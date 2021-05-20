@@ -4,7 +4,7 @@
 
 #pragma once
 
-namespace RenderCore { namespace LightingEngine { class ShadowProjectionDesc; class LightDesc; class ShadowGeneratorDesc; }}
+namespace RenderCore { namespace LightingEngine { class ShadowProjectionDesc; class LightDesc; class ShadowOperatorDesc; }}
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 
 namespace SceneEngine
@@ -57,7 +57,7 @@ namespace SceneEngine
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
         const DefaultShadowFrustumSettings& settings);
 
-	RenderCore::LightingEngine::ShadowGeneratorDesc
+	RenderCore::LightingEngine::ShadowOperatorDesc
 		CalculateShadowGeneratorDesc(
 			const DefaultShadowFrustumSettings& settings);
 

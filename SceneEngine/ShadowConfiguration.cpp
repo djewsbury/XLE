@@ -302,11 +302,11 @@ namespace SceneEngine
         return std::make_pair(result, worldToClip);
     }
 
-	RenderCore::LightingEngine::ShadowGeneratorDesc
+	RenderCore::LightingEngine::ShadowOperatorDesc
 		CalculateShadowGeneratorDesc(
 			const DefaultShadowFrustumSettings& settings)
 	{
-		RenderCore::LightingEngine::ShadowGeneratorDesc result;
+		RenderCore::LightingEngine::ShadowOperatorDesc result;
 		result._width   = settings._textureSize;
         result._height  = settings._textureSize;
         if (settings._flags & DefaultShadowFrustumSettings::Flags::HighPrecisionDepths) {

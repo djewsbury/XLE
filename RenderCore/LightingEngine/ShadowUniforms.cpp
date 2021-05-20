@@ -10,7 +10,7 @@
 #include "../../Math/Matrix.h"
 #include "../../Utility/MemoryUtils.h"
 
-namespace RenderCore { namespace LightingEngine
+namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	void BuildShadowConstantBuffers(
 		CB_ArbitraryShadowProjection& arbitraryCBSource,
@@ -26,10 +26,7 @@ namespace RenderCore { namespace LightingEngine
 
 			arbitraryCBSource._projectionCount = frustumCount;
 			for (unsigned c=0; c<frustumCount; ++c) {
-				arbitraryCBSource._worldToProj[c] = 
-					Combine(  
-						desc._fullProj[c]._viewMatrix, 
-						desc._fullProj[c]._projectionMatrix);
+				arbitraryCBSource._worldToProj[c] = desc._fullProj[c]._worldToProjTransform;
 				arbitraryCBSource._minimalProj[c] = desc._minimalProjection[c];
 			}
 
@@ -49,7 +46,7 @@ namespace RenderCore { namespace LightingEngine
 					// we don't really need to rebuild the projection
 					// matrix here. It should already be calcated in 
 					// _fullProj._projectionMatrix
-				const auto& projMatrix = desc._fullProj[c]._projectionMatrix;
+				const auto& projMatrix = desc._fullProj[c]._worldToProjTransform;
 				assert(IsOrthogonalProjection(projMatrix));
 
 				arbitraryCBSource._worldToProj[c] = Combine(baseWorldToProj, projMatrix);
@@ -139,24 +136,6 @@ namespace RenderCore { namespace LightingEngine
 		return true;
 	}
 
-	PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(const ShadowProjectionDesc& frustum)
-	{
-		auto projectionCount = std::min(frustum._projections.Count(), MaxShadowTexturesPerLight);
-		if (!projectionCount)
-			return PreparedDMShadowFrustum{};
-
-		PreparedDMShadowFrustum preparedResult;
-		preparedResult.InitialiseConstants(frustum._projections);
-		preparedResult._resolveParameters._worldSpaceBias = frustum._worldSpaceResolveBias;
-		preparedResult._resolveParameters._tanBlurAngle = frustum._tanBlurAngle;
-		preparedResult._resolveParameters._minBlurSearch = frustum._minBlurSearch;
-		preparedResult._resolveParameters._maxBlurSearch = frustum._maxBlurSearch;
-		preparedResult._resolveParameters._shadowTextureSize = (float)std::min(frustum._shadowGeneratorDesc._width, frustum._shadowGeneratorDesc._height);
-		XlZeroMemory(preparedResult._resolveParameters._dummy);
-
-		return preparedResult;
-	}
-
 	CB_ShadowResolveParameters::CB_ShadowResolveParameters()
     {
         _worldSpaceBias = -0.03f;
@@ -220,4 +199,4 @@ namespace RenderCore { namespace LightingEngine
         return basis;
     }
 
-}}
+}}}

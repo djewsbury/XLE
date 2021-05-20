@@ -5,7 +5,6 @@
 #pragma once
 
 #include "LightingEngine.h"
-#include "LightDesc.h"
 #include "../../Assets/AssetsCore.h"
 
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class GraphicsPipelineCollection; } }
@@ -14,16 +13,13 @@ namespace RenderCore { namespace Assets { class PredefinedPipelineLayoutFile; }}
 
 namespace RenderCore { namespace LightingEngine
 {
-	struct LightResolveOperatorDesc
-	{
-		LightSourceShape _shape = LightSourceShape::Directional;
-		unsigned _diffuseModel = 1;
-	};
+	class LightSourceOperatorDesc;
+	class ShadowOperatorDesc;
 
 	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightResolveOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowGeneratorDesc*> shadowGenerators,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 
@@ -33,8 +29,8 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<Techniques::GraphicsPipelineCollection>& pipelineCollection,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
-		IteratorRange<const LightResolveOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowGeneratorDesc*> shadowGenerators,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 }}

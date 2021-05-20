@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShadowPreparer.h"
-#include "LightDesc.h"
 #include "ShadowUniforms.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
@@ -39,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance Begin(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
-			const ShadowProjectionDesc& frustum,
+			const Internal::ShadowProjectionDesc& frustum,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::AttachmentPool& shadowGenAttachmentPool) override;
 
@@ -53,7 +52,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IPreparedShadowResult> CreatePreparedShadowResult() override;
 
 		DMShadowPreparer(
-			const ShadowGeneratorDesc& desc,
+			const ShadowOperatorDesc& desc,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
@@ -68,10 +67,11 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::ProjectionDesc _savedProjectionDesc;
 
-		PreparedDMShadowFrustum _workingDMFrustum;
+		Internal::PreparedDMShadowFrustum _workingDMFrustum;
 
 		DescriptorSetSignature _descSetSig;
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _descSetSlotBindings;
+		float _shadowTextureSize = 0.f;
 
 		class UniformDelegate : public Techniques::IShaderResourceDelegate
 		{
@@ -81,12 +81,12 @@ namespace RenderCore { namespace LightingEngine
 			{
 				switch (idx) {
 				case 0:
-					assert(dst.size() == sizeof(CB_ArbitraryShadowProjection)); 
-					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._arbitraryCBSource, sizeof(CB_ArbitraryShadowProjection));
+					assert(dst.size() == sizeof(Internal::CB_ArbitraryShadowProjection)); 
+					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._arbitraryCBSource, sizeof(Internal::CB_ArbitraryShadowProjection));
 					break;
 				case 1:
-					assert(dst.size() == sizeof(CB_OrthoShadowProjection)); 
-					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._orthoCBSource, sizeof(CB_OrthoShadowProjection));
+					assert(dst.size() == sizeof(Internal::CB_OrthoShadowProjection)); 
+					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._orthoCBSource, sizeof(Internal::CB_OrthoShadowProjection));
 					break;
 				default:
 					assert(0);
@@ -97,8 +97,8 @@ namespace RenderCore { namespace LightingEngine
 			size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				switch (idx) {
-				case 0: return sizeof(CB_ArbitraryShadowProjection);
-				case 1: return sizeof(CB_OrthoShadowProjection);
+				case 0: return sizeof(Internal::CB_ArbitraryShadowProjection);
+				case 1: return sizeof(Internal::CB_OrthoShadowProjection);
 				default:
 					assert(0);
 					return 0;
@@ -117,14 +117,33 @@ namespace RenderCore { namespace LightingEngine
 
 	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
 
+	Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
+		const Internal::ShadowProjectionDesc& frustum, float shadowTextureSize)
+	{
+		auto projectionCount = std::min(frustum._projections.Count(), MaxShadowTexturesPerLight);
+		if (!projectionCount)
+			return Internal::PreparedDMShadowFrustum{};
+
+		Internal::PreparedDMShadowFrustum preparedResult;
+		preparedResult.InitialiseConstants(frustum._projections);
+		preparedResult._resolveParameters._worldSpaceBias = frustum._worldSpaceResolveBias;
+		preparedResult._resolveParameters._tanBlurAngle = frustum._tanBlurAngle;
+		preparedResult._resolveParameters._minBlurSearch = frustum._minBlurSearch;
+		preparedResult._resolveParameters._maxBlurSearch = frustum._maxBlurSearch;
+		preparedResult._resolveParameters._shadowTextureSize = shadowTextureSize;
+		XlZeroMemory(preparedResult._resolveParameters._dummy);
+
+		return preparedResult;
+	}
+
 	Techniques::RenderPassInstance DMShadowPreparer::Begin(
 		IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext,
-		const ShadowProjectionDesc& frustum,
+		const Internal::ShadowProjectionDesc& frustum,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
-		_workingDMFrustum = SetupPreparedDMShadowFrustum(frustum);
+		_workingDMFrustum = SetupPreparedDMShadowFrustum(frustum, _shadowTextureSize);
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
@@ -202,13 +221,17 @@ namespace RenderCore { namespace LightingEngine
     static const auto s_shadowEnableNearCascadeString = "SHADOW_ENABLE_NEAR_CASCADE";
 
 	DMShadowPreparer::DMShadowPreparer(
-		const ShadowGeneratorDesc& desc,
+		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	: _pipelineAccelerators(pipelineAccelerators)
 	{
 		assert(desc._resolveType == ShadowResolveType::DepthTexture);
+
+		unsigned arrayCount = 0u;
+		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap)
+			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
 
 		///////////////////////////////
 		RenderStepFragmentInterface fragment{PipelineType::Graphics};
@@ -220,7 +243,7 @@ namespace RenderCore { namespace LightingEngine
 
 			auto output = fragment.DefineAttachment(
 				Techniques::AttachmentSemantics::ShadowDepthMap, 
-				desc._width, desc._height, desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap ? 0u : desc._arrayCount,
+				desc._width, desc._height, arrayCount,
 				AttachmentDesc{desc._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource | BindFlag::DepthStencil});
 			
 			auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(singleSidedBias, doubleSidedBias, desc._cullMode);
@@ -263,7 +286,7 @@ namespace RenderCore { namespace LightingEngine
 		} else {
 			pregAttach._desc = CreateDesc(
 				BindFlag::ShaderResource | BindFlag::DepthStencil, 0, GPUAccess::Read|GPUAccess::Write, 
-				TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, desc._arrayCount),
+				TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, arrayCount),
 				"shadow-map");
 		}
 		stitchingContext.DefineAttachment(pregAttach);
@@ -294,12 +317,14 @@ namespace RenderCore { namespace LightingEngine
 					_descSetSlotBindings.push_back({});
 			}
 		}
+
+		_shadowTextureSize = (float)std::min(desc._width, desc._height);
 	}
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
 	::Assets::FuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
-		const ShadowGeneratorDesc& desc, 
+		const ShadowOperatorDesc& desc, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
@@ -310,7 +335,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	::Assets::FuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
-		IteratorRange<const ShadowGeneratorDesc*> shadowGenerators, 
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
@@ -345,7 +370,7 @@ namespace RenderCore { namespace LightingEngine
 				auto finalResult = std::make_shared<ShadowPreparationOperators>();
 				finalResult->_operators.reserve(actualized.size());
 				for (auto& a:actualized)
-					finalResult->_operators.push_back({std::move(a), ShadowGeneratorDesc{}});
+					finalResult->_operators.push_back({std::move(a), ShadowOperatorDesc{}});
 
 				future.SetAsset(std::move(finalResult), nullptr);
 				return false;
@@ -363,32 +388,32 @@ namespace RenderCore { namespace LightingEngine
 
 	inline uint32_t FloatBits(float i) { return *(uint32_t*)&i; }
 
-	uint64_t Hash64(const ShadowGeneratorDesc& shadowGeneratorDesc, uint64_t seed)
+	uint64_t ShadowOperatorDesc::Hash(uint64_t seed)
 	{
 		uint64_t h0 = 
-			  (GetBits<12>(shadowGeneratorDesc._width)			<< 0ull)
-			| (GetBits<12>(shadowGeneratorDesc._height)			<< 12ull)
-			| (GetBits<8>(shadowGeneratorDesc._format)			<< 24ull)
-			| (GetBits<4>(shadowGeneratorDesc._arrayCount)		<< 32ull)
-			| (GetBits<4>(shadowGeneratorDesc._projectionMode)	<< 36ull)
-			| (GetBits<4>(shadowGeneratorDesc._cullMode)		<< 40ull)
-			| (GetBits<4>(shadowGeneratorDesc._resolveType)		<< 44ull)
-			| (GetBits<1>(shadowGeneratorDesc._enableNearCascade)  << 48ull)
+			  (GetBits<12>(_width)				<< 0ull)
+			| (GetBits<12>(_height)				<< 12ull)
+			| (GetBits<8>(_format)				<< 24ull)
+			| (GetBits<4>(_normalProjCount)		<< 32ull)
+			| (GetBits<4>(_projectionMode)		<< 36ull)
+			| (GetBits<4>(_cullMode)			<< 40ull)
+			| (GetBits<4>(_resolveType)			<< 44ull)
+			| (GetBits<1>(_enableNearCascade)  	<< 48ull)
 			;
 
 		uint64_t h1 = 
-				uint64_t(FloatBits(shadowGeneratorDesc._slopeScaledBias))
-			|  (uint64_t(FloatBits(shadowGeneratorDesc._depthBiasClamp)) << 32ull)
+				uint64_t(FloatBits(_slopeScaledBias))
+			|  (uint64_t(FloatBits(_depthBiasClamp)) << 32ull)
 			;
 
 		uint64_t h2 = 
-				uint64_t(FloatBits(shadowGeneratorDesc._dsSlopeScaledBias))
-			|  (uint64_t(FloatBits(shadowGeneratorDesc._dsDepthBiasClamp)) << 32ull)
+				uint64_t(FloatBits(_dsSlopeScaledBias))
+			|  (uint64_t(FloatBits(_dsDepthBiasClamp)) << 32ull)
 			;
 
 		uint64_t h3 = 
-				uint64_t(shadowGeneratorDesc._rasterDepthBias)
-			|  (uint64_t(shadowGeneratorDesc._dsRasterDepthBias) << 32ull)
+				uint64_t(_rasterDepthBias)
+			|  (uint64_t(_dsRasterDepthBias) << 32ull)
 			;
 
 		return HashCombine(h0, HashCombine(h1, HashCombine(h2, HashCombine(h3, seed))));

@@ -4,7 +4,6 @@
 
 #include "LightingEngine.h"
 #include "LightingEngineInternal.h"
-#include "LightDesc.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
 #include "../Techniques/RenderPass.h"
@@ -145,15 +144,28 @@ namespace RenderCore { namespace LightingEngine
 			_fragmentInterfaceMappings[regId]._subpassBegin);
 	}
 
+	ILightScene& CompiledLightingTechnique::GetLightScene()
+	{
+		return *_lightScene;
+	}
+
+	ILightScene& GetLightScene(CompiledLightingTechnique& technique)
+	{
+		return technique.GetLightScene();
+	}
+
 	CompiledLightingTechnique::CompiledLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		Techniques::FragmentStitchingContext& stitchingContext)
+		Techniques::FragmentStitchingContext& stitchingContext,
+		const std::shared_ptr<ILightScene>& lightScene)
 	: _pipelineAccelerators(pipelineAccelerators)
 	, _stitchingContext(&stitchingContext)
+	, _lightScene(lightScene)
 	{
 	}
 
 	CompiledLightingTechnique::~CompiledLightingTechnique() {}
+
 
 	void LightingTechniqueIterator::PushFollowingStep(std::function<CompiledLightingTechnique::StepFnSig>&& fn)
 	{
@@ -190,13 +202,11 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
-		const CompiledLightingTechnique& compiledTechnique,
-		const SceneLightingDesc& sceneLightingDesc)
+		const CompiledLightingTechnique& compiledTechnique)
 	: _threadContext(&threadContext)
 	, _parsingContext(&parsingContext)
 	, _pipelineAcceleratorPool(&pipelineAcceleratorPool)
 	, _compiledTechnique(&compiledTechnique)
-	, _sceneLightingDesc(sceneLightingDesc)
 	{
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
 		// (which should have happened at the end of the technique construction process)
@@ -279,12 +289,11 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
-		const SceneLightingDesc& lightingDesc,
 		CompiledLightingTechnique& compiledTechnique)
 	{
 		_iterator = std::make_unique<LightingTechniqueIterator>(
 			threadContext, parsingContext, pipelineAcceleratorPool,
-			compiledTechnique, lightingDesc);
+			compiledTechnique);
 	}
 
 	LightingTechniqueInstance::~LightingTechniqueInstance() {}
@@ -358,6 +367,5 @@ namespace RenderCore { namespace LightingEngine
 		_prepareResourcesIterator->_steps = technique._steps;
 		_prepareResourcesIterator->_stepIterator = _prepareResourcesIterator->_steps.begin();
 	}
-
 
 }}

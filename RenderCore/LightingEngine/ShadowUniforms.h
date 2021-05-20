@@ -4,12 +4,15 @@
 
 #pragma once
 
-#include "LightDesc.h"
+#include "ShadowPreparer.h"
+#include "LightScene_Internal.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Vector.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques { class IShaderResourceDelegate; }}
 
-namespace RenderCore { namespace LightingEngine
+namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	template<int MaxProjections> class MultiProjection;
 
@@ -95,7 +98,7 @@ namespace RenderCore { namespace LightingEngine
 		bool IsReady() const;
 	};
 
-	PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(const ShadowProjectionDesc& frustum);
+	// PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(const ShadowProjectionDesc& frustum);
 
-}}
+}}}
 

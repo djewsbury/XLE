@@ -5,7 +5,6 @@
 #pragma once
 
 #include "LightingEngine.h"
-#include "LightDesc.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 
@@ -36,6 +35,8 @@ namespace RenderCore { namespace LightingEngine
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
+		ILightScene& GetLightScene();
+
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -43,7 +44,8 @@ namespace RenderCore { namespace LightingEngine
 
 		CompiledLightingTechnique(
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext);
+			Techniques::FragmentStitchingContext& stitchingContext,
+			const std::shared_ptr<ILightScene>& lightScene);
 		~CompiledLightingTechnique();
 
 	private:
@@ -77,6 +79,8 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;
 
+		std::shared_ptr<ILightScene> _lightScene;
+
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
 
@@ -93,7 +97,6 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext* _parsingContext = nullptr;
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
-		SceneLightingDesc _sceneLightingDesc;
 
 		void PushFollowingStep(std::function<CompiledLightingTechnique::StepFnSig>&& fn);
         void PushFollowingStep(Techniques::BatchFilter batchFilter);
@@ -102,8 +105,7 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext,
 			Techniques::ParsingContext& parsingContext,
 			Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
-			const CompiledLightingTechnique& compiledTechnique,
-			const SceneLightingDesc& sceneLightingDesc);
+			const CompiledLightingTechnique& compiledTechnique);
 
 	private:
 		std::vector<CompiledLightingTechnique::Step> _steps;

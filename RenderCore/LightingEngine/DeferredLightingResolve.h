@@ -5,6 +5,7 @@
 #pragma once
 
 #include "DeferredLightingDelegate.h"
+#include "StandardLightOperators.h"
 #include "../Metal/Forward.h"
 #include "../Metal/InputLayout.h"
 #include <vector>
@@ -21,7 +22,7 @@ namespace RenderCore { namespace LightingEngine
 		struct Operator
 		{
 			std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
-			LightResolveOperatorDesc _desc;
+			LightSourceOperatorDesc _desc;
 		};
 
 		std::vector<Operator> _operators;
@@ -32,14 +33,15 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class IPreparedShadowResult;
+	namespace Internal { class StandardLightScene; }
 
     void ResolveLights(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
         Techniques::RenderPassInstance& rpi,
-		const SceneLightingDesc& sceneLightingDesc,
 		const LightResolveOperators& lightResolveOperators,
-		IteratorRange<const std::pair<LightId, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
+		Internal::StandardLightScene& lightScene,
+		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
 
 	enum class GBufferType
 	{
@@ -51,7 +53,7 @@ namespace RenderCore { namespace LightingEngine
 
     ::Assets::FuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
-		IteratorRange<const LightResolveOperatorDesc*> resolveOperators,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,

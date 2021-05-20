@@ -34,7 +34,7 @@ namespace SceneEngine
         const Float4x4& cameraToProjection);
 
     class ICompiledShadowGenerator;
-    std::shared_ptr<ICompiledShadowGenerator> CreateCompiledShadowGenerator(const ShadowGeneratorDesc&, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&);
+    std::shared_ptr<ICompiledShadowGenerator> CreateCompiledShadowGenerator(const ShadowOperatorDesc&, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&);
 
 #if 0
     void BindShadowsForForwardResolve(

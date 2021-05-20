@@ -10,10 +10,9 @@ namespace RenderCore { class IThreadContext; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class CompiledLightingTechnique;
-	class SceneLightingDesc;
 	class LightingEngineApparatus;
 	class SharedTechniqueDelegateBox;
+	class CompiledLightingTechnique;
 
 	enum class StepType { ParseScene, DrawSky, None, Abort };
 
@@ -33,7 +32,6 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext&,
 			Techniques::ParsingContext&,
 			Techniques::IPipelineAcceleratorPool&,
-			const SceneLightingDesc&,
 			CompiledLightingTechnique&);
 		~LightingTechniqueInstance();
 
@@ -49,5 +47,8 @@ namespace RenderCore { namespace LightingEngine
 		std::unique_ptr<PrepareResourcesIterator> _prepareResourcesIterator;
 		Step GetNextPrepareResourcesStep();
 	};
+
+	class ILightScene;
+	ILightScene& GetLightScene(CompiledLightingTechnique&);
 
 }}

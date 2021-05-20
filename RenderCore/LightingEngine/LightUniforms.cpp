@@ -3,10 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightUniforms.h"
-#include "LightDesc.h"
+#include "LightScene_Internal.h"
 #include "../../Math/Transformations.h"
 
-namespace RenderCore { namespace LightingEngine
+namespace RenderCore { namespace LightingEngine { namespace Internal
 {
     CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc)
     {
@@ -55,16 +55,12 @@ namespace RenderCore { namespace LightingEngine
                 Float3(0.f, 0.f, 0.f), 0 };
     }
 
-    CB_BasicEnvironment MakeBasicEnvironmentUniforms(const SceneLightingDesc& globalDesc)
+    CB_BasicEnvironment MakeBasicEnvironmentUniforms(const EnvironmentalLightingDesc& env)
     {
         CB_BasicEnvironment result;
-        result._ambient = MakeAmbientUniforms(globalDesc._env);
-        result._rangeFog = MakeRangeFogUniforms(globalDesc._env);
+        result._ambient = MakeAmbientUniforms(env);
+        result._rangeFog = MakeRangeFogUniforms(env);
         result._volumeFog = MakeBlankVolumeFogDesc();
-
-        auto lightCount = globalDesc._lights.size();
-        for (unsigned l=0; l<dimof(result._dominant); ++l)
-            result._dominant[l] = (lightCount > l) ? MakeLightUniforms(globalDesc._lights[l]) : MakeBlankLightDesc();
         return result;
     }
-}}
+}}}

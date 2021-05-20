@@ -4,8 +4,8 @@
 
 #include "DeferredLightingResolve.h"
 #include "DeferredLightingDelegate.h"
-#include "LightDesc.h"
 #include "LightUniforms.h"
+#include "LightScene_Internal.h"
 #include "ShadowPreparer.h"
 
 #include "../Techniques/CommonResources.h"
@@ -115,7 +115,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::FuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
-		const LightResolveOperatorDesc& desc,
+		const LightSourceOperatorDesc& desc,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
@@ -219,7 +219,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::FuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
-		IteratorRange<const LightResolveOperatorDesc*> resolveOperators,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
@@ -286,7 +286,7 @@ namespace RenderCore { namespace LightingEngine
 
 				finalResult->_operators.reserve(actualized.size());
 				for (auto& a:actualized)
-					finalResult->_operators.push_back({std::move(a), LightResolveOperatorDesc{}});
+					finalResult->_operators.push_back({std::move(a), LightSourceOperatorDesc{}});
 
 				UniformsStreamInterface sharedUsi;
 				sharedUsi.BindFixedDescriptorSet(0, Utility::Hash64("SharedDescriptors"));
@@ -316,9 +316,9 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
-		const SceneLightingDesc& sceneLightingDesc,
 		const LightResolveOperators& lightResolveOperators,
-		IteratorRange<const std::pair<LightId, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows)
+		Internal::StandardLightScene& lightScene,
+		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
 
@@ -355,12 +355,12 @@ namespace RenderCore { namespace LightingEngine
 		IDescriptorSet* fixedDescSets[] = { lightResolveOperators._fixedDescriptorSet.get() };
 		boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(fixedDescSets), 1);
 
-		auto lightCount = sceneLightingDesc._lights.size();
+		auto lightCount = lightScene._lights.size();
 		auto shadowIterator = preparedShadows.begin();
 		for (unsigned l=0; l<lightCount; ++l) {
-			const auto& i = sceneLightingDesc._lights[l];
+			const auto& i = lightScene._lights[l];
 
-			auto lightUniforms = MakeLightUniforms(i);
+			auto lightUniforms = MakeLightUniforms(i._desc);
 			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

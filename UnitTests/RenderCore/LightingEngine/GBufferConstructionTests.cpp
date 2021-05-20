@@ -6,7 +6,6 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../../RenderCore/LightingEngine/LightDesc.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"

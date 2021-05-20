@@ -6,9 +6,11 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../../RenderCore/LightingEngine/LightDesc.h"
+#include "../../../RenderCore/LightingEngine/LightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../../../RenderCore/LightingEngine/StandardLightOperators.h"
+#include "../../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
@@ -28,38 +30,75 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	static RenderCore::LightingEngine::LightDesc CreateTestLight()
+	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene)
 	{
-		RenderCore::LightingEngine::LightDesc result;
+		using namespace RenderCore::LightingEngine;
+		auto lightId = lightScene.CreateLightSource(0);
+
+		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
+		REQUIRE(positional);
+		ScaleRotationTranslationM srt{Float3(0.03f, 0.03f, 0.03f), Identity<Float3x3>(), Float3{0.f, 1.0f, 0.f}};
+		positional->SetLocalToWorld(AsFloat4x4(srt));
+
+		auto* emittance = lightScene.TryGetLightSourceInterface<IUniformEmittance>(lightId);
+		REQUIRE(emittance);
+		emittance->SetBrightness(Float3(10.f, 10.f, 10.f));
+
+		return lightId;
+
+		/*RenderCore::LightingEngine::LightDesc result;
 		result._orientation = Identity<Float3x3>();
-		result._position = Float3{0.f, 1.0f, 0.f};
+		result._position = ;
 		result._radii = Float2{1.0f, 1.0f};
 		result._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
 		result._diffuseColor = Float3{1.0f, 1.0f, 1.0f};
 		result._radii = Float2{100.f, 100.f};
-		return result;
+		return result;*/
 	}
 
-	static RenderCore::LightingEngine::ShadowProjectionDesc CreateTestShadowProjection()
+	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
-		RenderCore::LightingEngine::ShadowProjectionDesc result;
-		result._projections._normalProjCount = 1;
-		result._projections._fullProj[0]._projectionMatrix = OrthogonalProjection(-2.f, -2.f, 2.f, 2.f, 0.01f, 100.f, RenderCore::Techniques::GetDefaultClipSpaceType());
+		using namespace RenderCore::LightingEngine;
+		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
+
+		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
+		REQUIRE(projections);
+
 		auto camToWorld = MakeCameraToWorld(Float3{0.f, -1.0f, 0.f}, Float3{0.f, 0.0f, 1.f}, Float3{0.f, 10.0f, 0.f});
-		result._projections._fullProj[0]._viewMatrix = InvertOrthonormalTransform(camToWorld);
-		result._worldSpaceResolveBias = 0.f;
-        result._tanBlurAngle = 0.00436f;
-        result._minBlurSearch = 0.5f;
-        result._maxBlurSearch = 25.f;
-		result._lightId = 0;
-		return result;
+		auto worldToProj = OrthogonalProjection(-2.f, -2.f, 2.f, 2.f, 0.01f, 100.f, RenderCore::Techniques::GetDefaultClipSpaceType());
+		projections->SetWorldToDefiningProjection(Combine(camToWorld, worldToProj));
+
+		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
+			{ Float3{-1.f, -1.f}, Float3{1.f, 1.f} }
+		};
+		projections->SetSubProjections(MakeIteratorRange(subProj));
+
+		IShadowPreparer::Desc desc;
+		desc._worldSpaceResolveBias = 0.f;
+        desc._tanBlurAngle = 0.00436f;
+        desc._minBlurSearch = 0.5f;
+        desc._maxBlurSearch = 25.f;
+		auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowId);
+		REQUIRE(preparer);
+		preparer->SetDesc(desc);
+
+		return shadowId;
 	}
 
-	static RenderCore::LightingEngine::ShadowProjectionDesc CreateSphereShadowProjection(const RenderCore::LightingEngine::LightDesc& light)
+	static void ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene)
 	{
-		RenderCore::LightingEngine::ShadowProjectionDesc result;
-		result._projections._normalProjCount = 6;
-		result._shadowGeneratorDesc._arrayCount = 6;
+		auto srcId = CreateTestLight(lightScene);
+		CreateTestShadowProjection(lightScene, srcId);
+	}
+
+	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
+	{
+		using namespace RenderCore::LightingEngine;
+		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
+		
+		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
+		REQUIRE(positional);
+
 		// Build 6 projection for the cube faces
 		// Using DirectX conventions for face order here:
 		//		+X, -X
@@ -81,25 +120,21 @@ namespace UnitTests
 			Float3{0.f, 1.f, 0.f},
 			Float3{0.f, 1.f, 0.f}
 		};
+		Float4x4 worldToCamera[6];
+		Float4x4 cameraToProjection[6];
 		for (unsigned c=0; c<6; ++c) {
-			result._projections._fullProj[c]._projectionMatrix = PerspectiveProjection(
-				gPI/2.0f, 1.0f, 0.01f, light._radii[0], 
+			cameraToProjection[c] = PerspectiveProjection(
+				gPI/2.0f, 1.0f, 0.01f, positional->GetCutoffRange(), 
 				GeometricCoordinateSpace::RightHanded,
 				RenderCore::Techniques::GetDefaultClipSpaceType());
-			auto camToWorld = MakeCameraToWorld(faceForward[c], faceUp[c], light._position);
-			result._projections._fullProj[c]._viewMatrix = InvertOrthonormalTransform(camToWorld);
-			result._projections._minimalProjection[c] = ExtractMinimalProjection(result._projections._fullProj[c]._projectionMatrix);
+			auto camToWorld = MakeCameraToWorld(faceForward[c], faceUp[c], ExtractTranslation(positional->GetLocalToWorld()));
+			worldToCamera[c] = InvertOrthonormalTransform(camToWorld);
 		}
-		result._projections._mode = RenderCore::LightingEngine::ShadowProjectionMode::ArbitraryCubeMap;
-		result._shadowGeneratorDesc._projectionMode = RenderCore::LightingEngine::ShadowProjectionMode::ArbitraryCubeMap;
-		result._shadowGeneratorDesc._width = 256;
-		result._shadowGeneratorDesc._height = 256;
-		result._worldSpaceResolveBias = 0.f;
-        result._tanBlurAngle = 0.00436f;
-        result._minBlurSearch = 0.5f;
-        result._maxBlurSearch = 25.f;
-		result._lightId = 0;
-		return result;
+
+		auto* projections = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowId);
+		REQUIRE(projections);
+		projections->SetProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
+		return shadowId;
 	}
 
 	static RenderCore::Techniques::ParsingContext InitializeParsingContext(
@@ -176,10 +211,6 @@ namespace UnitTests
 		// auto drawableWriter = CreateSphereDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 		auto drawableWriter = CreateShapeStackDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 
-		RenderCore::LightingEngine::SceneLightingDesc lightingDesc;
-		lightingDesc._lights.push_back(CreateTestLight());
-		lightingDesc._shadowProjections.push_back(CreateTestShadowProjection());
-
 		RenderCore::Techniques::CameraDesc camera;
 		// camera._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
@@ -198,6 +229,7 @@ namespace UnitTests
 				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox,
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
 			// stall until all resources are ready
 			{
@@ -212,7 +244,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, lightingDesc, *lightingTechnique);
+					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
@@ -224,11 +256,11 @@ namespace UnitTests
 		{
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
 
-			LightingEngine::LightResolveOperatorDesc resolveOperators[] {
-				LightingEngine::LightResolveOperatorDesc{}
+			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
+				LightingEngine::LightSourceOperatorDesc{}
 			};
-			LightingEngine::ShadowGeneratorDesc shadowGenerator[] {
-				LightingEngine::ShadowGeneratorDesc{}
+			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
+				LightingEngine::ShadowOperatorDesc{}
 			};
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -238,6 +270,7 @@ namespace UnitTests
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
 			testApparatus._bufferUploads->Update(*threadContext);
 			Threading::Sleep(16);
@@ -256,7 +289,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, lightingDesc, *lightingTechnique);
+					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
@@ -282,14 +315,6 @@ namespace UnitTests
 
 		auto drawableWriter = CreateStonehengeDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 
-		RenderCore::LightingEngine::SceneLightingDesc lightingDesc;
-		auto light = CreateTestLight();
-		light._shape = LightingEngine::LightSourceShape::Sphere;
-		light._diffuseColor *= 10.f;
-		lightingDesc._lights.push_back(light);
-		auto shadowProjection = CreateSphereShadowProjection(light);
-		lightingDesc._shadowProjections.push_back(shadowProjection);
-
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
 		
@@ -301,13 +326,18 @@ namespace UnitTests
 		{
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
 
-			LightingEngine::LightResolveOperatorDesc resolveOperators[] {
-				LightingEngine::LightResolveOperatorDesc {
+			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
+				LightingEngine::LightSourceOperatorDesc {
 					LightingEngine::LightSourceShape::Sphere
 				}
 			};
-			LightingEngine::ShadowGeneratorDesc shadowGenerator[] {
-				shadowProjection._shadowGeneratorDesc
+			LightingEngine::ShadowOperatorDesc shadowOpDesc;
+			shadowOpDesc._projectionMode = LightingEngine::ShadowProjectionMode::ArbitraryCubeMap;
+			shadowOpDesc._normalProjCount = 6;
+			shadowOpDesc._width = 256;
+			shadowOpDesc._height = 256;
+			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
+				shadowOpDesc
 			};
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -317,6 +347,10 @@ namespace UnitTests
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+
+			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+			auto lightId = CreateTestLight(lightScene);
+			CreateSphereShadowProjection(lightScene, lightId);
 
 			testApparatus._bufferUploads->Update(*threadContext);
 			Threading::Sleep(16);
@@ -335,7 +369,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, lightingDesc, *lightingTechnique);
+					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
