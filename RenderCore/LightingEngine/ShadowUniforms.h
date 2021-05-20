@@ -123,8 +123,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		class OrthoSubProjection
 		{
 		public:
-			Float3      _projMins;
-			Float3      _projMaxs;
+			Float3      _topLeftFront;
+			Float3      _bottomRightBack;
 		};
 
 		ShadowProjectionMode	_mode = ShadowProjectionMode::Arbitrary;
@@ -227,11 +227,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
 			assert(projCount == _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
             for (unsigned c=0; c<projCount; ++c) {
-				_projections._orthoSub[c]._projMins = projections[c]._projMins;
-				_projections._orthoSub[c]._projMaxs = projections[c]._projMaxs;
+				_projections._orthoSub[c]._topLeftFront = projections[c]._topLeftFront;
+				_projections._orthoSub[c]._bottomRightBack = projections[c]._bottomRightBack;
 
 				auto projTransform = OrthogonalProjection(
-					projections[c]._projMins[0], projections[c]._projMaxs[1], projections[c]._projMaxs[0], projections[c]._projMins[1], projections[c]._projMins[2], projections[c]._projMaxs[2],
+					projections[c]._topLeftFront[0], projections[c]._topLeftFront[1], 
+					projections[c]._bottomRightBack[0], projections[c]._bottomRightBack[1], 
+					projections[c]._topLeftFront[2], projections[c]._bottomRightBack[2],
 					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
 				_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
 				_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);

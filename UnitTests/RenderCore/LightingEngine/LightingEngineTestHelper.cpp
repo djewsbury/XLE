@@ -310,6 +310,62 @@ namespace UnitTests
 		return std::make_shared<StonehengeDrawableWriter>(testHelper, pipelineAcceleratorPool);
 	}
 
+
+	class FlatPlaneDrawableWriter : public IDrawablesWriter
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
+		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
+		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
+		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
+		size_t _vertexCount;
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
+			auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
+			drawable->_pipeline = _pipelineAccelerator;
+			drawable->_descriptorSet = _descriptorSetAccelerator;
+			drawable->_geo = _geo;
+			drawable->_vertexCount = _vertexCount;
+			drawable->_looseUniformsInterface = _usi;
+			drawable->_drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+				{
+					ScaleRotationTranslationM srt {
+						Float3 { 1000.f, 1.0f, 1000.f },
+						Identity<Float3x3>(),
+						Float3 { 0.f, -1.0f, 0.f }
+					};
+					auto localTransform = RenderCore::Techniques::MakeLocalTransform(AsFloat4x4(srt), ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
+					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+				};
+		}
+
+		FlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		{
+			std::tie(_geo, _vertexCount) = CreateCubeGeo(testHelper);
+			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
+				nullptr,
+				ParameterBox {},
+				ToolsRig::Vertex3D_InputLayout,
+				RenderCore::Topology::TriangleList,
+				RenderCore::Assets::RenderStateSet{});
+
+			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
+				nullptr,
+				{}, {}, {});
+
+			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
+			_usi->BindImmediateData(0, Hash64("LocalTransform"));
+		}
+	};
+
+	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	{
+		return std::make_shared<FlatPlaneDrawableWriter>(testHelper, pipelineAcceleratorPool);
+	}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, IDrawablesWriter& drawableWriter)
@@ -390,6 +446,32 @@ namespace UnitTests
 		};
 
 		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 0 };
+	}
+
+	RenderCore::Techniques::ParsingContext InitializeParsingContext(
+		RenderCore::Techniques::TechniqueContext& techniqueContext,
+		const RenderCore::ResourceDesc& targetDesc,
+		const RenderCore::Techniques::CameraDesc& camera)
+	{
+		using namespace RenderCore;
+
+		Techniques::PreregisteredAttachment preregisteredAttachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorLDR,
+				targetDesc,
+				Techniques::PreregisteredAttachment::State::Uninitialized
+			}
+		};
+		FrameBufferProperties fbProps { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
+
+		Techniques::ParsingContext parsingContext{techniqueContext};
+		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+		
+		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+		stitchingContext._workingProps = fbProps;
+		for (const auto&a:preregisteredAttachments)
+			stitchingContext.DefineAttachment(a._semantic, a._desc, a._state, a._layoutFlags);
+		return parsingContext;
 	}
 
 }

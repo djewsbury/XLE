@@ -44,8 +44,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			for (unsigned c=0; c<frustumCount; ++c) {
 
 				auto projMatrix = OrthogonalProjection(
-					desc._orthoSub[c]._projMins[0], desc._orthoSub[c]._projMaxs[1], desc._orthoSub[c]._projMaxs[0], desc._orthoSub[c]._projMins[1], 
-					desc._orthoSub[c]._projMins[2], desc._orthoSub[c]._projMaxs[2],
+					desc._orthoSub[c]._topLeftFront[0], desc._orthoSub[c]._topLeftFront[1], 
+					desc._orthoSub[c]._bottomRightBack[0], desc._orthoSub[c]._bottomRightBack[1], 
+					desc._orthoSub[c]._topLeftFront[2], desc._orthoSub[c]._bottomRightBack[2],
 					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
 				assert(IsOrthogonalProjection(projMatrix));
 

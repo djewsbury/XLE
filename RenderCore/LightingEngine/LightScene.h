@@ -115,8 +115,8 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		struct OrthoSubProjection
 		{
-			Float3      _projMins;
-			Float3      _projMaxs;
+			Float3      _topLeftFront;
+			Float3      _bottomRightBack;
 		};
 		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) = 0;
 		virtual void SetSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;

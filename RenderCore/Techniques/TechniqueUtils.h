@@ -32,8 +32,8 @@ namespace RenderCore { namespace Techniques
         float       _verticalFieldOfView = Deg2Rad(34.8246f);
 
         // orthogonal settings
-        float       _left = -1.f, _top = -1.f;
-        float       _right = 1.f, _bottom = 1.f;
+        float       _left = -1.f, _top = 1.f;
+        float       _right = 1.f, _bottom = -1.f;
     };
 
     // Culling tests use an optimized implementation that takes advantage of

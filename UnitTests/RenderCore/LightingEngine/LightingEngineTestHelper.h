@@ -15,6 +15,7 @@ namespace RenderCore { namespace Techniques
 {
 	class TechniqueSharedResources;
 	class TechniqueContext;
+	class CameraDesc;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -56,6 +57,12 @@ namespace UnitTests
 	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
 	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
 	std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
+	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
 
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, IDrawablesWriter& drawableWriter);
+
+	RenderCore::Techniques::ParsingContext InitializeParsingContext(
+		RenderCore::Techniques::TechniqueContext& techniqueContext,
+		const RenderCore::ResourceDesc& targetDesc,
+		const RenderCore::Techniques::CameraDesc& camera);
 }

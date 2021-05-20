@@ -37,7 +37,7 @@ namespace UnitTests
 
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
 		REQUIRE(positional);
-		ScaleRotationTranslationM srt{Float3(0.03f, 0.03f, 0.03f), Identity<Float3x3>(), Float3{0.f, 1.0f, 0.f}};
+		ScaleRotationTranslationM srt{Float3(0.03f, 0.03f, 0.03f), Identity<Float3x3>(), Normalize(Float3{1.f, 1.0f, 0.f})};
 		positional->SetLocalToWorld(AsFloat4x4(srt));
 
 		auto* emittance = lightScene.TryGetLightSourceInterface<IUniformEmittance>(lightId);
@@ -55,11 +55,13 @@ namespace UnitTests
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
 		REQUIRE(projections);
 
-		auto camToWorld = MakeCameraToWorld(Float3{0.f, -1.0f, 0.f}, Float3{0.f, 0.0f, 1.f}, Float3{0.f, 10.0f, 0.f});
+        const float depthRange = 3.f;
+        float distanceToLight = depthRange / 2.0f;
+		auto camToWorld = MakeCameraToWorld(Normalize(Float3{-1.f, -1.0f, 0.f}), Float3{0.f, 1.0f, 0.f}, distanceToLight / std::sqrt(2.0f) * Float3{1.f, 1.0f, 0.f});
 		projections->SetWorldToOrthoView(InvertOrthonormalTransform(camToWorld));
 
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
-			{ Float3{-2.f, 2.f, 0.01f}, Float3{2.f, -2.f, 100.f} }
+			{ Float3{-1.f, 1.f, 0.0f}, Float3{1.f, -1.f, depthRange} }
 		};
 		projections->SetSubProjections(MakeIteratorRange(subProj));
 
@@ -79,52 +81,6 @@ namespace UnitTests
 	{
 		auto srcId = CreateTestLight(lightScene);
 		CreateTestShadowProjection(lightScene, srcId);
-	}
-
-	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
-	{
-		using namespace RenderCore::LightingEngine;
-		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
-		
-		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
-		REQUIRE(positional);
-
-		// Build 6 projection for the cube faces
-		// Using DirectX conventions for face order here:
-		//		+X, -X
-		//		+Y, -Y
-		//		+Z, -Z
-		Float3 faceForward[] {
-			Float3{1.f, 0.f, 0.f},
-			Float3{-1.f, 0.f, 0.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, -1.f, 0.f},
-			Float3{0.f, 0.f, 1.f},
-			Float3{0.f, 0.f, -1.f}
-		};
-		Float3 faceUp[] = {
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 0.f, -1.f},
-			Float3{0.f, 0.f, 1.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 1.f, 0.f}
-		};
-		Float4x4 worldToCamera[6];
-		Float4x4 cameraToProjection[6];
-		for (unsigned c=0; c<6; ++c) {
-			cameraToProjection[c] = PerspectiveProjection(
-				gPI/2.0f, 1.0f, 0.01f, positional->GetCutoffRange(), 
-				GeometricCoordinateSpace::RightHanded,
-				RenderCore::Techniques::GetDefaultClipSpaceType());
-			auto camToWorld = MakeCameraToWorld(faceForward[c], faceUp[c], ExtractTranslation(positional->GetLocalToWorld()));
-			worldToCamera[c] = InvertOrthonormalTransform(camToWorld);
-		}
-
-		auto* projections = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowId);
-		REQUIRE(projections);
-		projections->SetProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
-		return shadowId;
 	}
 
 	template<typename Type>
@@ -158,7 +114,7 @@ namespace UnitTests
 		}
 	};
 
-	TEST_CASE( "LightingEngine-ExecuteTechnique", "[rendercore_lighting_engine]" )
+	TEST_CASE( "LightingEngine-ShadowPrecisionTests", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
 		LightingEngineTestApparatus testApparatus;
@@ -166,18 +122,18 @@ namespace UnitTests
 
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
-			TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM),
+			TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
-		// auto drawableWriter = CreateSphereDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
-		auto drawableWriter = CreateShapeStackDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 
 		RenderCore::Techniques::CameraDesc camera;
-		// camera._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
-		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
+		// camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.5f}), Normalize(Float3{0.0f, 1.0f, 1.0f}), Float3{0.0f, 1.0f, -0.5f});
+        camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 1.0f, 0.0f});
+        camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
@@ -185,40 +141,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if 0
-		SECTION("Forward lighting")
-		{
-			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateForwardLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox,
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
-			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
-
-			// stall until all resources are ready
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-			}
-
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(lightingIterator, *drawableWriter);
-			}
-
-			fbHelper.SaveImage(*threadContext, "forward-lighting-output");
-		}
-#endif
-
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		SECTION("Deferred lighting")
+		SECTION("45 degree shadow precision")
 		{
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
 
@@ -261,87 +184,7 @@ namespace UnitTests
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
-			fbHelper.SaveImage(*threadContext, "deferred-lighting-output");
-		}
-
-		testHelper->EndFrameCapture();
-	}
-
-	TEST_CASE( "LightingEngine-SphereLightShadows", "[rendercore_lighting_engine]" )
-	{
-		using namespace RenderCore;
-		LightingEngineTestApparatus testApparatus;
-		auto testHelper = testApparatus._metalTestHelper.get();
-
-		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
-			TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
-			"temporary-out");
-		
-		auto threadContext = testHelper->_device->GetImmediateContext();
-		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
-
-		auto drawableWriter = CreateStonehengeDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
-
-		RenderCore::Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
-		
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
-		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
-
-		testHelper->BeginFrameCapture();
-
-		{
-			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
-
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc {
-					LightingEngine::LightSourceShape::Sphere
-				}
-			};
-			LightingEngine::ShadowOperatorDesc shadowOpDesc;
-			shadowOpDesc._projectionMode = LightingEngine::ShadowProjectionMode::ArbitraryCubeMap;
-			shadowOpDesc._normalProjCount = 6;
-			shadowOpDesc._width = 256;
-			shadowOpDesc._height = 256;
-			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				shadowOpDesc
-			};
-
-			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
-
-			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-			auto lightId = CreateTestLight(lightScene);
-			CreateSphereShadowProjection(lightScene, lightId);
-
-			testApparatus._bufferUploads->Update(*threadContext);
-			Threading::Sleep(16);
-			testApparatus._bufferUploads->Update(*threadContext);
-
-			// stall until all resources are ready
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-			}
-
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(lightingIterator, *drawableWriter);
-			}
-
-			fbHelper.SaveImage(*threadContext, "sphere-light-shadows-output");
+			fbHelper.SaveImage(*threadContext, "shadow-precision");
 		}
 
 		testHelper->EndFrameCapture();
