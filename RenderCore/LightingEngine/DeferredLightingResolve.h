@@ -6,6 +6,7 @@
 
 #include "DeferredLightingDelegate.h"
 #include "StandardLightOperators.h"
+#include "LightScene.h"
 #include "../Metal/Forward.h"
 #include "../Metal/InputLayout.h"
 #include <vector>
@@ -16,7 +17,7 @@ namespace RenderCore { namespace Techniques { class RenderPassInstance; }}
 
 namespace RenderCore { namespace LightingEngine
 {
-    class LightResolveOperators
+    class LightResolveOperators : public ILightSourceFactory
 	{
 	public:
 		struct Operator
@@ -30,6 +31,8 @@ namespace RenderCore { namespace LightingEngine
 		Metal::BoundUniforms _boundUniforms;
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
         bool _debuggingOn = false;
+
+		std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 	};
 
 	class IPreparedShadowResult;
@@ -43,12 +46,7 @@ namespace RenderCore { namespace LightingEngine
 		StandardLightScene& lightScene,
 		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
 
-	enum class GBufferType
-	{
-		PositionNormal,
-		PositionNormalParameters
-	};
-
+	enum class GBufferType { PositionNormal, PositionNormalParameters };
 	enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
 
     ::Assets::FuturePtr<LightResolveOperators> BuildLightResolveOperators(

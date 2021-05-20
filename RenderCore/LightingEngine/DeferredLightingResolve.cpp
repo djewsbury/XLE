@@ -5,7 +5,7 @@
 #include "DeferredLightingResolve.h"
 #include "DeferredLightingDelegate.h"
 #include "LightUniforms.h"
-#include "LightScene_Internal.h"
+#include "StandardLightScene.h"
 #include "ShadowPreparer.h"
 
 #include "../Techniques/CommonResources.h"
@@ -30,6 +30,10 @@ static Int2 GetCursorPos();
 
 namespace RenderCore { namespace LightingEngine
 {
+	std::unique_ptr<ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
+	{
+		return std::make_unique<StandardLightDesc>();
+	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -360,7 +364,8 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned l=0; l<lightCount; ++l) {
 			const auto& i = lightScene._lights[l];
 
-			auto lightUniforms = Internal::MakeLightUniforms(i._desc);
+			assert(i._desc->QueryInterface(typeid(StandardLightDesc).hash_code()) == i._desc.get());
+			auto lightUniforms = Internal::MakeLightUniforms(*(StandardLightDesc*)i._desc.get());
 			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

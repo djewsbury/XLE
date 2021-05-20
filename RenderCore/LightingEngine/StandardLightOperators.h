@@ -4,13 +4,8 @@
 
 #pragma once
 
-#include "../RenderCore/StateDesc.h"
-#include "../RenderCore/Format.h"
-#include "../Math/Matrix.h"
-#include "../Math/Vector.h"
 #include "../Utility/MemoryUtils.h"
 
-namespace Utility { class ParameterBox; }
 namespace RenderCore { namespace LightingEngine
 {
 	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
@@ -23,8 +18,5 @@ namespace RenderCore { namespace LightingEngine
 
 		uint64_t Hash(uint64_t seed = DefaultSeed64);
 	};
-
-		//////////////////////////////////////////////////////////////////
-
 
 }}

@@ -10,8 +10,44 @@
 #include "../../Math/ProjectionMath.h"
 
 namespace RenderCore { namespace LightingEngine
-{
-    class LightDesc : public IPositionalLightSource, public IUniformEmittance
+{	
+	class StandardLightScene : public ILightScene
+	{
+	public:
+		struct Light
+		{
+			LightSourceId _id;
+			LightOperatorId _operatorId;
+			std::unique_ptr<ILightBase> _desc;
+		};
+		std::vector<Light> _lights;
+		struct ShadowProjection
+		{
+			ShadowProjectionId _id;
+			ShadowOperatorId _operatorId;
+			LightSourceId _lightId;
+			std::unique_ptr<ILightBase> _desc;
+		};
+		std::vector<ShadowProjection> _shadowProjections;
+
+		std::shared_ptr<ILightSourceFactory> _lightSourceFactory;
+		std::shared_ptr<IShadowProjectionFactory> _shadowProjectionFactory;
+
+		LightSourceId _nextLightSource = 0;
+		ShadowProjectionId _nextShadow = 0;
+
+		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
+		virtual LightSourceId CreateLightSource(LightOperatorId op) override;
+		virtual void DestroyLightSource(LightSourceId) override;
+		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
+		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) override;
+		virtual void DestroyShadowProjection(ShadowProjectionId) override;
+		virtual void* QueryInterface(uint64_t) override;
+		StandardLightScene();
+		~StandardLightScene();
+	};
+
+	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance
 	{
 	public:
 		Float3x3    _orientation;
@@ -56,66 +92,24 @@ namespace RenderCore { namespace LightingEngine
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}
 
-        LightDesc()
-        {
-            _position = Normalize(Float3(-.1f, 0.33f, 1.f));
-            _orientation = Identity<Float3x3>();
-            _cutoffRange = 10000.f;
-            _radii = Float2(1.f, 1.f);
-            _diffuseColor = Float3(1.f, 1.f, 1.f);
-            _specularColor = Float3(1.f, 1.f, 1.f);
+		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
 
-            _diffuseWideningMin = 0.5f;
-            _diffuseWideningMax = 2.5f;
-            _diffuseModel = 1;
-
-            _shadowResolveModel = 0;
-        }
-	};
-	
-	class IShadowProjectionFactory
-	{
-	public:
-		virtual std::unique_ptr<ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId) = 0;
-		virtual ~IShadowProjectionFactory();
-	};
-
-	class StandardLightScene : public ILightScene
-	{
-	public:
-		struct Light
+		StandardLightDesc()
 		{
-			LightSourceId _id;
-			LightOperatorId _operatorId;
-			LightDesc _desc;
-		};
-		std::vector<Light> _lights;
-		struct ShadowProjection
-		{
-			ShadowProjectionId _id;
-			ShadowOperatorId _operatorId;
-			LightSourceId _lightId;
-			std::unique_ptr<ILightBase> _desc;
-		};
-		std::vector<ShadowProjection> _shadowProjections;
+			_position = Normalize(Float3(-.1f, 0.33f, 1.f));
+			_orientation = Identity<Float3x3>();
+			_cutoffRange = 10000.f;
+			_radii = Float2(1.f, 1.f);
+			_diffuseColor = Float3(1.f, 1.f, 1.f);
+			_specularColor = Float3(1.f, 1.f, 1.f);
 
-        std::vector<LightSourceOperatorDesc> _lightSourceOperators;
-		std::shared_ptr<IShadowProjectionFactory> _shadowProjectionFactory;
+			_diffuseWideningMin = 0.5f;
+			_diffuseWideningMax = 2.5f;
+			_diffuseModel = 1;
 
-		LightSourceId _nextLightSource = 0;
-		ShadowProjectionId _nextShadow = 0;
-
-		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
-		virtual LightSourceId CreateLightSource(LightOperatorId op) override;
-		virtual void DestroyLightSource(LightSourceId) override;
-		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
-		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) override;
-		virtual void DestroyShadowProjection(ShadowProjectionId) override;
-		virtual void* QueryInterface(uint64_t) override;
-		StandardLightScene();
-		~StandardLightScene();
+			_shadowResolveModel = 0;
+		}
 	};
-
 
 	////////////  temp ----->
 	enum class SkyTextureType { HemiCube, Cube, Equirectangular, HemiEquirectangular };

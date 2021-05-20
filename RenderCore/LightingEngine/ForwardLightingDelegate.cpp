@@ -8,7 +8,7 @@
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
-#include "LightScene_Internal.h"
+#include "StandardLightScene.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/RenderPass.h"

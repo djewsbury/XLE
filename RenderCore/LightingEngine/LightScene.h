@@ -49,6 +49,20 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~ILightBase();
 	};
 
+	class ILightSourceFactory
+	{
+	public:
+		virtual std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId) = 0;
+		virtual ~ILightSourceFactory();
+	};
+	
+	class IShadowProjectionFactory
+	{
+	public:
+		virtual std::unique_ptr<ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId) = 0;
+		virtual ~IShadowProjectionFactory();
+	};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class IPositionalLightSource

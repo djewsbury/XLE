@@ -2,12 +2,24 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "StandardLightScene.h"
 #include "LightScene.h"
-#include "LightScene_Internal.h"
 #include "../../Core/Exceptions.h"
 
 namespace RenderCore { namespace LightingEngine
 {
+	void* StandardLightDesc::QueryInterface(uint64_t interfaceTypeCode)
+	{
+		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
+			return (IPositionalLightSource*)this;
+		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
+			return (IUniformEmittance*)this;
+		} else if (interfaceTypeCode == typeid(StandardLightDesc).hash_code()) {
+			return this;
+		}
+		return nullptr;
+	}
+
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
 		auto i = std::find_if(
@@ -15,21 +27,14 @@ namespace RenderCore { namespace LightingEngine
 			[sourceId](const auto& c) { return c._id == sourceId; });
 		if (i == _lights.end())
 			return nullptr;
-
-		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
-			return (IPositionalLightSource*)&i->_desc;
-		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
-			return (IUniformEmittance*)&i->_desc;
-		}
-
-		return nullptr;
+		return i->_desc->QueryInterface(interfaceTypeCode);
 	}
 
 	auto StandardLightScene::CreateLightSource(LightOperatorId op) -> LightSourceId
 	{
-		assert(op < _lightSourceOperators.size());
 		auto result = _nextLightSource++;
-		_lights.push_back({result, op, LightDesc{}});
+		auto desc = _lightSourceFactory->CreateLightSource(op);	
+		_lights.push_back({result, op, std::move(desc)});
 		return result;
 	}
 
@@ -95,5 +100,6 @@ namespace RenderCore { namespace LightingEngine
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}
 	INearShadowProjection::~INearShadowProjection() {}
 	ILightBase::~ILightBase() {}
+	ILightSourceFactory::~ILightSourceFactory() {}
 	IShadowProjectionFactory::~IShadowProjectionFactory() {}
 }}

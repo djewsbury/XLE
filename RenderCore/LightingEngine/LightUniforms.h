@@ -9,7 +9,7 @@
 namespace RenderCore { namespace LightingEngine 
 {
 	class EnvironmentalLightingDesc;
-	class LightDesc;
+	class StandardLightDesc;
 }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -63,7 +63,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc);
 	CB_RangeFog MakeRangeFogUniforms(const EnvironmentalLightingDesc& desc);
-	CB_Light MakeLightUniforms(const LightDesc& light);
+	CB_Light MakeLightUniforms(const StandardLightDesc& light);
 	CB_Light MakeBlankLightDesc();
 	CB_VolumeFog MakeBlankVolumeFogDesc();
 	CB_BasicEnvironment MakeBasicEnvironmentUniforms(const EnvironmentalLightingDesc& env);

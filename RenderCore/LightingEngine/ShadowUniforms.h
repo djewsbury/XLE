@@ -7,6 +7,8 @@
 #include "ShadowPreparer.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Vector.h"
+#include "../../Math/Transformations.h"
+#include "../../Math/ProjectionMath.h"
 #include <memory>
 
 namespace RenderCore { namespace LightingEngine { namespace Internal

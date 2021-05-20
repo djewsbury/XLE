@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightUniforms.h"
-#include "LightScene_Internal.h"
+#include "StandardLightScene.h"
 #include "../../Math/Transformations.h"
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -23,7 +23,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
         return CB_RangeFog { Float3(0.f, 0.f, 0.f), 0 };
     }
 
-    CB_Light MakeLightUniforms(const LightDesc& light)
+    CB_Light MakeLightUniforms(const StandardLightDesc& light)
     {
         return CB_Light 
             {

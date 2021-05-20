@@ -10,7 +10,7 @@
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
 #include "LightScene.h"
-#include "LightScene_Internal.h"
+#include "StandardLightScene.h"
 #include "StandardLightOperators.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
@@ -319,7 +319,6 @@ namespace RenderCore { namespace LightingEngine
 				std::shared_ptr<ShadowPreparationOperators> shadowPreparationOperators) {
 
 				auto lightScene = std::make_shared<StandardLightScene>();
-				lightScene->_lightSourceOperators = resolveOperators;
 				lightScene->_shadowProjectionFactory = shadowPreparationOperators;
 
 				Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
@@ -377,8 +376,9 @@ namespace RenderCore { namespace LightingEngine
 
 				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture<CompiledLightingTechnique>(
 					thatFuture,
-					[lightingTechnique, captures](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
+					[lightingTechnique, captures, lightScene](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;
+						lightScene->_lightSourceFactory = resolveOperators;
 						return lightingTechnique;
 					});
 			});
