@@ -42,6 +42,13 @@ namespace RenderCore { namespace LightingEngine
 			}
 	};
 
+	class ILightBase
+	{
+	public:
+		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightBase();
+	};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class IPositionalLightSource

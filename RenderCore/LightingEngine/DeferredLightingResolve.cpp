@@ -317,7 +317,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
-		Internal::StandardLightScene& lightScene,
+		StandardLightScene& lightScene,
 		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
@@ -360,7 +360,7 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned l=0; l<lightCount; ++l) {
 			const auto& i = lightScene._lights[l];
 
-			auto lightUniforms = MakeLightUniforms(i._desc);
+			auto lightUniforms = Internal::MakeLightUniforms(i._desc);
 			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

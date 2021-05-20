@@ -33,14 +33,14 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class IPreparedShadowResult;
-	namespace Internal { class StandardLightScene; }
+	class StandardLightScene;
 
     void ResolveLights(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
-		Internal::StandardLightScene& lightScene,
+		StandardLightScene& lightScene,
 		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
 
 	enum class GBufferType

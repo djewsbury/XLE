@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance Begin(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
-			const Internal::ShadowProjectionDesc& frustum,
+			ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::AttachmentPool& shadowGenAttachmentPool) override;
 
@@ -118,18 +118,20 @@ namespace RenderCore { namespace LightingEngine
 	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
 
 	Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
-		const Internal::ShadowProjectionDesc& frustum, float shadowTextureSize)
+		ILightBase& projectionBase, float shadowTextureSize)
 	{
-		auto projectionCount = std::min(frustum._projections.Count(), MaxShadowTexturesPerLight);
+		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
+		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
+		auto projectionCount = std::min(projection._projections.Count(), Internal::MaxShadowTexturesPerLight);
 		if (!projectionCount)
 			return Internal::PreparedDMShadowFrustum{};
 
 		Internal::PreparedDMShadowFrustum preparedResult;
-		preparedResult.InitialiseConstants(frustum._projections);
-		preparedResult._resolveParameters._worldSpaceBias = frustum._worldSpaceResolveBias;
-		preparedResult._resolveParameters._tanBlurAngle = frustum._tanBlurAngle;
-		preparedResult._resolveParameters._minBlurSearch = frustum._minBlurSearch;
-		preparedResult._resolveParameters._maxBlurSearch = frustum._maxBlurSearch;
+		preparedResult.InitialiseConstants(projection._projections);
+		preparedResult._resolveParameters._worldSpaceBias = projection._worldSpaceResolveBias;
+		preparedResult._resolveParameters._tanBlurAngle = projection._tanBlurAngle;
+		preparedResult._resolveParameters._minBlurSearch = projection._minBlurSearch;
+		preparedResult._resolveParameters._maxBlurSearch = projection._maxBlurSearch;
 		preparedResult._resolveParameters._shadowTextureSize = shadowTextureSize;
 		XlZeroMemory(preparedResult._resolveParameters._dummy);
 
@@ -139,15 +141,17 @@ namespace RenderCore { namespace LightingEngine
 	Techniques::RenderPassInstance DMShadowPreparer::Begin(
 		IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext,
-		const Internal::ShadowProjectionDesc& frustum,
+		ILightBase& projectionBase,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
-		_workingDMFrustum = SetupPreparedDMShadowFrustum(frustum, _shadowTextureSize);
+		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
+		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
+		_workingDMFrustum = SetupPreparedDMShadowFrustum(projection, _shadowTextureSize);
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
-		parsingContext.GetProjectionDesc()._worldToProjection = frustum._worldToClip;
+		parsingContext.GetProjectionDesc()._worldToProjection = projection._worldToClip;
 		return Techniques::RenderPassInstance{
 			threadContext,
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
@@ -323,6 +327,16 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
+	std::unique_ptr<ILightBase> ShadowPreparationOperators::CreateShadowProjection(ILightScene::ShadowOperatorId opId)
+	{
+		assert(opId <= _operators.size());
+		auto result = std::make_unique<Internal::ShadowProjectionDesc>();
+		result->_projections._mode = _operators[opId]._desc._projectionMode;
+		result->_projections._useNearProj = _operators[opId]._desc._enableNearCascade;
+		result->_projections._normalProjCount = _operators[opId]._desc._normalProjCount;
+		return result;
+	}
+
 	::Assets::FuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -346,9 +360,11 @@ namespace RenderCore { namespace LightingEngine
 		for (const auto&desc:shadowGenerators)
 			futures.push_back(CreateCompiledShadowPreparer(desc, pipelineAccelerators, delegatesBox, descSetLayout));
 
+		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
+
 		auto result = std::make_shared<::Assets::AssetFuture<ShadowPreparationOperators>>();
 		result->SetPollingFunction(
-			[futures=std::move(futures)](::Assets::AssetFuture<ShadowPreparationOperators>& future) -> bool {
+			[futures=std::move(futures),shadowGeneratorCopy=std::move(shadowGeneratorCopy)](::Assets::AssetFuture<ShadowPreparationOperators>& future) -> bool {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
 				actualized.resize(futures.size());
@@ -369,8 +385,10 @@ namespace RenderCore { namespace LightingEngine
 
 				auto finalResult = std::make_shared<ShadowPreparationOperators>();
 				finalResult->_operators.reserve(actualized.size());
+				assert(actualized.size() == shadowGeneratorCopy.size());
+				auto i = shadowGeneratorCopy.begin();
 				for (auto& a:actualized)
-					finalResult->_operators.push_back({std::move(a), ShadowOperatorDesc{}});
+					finalResult->_operators.push_back({std::move(a), *i++});
 
 				future.SetAsset(std::move(finalResult), nullptr);
 				return false;

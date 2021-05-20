@@ -6,6 +6,12 @@
 
 #include "../../Math/Vector.h"
 
+namespace RenderCore { namespace LightingEngine 
+{
+	class EnvironmentalLightingDesc;
+	class LightDesc;
+}}
+
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	struct CB_Ambient
@@ -55,8 +61,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		CB_Light      _dominant[1];
 	};
 
-	class EnvironmentalLightingDesc;
-	class LightDesc;
 	CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc);
 	CB_RangeFog MakeRangeFogUniforms(const EnvironmentalLightingDesc& desc);
 	CB_Light MakeLightUniforms(const LightDesc& light);

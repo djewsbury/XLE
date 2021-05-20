@@ -6,7 +6,7 @@
 #include "LightScene_Internal.h"
 #include "../../Core/Exceptions.h"
 
-namespace RenderCore { namespace LightingEngine { namespace Internal
+namespace RenderCore { namespace LightingEngine
 {
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
@@ -51,32 +51,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			[preparerId](const auto& c) { return c._id == preparerId; });
 		if (i == _shadowProjections.end())
 			return nullptr;
-
-		if (interfaceTypeCode == typeid(IShadowPreparer).hash_code()) {
-			return &i->_desc;
-		} else if (interfaceTypeCode == typeid(IArbitraryShadowProjections).hash_code()) {
-			if (i->_desc._projections._mode == ShadowProjectionMode::Arbitrary || i->_desc._projections._mode == ShadowProjectionMode::ArbitraryCubeMap)
-				return (IArbitraryShadowProjections*)&i->_desc;
-		} else if (interfaceTypeCode == typeid(IOrthoShadowProjections).hash_code()) {
-			if (i->_desc._projections._mode == ShadowProjectionMode::Ortho)
-				return (IOrthoShadowProjections*)&i->_desc;
-		} else if (interfaceTypeCode == typeid(INearShadowProjection).hash_code()) {
-			if (i->_desc._projections._useNearProj)
-				return (INearShadowProjection*)&i->_desc;
-		}
-
-		return nullptr;
+		return i->_desc->QueryInterface(interfaceTypeCode);
 	}
 
 	auto StandardLightScene::CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) -> ShadowProjectionId
 	{
-		assert(op < _shadowOperators.size());
+		assert(_shadowProjectionFactory);
 		auto result = _nextShadow++;
-		ShadowProjectionDesc desc{};
-		desc._projections._mode = _shadowOperators[op]._projectionMode;
-		desc._projections._useNearProj = _shadowOperators[op]._enableNearCascade;
-		desc._projections._normalProjCount = _shadowOperators[op]._normalProjCount;
-		_shadowProjections.push_back({result, op, associatedLight, desc});
+		auto desc = _shadowProjectionFactory->CreateShadowProjection(op);	
+		_shadowProjections.push_back({result, op, associatedLight, std::move(desc)});
 		return result;
 	}
 
@@ -103,10 +86,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	StandardLightScene::~StandardLightScene()
 	{}
 
-}}}
 
-namespace RenderCore { namespace LightingEngine
-{
 	ILightScene::~ILightScene() {}
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}
@@ -114,4 +94,6 @@ namespace RenderCore { namespace LightingEngine
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}
 	INearShadowProjection::~INearShadowProjection() {}
+	ILightBase::~ILightBase() {}
+	IShadowProjectionFactory::~IShadowProjectionFactory() {}
 }}

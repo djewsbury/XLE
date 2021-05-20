@@ -25,7 +25,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ICompiledShadowPreparer> _shadowPreparer;
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
-		std::shared_ptr<Internal::StandardLightScene> _lightScene;
+		std::shared_ptr<StandardLightScene> _lightScene;
 
 		class UniformsDelegate : public Techniques::IShaderResourceDelegate
 		{
@@ -35,7 +35,7 @@ namespace RenderCore { namespace LightingEngine
 			{
 				assert(idx==0);
 				assert(dst.size() == sizeof(Internal::CB_BasicEnvironment));
-				*(Internal::CB_BasicEnvironment*)dst.begin() = MakeBasicEnvironmentUniforms(Internal::EnvironmentalLightingDesc{});
+				*(Internal::CB_BasicEnvironment*)dst.begin() = Internal::MakeBasicEnvironmentUniforms(EnvironmentalLightingDesc{});
 			}
 
 			size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
@@ -56,14 +56,14 @@ namespace RenderCore { namespace LightingEngine
 
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
-		const Internal::ShadowProjectionDesc& proj,
+		ILightBase& proj,
 		ICompiledShadowPreparer& preparer,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
 		auto res = preparer.CreatePreparedShadowResult();
 		iterator.PushFollowingStep(
-			[&preparer, proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool](LightingTechniqueIterator& iterator) {
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool](LightingTechniqueIterator& iterator) {
 				iterator._rpi = preparer.Begin(
 					*iterator._threadContext,
 					*iterator._parsingContext,
@@ -143,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
-		auto lightScene = std::make_shared<Internal::StandardLightScene>();
+		auto lightScene = std::make_shared<StandardLightScene>();
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
 		auto captures = std::make_shared<ForwardLightingCaptures>();
@@ -172,11 +172,11 @@ namespace RenderCore { namespace LightingEngine
 
 						auto& lightScene = *captures->_lightScene;
 						captures->_preparedShadows.reserve(lightScene._shadowProjections.size());
-						Internal::LightId prevLightId = ~0u; 
+						ILightScene::LightSourceId prevLightId = ~0u; 
 						for (unsigned c=0; c<lightScene._shadowProjections.size(); ++c) {
 							captures->_preparedShadows.push_back(std::make_pair(
 								lightScene._shadowProjections[c]._lightId,
-								SetupShadowPrepare(iterator, lightScene._shadowProjections[c]._desc, *captures->_shadowPreparer, *captures->_shadowGenFrameBufferPool, *captures->_shadowGenAttachmentPool)));
+								SetupShadowPrepare(iterator, *lightScene._shadowProjections[c]._desc, *captures->_shadowPreparer, *captures->_shadowGenFrameBufferPool, *captures->_shadowGenAttachmentPool)));
 
 							// shadow entries must be sorted by light id
 							assert(prevLightId == ~0u || prevLightId < lightScene._shadowProjections[c]._lightId);

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "LightScene_Internal.h"		// for IShadowProjectionFactory
 #include "../StateDesc.h"
 #include "../Format.h"
 #include "../../Assets/AssetsCore.h"
@@ -25,16 +26,8 @@ namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class IPreparedShadowResult
-	{
-	public:
-		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const = 0;
-		virtual ~IPreparedShadowResult();
-	};
-
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
 	enum class ShadowResolveType { DepthTexture, RayTraced };
-	constexpr unsigned MaxShadowTexturesPerLight = 6;
 
 	class ShadowOperatorDesc
 	{
@@ -73,7 +66,14 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t Hash(uint64_t seed = DefaultSeed64);
 	};
 
-	namespace Internal { class ShadowProjectionDesc; }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class IPreparedShadowResult
+	{
+	public:
+		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const = 0;
+		virtual ~IPreparedShadowResult();
+	};
 
 	class ICompiledShadowPreparer
 	{
@@ -81,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual Techniques::RenderPassInstance Begin(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
-			const Internal::ShadowProjectionDesc& frustum,
+			ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::AttachmentPool& shadowGenAttachmentPool) = 0;
 		virtual void End(
@@ -102,7 +102,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
-	class ShadowPreparationOperators
+	class ShadowPreparationOperators : public IShadowProjectionFactory
 	{
 	public:
 		struct Operator
@@ -111,6 +111,8 @@ namespace RenderCore { namespace LightingEngine
 			ShadowOperatorDesc _desc;
 		};
 		std::vector<Operator> _operators;
+
+		std::unique_ptr<ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId);
 	};
 	::Assets::FuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
