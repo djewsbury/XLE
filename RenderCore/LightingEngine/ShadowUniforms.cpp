@@ -37,19 +37,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				//  shader, we shouldn't need this. But we can have it
 				//  prepared for comparisons.
 			arbitraryCBSource._projectionCount = frustumCount;
-			auto baseWorldToProj = desc._definitionViewMatrix;
+			auto baseWorldToView = desc._definitionViewMatrix;
 
 			float p22 = 1.f, p23 = 0.f;
 
 			for (unsigned c=0; c<frustumCount; ++c) {
 
-					// we don't really need to rebuild the projection
-					// matrix here. It should already be calcated in 
-					// _fullProj._projectionMatrix
-				const auto& projMatrix = desc._fullProj[c]._worldToProjTransform;
+				auto projMatrix = OrthogonalProjection(
+					desc._orthoSub[c]._projMins[0], desc._orthoSub[c]._projMaxs[1], desc._orthoSub[c]._projMaxs[0], desc._orthoSub[c]._projMins[1], 
+					desc._orthoSub[c]._projMins[2], desc._orthoSub[c]._projMaxs[2],
+					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
 				assert(IsOrthogonalProjection(projMatrix));
 
-				arbitraryCBSource._worldToProj[c] = Combine(baseWorldToProj, projMatrix);
+				arbitraryCBSource._worldToProj[c] = Combine(baseWorldToView, projMatrix);
 				arbitraryCBSource._minimalProj[c] = ExtractMinimalProjection(projMatrix);
 
 				orthoCBSource._cascadeScale[c][0] = projMatrix(0,0);
@@ -85,14 +85,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto zComponentMerge = Identity<Float4x4>();
 			zComponentMerge(2,2) = p22;
 			zComponentMerge(2,3) = p23;
-			orthoCBSource._worldToProj = AsFloat3x4(Combine(baseWorldToProj, zComponentMerge));
+			orthoCBSource._worldToProj = AsFloat3x4(Combine(baseWorldToView, zComponentMerge));
 
 				// the special "near" cascade is reached via the main transform
-			orthoCBSource._nearCascade = 
-				AsFloat3x4(Combine(
-					Inverse(AsFloat4x4(orthoCBSource._worldToProj)), 
-					desc._specialNearProjection));
-			orthoCBSource._nearMinimalProjection = desc._specialNearMinimalProjection;
+			if (desc._useNearProj) {
+				orthoCBSource._nearCascade = 
+					AsFloat3x4(Combine(
+						Inverse(AsFloat4x4(orthoCBSource._worldToProj)), 
+						desc._specialNearProjection));
+				orthoCBSource._nearMinimalProjection = desc._specialNearMinimalProjection;
+			} else {
+				orthoCBSource._nearCascade = Identity<Float3x4>();
+				orthoCBSource._nearMinimalProjection = Zero<Float4>();
+			}
 		} else {
 			assert(0);
 		}

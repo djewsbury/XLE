@@ -45,6 +45,13 @@ namespace RenderCore { namespace LightingEngine
 			[sourceId](const auto& c) { return c._id == sourceId; });
 		if (i != _lights.end()) {
 			_lights.erase(i);
+
+			// Also destroy a shadow projection associated with this light, if it exists
+			auto i = std::find_if(
+				_shadowProjections.begin(), _shadowProjections.end(),
+				[sourceId](const auto& c) { return c._lightId == sourceId; });
+			if (i != _shadowProjections.end())
+				_shadowProjections.erase(i);
 		} else
 			Throw(std::runtime_error("Invalid light source id: " + std::to_string(sourceId)));
 	}

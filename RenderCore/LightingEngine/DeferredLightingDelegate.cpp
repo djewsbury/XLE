@@ -369,10 +369,14 @@ namespace RenderCore { namespace LightingEngine
 				// And then we'll complete the technique when the future from BuildLightResolveOperators() is completed
 				//
 				auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(resolveFragmentRegistration);
+				std::vector<ShadowOperatorDesc> shadowOp;
+				shadowOp.reserve(captures->_shadowPreparationOperators->_operators.size());
+				for (const auto& c:captures->_shadowPreparationOperators->_operators) shadowOp.push_back(c._desc);
 				auto lightResolveOperators = BuildLightResolveOperators(
-					*pipelineCollection, resolveOperators,
+					*pipelineCollection, 
+					resolveOperators, shadowOp,
 					*resolvedFB.first, resolvedFB.second+1,
-					false, 0, Shadowing::CubeMapShadows, GBufferType::PositionNormalParameters);
+					false, GBufferType::PositionNormalParameters);
 
 				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture<CompiledLightingTechnique>(
 					thatFuture,

@@ -152,7 +152,7 @@ namespace RenderCore { namespace LightingEngine
 		captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
 
 		ShadowOperatorDesc defaultShadowGenerator;
-		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, pipelineAccelerators, techDelBox, nullptr);
+		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, 0, pipelineAccelerators, techDelBox, nullptr);
 
 		auto result = std::make_shared<::Assets::AssetFuture<CompiledLightingTechnique>>("forward-lighting-technique");
 		::Assets::WhenAll(shadowPreparerFuture).ThenConstructToFuture<CompiledLightingTechnique>(

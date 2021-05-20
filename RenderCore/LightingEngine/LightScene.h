@@ -118,7 +118,7 @@ namespace RenderCore { namespace LightingEngine
 			Float3      _projMins;
 			Float3      _projMaxs;
 		};
-		virtual void SetWorldToDefiningProjection(const Float4x4& worldToCamera) = 0;
+		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) = 0;
 		virtual void SetSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;
 		virtual ~IOrthoShadowProjections();
 	};

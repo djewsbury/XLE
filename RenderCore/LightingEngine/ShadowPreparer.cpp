@@ -26,7 +26,9 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<IDescriptorSet> _descriptorSet;
+		ILightScene::ShadowOperatorId _operatorId = ~0u;
 		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const override { return _descriptorSet; }
+		virtual ILightScene::ShadowOperatorId GetShadowOperatorId() const override { return _operatorId; }
 		virtual ~PreparedShadowResult() {}
 	};
 
@@ -53,6 +55,7 @@ namespace RenderCore { namespace LightingEngine
 
 		DMShadowPreparer(
 			const ShadowOperatorDesc& desc,
+			ILightScene::ShadowOperatorId operatorId,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
@@ -72,6 +75,7 @@ namespace RenderCore { namespace LightingEngine
 		DescriptorSetSignature _descSetSig;
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _descSetSlotBindings;
 		float _shadowTextureSize = 0.f;
+		ILightScene::ShadowOperatorId _operatorId;
 
 		class UniformDelegate : public Techniques::IShaderResourceDelegate
 		{
@@ -218,7 +222,9 @@ namespace RenderCore { namespace LightingEngine
 
 	std::shared_ptr<IPreparedShadowResult> DMShadowPreparer::CreatePreparedShadowResult()
 	{
-		return std::make_shared<PreparedShadowResult>();
+		auto result = std::make_shared<PreparedShadowResult>();
+		result->_operatorId = _operatorId;
+		return result;
 	}
 
 	static const auto s_shadowCascadeModeString = "SHADOW_CASCADE_MODE";
@@ -226,10 +232,12 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::DMShadowPreparer(
 		const ShadowOperatorDesc& desc,
+		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	: _pipelineAccelerators(pipelineAccelerators)
+	, _operatorId(operatorId)
 	{
 		assert(desc._resolveType == ShadowResolveType::DepthTexture);
 
@@ -338,13 +346,14 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	::Assets::FuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
-		const ShadowOperatorDesc& desc, 
+		const ShadowOperatorDesc& desc,
+		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
 		auto result = std::make_shared<::Assets::AssetFuture<ICompiledShadowPreparer>>();
-		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout), nullptr);
+		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, operatorId, pipelineAccelerators, delegatesBox, descSetLayout), nullptr);
 		return result;
 	}
 
@@ -354,11 +363,12 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
+		assert(!shadowGenerators.empty());
 		using PreparerFuture = ::Assets::FuturePtr<ICompiledShadowPreparer>;
 		std::vector<PreparerFuture> futures;
 		futures.reserve(shadowGenerators.size());
-		for (const auto&desc:shadowGenerators)
-			futures.push_back(CreateCompiledShadowPreparer(desc, pipelineAccelerators, delegatesBox, descSetLayout));
+		for (unsigned operatorId=0; operatorId<shadowGenerators.size(); ++operatorId)
+			futures.push_back(CreateCompiledShadowPreparer(shadowGenerators[operatorId], operatorId, pipelineAccelerators, delegatesBox, descSetLayout));
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
 

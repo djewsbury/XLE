@@ -45,15 +45,6 @@ namespace UnitTests
 		emittance->SetBrightness(Float3(10.f, 10.f, 10.f));
 
 		return lightId;
-
-		/*RenderCore::LightingEngine::LightDesc result;
-		result._orientation = Identity<Float3x3>();
-		result._position = ;
-		result._radii = Float2{1.0f, 1.0f};
-		result._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-		result._diffuseColor = Float3{1.0f, 1.0f, 1.0f};
-		result._radii = Float2{100.f, 100.f};
-		return result;*/
 	}
 
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
@@ -65,11 +56,10 @@ namespace UnitTests
 		REQUIRE(projections);
 
 		auto camToWorld = MakeCameraToWorld(Float3{0.f, -1.0f, 0.f}, Float3{0.f, 0.0f, 1.f}, Float3{0.f, 10.0f, 0.f});
-		auto worldToProj = OrthogonalProjection(-2.f, -2.f, 2.f, 2.f, 0.01f, 100.f, RenderCore::Techniques::GetDefaultClipSpaceType());
-		projections->SetWorldToDefiningProjection(Combine(camToWorld, worldToProj));
+		projections->SetWorldToOrthoView(InvertOrthonormalTransform(camToWorld));
 
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
-			{ Float3{-1.f, -1.f}, Float3{1.f, 1.f} }
+			{ Float3{-2.f, -2.f, 0.01f}, Float3{2.f, 2.f, 100.f} }
 		};
 		projections->SetSubProjections(MakeIteratorRange(subProj));
 
@@ -221,6 +211,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#if 0
 		SECTION("Forward lighting")
 		{
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -250,6 +241,7 @@ namespace UnitTests
 
 			fbHelper.SaveImage(*threadContext, "forward-lighting-output");
 		}
+#endif
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Deferred lighting")
@@ -259,8 +251,10 @@ namespace UnitTests
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{}
 			};
+			LightingEngine::ShadowOperatorDesc shadowOp;
+			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				LightingEngine::ShadowOperatorDesc{}
+				shadowOp
 			};
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

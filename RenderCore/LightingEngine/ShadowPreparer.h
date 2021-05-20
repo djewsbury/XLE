@@ -28,6 +28,7 @@ namespace RenderCore { namespace LightingEngine
 {
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
 	enum class ShadowResolveType { DepthTexture, RayTraced };
+	enum class ShadowFilterModel { PoissonDisc, Smooth };
 
 	class ShadowOperatorDesc
 	{
@@ -60,6 +61,7 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProjectionMode	_projectionMode = ShadowProjectionMode::Arbitrary;
 		RenderCore::CullMode	_cullMode = RenderCore::CullMode::Back;
 		ShadowResolveType		_resolveType = ShadowResolveType::DepthTexture;
+		ShadowFilterModel		_filterModel = ShadowFilterModel::PoissonDisc;
 		unsigned				_normalProjCount = 1u;
 		bool					_enableNearCascade = false;
 
@@ -72,6 +74,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const = 0;
+		virtual ILightScene::ShadowOperatorId GetShadowOperatorId() const = 0;
 		virtual ~IPreparedShadowResult();
 	};
 
@@ -97,7 +100,8 @@ namespace RenderCore { namespace LightingEngine
 	class ShadowOperatorDesc;
 	class SharedTechniqueDelegateBox;
 	::Assets::FuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
-		const ShadowOperatorDesc& desc, 
+		const ShadowOperatorDesc& desc,
+		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);

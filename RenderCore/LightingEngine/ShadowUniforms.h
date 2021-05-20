@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ShadowPreparer.h"
+#include "../Techniques/TechniqueUtils.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Vector.h"
 #include "../../Math/Transformations.h"
@@ -212,7 +213,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 		}
 
-		virtual void SetWorldToDefiningProjection(const Float4x4& worldToCamera) override
+		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
 		{
 			assert(_projections._mode == ShadowProjectionMode::Ortho);
 			_projections._definitionViewMatrix = worldToCamera;
@@ -228,6 +229,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
             for (unsigned c=0; c<projCount; ++c) {
 				_projections._orthoSub[c]._projMins = projections[c]._projMins;
 				_projections._orthoSub[c]._projMaxs = projections[c]._projMaxs;
+
+				auto projTransform = OrthogonalProjection(
+					projections[c]._projMins[0], projections[c]._projMaxs[1], projections[c]._projMaxs[0], projections[c]._projMins[1], projections[c]._projMins[2], projections[c]._projMaxs[2],
+					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
+				_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
+				_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);
 			}
 		}
 

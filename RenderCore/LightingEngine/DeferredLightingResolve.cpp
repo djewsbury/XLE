@@ -117,14 +117,25 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
+	struct ShadowResolveParam
+	{
+		enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
+		Shadowing _shadowing = Shadowing::NoShadows;
+		ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
+
+		friend bool operator==(const ShadowResolveParam& lhs, const ShadowResolveParam& rhs)
+		{
+			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel;
+		}
+	};
+
 	::Assets::FuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
 		const LightSourceOperatorDesc& desc,
+		const ShadowResolveParam shadowResolveParam,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
-		unsigned shadowResolveModel,
-		Shadowing shadowing,
 		GBufferType gbufferType)
 	{
 		auto sampleCount = TextureSamples::Create();
@@ -137,16 +148,16 @@ namespace RenderCore { namespace LightingEngine
 		definesTable << ";MSAA_SAMPLES=" << ((sampleCount._sampleCount<=1)?0:sampleCount._sampleCount);
 		// if (desc._msaaSamplers) definesTable << ";MSAA_SAMPLERS=1";
 
-		if (shadowing != Shadowing::NoShadows) {
-			if (shadowing == Shadowing::OrthShadows || shadowing == Shadowing::OrthShadowsNearCascade || shadowing == Shadowing::OrthHybridShadows) {
+		if (shadowResolveParam._shadowing != ShadowResolveParam::Shadowing::NoShadows) {
+			if (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadows || shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
 				definesTable << ";SHADOW_CASCADE_MODE=" << 2u;
-			} else if (shadowing == Shadowing::CubeMapShadows) {
+			} else if (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
 				definesTable << ";SHADOW_CASCADE_MODE=" << 3u;
 			} else
 				definesTable << ";SHADOW_CASCADE_MODE=" << 1u;
-			definesTable << ";SHADOW_ENABLE_NEAR_CASCADE=" << (shadowing == Shadowing::OrthShadowsNearCascade ? 1u : 0u);
-			definesTable << ";SHADOW_RESOLVE_MODEL=" << unsigned(shadowResolveModel);
-			definesTable << ";SHADOW_RT_HYBRID=" << unsigned(shadowing == Shadowing::OrthHybridShadows);
+			definesTable << ";SHADOW_ENABLE_NEAR_CASCADE=" << (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
+			definesTable << ";SHADOW_RESOLVE_MODEL=" << unsigned(shadowResolveParam._filterModel);
+			definesTable << ";SHADOW_RT_HYBRID=" << unsigned(shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
 		}
 		definesTable << ";LIGHT_SHAPE=" << unsigned(desc._shape);
 		definesTable << ";DIFFUSE_METHOD=" << unsigned(desc._diffuseModel);
@@ -221,26 +232,99 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	static bool IsCompatible(const LightSourceOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
+	{
+		switch (shadowOp._projectionMode) {
+		case ShadowProjectionMode::Arbitrary:
+		case ShadowProjectionMode::Ortho:
+			return lightSource._shape == LightSourceShape::Directional || lightSource._shape == LightSourceShape::Rectangle || lightSource._shape == LightSourceShape::Disc;
+		case ShadowProjectionMode::ArbitraryCubeMap:
+			return lightSource._shape == LightSourceShape::Sphere || lightSource._shape == LightSourceShape::Tube;
+		default:
+			assert(0);
+			return false;
+		}
+	}
+
 	::Assets::FuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
-		unsigned shadowResolveModel,
-		Shadowing shadowing,
 		GBufferType gbufferType)
 	{
 		using PipelineFuture = ::Assets::FuturePtr<Metal::GraphicsPipeline>;
 		std::vector<PipelineFuture> pipelineFutures;
-		pipelineFutures.reserve(resolveOperators.size());
-		for (const auto&desc:resolveOperators)
+		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
+		
+		pipelineFutures.reserve(resolveOperators.size() * (1+shadowOperators.size()));
+		operatorToPipelineMap.reserve(resolveOperators.size() * (1+shadowOperators.size()));
+		for (unsigned lightOperatorId=0; lightOperatorId!=resolveOperators.size(); ++lightOperatorId) {
+			operatorToPipelineMap.push_back({lightOperatorId, ~0u, (unsigned)pipelineFutures.size()});
 			pipelineFutures.push_back(
 				BuildLightResolveOperator(
-					pipelineCollection, desc,
+					pipelineCollection, 
+					resolveOperators[lightOperatorId], ShadowResolveParam {}, 
 					fbDesc, subpassIdx,
-					hasScreenSpaceAO, shadowResolveModel,
-					shadowing, gbufferType));
+					hasScreenSpaceAO, 
+					gbufferType));
+		}
+
+		for (unsigned lightOperatorId=0; lightOperatorId!=resolveOperators.size(); ++lightOperatorId) {
+			
+			ShadowResolveParam shadowParams[shadowOperators.size()+1];
+			unsigned shadowParamCount = 0;
+			shadowParams[shadowParamCount++] = ShadowResolveParam { ShadowResolveParam::Shadowing::NoShadows };
+			auto basePipelineIdx = (unsigned)pipelineFutures.size();
+
+			for (unsigned shadowOperatorId=0; shadowOperatorId!=shadowOperators.size(); ++shadowOperatorId) {
+				const auto& shadowOp = shadowOperators[shadowOperatorId];
+				if (!IsCompatible(resolveOperators[lightOperatorId], shadowOp)) {
+					operatorToPipelineMap.push_back({lightOperatorId, shadowOperatorId, lightOperatorId});
+					continue;
+				}
+
+				ShadowResolveParam param;
+				param._filterModel = shadowOp._filterModel;
+				switch (shadowOp._projectionMode) {
+				case ShadowProjectionMode::Arbitrary:
+					param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
+					assert(!shadowOp._enableNearCascade);
+					break;
+				case ShadowProjectionMode::Ortho:
+					param._shadowing = shadowOp._enableNearCascade ? ShadowResolveParam::Shadowing::OrthShadowsNearCascade : ShadowResolveParam::Shadowing::OrthShadows;
+					break;
+				case ShadowProjectionMode::ArbitraryCubeMap:
+					param._shadowing = ShadowResolveParam::Shadowing::CubeMapShadows;
+					assert(!shadowOp._enableNearCascade);
+					break;
+				}
+
+				bool foundExisting = false;
+				for (unsigned c=0; c<shadowParamCount; ++c)
+					if (shadowParams[c] == param) {
+						foundExisting = true;
+						operatorToPipelineMap.push_back({lightOperatorId, shadowOperatorId, basePipelineIdx+c});
+						break;
+					}
+				if (!foundExisting) {
+					operatorToPipelineMap.push_back({lightOperatorId, shadowOperatorId, basePipelineIdx+shadowParamCount});
+					shadowParams[shadowParamCount++] = param;
+				}
+			}
+
+			for (unsigned c=0; c<shadowParamCount; ++c) {
+				pipelineFutures.push_back(
+					BuildLightResolveOperator(
+						pipelineCollection,
+						resolveOperators[lightOperatorId], shadowParams[c], 
+						fbDesc, subpassIdx,
+						hasScreenSpaceAO, 
+						gbufferType));
+			}
+		}
 
 		auto finalResult = std::make_shared<LightResolveOperators>();
 		finalResult->_pipelineLayout = pipelineCollection.GetPipelineLayout();
@@ -258,7 +342,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto result = std::make_shared<::Assets::AssetFuture<LightResolveOperators>>("light-operators");
 		result->SetPollingFunction(
-			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult)](::Assets::AssetFuture<LightResolveOperators>& future) -> bool {
+			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap)](::Assets::AssetFuture<LightResolveOperators>& future) -> bool {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<Metal::GraphicsPipeline>> actualized;
 				actualized.resize(pipelineFutures.size());
@@ -288,9 +372,10 @@ namespace RenderCore { namespace LightingEngine
 					}
 				}
 
-				finalResult->_operators.reserve(actualized.size());
+				finalResult->_pipelines.reserve(actualized.size());
 				for (auto& a:actualized)
-					finalResult->_operators.push_back({std::move(a), LightSourceOperatorDesc{}});
+					finalResult->_pipelines.push_back({std::move(a)});
+				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 
 				UniformsStreamInterface sharedUsi;
 				sharedUsi.BindFixedDescriptorSet(0, Utility::Hash64("SharedDescriptors"));
@@ -370,19 +455,39 @@ namespace RenderCore { namespace LightingEngine
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);
 
-			// while (shadowIterator != preparedShadows.end() && shadowIterator->first < l) ++shadowIterator;
-			if (shadowIterator != preparedShadows.end() && shadowIterator->first == l) {
+			const LightResolveOperators::Pipeline* pipeline;
+			assert(i._operatorId < lightResolveOperators._pipelines.size());
+
+			if (shadowIterator != preparedShadows.end() && shadowIterator->first == lightScene._lights[l]._id) {
 				IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
-				++shadowIterator;
-			}
 
-			auto& op = lightResolveOperators._operators[0];
+				auto shadowOperatorId = shadowIterator->second->GetShadowOperatorId();
+				auto q = std::find_if(
+					lightResolveOperators._operatorToPipelineMap.begin(), lightResolveOperators._operatorToPipelineMap.end(),
+					[operatorId=i._operatorId, shadowOperatorId](const auto& c) {
+						return std::get<0>(c) == operatorId && std::get<1>(c) == shadowOperatorId;
+					});
+				if (q != lightResolveOperators._operatorToPipelineMap.end()) {
+					pipeline = &lightResolveOperators._pipelines[std::get<2>(*q)];
+				} else {
+					assert(0);		// couldn't find the mapping for this light operator and shadow operator pair
+					pipeline = &lightResolveOperators._pipelines[i._operatorId];
+				}
+				++shadowIterator;
+			} else {
+				// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
+				// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
+				// generated for a light that doesn't exist
+				assert(shadowIterator != preparedShadows.end() || shadowIterator->first > lightScene._lights[l]._id);
+				pipeline = &lightResolveOperators._pipelines[i._operatorId];
+			}
+			
 			UniformsStream uniformsStream;
 			uniformsStream._immediateData = MakeIteratorRange(cbvs);
 			uniformsStream._resourceViews = MakeIteratorRange(srvs);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
-			encoder.Draw(*op._pipeline, 4);
+			encoder.Draw(*pipeline->_pipeline, 4);
 		}
 	}
    
