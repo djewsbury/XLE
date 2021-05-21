@@ -245,39 +245,33 @@ namespace RenderCore { namespace LightingEngine
 		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap)
 			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
 
+		Techniques::RSDepthBias singleSidedBias {
+			desc._rasterDepthBias, desc._depthBiasClamp, desc._slopeScaledBias };
+		Techniques::RSDepthBias doubleSidedBias {
+			desc._dsRasterDepthBias, desc._dsDepthBiasClamp, desc._dsSlopeScaledBias };
+		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(singleSidedBias, doubleSidedBias, desc._cullMode);
+
+		ParameterBox sequencerSelectors;
+		if (desc._projectionMode == ShadowProjectionMode::Ortho) {
+			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 2);
+		} else if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
+			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 3);
+		} else {
+			assert(desc._projectionMode == ShadowProjectionMode::Arbitrary);
+			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 1);
+		}
+		sequencerSelectors.SetParameter(s_shadowEnableNearCascadeString, desc._enableNearCascade?1:0);
+
 		///////////////////////////////
-		RenderStepFragmentInterface fragment{PipelineType::Graphics};
+		Techniques::FrameBufferDescFragment fragment;
 		{
-			Techniques::RSDepthBias singleSidedBias {
-				desc._rasterDepthBias, desc._depthBiasClamp, desc._slopeScaledBias };
-			Techniques::RSDepthBias doubleSidedBias {
-				desc._dsRasterDepthBias, desc._dsDepthBiasClamp, desc._dsSlopeScaledBias };
-
-			auto output = fragment.DefineAttachment(
-				Techniques::AttachmentSemantics::ShadowDepthMap, 
-				desc._width, desc._height, arrayCount,
-				AttachmentDesc{desc._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource | BindFlag::DepthStencil});
-			
-			auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(singleSidedBias, doubleSidedBias, desc._cullMode);
-
-			ParameterBox box;
-			if (desc._projectionMode == ShadowProjectionMode::Ortho) {
-				box.SetParameter(s_shadowCascadeModeString, 2);
-			} else if (desc._projectionMode == ShadowProjectionMode::ArbitraryCubeMap) {
-				box.SetParameter(s_shadowCascadeModeString, 3);
-			} else {
-				assert(desc._projectionMode == ShadowProjectionMode::Arbitrary);
-				box.SetParameter(s_shadowCascadeModeString, 1);
-			}
-			box.SetParameter(s_shadowEnableNearCascadeString, desc._enableNearCascade?1:0);
-
 			SubpassDesc subpass;
-			subpass.SetDepthStencil(output);
-			fragment.AddSubpass(
-				std::move(subpass),
-				shadowGenDelegate,
-				Techniques::BatchFilter::Max,
-				std::move(box));
+			subpass.SetDepthStencil(
+				fragment.DefineAttachment(
+					Techniques::AttachmentSemantics::ShadowDepthMap, 
+					desc._width, desc._height, arrayCount,
+					AttachmentDesc{desc._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource | BindFlag::DepthStencil}));
+			fragment.AddSubpass(std::move(subpass));
 		}
 		///////////////////////////////
 		
@@ -304,11 +298,11 @@ namespace RenderCore { namespace LightingEngine
 		stitchingContext.DefineAttachment(pregAttach);
 
 		stitchingContext._workingProps = FrameBufferProperties { desc._width, desc._height };
-		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(fragment.GetFrameBufferDescFragment());
+		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(fragment);
 
 		_sequencerConfigs = pipelineAccelerators->CreateSequencerConfig(
-			fragment.GetSubpassAddendums()[0]._techniqueDelegate,
-			fragment.GetSubpassAddendums()[0]._sequencerSelectors,
+			shadowGenDelegate,
+			sequencerSelectors,
 			_fbDesc._fbDesc,
 			0);
 		_uniformDelegate = std::make_shared<UniformDelegate>(*this);

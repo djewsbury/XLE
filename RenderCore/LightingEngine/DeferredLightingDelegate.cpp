@@ -362,6 +362,12 @@ namespace RenderCore { namespace LightingEngine
 					[captures](LightingTechniqueIterator& iterator) {
 					});
 
+				// prepare-only steps
+				for (const auto&shadowPreparer:captures->_shadowPreparationOperators->_operators) {
+					lightingTechnique->CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter::General);
+					lightingTechnique->CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
+				}
+
 				lightingTechnique->CompleteConstruction();
 
 				//

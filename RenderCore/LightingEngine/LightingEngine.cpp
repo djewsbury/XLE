@@ -50,6 +50,25 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(newStep));
 	}
 
+	void CompiledLightingTechnique::CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter batch)
+	{
+		assert(!_isConstructionCompleted);
+		ResolvePendingCreateFragmentSteps();
+		Step newStep;
+		newStep._type = Step::Type::ParseScene;
+		newStep._batch = batch;
+		_steps.emplace_back(std::move(newStep));
+	}
+
+	void CompiledLightingTechnique::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig)
+	{
+		assert(!_isConstructionCompleted);
+		Step newStep;
+		newStep._type = Step::Type::PrepareOnly_ExecuteDrawables;
+		newStep._sequencerConfig = std::move(sequencerConfig);
+		_steps.emplace_back(std::move(newStep));
+	}
+
 	auto CompiledLightingTechnique::CreateStep_RunFragments(RenderStepFragmentInterface&& fragments) -> FragmentInterfaceRegistration
 	{
 		assert(!_isConstructionCompleted);
@@ -276,6 +295,10 @@ namespace RenderCore { namespace LightingEngine
 				_iterator->_rpi.NextSubpass();
 				break;
 
+			case CompiledLightingTechnique::Step::Type::PrepareOnly_ParseScene:
+			case CompiledLightingTechnique::Step::Type::PrepareOnly_ExecuteDrawables:
+				break;
+
 			case CompiledLightingTechnique::Step::Type::None:
 				assert(0);
 				break;
@@ -318,12 +341,14 @@ namespace RenderCore { namespace LightingEngine
 			auto next = _prepareResourcesIterator->_stepIterator;
 			++_prepareResourcesIterator->_stepIterator;
 			switch (next->_type) {
+			case CompiledLightingTechnique::Step::Type::PrepareOnly_ParseScene:
 			case CompiledLightingTechnique::Step::Type::ParseScene:
 				return { StepType::ParseScene, next->_batch, &_prepareResourcesIterator->_drawablePkt };
 
 			case CompiledLightingTechnique::Step::Type::DrawSky:
 				return { StepType::DrawSky };
 
+			case CompiledLightingTechnique::Step::Type::PrepareOnly_ExecuteDrawables:
 			case CompiledLightingTechnique::Step::Type::ExecuteDrawables:
 				{
 					auto preparation = Techniques::PrepareResources(*_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt);

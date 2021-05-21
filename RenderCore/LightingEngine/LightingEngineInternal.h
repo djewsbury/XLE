@@ -31,6 +31,9 @@ namespace RenderCore { namespace LightingEngine
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
+		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter);
+		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig);
+
 		void CompleteConstruction();
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
@@ -56,7 +59,7 @@ namespace RenderCore { namespace LightingEngine
 
 		struct Step
 		{
-			enum class Type { ParseScene, DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, None };
+			enum class Type { ParseScene, DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ParseScene, PrepareOnly_ExecuteDrawables, None };
 			Type _type = Type::None;
 			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
