@@ -9,6 +9,7 @@
 
 #include "../TechniqueLibrary/Math/TextureAlgorithm.hlsl"		// for LoadFloat1
 #include "../TechniqueLibrary/Math/TransformAlgorithm.hlsl"		// float NDC->linear conversions
+#include "../TechniqueLibrary/SceneEngine/Lighting/LightDesc.hlsl"
 #include "../TechniqueLibrary/Framework/Binding.hlsl"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,39 @@ float3 CalculateWorldPosition(int2 pixelCoords, uint sampleIndex, float3 viewFru
 	float depth = GetLinear0To1Depth(pixelCoords, sampleIndex);
 	// if (depth >= 1.f) clip(-1); // maybe would be ideal to discard these pixels with stencil buffer
 	return CalculateWorldPosition(viewFrustumVector, depth, SysUniform_GetWorldSpaceView());
+}
+
+struct ResolvePixelProperties
+{
+	float3 worldPosition;
+	LightScreenDest screenDest;
+	float worldSpaceDepth;
+	float ndcDepth;
+};
+
+ResolvePixelProperties ResolvePixelProperties_Create(float4 position, float3 viewFrustumVector, SystemInputs sys)
+{
+	ResolvePixelProperties result;
+
+	int2 pixelCoords = position.xy;
+	
+    result.screenDest.pixelCoords = pixelCoords;
+    result.screenDest.sampleIndex = GetSampleIndex(sys);
+
+    // Note -- we could pre-multiply (miniProj.W/SysUniform_GetFarClip()) into the view frustum vector to optimise this slightly...?
+	result.ndcDepth = LoadFloat1(DepthTexture, pixelCoords.xy, GetSampleIndex(sys));
+    result.worldSpaceDepth = NDCDepthToWorldSpace(result.ndcDepth);
+
+    const bool orthoProjection = true;
+    if (!SysUniform_IsOrthogonalProjection()) {
+        result.worldPosition = SysUniform_GetWorldSpaceView() + (result.worldSpaceDepth / SysUniform_GetFarClip()) * viewFrustumVector;
+    } else {
+        float4x4 cameraBasis = SysUniform_GetCameraBasis();
+        float3 cameraForward = -float3(cameraBasis[0].z, cameraBasis[1].z, cameraBasis[2].z);
+        result.worldPosition = viewFrustumVector + SysUniform_GetWorldSpaceView() - (SysUniform_GetFarClip() - result.worldSpaceDepth) * cameraForward;
+    }
+
+	return result;
 }
 
 #endif

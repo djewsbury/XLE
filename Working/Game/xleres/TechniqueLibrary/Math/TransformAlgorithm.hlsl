@@ -179,12 +179,14 @@ MiniProjZW GlobalMiniProjZW()
 
     float NDCDepthToWorldSpace_Ortho(float NDCz, MiniProjZW miniProj)
     {
-        return (NDCz - miniProj.W) / miniProj.Z;
+            // see note above about negating the equation
+        return (miniProj.W - NDCz) / miniProj.Z;
     }
 
     float WorldSpaceDepthToNDC_Ortho(float worldSpaceDepth, MiniProjZW miniProj)
     {
-	    return miniProj.Z * worldSpaceDepth + miniProj.W;
+            // see note above about negating the equation
+	    return -(miniProj.Z * worldSpaceDepth + miniProj.W);
     }
 
     float NDCDepthDifferenceToWorldSpace_Ortho(float ndcDepthDifference, MiniProjZW miniProj)
@@ -197,28 +199,56 @@ MiniProjZW GlobalMiniProjZW()
         return worldSpaceDepth * miniProj.Z;
     }
 
+    float NDCDepthToLinear0To1_Ortho(float NDCz, MiniProjZW miniProj, float farClip)
+    {
+            // note -- could be optimised by pre-calculating "A" (see above)
+	    return NDCDepthToWorldSpace_Ortho(NDCz, miniProj) / farClip;
+    }
+
+    float Linear0To1DepthToNDC_Ortho(float worldSpaceDepth, MiniProjZW miniProj, float farClip)
+    {
+            // note -- could be optimised by pre-calculating "A" (see above)
+	    return WorldSpaceDepthToNDC_Ortho(worldSpaceDepth * farClip, miniProj);
+    }
+
 ///////////////////////////////////////////////////////////////////////////////
     //      D E F A U L T S     //
 ///////////////////////////////////////////////////////////////////////////////
 
     float NDCDepthToWorldSpace(float NDCz)
     {
-	    return NDCDepthToWorldSpace_Perspective(NDCz, GlobalMiniProjZW());
+        if (SysUniform_IsOrthogonalProjection()) {
+            return NDCDepthToWorldSpace_Ortho(NDCz, GlobalMiniProjZW());
+        } else {
+	        return NDCDepthToWorldSpace_Perspective(NDCz, GlobalMiniProjZW());
+        }
     }
 
     float WorldSpaceDepthToNDC(float worldSpaceDepth)
     {
-	    return WorldSpaceDepthToNDC_Perspective(worldSpaceDepth, GlobalMiniProjZW());
+        if (SysUniform_IsOrthogonalProjection()) {
+            return WorldSpaceDepthToNDC_Ortho(worldSpaceDepth, GlobalMiniProjZW());
+        } else {
+	        return WorldSpaceDepthToNDC_Perspective(worldSpaceDepth, GlobalMiniProjZW());
+        }
     }
 
     float NDCDepthToLinear0To1(float NDCz)
     {
-        return NDCDepthToLinear0To1_Perspective(NDCz, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        if (SysUniform_IsOrthogonalProjection()) {
+            return NDCDepthToLinear0To1_Ortho(NDCz, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        } else {
+            return NDCDepthToLinear0To1_Perspective(NDCz, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        }
     }
 
     float Linear0To1DepthToNDC(float worldSpaceDepth)
     {
-        return Linear0To1DepthToNDC_Perspective(worldSpaceDepth, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        if (SysUniform_IsOrthogonalProjection()) {
+            return Linear0To1DepthToNDC_Ortho(worldSpaceDepth, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        } else {
+            return Linear0To1DepthToNDC_Perspective(worldSpaceDepth, GlobalMiniProjZW(), SysUniform_GetFarClip());
+        }
     }
 
 ///////////////////////////////////////////////////////////////////////////////

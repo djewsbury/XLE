@@ -122,7 +122,12 @@ namespace RenderCore { namespace Techniques
         globalTransform._viewToWorld = projDesc._cameraToWorld;
         globalTransform._worldSpaceView = ExtractTranslation(projDesc._cameraToWorld);
         globalTransform._minimalProjection = ExtractMinimalProjection(projDesc._cameraToProjection);
-        globalTransform._farClip = CalculateNearAndFarPlane(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
+        if (IsOrthogonalProjection(projDesc._cameraToProjection)) {
+            globalTransform._farClip = CalculateNearAndFarPlane_Ortho(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
+            globalTransform._farClip = -globalTransform._farClip;       // we use negative far clip as a flag for orthogonal projection
+        } else {
+            globalTransform._farClip = CalculateNearAndFarPlane(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
+        }
 
             //  We can calculate the projection corners either from the camera to world,
             //  transform or from the final world-to-clip transform. Let's try to pick 

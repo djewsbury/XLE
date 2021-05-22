@@ -262,6 +262,7 @@ namespace RenderCore { namespace LightingEngine
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
 			_preparedShadows);
+		_preparedShadows.clear();
 	}
 
 	void DeferredLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)

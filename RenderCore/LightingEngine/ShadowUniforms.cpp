@@ -47,7 +47,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					desc._orthoSub[c]._topLeftFront[0], desc._orthoSub[c]._topLeftFront[1], 
 					desc._orthoSub[c]._bottomRightBack[0], desc._orthoSub[c]._bottomRightBack[1], 
 					desc._orthoSub[c]._topLeftFront[2], desc._orthoSub[c]._bottomRightBack[2],
-					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
+					Techniques::GetDefaultClipSpaceType());
 				assert(IsOrthogonalProjection(projMatrix));
 
 				arbitraryCBSource._worldToProj[c] = Combine(baseWorldToView, projMatrix);

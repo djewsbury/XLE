@@ -1026,10 +1026,76 @@ namespace RenderCore { namespace Metal_Vulkan
                 srcResource->GetBuffer(),
                 dstResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(dstLayout),
                 copyOperations, copyOps);
+		} else if (dstResource->GetBuffer() && srcResource->GetImage()) {
+            if (dst._resource->GetDesc()._type != ResourceDesc::Type::Texture)
+                Throw(::Exceptions::BasicLabel("Image to buffer copy not implemented, except for staging resources"));
+
+			const auto& srcDesc = src._resource->GetDesc();
+		    const auto& dstDesc = dstResource->GetDesc();
+		    assert(srcDesc._type == Resource::Desc::Type::Texture);
+		    assert(dstDesc._type == Resource::Desc::Type::Texture);
+
+            auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
+
+            VkBufferImageCopy copyOps[8];
+
+			assert(dstDesc._textureDesc._dimensionality != TextureDesc::Dimensionality::CubeMap);		// cubemap support may be a problem here, due to wierdness around the "arrayCount" variable
+
+            auto arrayCount = std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount);
+		    auto mips = std::max(1u, (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount));
+            unsigned width = srcDesc._textureDesc._width, height = srcDesc._textureDesc._height, depth = srcDesc._textureDesc._depth;
+            auto minDims = (GetCompressionType(srcDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+
+            assert(dstDesc._textureDesc._width >= width);
+            assert(dstDesc._textureDesc._height >= height);
+            assert(dstDesc._textureDesc._depth == depth);
+		    assert(mips*arrayCount <= dimof(copyOps));
+
+            // todo -- not adjusting the offsets/extents for mipmaps. This won't
+            // work correctly in the mipmapped case.
+            assert(mips <= 1);
+            for (unsigned m=0; m<mips; ++m) {
+                auto mipOffset = GetSubResourceOffset(dstDesc._textureDesc, m, 0);
+                for (unsigned a=0; a<arrayCount; ++a) {
+                    auto& c = copyOps[m+a*mips];
+                    c.bufferOffset = mipOffset._offset + mipOffset._pitches._arrayPitch * a;
+                    if (dst._leftTopFront[0] != ~0u) {
+                        c.bufferOffset += 
+                              dst._leftTopFront[2] * mipOffset._pitches._slicePitch
+                            + dst._leftTopFront[1] * mipOffset._pitches._rowPitch
+                            + dst._leftTopFront[0] * BitsPerPixel(dstDesc._textureDesc._format) / 8;
+                    }
+                    c.bufferRowLength = std::max(width, minDims);
+                    c.bufferImageHeight = std::max(height, minDims);
+
+                    c.imageSubresource = VkImageSubresourceLayers{ srcAspectMask, m, a, 1 };
+                    c.imageOffset = VkOffset3D{(int32_t)src._leftTopFront[0], (int32_t)src._leftTopFront[1], (int32_t)src._leftTopFront[2]};
+
+                    if (src._leftTopFront[0] != ~0u && src._rightBottomBack[0] != ~0u) {
+                        c.imageExtent = VkExtent3D{
+                            src._rightBottomBack[0] - src._leftTopFront[0],
+                            src._rightBottomBack[1] - src._leftTopFront[1],
+                            src._rightBottomBack[2] - src._leftTopFront[2]};
+                    } else {
+                        c.imageExtent = VkExtent3D{
+                            srcDesc._textureDesc._width,
+                            srcDesc._textureDesc._height,
+                            std::max(srcDesc._textureDesc._depth, 1u)};
+                    }
+                }
+
+                width >>= 1u;
+                height >>= 1u;
+                depth >>= 1u;
+            }
+
+            const auto copyOperations = mips*arrayCount;
+            context.GetActiveCommandList().CopyImageToBuffer(
+                srcResource->GetImage(), (VkImageLayout)Internal::AsVkImageLayout(srcLayout),
+                dstResource->GetBuffer(),
+                copyOperations, copyOps);
         } else {
-            // copies from buffer to image, or image to buffer are supported by Vulkan, but
-            // not implemented here.
-            Throw(::Exceptions::BasicLabel("Buffer to image and image to buffer copy not implemented"));
+            Throw(::Exceptions::BasicLabel("Blit copy operation not supported"));
         }
     }
 

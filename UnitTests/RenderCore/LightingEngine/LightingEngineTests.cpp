@@ -178,7 +178,19 @@ namespace UnitTests
 		RenderCore::Techniques::CameraDesc camera;
 		// camera._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
-		
+		// camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 0.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 0.f, 0.f});
+
+		const bool orthogonalProjection = true;
+		if (orthogonalProjection) {
+			camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+			camera._nearClip = 0.f;
+			camera._farClip = 100.f;
+			camera._left = -3.0f;
+			camera._top = 3.0f;
+			camera._right = 3.0f;
+			camera._bottom = -3.0f;
+		}
+
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 

@@ -96,32 +96,25 @@ float4 main(
 	float2 texCoord : TEXCOORD0,
 	float3 viewFrustumVector : VIEWFRUSTUMVECTOR,
 	SystemInputs sys) : SV_Target0
-{
-	int2 pixelCoords = position.xy;
+{	
 	GBufferValues sample = LoadGBuffer(position.xy, sys);
+    ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
 
     LightSampleExtra sampleExtra;
     sampleExtra.screenSpaceOcclusion = 1.f;
 	#if HAS_SCREENSPACE_AO==1
-        sampleExtra.screenSpaceOcclusion = LoadFloat1(AmbientOcclusion, pixelCoords, GetSampleIndex(sys));
+        sampleExtra.screenSpaceOcclusion = LoadFloat1(AmbientOcclusion, position.xy, GetSampleIndex(sys));
     #endif
 
-    LightScreenDest screenDest;
-    screenDest.pixelCoords = pixelCoords;
-    screenDest.sampleIndex = GetSampleIndex(sys);
-
-    // Note -- we could pre-multiply (miniProj.W/SysUniform_GetFarClip()) into the view frustum vector to optimise this slightly...?
-    float worldSpaceDepth = GetWorldSpaceDepth(pixelCoords, GetSampleIndex(sys));
-    float3 worldPosition = SysUniform_GetWorldSpaceView() + (worldSpaceDepth / SysUniform_GetFarClip()) * viewFrustumVector;
-
     float3 result = GetLightResolver().Resolve(
-        sample, sampleExtra, Light, worldPosition,
-        normalize(-viewFrustumVector), screenDest);
+        sample, sampleExtra, Light, resolvePixel.worldPosition,
+        normalize(-viewFrustumVector), resolvePixel.screenDest);
 
     // Also calculate the shadowing -- (though we could skip it if the lighting is too dim here)
-    CascadeAddress cascade = GetCascadeResolver().Resolve(worldPosition, texCoord, worldSpaceDepth);
-    float shadow = GetShadowResolver().Resolve(cascade, screenDest);
-
+    CascadeAddress cascade = GetCascadeResolver().Resolve(resolvePixel.worldPosition, texCoord, resolvePixel.worldSpaceDepth);
+    float shadow = GetShadowResolver().Resolve(cascade, resolvePixel.screenDest);
+    // return cascade.frustumCoordinates;
+    return float4(shadow.xxx, 1.f);
 	return float4((LightingScale*shadow)*result, 1.f);
 }
 

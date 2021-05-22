@@ -20,9 +20,10 @@ cbuffer GlobalTransform BIND_SEQ_B0
 float4x4 	SysUniform_GetWorldToClip() { return WorldToClip; }
 float4 		SysUniform_GetFrustumCorners(int cornerIdx) { return FrustumCorners[cornerIdx]; }
 float3 		SysUniform_GetWorldSpaceView() { return WorldSpaceView; }
-float 		SysUniform_GetFarClip() { return FarClip; }
+float 		SysUniform_GetFarClip() { return abs(FarClip); }
 float4 		SysUniform_GetMinimalProjection() { return MinimalProjection; }
 float4x4 	SysUniform_GetCameraBasis() { return CameraBasis; }
+bool 		SysUniform_IsOrthogonalProjection() { return FarClip < 0; }
 
 cbuffer LocalTransform BIND_DRAW_B0
 {

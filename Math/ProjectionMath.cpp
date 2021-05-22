@@ -586,8 +586,8 @@ namespace XLEMath
         } else {
                 //  This is the OpenGL view of clip space
                 //      -1<z/w<1
-            result(2,2) =     -(f+n) / (f*(f-n));
-            result(2,3) =   -(2.f*n) / (f-n);
+            result(2,2) =     -2.f / (f-n);
+            result(2,3) =   -(f+n) / (f-n);
         }
 
         if (clipSpaceType == ClipSpaceType::PositiveRightHanded) {
@@ -649,6 +649,31 @@ namespace XLEMath
         }
     }
 
+    std::pair<float, float> CalculateNearAndFarPlane_Ortho(
+        const Float4& minimalProjection, ClipSpaceType clipSpaceType)
+    {
+        // clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded
+        //  miniProj[2] = A = -1 / (f-n)
+        //  miniProj[3] = B = -n / (f-n)
+        //  C = B / A = n
+        //  A * (f - n) = -1
+        //  Af - An + 1 = 0
+        //  f = (An - 1) / A
+        //
+        // clipSpaceType == ClipSpaceType::StraddlingZero
+        //  A = -2 / (f-n)
+        //  B = -(f+n) / (f-n)
+        //  n = (B + 1) / A
+        //  f = (B - 1) / A
+        const float A = minimalProjection[2];
+        const float B = minimalProjection[3];
+        if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
+            return std::make_pair(B / A, (B - 1) / A);
+        } else {
+            return std::make_pair((B + 1) / A, (B - 1) / A);
+        }
+    }
+
     std::pair<float, float> CalculateFov(
         const Float4& minimalProjection, ClipSpaceType clipSpaceType)
     {
@@ -666,24 +691,6 @@ namespace XLEMath
         float verticalFOV = 2.f * XlATan2(tmb/2.f, n);
         float aspect = minimalProjection[1] / minimalProjection[0];
         return std::make_pair(verticalFOV, aspect);
-    }
-
-    std::pair<float, float> CalculateNearAndFarPlane_Ortho(
-        const Float4& minimalProjection, ClipSpaceType clipSpaceType)
-    {
-            // For ClipSpaceType::Positive:
-            //      miniProj[2] = A = -1 / (f-n)
-            //      miniProj[3] = B = -n / (f-n)
-            //      C = B / A = n
-
-        const float A = minimalProjection[2];
-        const float B = minimalProjection[3];
-        if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
-            return std::make_pair(B / A, (B - 1.f) / A);
-        } else {
-            assert(0);
-            return std::make_pair(0.f, 0.f);
-        }
     }
 
     Float2 CalculateDepthProjRatio_Ortho(

@@ -17,7 +17,10 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Metal/Resource.h"
+#include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
+#include "../../../RenderCore/IThreadContext.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
 #include "../../../Assets/IAsyncMarker.h"
@@ -30,14 +33,14 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
 		auto lightId = lightScene.CreateLightSource(0);
 
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
 		REQUIRE(positional);
-		ScaleRotationTranslationM srt{Float3(0.03f, 0.03f, 0.03f), Identity<Float3x3>(), Normalize(Float3{1.f, 1.0f, 0.f})};
+		ScaleRotationTranslationM srt{Float3(0.03f, 0.03f, 0.03f), Identity<Float3x3>(), Float3{std::sin(theta), std::cos(theta), 0.f}};
 		positional->SetLocalToWorld(AsFloat4x4(srt));
 
 		auto* emittance = lightScene.TryGetLightSourceInterface<IUniformEmittance>(lightId);
@@ -47,7 +50,7 @@ namespace UnitTests
 		return lightId;
 	}
 
-	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
+	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
 		auto shadowId = lightScene.CreateShadowProjection(0, lightSourceId);
@@ -55,13 +58,14 @@ namespace UnitTests
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
 		REQUIRE(projections);
 
-        const float depthRange = 3.f;
+        const float depthRange = 3000.f;
         float distanceToLight = depthRange / 2.0f;
-		auto camToWorld = MakeCameraToWorld(Normalize(Float3{-1.f, -1.0f, 0.f}), Float3{0.f, 1.0f, 0.f}, distanceToLight / std::sqrt(2.0f) * Float3{1.f, 1.0f, 0.f});
+		Float3 negativeLightDirection{std::sin(theta), std::cos(theta), 0.f};
+		auto camToWorld = MakeCameraToWorld(-negativeLightDirection, Float3{0.f, 1.0f, 0.f}, distanceToLight / std::sqrt(2.0f) * negativeLightDirection);
 		projections->SetWorldToOrthoView(InvertOrthonormalTransform(camToWorld));
 
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
-			{ Float3{-1.f, 1.f, 0.0f}, Float3{1.f, -1.f, depthRange} }
+			{ Float3{-1.f, 1.f, 0.f}, Float3{1.f, -1.f, depthRange} }
 		};
 		projections->SetSubProjections(MakeIteratorRange(subProj));
 
@@ -77,10 +81,11 @@ namespace UnitTests
 		return shadowId;
 	}
 
-	static void ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
 	{
-		auto srcId = CreateTestLight(lightScene);
-		CreateTestShadowProjection(lightScene, srcId);
+		auto srcId = CreateTestLight(lightScene, theta);
+		CreateTestShadowProjection(lightScene, srcId, theta);
+		return srcId;
 	}
 
 	template<typename Type>
@@ -120,10 +125,19 @@ namespace UnitTests
 		LightingEngineTestApparatus testApparatus;
 		auto testHelper = testApparatus._metalTestHelper.get();
 
+		const unsigned stripes = 256;
+		const unsigned stripeHeight= 8;
+
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
-			TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
+			TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
 			"temporary-out");
+
+		auto stitchedImageDesc = CreateDesc(
+			BindFlag::TransferDst, CPUAccess::Read, 0,
+			TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
+			"saved-image");
+		auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
@@ -132,8 +146,10 @@ namespace UnitTests
 
 		RenderCore::Techniques::CameraDesc camera;
 		// camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.5f}), Normalize(Float3{0.0f, 1.0f, 1.0f}), Float3{0.0f, 1.0f, -0.5f});
-        camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 1.0f, 0.0f});
+        camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 5.0f, 0.0f});
         camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		camera._nearClip = 0.f;
+		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
 		
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
@@ -150,6 +166,7 @@ namespace UnitTests
 			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
+			shadowOp._rasterDepthBias = 0;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp
 			};
@@ -161,7 +178,6 @@ namespace UnitTests
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
-			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
 			testApparatus._bufferUploads->Update(*threadContext);
 			Threading::Sleep(16);
@@ -178,13 +194,29 @@ namespace UnitTests
 				}
 			}
 
-			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(lightingIterator, *drawableWriter);
+			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+			for (unsigned c=0; c<stripes; ++c) {
+				auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
+
+				{
+					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+						*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+					ParseScene(lightingIterator, *drawableWriter);
+				}
+
+				auto encoder = Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder();
+				encoder.Copy(
+					Metal::BlitEncoder::CopyPartial_Dest {
+						stitchedImage.get(), {}, UInt3{0,c*stripeHeight,0}
+					},
+					Metal::BlitEncoder::CopyPartial_Src {
+						fbHelper.GetMainTarget().get(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
+					});
+
+				lightScene.DestroyLightSource(lightId);
 			}
 
-			fbHelper.SaveImage(*threadContext, "shadow-precision");
+			SaveImage(*threadContext, *stitchedImage, "shadow-precision");
 		}
 
 		testHelper->EndFrameCapture();
