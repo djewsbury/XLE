@@ -105,6 +105,7 @@ namespace ToolsRig
 
         const float texWrapsX = 8.f;
         const float texWrapsY = 4.f;
+        std::vector<bool> singularityVertex(pts.size(), false);
 
         for (auto i=pts.cbegin(); i!=pts.cend(); ++i) {
             Internal::Vertex3D vertex;
@@ -115,40 +116,32 @@ namespace ToolsRig
                 //  2 texture wraps horizontally, and 1 wrap vertically
                 //      let's map [-0.5f*pi, .5f*pi] -> [0.f, 1.f];
 
-            float latitude  = XlASin((*i)[2]);
-            float longitude = XlATan2((*i)[1], (*i)[0]);
+            float latitude  = XlASin(vertex._normal[2]);
+            float longitude = XlATan2(vertex._normal[1], vertex._normal[0]);
             latitude = 1.f - (latitude + .5f * gPI) / gPI * texWrapsY;
             longitude = (longitude + .5f * gPI) / gPI * (texWrapsX / 2.f);
 
             vertex._texCoord = Float2(longitude, latitude);
 
-            Float3 bt(0.f, 0.f, -1.f);
-            bt = bt - vertex._normal * Dot(vertex._normal, bt);
-            if (MagnitudeSquared(bt) < 1e-3f) {
-                    // this a vertex on a singularity (straight up or straight down)
-                vertex._tangent = Float4(0.f, 0.f, 0.f, 0.f);
-                // vertex._bitangent = Float3(0.f, 0.f, 0.f);
+            // Using the gradient of the atan2 function, we can calculate the
+            // tangent (since the u texture coordinate is based on that)
+            float x = vertex._normal[0], y = vertex._normal[1];
+            if (std::abs(x) > 1e-6f || std::abs(y) > 1e-6f) {
+                vertex._tangent = Expand(Normalize(Float3{-y/(x*x+y*y), x/(x*x+y*y), 0.f}), 1.0f);
+                assert(vertex._tangent[0] == vertex._tangent[0]);
             } else {
-                bt = Normalize(bt);
-                // vertex._bitangent = bt;
-                    // cross(bitangent, tangent) * handiness == normal, so...
-                Float3 t = Normalize(Cross(vertex._normal, bt));
-                vertex._tangent = Expand(t, 1.f);
-            
-                auto test = Float3(Cross(bt, Truncate(vertex._tangent)) * vertex._tangent[3]);
-                assert(Equivalent(test, vertex._normal, 1e-4f));
-
-                    // tangent should also be the 2d cross product of the XY position (according to the shape of a sphere)
-                auto test2 = Normalize(Float3(-(*i)[1], (*i)[0], 0.f));
-                assert(Equivalent(test2, Truncate(vertex._tangent), 1e-4f));
-
-                    // make sure handiness is right
-                // assert(Equivalent(vertex._bitangent[2], 0.f, 1e-4f));
-                // auto testLong = XlATan2((*i)[1] + 0.05f * vertex._bitangent[1], (*i)[0] + 0.05f * vertex._bitangent[0]);
-                // testLong = (testLong + .5f * gPI) / gPI;
-                // assert(testLong > longitude);
+                // Directly up and down there is a singularity where there is no real tangent or bitangent
+                // Let's just make up one 
+                if (vertex._normal[2] > 0.f) {
+                    vertex._tangent = Float4{1.f, 0.f, 0.f, 1.0f};
+                } else {
+                    vertex._tangent = Float4{-1.f, 0.f, 0.f, 1.0f};
+                }
+                singularityVertex[i-pts.cbegin()] = true;
             }
 
+            // We can get the bitangent via cross product, as so (but that's not essential to store here)
+            // Float3 bt = Normalize(Cross(vertex._tangent, vertex._normal));
             result.push_back(vertex);
         }
 
@@ -163,7 +156,8 @@ namespace ToolsRig
             auto& C = result[t*3+2];
 
                 // problems around the singularity straight up or straight down
-            if (MagnitudeSquared(A._tangent) < 1e-4f || MagnitudeSquared(B._tangent) < 1e-4f || MagnitudeSquared(C._tangent) < 1e-4f)
+            // if (MagnitudeSquared(Truncate(A._tangent)) < 1e-4f || MagnitudeSquared(Truncate(B._tangent)) < 1e-4f || MagnitudeSquared(Truncate(C._tangent)) < 1e-4f)
+            if (singularityVertex[t*3+0] || singularityVertex[t*3+1] || singularityVertex[t*3+2])
                 continue;
 
             if (XlAbs(B._texCoord[0] - A._texCoord[0]) > 1e-3f) {
