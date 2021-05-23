@@ -231,5 +231,40 @@ namespace ToolsRig
 
         return result;
     }
+
+    static Internal::Vertex3D JustPositionVertex(Float3 pt)
+    {
+        return Internal::Vertex3D{ pt, Zero<Float3>(), Zero<Float2>(), Zero<Float4>() };
+    }
+
+    std::vector<Internal::Vertex3D> BuildTriangleBasePyramid()
+    {
+        float a = 2.0f, b = 2.0f * 0.267949f, c = 2.0f * 0.732051f;
+        Float3 basePts[] = {
+            Float3(-1.0f + c, -1.0f, 1.0f), 
+            Float3(-1.0f, -1.0f, -1.0f + b),
+            Float3(1.0f, -1.0f, -1.0f)
+        };
+        Float3 apex = Float3(0.f, 1.0f, 0.f);
+
+        std::vector<Internal::Vertex3D> result;
+        result.push_back(JustPositionVertex(basePts[0]));
+        result.push_back(JustPositionVertex(basePts[1]));
+        result.push_back(JustPositionVertex(basePts[2]));
+
+        result.push_back(JustPositionVertex(basePts[0]));
+        result.push_back(JustPositionVertex(apex));
+        result.push_back(JustPositionVertex(basePts[1]));
+
+        result.push_back(JustPositionVertex(basePts[1]));
+        result.push_back(JustPositionVertex(apex));
+        result.push_back(JustPositionVertex(basePts[2]));
+
+        result.push_back(JustPositionVertex(basePts[2]));
+        result.push_back(JustPositionVertex(apex));
+        result.push_back(JustPositionVertex(basePts[0]));
+
+        return result;
+    }
 }
 

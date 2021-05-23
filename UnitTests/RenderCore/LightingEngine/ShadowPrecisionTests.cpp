@@ -23,6 +23,7 @@
 #include "../../../RenderCore/IThreadContext.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
+#include "../../../Math/Geometry.h"
 #include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
 #include "../../../xleres/FileList.h"
@@ -50,6 +51,8 @@ namespace UnitTests
 		return lightId;
 	}
 
+    const float depthRange = 10.f;
+
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
@@ -58,9 +61,10 @@ namespace UnitTests
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowId);
 		REQUIRE(projections);
 
-        const float depthRange = 3000.f;
         float distanceToLight = depthRange / 2.0f;
-		Float3 negativeLightDirection{std::sin(theta), std::cos(theta), 0.f};
+		const float angleToWorldSpace = gPI / 4.0f;
+		Float3 negativeLightDirection = SphericalToCartesian(Float3{gPI/2.0f + angleToWorldSpace, theta, 1});
+
 		auto camToWorld = MakeCameraToWorld(-negativeLightDirection, Float3{0.f, 1.0f, 0.f}, distanceToLight / std::sqrt(2.0f) * negativeLightDirection);
 		projections->SetWorldToOrthoView(InvertOrthonormalTransform(camToWorld));
 
@@ -119,84 +123,144 @@ namespace UnitTests
 		}
 	};
 
+	static void PrepareResources(IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	{
+		// stall until all resources are ready
+		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, lightingTechnique);
+		ParseScene(prepareLightingIterator, drawablesWriter);
+		auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
+		if (prepareMarker) {
+			prepareMarker->StallWhilePending();
+			REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
+		}
+	}
+
+	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
+	{
+		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
+		testApparatus._bufferUploads->Update(immContext);
+		Threading::Sleep(16);
+		testApparatus._bufferUploads->Update(immContext);
+	}
+
 	TEST_CASE( "LightingEngine-ShadowPrecisionTests", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
 		LightingEngineTestApparatus testApparatus;
 		auto testHelper = testApparatus._metalTestHelper.get();
 
-		const unsigned stripes = 256;
-		const unsigned stripeHeight= 8;
-
-		auto targetDesc = CreateDesc(
-			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
-			TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
-			"temporary-out");
-
-		auto stitchedImageDesc = CreateDesc(
-			BindFlag::TransferDst, CPUAccess::Read, 0,
-			TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
-			"saved-image");
-		auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
-		
 		auto threadContext = testHelper->_device->GetImmediateContext();
-		UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
-
-		auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 
 		RenderCore::Techniques::CameraDesc camera;
-		// camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.5f}), Normalize(Float3{0.0f, 1.0f, 1.0f}), Float3{0.0f, 1.0f, -0.5f});
         camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 5.0f, 0.0f});
         camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		camera._nearClip = 0.f;
 		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
 		
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
-		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
-
 		testHelper->BeginFrameCapture();
 
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		SECTION("45 degree shadow precision")
 		{
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
+
+			float wsDepthResolution = depthRange / 16384.f;
+			float wsXYRange = 2.0f / 2048.f;
+			float ratio0 = wsXYRange / wsDepthResolution;
+			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
 
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{}
 			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
-			shadowOp._rasterDepthBias = 0;
+			shadowOp._rasterDepthBias = (int)std::ceil(ratio1);
+			// const float worldSpaceExtraBias = 0.2f;
+			// shadowOp._rasterDepthBias += worldSpaceExtraBias / wsDepthResolution;
+			shadowOp._slopeScaledBias = 0.5f;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp
 			};
 
-			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
-				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
-
-			testApparatus._bufferUploads->Update(*threadContext);
-			Threading::Sleep(16);
-			testApparatus._bufferUploads->Update(*threadContext);
-
-			// stall until all resources are ready
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			SECTION("acne precision")
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-				ParseScene(prepareLightingIterator, *drawableWriter);
-				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
-				if (prepareMarker) {
-					prepareMarker->StallWhilePending();
-					REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
+				const unsigned stripes = 256;
+				const unsigned stripeHeight= 8;
+
+				auto stripeTargetDesc = CreateDesc(
+					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					TextureDesc::Plain2D(2048, stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
+					"temporary-out");
+
+				auto stitchedImageDesc = CreateDesc(
+					BindFlag::TransferDst, CPUAccess::Read, 0,
+					TextureDesc::Plain2D(2048, stripes*stripeHeight, RenderCore::Format::R8G8B8A8_UNORM),
+					"saved-image");
+				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
+				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, stripeTargetDesc, camera);
+				parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
+
+				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+					testHelper->_device,
+					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
+					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				PumpBufferUploads(testApparatus);
+
+				auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+
+				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+				for (unsigned c=0; c<stripes; ++c) {
+					auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
+
+					{
+						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+							*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+						ParseScene(lightingIterator, *drawableWriter);
+					}
+
+					auto encoder = Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder();
+					encoder.Copy(
+						Metal::BlitEncoder::CopyPartial_Dest {
+							stitchedImage.get(), {}, UInt3{0,c*stripeHeight,0}
+						},
+						Metal::BlitEncoder::CopyPartial_Src {
+							fbHelper.GetMainTarget().get(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
+						});
+
+					lightScene.DestroyLightSource(lightId);
 				}
+
+				SaveImage(*threadContext, *stitchedImage, "acne-shadow-precision");
+				parsingContext.GetTechniqueContext()._attachmentPool->UnbindAll();
 			}
 
-			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-			for (unsigned c=0; c<stripes; ++c) {
-				auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
+			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			SECTION("contact precision")
+			{
+				auto targetDesc = CreateDesc(
+					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
+					"temporary-out");
+
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+					testHelper->_device,
+					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
+					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				PumpBufferUploads(testApparatus);
+
+				auto drawableWriter = CreateSharpContactDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+
+				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+				auto lightId = ConfigureLightScene(lightScene, gPI/4.0f);
 
 				{
 					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
@@ -204,19 +268,13 @@ namespace UnitTests
 					ParseScene(lightingIterator, *drawableWriter);
 				}
 
-				auto encoder = Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder();
-				encoder.Copy(
-					Metal::BlitEncoder::CopyPartial_Dest {
-						stitchedImage.get(), {}, UInt3{0,c*stripeHeight,0}
-					},
-					Metal::BlitEncoder::CopyPartial_Src {
-						fbHelper.GetMainTarget().get(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
-					});
-
 				lightScene.DestroyLightSource(lightId);
-			}
 
-			SaveImage(*threadContext, *stitchedImage, "shadow-precision");
+				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+				REQUIRE(colorLDR);
+
+				SaveImage(*threadContext, *colorLDR, "contact-shadow-precision");
+			}
 		}
 
 		testHelper->EndFrameCapture();

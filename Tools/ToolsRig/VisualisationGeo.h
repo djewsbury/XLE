@@ -44,5 +44,6 @@ namespace ToolsRig
 
     std::vector<Internal::Vertex3D>     BuildGeodesicSphere(int detail = 4);
     std::vector<Internal::Vertex3D>     BuildCube();
+    std::vector<Internal::Vertex3D>     BuildTriangleBasePyramid();
 }
 

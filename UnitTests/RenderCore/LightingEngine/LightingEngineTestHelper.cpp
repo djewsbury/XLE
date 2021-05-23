@@ -99,107 +99,47 @@ namespace UnitTests
 		return {geo, cubeGeo.size()};
 	}
 
-	class SphereDrawableWriter : public IDrawablesWriter
+	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(MetalTestHelper& testHelper)
 	{
-	public:
-		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
-		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
-		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		size_t _vertexCount;
-
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
-		{
-			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
-			auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
-			drawable->_pipeline = _pipelineAccelerator;
-			drawable->_descriptorSet = _descriptorSetAccelerator;
-			drawable->_geo = _geo;
-			drawable->_vertexCount = _vertexCount;
-			drawable->_drawFn = [](RenderCore::Techniques::ParsingContext&, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-				{
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-				};
-		}
-
-		SphereDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
-		{
-			std::tie(_geo, _vertexCount) = CreateSphereGeo(testHelper);
-			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
-				nullptr,
-				ParameterBox {},
-				ToolsRig::Vertex3D_InputLayout,
-				RenderCore::Topology::TriangleList,
-				RenderCore::Assets::RenderStateSet{});
-
-			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
-				nullptr,
-				{}, {}, {});
-		}
-	};
-
-	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
-	{
-		return std::make_shared<SphereDrawableWriter>(testHelper, pipelineAcceleratorPool);
+		auto pyramidGeo = ToolsRig::BuildTriangleBasePyramid();
+		auto pyramidVb = testHelper.CreateVB(pyramidGeo);
+		auto geo = std::make_shared<RenderCore::Techniques::DrawableGeo>();
+		geo->_vertexStreams[0]._resource = pyramidVb;
+		geo->_vertexStreamCount = 1;
+		return {geo, pyramidGeo.size()};
 	}
 
-	class ShapeStackDrawableWriter : public IDrawablesWriter
+	class DrawablesWriterCommon : public IDrawablesWriter
 	{
 	public:
-		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _cubeGeo;
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
-		size_t _sphereVertexCount, _cubeVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		void WriteDrawable(
+			RenderCore::Techniques::DrawablesPacket& pkt, 
+			std::shared_ptr<RenderCore::Techniques::DrawableGeo> geo,
+			size_t vertexCount,
+			const Float4x4& localToWorld)
 		{
-			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
-			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(3);
+			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localToWorld; };
+			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
 			drawables[0]._pipeline = _pipelineAccelerator;
 			drawables[0]._descriptorSet = _descriptorSetAccelerator;
-			drawables[0]._geo = _sphereGeo;
-			drawables[0]._vertexCount = _sphereVertexCount;
+			drawables[0]._geo = std::move(geo);
+			drawables[0]._vertexCount = vertexCount;
 			drawables[0]._looseUniformsInterface = _usi;
+			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
 				{
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(AsFloat4x4(Float3{0.f, 1.0f + std::sqrt(8.0f)/2.0f, 0.f}), ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-				};
-
-			drawables[1]._pipeline = _pipelineAccelerator;
-			drawables[1]._descriptorSet = _descriptorSetAccelerator;
-			drawables[1]._geo = _cubeGeo;
-			drawables[1]._vertexCount = _cubeVertexCount;
-			drawables[1]._looseUniformsInterface = _usi;
-			drawables[1]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-				{
-					Float4x4 transform = Identity<Float4x4>();
-					Combine_IntoLHS(transform, RotationY{gPI / 4.0f});
-					Combine_IntoLHS(transform, RotationZ{gPI / 4.0f});
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(transform, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-				};
-
-			drawables[2]._pipeline = _pipelineAccelerator;
-			drawables[2]._descriptorSet = _descriptorSetAccelerator;
-			drawables[2]._geo = _cubeGeo;
-			drawables[2]._vertexCount = _cubeVertexCount;
-			drawables[2]._looseUniformsInterface = _usi;
-			drawables[2]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-				{
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}), ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+					auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
 					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
 					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
 				};
 		}
 
-		ShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		DrawablesWriterCommon(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
-			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(testHelper);
-			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(testHelper);
-
 			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
 			_usi->BindImmediateData(0, Hash64("LocalTransform"));
 
@@ -216,27 +156,79 @@ namespace UnitTests
 		}
 	};
 
+	class SphereDrawableWriter : public DrawablesWriterCommon
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
+		size_t _vertexCount;
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
+		}
+
+		SphereDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
+		{
+			std::tie(_geo, _vertexCount) = CreateSphereGeo(testHelper);
+		}
+	};
+
+	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	{
+		return std::make_shared<SphereDrawableWriter>(testHelper, pipelineAcceleratorPool);
+	}
+
+	class ShapeStackDrawableWriter : public DrawablesWriterCommon
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _cubeGeo;
+		size_t _sphereVertexCount, _cubeVertexCount;
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			WriteDrawable(
+				pkt,
+				_sphereGeo, _sphereVertexCount, 
+				AsFloat4x4(Float3{0.f, 1.0f + std::sqrt(8.0f)/2.0f, 0.f}));
+
+			Float4x4 transform = Identity<Float4x4>();
+			Combine_IntoLHS(transform, RotationY{gPI / 4.0f});
+			Combine_IntoLHS(transform, RotationZ{gPI / 4.0f});
+			WriteDrawable(
+				pkt,
+				_cubeGeo, _cubeVertexCount, 
+				transform);
+
+			WriteDrawable(
+				pkt,
+				_cubeGeo, _cubeVertexCount, 
+				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
+		}
+
+		ShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
+		{
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(testHelper);
+			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(testHelper);
+		}
+	};
+
 	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 	{
 		return std::make_shared<ShapeStackDrawableWriter>(testHelper, pipelineAcceleratorPool);
 	}
 
-	class StonehengeDrawableWriter : public IDrawablesWriter
+	class StonehengeDrawableWriter : public DrawablesWriterCommon
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
-		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
-		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 		size_t _vertexCount;
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
 			const unsigned stoneCount = 32;
 			
-			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localTransform; };
-			auto* drawables = pkt._drawables.Allocate<CustomDrawable>(stoneCount+1);
-
 			const float radius = 1.0f;
 			const float circumference = 2.0f * gPI * radius;
 			const float stoneWidth = circumference / 2.0f / stoneCount;
@@ -248,18 +240,10 @@ namespace UnitTests
 				Combine_IntoLHS(transform, RotationY{gPI / 2.0f + theta});
 				Combine_IntoLHS(transform, Float3{std::sin(theta), 0.f, std::cos(theta)});
 
-				drawables[c]._pipeline = _pipelineAccelerator;
-				drawables[c]._descriptorSet = _descriptorSetAccelerator;
-				drawables[c]._geo = _geo;
-				drawables[c]._looseUniformsInterface = _usi;
-				drawables[c]._vertexCount = _vertexCount;
-				drawables[c]._localTransform = transform;
-				drawables[c]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-					{
-						auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localTransform, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-						drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-						drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-					};
+				WriteDrawable(
+					pkt,
+					_geo, _vertexCount, 
+					transform);
 			}
 
 			Float4x4 baseTransform = Identity<Float4x4>();
@@ -272,36 +256,16 @@ namespace UnitTests
 			}
 			++count;
 
-			drawables[stoneCount]._pipeline = _pipelineAccelerator;
-			drawables[stoneCount]._descriptorSet = _descriptorSetAccelerator;
-			drawables[stoneCount]._geo = _geo;
-			drawables[stoneCount]._looseUniformsInterface = _usi;
-			drawables[stoneCount]._vertexCount = _vertexCount;
-			drawables[stoneCount]._localTransform = baseTransform;
-			drawables[stoneCount]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-				{
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localTransform, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-				};
+			WriteDrawable(
+				pkt,
+				_geo, _vertexCount, 
+				baseTransform);
 		}
 
 		StonehengeDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
 		{
 			std::tie(_geo, _vertexCount) = CreateCubeGeo(testHelper);
-			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
-				nullptr,
-				ParameterBox {},
-				ToolsRig::Vertex3D_InputLayout,
-				RenderCore::Topology::TriangleList,
-				RenderCore::Assets::RenderStateSet{});
-
-			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
-				nullptr,
-				{}, {}, {});
-
-			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
-			_usi->BindImmediateData(0, Hash64("LocalTransform"));
 		}
 	};
 
@@ -310,60 +274,71 @@ namespace UnitTests
 		return std::make_shared<StonehengeDrawableWriter>(testHelper, pipelineAcceleratorPool);
 	}
 
-
-	class FlatPlaneDrawableWriter : public IDrawablesWriter
+	class FlatPlaneDrawableWriter : public DrawablesWriterCommon
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
-		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
-		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
-		std::shared_ptr<RenderCore::UniformsStreamInterface> _usi;
 		size_t _vertexCount;
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
-			struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
-			auto* drawable = pkt._drawables.Allocate<CustomDrawable>();
-			drawable->_pipeline = _pipelineAccelerator;
-			drawable->_descriptorSet = _descriptorSetAccelerator;
-			drawable->_geo = _geo;
-			drawable->_vertexCount = _vertexCount;
-			drawable->_looseUniformsInterface = _usi;
-			drawable->_drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
-				{
-					ScaleRotationTranslationM srt {
-						Float3 { 1000.f, 1.0f, 1000.f },
-						Identity<Float3x3>(),
-						Float3 { 0.f, -1.0f, 0.f }
-					};
-					auto localTransform = RenderCore::Techniques::MakeLocalTransform(AsFloat4x4(srt), ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-					drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-					drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
-				};
+			ScaleRotationTranslationM srt {
+				Float3 { 1000.f, 1.0f, 1000.f },
+				Identity<Float3x3>(),
+				Float3 { 0.f, -1.0f, 0.f }
+			};
+			WriteDrawable(
+				pkt,
+				_geo, _vertexCount, 
+				AsFloat4x4(srt));
 		}
 
 		FlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
 		{
 			std::tie(_geo, _vertexCount) = CreateCubeGeo(testHelper);
-			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
-				nullptr,
-				ParameterBox {},
-				ToolsRig::Vertex3D_InputLayout,
-				RenderCore::Topology::TriangleList,
-				RenderCore::Assets::RenderStateSet{});
-
-			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
-				nullptr,
-				{}, {}, {});
-
-			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
-			_usi->BindImmediateData(0, Hash64("LocalTransform"));
 		}
 	};
 
 	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 	{
 		return std::make_shared<FlatPlaneDrawableWriter>(testHelper, pipelineAcceleratorPool);
+	}
+
+	class SharpContactDrawableWriter : public DrawablesWriterCommon
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo;
+		size_t _sphereVertexCount, _pyramidVertexCode;
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}));
+			auto pyramidTransform = MakeObjectToWorld(Float3{0.f, 0.0f, 1.f}, Float3{1.f, 0.f, 0.f}, Float3{0.f, 0.f, -1.f});
+			Combine_IntoLHS(pyramidTransform, RotationZ(-gPI/4.0f));
+			
+			// squeeze in local X & Z to a finer point 
+			Combine_IntoRHS(ArbitraryScale(Float3{0.1f, 1.0f, 0.1f}), pyramidTransform);
+			
+			// Rotate a small amount around X (towards the camera), around the center of the sphere (which is at Float3{0.f, 0.0f, 1.f})
+			Combine_IntoLHS(pyramidTransform, Float3{0.f, 0.0f, -1.f});
+			Combine_IntoLHS(pyramidTransform, RotationX(gPI*3.0f/16.0f));
+			Combine_IntoLHS(pyramidTransform, Float3{0.f, 0.0f, 1.f});
+
+			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCode, pyramidTransform);
+		}
+
+		SharpContactDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
+		{
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(testHelper);
+			std::tie(_pyramidGeo, _pyramidVertexCode) = CreateTriangleBasePyramidGeo(testHelper);
+		}
+	};
+
+	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	{
+		return std::make_shared<SharpContactDrawableWriter>(testHelper, pipelineAcceleratorPool);
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

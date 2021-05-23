@@ -47,6 +47,9 @@ namespace UnitTests
 		return lightId;
 	}
 
+	const float shadowDepthRange = 100.f;
+	const float shadowFrustumWidth = 4.0f;
+
 	static RenderCore::LightingEngine::ILightScene::ShadowProjectionId CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
@@ -59,7 +62,7 @@ namespace UnitTests
 		projections->SetWorldToOrthoView(InvertOrthonormalTransform(camToWorld));
 
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
-			{ Float3{-2.f, 2.f, 0.01f}, Float3{2.f, -2.f, 100.f} }
+			{ Float3{-shadowFrustumWidth/2.0f, shadowFrustumWidth/2.0f, 0.0f}, Float3{shadowFrustumWidth/2.0f, -shadowFrustumWidth/2.0f, shadowDepthRange} }
 		};
 		projections->SetSubProjections(MakeIteratorRange(subProj));
 
@@ -239,6 +242,14 @@ namespace UnitTests
 			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
+
+			float wsDepthResolution = shadowDepthRange / 16384.f;
+			float wsXYRange = shadowFrustumWidth / 2048.f;
+			float ratio0 = wsXYRange / wsDepthResolution;
+			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
+			shadowOp._rasterDepthBias = (int)std::ceil(ratio1);
+			shadowOp._slopeScaledBias = 0.5f;
+
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp
 			};
