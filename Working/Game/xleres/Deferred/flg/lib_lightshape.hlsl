@@ -49,7 +49,7 @@ export float3 DoResolve_Directional(
     LightSampleExtra sampleExtra = MakeLightSampleExtra(screenSpaceOcclusion);
     LightScreenDest screenDest = LightScreenDest_Create(pixelCoords, GetSampleIndex(sys));
 
-    return Resolve_Directional(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
+    return DirectionalLightResolve(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
 }
 
 export float3 DoResolve_Sphere(
@@ -67,7 +67,7 @@ export float3 DoResolve_Sphere(
     LightSampleExtra sampleExtra = MakeLightSampleExtra(screenSpaceOcclusion);
     LightScreenDest screenDest = LightScreenDest_Create(pixelCoords, GetSampleIndex(sys));
 
-    return Resolve_Sphere(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
+    return SphereLightResolve(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
 }
 
 export float3 DoResolve_Tube(
@@ -85,7 +85,7 @@ export float3 DoResolve_Tube(
     LightSampleExtra sampleExtra = MakeLightSampleExtra(screenSpaceOcclusion);
     LightScreenDest screenDest = LightScreenDest_Create(pixelCoords, GetSampleIndex(sys));
 
-    return Resolve_Tube(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
+    return TubeLightResolve(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
 }
 
 export float3 DoResolve_Rectangle(
@@ -103,7 +103,7 @@ export float3 DoResolve_Rectangle(
     LightSampleExtra sampleExtra = MakeLightSampleExtra(screenSpaceOcclusion);
     LightScreenDest screenDest = LightScreenDest_Create(pixelCoords, GetSampleIndex(sys));
 
-    return Resolve_Rectangle(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
+    return RectangleLightResolve(sample, sampleExtra, Light, worldPosition, normalize(-viewFrustumVector), screenDest);
 }
 
 export float3 DoResolve_Disc(

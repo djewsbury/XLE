@@ -2,8 +2,8 @@
 #include "xleres/TechniqueLibrary/System/Prefix.hlsl"
 
 #include "xleres/Nodes/Basic.sh"
-#include "xleres/TechniqueLibrary/SceneEngine/Lighting/SpecularMethods.hlsl"
-#include "xleres/TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
+#include "xleres/TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
+#include "xleres/TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
 
 void GGXTransmission(float roughness, float iorIncident, float iorOutgoing, float3 i, float3 o, float3 n, out float result : SV_Target0)

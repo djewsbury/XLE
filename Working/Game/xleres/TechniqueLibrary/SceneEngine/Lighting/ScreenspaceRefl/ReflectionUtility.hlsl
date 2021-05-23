@@ -8,7 +8,7 @@
 #define REFLECTION_UTILITY_H
 
 #include "SSConstants.hlsl"
-#include "../../../Math/TransformAlgorithm.hlsl"
+#include "../../../Math/ProjectionMath.hlsl"
 
 // #define DEPTH_IN_LINEAR_COORDS
 

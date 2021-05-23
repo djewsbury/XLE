@@ -11,7 +11,9 @@
     #define SPECULAR_METHOD 1
 #endif
 
-#include "SpecularMethods.hlsl"
+#include "AmbientResolve.hlsl"
+#include "../../LightingEngine/SpecularMethods.hlsl"
+#include "../../LightingEngine/LightDesc.hlsl"
 #include "IBL/IBLAlgorithm.hlsl"
 #include "IBL/IBLRef.hlsl"
 #include "../../Framework/CommonResources.hlsl"
@@ -146,8 +148,8 @@ float SplitSumIBLTrans_IntegrateBTDF(float roughness, float NdotV, float F0, flo
         // We could also try to find a parametric simplification... But the surface in 3D space is fairly complex.
         // I think we can afford to be much less accuracy for refraction (when compared to reflections) because it's
         // a somewhat less important effect.
-        const float minF0 = RefractiveIndexToF0(RefractiveIndexMin);
-        const float maxF0 = RefractiveIndexToF0(RefractiveIndexMax);
+        const float minF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMin);
+        const float maxF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMax);
         float specular = (F0 - minF0) / (maxF0 - minF0);
         // Note --
         //      Fixed array count for GlossTransLUT here

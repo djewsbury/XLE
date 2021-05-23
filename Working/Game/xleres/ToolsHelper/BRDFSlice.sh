@@ -9,7 +9,7 @@
 
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/DirectionalResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/DirectionalResolve.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
 float3 BRDF(float3 lightDir, float3 view, float3 normal, float3 tangent, float3 bitangent)
@@ -30,8 +30,8 @@ float3 BRDF(float3 lightDir, float3 view, float3 normal, float3 tangent, float3 
     light.DiffuseWideningMin = 0.5f;
     light.DiffuseWideningMax = 2.5f;
 
-    float3 diffuse = LightResolve_Diffuse(sample, view, lightDir, light);
-    float3 specular = LightResolve_Specular(sample, view, lightDir, light);
+    float3 diffuse = DirectionalLightResolve_Diffuse(sample, view, lightDir, light);
+    float3 specular = DirectionalLightResolve_Specular(sample, view, lightDir, light);
     return diffuse + specular;
 }
 

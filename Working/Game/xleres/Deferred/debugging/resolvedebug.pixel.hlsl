@@ -4,8 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../../TechniqueLibrary/SceneEngine/Lighting/ResolverInterface.hlsl"
-#include "../../TechniqueLibrary/SceneEngine/Lighting/LightShapes.hlsl"
+#include "../standardlighttypes.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
 #include "../resolveutil.hlsl"
 #include "../../TechniqueLibrary/Utility/LoadGBuffer.hlsl"
 #include "../../TechniqueLibrary/Framework/Binding.hlsl"

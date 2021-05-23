@@ -7,6 +7,8 @@
 #if !defined(SAMPLE_FILTERING_H)
 #define SAMPLE_FILTERING_H
 
+#include "../Framework/Binding.hlsl"
+
 SamplerComparisonState		ShadowSampler   BIND_SHARED_LIGHTING_S2;
 SamplerState				ShadowDepthSampler    BIND_SHARED_LIGHTING_S3;
 

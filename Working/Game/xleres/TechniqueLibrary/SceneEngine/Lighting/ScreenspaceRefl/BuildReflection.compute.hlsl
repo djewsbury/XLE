@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SSConstants.hlsl"
-#include "../../../Math/TransformAlgorithm.hlsl"
+#include "../../../Math/ProjectionMath.hlsl"
 #include "../../../Math/TextureAlgorithm.hlsl"
 #include "../../../Framework/CommonResources.hlsl"
 #include "../../../Framework/gbuffer.hlsl"

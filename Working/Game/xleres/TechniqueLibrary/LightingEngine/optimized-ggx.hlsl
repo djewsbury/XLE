@@ -35,7 +35,7 @@ For more information, please refer to <http://unlicense.org/>
 #if !defined(OPTIMIZED_GGX_H)
 #define OPTIMIZED_GGX_H
 
-#include "../../Framework/CommonResources.hlsl"
+#include "../Framework/CommonResources.hlsl"
 
 float G1V(float dotNV, float k)
 {

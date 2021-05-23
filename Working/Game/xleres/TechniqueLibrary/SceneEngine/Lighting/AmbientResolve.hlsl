@@ -7,12 +7,12 @@
 #if !defined(AMBIENT_RESOLVE_H)
 #define AMBIENT_RESOLVE_H
 
-#include "LightDesc.hlsl"
-#include "MaterialQuery.hlsl"
-#include "Constants.hlsl"
+#include "../../LightingEngine/LightDesc.hlsl"
+#include "../../LightingEngine/LightingAlgorithm.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"
 #include "../../Utility/Colour.hlsl"	                 // for LightingScale
 #include "../../Framework/Binding.hlsl"
+#include "../../Framework/gbuffer.hlsl"
 
 #if CALCULATE_SCREENSPACE_REFLECTIONS==1
     #include "../../Utility/LoadGBuffer.hlsl"
@@ -118,7 +118,7 @@ float3 CalculateSkyReflectionFresnel(float3 F0, GBufferValues sample, float3 vie
 float3 CalculateSkyReflections(GBufferValues sample, float3 viewDirection, float3 fresnel, float blurriness)
 {
     float3 worldSpaceReflection = reflect(-viewDirection, sample.worldSpaceNormal);
-    float roughness = Material_GetRoughness(sample);
+    float roughness = sample.material.roughness;
 
     // note -- this is a primitive alternative to the importance sampling IBL (implemented elsewhere)
     float mipMap = blurriness + saturate(roughness) * ReflectionBlurrinessFromRoughness;
@@ -142,7 +142,7 @@ float3 CalcBasicAmbient(LightScreenDest lsd, GBufferValues sample,
 
     float3 diffuseIBL = iblScale * SampleDiffuseIBL(sample.worldSpaceNormal, lsd);
 
-    float metal = Material_GetMetal(sample);
+    float metal = sample.material.metal;
     return (1.0f - metal)*(ambientColor + tiledLights + diffuseIBL)*sample.diffuseAlbedo.rgb;
 }
 
@@ -219,7 +219,7 @@ float3 LightResolve_Ambient(
         // Note that we can calculate the correct F0 values for real-world materials using
         // the methods described on that page.
         // Also consider sRGB/Linear wierdness in this step...
-    float3 F0 = lerp(Material_GetF0_0(sample).xxx, sample.diffuseAlbedo, Material_GetMetal(sample));
+    float3 F0 = lerp(SpecularParameterToF0(sample.material.specular).xxx, sample.diffuseAlbedo, sample.material.metal);
     float3 fresnel = CalculateSkyReflectionFresnel(F0, sample, directionToEye, mirrorReflection);
 
     #if HAS_SPECULAR_IBL==1
@@ -263,9 +263,7 @@ float3 LightResolve_Ambient(
         skyReflections *= specularOcclusion;
     #endif
 
-    return
-        diffusePart
-        + Material_GetReflectionScale(sample) * skyReflections;
+    return diffusePart + skyReflections;
 }
 
 #endif

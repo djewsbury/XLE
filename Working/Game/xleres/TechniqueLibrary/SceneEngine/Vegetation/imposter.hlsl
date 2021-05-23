@@ -15,7 +15,7 @@
 #include "../../Framework/MainGeometry.hlsl"
 #include "../../Framework/Surface.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
+#include "../../Math/ProjectionMath.hlsl"
 #include "../../Framework/gbuffer.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 #include "../Lighting/resolvefog.hlsl"

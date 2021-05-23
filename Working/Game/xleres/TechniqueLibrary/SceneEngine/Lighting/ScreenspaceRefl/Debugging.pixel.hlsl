@@ -10,7 +10,7 @@ Texture2D<float>	DownSampledDepth			: register(t10);
 #include "ReflectionUtility.hlsl"
 #include "../LightingAlgorithm.hlsl"
 #include "../../../Framework/CommonResources.hlsl"
-#include "../../../Math/TransformAlgorithm.hlsl"
+#include "../../../Math/ProjectionMath.hlsl"
 #include "../../../Utility/LoadGBuffer.hlsl"
 #include "../../../Math/TextureAlgorithm.hlsl"
 #include "PixelBasedIteration.hlsl"

@@ -7,7 +7,7 @@
 #include "resolvefog.hlsl"
 #include "VolumetricFog.hlsl"
 #include "../Lighting/BasicLightingEnvironment.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
+#include "../../Math/ProjectionMath.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 

@@ -3,8 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/SphericalHarmonics.hlsl"
+#include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
+#include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "Cubemap.h"
 
 Texture2D<float3> Input;

@@ -1,5 +1,5 @@
 
-#include "../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
+#include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 #include "../TechniqueLibrary/Framework/SystemUniforms.hlsl"
 #include "../TechniqueLibrary/Framework/VSOUT.hlsl"
 

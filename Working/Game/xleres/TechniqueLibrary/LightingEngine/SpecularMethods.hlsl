@@ -9,8 +9,7 @@
 
 #include "optimized-ggx.hlsl"
 #include "LightingAlgorithm.hlsl"
-#include "Constants.hlsl"
-#include "../../Math/Misc.hlsl"
+#include "../Math/Misc.hlsl"
 
 #if !defined(SPECULAR_METHOD)
     #define SPECULAR_METHOD 1
@@ -358,7 +357,7 @@ SpecularParameters SpecularParameters_RoughF0Transmission(float roughness, float
 }
 
 #if MAT_TRANSMITTED_SPECULAR==1
-    #include "Diagrams/GGXTransmission.hlsl"
+    #include "../SceneEngine/Lighting/Diagrams/GGXTransmission.hlsl"
 #endif
 
 float GGXTransmissionFresnel(float3 i, float3 ot, float F0, float iorIncident, float iorOutgoing)

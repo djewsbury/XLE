@@ -6,7 +6,7 @@
 
 #include "SSConstants.hlsl"
 #include "../LightingAlgorithm.hlsl"
-#include "../../../Math/TransformAlgorithm.hlsl"
+#include "../../../Math/ProjectionMath.hlsl"
 #include "../../../Math/TextureAlgorithm.hlsl"
 #include "../../../Framework/gbuffer.hlsl"
 

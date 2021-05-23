@@ -32,7 +32,7 @@ cbuffer LightCulling : register(b2)
 	float2				FOV;
 }
 
-#include "../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "../TechniqueLibrary/Profiling/Metrics.hlsl"
 

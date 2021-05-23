@@ -34,7 +34,7 @@ cbuffer VolumetricFogConstants
 #include "../Lighting/ShadowsResolve.hlsl" // for ShadowsPerspectiveProjection
 #include "../Lighting/ShadowProjection.hlsl"
 #include "../../Utility/Colour.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
+#include "../../Math/ProjectionMath.hlsl"
 #include "../../Math/MathConstants.hlsl"
 
 float MakeComparisonDistance(float shadowBufferDepth, int slice)

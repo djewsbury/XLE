@@ -1,5 +1,3 @@
-// Copyright 2016 XLGAMES Inc.
-//
 // Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
@@ -7,12 +5,12 @@
 #if !defined(LIGHTING_FORWARD_H)
 #define LIGHTING_FORWARD_H
 
-#include "LightDesc.hlsl"
-#include "DirectionalResolve.hlsl"
-#include "AmbientResolve.hlsl"
-#include "BasicLightingEnvironment.hlsl"
-#include "ShadowsResolve.hlsl"
-#include "CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
+#include "../TechniqueLibrary/LightingEngine/DirectionalResolve.hlsl"
+#include "../TechniqueLibrary/SceneEngine/Lighting/AmbientResolve.hlsl"
+#include "../TechniqueLibrary/SceneEngine/Lighting/BasicLightingEnvironment.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 
 float3 ResolveLitColor(
 	GBufferValues sample, float3 directionToEye,
@@ -36,7 +34,7 @@ float3 ResolveLitColor(
 					enableNearCascade = true;
 				#endif
 
-				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, GetShadowCascadeMode(), enableNearCascade);
+				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition);
 				if (cascade.cascadeIndex >= 0) {
 					shadowing[0] = ResolveShadows_Cascade(
 						cascade.cascadeIndex, cascade.frustumCoordinates, cascade.miniProjection,
@@ -51,11 +49,11 @@ float3 ResolveLitColor(
 			//			correctly inside a dynamic loop
 
 		[unroll] for (uint c=0; c<BASIC_LIGHT_COUNT; ++c) {
-			result += shadowing[c] * LightResolve_Diffuse(
+			result += shadowing[c] * DirectionalLightResolve_Diffuse(
 				sample, directionToEye,
 				BasicLight[c].Position, BasicLight[c]);
 
-			result += shadowing[c] * LightResolve_Specular(
+			result += shadowing[c] * DirectionalLightResolve_Specular(
 				sample, directionToEye,
 				BasicLight[c].Position, BasicLight[c]);
 		}

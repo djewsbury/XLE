@@ -42,7 +42,7 @@ float ResolveShadows(float3 worldPosition)
 	float2 tc;
 
 	[unroll] for (int c=0; c<BLURRED_SHADOW_CASCADE_COUNT; ++c) {
-		float4 frustumCoordinates = ShadowProjection_GetOutput(worldPosition, SHADOW_CASCADE_SKIP+c, GetShadowCascadeMode());
+		float4 frustumCoordinates = ShadowProjection_GetOutput(worldPosition, SHADOW_CASCADE_SKIP+c);
 
 		d = frustumCoordinates.z / frustumCoordinates.w;
 		tc = frustumCoordinates.xy / frustumCoordinates.w;

@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../Lighting/LightDesc.hlsl"
+#include "../../LightingEngine/LightDesc.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../../TechniqueLibrary/Framework/CommonResources.hlsl"
 #include "../../TechniqueLibrary/Math/TextureAlgorithm.hlsl"
 #include "../../TechniqueLibrary/Profiling/Metrics.hlsl"

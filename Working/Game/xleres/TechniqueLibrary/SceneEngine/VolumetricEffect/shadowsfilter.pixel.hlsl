@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "VolumetricFog.hlsl"
 
 Texture2DArray<float> InputShadowTextures : register(t2);

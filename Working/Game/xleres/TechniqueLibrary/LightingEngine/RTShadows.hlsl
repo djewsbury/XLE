@@ -156,7 +156,7 @@ bool IsShadowedByTriangle(float3 postDivideCoord, uint triIndex)
     return false;
 }
 
-float ResolveRTShadows(float3 postDivideCoord, int2 randomizerValue)
+float SampleRTShadows(float3 postDivideCoord, int2 randomizerValue)
 {
     uint2 dims;
     RTSListsHead.GetDimensions(dims.x, dims.y);

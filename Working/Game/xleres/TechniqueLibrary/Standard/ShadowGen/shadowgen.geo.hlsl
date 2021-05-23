@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShadowGenGeometryConfiguration.hlsl"
-#include "../../SceneEngine/Lighting/ShadowProjection.hlsl"
+#include "../../LightingEngine/ShadowProjection.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/VSOUT.hlsl"
 #include "../../Framework/VSShadowOutput.hlsl"
@@ -21,7 +21,7 @@
 	//if (BackfaceSign(float4(input[0].position,1), float4(input[1].position,1), float4(input[2].position,1)) > 0)
 	//	return;
 
-	uint count = min(GetShadowSubProjectionCount(GetShadowCascadeMode()), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
 	uint mask = 0xf;
 	uint frustumFlagAnd = input[0].shadowFrustumFlags & input[1].shadowFrustumFlags & input[2].shadowFrustumFlags;
 	[unroll] for (uint c=0; c<count; ++c, mask <<= 4) {

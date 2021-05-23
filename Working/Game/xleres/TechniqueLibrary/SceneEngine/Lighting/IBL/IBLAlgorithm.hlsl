@@ -7,7 +7,7 @@
 #if !defined(IBL_ALGORITHM_H)
 #define IBL_ALGORITHM_H
 
-#include "../LightingAlgorithm.hlsl"
+#include "../../../LightingEngine/LightingAlgorithm.hlsl"
 
 static const float MinSamplingAlpha = 0.001f;
 static const float MinSamplingRoughness = 0.03f;

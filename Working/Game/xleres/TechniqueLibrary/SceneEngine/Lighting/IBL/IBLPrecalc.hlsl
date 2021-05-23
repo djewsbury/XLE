@@ -8,7 +8,7 @@
 #define IBL_PRECALC_H
 
 #include "IBLAlgorithm.hlsl"
-#include "../LightingAlgorithm.hlsl"
+#include "../../../LightingEngine/LightingAlgorithm.hlsl"
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

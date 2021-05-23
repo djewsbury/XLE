@@ -44,13 +44,6 @@ struct LightDesc
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 	//   structures used by resolvers...
 
-struct CascadeAddress
-{
-	float4  frustumCoordinates;
-	int     cascadeIndex;
-	float4  miniProjection;
-};
-
 struct LightScreenDest
 {
     int2 pixelCoords;
@@ -67,22 +60,6 @@ LightScreenDest LightScreenDest_Create(int2 pixelCoords, uint sampleIndex)
 	LightScreenDest result;
 	result.pixelCoords = pixelCoords;
 	result.sampleIndex = sampleIndex;
-	return result;
-}
-
-CascadeAddress CascadeAddress_Invalid()
-{
-	CascadeAddress result;
-	result.cascadeIndex = -1;
-	return result;
-}
-
-CascadeAddress CascadeAddress_Create(float4 frustumCoordinates, int cascadeIndex, float4 miniProjection)
-{
-	CascadeAddress result;
-	result.cascadeIndex = cascadeIndex;
-	result.frustumCoordinates = frustumCoordinates;
-	result.miniProjection = miniProjection;
 	return result;
 }
 

@@ -11,7 +11,7 @@
 #include "../../Framework/MainGeometry.hlsl"
 #include "../../Framework/Surface.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"		// for SystemInputs
-#include "../../SceneEngine/Lighting/LightDesc.hlsl"		// for LightScreenDest
+#include "../../LightingEngine/LightDesc.hlsl"		// for LightScreenDest
 #include "../../SceneEngine/Lighting/resolvefog.hlsl"
 
 //////////////////////////////////////////////////////////////////

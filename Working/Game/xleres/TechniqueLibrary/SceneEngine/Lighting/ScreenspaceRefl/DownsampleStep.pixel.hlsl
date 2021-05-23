@@ -6,7 +6,7 @@
 
 #include "SSConstants.hlsl"
 #include "../MaterialQuery.hlsl"
-#include "../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../TechniqueLibrary/Math/TextureAlgorithm.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 

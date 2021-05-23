@@ -7,7 +7,7 @@
 #if !defined(RANGE_FOG_RESOLVE_H)
 #define RANGE_FOG_RESOLVE_H
 
-#include "LightDesc.hlsl"
+#include "../../LightingEngine/LightDesc.hlsl"
 
 void LightResolve_RangeFog(RangeFogDesc desc, float distance, out float outscatterScale, out float3 inscatter)
 {

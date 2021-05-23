@@ -12,7 +12,7 @@
 #include "../../TechniqueLibrary/Framework/LegacySurface.hlsl"
 #include "../../TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "../../BasicMaterial.hlsl"
-#include "../../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 // #include "../../TechniqueLibrary/Math/perlinnoise.hlsl"
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"
 #include "../../TechniqueLibrary/Framework/Binding.hlsl"

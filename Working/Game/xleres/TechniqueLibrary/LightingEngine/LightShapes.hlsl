@@ -14,7 +14,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float3 Resolve_Directional(
+float3 DirectionalLightResolve(
     GBufferValues sample,
     LightSampleExtra sampleExtra,
     LightDesc light,
@@ -22,8 +22,8 @@ float3 Resolve_Directional(
     float3 directionToEye,
     LightScreenDest screenDest)
 {
-    float3 diffuse = LightResolve_Diffuse(sample, directionToEye, light.Position, light);
-    float3 specular = LightResolve_Specular(sample, directionToEye, light.Position, light, sampleExtra.screenSpaceOcclusion);
+    float3 diffuse = DirectionalLightResolve_Diffuse(sample, directionToEye, light.Position, light);
+    float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, light.Position, light, sampleExtra.screenSpaceOcclusion);
     return diffuse + specular;
 }
 
@@ -61,7 +61,7 @@ float3 RepresentativeVector_Sphere(out float distortionCompensation, float3 vect
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float3 Resolve_Sphere(
+float3 SphereLightResolve(
     GBufferValues sample,
     LightSampleExtra sampleExtra,
     LightDesc light,
@@ -89,8 +89,8 @@ float3 Resolve_Sphere(
         //      based on distance, source radius & power, & material roughness
 
     float3 diffuseLightDir = (light.Position - worldPosition)*rDistance;
-    float3 diffuse = LightResolve_Diffuse(sample, directionToEye, diffuseLightDir, light);
-    float3 specular = LightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
+    float3 diffuse = DirectionalLightResolve_Diffuse(sample, directionToEye, diffuseLightDir, light);
+    float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
 
         // Specular attenuation is a little tricky here... We want the light
         // brightness to drop off relative to the solid angle of the light source.
@@ -137,7 +137,7 @@ float3 RepresentativeVector_Tube(float3 L0, float3 L1, float3 reflectionDir)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float3 Resolve_Tube(
+float3 TubeLightResolve(
     GBufferValues sample,
     LightSampleExtra sampleExtra,
     LightDesc light,
@@ -170,8 +170,8 @@ float3 Resolve_Tube(
     float rDistance = rsqrt(distanceSq);
     float3 diffuseRepDir = (tubePoint - worldPosition) * rDistance;
 
-    float3 diffuse = LightResolve_Diffuse_NdotL(sample, directionToEye, diffuseRepDir, NdotL, light);
-    float3 specular = LightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
+    float3 diffuse = DirectionalLightResolve_Diffuse_NdotL(sample, directionToEye, diffuseRepDir, NdotL, light);
+    float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
 
         // This specular attenuation method is based on Karis. Maybe it needs
         // a little more work...?
@@ -190,7 +190,7 @@ float3 Resolve_Tube(
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float3 Resolve_Rectangle(
+float3 RectangleLightResolve(
     GBufferValues sample,
     LightSampleExtra sampleExtra,
     LightDesc light,
@@ -232,7 +232,7 @@ float3 Resolve_Rectangle(
         // We can just do the rest of the diffuse calculation in light space, also...
         // If it's just lambert, it's trivial.
     float NdotL = dot(sampleNormal, lightNegDir);
-    float3 diffuse = LightResolve_Diffuse_NdotL(sample, viewDirectionLight, lightNegDir, NdotL, light);
+    float3 diffuse = DirectionalLightResolve_Diffuse_NdotL(sample, viewDirectionLight, lightNegDir, NdotL, light);
 
         // "cosThetaLightPlane" is the angle between the light normal the
         // direction from the light to the sample point. In this light type, light
@@ -266,7 +266,7 @@ float3 Resolve_Rectangle(
         // note --  We can get some interesting results if we use "lightNegDir" here instead of
         //          specLightNegDir -- it's a good way to visualise the representative point we're using
         //          for the diffuse calculation.
-    float3 specular = LightResolve_Specular(sample, viewDirectionLight, specLightNegDir, light, sampleExtra.screenSpaceOcclusion);
+    float3 specular = DirectionalLightResolve_Specular(sample, viewDirectionLight, specLightNegDir, light, sampleExtra.screenSpaceOcclusion);
     float specAttenuation = integralApprox;
 
     if (rectLightType == RectLightType_SingleDir)   { specAttenuation *= saturate(-specLightNegDir.z); }

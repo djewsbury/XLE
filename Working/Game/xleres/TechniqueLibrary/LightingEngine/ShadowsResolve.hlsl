@@ -8,11 +8,11 @@
 #define SHADOWS_RESOLVE_H
 
 #include "SampleFiltering.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
-#include "../../Math/Misc.hlsl"
-#include "../../Math/MathConstants.hlsl"
-#include "../../Framework/Binding.hlsl"
-#include "xleres/Deferred/resolvertshadows.hlsl"
+#include "RTShadows.hlsl"
+#include "../Math/ProjectionMath.hlsl"
+#include "../Math/Misc.hlsl"
+#include "../Math/MathConstants.hlsl"
+#include "../Framework/Binding.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S
@@ -172,14 +172,16 @@ float CalculateShadowCasterDistance(
 
 float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
 {
-        // these two methods should return the same result (and probably have similiar performance...)
-    #if (VULKAN!=1)
-        const bool useGatherCmpRed = false;
-    #else
-        const bool useGatherCmpRed = true;  // SampleCmpLevelZero produces incorrect code in Vulkan for 2d shadow array
-    #endif
+    // these two methods should return the same result (and probably have similiar performance...)
+    const bool useGatherCmpRed = false;
     if (!useGatherCmpRed) {
-        return ShadowTextures.SampleCmpLevelZero(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+        // SampleCmpLevelZero cannot be used with Vulkan, because there is no textureLod() override
+        // for a a sampler2DArrayShadow 
+        #if (VULKAN!=1)
+            return ShadowTextures.SampleCmpLevelZero(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+        #else
+            return ShadowTextures.SampleCmp(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+        #endif
     } else {
         float4 t = ShadowTextures.GatherCmpRed(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
         return dot(t, 1.0.xxxx) * 0.25f;
@@ -308,21 +310,18 @@ float ResolveDMShadows(	uint projection, float2 shadowTexCoord,
         biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowBiasWorldSpace, miniP);
     }
 
-    // float biasedDepth = comparisonDistance;
-    // return TestShadow(shadowTexCoord, projection, biasedDepth);
-
-    float casterDistance = CalculateShadowCasterDistance(
-        shadowTexCoord, casterDistanceComparison, projection,
-        msaaSampleIndex, DitherPatternValue(randomizerValue));
-
-    if (!shadowsPerspectiveProj) {
-            // In orthogonal projection mode, NDC depths are actually linear. So, we can convert a difference
-            // of depths in NDC space (like casterDistance) into world space depth easily. Linear depth values
-            // are more convenient for calculating the shadow filter radius
-        casterDistance = -NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, miniP);
-    }
-
     if (config._doFiltering) {
+        float casterDistance = CalculateShadowCasterDistance(
+            shadowTexCoord, casterDistanceComparison, projection,
+            msaaSampleIndex, DitherPatternValue(randomizerValue));
+
+        if (!shadowsPerspectiveProj) {
+                // In orthogonal projection mode, NDC depths are actually linear. So, we can convert a difference
+                // of depths in NDC space (like casterDistance) into world space depth easily. Linear depth values
+                // are more convenient for calculating the shadow filter radius
+            casterDistance = -NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, miniP);
+        }
+
         return CalculateFilteredShadows(
             shadowTexCoord, biasedDepth, projection, casterDistance, randomizerValue,
             miniProjection.xy, msaaSampleIndex, config);
@@ -356,7 +355,7 @@ float ResolveShadows_Cascade(
             //	We could alternatively have a completely independent cascade; but
             //	that would make doing the hybrid blend more difficult
     if (config._hasHybridRT && cascadeIndex==0) {
-        return ResolveRTShadows(cascadeNormCoords.xyz/cascadeNormCoords.w, randomizerValue);
+        return SampleRTShadows(cascadeNormCoords.xyz/cascadeNormCoords.w, randomizerValue);
     }
 
     return ResolveDMShadows(cascadeIndex, texCoords, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);

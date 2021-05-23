@@ -1,3 +1,10 @@
+// Distributed under the MIT License (See
+// accompanying file "LICENSE" or the website
+// http://www.opensource.org/licenses/mit-license.php)
+
+#include "../Math/MathConstants.hlsl"
+#include "../Math/Misc.hlsl"
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float3 ResolveSH_Opt(float3 premulCoefficients[9], float3 dir)

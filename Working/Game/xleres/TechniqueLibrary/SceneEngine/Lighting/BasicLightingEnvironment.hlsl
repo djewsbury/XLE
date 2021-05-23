@@ -7,7 +7,7 @@
 #if !defined(BASIC_LIGHTING_ENVIRONMENT_H)
 #define BASIC_LIGHTING_ENVIRONMENT_H
 
-#include "LightDesc.hlsl"
+#include "../../LightingEngine/LightDesc.hlsl"
 #include "../../Framework/Binding.hlsl"
 
 #if !defined(BASIC_LIGHT_COUNT)

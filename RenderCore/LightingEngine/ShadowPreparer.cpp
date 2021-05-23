@@ -85,12 +85,8 @@ namespace RenderCore { namespace LightingEngine
 			{
 				switch (idx) {
 				case 0:
-					assert(dst.size() == sizeof(Internal::CB_ArbitraryShadowProjection)); 
-					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._arbitraryCBSource, sizeof(Internal::CB_ArbitraryShadowProjection));
-					break;
-				case 1:
-					assert(dst.size() == sizeof(Internal::CB_OrthoShadowProjection)); 
-					std::memcpy(dst.begin(), &_preparer->_workingDMFrustum._orthoCBSource, sizeof(Internal::CB_OrthoShadowProjection));
+					assert(_preparer->_workingDMFrustum._cbSource.size() == dst.size());
+					std::memcpy(dst.begin(), _preparer->_workingDMFrustum._cbSource.begin(), dst.size());
 					break;
 				default:
 					assert(0);
@@ -101,8 +97,7 @@ namespace RenderCore { namespace LightingEngine
 			size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				switch (idx) {
-				case 0: return sizeof(Internal::CB_ArbitraryShadowProjection);
-				case 1: return sizeof(Internal::CB_OrthoShadowProjection);
+				case 0: return _preparer->_workingDMFrustum._cbSource.size();
 				default:
 					assert(0);
 					return 0;
@@ -111,8 +106,7 @@ namespace RenderCore { namespace LightingEngine
 		
 			UniformDelegate(DMShadowPreparer& preparer) : _preparer(&preparer)
 			{
-				_interface.BindImmediateData(0, Utility::Hash64("ArbitraryShadowProjection"), {});
-				_interface.BindImmediateData(1, Utility::Hash64("OrthogonalShadowProjection"), {});
+				_interface.BindImmediateData(0, Utility::Hash64("ShadowProjection"), {});
 			}
 			UniformsStreamInterface _interface;
 			DMShadowPreparer* _preparer;
@@ -194,19 +188,15 @@ namespace RenderCore { namespace LightingEngine
 		descSetInit._slotBindings = _descSetSlotBindings;
 		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}) };
 		IteratorRange<const void*> immediateData[3];
-		if (_workingDMFrustum._mode == ShadowProjectionMode::Arbitrary || _workingDMFrustum._mode == ShadowProjectionMode::ArbitraryCubeMap) {
-			immediateData[0] = MakeOpaqueIteratorRange(_workingDMFrustum._arbitraryCBSource);
-		} else {
-			immediateData[0] = MakeOpaqueIteratorRange(_workingDMFrustum._orthoCBSource);
-		}
+		immediateData[0] = {_workingDMFrustum._cbSource.begin(), _workingDMFrustum._cbSource.end()};
 		immediateData[1] = MakeOpaqueIteratorRange(_workingDMFrustum._resolveParameters);
-		auto screenToShadow = BuildScreenToShadowProjection(
+		auto screenToShadow = Internal::BuildScreenToShadowProjection(
+			_workingDMFrustum._mode,
 			_workingDMFrustum._frustumCount,
-			_workingDMFrustum._arbitraryCBSource,
-			_workingDMFrustum._orthoCBSource,
+			_workingDMFrustum._cbSource,
 			_savedProjectionDesc._cameraToWorld,
 			_savedProjectionDesc._cameraToProjection);
-		immediateData[2] = MakeOpaqueIteratorRange(screenToShadow);
+		immediateData[2] = {screenToShadow.begin(), screenToShadow.end()};
 		descSetInit._bindItems._resourceViews = MakeIteratorRange(srvs);
 		descSetInit._bindItems._immediateData = MakeIteratorRange(immediateData);
 		auto descSet = device.CreateDescriptorSet(descSetInit);
@@ -229,6 +219,7 @@ namespace RenderCore { namespace LightingEngine
 
 	static const auto s_shadowCascadeModeString = "SHADOW_CASCADE_MODE";
     static const auto s_shadowEnableNearCascadeString = "SHADOW_ENABLE_NEAR_CASCADE";
+	static const auto s_shadowSubProjectionCountString = "SHADOW_SUB_PROJECTION_COUNT";
 
 	DMShadowPreparer::DMShadowPreparer(
 		const ShadowOperatorDesc& desc,
@@ -261,6 +252,7 @@ namespace RenderCore { namespace LightingEngine
 			sequencerSelectors.SetParameter(s_shadowCascadeModeString, 1);
 		}
 		sequencerSelectors.SetParameter(s_shadowEnableNearCascadeString, desc._enableNearCascade?1:0);
+		sequencerSelectors.SetParameter(s_shadowSubProjectionCountString, desc._normalProjCount);
 
 		///////////////////////////////
 		Techniques::FrameBufferDescFragment fragment;

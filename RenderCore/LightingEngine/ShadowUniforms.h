@@ -17,28 +17,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	template<int MaxProjections> class MultiProjection;
 	constexpr unsigned MaxShadowTexturesPerLight = 6;
 
-	class CB_ArbitraryShadowProjection
-	{
-	public:
-		uint32_t    _projectionCount; 
-		uint32_t    _dummy[3];
-		Float4      _minimalProj[MaxShadowTexturesPerLight];
-		Float4x4    _worldToProj[MaxShadowTexturesPerLight];
-	};
-
-	class CB_OrthoShadowProjection
-	{
-	public:
-		Float3x4    _worldToProj;
-		Float4      _minimalProjection;
-		uint32_t    _projectionCount;
-		uint32_t    _dummy[3];
-		Float4      _cascadeScale[MaxShadowTexturesPerLight];
-		Float4      _cascadeTrans[MaxShadowTexturesPerLight];
-		Float3x4    _nearCascade;       // special projection for the area closest to the camera
-		Float4      _nearMinimalProjection;
-	};
-
 	class CB_ShadowResolveParameters
 	{
 	public:
@@ -50,19 +28,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		CB_ShadowResolveParameters();
 	};
 
-	struct CB_ScreenToShadowProjection
-	{
-		Float4x4    _cameraToShadow[6];
-		Float4x4    _orthoCameraToShadow;
-		Float2      _xyScale;
-		Float2      _xyTrans;
-		Float4x4    _orthoNearCameraToShadow;
-	};
-
-	CB_ScreenToShadowProjection BuildScreenToShadowProjection(
-        unsigned frustumCount,
-        const CB_ArbitraryShadowProjection& arbitraryCB,
-        const CB_OrthoShadowProjection& orthoCB,
+	SharedPkt BuildScreenToShadowProjection(
+		ShadowProjectionMode mode,
+		unsigned normalProjCount,
+		const SharedPkt& mainUniforms,
         const Float4x4& cameraToWorld,
         const Float4x4& cameraToProjection);
 
@@ -78,9 +47,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned    _frustumCount;
 		bool        _enableNearCascade;
 
-		ShadowProjectionMode			_mode;
-		CB_ArbitraryShadowProjection    _arbitraryCBSource;
-		CB_OrthoShadowProjection        _orthoCBSource;
+		ShadowProjectionMode	_mode;
+		SharedPkt				_cbSource;
 
 		void InitialiseConstants(
 			const MultiProjection<MaxShadowTexturesPerLight>&);
@@ -177,7 +145,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class ShadowProjectionDesc : public ILightBase, public IShadowPreparer, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
 	{
 	public:
-		using Projections = MultiProjection<Internal::MaxShadowTexturesPerLight>;
+		using Projections = MultiProjection<MaxShadowTexturesPerLight>;
 		Projections     _projections;
 		Float4x4        _worldToClip = Identity<Float4x4>();   ///< Intended for use in CPU-side culling. Objects culled by this transform will be culled from all projections
 
@@ -266,8 +234,4 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return nullptr;
 		}
 	};
-
-
-
 }}}
-

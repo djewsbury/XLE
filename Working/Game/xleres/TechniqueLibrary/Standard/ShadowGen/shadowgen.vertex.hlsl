@@ -3,13 +3,13 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShadowGenGeometryConfiguration.hlsl"
-#include "../../SceneEngine/Lighting/ShadowProjection.hlsl"
+#include "../../LightingEngine/ShadowProjection.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/VSIN.hlsl"
 #include "../../Framework/VSOUT.hlsl"
 #include "../../Framework/VSShadowOutput.hlsl"
 #include "../../Framework/DeformVertex.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
+#include "../../Math/ProjectionMath.hlsl"
 #include "../../../Nodes/Templates.vertex.sh"
 
 #if !defined(SHADOW_CASCADE_MODE)
@@ -35,7 +35,7 @@ VSShadowOutput BuildVSShadowOutput(
 
 	result.shadowFrustumFlags = 0;
 
-	uint count = min(GetShadowSubProjectionCount(GetShadowCascadeMode()), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
 
 	#if SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ARBITRARY || SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_CUBEMAP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ VSShadowOutput BuildVSShadowOutput(
 
 		#if (VSOUT_HAS_SHADOW_PROJECTION_COUNT>0)
 			for (uint c=0; c<count; ++c) {
-				float4 p = ShadowProjection_GetOutput(worldPosition, c, GetShadowCascadeMode());
+				float4 p = ShadowProjection_GetOutput(worldPosition, c);
 				bool	left	= p.x < -p.w,
 						right	= p.x >  p.w,
 						top		= p.y < -p.w,

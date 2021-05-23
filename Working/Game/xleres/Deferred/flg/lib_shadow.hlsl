@@ -72,9 +72,9 @@ void InternalCascadeResolve(
 {
     CascadeAddress adr;
     if (ResolveCascadeByWorldPosition == true) {
-        adr = ResolveCascade_FromWorldPosition(worldPosition, cascadeMode, enableNearCascade);
+        adr = ResolveCascade_FromWorldPosition(worldPosition);
     } else {
-        adr = ResolveCascade_CameraToShadowMethod(camXY, worldSpaceDepth, cascadeMode, enableNearCascade);
+        adr = ResolveCascade_CameraToShadowMethod(camXY, worldSpaceDepth);
     }
     frustumCoordinates = adr.frustumCoordinates;
     cascadeIndex = adr.cascadeIndex;

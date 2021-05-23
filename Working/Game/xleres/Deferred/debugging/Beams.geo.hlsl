@@ -4,9 +4,9 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../../TechniqueLibrary/Framework/MainGeometry.hlsl"
-#include "../../TechniqueLibrary/SceneEngine/Lighting/ShadowProjection.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
 struct GSInput

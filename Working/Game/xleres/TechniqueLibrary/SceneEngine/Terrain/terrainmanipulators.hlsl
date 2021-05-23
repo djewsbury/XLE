@@ -7,7 +7,7 @@
 
 #include "../../Math/MathConstants.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"
-#include "../../Math/TransformAlgorithm.hlsl"
+#include "../../Math/ProjectionMath.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 
 cbuffer CircleHighlightParameters

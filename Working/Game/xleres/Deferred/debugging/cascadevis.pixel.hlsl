@@ -5,7 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../resolveutil.hlsl"
-#include "../../TechniqueLibrary/SceneEngine/Lighting/CascadeResolve.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"
 #include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
@@ -31,11 +32,10 @@ float4 main(
     const bool resolveByWorldPosition = false;
     if (resolveByWorldPosition) {
         float3 worldPosition = CalculateWorldPosition(pixelCoords, GetSampleIndex(sys), viewFrustumVector);
-        cascade = ResolveCascade_FromWorldPosition(worldPosition, GetShadowCascadeMode(), enableNearCascade);
+        cascade = ResolveCascade_FromWorldPosition(worldPosition);
     } else {
         cascade = ResolveCascade_CameraToShadowMethod(
-            texCoord, GetWorldSpaceDepth(pixelCoords, GetSampleIndex(sys)),
-            GetShadowCascadeMode(), enableNearCascade);
+            texCoord, GetWorldSpaceDepth(pixelCoords, GetSampleIndex(sys)));
     }
 
     if (cascade.cascadeIndex >= 0) {

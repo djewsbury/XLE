@@ -9,8 +9,8 @@
 #include "../../TechniqueLibrary/Framework/Surface.hlsl"
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"
 #include "../../TechniqueLibrary/Math/perlinnoise.hlsl"
-#include "../../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
-#include "../../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
+#include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
 struct FragmentListNode
 {

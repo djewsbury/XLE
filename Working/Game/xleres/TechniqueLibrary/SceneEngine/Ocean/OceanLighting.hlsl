@@ -7,11 +7,11 @@
 #if !defined(OCEAN_LIGHTING_H)
 #define OCEAN_LIGHTING_H
 
-#include "../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
+#include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 #include "../Lighting/BasicLightingEnvironment.hlsl"
 #include "../Lighting/DirectionalResolve.hlsl"
 #include "../Lighting/AmbientResolve.hlsl"
-#include "../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../TechniqueLibrary/Math/Misc.hlsl"
 
     //
@@ -283,7 +283,7 @@ float3 DoSingleSpecular(OceanSurfaceSample oceanSample, float3 worldViewDirectio
         // todo --  we should consider using the normal instead of the half-vector
         //          for fresnel calculations here. Since water should have close to
         //          mirror reflections (as least some of the time)
-    return LightResolve_Specular(BuildGBufferValues(oceanSample), worldViewDirection, BasicLight[0].Position, BasicLight[0], 1.f, true);
+    return DirectionalLightResolve_Specular(BuildGBufferValues(oceanSample), worldViewDirection, BasicLight[0].Position, BasicLight[0], 1.f, true);
 }
 
 void CalculateSpecular(	inout OceanLightingParts parts,

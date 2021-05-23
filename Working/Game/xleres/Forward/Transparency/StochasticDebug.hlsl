@@ -6,7 +6,7 @@
 
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"
 #include "../../TechniqueLibrary/Framework/SystemUniforms.hlsl"
-#include "../../TechniqueLibrary/Math/TransformAlgorithm.hlsl"
+#include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
 Texture2DMS<float>  DepthsTexture;
 Texture2D<uint>		LitSamplesMetrics;

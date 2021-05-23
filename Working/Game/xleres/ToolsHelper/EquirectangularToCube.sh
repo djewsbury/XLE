@@ -6,7 +6,7 @@
 
 #include "Cubemap.h"
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/LightingAlgorithm.hlsl"
+#include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
 Texture2D Input;
 SamplerState DefaultSampler;

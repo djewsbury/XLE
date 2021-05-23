@@ -122,10 +122,11 @@ namespace RenderCore { namespace LightingEngine
 		enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
 		Shadowing _shadowing = Shadowing::NoShadows;
 		ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
+		unsigned _normalProjCount = 1u;
 
 		friend bool operator==(const ShadowResolveParam& lhs, const ShadowResolveParam& rhs)
 		{
-			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel;
+			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount;
 		}
 	};
 
@@ -155,6 +156,7 @@ namespace RenderCore { namespace LightingEngine
 				definesTable << ";SHADOW_CASCADE_MODE=" << 3u;
 			} else
 				definesTable << ";SHADOW_CASCADE_MODE=" << 1u;
+			definesTable << ";SHADOW_SUB_PROJECTION_COUNT=" << shadowResolveParam._normalProjCount;
 			definesTable << ";SHADOW_ENABLE_NEAR_CASCADE=" << (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
 			definesTable << ";SHADOW_RESOLVE_MODEL=" << unsigned(shadowResolveParam._filterModel);
 			definesTable << ";SHADOW_RT_HYBRID=" << unsigned(shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
@@ -301,6 +303,7 @@ namespace RenderCore { namespace LightingEngine
 					assert(!shadowOp._enableNearCascade);
 					break;
 				}
+				param._normalProjCount = shadowOp._normalProjCount;
 
 				bool foundExisting = false;
 				for (unsigned c=0; c<shadowParamCount; ++c)

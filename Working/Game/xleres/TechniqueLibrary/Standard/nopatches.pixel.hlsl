@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Framework/VSOUT.hlsl"
-#include "../SceneEngine/Lighting/Forward.hlsl"
+#include "../../Forward/ResolveLitColor.hlsl"
 #include "../../Objects/IllumShader/PerPixel.h"
 
 #if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)

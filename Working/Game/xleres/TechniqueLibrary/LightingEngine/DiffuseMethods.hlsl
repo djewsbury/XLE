@@ -7,8 +7,8 @@
 #if !defined(DIFFUSE_METHODS_H)
 #define DIFFUSE_METHODS_H
 
-#include "../../Math/MathConstants.hlsl"
-#include "../../Math/Misc.hlsl"
+#include "../Math/MathConstants.hlsl"
+#include "../Math/Misc.hlsl"
 
 float RaiseTo5(float x) { float x2 = x*x; return x2*x2*x; }
 
@@ -111,11 +111,11 @@ struct DiffuseParameters
 
 DiffuseParameters DiffuseParameters_Roughness(float roughness, float diffuseWideningMin, float diffuseWideningMax)
 {
-  DiffuseParameters result;
-  result.roughness = roughness;
-  result.diffuseWideningMin = diffuseWideningMin;
-  result.diffuseWideningMax = diffuseWideningMax;
-  return result;
+    DiffuseParameters result;
+    result.roughness = roughness;
+    result.diffuseWideningMin = diffuseWideningMin;
+    result.diffuseWideningMax = diffuseWideningMax;
+    return result;
 }
 
 float CalculateDiffuse( float3 normal, float3 directionToEye,
@@ -128,6 +128,8 @@ float CalculateDiffuse( float3 normal, float3 directionToEye,
         return DiffuseMethod_Disney(
             normal, directionToEye, negativeLightDirection,
             parameters.roughness, parameters.diffuseWideningMin, parameters.diffuseWideningMax);
+    #else
+        return 1;
     #endif
 }
 

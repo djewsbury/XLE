@@ -7,8 +7,8 @@
 #define FORCE_GGX_REF
 
 #include "Cubemap.h"
-#include "../TechniqueLibrary/SceneEngine/Lighting/SpecularMethods.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/MaterialQuery.hlsl"
+#include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
+#include "../TechniqueLibrary/LightingEngine/MaterialQuery.hlsl"
 
 Texture2D Input;
 

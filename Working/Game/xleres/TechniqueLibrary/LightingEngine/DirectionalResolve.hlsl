@@ -11,11 +11,14 @@
 #include "DiffuseMethods.hlsl"
 #include "LightDesc.hlsl"
 
-#include "MaterialQuery.hlsl"
-#include "../../Framework/gbuffer.hlsl"
-#include "../../Math/MathConstants.hlsl"
+#include "../Framework/gbuffer.hlsl"
+#include "../Math/MathConstants.hlsl"
 
-float3 LightResolve_Diffuse_NdotL(
+float GetRoughness(GBufferValues sample) { return sample.material.roughness; }
+float GetMetallicness(GBufferValues sample) { return sample.material.metal; }
+float GetF0_0(GBufferValues sample) { return SpecularParameterToF0(sample.material.specular); }
+
+float3 DirectionalLightResolve_Diffuse_NdotL(
 	GBufferValues sample,
 	float3 directionToEye,
 	float3 negativeLightDirection,
@@ -33,26 +36,26 @@ float3 LightResolve_Diffuse_NdotL(
 
 	float rawDiffuse = CalculateDiffuse(
 		sample.worldSpaceNormal, directionToEye, negativeLightDirection,
-		DiffuseParameters_Roughness(Material_GetRoughness(sample), light.DiffuseWideningMin, light.DiffuseWideningMax));
+		DiffuseParameters_Roughness(GetRoughness(sample), light.DiffuseWideningMin, light.DiffuseWideningMax));
 
-    float metal = Material_GetMetal(sample);
-	float result = Material_GetDiffuseScale(sample) * rawDiffuse * (1.0f - metal);
+    float metal = GetMetallicness(sample);
+	float result = rawDiffuse * (1.0f - metal);
 	result *= sample.cookedLightOcclusion;
 	result *= NdotL;
 	return result * light.Diffuse.rgb * sample.diffuseAlbedo.rgb;
 }
 
-float3 LightResolve_Diffuse(
+float3 DirectionalLightResolve_Diffuse(
 	GBufferValues sample,
 	float3 directionToEye,
 	float3 negativeLightDirection,
 	LightDesc light)
 {
 	float NdotL = dot(sample.worldSpaceNormal, negativeLightDirection);
-	return LightResolve_Diffuse_NdotL(sample, directionToEye, negativeLightDirection, NdotL, light);
+	return DirectionalLightResolve_Diffuse_NdotL(sample, directionToEye, negativeLightDirection, NdotL, light);
 }
 
-float3 LightResolve_Specular(
+float3 DirectionalLightResolve_Specular(
 	GBufferValues sample,
 	float3 directionToEye,
 	float3 negativeLightDirection,
@@ -61,14 +64,14 @@ float3 LightResolve_Specular(
 	bool mirrorSpecular = false)
 {
 		// HACK! preventing problems at very low roughness values
-	float roughnessValue = max(0.03f, Material_GetRoughness(sample));
+	float roughnessValue = max(0.03f, GetRoughness(sample));
 
 		////////////////////////////////////////////////
 
 		// In our "metal" lighting model, sample.diffuseAlbedo actually contains
 		// per-wavelength F0 values.
 	float3 metalF0 = sample.diffuseAlbedo;
-	float3 F0_0 = lerp(Material_GetF0_0(sample).xxx, metalF0, Material_GetMetal(sample));
+	float3 F0_0 = lerp(GetF0_0(sample).xxx, metalF0, GetMetallicness(sample));
 
 	SpecularParameters param0 = SpecularParameters_RoughF0Transmission(
 		roughnessValue, F0_0, sample.transmission);
@@ -103,7 +106,7 @@ float3 LightResolve_Specular(
 		specularOcclusion = TriAceSpecularOcclusion(NdotV, specularOcclusion);
 	}
 
-	// float norm = 1.f / (pi * sample.material.roughness * sample.material.roughness);
+	// float norm = 1.f / (pi * GetRoughness(sample) * GetRoughness(sample));
 	float norm = 1.f;
 
 	// note -- specular occlusion is going to apply to both reflected and transmitted specular

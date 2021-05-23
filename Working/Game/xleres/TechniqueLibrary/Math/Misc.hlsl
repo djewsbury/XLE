@@ -74,4 +74,9 @@ uint IntegerHash(uint seed)
 #endif
 }
 
+int CountTrue(bool3 input)
+{
+	return dot(float(true).xxx, input);
+}
+
 #endif
