@@ -25,7 +25,7 @@ export float DoResolve_ShadowResolver_PoissonDisc(
     )
 {
     ShadowResolveConfig config = ShadowResolveConfig_Default();
-    config._pcUsePoissonDiskMethod = true;
+    config._filteringMode = SHADOW_FILTER_MODEL_POISSONDISC;
     return ResolveShadows_Cascade(
         cascadeIndex, frustumCoordinates, miniProjection,
         int2(pixelCoords.xy), sampleIndex,
@@ -41,7 +41,7 @@ export float DoResolve_ShadowResolver_Smooth(
     )
 {
     ShadowResolveConfig config = ShadowResolveConfig_Default();
-    config._pcUsePoissonDiskMethod = false;
+    config._filteringMode = SHADOW_FILTER_MODEL_SMOOTH;
     return ResolveShadows_Cascade(
         cascadeIndex, frustumCoordinates, miniProjection,
         int2(pixelCoords.xy), sampleIndex,

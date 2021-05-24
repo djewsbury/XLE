@@ -22,7 +22,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		float       _worldSpaceBias;
 		float       _tanBlurAngle;
-		float       _minBlurSearch, _maxBlurSearch;
+		float       _minBlurSearchNorm, _maxBlurSearchNorm;
 		float       _shadowTextureSize;
 		unsigned    _dummy[3];
 		CB_ShadowResolveParameters();
@@ -151,18 +151,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		float           _worldSpaceResolveBias = 0.f;
 		float           _tanBlurAngle = 0.00436f;
-		float           _minBlurSearch = 0.5f, _maxBlurSearch = 25.f;
+		float           _minBlurSearchPixels = 0.5f, _maxBlurSearchPixels = 25.f;
 
 		virtual void SetDesc(const Desc& newDesc) override
 		{
 			_worldSpaceResolveBias = newDesc._worldSpaceResolveBias;
 			_tanBlurAngle = newDesc._tanBlurAngle;
-			_minBlurSearch = newDesc._minBlurSearch;
-			_maxBlurSearch = newDesc._maxBlurSearch;
+			_minBlurSearchPixels = newDesc._minBlurSearch;
+			_maxBlurSearchPixels = newDesc._maxBlurSearch;
 		}
 		virtual Desc GetDesc() const override
 		{
-			return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearch, _maxBlurSearch };
+			return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearchPixels, _maxBlurSearchPixels };
 		}
 
 		virtual void SetProjections(

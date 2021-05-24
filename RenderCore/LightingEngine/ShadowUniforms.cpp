@@ -162,9 +162,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		_worldSpaceBias = -0.03f;
 		_tanBlurAngle = 0.00436f;		// tan(.25 degrees)
-		_minBlurSearch = 0.5f;
-		_maxBlurSearch = 25.f;
 		_shadowTextureSize = 1024.f;
+		_minBlurSearchNorm = 0.5f / _shadowTextureSize;
+		_maxBlurSearchNorm = 25.f / _shadowTextureSize;
 		XlZeroMemory(_dummy);
 	}
 

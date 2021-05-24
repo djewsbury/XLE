@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 {
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
 	enum class ShadowResolveType { DepthTexture, RayTraced };
-	enum class ShadowFilterModel { PoissonDisc, Smooth };
+	enum class ShadowFilterModel { None, PoissonDisc, Smooth };
 
 	class ShadowOperatorDesc
 	{
@@ -62,6 +62,7 @@ namespace RenderCore { namespace LightingEngine
 		RenderCore::CullMode	_cullMode = RenderCore::CullMode::Back;
 		ShadowResolveType		_resolveType = ShadowResolveType::DepthTexture;
 		ShadowFilterModel		_filterModel = ShadowFilterModel::PoissonDisc;
+		bool					_enableContactHardening = false;
 		unsigned				_normalProjCount = 1u;
 		bool					_enableNearCascade = false;
 

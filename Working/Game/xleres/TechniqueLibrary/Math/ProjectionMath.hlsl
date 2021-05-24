@@ -190,12 +190,12 @@ MiniProjZW GlobalMiniProjZW()
 
     float NDCDepthDifferenceToWorldSpace_Ortho(float ndcDepthDifference, MiniProjZW miniProj)
     {
-        return ndcDepthDifference / miniProj.Z;
+        return -ndcDepthDifference / miniProj.Z;
     }
 
     float WorldSpaceDepthDifferenceToNDC_Ortho(float worldSpaceDepth, MiniProjZW miniProj)
     {
-        return worldSpaceDepth * miniProj.Z;
+        return -worldSpaceDepth * miniProj.Z;
     }
 
     float NDCDepthToLinear0To1_Ortho(float NDCz, MiniProjZW miniProj, float farClip)

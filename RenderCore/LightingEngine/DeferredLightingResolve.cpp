@@ -123,10 +123,11 @@ namespace RenderCore { namespace LightingEngine
 		Shadowing _shadowing = Shadowing::NoShadows;
 		ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
 		unsigned _normalProjCount = 1u;
+		bool _enableContactHardening = false;
 
 		friend bool operator==(const ShadowResolveParam& lhs, const ShadowResolveParam& rhs)
 		{
-			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount;
+			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount && lhs._enableContactHardening == rhs._enableContactHardening;
 		}
 	};
 
@@ -158,7 +159,8 @@ namespace RenderCore { namespace LightingEngine
 				definesTable << ";SHADOW_CASCADE_MODE=" << 1u;
 			definesTable << ";SHADOW_SUB_PROJECTION_COUNT=" << shadowResolveParam._normalProjCount;
 			definesTable << ";SHADOW_ENABLE_NEAR_CASCADE=" << (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
-			definesTable << ";SHADOW_RESOLVE_MODEL=" << unsigned(shadowResolveParam._filterModel);
+			definesTable << ";SHADOW_FILTER_MODEL=" << unsigned(shadowResolveParam._filterModel);
+			definesTable << ";SHADOW_FILTER_CONTACT_HARDENING=" << unsigned(shadowResolveParam._enableContactHardening);
 			definesTable << ";SHADOW_RT_HYBRID=" << unsigned(shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
 		}
 		definesTable << ";LIGHT_SHAPE=" << unsigned(desc._shape);
@@ -304,6 +306,7 @@ namespace RenderCore { namespace LightingEngine
 					break;
 				}
 				param._normalProjCount = shadowOp._normalProjCount;
+				param._enableContactHardening = shadowOp._enableContactHardening;
 
 				bool foundExisting = false;
 				for (unsigned c=0; c<shadowParamCount; ++c)

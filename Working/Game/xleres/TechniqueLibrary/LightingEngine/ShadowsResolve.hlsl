@@ -7,7 +7,7 @@
 #if !defined(SHADOWS_RESOLVE_H)
 #define SHADOWS_RESOLVE_H
 
-#include "SampleFiltering.hlsl"
+#include "ShadowSampleFiltering.hlsl"
 #include "RTShadows.hlsl"
 #include "../Math/ProjectionMath.hlsl"
 #include "../Math/Misc.hlsl"
@@ -21,9 +21,17 @@ Texture2DArray 	ShadowTextures BIND_SHADOW_T0;
 TextureCube 	ShadowCube BIND_SHADOW_T0;
 Texture2D		NoiseTexture BIND_SHARED_LIGHTING_T1;
 
-#if !defined(SHADOW_RESOLVE_MODEL)
-    #define SHADOW_RESOLVE_MODEL 0
+#if !defined(SHADOW_FILTER_MODEL)
+    #define SHADOW_FILTER_MODEL 0
 #endif
+
+#if !defined(SHADOW_FILTER_CONTACT_HARDENING)
+    #define SHADOW_FILTER_CONTACT_HARDENING 0
+#endif
+
+#define SHADOW_FILTER_MODEL_NONE 0
+#define SHADOW_FILTER_MODEL_POISSONDISC 1
+#define SHADOW_FILTER_MODEL_SMOOTH 2
 
 static const bool ShadowsPerspectiveProjection = false;
 
@@ -42,28 +50,25 @@ cbuffer ShadowResolveParameters BIND_SHADOW_B1
 {
     float ShadowBiasWorldSpace;
     float TanBlurAngle;
-    float MinBlurRadius;
-    float MaxBlurRadius;
+    float MinBlurRadiusNorm;
+    float MaxBlurRadiusNorm;
     float ShadowTextureSize;
 }
 
 struct ShadowResolveConfig
 {
-    bool _doFiltering;
-
-        // "Percentage Closer" configuration
-    bool _pcUsePoissonDiskMethod;
+    uint _filteringMode;
     bool _pcDoFilterRotation;
-
+    bool _doContactHardening;
     bool _hasHybridRT;
 };
 
 ShadowResolveConfig ShadowResolveConfig_Default()
 {
     ShadowResolveConfig result;
-    result._doFiltering = true;
-    result._pcUsePoissonDiskMethod = SHADOW_RESOLVE_MODEL == 0;
+    result._filteringMode = SHADOW_FILTER_MODEL;
     result._pcDoFilterRotation = true;
+    result._doContactHardening = SHADOW_FILTER_CONTACT_HARDENING;
     result._hasHybridRT = false;
     return result;
 }
@@ -71,8 +76,7 @@ ShadowResolveConfig ShadowResolveConfig_Default()
 ShadowResolveConfig ShadowResolveConfig_NoFilter()
 {
     ShadowResolveConfig result;
-    result._doFiltering = false;
-    result._pcUsePoissonDiskMethod = false;
+    result._filteringMode = SHADOW_FILTER_MODEL_NONE;
     result._pcDoFilterRotation = false;
     result._hasHybridRT = false;
     return result;
@@ -107,13 +111,20 @@ float CalculateShadowCasterDistance(
     float accumulatedSampleCount = 0.0001f;
 
     float angle = 2.f * pi * ditherPatternValue;
-    float2 sinCosAngle;
-    sincos(angle, sinCosAngle.x, sinCosAngle.y);
-    float2x2 rotationMatrix = float2x2(
-        float2(sinCosAngle.x, sinCosAngle.y),
-        float2(-sinCosAngle.y, sinCosAngle.x));
+    float2 filterRotation;
+    sincos(angle, filterRotation.x, filterRotation.y);
 
-    const float filterSize = 12.f / ShadowTextureSize;
+    const float searchSize = MaxBlurRadiusNorm;
+    filterRotation *= searchSize;
+
+    float minDistance = 1.0f;
+
+    // We need some tolerance here, because of precision issues
+    // If the depth we sample from the depth texture is from the surface we're now drawing
+    // shadows for, we have to be sure to not count it 
+    const float tolerance = 0.01f;
+    comparisonDistance -= tolerance;
+
     #if MSAA_SAMPLES <= 1
             //	Undersampling here can cause some horrible artefacts.
             //		In many cases, 4 samples is enough.
@@ -137,28 +148,35 @@ float CalculateShadowCasterDistance(
             //
             //		Sample the depth texture, using a normal non-comparison sampler
             //
-        float2 baseFilter0 = GetRawShadowSampleFilter((c*4+0)*sampleStep+sampleOffset);
-        float2 baseFilter1 = GetRawShadowSampleFilter((c*4+1)*sampleStep+sampleOffset);
-        float2 baseFilter2 = GetRawShadowSampleFilter((c*4+2)*sampleStep+sampleOffset);
-        float2 baseFilter3 = GetRawShadowSampleFilter((c*4+3)*sampleStep+sampleOffset);
+        float2 filter0 = GetRawShadowSampleFilter((c*4+0)*sampleStep+sampleOffset);
+        float2 filter1 = GetRawShadowSampleFilter((c*4+1)*sampleStep+sampleOffset);
+        float2 filter2 = GetRawShadowSampleFilter((c*4+2)*sampleStep+sampleOffset);
+        float2 filter3 = GetRawShadowSampleFilter((c*4+3)*sampleStep+sampleOffset);
 
-        baseFilter0 = mul(rotationMatrix, baseFilter0);
-        baseFilter1 = mul(rotationMatrix, baseFilter1);
-        baseFilter2 = mul(rotationMatrix, baseFilter2);
-        baseFilter3 = mul(rotationMatrix, baseFilter3);
+        float2 rotatedFilter0 = float2(dot(filterRotation, filter0), dot(float2(filterRotation.y, -filterRotation.x), filter0));
+        float2 rotatedFilter1 = float2(dot(filterRotation, filter1), dot(float2(filterRotation.y, -filterRotation.x), filter1));
+        float2 rotatedFilter2 = float2(dot(filterRotation, filter2), dot(float2(filterRotation.y, -filterRotation.x), filter2));
+        float2 rotatedFilter3 = float2(dot(filterRotation, filter3), dot(float2(filterRotation.y, -filterRotation.x), filter3));
 
         float4 sampleDepth;
-        sampleDepth.x = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + filterSize * baseFilter0, float(arrayIndex)), 0).r;
-        sampleDepth.y = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + filterSize * baseFilter1, float(arrayIndex)), 0).r;
-        sampleDepth.z = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + filterSize * baseFilter2, float(arrayIndex)), 0).r;
-        sampleDepth.w = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + filterSize * baseFilter3, float(arrayIndex)), 0).r;
+        sampleDepth.x = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter0, float(arrayIndex)), 0).r;
+        sampleDepth.y = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter1, float(arrayIndex)), 0).r;
+        sampleDepth.z = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
+        sampleDepth.w = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
 
         float4 difference 		 = comparisonDistance.xxxx - sampleDepth;
         float4 sampleCount 		 = difference > 0.0f;					// array of 1s for pixels in the shadow texture closer to the light
         accumulatedSampleCount 	+= dot(sampleCount, 1.0.xxxx);			// count number of 1s in "sampleCount"
             // Clamp maximum distance considered here?
-        accumulatedDistance += dot(difference, sampleCount);		// accumulate only the samples closer to the light
+        accumulatedDistance     += dot(difference, sampleCount);		// accumulate only the samples closer to the light
+
+        minDistance = difference.x > 0.f ? min(minDistance, sampleDepth.x) : minDistance;
+        minDistance = difference.y > 0.f ? min(minDistance, sampleDepth.y) : minDistance;
+        minDistance = difference.z > 0.f ? min(minDistance, sampleDepth.z) : minDistance;
+        minDistance = difference.w > 0.f ? min(minDistance, sampleDepth.w) : minDistance;
     }
+
+    return comparisonDistance - minDistance;
 
         //
         //		finalDistance is the assumed distance to the shadow caster
@@ -188,147 +206,168 @@ float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
     }
 }
 
+float CalculateFilteredShadows_PoissonDisc(
+    float2 texCoords, float comparisonDistance, uint arrayIndex,
+    float filterSizeNorm,
+    int2 randomizerValue, uint msaaSampleIndex)
+{
+    float noiseValue = NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
+    float2 filterRotation;
+    sincos(2.f * 3.14159f * noiseValue, filterRotation.x, filterRotation.y);
+    filterRotation *= filterSizeNorm;
+
+    float2 depthddTC = CalculateShadowLargeFilterBias(comparisonDistance, texCoords);
+
+    float weightTotal = 0.f;
+
+    const bool doFilterRotation = true;
+    float shadowingTotal = 0.f;
+    #if MSAA_SAMPLES <= 1
+        const uint sampleCount = 32;
+        const uint sampleOffset = 0;
+        const uint loopCount = sampleCount / 4;
+    #else
+        const uint sampleCount = 4;		// We will be blending multiple samples, anyway... So minimize sample count for MSAA
+        const uint sampleOffset = msaaSampleIndex * (FilterKernelSize-sampleCount) / (MSAA_SAMPLES-1);
+        const uint loopCount = sampleCount / 4;
+        [unroll]
+    #endif
+    for (uint c=0; c<loopCount; ++c) {
+
+            // note --	we can use the screen space derivatives of sample position to
+            //			bias the offsets here, and avoid some acne artefacts
+        float2 filter0 = GetRawShadowSampleFilter(c*4+0+sampleOffset);
+        float2 filter1 = GetRawShadowSampleFilter(c*4+1+sampleOffset);
+        float2 filter2 = GetRawShadowSampleFilter(c*4+2+sampleOffset);
+        float2 filter3 = GetRawShadowSampleFilter(c*4+3+sampleOffset);
+
+        float2 rotatedFilter0, rotatedFilter1, rotatedFilter2, rotatedFilter3;
+        if (doFilterRotation) {
+            rotatedFilter0 = float2(dot(filterRotation, filter0), dot(float2(filterRotation.y, -filterRotation.x), filter0));
+            rotatedFilter1 = float2(dot(filterRotation, filter1), dot(float2(filterRotation.y, -filterRotation.x), filter1));
+            rotatedFilter2 = float2(dot(filterRotation, filter2), dot(float2(filterRotation.y, -filterRotation.x), filter2));
+            rotatedFilter3 = float2(dot(filterRotation, filter3), dot(float2(filterRotation.y, -filterRotation.x), filter3));
+        } else {
+            rotatedFilter0 = filterSizeNorm*filter0;
+            rotatedFilter1 = filterSizeNorm*filter1;
+            rotatedFilter2 = filterSizeNorm*filter2;
+            rotatedFilter3 = filterSizeNorm*filter3;
+        }
+
+        float cDist0 = comparisonDistance + dot(rotatedFilter0, depthddTC);
+        float cDist1 = comparisonDistance + dot(rotatedFilter1, depthddTC);
+        float cDist2 = comparisonDistance + dot(rotatedFilter2, depthddTC);
+        float cDist3 = comparisonDistance + dot(rotatedFilter3, depthddTC);
+
+        float4 sampleDepth;
+        sampleDepth.x = TestShadow(texCoords + rotatedFilter0, arrayIndex, cDist0);
+        sampleDepth.y = TestShadow(texCoords + rotatedFilter1, arrayIndex, cDist1);
+        sampleDepth.z = TestShadow(texCoords + rotatedFilter2, arrayIndex, cDist2);
+        sampleDepth.w = TestShadow(texCoords + rotatedFilter3, arrayIndex, cDist3);
+
+        shadowingTotal += dot(sampleDepth, 1.0.xxxx);
+    }
+
+    return shadowingTotal * (1.f / float(sampleCount));
+}
+
 float CalculateFilteredShadows(
     float2 texCoords, float comparisonDistance, uint arrayIndex,
-    float casterDistance, int2 randomizerValue,
-    float2 projectionScale, uint msaaSampleIndex,
+    float filterSizeNorm, 
+    int2 randomizerValue, uint msaaSampleIndex, 
     ShadowResolveConfig config)
 {
-        //	In "ShadowsPerspectiveProjection", casterDistance is the difference between 2 NDC depths
-        //	Otherwise, casterDistance is world space distance between the sample and caster.
-    float filterSize, filterSizePixels;
-    if (ShadowsPerspectiveProjection) {
-        filterSize = lerp(0.001f, 0.015f, saturate(casterDistance*30.f));
-        filterSize *= .03f * projectionScale.x;		// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
-        filterSizePixels = filterSize * ShadowTextureSize;
+    if (config._filteringMode == SHADOW_FILTER_MODEL_POISSONDISC) {
+
+        return CalculateFilteredShadows_PoissonDisc(
+            texCoords, comparisonDistance, arrayIndex, 
+            filterSizeNorm,
+            randomizerValue, msaaSampleIndex);
+
+    } else if (config._filteringMode == SHADOW_FILTER_MODEL_SMOOTH) {
+
+        float fRatio = saturate(filterSizeNorm * ShadowTextureSize / float(AMD_FILTER_SIZE));
+        return FixedSizeShadowFilter(
+            ShadowTextures,
+            float3(texCoords, float(arrayIndex)), comparisonDistance, fRatio);
+
+    } else {
+
+        return TestShadow(texCoords, arrayIndex, comparisonDistance);
+
+    }
+}
+
+float CalculateFilterSize(
+    uint cascadeIndex, float2 shadowTexCoord,
+    float4 miniProjection, float comparisonDistance,
+    int2 randomizerValue, uint msaaSampleIndex)
+{
+    float casterDistance = CalculateShadowCasterDistance(
+        shadowTexCoord, comparisonDistance, cascadeIndex,
+        msaaSampleIndex, DitherPatternValue(randomizerValue));
+
+    float projectionScale = miniProjection.x;	// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
+
+    float filterSizeNorm;
+    if (!ShadowsPerspectiveProjection) {
+
+            // In orthogonal projection mode, NDC depths are actually linear. So, we can convert a difference
+            // of depths in NDC space (like casterDistance) into world space depth easily. Linear depth values
+            // are more convenient for calculating the shadow filter radius
+        float worldSpaceCasterDistance = NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, AsMiniProjZW(miniProjection));
+
+        const float distanceToWideningScale = 10.f / ShadowTextureSize * projectionScale;
+        filterSizeNorm = distanceToWideningScale * worldSpaceCasterDistance;
     } else {
             //	There are various ways to calculate the filtering distance here...
             //	For example, we can assume the light source is an area light source, and
             //	calculate the appropriate penumbra for that object. But let's just use
             //	a simple method and calculate a fixed penumbra angle
-        filterSizePixels  = TanBlurAngle * casterDistance;
-        filterSizePixels *= projectionScale.x * (ShadowTextureSize / 2.f);
-
-        filterSizePixels = min(max(filterSizePixels, MinBlurRadius), MaxBlurRadius);
-
-        filterSize = filterSizePixels / ShadowTextureSize;
+        filterSizeNorm = TanBlurAngle * casterDistance * projectionScale;
     }
 
-    if (config._pcUsePoissonDiskMethod) {
-
-        float noiseValue = NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
-        float2 filterRotation;
-        sincos(2.f * 3.14159f * noiseValue, filterRotation.x, filterRotation.y);
-        filterRotation *= filterSize;
-
-        float2 depthddTC = CalculateShadowLargeFilterBias(comparisonDistance, texCoords);
-
-        const bool doFilterRotation = true;
-        float shadowingTotal = 0.f;
-        #if MSAA_SAMPLES <= 1
-            const uint sampleCount = 32;
-            const uint sampleOffset = 0;
-            const uint loopCount = sampleCount / 4;
-        #else
-            const uint sampleCount = 4;		// We will be blending multiple samples, anyway... So minimize sample count for MSAA
-            const uint sampleOffset = msaaSampleIndex * (FilterKernelSize-sampleCount) / (MSAA_SAMPLES-1);
-            const uint loopCount = sampleCount / 4;
-            [unroll]
-        #endif
-        for (uint c=0; c<loopCount; ++c) {
-
-                // note --	we can use the screen space derivatives of sample position to
-                //			bias the offsets here, and avoid some acne artefacts
-            float2 filter0 = GetRawShadowSampleFilter(c*4+0+sampleOffset);
-            float2 filter1 = GetRawShadowSampleFilter(c*4+1+sampleOffset);
-            float2 filter2 = GetRawShadowSampleFilter(c*4+2+sampleOffset);
-            float2 filter3 = GetRawShadowSampleFilter(c*4+3+sampleOffset);
-
-            float2 rotatedFilter0, rotatedFilter1, rotatedFilter2, rotatedFilter3;
-            if (doFilterRotation) {
-                rotatedFilter0 = float2(dot(filterRotation, filter0), dot(float2(filterRotation.y, -filterRotation.x), filter0));
-                rotatedFilter1 = float2(dot(filterRotation, filter1), dot(float2(filterRotation.y, -filterRotation.x), filter1));
-                rotatedFilter2 = float2(dot(filterRotation, filter2), dot(float2(filterRotation.y, -filterRotation.x), filter2));
-                rotatedFilter3 = float2(dot(filterRotation, filter3), dot(float2(filterRotation.y, -filterRotation.x), filter3));
-            } else {
-                rotatedFilter0 = filterSize*filter0;
-                rotatedFilter1 = filterSize*filter1;
-                rotatedFilter2 = filterSize*filter2;
-                rotatedFilter3 = filterSize*filter3;
-            }
-
-            float cDist0 = comparisonDistance + dot(rotatedFilter0, depthddTC);
-            float cDist1 = comparisonDistance + dot(rotatedFilter1, depthddTC);
-            float cDist2 = comparisonDistance + dot(rotatedFilter2, depthddTC);
-            float cDist3 = comparisonDistance + dot(rotatedFilter3, depthddTC);
-
-            float4 sampleDepth;
-            sampleDepth.x = TestShadow(texCoords + rotatedFilter0, arrayIndex, cDist0);
-            sampleDepth.y = TestShadow(texCoords + rotatedFilter1, arrayIndex, cDist1);
-            sampleDepth.z = TestShadow(texCoords + rotatedFilter2, arrayIndex, cDist2);
-            sampleDepth.w = TestShadow(texCoords + rotatedFilter3, arrayIndex, cDist3);
-
-            shadowingTotal += dot(sampleDepth, 1.0.xxxx);
-        }
-
-        return shadowingTotal * (1.f / float(sampleCount));
-
-    } else {
-
-        float fRatio = saturate(filterSizePixels / float(AMD_FILTER_SIZE));
-        return FixedSizeShadowFilter(
-            ShadowTextures,
-            float3(texCoords, float(arrayIndex)), comparisonDistance, fRatio);
-
-    }
+    filterSizeNorm = min(max(filterSizeNorm, MinBlurRadiusNorm), MaxBlurRadiusNorm);
+    return filterSizeNorm;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-    //   R E S O L V E
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-float ResolveDMShadows(	uint projection, float2 shadowTexCoord,
+float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord,
                         float4 miniProjection,
                         float comparisonDistance,
                         int2 randomizerValue, uint msaaSampleIndex,
                         ShadowResolveConfig config)
 {
-    float casterDistanceComparison = comparisonDistance;
     float biasedDepth;
-    const bool shadowsPerspectiveProj = ShadowsPerspectiveProjection;
-
         //	Here, we bias the shadow depth using world space units.
         //	This appears to produce more reliable results and variety
         //	of depth ranges.
         //	With perspective projection, it is more expensive than biasing in NDC depth space.
         //	But with orthogonal shadows, it should be very similar
     MiniProjZW miniP = AsMiniProjZW(miniProjection);
-    if (shadowsPerspectiveProj) {
+    if (ShadowsPerspectiveProjection) {
         float worldSpaceDepth = NDCDepthToWorldSpace_Perspective(comparisonDistance, miniP);
         biasedDepth = WorldSpaceDepthToNDC_Perspective(worldSpaceDepth - ShadowBiasWorldSpace, miniP);
     } else {
         biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowBiasWorldSpace, miniP);
     }
 
-    if (config._doFiltering) {
-        float casterDistance = CalculateShadowCasterDistance(
-            shadowTexCoord, casterDistanceComparison, projection,
-            msaaSampleIndex, DitherPatternValue(randomizerValue));
-
-        if (!shadowsPerspectiveProj) {
-                // In orthogonal projection mode, NDC depths are actually linear. So, we can convert a difference
-                // of depths in NDC space (like casterDistance) into world space depth easily. Linear depth values
-                // are more convenient for calculating the shadow filter radius
-            casterDistance = -NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, miniP);
-        }
-
-        return CalculateFilteredShadows(
-            shadowTexCoord, biasedDepth, projection, casterDistance, randomizerValue,
-            miniProjection.xy, msaaSampleIndex, config);
-    } else {
-        return TestShadow(shadowTexCoord, projection, biasedDepth);
+    float filterSize = MinBlurRadiusNorm;
+    if (config._doContactHardening) {
+        filterSize = CalculateFilterSize(
+            cascadeIndex, shadowTexCoord,
+            miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex);
     }
+
+    // return (filterSize - MinBlurRadiusNorm) / (MaxBlurRadiusNorm - MinBlurRadiusNorm);
+
+    return CalculateFilteredShadows(
+        shadowTexCoord, biasedDepth, cascadeIndex, filterSize, randomizerValue,
+        msaaSampleIndex, config);
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+    //   R E S O L V E
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ResolveShadows_Cascade(
     int cascadeIndex, float4 cascadeNormCoords, float4 miniProjection,
@@ -358,7 +397,7 @@ float ResolveShadows_Cascade(
         return SampleRTShadows(cascadeNormCoords.xyz/cascadeNormCoords.w, randomizerValue);
     }
 
-    return ResolveDMShadows(cascadeIndex, texCoords, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);
+    return SampleDMShadows(cascadeIndex, texCoords, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);
 }
 
 float CubeMapComparisonDistance(float3 cubeMapSampleCoord, float4 miniProjection)

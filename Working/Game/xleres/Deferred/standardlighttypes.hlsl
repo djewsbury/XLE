@@ -36,17 +36,15 @@ float3 ResolveLight(
 
 float ResolveShadows(CascadeAddress cascadeAddress, LightScreenDest screenDesc)
 {
+    ShadowResolveConfig config = ShadowResolveConfig_Default();
     #if SHADOW_CASCADE_MODE == 0
         return 1.0f;
     #elif SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP
-        ShadowResolveConfig config = ShadowResolveConfig_Default();
         return ResolveShadows_CubeMap(
             cascadeAddress.frustumCoordinates.xyz, cascadeAddress.miniProjection,
             screenDesc.pixelCoords, screenDesc.sampleIndex,
             config);
     #else
-        ShadowResolveConfig config = ShadowResolveConfig_Default();
-        config._pcUsePoissonDiskMethod = SHADOW_RESOLVE_MODEL == 0;
         return ResolveShadows_Cascade(
             cascadeAddress.cascadeIndex, cascadeAddress.frustumCoordinates, cascadeAddress.miniProjection,
             screenDesc.pixelCoords, screenDesc.sampleIndex,

@@ -76,8 +76,10 @@ namespace UnitTests
 		IShadowPreparer::Desc desc;
 		desc._worldSpaceResolveBias = 0.f;
         desc._tanBlurAngle = 0.00436f;
-        desc._minBlurSearch = 0.5f;
-        desc._maxBlurSearch = 25.f;
+        desc._minBlurSearch = 3.0f;
+        desc._maxBlurSearch = 35.f;
+		// desc._minBlurSearch = 10.0f;
+		// desc._maxBlurSearch = 50.f;
 		auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowId);
 		REQUIRE(preparer);
 		preparer->SetDesc(desc);
@@ -173,8 +175,10 @@ namespace UnitTests
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
 			shadowOp._rasterDepthBias = (int)std::ceil(ratio1);
+			// shadowOp._rasterDepthBias += 256;
 			// const float worldSpaceExtraBias = 0.2f;
 			// shadowOp._rasterDepthBias += worldSpaceExtraBias / wsDepthResolution;
+			shadowOp._enableContactHardening = true;
 			shadowOp._slopeScaledBias = 0.5f;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp

@@ -40,9 +40,9 @@
 				// make the vertices massive. It also seems to cause problems sometimes either in the HLSL compiler
 				// or in the conversion from HLSL to GLSL. Even if we unroll the loop, the indexor 'c' doesn't seem to always
 				// apply correctly
-				float4 p0 = ShadowProjection_GetOutput(input[0].position.xyz, c, GetShadowCascadeMode());
-				float4 p1 = ShadowProjection_GetOutput(input[1].position.xyz, c, GetShadowCascadeMode());
-				float4 p2 = ShadowProjection_GetOutput(input[2].position.xyz, c, GetShadowCascadeMode());
+				float4 p0 = ShadowProjection_GetOutput(input[0].position.xyz, c);
+				float4 p1 = ShadowProjection_GetOutput(input[1].position.xyz, c);
+				float4 p2 = ShadowProjection_GetOutput(input[2].position.xyz, c);
 			#elif SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ORTHOGONAL
 				float4 p0 = float4(AdjustForOrthoCascade(input[0].position.xyz, c), 1.f);
 				float4 p1 = float4(AdjustForOrthoCascade(input[1].position.xyz, c), 1.f);
@@ -63,10 +63,10 @@
 				//		half of pixels shadow themselves, and half don't.
 				//		Still some investigation required to find out why that is...
 				//
-			const float halfDepthBufferPrecision = .5f/65536.f;
-			p0.z -= halfDepthBufferPrecision * p0.w;
-			p1.z -= halfDepthBufferPrecision * p1.w;
-			p2.z -= halfDepthBufferPrecision * p2.w;
+			// const float halfDepthBufferPrecision = .5f/65536.f;
+			// p0.z -= halfDepthBufferPrecision * p0.w;
+			// p1.z -= halfDepthBufferPrecision * p1.w;
+			// p2.z -= halfDepthBufferPrecision * p2.w;
 
 			VSOUT output;
 			output.position = p0;
@@ -129,10 +129,10 @@
 		float4 p2 = float4(mul(OrthoNearCascade, float4(input[2].position.xyz, 1.f)), 1.f);
 
 		if (TriInFrustum(p0, p1, p2)) {
-			const float halfDepthBufferPrecision = .5f/65536.f;
-			p0.z -= halfDepthBufferPrecision * p0.w;
-			p1.z -= halfDepthBufferPrecision * p1.w;
-			p2.z -= halfDepthBufferPrecision * p2.w;
+			// const float halfDepthBufferPrecision = .5f/65536.f;
+			// p0.z -= halfDepthBufferPrecision * p0.w;
+			// p1.z -= halfDepthBufferPrecision * p1.w;
+			// p2.z -= halfDepthBufferPrecision * p2.w;
 
 			VSOUT output;
 			output.position = p0;

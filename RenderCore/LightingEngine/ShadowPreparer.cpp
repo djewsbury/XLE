@@ -128,8 +128,8 @@ namespace RenderCore { namespace LightingEngine
 		preparedResult.InitialiseConstants(projection._projections);
 		preparedResult._resolveParameters._worldSpaceBias = projection._worldSpaceResolveBias;
 		preparedResult._resolveParameters._tanBlurAngle = projection._tanBlurAngle;
-		preparedResult._resolveParameters._minBlurSearch = projection._minBlurSearch;
-		preparedResult._resolveParameters._maxBlurSearch = projection._maxBlurSearch;
+		preparedResult._resolveParameters._minBlurSearchNorm = projection._minBlurSearchPixels / shadowTextureSize;
+		preparedResult._resolveParameters._maxBlurSearchNorm = projection._maxBlurSearchPixels / shadowTextureSize;
 		preparedResult._resolveParameters._shadowTextureSize = shadowTextureSize;
 		XlZeroMemory(preparedResult._resolveParameters._dummy);
 
