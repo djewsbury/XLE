@@ -30,10 +30,10 @@ cbuffer ShadowProjection ShadowProjectionBinding
 		row_major float4x4 ShadowWorldToProj[SHADOW_SUB_PROJECTION_COUNT];
 		float4 ShadowMinimalProjection[SHADOW_SUB_PROJECTION_COUNT];
 	#elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-		row_major float3x4 OrthoShadowWorldToProj;
+		row_major float3x4 OrthoShadowWorldToView;
 		float4 OrthoShadowMinimalProjection;
-		float3 OrthoShadowCascadeScale[SHADOW_SUB_PROJECTION_COUNT];
-		float3 OrthoShadowCascadeTrans[SHADOW_SUB_PROJECTION_COUNT];
+		float4 OrthoShadowCascadeScale[SHADOW_SUB_PROJECTION_COUNT];
+		float4 OrthoShadowCascadeTrans[SHADOW_SUB_PROJECTION_COUNT];
 		#if SHADOW_ENABLE_NEAR_CASCADE
 			row_major float3x4 OrthoNearCascade;
 			float4 OrthoShadowNearMinimalProjection;
@@ -74,7 +74,7 @@ float3 AdjustForOrthoCascade(float3 basePosition, uint cascadeIndex)
 		return float3(
 			basePosition.x * OrthoShadowCascadeScale[cascadeIndex].x + OrthoShadowCascadeTrans[cascadeIndex].x,
 			basePosition.y * OrthoShadowCascadeScale[cascadeIndex].y + OrthoShadowCascadeTrans[cascadeIndex].y,
-			basePosition.z);
+			basePosition.z * OrthoShadowCascadeScale[cascadeIndex].z + OrthoShadowCascadeTrans[cascadeIndex].z);
 	#else
 		return basePosition;
 	#endif
@@ -85,7 +85,7 @@ float4 ShadowProjection_GetOutput(float3 position, uint cascadeIndex)
 	#if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP)
         return mul(ShadowWorldToProj[cascadeIndex], float4(position,1));
     #elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-        float3 a = AdjustForOrthoCascade(mul(OrthoShadowWorldToProj, float4(position, 1)), cascadeIndex);
+        float3 a = AdjustForOrthoCascade(mul(OrthoShadowWorldToView, float4(position, 1)), cascadeIndex);
         return float4(a, 1.f);
     #else
         return 0.0.xxxx;

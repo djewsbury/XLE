@@ -58,7 +58,7 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
     #if SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ARBITRARY || SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_CUBEMAP
         output.position = ShadowProjection_GetOutput(worldPosition, 0);
     #elif SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ORTHOGONAL
-        float3 basePosition = mul(OrthoShadowWorldToProj, float4(worldPosition, 1));
+        float3 basePosition = mul(OrthoShadowWorldToView, float4(worldPosition, 1));
         float3 cascadePos = AdjustForOrthoCascade(basePosition, 0);
         output.position = float4(cascadePos, 1.f);
     #endif

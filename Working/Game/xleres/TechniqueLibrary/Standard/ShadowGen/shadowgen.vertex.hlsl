@@ -57,7 +57,7 @@ VSShadowOutput BuildVSShadowOutput(
 	#elif SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ORTHOGONAL
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-		float3 basePosition = mul(OrthoShadowWorldToProj, float4(worldPosition, 1));
+		float3 basePosition = mul(OrthoShadowWorldToView, float4(worldPosition, 1));
 
 		result.position = float4(basePosition, 1);
 		for (uint c=0; c<count; ++c) {

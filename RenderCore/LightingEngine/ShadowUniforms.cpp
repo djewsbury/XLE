@@ -15,7 +15,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class CB_OrthoShadowProjection
 	{
 	public:
-		Float3x4    _worldToProj;
+		Float3x4    _worldToView;
 		Float4      _minimalProjection;
 	};
 
@@ -67,8 +67,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto* cascadeTrans = (Float4*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + sizeof(Float4) * desc._normalProjCount);
 			auto* nearProj = (CB_OrthoShadowNearCascade*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + desc._normalProjCount*sizeof(Float4)*2);
 
-			float p22 = 1.f, p23 = 0.f;
-
 			for (unsigned c=0; c<desc._normalProjCount; ++c) {
 
 				auto projMatrix = OrthogonalProjection(
@@ -82,35 +80,21 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				cascadeScale[c][1] = projMatrix(1,1);
 				cascadeTrans[c][0] = projMatrix(0,3);
 				cascadeTrans[c][1] = projMatrix(1,3);
-
-				if (c==0) {
-					p22 = projMatrix(2,2);
-					p23 = projMatrix(2,3);
-				}
-
-					// (unused parts)
-				cascadeScale[c][2] = 1.f;
-				cascadeScale[c][2] = 0.f;
+				cascadeScale[c][2] = projMatrix(2,2);
+				cascadeTrans[c][2] = projMatrix(2,3);
+				cascadeScale[c][3] = 0.f;
 				cascadeTrans[c][3] = 1.f;
-				cascadeTrans[c][3] = 0.f;
 			}
 
 				//  Also fill in the constants for ortho projection mode
 			baseCB->_minimalProjection = desc._minimalProjection[0];
-
-				//  We merge in the transform for the z component
-				//  Every cascade uses the same depth range, which means we only
-				//  have to adjust the X and Y components for each cascade
-			auto zComponentMerge = Identity<Float4x4>();
-			zComponentMerge(2,2) = p22;
-			zComponentMerge(2,3) = p23;
-			baseCB->_worldToProj = AsFloat3x4(Combine(baseWorldToView, zComponentMerge));
+			baseCB->_worldToView = AsFloat3x4(baseWorldToView);
 
 				// the special "near" cascade is reached via the main transform
 			if (desc._useNearProj) {
 				nearProj->_nearCascade = 
 					AsFloat3x4(Combine(
-						Inverse(AsFloat4x4(baseCB->_worldToProj)), 
+						Inverse(AsFloat4x4(baseCB->_worldToView)), 
 						desc._specialNearProjection));
 				nearProj->_nearMinimalProjection = desc._specialNearMinimalProjection;
 			}
@@ -241,7 +225,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto* orthCB = (CB_OrthoShadowProjection*)mainUniforms.begin();
 			auto* nearProj = (CB_OrthoShadowNearCascade*)PtrAdd(mainUniforms.begin(), sizeof(CB_OrthoShadowProjection) + normalProjCount*sizeof(Float4)*2);
 
-			auto& worldToShadowProj = orthCB->_worldToProj;
+			auto& worldToShadowProj = orthCB->_worldToView;
 			basis->_orthoCameraToShadow = Combine(cameraToWorld, worldToShadowProj);
 			basis->_orthoNearCameraToShadow = Combine(basis->_orthoCameraToShadow, nearProj->_nearCascade);
 

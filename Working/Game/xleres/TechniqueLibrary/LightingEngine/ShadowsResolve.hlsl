@@ -14,6 +14,8 @@
 #include "../Math/MathConstants.hlsl"
 #include "../Framework/Binding.hlsl"
 
+#include "ShadowProjection.hlsl"
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,15 +210,13 @@ float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
 
 float CalculateFilteredShadows_PoissonDisc(
     float2 texCoords, float comparisonDistance, uint arrayIndex,
-    float filterSizeNorm,
+    float filterSizeNorm, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
 {
     float noiseValue = NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
     float2 filterRotation;
     sincos(2.f * 3.14159f * noiseValue, filterRotation.x, filterRotation.y);
     filterRotation *= filterSizeNorm;
-
-    float2 depthddTC = CalculateShadowLargeFilterBias(comparisonDistance, texCoords);
 
     float weightTotal = 0.f;
 
@@ -254,10 +254,10 @@ float CalculateFilteredShadows_PoissonDisc(
             rotatedFilter3 = filterSizeNorm*filter3;
         }
 
-        float cDist0 = comparisonDistance + dot(rotatedFilter0, depthddTC);
-        float cDist1 = comparisonDistance + dot(rotatedFilter1, depthddTC);
-        float cDist2 = comparisonDistance + dot(rotatedFilter2, depthddTC);
-        float cDist3 = comparisonDistance + dot(rotatedFilter3, depthddTC);
+        float cDist0 = comparisonDistance + dot(rotatedFilter0, filterPlane);
+        float cDist1 = comparisonDistance + dot(rotatedFilter1, filterPlane);
+        float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
+        float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
 
         float4 sampleDepth;
         sampleDepth.x = TestShadow(texCoords + rotatedFilter0, arrayIndex, cDist0);
@@ -273,7 +273,7 @@ float CalculateFilteredShadows_PoissonDisc(
 
 float CalculateFilteredShadows(
     float2 texCoords, float comparisonDistance, uint arrayIndex,
-    float filterSizeNorm, 
+    float filterSizeNorm, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex, 
     ShadowResolveConfig config)
 {
@@ -281,7 +281,7 @@ float CalculateFilteredShadows(
 
         return CalculateFilteredShadows_PoissonDisc(
             texCoords, comparisonDistance, arrayIndex, 
-            filterSizeNorm,
+            filterSizeNorm, filterPlane,
             randomizerValue, msaaSampleIndex);
 
     } else if (config._filteringMode == SHADOW_FILTER_MODEL_SMOOTH) {
@@ -289,7 +289,7 @@ float CalculateFilteredShadows(
         float fRatio = saturate(filterSizeNorm * ShadowTextureSize / float(AMD_FILTER_SIZE));
         return FixedSizeShadowFilter(
             ShadowTextures,
-            float3(texCoords, float(arrayIndex)), comparisonDistance, fRatio);
+            float3(texCoords, float(arrayIndex)), comparisonDistance, fRatio, filterPlane);
 
     } else {
 
@@ -331,7 +331,7 @@ float CalculateFilterSize(
     return filterSizeNorm;
 }
 
-float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord,
+float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal,
                         float4 miniProjection,
                         float comparisonDistance,
                         int2 randomizerValue, uint msaaSampleIndex,
@@ -348,7 +348,9 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord,
         float worldSpaceDepth = NDCDepthToWorldSpace_Perspective(comparisonDistance, miniP);
         biasedDepth = WorldSpaceDepthToNDC_Perspective(worldSpaceDepth - ShadowBiasWorldSpace, miniP);
     } else {
-        biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowBiasWorldSpace, miniP);
+        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+            biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowBiasWorldSpace * cascadeSpaceNormal.z, miniP);
+        #endif
     }
 
     float filterSize = MinBlurRadiusNorm;
@@ -358,10 +360,28 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord,
             miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex);
     }
 
-    // return (filterSize - MinBlurRadiusNorm) / (MaxBlurRadiusNorm - MinBlurRadiusNorm);
+    // float2 filterPlane = CalculateFilterPlane_ScreenSpaceDerivatives(comparisonDistance, shadowTexCoord);
+    cascadeSpaceNormal = normalize(cascadeSpaceNormal);
+    float2 filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
+    #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+        filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[0].xy;
+    #endif
+
+#if 0
+    {
+        float3 bitangent = normalize(cross(float3(1, 0, 0), cascadeSpaceNormal));
+        float3 tangent = normalize(cross(cascadeSpaceNormal, bitangent));
+
+        float2 filterPlane2 = float2(tangent.z / tangent.x, bitangent.z / bitangent.y);
+        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+            filterPlane2 *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[0].xy;
+        #endif
+        filterPlane = filterPlane2;
+    }
+#endif
 
     return CalculateFilteredShadows(
-        shadowTexCoord, biasedDepth, cascadeIndex, filterSize, randomizerValue,
+        shadowTexCoord, biasedDepth, cascadeIndex, filterSize, filterPlane, randomizerValue,
         msaaSampleIndex, config);
 }
 
@@ -370,7 +390,8 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord,
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ResolveShadows_Cascade(
-    int cascadeIndex, float4 cascadeNormCoords, float4 miniProjection,
+    int cascadeIndex, float4 cascadeNormCoords, float3 cascadeSpaceNormal,
+    float4 miniProjection,
     int2 randomizerValue, uint msaaSampleIndex,
     ShadowResolveConfig config)
 {
@@ -397,7 +418,7 @@ float ResolveShadows_Cascade(
         return SampleRTShadows(cascadeNormCoords.xyz/cascadeNormCoords.w, randomizerValue);
     }
 
-    return SampleDMShadows(cascadeIndex, texCoords, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);
+    return SampleDMShadows(cascadeIndex, texCoords, cascadeSpaceNormal, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);
 }
 
 float CubeMapComparisonDistance(float3 cubeMapSampleCoord, float4 miniProjection)

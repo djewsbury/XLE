@@ -46,7 +46,8 @@ float ResolveShadows(CascadeAddress cascadeAddress, LightScreenDest screenDesc)
             config);
     #else
         return ResolveShadows_Cascade(
-            cascadeAddress.cascadeIndex, cascadeAddress.frustumCoordinates, cascadeAddress.miniProjection,
+            cascadeAddress.cascadeIndex, cascadeAddress.frustumCoordinates, cascadeAddress.frustumSpaceNormal, 
+            cascadeAddress.miniProjection,
             screenDesc.pixelCoords, screenDesc.sampleIndex,
             config);
     #endif
@@ -72,11 +73,11 @@ float ResolveShadows(CascadeAddress cascadeAddress, LightScreenDest screenDesc)
     // for persective
 static const bool ResolveCascadeByWorldPosition = true;
 
-CascadeAddress ResolveShadowsCascade(float3 worldPosition, float2 camXY, float worldSpaceDepth)
+CascadeAddress ResolveShadowsCascade(float3 worldPosition, float3 worldNormal, float2 camXY, float worldSpaceDepth)
 {
     #if SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY || SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL
         if (ResolveCascadeByWorldPosition == true) {
-            return ResolveCascade_FromWorldPosition(worldPosition);
+            return ResolveCascade_FromWorldPosition(worldPosition, worldNormal);
         } else {
             return ResolveCascade_CameraToShadowMethod(camXY, worldSpaceDepth);
         }
