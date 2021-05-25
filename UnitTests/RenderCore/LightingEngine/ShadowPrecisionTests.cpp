@@ -76,7 +76,7 @@ namespace UnitTests
 		IShadowPreparer::Desc desc;
 		desc._worldSpaceResolveBias = 0.f;
         desc._tanBlurAngle = 0.00436f;
-		desc._minBlurSearch = 15.f;
+		desc._minBlurSearch = 3.f;
         desc._maxBlurSearch = 35.f;
 		auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowId);
 		REQUIRE(preparer);
@@ -163,7 +163,7 @@ namespace UnitTests
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
 
 			float wsDepthResolution = depthRange / 16384.f;
-			const float filterRadiusInPixels = 3.0f;
+			const float filterRadiusInPixels = 10.0f;
 			const float frustumWidthWS = 2.0f;
 			float wsXYRange = filterRadiusInPixels * frustumWidthWS / 2048.f;
 			float ratio0 = wsXYRange / wsDepthResolution;
@@ -178,7 +178,7 @@ namespace UnitTests
 			// shadowOp._rasterDepthBias += 256;
 			// const float worldSpaceExtraBias = 0.2f;
 			// shadowOp._rasterDepthBias += worldSpaceExtraBias / wsDepthResolution;
-			shadowOp._enableContactHardening = false;
+			shadowOp._enableContactHardening = true;
 			shadowOp._slopeScaledBias = 0.5f;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp

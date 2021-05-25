@@ -364,8 +364,11 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
     cascadeSpaceNormal = normalize(cascadeSpaceNormal);
     float2 filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
     #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-        filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[0].xy;
+        filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
     #endif
+
+    // I think we need to scale by 2.0 here to compensate for the viewport transform (ie, ndc [-1,1] -> [0, 1])
+    filterPlane *= 2.0;
 
 #if 0
     {
@@ -374,7 +377,7 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
 
         float2 filterPlane2 = float2(tangent.z / tangent.x, bitangent.z / bitangent.y);
         #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            filterPlane2 *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[0].xy;
+            filterPlane2 *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
         #endif
         filterPlane = filterPlane2;
     }
