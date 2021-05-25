@@ -11,6 +11,7 @@
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
@@ -260,7 +261,7 @@ namespace UnitTests
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = CreateSharpContactDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+				auto drawableWriter = CreateSharpContactDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -284,4 +285,92 @@ namespace UnitTests
 		testHelper->EndFrameCapture();
 	}
 
+
+	TEST_CASE( "LightingEngine-SunSourceCascades", "[rendercore_lighting_engine]" )
+	{
+		using namespace RenderCore;
+		LightingEngineTestApparatus testApparatus;
+		auto testHelper = testApparatus._metalTestHelper.get();
+
+		auto threadContext = testHelper->_device->GetImmediateContext();
+
+		RenderCore::Techniques::CameraDesc visCamera;
+        visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 20.0f, 0.0f});
+        visCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		visCamera._nearClip = 0.f;
+		visCamera._farClip = 100.f;
+		visCamera._left = 0.f;
+		visCamera._top = 100.f;
+		visCamera._right = 100.f;
+		visCamera._bottom = 0.f;
+
+		RenderCore::Techniques::CameraDesc sceneCamera;
+        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-15.0f, 12.0f, -15.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), 2.0f * Float3{-15.0f, 12.0f, -15.0f} + 2.0f * Float3{10.f, 0.f, 10.f});
+        sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
+		sceneCamera._nearClip = 0.05f;
+		sceneCamera._farClip = 200.f;
+		sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
+
+		const Float3 negativeLightDirection = Normalize(Float3{1.0f, 1.0f, 0.0f});
+
+		testHelper->BeginFrameCapture();
+
+		{
+			RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceFrustumSettings;
+			sunSourceFrustumSettings._flags = 0;
+
+			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
+
+			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
+				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Directional }
+			};
+			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
+				CalculateShadowOperatorDesc(sunSourceFrustumSettings)
+			};
+
+			{
+				auto targetDesc = CreateDesc(
+					BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
+					"temporary-out");
+
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, visCamera);
+				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+					testHelper->_device,
+					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
+					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
+				PumpBufferUploads(testApparatus);
+
+				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f}; 
+				auto drawableWriter = CreateShapeWorldDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool, worldMins, worldMaxs);
+				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+
+				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+				auto lightId = lightScene.CreateLightSource(0);
+				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
+				auto shadowProjectionId = lightScene.CreateShadowProjection(0, lightId);
+				LightingEngine::ConfigureShadowCascades(lightScene, shadowProjectionId, negativeLightDirection, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
+
+				{
+					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+						*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+					ParseScene(lightingIterator, *drawableWriter);
+				}
+
+				lightScene.DestroyLightSource(lightId);
+
+				// auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::GBufferNormal);
+				REQUIRE(colorLDR);
+
+				SaveImage(*threadContext, *colorLDR, "sun-source-cascades");
+			}
+
+		}
+
+		testHelper->EndFrameCapture();
+	}
 }

@@ -187,6 +187,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
 		{
 			assert(_projections._mode == ShadowProjectionMode::Ortho);
+			assert(IsOrthonormal(Truncate3x3(worldToCamera)));
 			_projections._definitionViewMatrix = worldToCamera;
 		}
 

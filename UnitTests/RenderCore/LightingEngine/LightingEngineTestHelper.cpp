@@ -309,7 +309,7 @@ namespace UnitTests
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo;
-		size_t _sphereVertexCount, _pyramidVertexCode;
+		size_t _sphereVertexCount, _pyramidVertexCount;
 
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
@@ -325,20 +325,81 @@ namespace UnitTests
 			Combine_IntoLHS(pyramidTransform, RotationX(gPI*3.0f/16.0f));
 			Combine_IntoLHS(pyramidTransform, Float3{0.f, 0.0f, 1.f});
 
-			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCode, pyramidTransform);
+			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, pyramidTransform);
 		}
 
 		SharpContactDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
 		{
 			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(testHelper);
-			std::tie(_pyramidGeo, _pyramidVertexCode) = CreateTriangleBasePyramidGeo(testHelper);
+			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(testHelper);
 		}
 	};
 
-	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 	{
 		return std::make_shared<SharpContactDrawableWriter>(testHelper, pipelineAcceleratorPool);
+	}
+
+	class ShapeWorldDrawableWriter : public DrawablesWriterCommon
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo, _cubeGeo;
+		size_t _sphereVertexCount, _pyramidVertexCount, _cubeVertexCount;
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
+			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
+			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+		}
+
+		ShapeWorldDrawableWriter(
+			MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+			const Float2& worldMins, const Float2& worldMaxs)
+		: DrawablesWriterCommon(testHelper, pipelineAcceleratorPool)
+		{
+			std::tie(_sphereGeo, _sphereVertexCount) = CreateSphereGeo(testHelper);
+			std::tie(_pyramidGeo, _pyramidVertexCount) = CreateTriangleBasePyramidGeo(testHelper);
+			std::tie(_cubeGeo, _cubeVertexCount) = CreateCubeGeo(testHelper);
+
+			// //// //// //// //// //// //// //
+			std::mt19937_64 rng(0);
+			unsigned objects = 256;
+			while (objects--) {
+				float scale = std::pow(2.0f, std::uniform_real_distribution<float>(-2.0f, 2.0f)(rng));
+				Float3 position {
+					std::uniform_real_distribution<float>(worldMins[0], worldMaxs[0])(rng),
+					1.0f * scale,
+					std::uniform_real_distribution<float>(worldMins[1], worldMaxs[1])(rng)};
+				float yRotation = std::uniform_real_distribution<float>(-gPI, gPI)(rng);
+				auto transform = AsFloat4x4(UniformScaleYRotTranslation{scale, yRotation, position});
+
+				auto type = std::uniform_int_distribution<>(0, 2)(rng);
+				if (type == 0) {
+					_cubes.push_back(transform);
+				} else if (type == 1) {
+					_spheres.push_back(transform);
+				} else
+					_pyramid.push_back(transform);
+			}
+
+			// //// //// //// //// //// //// //
+			auto baseTransform = AsFloat4x4(Float3{1.0f, -2.0f, 1.0f});
+			Combine_IntoLHS(baseTransform, ArbitraryScale{Float3{(worldMaxs[0] - worldMins[0]) / 2.0f, 0.01f, (worldMaxs[1] - worldMins[1]) / 2.0f}});
+			_cubes.push_back(baseTransform);
+		}
+
+		std::vector<Float4x4> _cubes;
+		std::vector<Float4x4> _spheres;
+		std::vector<Float4x4> _pyramid;
+	};
+
+	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(
+		MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+		const Float2& worldMins, const Float2& worldMaxs)
+	{
+		return std::make_shared<ShapeWorldDrawableWriter>(testHelper, pipelineAcceleratorPool, worldMins, worldMaxs);
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

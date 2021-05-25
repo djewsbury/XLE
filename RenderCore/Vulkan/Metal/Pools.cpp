@@ -267,7 +267,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	TemporaryBufferSpace::Pimpl::Pimpl(ObjectFactory& factory, std::shared_ptr<IAsyncTracker> gpuTracker)
 	: _factory(&factory), _gpuTracker(gpuTracker)
-	, _cb(factory, 32*1024)
+	, _cb(factory, 256*1024)
 	{
 	}
 

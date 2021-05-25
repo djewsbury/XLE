@@ -13,6 +13,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		DeferredLightingDelegate.cpp
 		DeferredLightingResolve.cpp
 		StandardLightScene.cpp
+		SunSourceConfiguration.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

@@ -4,12 +4,15 @@
 
 #pragma once
 
-namespace RenderCore { namespace LightingEngine { class ShadowProjectionDesc; class LightDesc; class ShadowOperatorDesc; }}
+#include "LightScene.h"
+
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 
-namespace SceneEngine
+namespace RenderCore { namespace LightingEngine
 {
-    class DefaultShadowFrustumSettings
+    class ShadowOperatorDesc;
+
+    class SunSourceFrustumSettings
     {
     public:
         struct Flags 
@@ -23,26 +26,26 @@ namespace SceneEngine
             };
             typedef unsigned BitField;
         };
-        unsigned        _frustumCount;
+        unsigned        _maxFrustumCount;
         float           _maxDistanceFromCamera;
         float           _frustumSizeFactor;
         float           _focusDistance;
         Flags::BitField _flags;
         unsigned        _textureSize;
 
-        float           _slopeScaledBias;
+        /*float           _slopeScaledBias;
         float           _depthBiasClamp;
         unsigned        _rasterDepthBias;
 
         float           _dsSlopeScaledBias;
         float           _dsDepthBiasClamp;
-        unsigned        _dsRasterDepthBias;
+        unsigned        _dsRasterDepthBias;*/
 
-        float           _worldSpaceResolveBias;
+        // float           _worldSpaceResolveBias;
         float           _tanBlurAngle;
         float           _minBlurSearch, _maxBlurSearch;
 
-        DefaultShadowFrustumSettings();
+        SunSourceFrustumSettings();
     };
 
     /// <summary>Calculate a default set of shadow cascades for the sun<summary>
@@ -51,14 +54,13 @@ namespace SceneEngine
     /// <param name="mainSceneCameraDesc">This is the projection desc used when rendering the 
     /// the main scene from this camera (it's the project desc for the shadows render). This
     /// is required for adapting the shadows projection to the main scene camera.</param>
-    RenderCore::LightingEngine::ShadowProjectionDesc CalculateDefaultShadowCascades(
-        const RenderCore::LightingEngine::LightDesc& lightDesc,
-        unsigned lightId,
-        const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
-        const DefaultShadowFrustumSettings& settings);
+    void ConfigureShadowCascades(
+        ILightScene& lightScene,
+        ILightScene::ShadowProjectionId shadowProjectionId,
+        const Float3& negativeLightDirection,
+        const Techniques::ProjectionDesc& mainSceneCameraDesc,
+        const SunSourceFrustumSettings& settings);
 
-	RenderCore::LightingEngine::ShadowOperatorDesc
-		CalculateShadowGeneratorDesc(
-			const DefaultShadowFrustumSettings& settings);
+	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings);
 
-}
+}}

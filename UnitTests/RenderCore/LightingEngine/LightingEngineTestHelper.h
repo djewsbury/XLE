@@ -6,6 +6,7 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../BufferUploads/IBufferUploads.h"
+#include "../../../Math/Vector.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../ConsoleRig/GlobalServices.h"
 #include "thousandeyes/futures/then.h"
@@ -58,7 +59,10 @@ namespace UnitTests
 	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
 	std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
 	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
+	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
+	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(
+		MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
+		const Float2& worldMins, const Float2& worldMaxs);
 
 	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, IDrawablesWriter& drawableWriter);
 

@@ -2,17 +2,19 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ShadowConfiguration.h"
-#include "../RenderCore/LightingEngine/LightDesc.h"
-#include "../RenderCore/Techniques/TechniqueUtils.h"
-#include "../ConsoleRig/Console.h"
-#include "../Math/Vector.h"
-#include "../Math/Matrix.h"
-#include "../Math/Transformations.h"
-#include "../Math/ProjectionMath.h"
-#include "../Utility/BitUtils.h"
+#include "SunSourceConfiguration.h"
+#include "ShadowPreparer.h"
+#include "../Techniques/TechniqueUtils.h"
+#include "../Format.h"
+#include "../StateDesc.h"
+#include "../../ConsoleRig/Console.h"
+#include "../../Math/Vector.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Transformations.h"
+#include "../../Math/ProjectionMath.h"
+#include "../../Utility/BitUtils.h"
 
-namespace SceneEngine
+namespace RenderCore { namespace LightingEngine
 {
     static Float4x4 MakeWorldToLight(
         const Float3& negativeLightDirection,
@@ -22,14 +24,29 @@ namespace SceneEngine
             MakeCameraToWorld(-negativeLightDirection, Float3(1.f, 0.f, 0.f), position));
     }
 
-    static std::pair<RenderCore::LightingEngine::ShadowProjectionDesc::Projections, Float4x4> 
-        BuildBasicShadowProjections(
-            const RenderCore::LightingEngine::LightDesc& lightDesc,
-            const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
-            const DefaultShadowFrustumSettings& settings)
+    static const unsigned s_staticMaxSubProjections = 6;
+
+    struct OrthoProjections
+    {
+        Float4x4 _worldToView;
+        unsigned _normalProjCount = 0;
+        IOrthoShadowProjections::OrthoSubProjection _orthSubProjections[s_staticMaxSubProjections];
+    };
+
+    struct ArbitraryProjections
+    {
+        unsigned _normalProjCount = 0;
+        Float4x4 _worldToCamera[s_staticMaxSubProjections];
+        Float4x4 _cameraToProjection[s_staticMaxSubProjections];
+    };
+
+    static ArbitraryProjections BuildBasicShadowProjections(
+        const Float3& negativeLightDirection,
+        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+        const SunSourceFrustumSettings& settings)
     {
         using namespace RenderCore::LightingEngine;
-        ShadowProjectionDesc::Projections result;
+        ArbitraryProjections result;
 
         const float shadowNearPlane = 1.f;
         const float shadowFarPlane = settings._maxDistanceFromCamera;
@@ -37,41 +54,30 @@ namespace SceneEngine
         static float projectionSizePower = 3.75f;
         float shadowProjectionDist = shadowFarPlane - shadowNearPlane;
 
-        auto negativeLightDirection = lightDesc._position;
-
         auto cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
         auto cameraForward = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
 
             //  Calculate a simple set of shadow frustums.
             //  This method is non-ideal, but it's just a place holder for now
         result._normalProjCount = 5;
-        result._mode = ShadowProjectionMode::Arbitrary;
         for (unsigned c=0; c<result._normalProjCount; ++c) {
             const float projectionWidth = shadowWidthScale * std::pow(projectionSizePower, float(c));
-            auto& p = result._fullProj[c];
 
             Float3 shiftDirection = cameraForward - negativeLightDirection * Dot(cameraForward, negativeLightDirection);
 
             Float3 focusPoint = cameraPos + (projectionWidth * 0.45f) * shiftDirection;
             auto lightViewMatrix = MakeWorldToLight(
                 negativeLightDirection, focusPoint + (.5f * shadowProjectionDist) * negativeLightDirection);
-            p._projectionMatrix = OrthogonalProjection(
+            result._cameraToProjection[c] = OrthogonalProjection(
                 -.5f * projectionWidth, -.5f * projectionWidth,
                  .5f * projectionWidth,  .5f * projectionWidth,
                 shadowNearPlane, shadowFarPlane,
                 GeometricCoordinateSpace::RightHanded,
                 RenderCore::Techniques::GetDefaultClipSpaceType());
-            p._viewMatrix = lightViewMatrix;
-
-            result._minimalProjection[c] = ExtractMinimalProjection(p._projectionMatrix);
+            result._worldToCamera[c] = lightViewMatrix;
         }
         
-            //  Setup a single world-to-clip that contains all frustums within it. This will 
-            //  be used for cull objects out of shadow casting.
-        auto& lastProj = result._fullProj[result._normalProjCount-1];
-        auto worldToClip = Combine(lastProj._viewMatrix, lastProj._projectionMatrix);
-
-        return std::make_pair(result, worldToClip);
+        return result;
     }
 
     static void CalculateCameraFrustumCornersDirection(
@@ -95,7 +101,7 @@ namespace SceneEngine
     }
 
     static std::pair<Float4x4, Float4> BuildCameraAlignedOrthogonalShadowProjection(
-        const RenderCore::LightingEngine::LightDesc& lightDesc,
+        const Float3& negativeLightDirection,
         const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
         float depth, float maxDistanceFromCamera)
     {
@@ -105,7 +111,7 @@ namespace SceneEngine
             // First, we build a rough projection-to-world based on the camera right direction...
 
         auto projRight = ExtractRight(mainSceneProjectionDesc._cameraToWorld);
-        auto projForward = -lightDesc._position;
+        auto projForward = -negativeLightDirection;
         auto projUp = Cross(projRight, projForward);
         auto adjRight = Cross(projForward, projUp);
 
@@ -116,16 +122,16 @@ namespace SceneEngine
             // Now we just have to fit the finsl projection around the frustum corners
 
         auto clipSpaceType = RenderCore::Techniques::GetDefaultClipSpaceType();
-        auto miniProj = PerspectiveProjection(
+        auto reducedDepthProjection = PerspectiveProjection(
             mainSceneProjectionDesc._verticalFov, mainSceneProjectionDesc._aspectRatio,
             mainSceneProjectionDesc._nearClip, depth,
             GeometricCoordinateSpace::RightHanded, clipSpaceType);
 
-        auto worldToMiniProj = Combine(
-            InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), miniProj);
+        auto worldToReducedDepthProj = Combine(
+            InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), reducedDepthProjection);
 
         Float3 frustumCorners[8];
-        CalculateAbsFrustumCorners(frustumCorners, worldToMiniProj, clipSpaceType);
+        CalculateAbsFrustumCorners(frustumCorners, worldToReducedDepthProj, clipSpaceType);
 
         Float3 shadowViewSpace[8];
 		Float3 shadowViewMins( std::numeric_limits<float>::max(),  std::numeric_limits<float>::max(),  std::numeric_limits<float>::max());
@@ -159,11 +165,10 @@ namespace SceneEngine
         return std::make_pair(result, ExtractMinimalProjection(projMatrix));
     }
 
-    static std::pair<RenderCore::LightingEngine::ShadowProjectionDesc::Projections, Float4x4>  
-        BuildSimpleOrthogonalShadowProjections(
-            const RenderCore::LightingEngine::LightDesc& lightDesc,
-            const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
-            const DefaultShadowFrustumSettings& settings)
+    static OrthoProjections BuildSimpleOrthogonalShadowProjections(
+        const Float3& negativeLightDirection,
+        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+        const SunSourceFrustumSettings& settings)
     {
         // We're going to build some basic adaptive shadow frustums. These frustums
         // all fit within the same "definition" orthogonal space. This means that
@@ -175,9 +180,8 @@ namespace SceneEngine
         using namespace RenderCore::LightingEngine;
         using namespace RenderCore;
 
-        ShadowProjectionDesc::Projections result;
-        result._normalProjCount = settings._frustumCount;
-        result._mode = ShadowProjectionMode::Ortho;
+        OrthoProjections result;
+        result._normalProjCount = settings._maxFrustumCount;
 
         const float shadowNearPlane = -settings._maxDistanceFromCamera;
         const float shadowFarPlane = settings._maxDistanceFromCamera;
@@ -188,9 +192,9 @@ namespace SceneEngine
 
         Float3 cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
         Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward(mainSceneProjectionDesc._cameraToWorld);
-        result._definitionViewMatrix = MakeWorldToLight(lightDesc._position, focusPoint);
-        assert(std::isfinite(result._definitionViewMatrix(0,3)) && !std::isnan(result._definitionViewMatrix(0,3)));
-        Float4x4 worldToLightProj = result._definitionViewMatrix;
+        Float4x4 worldToView = MakeWorldToLight(negativeLightDirection, focusPoint);
+        assert(std::isfinite(worldToView(0,3)) && !std::isnan(worldToView(0,3)));
+        result._worldToView = worldToView;
 
             //  Calculate 4 vectors for the directions of the frustum corners, 
             //  relative to the camera position.
@@ -234,7 +238,7 @@ namespace SceneEngine
 			Float3 shadowViewMins( std::numeric_limits<float>::max(),  std::numeric_limits<float>::max(),  std::numeric_limits<float>::max());
 			Float3 shadowViewMaxs(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
 			for (unsigned c = 0; c < 8; c++) {
-				shadowViewSpace[c] = TransformPoint(worldToLightProj, absFrustumCorners[c]);
+				shadowViewSpace[c] = TransformPoint(worldToView, absFrustumCorners[c]);
 
 					//	In our right handed coordinate space, the z coordinate in view space should
 					//	be negative. But we always specify near & far in positive values. So
@@ -257,8 +261,8 @@ namespace SceneEngine
             shadowViewMins[2] = shadowNearPlane;
             shadowViewMaxs[2] = shadowFarPlane;
 
-            result._orthoSub[f]._projMins = shadowViewMins;
-            result._orthoSub[f]._projMaxs = shadowViewMaxs;
+            result._orthSubProjections[f]._topLeftFront = shadowViewMins;
+            result._orthSubProjections[f]._bottomRightBack = shadowViewMaxs;
 
             allCascadesMins[0] = std::min(allCascadesMins[0], shadowViewMins[0]);
             allCascadesMins[1] = std::min(allCascadesMins[1], shadowViewMins[1]);
@@ -268,48 +272,33 @@ namespace SceneEngine
             allCascadesMaxs[2] = std::max(allCascadesMaxs[2], shadowViewMaxs[2]);
         }
 
-        for (unsigned f=0; f<result._normalProjCount; ++f) {
-            result._fullProj[f]._viewMatrix = result._definitionViewMatrix;
-
-                // Note that we're flipping y here in order to keep
-                // the winding direction correct in the final projection
-            const auto& mins = result._orthoSub[f]._projMins;
-            const auto& maxs = result._orthoSub[f]._projMaxs;
-            Float4x4 projMatrix = OrthogonalProjection(
-                mins[0], maxs[1], maxs[0], mins[1], mins[2], maxs[2],
-                GeometricCoordinateSpace::RightHanded, clipSpaceType);
-            result._fullProj[f]._projectionMatrix = projMatrix;
-
-            result._minimalProjection[f] = ExtractMinimalProjection(projMatrix);
-        }
-
             //  When building the world to clip matrix, we want some to use some projection
             //  that projection that will contain all of the shadow frustums.
             //  We can use allCascadesMins and allCascadesMaxs to find the area of the 
             //  orthogonal space that is actually used. We just have to incorporate these
             //  mins and maxs into the projection matrix
 
+        /*
         Float4x4 clippingProjMatrix = OrthogonalProjection(
             allCascadesMins[0], allCascadesMaxs[1], allCascadesMaxs[0], allCascadesMins[1], 
             shadowNearPlane, shadowFarPlane,
             GeometricCoordinateSpace::RightHanded, clipSpaceType);
-        Float4x4 worldToClip = Combine(result._definitionViewMatrix, clippingProjMatrix);
+        Float4x4 worldToClip = Combine(definitionViewMatrix, clippingProjMatrix);
 
         std::tie(result._specialNearProjection, result._specialNearMinimalProjection) = 
             BuildCameraAlignedOrthogonalShadowProjection(lightDesc, mainSceneProjectionDesc, 2.5, 30.f);
         result._useNearProj = true;
+        */
 
-        return std::make_pair(result, worldToClip);
+        return result;
     }
 
-	RenderCore::LightingEngine::ShadowOperatorDesc
-		CalculateShadowGeneratorDesc(
-			const DefaultShadowFrustumSettings& settings)
+	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings)
 	{
-		RenderCore::LightingEngine::ShadowOperatorDesc result;
+		ShadowOperatorDesc result;
 		result._width   = settings._textureSize;
         result._height  = settings._textureSize;
-        if (settings._flags & DefaultShadowFrustumSettings::Flags::HighPrecisionDepths) {
+        if (settings._flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
             // note --  currently having problems in Vulkan with reading from the D24_UNORM_XX format
             //          might be better to move to 32 bit format now, anyway
             result._format = RenderCore::Format::D32_FLOAT;
@@ -317,120 +306,127 @@ namespace SceneEngine
             result._format = RenderCore::Format::D16_UNORM;
         }
 
-		if (settings._flags & DefaultShadowFrustumSettings::Flags::ArbitraryCascades) {
-			result._arrayCount = 5;
+		if (settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades) {
+			result._normalProjCount = 5;
 			result._enableNearCascade = false;
-			result._projectionMode = RenderCore::LightingEngine::ShadowProjectionMode::Arbitrary;
+			result._projectionMode = ShadowProjectionMode::Arbitrary;
 		} else {
-			result._arrayCount = settings._frustumCount + 1;		// (add one for the special "near" cascade
-			result._enableNearCascade = true;
-			result._projectionMode = RenderCore::LightingEngine::ShadowProjectionMode::Ortho;
+			result._normalProjCount = settings._maxFrustumCount;
+			// result._enableNearCascade = true;
+			result._projectionMode = ShadowProjectionMode::Ortho;
 		}
 
-        if (settings._flags & DefaultShadowFrustumSettings::Flags::RayTraced) {
-            result._resolveType = RenderCore::LightingEngine::ShadowResolveType::RayTraced;
+        if (settings._flags & SunSourceFrustumSettings::Flags::RayTraced) {
+            result._resolveType = ShadowResolveType::RayTraced;
         } else {
-            result._resolveType = RenderCore::LightingEngine::ShadowResolveType::DepthTexture;
+            result._resolveType = ShadowResolveType::DepthTexture;
         }
 
-        if (settings._flags & DefaultShadowFrustumSettings::Flags::CullFrontFaces) {
+        if (settings._flags & SunSourceFrustumSettings::Flags::CullFrontFaces) {
             result._cullMode = RenderCore::CullMode::Front;
         } else {
             result._cullMode = RenderCore::CullMode::Back;
         }
 
+        // todo -- setup some configuration settings for these
+        /*
         result._slopeScaledBias = settings._slopeScaledBias;
         result._depthBiasClamp = settings._depthBiasClamp;
         result._rasterDepthBias = settings._rasterDepthBias;
         result._dsSlopeScaledBias = settings._dsSlopeScaledBias;
         result._dsDepthBiasClamp = settings._dsDepthBiasClamp;
         result._dsRasterDepthBias = settings._dsRasterDepthBias;
+        */
+
 		return result;
 	}
 
-    RenderCore::LightingEngine::ShadowProjectionDesc 
-        CalculateDefaultShadowCascades(
-            const RenderCore::LightingEngine::LightDesc& lightDesc,
-            unsigned lightId,
-            const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
-            const DefaultShadowFrustumSettings& settings)
+    void ConfigureShadowCascades(
+        ILightScene& lightScene,
+        ILightScene::ShadowProjectionId shadowProjectionId,
+        const Float3& negativeLightDirection,
+        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+        const SunSourceFrustumSettings& settings)
     {
-            //  Build a default shadow frustum projection from the given inputs
-            //  Note -- this is a very primitive implementation!
-            //          But it actually works ok.
-            //          Still, it's just a placeholder.
-
-        using namespace RenderCore::LightingEngine;
-
-        ShadowProjectionDesc result;
-        
-        if (settings._flags & DefaultShadowFrustumSettings::Flags::ArbitraryCascades) {
-            auto t = BuildBasicShadowProjections(lightDesc, mainSceneProjectionDesc, settings);
-            result._projections = t.first;
-            result._worldToClip = t.second;
+        if (settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades) {
+            auto t = BuildBasicShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+            assert(t._normalProjCount);
+            auto* cascades = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowProjectionId);
+            if (cascades)
+                cascades->SetProjections(
+                    MakeIteratorRange(t._worldToCamera, &t._worldToCamera[t._normalProjCount]),
+                    MakeIteratorRange(t._cameraToProjection, &t._cameraToProjection[t._normalProjCount]));
         } else {
-            auto t = BuildSimpleOrthogonalShadowProjections(lightDesc, mainSceneProjectionDesc, settings);
-            result._projections = t.first;
-            result._worldToClip = t.second;
+            auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+            assert(t._normalProjCount);
+            auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
+            if (cascades) {
+                cascades->SetSubProjections(
+                    MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
+                cascades->SetWorldToOrthoView(t._worldToView);
+            }
         }
 
-        result._worldSpaceResolveBias = settings._worldSpaceResolveBias;
-        result._tanBlurAngle = settings._tanBlurAngle;
-        result._minBlurSearch = settings._minBlurSearch;
-        result._maxBlurSearch = settings._maxBlurSearch;
+        auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowProjectionId);
+        if (preparer) {
+            IShadowPreparer::Desc desc;
+            // desc._worldSpaceResolveBias = settings._worldSpaceResolveBias;
+            desc._tanBlurAngle = settings._tanBlurAngle;
+            desc._minBlurSearch = settings._minBlurSearch;
+            desc._maxBlurSearch = settings._maxBlurSearch;
+            preparer->SetDesc(desc);
+        }
 
-        result._lightId = lightId;
-
-		result._shadowGeneratorDesc = CalculateShadowGeneratorDesc(settings);
+		/*result._shadowGeneratorDesc = CalculateShadowGeneratorDesc(settings);
 		assert(result._shadowGeneratorDesc._enableNearCascade == result._projections._useNearProj);
 		assert(result._shadowGeneratorDesc._arrayCount == result._projections.Count());
 		assert(result._shadowGeneratorDesc._projectionMode == result._projections._mode);
 
-        return result;
+        return result;*/
     }
 
-    DefaultShadowFrustumSettings::DefaultShadowFrustumSettings()
+    SunSourceFrustumSettings::SunSourceFrustumSettings()
     {
         const unsigned frustumCount = 5;
         const float maxDistanceFromCamera = 500.f;        // need really large distance because some models have a 100.f scale factor!
         const float frustumSizeFactor = 3.8f;
         const float focusDistance = 3.f;
 
-        _frustumCount = frustumCount;
+        _maxFrustumCount = frustumCount;
         _maxDistanceFromCamera = maxDistanceFromCamera;
         _frustumSizeFactor = frustumSizeFactor;
         _focusDistance = focusDistance;
         _flags = Flags::HighPrecisionDepths;
         _textureSize = 2048;
 
-        _slopeScaledBias = Tweakable("ShadowSlopeScaledBias", 1.f);
-        _depthBiasClamp = Tweakable("ShadowDepthBiasClamp", 0.f);
-        _rasterDepthBias = Tweakable("ShadowRasterDepthBias", 600);
+        // _slopeScaledBias = Tweakable("ShadowSlopeScaledBias", 1.f);
+        // _depthBiasClamp = Tweakable("ShadowDepthBiasClamp", 0.f);
+        // _rasterDepthBias = Tweakable("ShadowRasterDepthBias", 600);
 
-        _dsSlopeScaledBias = _slopeScaledBias;
-        _dsDepthBiasClamp = _depthBiasClamp;
-        _dsRasterDepthBias = _rasterDepthBias;
+        // _dsSlopeScaledBias = _slopeScaledBias;
+        // _dsDepthBiasClamp = _depthBiasClamp;
+        // _dsRasterDepthBias = _rasterDepthBias;
 
-        _worldSpaceResolveBias = 0.f;   // (-.3f)
+        // _worldSpaceResolveBias = 0.f;   // (-.3f)
         _tanBlurAngle = 0.00436f;
         _minBlurSearch = 0.5f;
         _maxBlurSearch = 25.f;
     }
 
-}
+}}
 
 #include "../Utility/Meta/ClassAccessors.h"
 #include "../Utility/Meta/ClassAccessorsImpl.h"
 
-template<> const ClassAccessors& Legacy_GetAccessors<SceneEngine::DefaultShadowFrustumSettings>()
+template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::SunSourceFrustumSettings>()
 {
-    using Obj = SceneEngine::DefaultShadowFrustumSettings;
+    using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
     static ClassAccessors props(typeid(Obj).hash_code());
     static bool init = false;
     if (!init) {
-        props.Add("FrustumCount",
-            [](const Obj& obj) { return obj._frustumCount; },
-            [](Obj& obj, unsigned value) { obj._frustumCount = Clamp(value, 1u, RenderCore::LightingEngine::MaxShadowTexturesPerLight); });
+        props.Add("MaxFrustumCount",
+            [](const Obj& obj) { return obj._maxFrustumCount; },
+            [](Obj& obj, unsigned value) { obj._maxFrustumCount = Clamp(value, 1u, RenderCore::LightingEngine::s_staticMaxSubProjections); });
         props.Add("MaxDistanceFromCamera",  &Obj:: _maxDistanceFromCamera);
         props.Add("FrustumSizeFactor", &Obj::_frustumSizeFactor);
         props.Add("FocusDistance", &Obj::_focusDistance);
@@ -438,13 +434,13 @@ template<> const ClassAccessors& Legacy_GetAccessors<SceneEngine::DefaultShadowF
         props.Add("TextureSize",
             [](const Obj& obj) { return obj._textureSize; },
             [](Obj& obj, unsigned value) { obj._textureSize = 1<<(IntegerLog2(value-1)+1); });  // ceil to a power of two
-        props.Add("SingleSidedSlopeScaledBias", &Obj::_slopeScaledBias);
-        props.Add("SingleSidedDepthBiasClamp", &Obj::_depthBiasClamp);
-        props.Add("SingleSidedRasterDepthBias", &Obj::_rasterDepthBias);
-        props.Add("DoubleSidedSlopeScaledBias", &Obj::_dsSlopeScaledBias);
-        props.Add("DoubleSidedDepthBiasClamp", &Obj::_dsDepthBiasClamp);
-        props.Add("DoubleSidedRasterDepthBias", &Obj::_dsRasterDepthBias);
-        props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
+        // props.Add("SingleSidedSlopeScaledBias", &Obj::_slopeScaledBias);
+        // props.Add("SingleSidedDepthBiasClamp", &Obj::_depthBiasClamp);
+        // props.Add("SingleSidedRasterDepthBias", &Obj::_rasterDepthBias);
+        // props.Add("DoubleSidedSlopeScaledBias", &Obj::_dsSlopeScaledBias);
+        // props.Add("DoubleSidedDepthBiasClamp", &Obj::_dsDepthBiasClamp);
+        // props.Add("DoubleSidedRasterDepthBias", &Obj::_dsRasterDepthBias);
+        // props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
         props.Add("BlurAngleDegrees",   
             [](const Obj& obj) { return Rad2Deg(XlATan(obj._tanBlurAngle)); },
             [](Obj& obj, float value) { obj._tanBlurAngle = XlTan(Deg2Rad(value)); } );
