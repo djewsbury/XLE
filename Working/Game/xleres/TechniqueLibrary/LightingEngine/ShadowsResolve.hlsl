@@ -10,8 +10,8 @@
 #include "ShadowSampleFiltering.hlsl"
 #include "RTShadows.hlsl"
 #include "../Math/ProjectionMath.hlsl"
-#include "../Math/Misc.hlsl"
 #include "../Math/MathConstants.hlsl"
+#include "../Math/PoissonDisc.hlsl"
 #include "../Framework/Binding.hlsl"
 
 #include "ShadowProjection.hlsl"
@@ -37,17 +37,6 @@ Texture2D		NoiseTexture BIND_SHARED_LIGHTING_T1;
 
 static const bool ShadowsPerspectiveProjection = false;
 
-static const uint FilterKernelSize = 32;
-cbuffer ShadowFilteringTable BIND_SHARED_LIGHTING_B0
-{
-    // #define PACK_FILTER_KERNEL
-    #if defined(PACK_FILTER_KERNEL)
-        float4 FilterKernel[16];
-    #else
-        float4 FilterKernel[32];
-    #endif
-}
-
 cbuffer ShadowResolveParameters BIND_SHADOW_B1
 {
     float ShadowBiasWorldSpace;
@@ -55,6 +44,7 @@ cbuffer ShadowResolveParameters BIND_SHADOW_B1
     float MinBlurRadiusNorm;
     float MaxBlurRadiusNorm;
     float ShadowTextureSize;
+    float CasterLookupExtraBias;
 }
 
 struct ShadowResolveConfig
@@ -86,18 +76,45 @@ ShadowResolveConfig ShadowResolveConfig_NoFilter()
 
 float2 GetRawShadowSampleFilter(uint index)
 {
-    #if MSAA_SAMPLES > 1		// hack -- shader optimiser causes a problem with shadow filtering...
-        return 0.0.xx;
-    #else
-        #if defined(PACK_FILTER_KERNEL)	// this only works efficiently if we can unpack all of the shadow loops
-            if (index >= 16) {
-                return FilterKernel[index-16].zw;
-            } else
-        #endif
-        {
-            return FilterKernel[index].xy;
+    return gPoissonDisc32Tap[index];
+}
+
+uint2 GetRawShadowSampleKernelSize() { return 32; }
+
+float GetNoisyValue(int2 randomizerValue, uint idx)
+{
+    //
+    // Many different ways to get a noisy value from these coords
+    // 0: lookup in balanced_noise texture (which just contains a lot of evenly distributed random values)
+    //      if the texture is built well, we can bias the noise to minimize clumping 
+    // 1: use IntegerHash to scrample the bits of the input and 
+    //      no texture lookups, everything is just algorithm. Plus there's no repeats, it's unique across the whole domain 
+    // 2: use DitherPatternValue
+    //      sometimes the regularity of the pattern can actually make it visually more appealing
+    //
+    // The relative cost of each method might depend greatly on the particular hardware, particularly for that
+    // noise texture lookup!
+    //
+    const uint noiseMethod = 0;
+    if (noiseMethod == 0) {
+        if (idx == 0) {
+            return NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
+        } else {
+            return NoiseTexture.Load(int3((randomizerValue.x + 17) & 0xff, (randomizerValue.y + 33) & 0xff, 0)).r;
         }
-    #endif
+    } else if (noiseMethod == 1) {
+        if (idx == 0) {
+            return asfloat(IntegerHash(randomizerValue.y * 2048 + randomizerValue.x) & ((1 << 23) - 1) | 0x3f800000) - 1.0f;
+        } else {
+            return asfloat(IntegerHash((2048*2048)+randomizerValue.x * 2048 + randomizerValue.y) & ((1 << 23) - 1) | 0x3f800000) - 1.0f;
+        }
+    } else if (noiseMethod == 2) {
+        if (idx == 0) {
+            return DitherPatternValue(randomizerValue);
+        } else {
+            return DitherPatternValue(randomizerValue.yx);
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,26 +123,24 @@ float2 GetRawShadowSampleFilter(uint index)
 
 float CalculateShadowCasterDistance(
     float2 texCoords, float comparisonDistance,
-    uint arrayIndex, uint msaaSampleIndex,
-    float ditherPatternValue)
+    uint arrayIndex, float2 filterPlane, uint msaaSampleIndex, float noisyValue)
 {
     float accumulatedDistance = 0.0f;
     float accumulatedSampleCount = 0.0001f;
 
-    float angle = 2.f * pi * ditherPatternValue;
+    float angle = 2.0f * pi * noisyValue;
     float2 filterRotation;
     sincos(angle, filterRotation.x, filterRotation.y);
 
     const float searchSize = MaxBlurRadiusNorm;
     filterRotation *= searchSize;
 
-    float minDistance = 1.0f;
+    float minDifference = 2.0f;
 
     // We need some tolerance here, because of precision issues
     // If the depth we sample from the depth texture is from the surface we're now drawing
     // shadows for, we have to be sure to not count it 
-    const float tolerance = 0.01f;
-    comparisonDistance -= tolerance;
+    comparisonDistance -= CasterLookupExtraBias;
 
     #if MSAA_SAMPLES <= 1
             //	Undersampling here can cause some horrible artefacts.
@@ -133,15 +148,15 @@ float CalculateShadowCasterDistance(
             //		But on edges, we can get extreme filtering problems
             //		with few samples.
             //
-        const uint sampleCount = 16;
+        const uint sampleCount = 8;
         const uint sampleOffset = 0;
         const uint loopCount = sampleCount / 4;
-        const uint sampleStep = FilterKernelSize / sampleCount;
+        const uint sampleStep = GetRawShadowSampleKernelSize() / sampleCount;
     #else
         const uint sampleCount = 4;		// this could cause some unusual behaviour...
-        const uint sampleOffset = msaaSampleIndex; // * (FilterKernelSize-sampleCount) / (MSAA_SAMPLES-1);
+        const uint sampleOffset = msaaSampleIndex; // * (GetRawShadowSampleKernelSize()-sampleCount) / (MSAA_SAMPLES-1);
         const uint loopCount = sampleCount / 4;
-        const uint sampleStep = (FilterKernelSize-MSAA_SAMPLES+sampleCount) / sampleCount;
+        const uint sampleStep = (GetRawShadowSampleKernelSize()-MSAA_SAMPLES+sampleCount) / sampleCount;
         [unroll]
 
     #endif
@@ -166,19 +181,24 @@ float CalculateShadowCasterDistance(
         sampleDepth.z = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
         sampleDepth.w = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
 
-        float4 difference 		 = comparisonDistance.xxxx - sampleDepth;
+        float cDist0 = comparisonDistance + dot(rotatedFilter0, filterPlane);
+        float cDist1 = comparisonDistance + dot(rotatedFilter1, filterPlane);
+        float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
+        float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
+
+        float4 difference 		 = float4(cDist0, cDist1, cDist2, cDist3) - sampleDepth;
         float4 sampleCount 		 = difference > 0.0f;					// array of 1s for pixels in the shadow texture closer to the light
         accumulatedSampleCount 	+= dot(sampleCount, 1.0.xxxx);			// count number of 1s in "sampleCount"
             // Clamp maximum distance considered here?
         accumulatedDistance     += dot(difference, sampleCount);		// accumulate only the samples closer to the light
 
-        minDistance = difference.x > 0.f ? min(minDistance, sampleDepth.x) : minDistance;
-        minDistance = difference.y > 0.f ? min(minDistance, sampleDepth.y) : minDistance;
-        minDistance = difference.z > 0.f ? min(minDistance, sampleDepth.z) : minDistance;
-        minDistance = difference.w > 0.f ? min(minDistance, sampleDepth.w) : minDistance;
+        minDifference = difference.x > 0.0f ? min(minDifference, difference.x) : minDifference;
+        minDifference = difference.y > 0.0f ? min(minDifference, difference.y) : minDifference;
+        minDifference = difference.z > 0.0f ? min(minDifference, difference.z) : minDifference;
+        minDifference = difference.w > 0.0f ? min(minDifference, difference.w) : minDifference;
     }
 
-    return comparisonDistance - minDistance;
+    return minDifference + CasterLookupExtraBias;
 
         //
         //		finalDistance is the assumed distance to the shadow caster
@@ -213,22 +233,22 @@ float CalculateFilteredShadows_PoissonDisc(
     float filterSizeNorm, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
 {
-    float noiseValue = NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
+    float noiseValue = GetNoisyValue(randomizerValue, 0);
     float2 filterRotation;
-    sincos(2.f * 3.14159f * noiseValue, filterRotation.x, filterRotation.y);
+    sincos(2.0f * pi * noiseValue, filterRotation.x, filterRotation.y);
     filterRotation *= filterSizeNorm;
 
-    float weightTotal = 0.f;
+    float weightTotal = 0.0f;
 
     const bool doFilterRotation = true;
-    float shadowingTotal = 0.f;
+    float shadowingTotal = 0.0f;
     #if MSAA_SAMPLES <= 1
         const uint sampleCount = 32;
         const uint sampleOffset = 0;
         const uint loopCount = sampleCount / 4;
     #else
         const uint sampleCount = 4;		// We will be blending multiple samples, anyway... So minimize sample count for MSAA
-        const uint sampleOffset = msaaSampleIndex * (FilterKernelSize-sampleCount) / (MSAA_SAMPLES-1);
+        const uint sampleOffset = msaaSampleIndex * (GetRawShadowSampleKernelSize()-sampleCount) / (MSAA_SAMPLES-1);
         const uint loopCount = sampleCount / 4;
         [unroll]
     #endif
@@ -268,7 +288,7 @@ float CalculateFilteredShadows_PoissonDisc(
         shadowingTotal += dot(sampleDepth, 1.0.xxxx);
     }
 
-    return shadowingTotal * (1.f / float(sampleCount));
+    return shadowingTotal * (1.0f / float(sampleCount));
 }
 
 float CalculateFilteredShadows(
@@ -300,12 +320,14 @@ float CalculateFilteredShadows(
 
 float CalculateFilterSize(
     uint cascadeIndex, float2 shadowTexCoord,
-    float4 miniProjection, float comparisonDistance,
+    float4 miniProjection, float comparisonDistance, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
 {
     float casterDistance = CalculateShadowCasterDistance(
-        shadowTexCoord, comparisonDistance, cascadeIndex,
-        msaaSampleIndex, DitherPatternValue(randomizerValue));
+        shadowTexCoord, comparisonDistance, cascadeIndex, filterPlane,
+        msaaSampleIndex, GetNoisyValue(randomizerValue, 1));
+
+    if (casterDistance >= 1.0f) return -1.0f;
 
     float projectionScale = miniProjection.x;	// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
 
@@ -317,7 +339,7 @@ float CalculateFilterSize(
             // are more convenient for calculating the shadow filter radius
         float worldSpaceCasterDistance = NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, AsMiniProjZW(miniProjection));
 
-        const float distanceToWideningScale = 10.f / ShadowTextureSize * projectionScale;
+        const float distanceToWideningScale = 10.0f / ShadowTextureSize * projectionScale;
         filterSizeNorm = distanceToWideningScale * worldSpaceCasterDistance;
     } else {
             //	There are various ways to calculate the filtering distance here...
@@ -353,13 +375,6 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
         #endif
     }
 
-    float filterSize = MinBlurRadiusNorm;
-    if (config._doContactHardening) {
-        filterSize = CalculateFilterSize(
-            cascadeIndex, shadowTexCoord,
-            miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex);
-    }
-
     // float2 filterPlane = CalculateFilterPlane_ScreenSpaceDerivatives(comparisonDistance, shadowTexCoord);
     cascadeSpaceNormal = normalize(cascadeSpaceNormal);
     float2 filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
@@ -368,20 +383,16 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
     #endif
 
     // I think we need to scale by 2.0 here to compensate for the viewport transform (ie, ndc [-1,1] -> [0, 1])
-    filterPlane *= 2.0;
+    filterPlane *= 2.0f;
 
-#if 0
-    {
-        float3 bitangent = normalize(cross(float3(1, 0, 0), cascadeSpaceNormal));
-        float3 tangent = normalize(cross(cascadeSpaceNormal, bitangent));
-
-        float2 filterPlane2 = float2(tangent.z / tangent.x, bitangent.z / bitangent.y);
-        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            filterPlane2 *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
-        #endif
-        filterPlane = filterPlane2;
+    float filterSize = MinBlurRadiusNorm;
+    if (config._doContactHardening) {
+        filterSize = CalculateFilterSize(
+            cascadeIndex, shadowTexCoord,
+            miniProjection, comparisonDistance, filterPlane, randomizerValue, msaaSampleIndex);
+        if (filterSize < 0.0f)
+            return TestShadow(shadowTexCoord, cascadeIndex, comparisonDistance);
     }
-#endif
 
     return CalculateFilteredShadows(
         shadowTexCoord, biasedDepth, cascadeIndex, filterSize, filterPlane, randomizerValue,
@@ -398,7 +409,7 @@ float ResolveShadows_Cascade(
     int2 randomizerValue, uint msaaSampleIndex,
     ShadowResolveConfig config)
 {
-    [branch] if (cascadeIndex < 0) return 1.f;
+    [branch] if (cascadeIndex < 0) return 1.0f;
 
     float2 texCoords;
     float comparisonDistance;

@@ -131,6 +131,7 @@ namespace RenderCore { namespace LightingEngine
 		preparedResult._resolveParameters._minBlurSearchNorm = projection._minBlurSearchPixels / shadowTextureSize;
 		preparedResult._resolveParameters._maxBlurSearchNorm = projection._maxBlurSearchPixels / shadowTextureSize;
 		preparedResult._resolveParameters._shadowTextureSize = shadowTextureSize;
+		preparedResult._resolveParameters._casterLookupExtraBias = projection._casterLookupExtraBias;
 		XlZeroMemory(preparedResult._resolveParameters._dummy);
 
 		return preparedResult;

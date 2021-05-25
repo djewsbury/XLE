@@ -60,49 +60,6 @@ namespace RenderCore { namespace LightingEngine
 		};
 	};
 
-	class ShadowFilteringTable
-	{
-	public:
-		Float4      _filterKernel[32];
-
-		ShadowFilteringTable()
-		{
-			_filterKernel[ 0] = Float4(-0.1924249f, -0.5685654f,0,0);
-			_filterKernel[ 1] = Float4(0.0002287195f, -0.830722f,0,0);
-			_filterKernel[ 2] = Float4(-0.6227817f, -0.676464f,0,0);
-			_filterKernel[ 3] = Float4(-0.3433303f, -0.8954138f,0,0);
-			_filterKernel[ 4] = Float4(-0.3087259f, 0.0593961f,0,0);
-			_filterKernel[ 5] = Float4(0.4013956f, 0.005351349f,0,0);
-			_filterKernel[ 6] = Float4(0.6675568f, 0.2226908f,0,0);
-			_filterKernel[ 7] = Float4(0.4703487f, 0.4219977f,0,0);
-			_filterKernel[ 8] = Float4(-0.865732f, -0.1704932f,0,0);
-			_filterKernel[ 9] = Float4(0.4836336f, -0.7363456f,0,0);
-			_filterKernel[10] = Float4(-0.8455518f, 0.429606f,0,0);
-			_filterKernel[11] = Float4(0.2486194f, 0.7276461f,0,0);
-			_filterKernel[12] = Float4(0.01841145f, 0.581219f,0,0);
-			_filterKernel[13] = Float4(0.9428069f, 0.2151681f,0,0);
-			_filterKernel[14] = Float4(-0.2937738f, 0.8432091f,0,0);
-			_filterKernel[15] = Float4(0.01657544f, 0.9762882f,0,0);
-
-			_filterKernel[16] = Float4(0.03878351f, -0.1410931f,0,0);
-			_filterKernel[17] = Float4(-0.3663213f, -0.348966f,0,0);
-			_filterKernel[18] = Float4(0.2333971f, -0.5178556f,0,0);
-			_filterKernel[19] = Float4(-0.6433204f, -0.3284476f,0,0);
-			_filterKernel[20] = Float4(0.1255225f, 0.3221043f,0,0);
-			_filterKernel[21] = Float4(0.4051761f, -0.299208f,0,0);
-			_filterKernel[22] = Float4(0.8829983f, -0.1718857f,0,0);
-			_filterKernel[23] = Float4(0.6724088f, -0.3562584f,0,0);
-			_filterKernel[24] = Float4(-0.826445f, 0.1214067f,0,0);
-			_filterKernel[25] = Float4(-0.386752f, 0.406546f,0,0);
-			_filterKernel[26] = Float4(-0.5869312f, -0.01993746f,0,0);
-			_filterKernel[27] = Float4(0.7842119f, 0.5549603f,0,0);
-			_filterKernel[28] = Float4(0.5801646f, 0.7416336f,0,0);
-			_filterKernel[29] = Float4(0.7366455f, -0.6388465f,0,0);
-			_filterKernel[30] = Float4(-0.6067169f, 0.6372176f,0,0);
-			_filterKernel[31] = Float4(0.2743046f, -0.9303559f,0,0);
-		}
-	};
-
 	static const uint32_t StencilSky = 1<<7;
 	static const uint32_t StencilSampleCount = 1<<6;
 
@@ -211,23 +168,20 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToFuture<IDescriptorSet>(
 			*result,
 			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
-				SamplerDesc shadowComparisonSamplerDesc { FilterMode::ComparisonBilinear, AddressMode::Clamp, AddressMode::Clamp, CompareOp::LessEqual };
-				SamplerDesc shadowDepthSamplerDesc { FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp };
+				SamplerDesc shadowComparisonSamplerDesc { FilterMode::ComparisonBilinear, AddressMode::Border, AddressMode::Border, CompareOp::LessEqual };
+				SamplerDesc shadowDepthSamplerDesc { FilterMode::Bilinear, AddressMode::Border, AddressMode::Border };
 				auto shadowComparisonSampler = device->CreateSampler(shadowComparisonSamplerDesc);
 				auto shadowDepthSampler = device->CreateSampler(shadowDepthSamplerDesc);
 
 				DescriptorSetInitializer::BindTypeAndIdx bindTypes[4];
-				bindTypes[0] = { DescriptorSetInitializer::BindType::ImmediateData, 0 };
+				bindTypes[0] = { DescriptorSetInitializer::BindType::Empty };
 				bindTypes[1] = { DescriptorSetInitializer::BindType::ResourceView, 0 };
 				bindTypes[2] = { DescriptorSetInitializer::BindType::Sampler, 0 };
 				bindTypes[3] = { DescriptorSetInitializer::BindType::Sampler, 1 };
-				ShadowFilteringTable shdParam;
-				ImmediateDataStream immDatas { shdParam };
 				IResourceView* srv[1] { balancedNoise->GetShaderResource().get() };
 				ISampler* samplers[2] { shadowComparisonSampler.get(), shadowDepthSampler.get() };
 				DescriptorSetInitializer inits;
 				inits._slotBindings = MakeIteratorRange(bindTypes);
-				inits._bindItems = immDatas;
 				inits._bindItems._resourceViews = MakeIteratorRange(srv);
 				inits._bindItems._samplers = MakeIteratorRange(samplers);
 				inits._signature = &descSetLayout;
