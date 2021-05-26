@@ -24,6 +24,9 @@ CascadeAddress CascadeAddress_Invalid()
 {
 	CascadeAddress result;
 	result.cascadeIndex = -1;
+    result.frustumCoordinates = 0.0.xxxx;
+    result.frustumSpaceNormal = 0.0.xxx;
+	result.miniProjection = 0.0.xxxx;
 	return result;
 }
 

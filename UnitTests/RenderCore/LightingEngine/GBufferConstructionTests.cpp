@@ -243,6 +243,7 @@ namespace UnitTests
 
 	static void RunSimpleFullscreen(
 		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::Techniques::RenderPassInstance& rpi,
 		StringSection<> pixelShader,
@@ -250,9 +251,9 @@ namespace UnitTests
 		RenderCore::UniformsStream& us)
 	{
 		// Very simple stand-in tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelineLayout, rpi, pixelShader, usi);
+		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelineLayout, rpi, pixelShader, {}, usi);
 		op->StallWhilePending();
-		op->Actualize()->Draw(threadContext, us);
+		op->Actualize()->Draw(threadContext, parsingContext, us);
 	}
 
 	static void CalculateSimularity(IteratorRange<const Float4*> A, IteratorRange<const Float4*> B)
@@ -441,7 +442,6 @@ namespace UnitTests
 					usi.BindResourceView(1, Utility::Hash64("GBuffer_Normals"));
 					usi.BindResourceView(2, Utility::Hash64("GBuffer_Parameters"));
 					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
-					usi.BindImmediateData(0, RenderCore::Techniques::ObjectCB::GlobalTransform);
 					UniformsStream us;
 					IResourceView* srvs[] = { 
 						rpi.GetInputAttachmentSRV(0),
@@ -450,10 +450,7 @@ namespace UnitTests
 						rpi.GetInputAttachmentSRV(3)
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
-					auto globalTransform = BuildGlobalTransformConstants(parsingContext.GetProjectionDesc());
-					UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(globalTransform) };
-					us._immediateData = MakeIteratorRange(immData);
-					RunSimpleFullscreen(*threadContext, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
+					RunSimpleFullscreen(*threadContext, parsingContext, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
 
 					attachmentReservation = rpi.GetAttachmentReservation();
 				}

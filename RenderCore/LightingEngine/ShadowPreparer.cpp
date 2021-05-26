@@ -434,5 +434,48 @@ namespace RenderCore { namespace LightingEngine
 		return HashCombine(h0, HashCombine(h1, HashCombine(h2, HashCombine(h3, seed))));
 	}
 
+	namespace Internal
+	{
+		std::string ShadowResolveParam::WriteShaderSelectors() const
+		{
+			StringMeld<256, ::Assets::ResChar> str;
+			if (_shadowing != ShadowResolveParam::Shadowing::NoShadows) {
+				if (_shadowing == ShadowResolveParam::Shadowing::OrthShadows || _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || _shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
+					str << "SHADOW_CASCADE_MODE=" << 2u;
+				} else if (_shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
+					str << "SHADOW_CASCADE_MODE=" << 3u;
+				} else
+					str << "SHADOW_CASCADE_MODE=" << 1u;
+				str << ";SHADOW_SUB_PROJECTION_COUNT=" << _normalProjCount;
+				str << ";SHADOW_ENABLE_NEAR_CASCADE=" << (_shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
+				str << ";SHADOW_FILTER_MODEL=" << unsigned(_filterModel);
+				str << ";SHADOW_FILTER_CONTACT_HARDENING=" << unsigned(_enableContactHardening);
+				str << ";SHADOW_RT_HYBRID=" << unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
+			}
+			return str.AsString();
+		}
+
+		ShadowResolveParam MakeShadowResolveParam(const ShadowOperatorDesc& shadowOp)
+		{
+			ShadowResolveParam param;
+			param._filterModel = shadowOp._filterModel;
+			switch (shadowOp._projectionMode) {
+			case ShadowProjectionMode::Arbitrary:
+				param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
+				assert(!shadowOp._enableNearCascade);
+				break;
+			case ShadowProjectionMode::Ortho:
+				param._shadowing = shadowOp._enableNearCascade ? ShadowResolveParam::Shadowing::OrthShadowsNearCascade : ShadowResolveParam::Shadowing::OrthShadows;
+				break;
+			case ShadowProjectionMode::ArbitraryCubeMap:
+				param._shadowing = ShadowResolveParam::Shadowing::CubeMapShadows;
+				assert(!shadowOp._enableNearCascade);
+				break;
+			}
+			param._normalProjCount = shadowOp._normalProjCount;
+			param._enableContactHardening = shadowOp._enableContactHardening;
+			return param;
+		}
+	}
 }}
 

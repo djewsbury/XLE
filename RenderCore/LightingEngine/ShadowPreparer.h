@@ -125,8 +125,26 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
-	/*void ShadowGen_DrawShadowFrustums(
-		Metal::DeviceContext& devContext, 
-		Techniques::ParsingContext& parserContext,
-		const ShadowProjectionDesc& projectionDesc);*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		struct ShadowResolveParam
+		{
+			enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
+			Shadowing _shadowing = Shadowing::NoShadows;
+			ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
+			unsigned _normalProjCount = 1u;
+			bool _enableContactHardening = false;
+
+			friend bool operator==(const ShadowResolveParam& lhs, const ShadowResolveParam& rhs)
+			{
+				return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount && lhs._enableContactHardening == rhs._enableContactHardening;
+			}
+
+			std::string WriteShaderSelectors() const;
+		};
+
+		ShadowResolveParam MakeShadowResolveParam(const ShadowOperatorDesc& shadowOp);
+	}
 }}

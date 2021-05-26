@@ -79,7 +79,7 @@ float2 GetRawShadowSampleFilter(uint index)
     return gPoissonDisc32Tap[index];
 }
 
-uint2 GetRawShadowSampleKernelSize() { return 32; }
+uint GetRawShadowSampleKernelSize() { return 32; }
 
 float GetNoisyValue(int2 randomizerValue, uint idx)
 {

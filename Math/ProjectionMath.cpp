@@ -571,6 +571,9 @@ namespace XLEMath
         const float n = nearClipPlane;
         const float f = farClipPlane;
 
+        if (clipSpaceType == ClipSpaceType::PositiveRightHanded)
+            std::swap(t, b);
+
         Float4x4 result = Identity<Float4x4>();
         result(0,0) =  2.f / (r-l);
         result(0,3) =  -(r+l) / (r-l);
@@ -589,9 +592,6 @@ namespace XLEMath
             result(2,2) =     -2.f / (f-n);
             result(2,3) =   -(f+n) / (f-n);
         }
-
-        if (clipSpaceType == ClipSpaceType::PositiveRightHanded)
-            result(1,1) = -result(1,1);
 
         return result;
     }

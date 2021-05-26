@@ -12,14 +12,17 @@ namespace RenderCore
 	class IThreadContext;
 	class UniformsStream;
 	class UniformsStreamInterface;
+	class IDescriptorSet;
 }
 
 namespace RenderCore { namespace Techniques
 {
+	class ParsingContext;
+	
 	class IShaderOperator
 	{
 	public:
-		virtual void Draw(IThreadContext&, const UniformsStream&) = 0;
+		virtual void Draw(IThreadContext&, ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual ~IShaderOperator();
 	};
 
@@ -29,11 +32,13 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderPassInstance& rpi,
 		StringSection<> pixelShader,
+		StringSection<> definesTable,
 		const UniformsStreamInterface& usi);
 
 	::Assets::FuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const FrameBufferTarget& fbTarget,
 		StringSection<> pixelShader,
+		StringSection<> definesTable,
 		const UniformsStreamInterface& usi);
 }}

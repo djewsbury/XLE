@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
@@ -318,6 +319,85 @@ namespace UnitTests
 		}
 	};
 
+	static void DrawCameraAndShadowFrustums(
+		RenderCore::IThreadContext& threadContext,
+		ImmediateDrawingHelper& immediateDrawingHelper,
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::LightingEngine::ILightScene& lightScene,
+		unsigned shadowProjectionId,
+		const RenderCore::Techniques::CameraDesc& sceneCamera)
+	{
+		using namespace RenderCore;
+		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+			threadContext, *immediateDrawingHelper._immediateDrawables, immediateDrawingHelper._fontRenderingManager.get());
+
+		RenderOverlays::ColorB cols[]= {
+			RenderOverlays::ColorB(196, 230, 230),
+			RenderOverlays::ColorB(255, 128, 128),
+			RenderOverlays::ColorB(128, 255, 128),
+			RenderOverlays::ColorB(128, 128, 255),
+			RenderOverlays::ColorB(255, 255, 128),
+			RenderOverlays::ColorB(128, 255, 255)
+		};
+		unsigned colorIterator = 0;
+		auto* shadowProj = lightScene.TryGetShadowProjectionInterface<LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
+		if (shadowProj) {
+			auto worldToView = shadowProj->GetWorldToOrthoView();
+			auto subProjs = shadowProj->GetOrthoSubProjections();
+			for (const auto& subProj:subProjs) {
+				auto col = cols[(colorIterator++)%dimof(cols)];
+				auto topLeftFront = subProj._topLeftFront;
+				auto bottomRightBack = subProj._bottomRightBack;
+				// We have to reverse the Z values, because -Z is into the camera in camera space, but we represent near and far clip values as positives
+				topLeftFront[2] = -topLeftFront[2];
+				bottomRightBack[2] = -bottomRightBack[2];
+				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
+					overlayContext.get(), 
+					std::make_tuple(topLeftFront, bottomRightBack),
+					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
+					col, 0x2);
+
+				col.a = 196;
+				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
+					overlayContext.get(), 
+					std::make_tuple(topLeftFront, bottomRightBack),
+					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
+					col, 0x1);
+			}
+		}
+		
+		auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
+		RenderOverlays::DebuggingDisplay::DrawFrustum(overlayContext.get(), sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
+
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
+		auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		if (prepare) {
+			prepare->StallWhilePending();
+			REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
+		}
+		immediateDrawingHelper._immediateDrawables->ExecuteDraws(threadContext, parsingContext, rpi);
+	}
+
+	static void DrawCascadeColors(
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout)
+	{
+		using namespace RenderCore;
+		auto rpi = Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
+		UniformsStreamInterface usi;
+		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
+		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView();
+		usi.BindResourceView(0, Hash64("PrebuildCascadeIndexTexture"));
+		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };
+		UniformsStream us;
+		us._resourceViews = MakeIteratorRange(srvs);
+		auto op = CreateFullViewportOperator(
+			pipelineLayout, rpi, CASCADE_VIS_HLSL ":col_vis_pass", {}, usi);
+		op->StallWhilePending();
+		op->Actualize()->Draw(threadContext, parsingContext, us);
+	}
+
 	TEST_CASE( "LightingEngine-SunSourceCascades", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -339,7 +419,7 @@ namespace UnitTests
 
 		RenderCore::Techniques::CameraDesc sceneCamera;
 //        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-40.0f, 10.0f, -40.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{-5.0f, 10.0f, -5.0f});
-        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-40.0f, 10.0f, -40.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
+        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-25.0f, 10.0f, -25.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
         sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
 		sceneCamera._nearClip = 0.05f;
 		sceneCamera._farClip = 150.f;
@@ -373,13 +453,14 @@ namespace UnitTests
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, visCamera);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
 					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
+					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
@@ -393,68 +474,56 @@ namespace UnitTests
 				auto shadowProjectionId = lightScene.CreateShadowProjection(0, lightId);
 				LightingEngine::ConfigureShadowCascades(lightScene, shadowProjectionId, negativeLightDirection, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
 
+				// draw once from the "scene camera"
 				{
-					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-						*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-					ParseScene(lightingIterator, *drawableWriter);
+					{
+						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+							*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+						ParseScene(lightingIterator, *drawableWriter);
+					}
+
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+
+					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+					REQUIRE(colorLDR);
+
+					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-scene-camera");
+
+					auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
+					REQUIRE(cascadeIndexTexture);
+					auto cascadeIndexReadback = cascadeIndexTexture->ReadBackSynchronized(*threadContext);
+					unsigned cascadePixelCount[5] = {0,0,0,0,0};
+					auto cascadeIndicies = MakeIteratorRange((const uint8_t*)AsPointer(cascadeIndexReadback.begin()), (const uint8_t*)AsPointer(cascadeIndexReadback.end()));
+					for (auto i:cascadeIndicies)
+						if (i < dimof(cascadePixelCount))
+							++cascadePixelCount[i];
+					Log(Warning) << "Cascade[0]: " << cascadePixelCount[0] << std::endl;
+					Log(Warning) << "Cascade[1]: " << cascadePixelCount[1] << std::endl;
+					Log(Warning) << "Cascade[2]: " << cascadePixelCount[2] << std::endl;
+					Log(Warning) << "Cascade[3]: " << cascadePixelCount[3] << std::endl;
+					Log(Warning) << "Cascade[4]: " << cascadePixelCount[4] << std::endl;
 				}
 
-				// draw the camera and shadow frustums into the output image
+				// and once from the "vis camera"
 				{
-					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						*threadContext, *immediateDrawingHelper._immediateDrawables, immediateDrawingHelper._fontRenderingManager.get());
-
-					RenderOverlays::ColorB cols[]= {
-						RenderOverlays::ColorB(196, 230, 230),
-						RenderOverlays::ColorB(255, 128, 128),
-						RenderOverlays::ColorB(128, 255, 128),
-						RenderOverlays::ColorB(128, 128, 255),
-						RenderOverlays::ColorB(255, 255, 128),
-						RenderOverlays::ColorB(128, 255, 255)
-					};
-					unsigned colorIterator = 0;
-					auto* shadowProj = lightScene.TryGetShadowProjectionInterface<LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
-					if (shadowProj) {
-						auto worldToView = shadowProj->GetWorldToOrthoView();
-						auto subProjs = shadowProj->GetOrthoSubProjections();
-						for (const auto& subProj:subProjs) {
-							auto col = cols[(colorIterator++)%dimof(cols)];
-							auto topLeftFront = subProj._topLeftFront;
-							auto bottomRightBack = subProj._bottomRightBack;
-							// We have to reverse the Z values, because -Z is into the camera in camera space, but we represent near and far clip values as positives
-							topLeftFront[2] = -topLeftFront[2];
-							bottomRightBack[2] = -bottomRightBack[2];
-							RenderOverlays::DebuggingDisplay::DrawBoundingBox(
-								overlayContext.get(), 
-								std::make_tuple(topLeftFront, bottomRightBack),
-								InvertOrthonormalTransform(AsFloat3x4(worldToView)),
-								col, 0x2);
-
-							col.a = 196;
-							RenderOverlays::DebuggingDisplay::DrawBoundingBox(
-								overlayContext.get(), 
-								std::make_tuple(topLeftFront, bottomRightBack),
-								InvertOrthonormalTransform(AsFloat3x4(worldToView)),
-								col, 0x1);
-						}
+					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCamera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+					{
+						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+							*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+						ParseScene(lightingIterator, *drawableWriter);
 					}
-					
-					auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
-					RenderOverlays::DebuggingDisplay::DrawFrustum(overlayContext.get(), sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
 
-					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*threadContext, parsingContext);
-					auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
-					if (prepare) {
-						prepare->StallWhilePending();
-						REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
-					}
-					immediateDrawingHelper._immediateDrawables->ExecuteDraws(*threadContext, parsingContext, rpi);
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+
+					// draw the camera and shadow frustums into the output image
+					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, shadowProjectionId, sceneCamera);
+
+					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
+					REQUIRE(colorLDR);
+
+					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-vis-camera");
 				}
 
-				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
-				REQUIRE(colorLDR);
-
-				SaveImage(*threadContext, *colorLDR, "sun-source-cascades");
 			}
 
 		}

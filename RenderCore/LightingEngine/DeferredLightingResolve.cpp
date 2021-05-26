@@ -74,24 +74,10 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
-	struct ShadowResolveParam
-	{
-		enum class Shadowing { NoShadows, PerspectiveShadows, OrthShadows, OrthShadowsNearCascade, OrthHybridShadows, CubeMapShadows };
-		Shadowing _shadowing = Shadowing::NoShadows;
-		ShadowFilterModel _filterModel = ShadowFilterModel::PoissonDisc;
-		unsigned _normalProjCount = 1u;
-		bool _enableContactHardening = false;
-
-		friend bool operator==(const ShadowResolveParam& lhs, const ShadowResolveParam& rhs)
-		{
-			return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount && lhs._enableContactHardening == rhs._enableContactHardening;
-		}
-	};
-
 	::Assets::FuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
 		const LightSourceOperatorDesc& desc,
-		const ShadowResolveParam shadowResolveParam,
+		const Internal::ShadowResolveParam shadowResolveParam,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
@@ -106,31 +92,14 @@ namespace RenderCore { namespace LightingEngine
 		definesTable << "GBUFFER_TYPE=" << (unsigned)gbufferType;
 		definesTable << ";MSAA_SAMPLES=" << ((sampleCount._sampleCount<=1)?0:sampleCount._sampleCount);
 		// if (desc._msaaSamplers) definesTable << ";MSAA_SAMPLERS=1";
-
-		if (shadowResolveParam._shadowing != ShadowResolveParam::Shadowing::NoShadows) {
-			if (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadows || shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
-				definesTable << ";SHADOW_CASCADE_MODE=" << 2u;
-			} else if (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
-				definesTable << ";SHADOW_CASCADE_MODE=" << 3u;
-			} else
-				definesTable << ";SHADOW_CASCADE_MODE=" << 1u;
-			definesTable << ";SHADOW_SUB_PROJECTION_COUNT=" << shadowResolveParam._normalProjCount;
-			definesTable << ";SHADOW_ENABLE_NEAR_CASCADE=" << (shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
-			definesTable << ";SHADOW_FILTER_MODEL=" << unsigned(shadowResolveParam._filterModel);
-			definesTable << ";SHADOW_FILTER_CONTACT_HARDENING=" << unsigned(shadowResolveParam._enableContactHardening);
-			definesTable << ";SHADOW_RT_HYBRID=" << unsigned(shadowResolveParam._shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
-		}
 		definesTable << ";LIGHT_SHAPE=" << unsigned(desc._shape);
 		definesTable << ";DIFFUSE_METHOD=" << unsigned(desc._diffuseModel);
 		definesTable << ";HAS_SCREENSPACE_AO=" << unsigned(hasScreenSpaceAO);
+		auto shadowSelectors = shadowResolveParam.WriteShaderSelectors();
+		if (!shadowSelectors.empty())
+			definesTable << ";" << shadowSelectors;
 
-		const bool flipDirection = false;
-		const char* vertexShader_viewFrustumVector = 
-			flipDirection
-				? BASIC2D_VERTEX_HLSL ":fullscreen_flip_viewfrustumvector"
-				: BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector"
-				;
-
+		const char* vertexShader_viewFrustumVector = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
 		auto stencilRefValue = 0;
 
 		Techniques::VertexInputStates inputStates;
@@ -224,7 +193,7 @@ namespace RenderCore { namespace LightingEngine
 			pipelineFutures.push_back(
 				BuildLightResolveOperator(
 					pipelineCollection, 
-					resolveOperators[lightOperatorId], ShadowResolveParam {}, 
+					resolveOperators[lightOperatorId], Internal::ShadowResolveParam {}, 
 					fbDesc, subpassIdx,
 					hasScreenSpaceAO, 
 					gbufferType));
@@ -232,9 +201,9 @@ namespace RenderCore { namespace LightingEngine
 
 		for (unsigned lightOperatorId=0; lightOperatorId!=resolveOperators.size(); ++lightOperatorId) {
 			
-			ShadowResolveParam shadowParams[shadowOperators.size()+1];
+			Internal::ShadowResolveParam shadowParams[shadowOperators.size()+1];
 			unsigned shadowParamCount = 0;
-			shadowParams[shadowParamCount++] = ShadowResolveParam { ShadowResolveParam::Shadowing::NoShadows };
+			shadowParams[shadowParamCount++] = Internal::ShadowResolveParam { Internal::ShadowResolveParam::Shadowing::NoShadows };
 			auto basePipelineIdx = (unsigned)pipelineFutures.size();
 
 			for (unsigned shadowOperatorId=0; shadowOperatorId!=shadowOperators.size(); ++shadowOperatorId) {
@@ -244,24 +213,7 @@ namespace RenderCore { namespace LightingEngine
 					continue;
 				}
 
-				ShadowResolveParam param;
-				param._filterModel = shadowOp._filterModel;
-				switch (shadowOp._projectionMode) {
-				case ShadowProjectionMode::Arbitrary:
-					param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
-					assert(!shadowOp._enableNearCascade);
-					break;
-				case ShadowProjectionMode::Ortho:
-					param._shadowing = shadowOp._enableNearCascade ? ShadowResolveParam::Shadowing::OrthShadowsNearCascade : ShadowResolveParam::Shadowing::OrthShadows;
-					break;
-				case ShadowProjectionMode::ArbitraryCubeMap:
-					param._shadowing = ShadowResolveParam::Shadowing::CubeMapShadows;
-					assert(!shadowOp._enableNearCascade);
-					break;
-				}
-				param._normalProjCount = shadowOp._normalProjCount;
-				param._enableContactHardening = shadowOp._enableContactHardening;
-
+				auto param = Internal::MakeShadowResolveParam(shadowOp);
 				bool foundExisting = false;
 				for (unsigned c=0; c<shadowParamCount; ++c)
 					if (shadowParams[c] == param) {

@@ -17,6 +17,7 @@
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/PipelineCollection.h"
+#include "../Techniques/PipelineOperators.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
@@ -48,6 +49,7 @@ namespace RenderCore { namespace LightingEngine
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
 		void DoLightResolve(LightingTechniqueIterator& iterator);
 		void DoToneMap(LightingTechniqueIterator& iterator);
+		void GenerateDebuggingOutputs(LightingTechniqueIterator& iterator);
 	};
 
 	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
@@ -244,7 +246,8 @@ namespace RenderCore { namespace LightingEngine
 		_preparedShadows.reserve(_lightScene->_shadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 
 		for (unsigned c=0; c<_lightScene->_shadowProjections.size(); ++c) {
-			auto& shadowPreparer = *_shadowPreparationOperators->_operators[0]._preparer;
+			auto shadowOperatorId = _lightScene->_shadowProjections[c]._operatorId;
+			auto& shadowPreparer = *_shadowPreparationOperators->_operators[shadowOperatorId]._preparer;
 			_preparedShadows.push_back(std::make_pair(
 				_lightScene->_shadowProjections[c]._lightId,
 				SetupShadowPrepare(iterator, *_lightScene->_shadowProjections[c]._desc, shadowPreparer, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
@@ -262,7 +265,6 @@ namespace RenderCore { namespace LightingEngine
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
 			_preparedShadows);
-		_preparedShadows.clear();
 	}
 
 	void DeferredLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
@@ -298,7 +300,8 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
-		const FrameBufferProperties& fbProps)
+		const FrameBufferProperties& fbProps,
+		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		auto shadowDescSet = lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
 		if (shadowDescSet == lightingOperatorsPipelineLayoutFile->_descriptorSets.end())
@@ -314,7 +317,7 @@ namespace RenderCore { namespace LightingEngine
 			*result,
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
-			resolveOperators=std::move(resolveOperators), pipelineCollection](
+			resolveOperators=std::move(resolveOperators), pipelineCollection, flags](
 				::Assets::AssetFuture<CompiledLightingTechnique>& thatFuture,
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<ShadowPreparationOperators> shadowPreparationOperators) {
@@ -358,9 +361,18 @@ namespace RenderCore { namespace LightingEngine
 					});
 				lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
 
+				// generate debugging outputs
+				if (flags & DeferredLightingTechniqueFlags::GenerateDebuggingTextures) {
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->GenerateDebuggingOutputs(iterator);
+						});
+				}
+
 				// unbind operations
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
+						captures->_preparedShadows.clear();
 					});
 
 				// prepare-only steps
@@ -402,7 +414,8 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps)
+		const FrameBufferProperties& fbProps,
+		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		return CreateDeferredLightingTechnique(
 			apparatus->_device,
@@ -411,6 +424,64 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_lightingOperatorCollection,
 			apparatus->_lightingOperatorsPipelineLayoutFile,
 			resolveOperators, shadowGenerators, preregisteredAttachments,
-			fbProps);		
+			fbProps, flags);		
 	}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+		//   D E B U G G I N G   &   P R O F I L I N G    //
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static void GenerateShadowingDebugTextures(
+		IThreadContext& threadContext,
+		Techniques::ParsingContext& parsingContext,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const ShadowOperatorDesc& shadowOpDesc,
+		const IPreparedShadowResult& preparedShadowResult,
+		unsigned idx)
+	{
+		const auto cascadeIndexSemantic = Utility::Hash64("CascadeIndex");
+		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
+		Techniques::FrameBufferDescFragment fbDesc;
+		SubpassDesc sp;
+		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(cascadeIndexSemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
+		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(sampleDensitySemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
+		sp.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
+		sp.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		fbDesc.AddSubpass(std::move(sp));
+
+		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
+
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Utility::Hash64("GBuffer_Normals"));
+		usi.BindResourceView(1, Utility::Hash64("DepthTexture"));
+		usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
+		IResourceView* srvs[] = { rpi.GetInputAttachmentSRV(0), rpi.GetInputAttachmentSRV(1) };
+		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
+		UniformsStream us;
+		us._resourceViews = MakeIteratorRange(srvs);
+		IDescriptorSet* shadowDescSets[] = { preparedShadowResult.GetDescriptorSet().get() };
+
+		auto selectors = Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors();
+
+		auto op = Techniques::CreateFullViewportOperator(pipelineLayout, rpi, CASCADE_VIS_HLSL ":detailed_visualisation", MakeStringSection(selectors), usi);
+		op->StallWhilePending();
+		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
+		op->Actualize()->Draw(threadContext, parsingContext, us, MakeIteratorRange(shadowDescSets));
+	}
+
+	void DeferredLightingCaptures::GenerateDebuggingOutputs(LightingTechniqueIterator& iterator)
+	{
+		unsigned c=0;
+		for (const auto& preparedShadow:_preparedShadows) {
+			auto opId = preparedShadow.second->GetShadowOperatorId();
+			GenerateShadowingDebugTextures( 
+				*iterator._threadContext, *iterator._parsingContext, 
+				_lightResolveOperators->_pipelineLayout, 
+				_shadowPreparationOperators->_operators[opId]._desc,
+				*preparedShadow.second, c);
+			++c;
+		}
+	}
+
 }}

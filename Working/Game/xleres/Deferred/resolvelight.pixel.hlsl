@@ -6,10 +6,10 @@
 #define RESOLVE_UNSHADOWED_PSH
 
 #include "standardlighttypes.hlsl"
+#include "resolveutil.hlsl"
 #include "../TechniqueLibrary/Utility/LoadGBuffer.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl" // for LightingScale
 #include "../TechniqueLibrary/Framework/Binding.hlsl"
-#include "resolveutil.hlsl"
 
 #if HAS_SCREENSPACE_AO==1
     Texture2D<float>	AmbientOcclusion : register(t5);
@@ -44,7 +44,7 @@ float4 main(
     CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
     float shadow = ResolveShadows(cascade, resolvePixel.screenDest);
 
-    // return cascade.frustumCoordinates;
+    // return float4(cascade.frustumCoordinates.xyz, 1.0f);
     return float4(shadow.xxx, 1.f);
 	return float4((LightingScale*shadow)*result, 1.f);
 }

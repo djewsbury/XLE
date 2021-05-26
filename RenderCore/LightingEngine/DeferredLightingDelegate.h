@@ -16,12 +16,19 @@ namespace RenderCore { namespace LightingEngine
 	class LightSourceOperatorDesc;
 	class ShadowOperatorDesc;
 
+	namespace DeferredLightingTechniqueFlags
+	{
+		enum Enum { GenerateDebuggingTextures = 1<<0 };
+		using BitField = unsigned;
+	};
+
 	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps);
+		const FrameBufferProperties& fbProps,
+		DeferredLightingTechniqueFlags::BitField flags = 0);
 
 	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
@@ -32,6 +39,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const FrameBufferProperties& fbProps);
+		const FrameBufferProperties& fbProps,
+		DeferredLightingTechniqueFlags::BitField flags = 0);
 }}
 
