@@ -105,7 +105,7 @@ namespace RenderCore { namespace LightingEngine
 	class IArbitraryShadowProjections
 	{
 	public:
-		virtual void SetProjections(
+		virtual void SetArbitrarySubProjections(
 			IteratorRange<const Float4x4*> worldToCamera,
 			IteratorRange<const Float4x4*> cameraToProjection) = 0;
 		virtual ~IArbitraryShadowProjections();
@@ -120,7 +120,9 @@ namespace RenderCore { namespace LightingEngine
 			Float3      _bottomRightBack;
 		};
 		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) = 0;
-		virtual void SetSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;
+		virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;
+		virtual Float4x4 GetWorldToOrthoView() const = 0;
+		virtual std::vector<OrthoSubProjection> GetOrthoSubProjections() const = 0;
 		virtual ~IOrthoShadowProjections();
 	};
 

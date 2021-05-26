@@ -64,7 +64,7 @@ namespace UnitTests
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
 			{ Float3{-shadowFrustumWidth/2.0f, shadowFrustumWidth/2.0f, 0.0f}, Float3{shadowFrustumWidth/2.0f, -shadowFrustumWidth/2.0f, shadowDepthRange} }
 		};
-		projections->SetSubProjections(MakeIteratorRange(subProj));
+		projections->SetOrthoSubProjections(MakeIteratorRange(subProj));
 
 		IShadowPreparer::Desc desc;
 		desc._worldSpaceResolveBias = 0.f;
@@ -126,7 +126,7 @@ namespace UnitTests
 
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowId);
 		REQUIRE(projections);
-		projections->SetProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
+		projections->SetArbitrarySubProjections(MakeIteratorRange(worldToCamera), MakeIteratorRange(cameraToProjection));
 		return shadowId;
 	}
 

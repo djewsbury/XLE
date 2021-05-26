@@ -223,7 +223,14 @@ namespace UnitTests
 
 		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (filename.AsString() + ".png");
 		
-		auto data = resource.ReadBackSynchronized(threadContext);		
+		auto data = resource.ReadBackSynchronized(threadContext);
+		
+		if (compCount == 4) {
+			// nuke alpha channel for RGBA outputs
+			uint8_t* bytes = (uint8_t*)AsPointer(data.begin());
+			while( bytes != AsPointer(data.end())) { bytes[3] = 0xff; bytes += 4; }
+		}
+
 		auto res = stbi_write_png(
 			outputName.string().c_str(),
 			desc._textureDesc._width, desc._textureDesc._height,
@@ -260,13 +267,13 @@ namespace UnitTests
 		_pimpl->_mainTarget = device.CreateResource(mainFBDesc, initData);
 		_pimpl->_originalMainTargetDesc = mainFBDesc;
 
-		FrameBufferDesc::Attachment mainAttachment { mainFBDesc._textureDesc._format };
-		mainAttachment._desc._loadFromPreviousPhase = beginLoadStore;
+		AttachmentDesc mainAttachment { mainFBDesc._textureDesc._format };
+		mainAttachment._loadFromPreviousPhase = beginLoadStore;
 		SubpassDesc mainSubpass;
 		mainSubpass.AppendOutput(0);
 		mainSubpass.SetName("unit-test-subpass");
 		_pimpl->_fbDesc = FrameBufferDesc { 
-			std::vector<FrameBufferDesc::Attachment>{ mainAttachment },
+			std::vector<AttachmentDesc>{ mainAttachment },
 			std::vector<SubpassDesc>{ mainSubpass } };
 
 		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(

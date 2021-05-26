@@ -77,8 +77,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				assert(IsOrthogonalProjection(projMatrix));
 
 				cascadeScale[c][0] = projMatrix(0,0);
-				cascadeScale[c][1] = projMatrix(1,1);
 				cascadeTrans[c][0] = projMatrix(0,3);
+				cascadeScale[c][1] = projMatrix(1,1);
 				cascadeTrans[c][1] = projMatrix(1,3);
 				cascadeScale[c][2] = projMatrix(2,2);
 				cascadeTrans[c][2] = projMatrix(2,3);

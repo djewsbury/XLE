@@ -110,7 +110,7 @@ namespace RenderCore { namespace LightingEngine
             // near clip plane.
             // First, we build a rough projection-to-world based on the camera right direction...
 
-        auto projRight = ExtractRight(mainSceneProjectionDesc._cameraToWorld);
+        auto projRight = ExtractRight_Cam(mainSceneProjectionDesc._cameraToWorld);
         auto projForward = -negativeLightDirection;
         auto projUp = Cross(projRight, projForward);
         auto adjRight = Cross(projForward, projUp);
@@ -191,8 +191,9 @@ namespace RenderCore { namespace LightingEngine
         for (unsigned c=0; c<result._normalProjCount; ++c) { t += std::pow(settings._frustumSizeFactor, float(c)); }
 
         Float3 cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
-        Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward(mainSceneProjectionDesc._cameraToWorld);
-        Float4x4 worldToView = MakeWorldToLight(negativeLightDirection, focusPoint);
+        Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
+        auto lightToWorld = MakeCameraToWorld(-negativeLightDirection, ExtractRight_Cam(mainSceneProjectionDesc._cameraToWorld), focusPoint);
+        Float4x4 worldToView = InvertOrthonormalTransform(lightToWorld);
         assert(std::isfinite(worldToView(0,3)) && !std::isnan(worldToView(0,3)));
         result._worldToView = worldToView;
 
@@ -201,8 +202,8 @@ namespace RenderCore { namespace LightingEngine
         Float3 frustumCornerDir[4];
         CalculateCameraFrustumCornersDirection(frustumCornerDir, mainSceneProjectionDesc, clipSpaceType);
 
-        Float3 allCascadesMins( std::numeric_limits<float>::max(),  std::numeric_limits<float>::max(),  std::numeric_limits<float>::max());
-		Float3 allCascadesMaxs(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
+        // Float3 allCascadesMins( std::numeric_limits<float>::max(),  std::numeric_limits<float>::max(),  std::numeric_limits<float>::max());
+		// Float3 allCascadesMaxs(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
 
 		float distanceFromCamera = 0.f;
 		for (unsigned f=0; f<result._normalProjCount; ++f) {
@@ -259,17 +260,17 @@ namespace RenderCore { namespace LightingEngine
 				//	and the frustum
 
             shadowViewMins[2] = shadowNearPlane;
-            shadowViewMaxs[2] = shadowFarPlane;
+            // shadowViewMaxs[2] = shadowFarPlane;
 
             result._orthSubProjections[f]._topLeftFront = shadowViewMins;
             result._orthSubProjections[f]._bottomRightBack = shadowViewMaxs;
 
-            allCascadesMins[0] = std::min(allCascadesMins[0], shadowViewMins[0]);
-            allCascadesMins[1] = std::min(allCascadesMins[1], shadowViewMins[1]);
-            allCascadesMins[2] = std::min(allCascadesMins[2], shadowViewMins[2]);
-            allCascadesMaxs[0] = std::max(allCascadesMaxs[0], shadowViewMaxs[0]);
-            allCascadesMaxs[1] = std::max(allCascadesMaxs[1], shadowViewMaxs[1]);
-            allCascadesMaxs[2] = std::max(allCascadesMaxs[2], shadowViewMaxs[2]);
+            // allCascadesMins[0] = std::min(allCascadesMins[0], shadowViewMins[0]);
+            // allCascadesMins[1] = std::min(allCascadesMins[1], shadowViewMins[1]);
+            // allCascadesMins[2] = std::min(allCascadesMins[2], shadowViewMins[2]);
+            // allCascadesMaxs[0] = std::max(allCascadesMaxs[0], shadowViewMaxs[0]);
+            // allCascadesMaxs[1] = std::max(allCascadesMaxs[1], shadowViewMaxs[1]);
+            // allCascadesMaxs[2] = std::max(allCascadesMaxs[2], shadowViewMaxs[2]);
         }
 
             //  When building the world to clip matrix, we want some to use some projection
@@ -353,7 +354,7 @@ namespace RenderCore { namespace LightingEngine
             assert(t._normalProjCount);
             auto* cascades = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowProjectionId);
             if (cascades)
-                cascades->SetProjections(
+                cascades->SetArbitrarySubProjections(
                     MakeIteratorRange(t._worldToCamera, &t._worldToCamera[t._normalProjCount]),
                     MakeIteratorRange(t._cameraToProjection, &t._cameraToProjection[t._normalProjCount]));
         } else {
@@ -361,7 +362,7 @@ namespace RenderCore { namespace LightingEngine
             assert(t._normalProjCount);
             auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
             if (cascades) {
-                cascades->SetSubProjections(
+                cascades->SetOrthoSubProjections(
                     MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
                 cascades->SetWorldToOrthoView(t._worldToView);
             }

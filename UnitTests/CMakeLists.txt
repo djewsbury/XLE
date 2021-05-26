@@ -103,6 +103,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
     target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
     target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE BufferUploads-${metal_name})
+    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE RenderOverlays-${metal_name})
+    target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE PlatformRig-${metal_name})
     xle_executable_post_build(UnitTests-RenderCoreAssetsTechniques-${metal_name})
 
     add_dependencies(UnitTests-RenderCoreAssetsTechniques-${metal_name} ColladaConversion)

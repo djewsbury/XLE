@@ -17,11 +17,16 @@
 #include "../../../RenderCore/Techniques/CommonBindings.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
+#include "../../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/IThreadContext.h"
+#include "../../../RenderOverlays/OverlayContext.h"
+#include "../../../RenderOverlays/DebuggingDisplay.h"
+#include "../../../RenderOverlays/FontRendering.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
 #include "../../../Math/Geometry.h"
@@ -72,7 +77,7 @@ namespace UnitTests
 		IOrthoShadowProjections::OrthoSubProjection subProj[] = {
 			{ Float3{-1.f, 1.f, 0.f}, Float3{1.f, -1.f, depthRange} }
 		};
-		projections->SetSubProjections(MakeIteratorRange(subProj));
+		projections->SetOrthoSubProjections(MakeIteratorRange(subProj));
 
 		IShadowPreparer::Desc desc;
 		desc._worldSpaceResolveBias = 0.f;
@@ -285,39 +290,73 @@ namespace UnitTests
 		testHelper->EndFrameCapture();
 	}
 
+	struct ImmediateDrawingHelper
+	{
+		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
+
+		ImmediateDrawingHelper(MetalTestHelper& metalHelper)
+		{
+			auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(IMMEDIATE_PIPELINE);
+			pipelineLayoutFuture->StallWhilePending();
+			auto pipelineLayoutFile = pipelineLayoutFuture->Actualize();
+
+			const std::string pipelineLayoutName = "ImmediateDrawables";
+			auto i = pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
+			if (i == pipelineLayoutFile->_pipelineLayouts.end())
+				Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
+			auto pipelineInit = i->second->MakePipelineLayoutInitializer(metalHelper._shaderCompiler->GetShaderLanguage());
+			auto compiledPipelineLayout = metalHelper._device->CreatePipelineLayout(pipelineInit);
+
+			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(
+				metalHelper._device, 
+				compiledPipelineLayout,
+				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Material"),
+				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
+
+			// _fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*metalHelper._device);
+		}
+	};
 
 	TEST_CASE( "LightingEngine-SunSourceCascades", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
 		LightingEngineTestApparatus testApparatus;
 		auto testHelper = testApparatus._metalTestHelper.get();
+		ImmediateDrawingHelper immediateDrawingHelper(*testApparatus._metalTestHelper);
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		RenderCore::Techniques::CameraDesc visCamera;
-        visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 20.0f, 0.0f});
+        visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
         visCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		visCamera._nearClip = 0.f;
-		visCamera._farClip = 100.f;
+		visCamera._farClip = 400.f;
 		visCamera._left = 0.f;
-		visCamera._top = 100.f;
 		visCamera._right = 100.f;
-		visCamera._bottom = 0.f;
+		visCamera._top = 0.f;
+		visCamera._bottom = -100.f;
 
 		RenderCore::Techniques::CameraDesc sceneCamera;
-        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-15.0f, 12.0f, -15.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), 2.0f * Float3{-15.0f, 12.0f, -15.0f} + 2.0f * Float3{10.f, 0.f, 10.f});
+//        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-40.0f, 10.0f, -40.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{-5.0f, 10.0f, -5.0f});
+        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-40.0f, 10.0f, -40.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
         sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
 		sceneCamera._nearClip = 0.05f;
-		sceneCamera._farClip = 200.f;
+		sceneCamera._farClip = 150.f;
 		sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
 
-		const Float3 negativeLightDirection = Normalize(Float3{1.0f, 1.0f, 0.0f});
+		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
+//		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
 
 		testHelper->BeginFrameCapture();
 
 		{
 			RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceFrustumSettings;
 			sunSourceFrustumSettings._flags = 0;
+			sunSourceFrustumSettings._maxDistanceFromCamera = 100.f;
+			sunSourceFrustumSettings._focusDistance = ExtractTranslation(sceneCamera._cameraToWorld)[1] / -ExtractForward_Cam(sceneCamera._cameraToWorld)[1];
+			sunSourceFrustumSettings._maxFrustumCount = 4;
+			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);
 
@@ -360,10 +399,59 @@ namespace UnitTests
 					ParseScene(lightingIterator, *drawableWriter);
 				}
 
-				lightScene.DestroyLightSource(lightId);
+				// draw the camera and shadow frustums into the output image
+				{
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+						*threadContext, *immediateDrawingHelper._immediateDrawables, immediateDrawingHelper._fontRenderingManager.get());
 
-				// auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
-				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::GBufferNormal);
+					RenderOverlays::ColorB cols[]= {
+						RenderOverlays::ColorB(196, 230, 230),
+						RenderOverlays::ColorB(255, 128, 128),
+						RenderOverlays::ColorB(128, 255, 128),
+						RenderOverlays::ColorB(128, 128, 255),
+						RenderOverlays::ColorB(255, 255, 128),
+						RenderOverlays::ColorB(128, 255, 255)
+					};
+					unsigned colorIterator = 0;
+					auto* shadowProj = lightScene.TryGetShadowProjectionInterface<LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
+					if (shadowProj) {
+						auto worldToView = shadowProj->GetWorldToOrthoView();
+						auto subProjs = shadowProj->GetOrthoSubProjections();
+						for (const auto& subProj:subProjs) {
+							auto col = cols[(colorIterator++)%dimof(cols)];
+							auto topLeftFront = subProj._topLeftFront;
+							auto bottomRightBack = subProj._bottomRightBack;
+							// We have to reverse the Z values, because -Z is into the camera in camera space, but we represent near and far clip values as positives
+							topLeftFront[2] = -topLeftFront[2];
+							bottomRightBack[2] = -bottomRightBack[2];
+							RenderOverlays::DebuggingDisplay::DrawBoundingBox(
+								overlayContext.get(), 
+								std::make_tuple(topLeftFront, bottomRightBack),
+								InvertOrthonormalTransform(AsFloat3x4(worldToView)),
+								col, 0x2);
+
+							col.a = 196;
+							RenderOverlays::DebuggingDisplay::DrawBoundingBox(
+								overlayContext.get(), 
+								std::make_tuple(topLeftFront, bottomRightBack),
+								InvertOrthonormalTransform(AsFloat3x4(worldToView)),
+								col, 0x1);
+						}
+					}
+					
+					auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
+					RenderOverlays::DebuggingDisplay::DrawFrustum(overlayContext.get(), sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
+
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*threadContext, parsingContext);
+					auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+					if (prepare) {
+						prepare->StallWhilePending();
+						REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
+					}
+					immediateDrawingHelper._immediateDrawables->ExecuteDraws(*threadContext, parsingContext, rpi);
+				}
+
+				auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 				REQUIRE(colorLDR);
 
 				SaveImage(*threadContext, *colorLDR, "sun-source-cascades");

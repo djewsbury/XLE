@@ -18,11 +18,7 @@
 		// don't output to further pipeline stages.
 	#if MAT_VCOLOR_IS_ANIM_PARAM!=1 || VIS_ANIM_PARAM!=0
 		#if !defined(VSOUT_HAS_COLOR)
-			#if MAT_MODULATE_VERTEX_ALPHA
-				#define VSOUT_HAS_COLOR 1
-			#else
-				#define VSOUT_HAS_COLOR 2
-			#endif
+			#define VSOUT_HAS_COLOR 1
 		#endif
 	#endif
 #endif

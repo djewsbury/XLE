@@ -122,7 +122,7 @@
 		// Note that the clip test here is going to be expensive! We ideally enable this only when
 		// required.
 
-		uint nearCascadeIndex = GetShadowSubProjectionCount(GetShadowCascadeMode());
+		uint nearCascadeIndex = GetShadowSubProjectionCount();
 
 		float4 p0 = float4(mul(OrthoNearCascade, float4(input[0].position.xyz, 1.f)), 1.f);
 		float4 p1 = float4(mul(OrthoNearCascade, float4(input[1].position.xyz, 1.f)), 1.f);

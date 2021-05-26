@@ -46,6 +46,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
 
     #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
         float3 basePosition = mul(OrthoShadowWorldToView, float4(worldPosition, 1));
+        float3 viewSpaceNormal = mul(OrthoShadowWorldToView, float4(worldNormal, 0)).xyz;
         #if SHADOW_ENABLE_NEAR_CASCADE
             float4 frustumCoordinates = float4(mul(OrthoNearCascade, float4(basePosition, 1)), 1.f);
             if (PtInFrustum(frustumCoordinates))
@@ -57,18 +58,15 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             // (except for the near cascade, which is focused on the near geometry)
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, 0), 1.f);
-            float3 frustumSpaceNormal = mul(OrthoShadowWorldToView, float4(worldNormal, 0)).xyz;
             return CascadeAddress_Create(frustumCoordinates, frustumSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
         #else
-            [branch] if (PtInFrustumZ(float4(basePosition, 1.f))) {
-                CascadeAddress result = CascadeAddress_Invalid();
-                [unroll] for (int c=GetShadowCascadeSubProjectionCount()-1; c>=0; c--) {
+            //[branch] if (PtInFrustumZ(float4(basePosition, 1.f))) {
+                [unroll] for (uint c=0; c<GetShadowCascadeSubProjectionCount(); c++) {
                     float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, c), 1.f);
-                    if (PtInFrustumXY(frustumCoordinates))
-                        result = CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj_NotNear(c));
+                    if (PtInFrustum(frustumCoordinates))
+                        return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, c, ShadowProjection_GetMiniProj_NotNear(c));
                 }
-                return result;
-            }
+            //}
         #endif
     #elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP)
 

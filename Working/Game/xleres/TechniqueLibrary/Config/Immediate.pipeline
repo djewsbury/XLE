@@ -39,22 +39,13 @@ DescriptorSet Sequencer
 
 DescriptorSet Draw
 {
-	SampledTexture tex0;						// 0
-	SampledTexture tex1;						// 1
-	SampledTexture tex2;						// 2
-	SampledTexture tex3;						// 3
-	SampledTexture tex4;						// 4
-	SampledTexture tex5;						// 5
-	SampledTexture tex6;						// 6
-	SampledTexture tex7;						// 7
-	SampledTexture tex8;						// 8
-	SampledTexture tex9;						// 9
-
-	UniformBuffer LocalTransform				// 10
+	UniformBuffer LocalTransform				// 0
 	{
 		float3x4 LocalToWorld;
 		float3 LocalSpaceView;
 	};
+
+	SampledTexture tex0;						// 1
 };
 
 DescriptorSet Material
