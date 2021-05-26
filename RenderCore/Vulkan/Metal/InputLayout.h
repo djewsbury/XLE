@@ -131,10 +131,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			const UniformsStreamInterface& group3 = {});
 		BoundUniforms();
 		~BoundUniforms();
-		BoundUniforms(const BoundUniforms&) = default;
-		BoundUniforms& operator=(const BoundUniforms&) = default;
-		BoundUniforms(BoundUniforms&&) = default;
-		BoundUniforms& operator=(BoundUniforms&&) = default;
+		BoundUniforms(const BoundUniforms&);
+		BoundUniforms& operator=(const BoundUniforms&);
+		BoundUniforms(BoundUniforms&&);
+		BoundUniforms& operator=(BoundUniforms&&);
 
 	private:
 		struct LooseUniformBind { uint32_t _descSetSlot; uint32_t _inputUniformStreamIdx; };
@@ -150,7 +150,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			
 			// these exist so we default out slots that are used by the shader, but not provided as input
 			std::vector<DescriptorSlot> _sig;
-			uint64_t _shaderUsageMask = 0ull;
+			uint64_t _dummyMask = 0ull;
+			unsigned _sharedBuilder = ~0u;
 		};
 
 		struct PushConstantBindingRules
@@ -179,6 +180,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		GroupRules _group[4];
 		PipelineType _pipelineType;
+
+		class SharedDescSetBuilder;
+		mutable std::vector<SharedDescSetBuilder> _sharedDescSetBuilders;
 
 		class ConstructionHelper;
 		class BindingHelper;

@@ -316,10 +316,63 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		GroupRules _group[4];
 
-		void AddLooseUniformBinding(
-			UniformStreamType uniformStreamType,
-			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
-			unsigned groupIdx, unsigned inputUniformStreamIdx, uint32_t shaderStageMask)
+		struct DescriptorSetInfo
+		{
+			std::vector<unsigned> _groupsThatWriteHere;
+			uint64_t _shaderUsageMask = 0ull;
+			uint64_t _dummyMask = 0ull;
+			unsigned _shaderStageMask = 0;
+			unsigned _assignedSharedDescSetWriter = ~0u;
+		};
+		std::vector<DescriptorSetInfo> _descSetInfos;
+		unsigned _sharedDescSetWriterCount = 0;
+
+		void FinalizeRules()
+		{
+			unsigned firstLooseUniformsGroup = ~0u;
+			for (unsigned c=0; c<_looseUniforms.size(); ++c)
+				if (!_looseUniforms[c]->_immediateDataBindings.empty() || !_looseUniforms[c]->_resourceViewBindings.empty() || !_looseUniforms[c]->_samplerBindings.empty()) {
+					firstLooseUniformsGroup = c;	// assign this to the first group that is not just fixed descriptor sets
+					break;
+				}
+
+			for (unsigned descSetIdx=0; descSetIdx<_descSetInfos.size(); ++descSetIdx) {
+				auto& ds = _descSetInfos[descSetIdx];
+				if (ds._groupsThatWriteHere.empty()) {
+					// If there are some dummys that need to be written, we'll create some rules for that
+					// here and continue on
+					// Otherwise this desc set is not needed by the shader and we'll ignore it
+					if (ds._dummyMask != 0) {
+						assert(firstLooseUniformsGroup != ~0u);
+						ds._groupsThatWriteHere.push_back(firstLooseUniformsGroup);
+						InitializeAdaptiveSetBindingRules(descSetIdx, firstLooseUniformsGroup, ds._shaderStageMask);
+					} else
+						continue;
+				}
+				std::sort(ds._groupsThatWriteHere.begin(), ds._groupsThatWriteHere.end());
+				
+				// assign the "dummies" for this desc set to the first group that writes here
+				auto& groupForDummies = _group[ds._groupsThatWriteHere[0]];
+				for (auto& set:groupForDummies._adaptiveSetRules) {
+					if (set._descriptorSetIdx == descSetIdx) {
+						assert(set._dummyMask == 0); 
+						set._dummyMask = ds._dummyMask;
+						break;
+					}
+				}
+
+				if (ds._groupsThatWriteHere.size() == 1) continue;
+
+				// If multiple groups write here, assign a shared builder
+				ds._assignedSharedDescSetWriter = _sharedDescSetWriterCount++;
+				for (auto groupIdx:ds._groupsThatWriteHere)
+					for (auto& set:_group[groupIdx]._adaptiveSetRules)
+						if (set._descriptorSetIdx == descSetIdx)
+							set._sharedBuilder = ds._assignedSharedDescSetWriter;
+			}
+		}
+
+		AdaptiveSetBindingRules* InitializeAdaptiveSetBindingRules(unsigned outputDescriptorSet, unsigned groupIdx, uint32_t shaderStageMask)
 		{
 			assert(groupIdx < 4);
 			auto& groupRules = _group[groupIdx];
@@ -328,39 +381,58 @@ namespace RenderCore { namespace Metal_Vulkan
 				[outputDescriptorSet](const auto& c) { return c._descriptorSetIdx == outputDescriptorSet; });
 			if (adaptiveSet == groupRules._adaptiveSetRules.end()) {
 				groupRules._adaptiveSetRules.push_back(
-					AdaptiveSetBindingRules { outputDescriptorSet, shaderStageMask, _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet) });
+					AdaptiveSetBindingRules { outputDescriptorSet, 0u, _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet) });
 				adaptiveSet = groupRules._adaptiveSetRules.end()-1;
 				auto bindings = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet)->GetDescriptorSlots();
 				adaptiveSet->_sig = std::vector<DescriptorSlot> { bindings.begin(), bindings.end() };
-				adaptiveSet->_shaderUsageMask = (1ull << uint64_t(outputDescriptorSetSlot));
-			} else {
-				adaptiveSet->_shaderStageMask |= shaderStageMask;
-				adaptiveSet->_shaderUsageMask |= (1ull << uint64_t(outputDescriptorSetSlot));
+			}
+			adaptiveSet->_shaderStageMask |= shaderStageMask;
+			return AsPointer(adaptiveSet);
+		}
+
+		void AddLooseUniformBinding(
+			UniformStreamType uniformStreamType,
+			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
+			unsigned groupIdx, unsigned inputUniformStreamIdx, uint32_t shaderStageMask)
+		{
+			if (_descSetInfos.size() <= outputDescriptorSet)
+				_descSetInfos.resize(outputDescriptorSet+1);
+
+			_descSetInfos[outputDescriptorSet]._shaderUsageMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
+			_descSetInfos[outputDescriptorSet]._shaderStageMask |= shaderStageMask;
+			if (uniformStreamType == UniformStreamType::Dummy) {
+				_descSetInfos[outputDescriptorSet]._dummyMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
+				return;
 			}
 
-			if (uniformStreamType != UniformStreamType::Dummy) {
-				std::vector<LooseUniformBind>* binds;
-				if (uniformStreamType == UniformStreamType::ImmediateData) {
-					binds = &adaptiveSet->_immediateDataBinds;
-					groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(inputUniformStreamIdx));
-				} else if (uniformStreamType == UniformStreamType::ResourceView) {
-					binds = &adaptiveSet->_resourceViewBinds;
-					groupRules._boundLooseResources |= (1ull << uint64_t(inputUniformStreamIdx));
-				} else {
-					assert(uniformStreamType == UniformStreamType::Sampler);
-					binds = &adaptiveSet->_samplerBinds;
-					groupRules._boundLooseSamplerStates |= (1ull << uint64_t(inputUniformStreamIdx));
-				}
+			auto& groupsWr = _descSetInfos[outputDescriptorSet]._groupsThatWriteHere;
+			if (std::find(groupsWr.begin(), groupsWr.end(), groupIdx) == groupsWr.end()) groupsWr.push_back(groupIdx);
 
-				auto existing = std::find_if(
-					binds->begin(), binds->end(),
-					[outputDescriptorSetSlot](const auto&c) { return c._descSetSlot == outputDescriptorSetSlot; });
-				if (existing != binds->end()) {
-					if (existing->_inputUniformStreamIdx != inputUniformStreamIdx)
-						Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
-				} else {
-					binds->push_back({outputDescriptorSetSlot, inputUniformStreamIdx});
-				}
+			assert(groupIdx < 4);
+			auto& groupRules = _group[groupIdx];
+			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
+
+			std::vector<LooseUniformBind>* binds;
+			if (uniformStreamType == UniformStreamType::ImmediateData) {
+				binds = &adaptiveSet->_immediateDataBinds;
+				groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(inputUniformStreamIdx));
+			} else if (uniformStreamType == UniformStreamType::ResourceView) {
+				binds = &adaptiveSet->_resourceViewBinds;
+				groupRules._boundLooseResources |= (1ull << uint64_t(inputUniformStreamIdx));
+			} else {
+				assert(uniformStreamType == UniformStreamType::Sampler);
+				binds = &adaptiveSet->_samplerBinds;
+				groupRules._boundLooseSamplerStates |= (1ull << uint64_t(inputUniformStreamIdx));
+			}
+
+			auto existing = std::find_if(
+				binds->begin(), binds->end(),
+				[outputDescriptorSetSlot](const auto&c) { return c._descSetSlot == outputDescriptorSetSlot; });
+			if (existing != binds->end()) {
+				if (existing->_inputUniformStreamIdx != inputUniformStreamIdx)
+					Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
+			} else {
+				binds->push_back({outputDescriptorSetSlot, inputUniformStreamIdx});
 			}
 		}
 
@@ -380,13 +452,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		void BindReflection(const SPIRVReflection& reflection, uint32_t shaderStageMask)
 		{
 			assert(_looseUniforms.size() <= 4);
-
-			unsigned groupIdxForDummies = 0;
-			for (unsigned c=0; c<_looseUniforms.size(); ++c)
-				if (!_looseUniforms[c]->_immediateDataBindings.empty() || !_looseUniforms[c]->_resourceViewBindings.empty() || !_looseUniforms[c]->_samplerBindings.empty()) {
-					groupIdxForDummies = c;	// assign this to the first group that is not just fixed descriptor sets
-					break;
-				}
+			const unsigned groupIdxForDummies = ~0u;
 
 			// We'll need an input value for every binding in the shader reflection
 			for (const auto&v:reflection._variables) {
@@ -503,13 +569,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			assert(_looseUniforms.size() <= 4);
 
-			unsigned groupIdxForDummies = 0;
-			for (unsigned c=0; c<_looseUniforms.size(); ++c)
-				if (!_looseUniforms[c]->_immediateDataBindings.empty() || !_looseUniforms[c]->_resourceViewBindings.empty() || !_looseUniforms[c]->_samplerBindings.empty()) {
-					groupIdxForDummies = c;	// assign this to the first group that is not just fixed descriptor sets
-					break;
-				}
-
 			for(unsigned descSetIdx=0; descSetIdx<pipelineLayout.GetDescriptorSets().size(); ++descSetIdx) {
 				const auto& descSet = pipelineLayout.GetDescriptorSets()[descSetIdx];
 				for (unsigned slotIdx=0; slotIdx<descSet._signature._slots.size(); ++slotIdx) {
@@ -579,6 +638,35 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	class BoundUniforms::SharedDescSetBuilder 
+	{
+	public:
+		ProgressiveDescriptorSetBuilder _builder;
+		unsigned _unflushedGroupMask = 0;
+		unsigned _groupMask = 0;
+		std::vector<DescriptorSlot> _signature;
+
+		SharedDescSetBuilder(IteratorRange<const DescriptorSlot*> signature)
+		: _builder(signature), _unflushedGroupMask(0), _groupMask(0), _signature(signature.begin(), signature.end()) {}
+		SharedDescSetBuilder(SharedDescSetBuilder&&) = default;
+		SharedDescSetBuilder& operator=(SharedDescSetBuilder&&) = default;
+		SharedDescSetBuilder(const SharedDescSetBuilder& copyFrom)
+		: _builder(MakeIteratorRange(copyFrom._signature))
+		, _groupMask(copyFrom._groupMask)
+		, _signature(copyFrom._signature)
+		, _unflushedGroupMask(0) {}
+		SharedDescSetBuilder& operator=(const SharedDescSetBuilder& copyFrom)
+		{
+			if (&copyFrom != this) {
+				_builder = ProgressiveDescriptorSetBuilder{MakeIteratorRange(copyFrom._signature)};
+				_groupMask = copyFrom._groupMask;
+				_signature = copyFrom._signature;
+				_unflushedGroupMask = 0;
+			}
+			return *this;
+		}
+	};
+
 	BoundUniforms::BoundUniforms(
 		const ShaderProgram& shader,
 		const UniformsStreamInterface& group0,
@@ -615,6 +703,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			const auto& compiledCode = shader.GetCompiledCode((ShaderStage)stage);
 			if (compiledCode.GetByteCode().size()) {
 				helper.BindReflection(SPIRVReflection(compiledCode.GetByteCode()), Internal::AsVkShaderStageFlags((ShaderStage)stage));
+			}
+		}
+
+		helper.FinalizeRules();
+
+		if (helper._sharedDescSetWriterCount) {
+			_sharedDescSetBuilders.reserve(helper._sharedDescSetWriterCount);
+			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
+				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
+				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
+				auto& i = _sharedDescSetBuilders.emplace_back(pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+					i._groupMask |= 1 << g;
 			}
 		}
 
@@ -675,6 +776,19 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		helper.BindPipelineLayout(pipelineLayoutInitializer, shaderStageMask);
 
+		helper.FinalizeRules();
+
+		if (helper._sharedDescSetWriterCount) {
+			_sharedDescSetBuilders.reserve(helper._sharedDescSetWriterCount);
+			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
+				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
+				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
+				auto& i = _sharedDescSetBuilders.emplace_back(helper._pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+					i._groupMask |= 1 << g;
+			}
+		}
+
 		for (unsigned c=0; c<4; ++c) {
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
@@ -684,6 +798,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
 		}
 	}
+
+	BoundUniforms::BoundUniforms(const BoundUniforms&) = default;
+	BoundUniforms& BoundUniforms::operator=(const BoundUniforms&) = default;
+	BoundUniforms::BoundUniforms(BoundUniforms&&) = default;
+	BoundUniforms& BoundUniforms::operator=(BoundUniforms&&) = default;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -803,9 +922,25 @@ namespace RenderCore { namespace Metal_Vulkan
 			bool requiresTemporaryBufferBarrier = false;
 
 			// -------- write descriptor set --------
-			ProgressiveDescriptorSetBuilder builder { MakeIteratorRange(adaptiveSet._sig) };
+			ProgressiveDescriptorSetBuilder builderT { MakeIteratorRange(adaptiveSet._sig) };
+			bool doFlushNow = true;
+			ProgressiveDescriptorSetBuilder* builder = &builderT;
+			if (adaptiveSet._sharedBuilder != ~0u) {
+				auto& sharedBuilder = _sharedDescSetBuilders[adaptiveSet._sharedBuilder];
+				builder = &sharedBuilder._builder;
+				// Flush only when all of the groups that will write to this descriptor set have done
+				// their thing
+				sharedBuilder._unflushedGroupMask |= 1 << groupIdx;
+				assert((sharedBuilder._unflushedGroupMask & sharedBuilder._groupMask) == sharedBuilder._unflushedGroupMask);
+				if (sharedBuilder._unflushedGroupMask == sharedBuilder._groupMask) {
+					sharedBuilder._unflushedGroupMask = 0;
+				} else {
+					doFlushNow = false;
+				}
+			}
+			
 			auto cbBindingFlag = BindingHelper::WriteImmediateDataBindings(
-				builder,
+				*builder,
 				context.GetTemporaryBufferSpace(),
 				requiresTemporaryBufferBarrier,
 				context.GetFactory(),
@@ -813,12 +948,12 @@ namespace RenderCore { namespace Metal_Vulkan
 				MakeIteratorRange(adaptiveSet._immediateDataBinds));
 
 			auto srvBindingFlag = BindingHelper::WriteResourceViewBindings(
-				builder,
+				*builder,
 				stream._resourceViews,
 				MakeIteratorRange(adaptiveSet._resourceViewBinds));
 
 			auto ssBindingFlag = BindingHelper::WriteSamplerStateBindings(
-				builder,
+				*builder,
 				MakeIteratorRange((const SamplerState*const*)stream._samplers.begin(), (const SamplerState*const*)stream._samplers.end()),
 				MakeIteratorRange(adaptiveSet._samplerBinds));
 
@@ -831,26 +966,25 @@ namespace RenderCore { namespace Metal_Vulkan
 			//
 			// In the most common case, there should be no dummy descriptors to fill in here... So we'll 
 			// optimise for that case.
-			uint64_t dummyDescWriteMask = (~(cbBindingFlag|srvBindingFlag|ssBindingFlag)) & adaptiveSet._shaderUsageMask;
+			uint64_t dummyDescWriteMask = (~(cbBindingFlag|srvBindingFlag|ssBindingFlag)) & adaptiveSet._dummyMask;
 			uint64_t dummyDescWritten = 0;
 			if (dummyDescWriteMask != 0)
-				dummyDescWritten = builder.BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
+				dummyDescWritten = builder->BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
 
-			// note --  vkUpdateDescriptorSets happens immediately, regardless of command list progress.
-			//          Ideally we don't really want to have to update these constantly... Once they are 
-			//          set, maybe we can just reuse them?
-			if (cbBindingFlag | srvBindingFlag | ssBindingFlag | dummyDescWriteMask) {
-				std::vector<uint64_t> resourceVisibilityList;
-				builder.FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
-				context.RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
+			if (doFlushNow) {
+				if (cbBindingFlag | srvBindingFlag | ssBindingFlag | dummyDescWriteMask) {
+					std::vector<uint64_t> resourceVisibilityList;
+					builder->FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
+					context.RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
+				}
+			
+				encoder.BindDescriptorSet(
+					adaptiveSet._descriptorSetIdx, descriptorSet.get()
+					VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
+
+				if (requiresTemporaryBufferBarrier)
+					context.GetTemporaryBufferSpace().WriteBarrier(context);
 			}
-		
-			encoder.BindDescriptorSet(
-				adaptiveSet._descriptorSetIdx, descriptorSet.get()
-				VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
-
-			if (requiresTemporaryBufferBarrier)
-				context.GetTemporaryBufferSpace().WriteBarrier(context);
 		}
 
 		for (const auto&pushConstants:_group[groupIdx]._pushConstantsRules) {
