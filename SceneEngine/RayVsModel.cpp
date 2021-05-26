@@ -292,7 +292,7 @@ namespace SceneEngine
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
-			box._fbDesc,
+			box._fbDesc, {},
 			*_pimpl->_res->_frameBufferPool, _pimpl->_res->_dummyAttachmentPool,
 			{} };
 

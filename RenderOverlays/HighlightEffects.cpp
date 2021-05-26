@@ -104,15 +104,11 @@ namespace RenderOverlays
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted)
     {
-		std::vector<FrameBufferDesc::Attachment> attachments {
-			{ Techniques::AttachmentSemantics::ColorLDR },
-			{ Techniques::AttachmentSemantics::MultisampleDepth }
-		};
+		Techniques::FrameBufferDescFragment fbDesc;
 		SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
-		mainPass.AppendOutput(0);
-		mainPass.AppendInput(1);
-		FrameBufferDesc fbDesc{ std::move(attachments), {mainPass}, parsingContext._fbProps };
+		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
+		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
 
         auto stencilSrv = rpi.GetInputAttachmentSRV(
@@ -215,29 +211,26 @@ namespace RenderOverlays
         _pimpl = std::make_unique<Pimpl>(threadContext, std::move(pipelineLayout));
 
 		Techniques::FrameBufferDescFragment fbDescFrag;
-		auto n_offscreen = fbDescFrag.DefineTemporaryAttachment(
-			AttachmentDesc {
-				Format::R8G8B8A8_UNORM, 1.f, 1.f, 0u,
-				AttachmentDesc::Flags::OutputRelativeDimensions,
-                BindFlag::ShaderResource });
+		auto n_offscreen = fbDescFrag.DefineAttachmentRelativeDims(
+            0, 1.f, 1.f,
+			AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, LoadStore::DontCare, 0, BindFlag::ShaderResource });
 		auto n_mainColor = fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR);
 		const bool doDepthTest = true;
         auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;
 
 		SubpassDesc subpass0;
-		subpass0.AppendOutput(n_offscreen, LoadStore::Clear, LoadStore::Retain);
-		subpass0.SetDepthStencil(AttachmentViewDesc { n_depth, LoadStore::Retain, LoadStore::Retain, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil } });
+		subpass0.AppendOutput(n_offscreen);
+		subpass0.SetDepthStencil(AttachmentViewDesc { n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil } });
 		fbDescFrag.AddSubpass(std::move(subpass0));
 
 		SubpassDesc subpass1;
-		subpass1.AppendOutput(n_mainColor, LoadStore::Retain, LoadStore::Retain);
-		subpass1.AppendInput(n_offscreen, LoadStore::Retain, LoadStore::DontCare);
+		subpass1.AppendOutput(n_mainColor);
+		subpass1.AppendInput(n_offscreen);
 		fbDescFrag.AddSubpass(std::move(subpass1));
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
-		auto fbDesc = Techniques::BuildFrameBufferDesc(std::move(fbDescFrag), parsingContext._fbProps);
         _pimpl->_rpi = Techniques::RenderPassInstance(
-            threadContext, parsingContext, fbDesc, 
+            threadContext, parsingContext, fbDescFrag, 
 			{MakeIteratorRange(clearValues)});
     }
 

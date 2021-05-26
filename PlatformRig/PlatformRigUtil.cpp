@@ -7,7 +7,6 @@
 #include "PlatformRigUtil.h"
 #include "FrameRig.h"
 #include "../RenderCore/IDevice.h"
-#include "../RenderCore/LightingEngine/LightDesc.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Format.h"

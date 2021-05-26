@@ -133,20 +133,14 @@ namespace RenderCore
 	{
 	public:
         auto	GetSubpasses() const -> IteratorRange<const SubpassDesc*> { return MakeIteratorRange(_subpasses); }
-
-        struct Attachment
-        {
-            // uint64_t        _semantic = 0;
-			AttachmentDesc  _desc = {};
-        };
-        auto    GetAttachments() const -> IteratorRange<const Attachment*> { return MakeIteratorRange(_attachments); }
+        auto    GetAttachments() const -> IteratorRange<const AttachmentDesc*> { return MakeIteratorRange(_attachments); }
 
         const FrameBufferProperties& GetProperties() const { return _props; }
 
         uint64_t    GetHash() const { return _hash; }
 
 		FrameBufferDesc(
-            std::vector<Attachment>&& attachments,
+            std::vector<AttachmentDesc>&& attachments,
             std::vector<SubpassDesc>&& subpasses,
             const FrameBufferProperties& props = {});
 		FrameBufferDesc();
@@ -155,7 +149,7 @@ namespace RenderCore
 		static FrameBufferDesc s_empty;
 
 	private:
-        std::vector<Attachment>         _attachments;
+        std::vector<AttachmentDesc>     _attachments;
         std::vector<SubpassDesc>        _subpasses;
         FrameBufferProperties           _props;
         uint64_t                        _hash;

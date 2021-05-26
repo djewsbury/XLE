@@ -54,9 +54,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/TestDisplays.h)
 
     set(MiniSceneEngineSrc
-        ../SceneEngine/BasicLightingStateDelegate.cpp
-        ../SceneEngine/LightInternal.cpp
-        ../SceneEngine/ExecuteScene.cpp
         ../SceneEngine/RayVsModel.cpp
         ../SceneEngine/IntersectionTest.cpp
         ../SceneEngine/PlacementsManager.cpp

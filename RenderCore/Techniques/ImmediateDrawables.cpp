@@ -10,6 +10,7 @@
 #include "CompiledShaderPatchCollection.h"
 #include "Drawables.h"
 #include "RenderPass.h"
+#include "ParsingContext.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/AssetFutureContinuation.h"
 #include "../Assets/Assets.h"
@@ -306,8 +307,8 @@ namespace RenderCore { namespace Techniques
 				_techniqueDelegate, ParameterBox{},
 				fbDesc, subpassIndex);
 
-			assert(fbDesc.GetProperties()._outputWidth * fbDesc.GetProperties()._outputHeight);
-			Float2 viewportDimensions { fbDesc.GetProperties()._outputWidth, fbDesc.GetProperties()._outputHeight };
+			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
+			Float2 viewportDimensions { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 			_resourceDelegate->Configure(context, viewportDimensions);
 
 			SequencerContext sequencerContext;

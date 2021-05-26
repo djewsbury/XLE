@@ -159,13 +159,14 @@ namespace PlatformRig
 			// (including setting the normalized width and height)
 			parserContext.GetTechniqueContext()._attachmentPool->Bind(RenderCore::Techniques::AttachmentSemantics::ColorLDR, presentationTarget);
             auto targetDesc = presentationTarget->GetDesc();
-            parserContext._preregisteredAttachments.push_back(
+            auto& stitchingContext = parserContext.GetFragmentStitchingContext();
+            stitchingContext.DefineAttachment(
                 RenderCore::Techniques::PreregisteredAttachment {
                     RenderCore::Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
                     RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized
                 });
-            parserContext._fbProps = RenderCore::FrameBufferProperties { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
+            stitchingContext._workingProps = RenderCore::FrameBufferProperties { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
             parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)targetDesc._textureDesc._width, (float)targetDesc._textureDesc._height };
 
 			////////////////////////////////
@@ -173,7 +174,7 @@ namespace PlatformRig
 			TRY {
 				if (_mainOverlaySys) {
                     #if defined(_DEBUG)
-                        assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(parserContext._preregisteredAttachments), parserContext._fbProps));
+                        assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
                     #endif
                     _mainOverlaySys->Render(context, parserContext);
                 } else {

@@ -243,7 +243,12 @@ namespace RenderOverlays
 
 	static RenderCore::Techniques::ImmediateDrawableMaterial AsMaterial(const OverlayState& state)
 	{
-		return {};
+		RenderCore::Techniques::ImmediateDrawableMaterial result;
+		result._stateSet._forwardBlendSrc = Blend::SrcAlpha;
+		result._stateSet._forwardBlendDst = Blend::InvSrcAlpha;
+		result._stateSet._forwardBlendOp = BlendOp::Add;
+		result._stateSet._flag = RenderCore::Assets::RenderStateSet::Flag::ForwardBlend;
+		return result;
 	}
 
 	IteratorRange<void*> ImmediateOverlayContext::BeginDrawCall(const DrawCall& drawCall)
@@ -419,11 +424,12 @@ namespace RenderOverlays
 	ImmediateOverlayContext::ImmediateOverlayContext(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-		FontRenderingManager& fontRenderingManager)
+		FontRenderingManager* fontRenderingManager)
 	: ImmediateOverlayContext(threadContext, immediateDrawables)
 	{
-		_fontRenderingManager = &fontRenderingManager;
-		_defaultFont = ConsoleRig::FindCachedBox2<DefaultFontBox>()._font;
+		_fontRenderingManager = fontRenderingManager;
+		if (_fontRenderingManager)
+			_defaultFont = ConsoleRig::FindCachedBox2<DefaultFontBox>()._font;
 	}
 
 	ImmediateOverlayContext::~ImmediateOverlayContext()
@@ -434,7 +440,7 @@ namespace RenderOverlays
 		MakeImmediateOverlayContext(
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-			FontRenderingManager& fontRenderingManager)
+			FontRenderingManager* fontRenderingManager)
 	{
 		return std::make_unique<ImmediateOverlayContext>(threadContext, immediateDrawables, fontRenderingManager);
 	}
@@ -444,7 +450,7 @@ namespace RenderOverlays
             RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ImmediateDrawingApparatus& apparatus)
 	{
-		return MakeImmediateOverlayContext(threadContext, *apparatus._immediateDrawables, *apparatus._fontRenderingManager);
+		return MakeImmediateOverlayContext(threadContext, *apparatus._immediateDrawables, apparatus._fontRenderingManager.get());
 	}
 
 	IOverlayContext::~IOverlayContext() {}

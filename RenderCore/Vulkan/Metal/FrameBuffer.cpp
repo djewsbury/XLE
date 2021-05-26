@@ -213,7 +213,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (i == workingAttachments.end() || i->first != attachmentName) {
 					i = workingAttachments.insert(i, {attachmentName, WorkingAttachment{}});
 					assert(attachmentName < layout.GetAttachments().size());
-					i->second._desc = layout.GetAttachments()[attachmentName]._desc;
+					i->second._desc = layout.GetAttachments()[attachmentName];
 				}
 
 				AttachmentUsage loadUsage { spIdx, usage };
@@ -594,7 +594,7 @@ namespace RenderCore { namespace Metal_Vulkan
         for (const auto&a:uniqueAttachments) {
 			// Note that we can't support TextureViewDesc properly here, because we don't support 
 			// the same resource being used with more than one view
-			auto resource = namedResources.GetResource(a.first, fbAttachments[a.first]._desc, fbDesc.GetProperties());
+			auto resource = namedResources.GetResource(a.first, fbAttachments[a.first], fbDesc.GetProperties());
 			auto rtv = viewPool.GetTextureView(resource, AsBindFlag(a.second), TextureViewDesc{});
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
 

@@ -69,7 +69,7 @@ namespace RenderOverlays
         ImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-            FontRenderingManager& fontRenderingManager);
+            FontRenderingManager* fontRenderingManager);
         ImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::IImmediateDrawables& immediateDrawables);
@@ -92,7 +92,7 @@ namespace RenderOverlays
 		MakeImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-            FontRenderingManager& fontRenderingManager);
+            FontRenderingManager* fontRenderingManager = nullptr);
 
     std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(

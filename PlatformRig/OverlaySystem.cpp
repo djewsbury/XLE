@@ -267,9 +267,9 @@ namespace PlatformRig
         RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext)
     {
-		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, *_fontRenderer);
+		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, _fontRenderer.get());
 
-        Int2 viewportDims{ parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight };
+        Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
         assert(viewportDims[0] * viewportDims[1]);
         _screens->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });
 

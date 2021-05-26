@@ -15,7 +15,7 @@ namespace RenderCore
 	FrameBufferDesc FrameBufferDesc::s_empty { {}, {SubpassDesc{}} };
 
 	FrameBufferDesc::FrameBufferDesc(
-        std::vector<Attachment>&& attachments,
+        std::vector<AttachmentDesc>&& attachments,
         std::vector<SubpassDesc>&& subpasses,
         const FrameBufferProperties& props)
 	: _attachments(std::move(attachments))
@@ -26,7 +26,7 @@ namespace RenderCore
         // together the hashes of the members.
         _hash = DefaultSeed64;
         for (const auto&a:_attachments)
-            _hash = HashCombine(_hash, a._desc.CalculateHash());
+            _hash = HashCombine(_hash, a.CalculateHash());
         for (const auto&sp:_subpasses)
             _hash = HashCombine(_hash, sp.CalculateHash());
         _hash = HashCombine(_hash, _props.CalculateHash());
@@ -61,7 +61,7 @@ namespace RenderCore
 
     uint64_t AttachmentDesc::CalculateHash() const
     {
-        assert((uint64_t(_format) & MaskBits(8)) == uint64_t(_format));
+        assert((uint64_t(_format) & MaskBits(12)) == uint64_t(_format));
         assert((uint64_t(_flags) & MaskBits(1)) == uint64_t(_flags));
         assert((uint64_t(_loadFromPreviousPhase) & MaskBits(5)) == uint64_t(_loadFromPreviousPhase));
         assert((uint64_t(_storeToNextPhase) & MaskBits(5)) == uint64_t(_storeToNextPhase));
@@ -69,11 +69,11 @@ namespace RenderCore
         assert((uint64_t(_finalLayout) & MaskBits(15)) == uint64_t(_finalLayout));
 
         return  uint64_t(_format)
-            |   (uint64_t(_flags) << 8ull)
-            |   (uint64_t(_loadFromPreviousPhase) << 9ull)
-            |   (uint64_t(_storeToNextPhase) << 14ull)
-            |   (uint64_t(_initialLayout) << 19ull)
-            |   (uint64_t(_finalLayout) << 34ull)
+            |   (uint64_t(_flags) << 12ull)
+            |   (uint64_t(_loadFromPreviousPhase) << 12ull)
+            |   (uint64_t(_storeToNextPhase) << 18ull)
+            |   (uint64_t(_initialLayout) << 23ull)
+            |   (uint64_t(_finalLayout) << 38ull)
             ;
     }
 
@@ -126,7 +126,7 @@ namespace RenderCore
 
 		// note -- ignoring the "preserve" bindings; because those make less sense with a single subpass
 
-		std::vector<FrameBufferDesc::Attachment> newAttachments;
+		std::vector<AttachmentDesc> newAttachments;
 		newAttachments.resize(nextRemapIndex);
 		for (unsigned c=0; c<input.GetAttachments().size(); ++c)
 			if (attachmentRemap[c] != ~0u)

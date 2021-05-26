@@ -259,7 +259,7 @@ namespace RenderCore { namespace Techniques
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs);
 		assert(poolAttachments.GetResourceIds().size() == desc.GetAttachments().size());
 
-        std::vector<FrameBufferDesc::Attachment> adjustedAttachments;
+        std::vector<AttachmentDesc> adjustedAttachments;
         adjustedAttachments.reserve(desc.GetAttachments().size());
         Result result;
 
@@ -279,7 +279,7 @@ namespace RenderCore { namespace Techniques
             // This also has the effect of normalizing the attachment desc information for the hash value,
             // which would help cases where functionality identical information produces different hash value
             auto resDesc = matchedAttachment._resource->GetDesc();
-            AttachmentDesc completeAttachmentDesc = desc.GetAttachments()[c]._desc;
+            AttachmentDesc completeAttachmentDesc = desc.GetAttachments()[c];
             completeAttachmentDesc._format = resDesc._textureDesc._format;
             adjustedAttachments.push_back({completeAttachmentDesc});
         }
@@ -1036,7 +1036,7 @@ namespace RenderCore { namespace Techniques
         //      might take in a "hdrcolor" semantic and write to a "lhdrcolor" semantic)
         // * add an extra "copy" subpass -- this should just copy to the expected output buffer
         //
-        std::vector<FrameBufferDesc::Attachment> fbAttachments;
+        std::vector<AttachmentDesc> fbAttachments;
         std::vector<uint64_t> attachmentSemantics;
         fbAttachments.reserve(fragment._attachments.size());
         attachmentSemantics.reserve(fragment._attachments.size());

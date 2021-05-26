@@ -99,7 +99,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto sampleCount = TextureSamples::Create();
 		auto mainOutputAttachment = fbDesc.GetSubpasses()[subpassIdx].GetOutputs()[0]._resourceName;
-		if (fbDesc.GetAttachments()[mainOutputAttachment]._desc._flags & AttachmentDesc::Flags::Multisampled)
+		if (fbDesc.GetAttachments()[mainOutputAttachment]._flags & AttachmentDesc::Flags::Multisampled)
 			sampleCount = fbDesc.GetProperties()._samples;
 		
 		StringMeld<256, ::Assets::ResChar> definesTable;
