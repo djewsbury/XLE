@@ -262,8 +262,8 @@ namespace RenderCore { namespace LightingEngine
             shadowViewMins[2] = shadowNearPlane;
             // shadowViewMaxs[2] = shadowFarPlane;
 
-            result._orthSubProjections[f]._topLeftFront = shadowViewMins;
-            result._orthSubProjections[f]._bottomRightBack = shadowViewMaxs;
+            result._orthSubProjections[f]._leftTopFront = shadowViewMins;
+            result._orthSubProjections[f]._rightBottomBack = shadowViewMaxs;
 
             // allCascadesMins[0] = std::min(allCascadesMins[0], shadowViewMins[0]);
             // allCascadesMins[1] = std::min(allCascadesMins[1], shadowViewMins[1]);
@@ -294,6 +294,267 @@ namespace RenderCore { namespace LightingEngine
         return result;
     }
 
+    static std::optional<Float3> NearestPointNotInsideOrthoProjection(
+        const Float4x4& cameraWorldToClip,
+        const Float3* absFrustumCorners,
+        const Float4x4& orthoViewToWorld,
+        Float3 orthoLeftTopFront,
+        Float3 orthoRightBottomBack)
+    {
+        // We need to test the edges of ortho box against the camera frustum
+        // and the edges of the ortho box against the frustum
+
+        const unsigned edges[] = {
+            0, 1,
+            1, 2,
+            2, 3,
+            3, 0,
+
+            4, 5,
+            5, 6,
+            6, 7,
+            7, 4,
+
+            0, 4,
+            1, 5,
+            2, 6,
+            3, 7
+        };
+
+        auto orthoToClip = Combine(orthoViewToWorld, cameraWorldToClip);
+        auto orthoWorldToView = InvertOrthonormalTransform(orthoViewToWorld);
+
+        float closestDepth = FLT_MAX;
+        std::optional<Float4> closestPoint;
+
+        {
+            const Float4 clipSpaceCorners[] = {
+                orthoToClip * Expand(Float3{orthoLeftTopFront[0], orthoLeftTopFront[1], orthoLeftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoRightBottomBack[0], orthoLeftTopFront[1], orthoLeftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoLeftTopFront[0], orthoRightBottomBack[1], orthoLeftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoRightBottomBack[0], orthoRightBottomBack[1], orthoLeftTopFront[2]}, 1.0f),
+
+                orthoToClip * Expand(Float3{orthoLeftTopFront[0], orthoLeftTopFront[1], orthoRightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoRightBottomBack[0], orthoLeftTopFront[1], orthoRightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoLeftTopFront[0], orthoRightBottomBack[1], orthoRightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{orthoRightBottomBack[0], orthoRightBottomBack[1], orthoRightBottomBack[2]}, 1.0f)
+            };
+
+            for (unsigned e=0; e<dimof(edges); e+=2) {
+                auto start = clipSpaceCorners[edges[e+0]];
+                auto end = clipSpaceCorners[edges[e+1]];
+
+                for (unsigned ele=0; ele<2; ++ele) {
+                    float a = start[ele] / start[3], b = start[ele] / start[3]; 
+                    if ((a < -1.0f) != (b < -1.0f)) {
+                        auto alpha = (-1.0f - a) / (b - a);
+                        auto intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele] / intersection[3], -1.0f, 1e-4f));
+                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
+                            float depth = intersection[2];
+                            if (depth < closestDepth) {
+                                closestDepth = depth;
+                                closestPoint = intersection;
+                            }
+                        }
+                    }
+
+                    if ((a > 1.0f) != (b > 1.0f)) {
+                        auto alpha = (1.0f - a) / (b - a);
+                        auto intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele] / intersection[3], 1.0f, 1e-4f));
+                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
+                            float depth = intersection[2];
+                            if (depth < closestDepth) {
+                                closestDepth = depth;
+                                closestPoint = intersection;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        {
+            assert(orthoLeftTopFront[0] < orthoRightBottomBack[0]);
+            assert(orthoLeftTopFront[1] < orthoRightBottomBack[1]);
+            assert(orthoLeftTopFront[2] < orthoRightBottomBack[2]);
+
+            for (unsigned e=0; e<dimof(edges); e+=2) {
+                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+0]]);
+                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+1]]);
+
+                for (unsigned ele=0; ele<3; ++ele) {
+                    if ((start[ele] < orthoLeftTopFront[ele]) != (end[ele] < orthoLeftTopFront[ele])) {
+                        float alpha = (orthoLeftTopFront[ele] - start[ele]) / (end[ele] - start[ele]);
+                        Float3 intersection = start + (end-start)*alpha;
+                        if (intersection[(ele+1)%3] >= orthoLeftTopFront[(ele+1)%3] && intersection[(ele+1)%3] <= orthoRightBottomBack[(ele+1)%3]
+                            && intersection[(ele+2)%3] >= orthoLeftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= orthoRightBottomBack[(ele+2)%3]) {
+
+                            Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
+                            float depth = clipSpace[2];
+                            if (depth < closestDepth) {
+                                closestDepth = depth;
+                                closestPoint = clipSpace;
+                            }
+                        }
+                    } else if ((start[ele] > orthoRightBottomBack[ele]) != (end[ele] > orthoRightBottomBack[ele])) {
+                        float alpha = (orthoRightBottomBack[ele] - start[ele]) / (end[ele] - start[ele]);
+                        Float3 intersection = start + (end-start)*alpha;
+                        if (intersection[(ele+1)%3] >= orthoLeftTopFront[(ele+1)%3] && intersection[(ele+1)%3] <= orthoRightBottomBack[(ele+1)%3]
+                            && intersection[(ele+2)%3] >= orthoLeftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= orthoRightBottomBack[(ele+2)%3]) {
+
+                            Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
+                            float depth = clipSpace[2];
+                            if (depth < closestDepth) {
+                                closestDepth = depth;
+                                closestPoint = clipSpace;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (closestPoint.has_value())
+            return Truncate(Inverse(cameraWorldToClip) * closestPoint.value());
+
+        return {};
+    }
+
+    static OrthoProjections BuildResolutionNormalizedOrthogonalShadowProjections(
+        const Float3& negativeLightDirection,
+        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+        const SunSourceFrustumSettings& settings)
+    {
+        const UInt2 normalizedScreenResolution(2048, 2048);
+        const unsigned shadowMapResolution = 2048;
+        const unsigned shadowMapDepthResolution = (1 << 16) - 1;
+
+        Float3 cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
+        Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
+
+        // find the dimensions in view space for the focus point
+        auto worldToMainCamera = InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld);
+        auto viewSpaceFocusPoint = TransformPoint(worldToMainCamera, focusPoint);
+        auto clipSpaceFocus = mainSceneProjectionDesc._cameraToProjection * Expand(viewSpaceFocusPoint, 1.0f);
+        float w = clipSpaceFocus[3];
+        float viewSpaceDimsX = 1.0f / float(normalizedScreenResolution[0]) * 2.0f * w / mainSceneProjectionDesc._cameraToProjection(0,0);
+        float viewSpaceDimsY = 1.0f / float(normalizedScreenResolution[1]) * 2.0f * w / mainSceneProjectionDesc._cameraToProjection(1,1);
+        
+        // choose the minimum absolute value so ultra widescreen isn't disadvantaged
+        float viewSpacePixelDims = std::min(std::abs(viewSpaceDimsX), std::abs(viewSpaceDimsY));
+
+        // We want to project the first frustum so that one shadow map texel maps roughly onto one screen pixel
+        // (also, we want to keep the depth precision roughly inline with X & Y precision, so this will also impact
+        // the depth range for the shadow projection)
+
+        float projectionDimsXY = viewSpacePixelDims * shadowMapResolution;
+        float projectionDimsZ = viewSpacePixelDims * shadowMapDepthResolution;
+
+        Float3 shadowUp = ExtractRight_Cam(mainSceneProjectionDesc._cameraToWorld);     // we can control if we want the projection to roll here
+        auto lightViewToWorld = MakeCameraToWorld(-negativeLightDirection, shadowUp, focusPoint);
+        auto worldToLightView = InvertOrthonormalTransform(lightViewToWorld);
+
+        // The first projection must include the near plane of the camera, as well as the focus point
+        Float3 nearPlaneLightViewMins { FLT_MAX, FLT_MAX, FLT_MAX }, nearPlaneLightViewMaxs { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        Float3 focusLightView = TransformPoint(worldToLightView, focusPoint);
+
+        Float3 corners[8];
+        CalculateAbsFrustumCorners(corners, mainSceneProjectionDesc._worldToProjection, Techniques::GetDefaultClipSpaceType());
+        for (unsigned c=0; c<4; ++c) {
+            auto lightView = TransformPoint(worldToLightView, corners[c]);
+            nearPlaneLightViewMins[0] = std::min(nearPlaneLightViewMins[0], lightView[0]);
+            nearPlaneLightViewMins[1] = std::min(nearPlaneLightViewMins[1], lightView[1]);
+            nearPlaneLightViewMins[2] = std::min(nearPlaneLightViewMins[2], lightView[2]);
+            nearPlaneLightViewMaxs[0] = std::max(nearPlaneLightViewMaxs[0], lightView[0]);
+            nearPlaneLightViewMaxs[1] = std::max(nearPlaneLightViewMaxs[1], lightView[1]);
+            nearPlaneLightViewMaxs[2] = std::max(nearPlaneLightViewMaxs[2], lightView[2]);
+        }
+
+        IOrthoShadowProjections::OrthoSubProjection firstSubProjection;
+        if (focusLightView[0] > nearPlaneLightViewMaxs[0]) {
+            firstSubProjection._leftTopFront[0] = nearPlaneLightViewMins[0];
+            firstSubProjection._rightBottomBack[0] = nearPlaneLightViewMins[0] + projectionDimsXY;
+        } else {
+            firstSubProjection._leftTopFront[0] = nearPlaneLightViewMaxs[0];
+            firstSubProjection._rightBottomBack[0] = nearPlaneLightViewMaxs[0] - projectionDimsXY;
+        }
+
+        if (nearPlaneLightViewMins[1] < focusLightView[1] - 0.5f * projectionDimsXY) {
+            firstSubProjection._leftTopFront[1] = nearPlaneLightViewMins[1];
+            firstSubProjection._rightBottomBack[1] = nearPlaneLightViewMins[1] + projectionDimsXY;
+        } else if (nearPlaneLightViewMaxs[1] > focusLightView[1] + 0.5f * projectionDimsXY) {
+            firstSubProjection._leftTopFront[1] = nearPlaneLightViewMaxs[1] - projectionDimsXY;
+            firstSubProjection._rightBottomBack[1] = nearPlaneLightViewMins[1];
+        } else {
+            firstSubProjection._leftTopFront[1] = focusLightView[1] - 0.5f * projectionDimsXY;
+            firstSubProjection._rightBottomBack[1] = focusLightView[1] + 0.5f * projectionDimsXY;
+        }
+
+        // todo -- we should instead set the "near" part to just touch the view frustum, and clamp depth values 
+        // less than zero to just zero
+        const float depthRangeAmountBeyondFocus = 0.1f;
+        firstSubProjection._leftTopFront[2] = focusLightView[2] - (1.f - depthRangeAmountBeyondFocus) * projectionDimsZ;
+        firstSubProjection._rightBottomBack[2] = focusLightView[2] + depthRangeAmountBeyondFocus * projectionDimsZ;
+
+        if (firstSubProjection._leftTopFront[0] > firstSubProjection._rightBottomBack[0])
+            std::swap(firstSubProjection._leftTopFront[0], firstSubProjection._rightBottomBack[0]);
+        if (firstSubProjection._leftTopFront[1] > firstSubProjection._rightBottomBack[1])
+            std::swap(firstSubProjection._leftTopFront[1], firstSubProjection._rightBottomBack[1]);
+        if (firstSubProjection._leftTopFront[2] > firstSubProjection._rightBottomBack[2])
+            std::swap(firstSubProjection._leftTopFront[2], firstSubProjection._rightBottomBack[2]);
+
+        // Find the nearest part of the view frustum that is not included in the ortho projection
+        auto closestUncoveredPart = NearestPointNotInsideOrthoProjection(
+            mainSceneProjectionDesc._worldToProjection, corners,
+            lightViewToWorld,
+            firstSubProjection._leftTopFront,
+            firstSubProjection._rightBottomBack);
+
+        OrthoProjections result;
+        result._worldToView = worldToLightView;
+        result._normalProjCount = 1;
+        result._orthSubProjections[0] = firstSubProjection;
+
+        if (closestUncoveredPart.has_value()) {
+
+            // One face of the new frustum should on the plane that intersects "closestUncoveredPart",
+            // with the normal being the X axis of ortho space
+            //
+            // But we have freedom to shift the cascade box along the forward and up directions in ortho
+            // space. We'll do this by trying to keep aligned with the forward direction of the scene
+            // camera
+            //
+            // let's do this in ortho space, where it's going to be a lot easier
+
+            auto newProjectionDimsXY = 2.0f * projectionDimsXY;
+
+            auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
+            auto camPositionInOrtho = TransformPoint(worldToLightView, ExtractTranslation(mainSceneProjectionDesc._cameraToWorld));
+
+            auto basisPointInOrtho = TransformPoint(worldToLightView, closestUncoveredPart.value());
+
+            Float3 focusPositionInOrtho;
+            if (basisPointInOrtho[0] > camPositionInOrtho[0]) {
+                float focusY = basisPointInOrtho[0] + newProjectionDimsXY;
+                float alpha = (focusY - camPositionInOrtho[0]) / camForwardInOrtho[0];
+                focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
+            } else {
+                float focusY = basisPointInOrtho[0] - newProjectionDimsXY;
+                float alpha = (focusY - camPositionInOrtho[0]) / camForwardInOrtho[0];
+                focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
+            }
+
+            ++result._normalProjCount;
+            result._orthSubProjections[1]._leftTopFront = Float3{ focusPositionInOrtho[0] - newProjectionDimsXY, focusPositionInOrtho[1] - newProjectionDimsXY, firstSubProjection._leftTopFront[2] };
+            result._orthSubProjections[1]._rightBottomBack = Float3{ focusPositionInOrtho[0] + newProjectionDimsXY, focusPositionInOrtho[1] + newProjectionDimsXY, firstSubProjection._rightBottomBack[2] };
+
+        }
+
+        return result;
+    }
+
 	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings)
 	{
 		ShadowOperatorDesc result;
@@ -312,7 +573,7 @@ namespace RenderCore { namespace LightingEngine
 			result._enableNearCascade = false;
 			result._projectionMode = ShadowProjectionMode::Arbitrary;
 		} else {
-			result._normalProjCount = settings._maxFrustumCount;
+			result._normalProjCount = 2; // settings._maxFrustumCount;
 			// result._enableNearCascade = true;
 			result._projectionMode = ShadowProjectionMode::Ortho;
 		}
@@ -358,7 +619,8 @@ namespace RenderCore { namespace LightingEngine
                     MakeIteratorRange(t._worldToCamera, &t._worldToCamera[t._normalProjCount]),
                     MakeIteratorRange(t._cameraToProjection, &t._cameraToProjection[t._normalProjCount]));
         } else {
-            auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+            // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
             assert(t._normalProjCount);
             auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
             if (cascades) {

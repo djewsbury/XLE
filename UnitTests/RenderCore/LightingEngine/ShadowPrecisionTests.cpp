@@ -346,21 +346,21 @@ namespace UnitTests
 			auto subProjs = shadowProj->GetOrthoSubProjections();
 			for (const auto& subProj:subProjs) {
 				auto col = cols[(colorIterator++)%dimof(cols)];
-				auto topLeftFront = subProj._topLeftFront;
-				auto bottomRightBack = subProj._bottomRightBack;
+				auto leftTopFront = subProj._leftTopFront;
+				auto rightBottomBack = subProj._rightBottomBack;
 				// We have to reverse the Z values, because -Z is into the camera in camera space, but we represent near and far clip values as positives
-				topLeftFront[2] = -topLeftFront[2];
-				bottomRightBack[2] = -bottomRightBack[2];
+				leftTopFront[2] = -leftTopFront[2];
+				rightBottomBack[2] = -rightBottomBack[2];
 				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
 					overlayContext.get(), 
-					std::make_tuple(topLeftFront, bottomRightBack),
+					std::make_tuple(leftTopFront, rightBottomBack),
 					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
 					col, 0x2);
 
 				col.a = 196;
 				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
 					overlayContext.get(), 
-					std::make_tuple(topLeftFront, bottomRightBack),
+					std::make_tuple(leftTopFront, rightBottomBack),
 					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
 					col, 0x1);
 			}

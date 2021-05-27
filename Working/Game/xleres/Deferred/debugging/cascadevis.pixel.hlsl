@@ -53,9 +53,9 @@ void detailed_visualisation(
     ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
     CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
     outCascadeIndex = cascade.cascadeIndex;
-    outSampleDensity.x = ddx_fine(cascade.frustumCoordinates.x) + ddy_fine(cascade.frustumCoordinates.x);
-    outSampleDensity.y = ddx_fine(cascade.frustumCoordinates.y) + ddy_fine(cascade.frustumCoordinates.y);
-    outSampleDensity.z = ddx_fine(cascade.frustumCoordinates.z) + ddy_fine(cascade.frustumCoordinates.z);
+    outSampleDensity.x = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.x) + ddy_fine(cascade.frustumCoordinates.x));
+    outSampleDensity.y = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.y) + ddy_fine(cascade.frustumCoordinates.y));
+    outSampleDensity.z = 16384 * 0.5 * (ddx_fine(cascade.frustumCoordinates.z) + ddy_fine(cascade.frustumCoordinates.z));
     outSampleDensity.w = 1.0f;
 }
 

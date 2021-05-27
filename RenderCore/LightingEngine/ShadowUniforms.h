@@ -92,8 +92,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		class OrthoSubProjection
 		{
 		public:
-			Float3      _topLeftFront;
-			Float3      _bottomRightBack;
+			Float3      _leftTopFront;
+			Float3      _rightBottomBack;
 		};
 
 		ShadowProjectionMode	_mode = ShadowProjectionMode::Arbitrary;
@@ -199,13 +199,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
 			assert(projCount == _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
             for (unsigned c=0; c<projCount; ++c) {
-				_projections._orthoSub[c]._topLeftFront = projections[c]._topLeftFront;
-				_projections._orthoSub[c]._bottomRightBack = projections[c]._bottomRightBack;
+				_projections._orthoSub[c]._leftTopFront = projections[c]._leftTopFront;
+				_projections._orthoSub[c]._rightBottomBack = projections[c]._rightBottomBack;
 
 				auto projTransform = OrthogonalProjection(
-					projections[c]._topLeftFront[0], projections[c]._topLeftFront[1], 
-					projections[c]._bottomRightBack[0], projections[c]._bottomRightBack[1], 
-					projections[c]._topLeftFront[2], projections[c]._bottomRightBack[2],
+					projections[c]._leftTopFront[0], projections[c]._leftTopFront[1], 
+					projections[c]._rightBottomBack[0], projections[c]._rightBottomBack[1], 
+					projections[c]._leftTopFront[2], projections[c]._rightBottomBack[2],
 					GeometricCoordinateSpace::RightHanded, Techniques::GetDefaultClipSpaceType());
 				_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
 				_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);
@@ -224,7 +224,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::vector<OrthoSubProjection> result;
 			result.reserve(_projections._normalProjCount);
 			for (unsigned c=0; c<_projections._normalProjCount; ++c)
-				result.push_back(OrthoSubProjection{_projections._orthoSub[c]._topLeftFront, _projections._orthoSub[c]._bottomRightBack});
+				result.push_back(OrthoSubProjection{_projections._orthoSub[c]._leftTopFront, _projections._orthoSub[c]._rightBottomBack});
 			return result;
 		}
 

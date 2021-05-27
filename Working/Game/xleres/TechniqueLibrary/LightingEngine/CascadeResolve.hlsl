@@ -61,7 +61,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             // (except for the near cascade, which is focused on the near geometry)
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, 0), 1.f);
-            return CascadeAddress_Create(frustumCoordinates, frustumSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
+            return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
         #else
             //[branch] if (PtInFrustumZ(float4(basePosition, 1.f))) {
                 [unroll] for (uint c=0; c<GetShadowCascadeSubProjectionCount(); c++) {

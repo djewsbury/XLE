@@ -70,9 +70,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			for (unsigned c=0; c<desc._normalProjCount; ++c) {
 
 				auto projMatrix = OrthogonalProjection(
-					desc._orthoSub[c]._topLeftFront[0], desc._orthoSub[c]._topLeftFront[1], 
-					desc._orthoSub[c]._bottomRightBack[0], desc._orthoSub[c]._bottomRightBack[1], 
-					desc._orthoSub[c]._topLeftFront[2], desc._orthoSub[c]._bottomRightBack[2],
+					desc._orthoSub[c]._leftTopFront[0], desc._orthoSub[c]._leftTopFront[1], 
+					desc._orthoSub[c]._rightBottomBack[0], desc._orthoSub[c]._rightBottomBack[1], 
+					desc._orthoSub[c]._leftTopFront[2], desc._orthoSub[c]._rightBottomBack[2],
 					Techniques::GetDefaultClipSpaceType());
 				assert(IsOrthogonalProjection(projMatrix));
 
