@@ -232,11 +232,6 @@ namespace ToolsRig
         return result;
     }
 
-    static Internal::Vertex3D JustPositionVertex(Float3 pt)
-    {
-        return Internal::Vertex3D{ pt, Zero<Float3>(), Zero<Float2>(), Zero<Float4>() };
-    }
-
     std::vector<Internal::Vertex3D> BuildTriangleBasePyramid()
     {
         float a = 2.0f, b = 2.0f * 0.267949f, c = 2.0f * 0.732051f;
@@ -248,21 +243,26 @@ namespace ToolsRig
         Float3 apex = Float3(0.f, 1.0f, 0.f);
 
         std::vector<Internal::Vertex3D> result;
-        result.push_back(JustPositionVertex(basePts[0]));
-        result.push_back(JustPositionVertex(basePts[1]));
-        result.push_back(JustPositionVertex(basePts[2]));
+        result.push_back(Internal::Vertex3D{ basePts[0], Float3{0.f, -1.0f, 0.f}, Float2{ 0.5f + 0.5f * basePts[0][0], 0.5f + 0.5f * basePts[0][1] }, Expand(Float3(1.0f, 0.f, 0.f), 1.0f) });
+        result.push_back(Internal::Vertex3D{ basePts[1], Float3{0.f, -1.0f, 0.f}, Float2{ 0.5f + 0.5f * basePts[1][0], 0.5f + 0.5f * basePts[1][1] }, Expand(Float3(1.0f, 0.f, 0.f), 1.0f) });
+        result.push_back(Internal::Vertex3D{ basePts[2], Float3{0.f, -1.0f, 0.f}, Float2{ 0.5f + 0.5f * basePts[2][0], 0.5f + 0.5f * basePts[2][1] }, Expand(Float3(1.0f, 0.f, 0.f), 1.0f) });
 
-        result.push_back(JustPositionVertex(basePts[0]));
-        result.push_back(JustPositionVertex(apex));
-        result.push_back(JustPositionVertex(basePts[1]));
+        for (unsigned c=0; c<3; c++) {
+            Float3 position0 = basePts[c%dimof(basePts)];
+            Float3 position1 = basePts[(c+1)%dimof(basePts)];
 
-        result.push_back(JustPositionVertex(basePts[1]));
-        result.push_back(JustPositionVertex(apex));
-        result.push_back(JustPositionVertex(basePts[2]));
+            Float3 uAxis = position1 - position0;
+            Float3 vAxis = apex - 0.5f * (position0 + position1);
+            auto normal = Normalize(Cross(vAxis, uAxis));
+            uAxis = Normalize(uAxis);
 
-        result.push_back(JustPositionVertex(basePts[2]));
-        result.push_back(JustPositionVertex(apex));
-        result.push_back(JustPositionVertex(basePts[0]));
+            float u0 = c / 3.0f;
+            float u1 = (c+1) / 3.0f;
+            
+            result.push_back(Internal::Vertex3D{position0, normal, Float2{u0, 0.f}, Expand(uAxis, 1.0f)});
+            result.push_back(Internal::Vertex3D{apex, normal, Float2{0.5f * (u0 + u1), 1.f}, Expand(uAxis, 1.0f)});
+            result.push_back(Internal::Vertex3D{position1, normal, Float2{u1, 0.f}, Expand(uAxis, 1.0f)});
+        }
 
         return result;
     }
