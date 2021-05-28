@@ -5,47 +5,91 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "BasicLightingStateDelegate.h"
-#include "ShadowConfiguration.h"
-#include "../../RenderCore/LightingEngine/LightDesc.h"
-#include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
-#include "../../Math/Transformations.h"
-#include "../../Math/MathSerialization.h"
-#include "../../Utility/StringUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Conversion.h"
-#include "../../Utility/Meta/AccessorSerialize.h"
-#include "../../Utility/Meta/ClassAccessors.h"
+#include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
+#include "../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../Assets/Assets.h"
+#include "../Assets/AssetFutureContinuation.h"
+#include "../Math/Transformations.h"
+#include "../Math/MathSerialization.h"
+#include "../Utility/StringUtils.h"
+#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/PathUtils.h"
+#include "../Utility/Conversion.h"
+#include "../Utility/Meta/AccessorSerialize.h"
+#include "../Utility/Meta/ClassAccessors.h"
  
-// #include "../../SceneEngine/LightingParserStandardPlugin.h"     // (for stubbing out)
-
 namespace SceneEngine
 {
-    unsigned BasicLightingStateDelegate::GetShadowProjectionCount() const 
-    { 
-        return (unsigned)GetEnvSettings()._shadowProj.size(); 
-    }
 
-    auto BasicLightingStateDelegate::GetShadowProjectionDesc(
-        unsigned index, const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc) const 
-        -> RenderCore::LightingEngine::ShadowProjectionDesc
+    void BasicLightingStateDelegate::ConfigureLightScene(
+        const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
+        RenderCore::LightingEngine::ILightScene& lightScene) const
     {
-        return CalculateDefaultShadowCascades(
-            GetEnvSettings()._shadowProj[index]._light, 
-            GetEnvSettings()._shadowProj[index]._lightId,
-            mainSceneProjectionDesc,
-            GetEnvSettings()._shadowProj[index]._shadowFrustumSettings);
+        auto lightOperators = GetLightResolveOperators();
+
+        RenderCore::LightingEngine::ILightScene::LightSourceId lightIndexToId[_envSettings->_lights.size()];
+
+        unsigned lightIdx=0;
+        for (const auto& light:_envSettings->_lights) {
+            unsigned operatorId = 0;
+            for (; operatorId != lightOperators.size(); ++operatorId)
+                if (lightOperators[operatorId]._diffuseModel == light._diffuseModel && lightOperators[operatorId]._shape == light._shape)
+                    break;
+
+            assert(operatorId < lightOperators.size());
+            auto lightId = lightScene.CreateLightSource(operatorId);
+            lightIndexToId[lightIdx++] = lightId;
+
+            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
+            if (positional) {
+                ScaleRotationTranslationM srt { Expand(light._radii, 1.0f), light._orientation, light._position };
+                positional->SetLocalToWorld(AsFloat4x4(srt));
+            }
+
+            auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
+            if (emittance) {
+                emittance->SetBrightness(light._diffuseColor);
+                emittance->SetDiffuseWideningFactors({light._diffuseWideningMin, light._diffuseWideningMax});
+            }
+        }
+
+        auto shadowOperators = GetLightResolveOperators();
+
+        for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
+            unsigned operatorId = 0;
+            auto shadowId = RenderCore::LightingEngine::CreateShadowCascades(
+                lightScene, operatorId, lightIndexToId[shadow._lightIdx],
+                mainSceneCameraDesc, shadow._shadowFrustumSettings);
+        }
     }
 
-    unsigned BasicLightingStateDelegate::GetLightCount() const 
-    { 
-        return (unsigned)GetEnvSettings()._lights.size(); 
-    }
-
-    auto BasicLightingStateDelegate::GetLightDesc(unsigned index) const -> const RenderCore::LightingEngine::LightDesc&
+    std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> BasicLightingStateDelegate::GetLightResolveOperators() const
     {
-        return GetEnvSettings()._lights[index];
+        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
+        for (const auto& light:_envSettings->_lights) {
+            RenderCore::LightingEngine::LightSourceOperatorDesc opDesc { light._shape, light._diffuseModel };
+            auto h = opDesc.Hash();
+            auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
+            if (i == result.end())
+                result.push_back(opDesc);
+        }
+        return result;
+    }
+
+    std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> BasicLightingStateDelegate::GetShadowResolveOperators() const
+    {
+        std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> result;
+        std::vector<uint64_t> resultHashes;
+        for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
+            RenderCore::LightingEngine::ShadowOperatorDesc opDesc;
+            opDesc = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow._shadowFrustumSettings);
+            auto h = opDesc.Hash();
+            if (std::find(resultHashes.begin(), resultHashes.end(), h) == resultHashes.end()) {
+                result.push_back(opDesc);
+                resultHashes.push_back(h);
+            }
+        }
+        return result;
     }
 
     auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() const -> RenderCore::LightingEngine::EnvironmentalLightingDesc
@@ -81,9 +125,25 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    RenderCore::LightingEngine::LightDesc DefaultDominantLight()
+    LightDesc::LightDesc()
     {
-        RenderCore::LightingEngine::LightDesc light;
+        _orientation = Identity<Float3x3>();
+		_position = Float3{0, 1, 0};
+		_radii = Float2{0, 0};
+
+        _cutoffRange = 10.f;
+        _diffuseColor = Float3{1,1,1};
+		_specularColor = Float3{1,1,1};
+		_diffuseWideningMin = 1.0f;
+		_diffuseWideningMax = 1.0f;
+
+        _shape = RenderCore::LightingEngine::LightSourceShape::Directional;
+        _diffuseModel = RenderCore::LightingEngine::DiffuseModel::Disney;
+    }
+
+    LightDesc DefaultDominantLight()
+    {
+        LightDesc light;
         light._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
         light._position = Normalize(Float3(-0.15046243f, 0.97377890f, 0.17063323f));
         light._cutoffRange = 10000.f;
@@ -91,13 +151,12 @@ namespace SceneEngine
         light._specularColor = Float3(6.7647061f, 6.4117646f, 4.7647061f);
         light._diffuseWideningMax = .9f;
         light._diffuseWideningMin = 0.2f;
-        light._diffuseModel = 1;
         return light;
     }
 
-    RenderCore::LightingEngine::EnvironmentalLightingDesc DefaultEnvironmentalLightingDesc()
+    EnvironmentalLightingDesc DefaultEnvironmentalLightingDesc()
     {
-        RenderCore::LightingEngine::EnvironmentalLightingDesc result;
+        EnvironmentalLightingDesc result;
         result._ambientLight = Float3(0.f, 0.f, 0.f);
         result._skyTexture = "xleres/defaultresources/sky/samplesky2.dds";
         result._diffuseIBL = "xleres/defaultresources/sky/samplesky2_diffuse.dds";
@@ -116,11 +175,11 @@ namespace SceneEngine
         auto defLight = DefaultDominantLight();
         result._lights.push_back(defLight);
 
-        auto frustumSettings = DefaultShadowFrustumSettings();
-        result._shadowProj.push_back(EnvironmentSettings::ShadowProj { defLight, 0, frustumSettings });
+        auto frustumSettings = DefaultSunSourceFrustumSettings();
+        result._sunSourceShadowProj.push_back(EnvironmentSettings::SunSourceShadowProj { 0, frustumSettings });
 
         if (constant_expression<false>::result()) {
-            RenderCore::LightingEngine::LightDesc secondaryLight;
+            LightDesc secondaryLight;
             secondaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
             secondaryLight._position = Normalize(Float3(0.71622938f, 0.48972201f, -0.49717990f));
             secondaryLight._cutoffRange = 10000.f;
@@ -128,10 +187,9 @@ namespace SceneEngine
             secondaryLight._specularColor = Float3(5.f, 5.f, 5.f);
             secondaryLight._diffuseWideningMax = 2.f;
             secondaryLight._diffuseWideningMin = 0.5f;
-            secondaryLight._diffuseModel = 0;
             result._lights.push_back(secondaryLight);
 
-            RenderCore::LightingEngine::LightDesc tertiaryLight;
+            LightDesc tertiaryLight;
             tertiaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
             tertiaryLight._position = Normalize(Float3(-0.75507462f, -0.62672323f, 0.19256261f));
             tertiaryLight._cutoffRange = 10000.f;
@@ -139,14 +197,24 @@ namespace SceneEngine
             tertiaryLight._specularColor = Float3(3.5f, 3.5f, 3.5f);
             tertiaryLight._diffuseWideningMax = 2.f;
             tertiaryLight._diffuseWideningMin = 0.5f;
-            tertiaryLight._diffuseModel = 0;
             result._lights.push_back(tertiaryLight);
         }
 
         return std::move(result);
     }
 
-        static ParameterBox::ParameterNameHash ParamHash(const char name[])
+    SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
+    {
+        SunSourceFrustumSettings result;
+        result._maxFrustumCount = 3;
+        result._maxDistanceFromCamera = 2000.f;
+        result._focusDistance = 5.0f;
+        result._flags = 0;
+        result._textureSize = 2048;
+        return result;
+    }
+
+    static ParameterBox::ParameterNameHash ParamHash(const char name[])
     {
         return ParameterBox::MakeParameterNameHash(name);
     }
@@ -232,7 +300,7 @@ namespace SceneEngine
         return result;
     }
 
-    RenderCore::LightingEngine::LightDesc MakeLightDesc(const Utility::ParameterBox& props)
+    LightDesc MakeLightDesc(const Utility::ParameterBox& props)
     {
         static const auto diffuseHash = ParameterBox::MakeParameterNameHash("Diffuse");
         static const auto diffuseBrightnessHash = ParameterBox::MakeParameterNameHash("DiffuseBrightness");
@@ -241,28 +309,28 @@ namespace SceneEngine
         static const auto diffuseWideningMax = ParameterBox::MakeParameterNameHash("DiffuseWideningMax");
         static const auto specularHash = ParameterBox::MakeParameterNameHash("Specular");
         static const auto specularBrightnessHash = ParameterBox::MakeParameterNameHash("SpecularBrightness");
-        static const auto shadowResolveModel = ParameterBox::MakeParameterNameHash("ShadowResolveModel");
+        // static const auto shadowResolveModel = ParameterBox::MakeParameterNameHash("ShadowResolveModel");
         static const auto cutoffRange = ParameterBox::MakeParameterNameHash("CutoffRange");
         static const auto shape = ParameterBox::MakeParameterNameHash("Shape");
 
-        RenderCore::LightingEngine::LightDesc result;
+        LightDesc result;
         result._diffuseColor = props.GetParameter(diffuseBrightnessHash, 1.f) * AsFloat3Color(props.GetParameter(diffuseHash, ~0x0u));
         result._specularColor = props.GetParameter(specularBrightnessHash, 1.f) * AsFloat3Color(props.GetParameter(specularHash, ~0x0u));
 
         result._diffuseWideningMin = props.GetParameter(diffuseWideningMin, result._diffuseWideningMin);
         result._diffuseWideningMax = props.GetParameter(diffuseWideningMax, result._diffuseWideningMax);
-        result._diffuseModel = props.GetParameter(diffuseModel, 1);
         result._cutoffRange = props.GetParameter(cutoffRange, result._cutoffRange);
 
         result._shape = (RenderCore::LightingEngine::LightSourceShape)props.GetParameter(shape, unsigned(result._shape));
 
-        result._shadowResolveModel = props.GetParameter(shadowResolveModel, 0);
+        result._diffuseModel = (RenderCore::LightingEngine::DiffuseModel)props.GetParameter(diffuseModel, 1);
+        // auto shadowModel = props.GetParameter(shadowResolveModel, 0);
         return result;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static void ReadTransform(RenderCore::LightingEngine::LightDesc& light, const ParameterBox& props)
+    static void ReadTransform(LightDesc& light, const ParameterBox& props)
     {
         static const auto transformHash = ParameterBox::MakeParameterNameHash("Transform");
         auto transform = Transpose(props.GetParameter(transformHash, Identity<Float4x4>()));
@@ -308,7 +376,7 @@ namespace SceneEngine
 
         _environmentalLightingDesc = DefaultEnvironmentalLightingDesc();
 
-        std::vector<std::pair<uint64, DefaultShadowFrustumSettings>> shadowSettings;
+        std::vector<std::pair<uint64, SunSourceFrustumSettings>> shadowSettings;
         std::vector<uint64> lightNames;
         std::vector<std::pair<uint64, uint64>> lightFrustumLink;    // lightid to shadow settings map
 
@@ -356,10 +424,10 @@ namespace SceneEngine
                             hashName = Hash64(paramValue.value());
 
                         shadowSettings.push_back(
-                            std::make_pair(hashName, CreateFromParameters<DefaultShadowFrustumSettings>(params)));
+                            std::make_pair(hashName, CreateFromParameters<SunSourceFrustumSettings>(params)));
 
                         uint64 frustumLink = 0;
-                        paramValue = params.GetParameterAsString(Attribute::Name);
+                        paramValue = params.GetParameterAsString(Attribute::AttachedLight);
                         if (paramValue.has_value())
                             frustumLink = Hash64(paramValue.value());
                         lightFrustumLink.push_back(std::make_pair(frustumLink, hashName));
@@ -391,7 +459,7 @@ namespace SceneEngine
             // bind shadow settings (mapping via the light name parameter)
         for (unsigned c=0; c<lightFrustumLink.size(); ++c) {
             auto f = std::find_if(shadowSettings.cbegin(), shadowSettings.cend(), 
-                [&lightFrustumLink, c](const std::pair<uint64, DefaultShadowFrustumSettings>&i) { return i.first == lightFrustumLink[c].second; });
+                [&lightFrustumLink, c](const std::pair<uint64, SunSourceFrustumSettings>&i) { return i.first == lightFrustumLink[c].second; });
 
             auto l = std::find(lightNames.cbegin(), lightNames.cend(), lightFrustumLink[c].first);
 
@@ -399,8 +467,8 @@ namespace SceneEngine
                 auto lightIndex = std::distance(lightNames.cbegin(), l);
                 assert(lightIndex < ptrdiff_t(_lights.size()));
 
-                _shadowProj.push_back(
-                    EnvironmentSettings::ShadowProj { _lights[lightIndex], RenderCore::LightingEngine::LightId(lightIndex), f->second });
+                _sunSourceShadowProj.push_back(
+                    EnvironmentSettings::SunSourceShadowProj { unsigned(lightIndex), f->second });
             }
         }
     }

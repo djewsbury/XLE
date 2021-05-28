@@ -471,8 +471,7 @@ namespace UnitTests
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = lightScene.CreateLightSource(0);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
-				auto shadowProjectionId = lightScene.CreateShadowProjection(0, lightId);
-				LightingEngine::ConfigureShadowCascades(lightScene, shadowProjectionId, negativeLightDirection, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
+				auto shadowProjectionId = LightingEngine::CreateShadowCascades(lightScene, 0, lightId, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
 
 				// draw once from the "scene camera"
 				{

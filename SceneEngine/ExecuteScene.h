@@ -11,7 +11,7 @@ namespace RenderCore { namespace Techniques
 {
     class IPipelineAcceleratorPool;
     class SequencerContext;
-    struct PreregisteredAttachment;
+	class ParsingContext;
 }}
 
 namespace RenderCore { namespace LightingEngine 
@@ -19,7 +19,8 @@ namespace RenderCore { namespace LightingEngine
     class CompiledLightingTechnique;
     class LightingTechniqueInstance;
 }}
-namespace Assets { class IAsyncMarker; }
+namespace RenderCore { class IThreadContext; }
+namespace Assets { class IAsyncMarker; template<typename Type> class AssetFuture;}
 
 namespace SceneEngine
 {
@@ -39,7 +40,10 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique);
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
-		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
+
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::AssetFuture<RenderCore::LightingEngine::CompiledLightingTechnique>&);
 }

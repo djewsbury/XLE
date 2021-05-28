@@ -66,7 +66,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned				_normalProjCount = 1u;
 		bool					_enableNearCascade = false;
 
-		uint64_t Hash(uint64_t seed = DefaultSeed64);
+		uint64_t Hash(uint64_t seed = DefaultSeed64) const;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////

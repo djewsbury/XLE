@@ -23,7 +23,6 @@ namespace RenderCore { namespace Techniques {
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
-namespace SceneEngine { class LightDesc; class GlobalLightingDesc; }
 namespace RenderOverlays { class IOverlayContext; }
 namespace RenderOverlays { namespace DebuggingDisplay { struct Rect; }}
 namespace OSServices { class OnChangeCallback; }
@@ -64,7 +63,7 @@ namespace ToolsRig
         const std::pair<Float3, Float3>& boxIn);
 
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
-    void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&, UInt2 viewportDims);
+    void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
 
 	class VisEnvSettings
     {
@@ -143,7 +142,7 @@ namespace ToolsRig
     public:
         virtual void Set(const VisEnvSettings& envSettings) = 0;
 		virtual void Set(const std::shared_ptr<SceneEngine::IScene>& scene) = 0;
-        virtual const std::shared_ptr<VisCameraSettings>& GetCamera() = 0;
+        virtual std::shared_ptr<VisCameraSettings> GetCamera() = 0;
 		virtual void ResetCamera() = 0;
         virtual ~ISimpleSceneLayer() = default;
     };

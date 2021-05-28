@@ -86,6 +86,12 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
 	}
 
+	void StandardLightScene::Clear()
+	{
+		_lights.clear();
+		_shadowProjections.clear();
+	}
+
 	void* StandardLightScene::QueryInterface(uint64_t typeCode)
 	{
 		if (typeCode == typeid(StandardLightScene).hash_code())
@@ -97,6 +103,13 @@ namespace RenderCore { namespace LightingEngine
 	{}
 	StandardLightScene::~StandardLightScene()
 	{}
+
+	uint64_t LightSourceOperatorDesc::Hash(uint64_t seed) const
+	{
+		uint64_t h = 
+			(uint64_t(_shape) & 0xff) << 8ull | (uint64_t(_diffuseModel) & 0xff);
+		return HashCombine(h, seed);
+	}
 
 
 	ILightScene::~ILightScene() {}

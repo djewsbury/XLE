@@ -19,7 +19,7 @@
 #endif
 
 #if defined(SHADOW_GEN_SHADER)
-	#define ShadowProjectionBinding BIND_SEQ_B4
+	#define ShadowProjectionBinding BIND_SEQ_B5
 #else
 	#define ShadowProjectionBinding BIND_SHADOW_B0
 #endif

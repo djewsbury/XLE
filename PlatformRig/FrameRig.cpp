@@ -143,17 +143,19 @@ namespace PlatformRig
         }
         _pimpl->_prevFrameStartTime = startTime;
 
-		auto presentationTarget = context.BeginFrame(presChain);
-		auto presentationTargetDesc = presentationTarget->GetDesc();
-
-		context.GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
-
-            //  We must invalidate the cached state at least once per frame.
-            //  It appears that the driver might forget bound constant buffers
-            //  during the begin frame or present
-        context.InvalidateCachedState();
-
+        bool endAnnotatorFrame = false;
 		TRY {
+
+            auto presentationTarget = context.BeginFrame(presChain);
+            auto presentationTargetDesc = presentationTarget->GetDesc();
+
+            context.GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
+            endAnnotatorFrame = true;
+
+                //  We must invalidate the cached state at least once per frame.
+                //  It appears that the driver might forget bound constant buffers
+                //  during the begin frame or present
+            context.InvalidateCachedState();
 
 			// Bind the presentation target as the default output for the parser context
 			// (including setting the normalized width and height)
@@ -231,12 +233,14 @@ namespace PlatformRig
             if (_subFrameEvents)
                 _subFrameEvents->_onPostPresent.Invoke(context);
 
+            context.GetAnnotator().Frame_End();
+
 		} CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
-		} CATCH_END
-
-		context.GetAnnotator().Frame_End();
-
+		    if (endAnnotatorFrame)
+                context.GetAnnotator().Frame_End();
+	    } CATCH_END
+	
         if (_subFrameEvents)
             _subFrameEvents->_onFrameBarrier.Invoke();
 

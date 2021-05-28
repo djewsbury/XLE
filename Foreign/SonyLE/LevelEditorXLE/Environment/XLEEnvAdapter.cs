@@ -174,8 +174,8 @@ namespace LevelEditorXLE.Environment
                 case Command.AddShadowSettings:
                     ApplicationUtil.Insert(
                         DomNode.GetRoot(), this,
-                        new DomNode(Schema.envSettingsType.Type),
-                        "Add Environment Settings", null);
+                        new DomNode(Schema.shadowFrustumSettings.Type),
+                        "Add Shadow Settings", null);
                     break;
             }
         }

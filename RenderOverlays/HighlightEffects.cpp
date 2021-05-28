@@ -109,6 +109,7 @@ namespace RenderOverlays
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
 		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+        fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
 
         auto stencilSrv = rpi.GetInputAttachmentSRV(

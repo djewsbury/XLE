@@ -222,15 +222,12 @@ namespace ToolsRig
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& centre, float radius)
     {
-		std::vector<FrameBufferDesc::Attachment> attachments {
-			{ Techniques::AttachmentSemantics::ColorLDR, AsAttachmentDesc(parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(RenderCore::Techniques::AttachmentSemantics::ColorLDR)->GetDesc()) },
-			{ Techniques::AttachmentSemantics::MultisampleDepth, Format::D24_UNORM_S8_UINT }
-		};
+        Techniques::FrameBufferDescFragment fbDesc;
 		SubpassDesc mainPass;
 		mainPass.SetName("RenderCylinderHighlight");
-		mainPass.AppendOutput(0);
-		mainPass.AppendInput(1);
-		FrameBufferDesc fbDesc{ std::move(attachments), {mainPass} };
+		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
+		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+        fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
         auto depthSrv = rpi.GetInputAttachmentSRV(0, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
@@ -280,15 +277,12 @@ namespace ToolsRig
         const Float3& mins, const Float3& maxs,
 		RectangleHighlightType type)
     {
-		std::vector<FrameBufferDesc::Attachment> attachments {
-			{ Techniques::AttachmentSemantics::ColorLDR, AsAttachmentDesc(parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(RenderCore::Techniques::AttachmentSemantics::ColorLDR)->GetDesc()) },
-			{ Techniques::AttachmentSemantics::MultisampleDepth, Format::D24_UNORM_S8_UINT }
-		};
+        Techniques::FrameBufferDescFragment fbDesc;
 		SubpassDesc mainPass;
-		mainPass.SetName("RenderCylinderHighlight");
-		mainPass.AppendOutput(0);
-		mainPass.AppendInput(1);
-		FrameBufferDesc fbDesc{ std::move(attachments), {mainPass} };
+		mainPass.SetName("RenderRectangleHighlight");
+		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
+		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+        fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
         auto depthSrv = rpi.GetInputAttachmentSRV(0, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});

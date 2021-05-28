@@ -380,9 +380,7 @@ namespace GUILayer
             RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
-            Int2 viewportDims{ parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight };
-            
-            ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get(), viewportDims);
+            ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get());
             
             auto& immediateDrawables = *EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus()->_immediateDrawables;
             auto& pipelineAccelerators = *EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_pipelineAccelerators;

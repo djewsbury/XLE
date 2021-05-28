@@ -61,7 +61,7 @@ namespace Sample
 
 		auto scene = ToolsRig::MakeScene(pipelineAccelerators, visSettings);
 		modelLayer->Set(scene);
-		modelLayer->Set(ToolsRig::VisEnvSettings{});
+		modelLayer->Set(ToolsRig::VisEnvSettings{"rawos/defaultenv.txt:environment"});
 		AddSystem(modelLayer);
 
 		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();

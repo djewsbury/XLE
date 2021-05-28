@@ -11,12 +11,13 @@ namespace RenderCore { namespace LightingEngine
 	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
 	enum class DiffuseModel { Lambert, Disney };
 
-	struct LightSourceOperatorDesc
+	class LightSourceOperatorDesc
 	{
+	public:
 		LightSourceShape _shape = LightSourceShape::Directional;
 		DiffuseModel _diffuseModel = DiffuseModel::Disney;
 
-		uint64_t Hash(uint64_t seed = DefaultSeed64);
+		uint64_t Hash(uint64_t seed = DefaultSeed64) const;
 	};
 
 }}

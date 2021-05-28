@@ -350,7 +350,12 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		assert(!shadowGenerators.empty());
+		auto result = std::make_shared<::Assets::AssetFuture<ShadowPreparationOperators>>();
+		if (shadowGenerators.empty()) {
+			result->SetAsset(std::make_shared<ShadowPreparationOperators>(), {});
+			return result;
+		}
+
 		using PreparerFuture = ::Assets::FuturePtr<ICompiledShadowPreparer>;
 		std::vector<PreparerFuture> futures;
 		futures.reserve(shadowGenerators.size());
@@ -358,8 +363,6 @@ namespace RenderCore { namespace LightingEngine
 			futures.push_back(CreateCompiledShadowPreparer(shadowGenerators[operatorId], operatorId, pipelineAccelerators, delegatesBox, descSetLayout));
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
-
-		auto result = std::make_shared<::Assets::AssetFuture<ShadowPreparationOperators>>();
 		result->SetPollingFunction(
 			[futures=std::move(futures),shadowGeneratorCopy=std::move(shadowGeneratorCopy)](::Assets::AssetFuture<ShadowPreparationOperators>& future) -> bool {
 				using namespace ::Assets;
@@ -403,7 +406,7 @@ namespace RenderCore { namespace LightingEngine
 
 	inline uint32_t FloatBits(float i) { return *(uint32_t*)&i; }
 
-	uint64_t ShadowOperatorDesc::Hash(uint64_t seed)
+	uint64_t ShadowOperatorDesc::Hash(uint64_t seed) const
 	{
 		uint64_t h0 = 
 			  (GetBits<12>(_width)				<< 0ull)

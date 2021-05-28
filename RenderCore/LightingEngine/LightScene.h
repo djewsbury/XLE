@@ -26,6 +26,8 @@ namespace RenderCore { namespace LightingEngine
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) = 0;
 		virtual void DestroyShadowProjection(ShadowProjectionId) = 0;
 
+		virtual void Clear() = 0;
+
 		virtual void* QueryInterface(uint64_t) = 0;
 		virtual ~ILightScene();
 

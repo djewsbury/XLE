@@ -1618,7 +1618,7 @@ namespace ToolsRig
         RenderCore::IThreadContext& device, RenderCore::Techniques::ParsingContext& parsingContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
     {
-		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(device, *_pimpl->_immediateDrawables, *_pimpl->_fontRenderingManager);
+		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(device, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 		auto viewportDims = device.GetStateDesc()._viewportDimensions;
 		_pimpl->_screens->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ { 0,0 },{ int(viewportDims[0]), int(viewportDims[1]) } });
     }

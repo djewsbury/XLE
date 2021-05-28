@@ -8,14 +8,14 @@
 
 #include "EnvironmentSettings.h"
 #include "RetainedEntities.h"
-#include "../../RenderCore/LightingEngine/LightDesc.h"
+#include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #if defined(GUILAYER_SCENEENGINE)
 #include "../../SceneEngine/Ocean.h"
 #include "../../SceneEngine/DeepOceanSim.h"
 #include "../../SceneEngine/VolumetricFog.h"
 #include "../../SceneEngine/ShallowSurface.h"
 #endif
-#include "../../SceneEngine/ShadowConfiguration.h"
+#include "../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
@@ -41,7 +41,7 @@ namespace EntityInterface
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static void ReadTransform(RenderCore::LightingEngine::LightDesc& light, const ParameterBox& props)
+    static void ReadTransform(SceneEngine::LightDesc& light, const ParameterBox& props)
     {
         static const auto transformHash = ParameterBox::MakeParameterNameHash("Transform");
         auto transform = Transpose(props.GetParameter(transformHash, Identity<Float4x4>()));
@@ -111,7 +111,7 @@ namespace EntityInterface
                 if (props.GetParameter(Attribute::Flags, 0u) & (1<<0)) {
 
                         // look for frustum settings that match the "name" parameter
-                    auto frustumSettings = SceneEngine::DefaultShadowFrustumSettings{};
+                    auto frustumSettings = SceneEngine::DefaultSunSourceFrustumSettings();
                     auto fsRef = props.GetParameterAsString(Attribute::Name);
                     if (fsRef.has_value()) {
                         for (const auto& cid2 : obj._children) {
@@ -121,13 +121,13 @@ namespace EntityInterface
                             auto attachedLight = fsSetObj->_properties.GetParameterAsString(Attribute::AttachedLight);
                             if (!attachedLight.has_value() || XlCompareStringI(attachedLight.value().c_str(), fsRef.value().c_str())!=0) continue;
 
-                            frustumSettings = CreateFromParameters<SceneEngine::DefaultShadowFrustumSettings>(fsSetObj->_properties);
+                            frustumSettings = CreateFromParameters<RenderCore::LightingEngine::SunSourceFrustumSettings>(fsSetObj->_properties);
                             break;
                         }
                     }
 
-                    result._shadowProj.push_back(
-                        EnvironmentSettings::ShadowProj { light, unsigned(result._lights.size()), frustumSettings });
+                    result._sunSourceShadowProj.push_back(
+                        EnvironmentSettings::SunSourceShadowProj { unsigned(result._lights.size()), frustumSettings });
                 }
 
                 result._lights.push_back(light);

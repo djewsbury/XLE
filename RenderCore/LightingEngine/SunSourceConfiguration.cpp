@@ -603,13 +603,21 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-    void ConfigureShadowCascades(
+    ILightScene::ShadowProjectionId CreateShadowCascades(
         ILightScene& lightScene,
-        ILightScene::ShadowProjectionId shadowProjectionId,
-        const Float3& negativeLightDirection,
+        ILightScene::ShadowOperatorId shadowOperatorId,
+        ILightScene::LightSourceId associatedLightId,
         const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
         const SunSourceFrustumSettings& settings)
     {
+        auto* positionalLightSource = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
+        if (!positionalLightSource)
+            Throw(std::runtime_error("Could not find positional light source information in CreateShadowCascades for a sun light source"));
+
+        auto negativeLightDirection = Normalize(ExtractTranslation(positionalLightSource->GetLocalToWorld()));
+
+        auto shadowProjectionId = lightScene.CreateShadowProjection(shadowOperatorId, associatedLightId);
+
         if (settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades) {
             auto t = BuildBasicShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
             assert(t._normalProjCount);
@@ -646,6 +654,8 @@ namespace RenderCore { namespace LightingEngine
 		assert(result._shadowGeneratorDesc._projectionMode == result._projections._mode);
 
         return result;*/
+
+        return shadowProjectionId;
     }
 
     SunSourceFrustumSettings::SunSourceFrustumSettings()

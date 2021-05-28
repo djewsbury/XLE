@@ -17,6 +17,8 @@
 #include "../../SceneEngine/ExecuteScene.h"
 
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
+#include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
@@ -90,26 +92,21 @@ namespace GUILayer
         RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext)
     {
-		assert(parserContext._fbProps._outputWidth * parserContext._fbProps._outputHeight);
-		auto depthBufferDesc = RenderCore::CreateDesc(
-			RenderCore::BindFlag::DepthStencil | RenderCore::BindFlag::ShaderResource,
-			0, RenderCore::GPUAccess::Read | RenderCore::GPUAccess::Write,
-			RenderCore::TextureDesc::Plain2D(
-				parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight,
-				RenderCore::Format::D24_UNORM_S8_UINT, 1, 0, parserContext._fbProps._samples),
-			"SimpleSceneLayer-depth");
-		parserContext.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth, depthBufferDesc);
-        UInt2 viewportDims { parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight };
+        UInt2 viewportDims { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 
-		auto compiledTechnique = RenderCore::LightingEngine::CreateForwardLightingTechnique(
-			_pipelineAcceleratorPool.GetNativePtr(), _lightingApparatus.GetNativePtr(),
-			parserContext._preregisteredAttachments, parserContext._fbProps);
+        auto& stitchingContext = parserContext.GetFragmentStitchingContext();
+		EditorLightingParserDelegate lightingDelegate(_scene.GetNativePtr());
+		auto compiledTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+			_lightingApparatus.GetNativePtr(),
+            lightingDelegate.GetLightResolveOperators(),
+			lightingDelegate.GetShadowResolveOperators(),
+			stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+        auto compiledTechnique = SceneEngine::StallAndActualize(*compiledTechniqueFuture);
 
         {
-			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get(), UInt2{parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight});
-			
-			{
-				EditorLightingParserDelegate lightingDelegate(_scene.GetNativePtr());
+			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
+
+            {
 				lightingDelegate.PrepareEnvironmentalSettings(
 					clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
 
@@ -120,10 +117,14 @@ namespace GUILayer
 				for (;;) {
 					auto next = lightingIterator.GetNextStep();
 					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
-					assert(next._type == RenderCore::LightingEngine::StepType::ParseScene);
-					assert(next._pkt);
-					BuildDrawables(*_scene.get(), *_camera.get(), viewportDims, next._batch, *next._pkt);
+					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
+					    assert(next._pkt);
+					    BuildDrawables(*_scene.get(), *_camera.get(), viewportDims, next._batch, *next._pkt);
+                    }
 				}
+
+                auto& lightScene = RenderCore::LightingEngine::GetLightScene(*compiledTechnique);
+				lightScene.Clear();
 			}
 		}
 
@@ -187,7 +188,7 @@ namespace GUILayer
             *_envSettings = BuildEnvironmentSettings(objs, *settings);
         } else {
             _envSettings->_lights.clear();
-            _envSettings->_shadowProj.clear();
+            _envSettings->_sunSourceShadowProj.clear();
             _envSettings->_environmentalLightingDesc = SceneEngine::DefaultEnvironmentalLightingDesc();
         }
     }

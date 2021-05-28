@@ -42,6 +42,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) override;
 		virtual void DestroyShadowProjection(ShadowProjectionId) override;
+		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
 		StandardLightScene();
 		~StandardLightScene();
@@ -59,9 +60,6 @@ namespace RenderCore { namespace LightingEngine
 		Float3      _specularColor;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
-
-		unsigned    _diffuseModel;				// shift to light operator
-		unsigned    _shadowResolveModel;		// shift to shadowing operator
 
  		virtual void SetLocalToWorld(const Float4x4& localToWorld) override
 		{
@@ -105,9 +103,6 @@ namespace RenderCore { namespace LightingEngine
 
 			_diffuseWideningMin = 0.5f;
 			_diffuseWideningMax = 2.5f;
-			_diffuseModel = 1;
-
-			_shadowResolveModel = 0;
 		}
 	};
 

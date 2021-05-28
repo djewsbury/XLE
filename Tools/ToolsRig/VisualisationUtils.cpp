@@ -5,8 +5,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "VisualisationUtils.h"
-#include "../../RenderCore/LightingEngine/LightDesc.h"
-#include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../SceneEngine/RayVsModel.h"
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
@@ -17,6 +15,8 @@
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
+#include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
@@ -67,8 +67,9 @@ namespace ToolsRig
         return result;
     }
 
-	void ConfigureParsingContext(RenderCore::Techniques::ParsingContext& parsingContext, const VisCameraSettings& cam, UInt2 viewportDims)
+	void ConfigureParsingContext(RenderCore::Techniques::ParsingContext& parsingContext, const VisCameraSettings& cam)
 	{
+		UInt2 viewportDims { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
 		auto camDesc = ToolsRig::AsCameraDesc(cam);
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(camDesc, viewportDims);
 	}
@@ -123,7 +124,7 @@ namespace ToolsRig
         void Set(const VisEnvSettings& envSettings) override;
 		void Set(const std::shared_ptr<SceneEngine::IScene>& scene) override;
 
-		const std::shared_ptr<VisCameraSettings>& GetCamera() override;
+		std::shared_ptr<VisCameraSettings> GetCamera() override;
 		void ResetCamera() override;
 		virtual OverlayState GetOverlayState() const override;
 
@@ -137,27 +138,30 @@ namespace ToolsRig
         ~SimpleSceneLayer();
     protected:
 		std::shared_ptr<SceneEngine::IScene> _scene;
-
-		std::shared_ptr<SceneEngine::BasicLightingStateDelegate> _envSettings;
-		::Assets::FuturePtr<SceneEngine::BasicLightingStateDelegate> _envSettingsFuture;
-		
-		std::string _envSettingsErrorMessage;
-		unsigned _loadingIndicatorCounter = 0;
-
-		bool _preparingScene = false;
-		bool _preparingEnvSettings = false;
-		bool _preparingPipelineAccelerators = false;
-
 		std::shared_ptr<VisCameraSettings> _camera;
 
-		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
+		class PreparedScene
+		{
+		public:
+			std::shared_ptr<SceneEngine::BasicLightingStateDelegate> _envSettings;
+			std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
+			bool _pendingCameraReset = false;
+		};
+		::Assets::FuturePtr<PreparedScene> _preparedSceneFuture;
+
+		::Assets::FuturePtr<SceneEngine::BasicLightingStateDelegate> _envSettingsFuture;
+		void RebuildPreparedScene();
+		
+		unsigned _loadingIndicatorCounter = 0;
+
 		uint64_t _lightingTechniqueTargetsHash = 0ull;
+		std::vector<RenderCore::Techniques::PreregisteredAttachment> _lightingTechniqueTargets;
+		RenderCore::FrameBufferProperties _lightingTechniqueFBProps;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
-		std::shared_ptr<::Assets::IAsyncMarker> _pendingPipelines;
     };
 
 	static ::Assets::AssetState GetAsyncSceneState(SceneEngine::IScene& scene)
@@ -237,80 +241,47 @@ namespace ToolsRig
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         using namespace SceneEngine;
-
-		if (_preparingEnvSettings) {
-			auto newActualized = _envSettingsFuture->TryActualize();
-			if (newActualized) {
-				_envSettings = newActualized;
-				_envSettingsFuture = nullptr;
-				_envSettingsErrorMessage = {};
-				_preparingEnvSettings = false;
-			} else if (_envSettingsFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
-				_envSettingsErrorMessage = ::Assets::AsString(_envSettingsFuture->GetActualizationLog());
-				_envSettings = nullptr;
-				_envSettingsFuture = nullptr;
-				_preparingEnvSettings = false;
-			}
-		}
-
-		assert(_compiledLightingTechnique);
 		#if defined(_DEBUG)
-			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(parserContext._preregisteredAttachments), parserContext._fbProps);
+			auto& stitchingContext = parserContext.GetFragmentStitchingContext();
+			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			assert(_lightingTechniqueTargetsHash == validationHash);		// If you get here, it means that this render target configuration doesn't match what was last used with OnRenderTargetUpdate()
 		#endif
 
-		// _pimpl->_envSettings is our SceneEngine::BasicLightingStateDelegate
+		PreparedScene* actualizedScene = nullptr;
+		if (_preparedSceneFuture)
+			actualizedScene = _preparedSceneFuture->TryActualize().get();
 
-		if (_preparingScene && !_preparingEnvSettings) {
-			auto stillPending = GetAsyncSceneState(*_scene) == ::Assets::AssetState::Pending;
-			if (!stillPending) {
-				_preparingScene = false;
+		if (actualizedScene) {
+
+			// Have to do camera reset here after load to avoid therading issues
+			if (actualizedScene->_pendingCameraReset) {
 				ResetCamera();
-
-				_preparingPipelineAccelerators = true;
-				_pendingPipelines = SceneEngine::PrepareResources(
-					*_pipelineAccelerators, *_compiledLightingTechnique, *_scene);
+				actualizedScene->_pendingCameraReset = false;
 			}
-		}
-
-		if (_preparingPipelineAccelerators) {
-			if (!_pendingPipelines || _pendingPipelines->GetAssetState() != ::Assets::AssetState::Pending) {
-				_preparingPipelineAccelerators = false;
-				_pendingPipelines.reset();
-			}
-		}
-
-		assert(parserContext._fbProps._outputWidth * parserContext._fbProps._outputHeight);
-		auto depthBufferDesc = RenderCore::CreateDesc(
-			RenderCore::BindFlag::DepthStencil | RenderCore::BindFlag::ShaderResource,
-			0, RenderCore::GPUAccess::Read | RenderCore::GPUAccess::Write,
-			RenderCore::TextureDesc::Plain2D(
-				parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight,
-				RenderCore::Format::D24_UNORM_S8_UINT, 1, 0, parserContext._fbProps._samples),
-			"SimpleSceneLayer-depth");
-		parserContext.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth, depthBufferDesc);
-
-		if (!_preparingEnvSettings && !_preparingScene && !_preparingPipelineAccelerators) {
 
 			auto cam = AsCameraDesc(*_camera);
 			SceneEngine::SceneView sceneView {
 				SceneEngine::SceneView::Type::Normal,
-				RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight})
+				RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height})
 			};
 			
 			parserContext.GetProjectionDesc() = sceneView._projection;
 			{
 				auto lightingIterator = SceneEngine::BeginLightingTechnique(
 					threadContext, parserContext, *_pipelineAccelerators,
-					*_envSettings, *_compiledLightingTechnique);
+					*actualizedScene->_envSettings, *actualizedScene->_compiledLightingTechnique);
 
 				for (;;) {
 					auto next = lightingIterator.GetNextStep();
 					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
-					assert(next._type == RenderCore::LightingEngine::StepType::ParseScene);
-					assert(next._pkt);
-					_scene->ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
+					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
+						assert(next._pkt);
+						_scene->ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
+					}
 				}
+
+				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
+				lightScene.Clear();
 			}
 
 			// Draw debugging overlays -- 
@@ -321,9 +292,9 @@ namespace ToolsRig
 		} else {
 			// Draw a loading indicator, 
 			using namespace RenderOverlays::DebuggingDisplay;
-			RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_immediateDrawables, *_fontRenderingManager);
+			RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_immediateDrawables, _fontRenderingManager.get());
 			overlays.CaptureState();
-			auto viewportDims = Coord2(parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight);
+			auto viewportDims = Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 			Rect rect { Coord2{0, 0}, viewportDims };
 			RenderLoadingIndicator(overlays, rect, _loadingIndicatorCounter++);
 			overlays.ReleaseState();
@@ -332,13 +303,13 @@ namespace ToolsRig
 			_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
 		}
 
-		if (!_envSettingsErrorMessage.empty()) {
+		/*if (!_envSettingsErrorMessage.empty()) {
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
 			if (!_envSettingsErrorMessage.empty()) {
 				assert(0);
 				// SceneEngine::DrawString(threadContext, RenderOverlays::GetDefaultFont(), _envSettingsErrorMessage);
 			}
-		}
+		}*/
     }
 
 	void SimpleSceneLayer::OnRenderTargetUpdate(
@@ -346,35 +317,108 @@ namespace ToolsRig
 		const RenderCore::FrameBufferProperties& fbProps)
 	{
 		assert(_pipelineAccelerators && _lightingApparatus);
-		auto lightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(_lightingApparatus, preregAttachments, fbProps);
-		lightingTechniqueFuture->StallWhilePending();
-		_compiledLightingTechnique = lightingTechniqueFuture->Actualize();
 		_lightingTechniqueTargetsHash = RenderCore::Techniques::HashPreregisteredAttachments(preregAttachments, fbProps);
+		_lightingTechniqueTargets = {preregAttachments.begin(), preregAttachments.end()};
+		_lightingTechniqueFBProps = fbProps;
+		RebuildPreparedScene();
+	}
+
+	void SimpleSceneLayer::RebuildPreparedScene()
+	{
+		if (!_envSettingsFuture || _lightingTechniqueTargets.empty() || !_scene) {
+			_preparedSceneFuture = nullptr;
+			return;
+		}
+
+		//
+		// envSettings -> compiledLightingTechnique -> preparedShaders -> PreparedScene
+		//                SceneEngine::IScene ----------------^
+		//
+		_preparedSceneFuture = std::make_shared<::Assets::AssetFuture<PreparedScene>>("simple-scene-layer");
+
+		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture<PreparedScene>(
+			*_preparedSceneFuture,
+			[targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, scene = _scene, pipelineAccelerators = _pipelineAccelerators](
+				::Assets::AssetFuture<PreparedScene>& thatFuture, 
+				std::shared_ptr<SceneEngine::BasicLightingStateDelegate> envSettings) {
+
+				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+					lightingApparatus,
+					envSettings->GetLightResolveOperators(),
+					envSettings->GetShadowResolveOperators(),
+					targets, fbProps);
+				
+				thatFuture.SetPollingFunction(
+					[compiledLightingTechniqueFuture, scene, pipelineAccelerators, envSettings](::Assets::AssetFuture<PreparedScene>& thatFuture) {
+						auto state = GetAsyncSceneState(*scene);
+						if (state == ::Assets::AssetState::Pending) return true;
+						if (state == ::Assets::AssetState::Invalid) {
+							thatFuture.SetInvalidAsset({}, ::Assets::AsBlob("Scene is invalid"));
+							return false;
+						}
+						
+						::Assets::Blob queriedLog;
+						::Assets::DependencyValidation queriedDepVal;
+						std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> actualizedLightingTechnique;
+						state = compiledLightingTechniqueFuture->CheckStatusBkgrnd(actualizedLightingTechnique, queriedDepVal, queriedLog);
+						if (state == ::Assets::AssetState::Pending) return true;
+						if (state == ::Assets::AssetState::Invalid) {
+							thatFuture.SetInvalidAsset(queriedDepVal, queriedLog);
+							return false;
+						}
+
+						auto preparedScene = std::make_shared<PreparedScene>();
+						preparedScene->_envSettings = envSettings;
+						preparedScene->_compiledLightingTechnique = actualizedLightingTechnique;
+						preparedScene->_pendingCameraReset = true;
+
+						auto pendingResources = SceneEngine::PrepareResources(
+							*RenderCore::Techniques::GetThreadContext(),
+							*pipelineAccelerators, *actualizedLightingTechnique, *scene);
+						if (pendingResources) {
+							thatFuture.SetPollingFunction(
+								[pendingResources, preparedScene](::Assets::AssetFuture<PreparedScene>& thatFuture) {
+									auto state = pendingResources->GetAssetState();
+									if (state == ::Assets::AssetState::Pending) return true;
+									if (state == ::Assets::AssetState::Invalid) {
+										thatFuture.SetInvalidAsset({}, ::Assets::AsBlob("Invalid asset during prepare resources"));
+									} else {
+										thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
+									}
+									return false;
+								});
+						} else {
+							thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
+						}
+						return false;
+					});
+			});
+
 	}
 
     void SimpleSceneLayer::Set(const VisEnvSettings& envSettings)
     {
 		_envSettingsFuture = std::make_shared<::Assets::AssetFuture<SceneEngine::BasicLightingStateDelegate>>("VisualizationEnvironment");
 		::Assets::AutoConstructToFuture(*_envSettingsFuture, envSettings._envConfigFile);
-		_preparingEnvSettings = true;
+		RebuildPreparedScene();
     }
 
 	void SimpleSceneLayer::Set(const std::shared_ptr<SceneEngine::IScene>& scene)
 	{
 		_scene = scene;
-		_preparingScene = true;
+		RebuildPreparedScene();
 	}
 
-	const std::shared_ptr<VisCameraSettings>& SimpleSceneLayer::GetCamera()
+	std::shared_ptr<VisCameraSettings> SimpleSceneLayer::GetCamera()
 	{
 		return _camera;
 	}
 
 	void SimpleSceneLayer::ResetCamera()
 	{
-		auto* scene = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
-		if (scene) {
-			auto boundingBox = scene->GetBoundingBox();
+		auto* visContentScene = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
+		if (visContentScene) {
+			auto boundingBox = visContentScene->GetBoundingBox();
 			*_camera = ToolsRig::AlignCameraToBoundingBox(_camera->_verticalFieldOfView, boundingBox);
 		}
 	}
@@ -383,10 +427,7 @@ namespace ToolsRig
 	{
 		RefreshMode refreshMode = RefreshMode::EventBased;
 
-		if (!_envSettings && _envSettingsFuture->GetAssetState() == ::Assets::AssetState::Pending)
-			return { RefreshMode::RegularAnimation };
-
-		if (_preparingEnvSettings || _preparingScene || _preparingPipelineAccelerators)
+		if (_preparedSceneFuture && _preparedSceneFuture->GetAssetState() == ::Assets::AssetState::Pending)
 			return { RefreshMode::RegularAnimation };
 
 		// Need regular updates if the scene future hasn't been fully loaded yet
@@ -575,7 +616,7 @@ namespace ToolsRig
 
 		if (!_pimpl->_scene || !_pimpl->_cameraSettings || GetAsyncSceneState(*_pimpl->_scene) == ::Assets::AssetState::Pending) return;
 
-		UInt2 viewportDims(parserContext._fbProps._outputWidth, parserContext._fbProps._outputHeight);
+		UInt2 viewportDims(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 		assert(viewportDims[0] && viewportDims[1]);
 		RenderCore::Techniques::SequencerContext sequencerTechnique;
 		auto cam = AsCameraDesc(*_pimpl->_cameraSettings);
@@ -590,15 +631,12 @@ namespace ToolsRig
 
 		if (_pimpl->_settings._drawWireframe || _pimpl->_settings._drawNormals || _pimpl->_settings._skeletonMode || doColorByMaterial) {
 			
-			std::vector<FrameBufferDesc::Attachment> attachments {
-				{ Techniques::AttachmentSemantics::ColorLDR },
-				{ Techniques::AttachmentSemantics::MultisampleDepth }
-			};
+			Techniques::FrameBufferDescFragment fbDesc;
 			SubpassDesc mainPass;
 			mainPass.SetName("VisualisationOverlay");
-			mainPass.AppendOutput(0);
-			mainPass.SetDepthStencil(1, LoadStore::Retain_ClearStencil);		// ensure stencil is cleared (but ok to keep depth)
-			FrameBufferDesc fbDesc{ std::move(attachments), std::vector<SubpassDesc>{mainPass}, parserContext._fbProps };
+			mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
+			mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_ClearStencil));		// ensure stencil is cleared (but ok to keep depth)
+			fbDesc.AddSubpass(std::move(mainPass));
 			Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
 			static auto visWireframeDelegate =
@@ -641,7 +679,7 @@ namespace ToolsRig
 				auto* visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 				if (visContent) {
 					CATCH_ASSETS_BEGIN
-						RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, *_pimpl->_fontRenderingManager);
+						RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 						visContent->RenderSkeleton(
 							overlays, parserContext,
 							_pimpl->_settings._skeletonMode == 2);
@@ -696,7 +734,7 @@ namespace ToolsRig
 			CATCH_ASSETS_BEGIN
 
 				using namespace RenderOverlays::DebuggingDisplay;
-				RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, *_pimpl->_fontRenderingManager);
+				RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 				overlays.CaptureState();
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
 				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, *_pimpl->_scene);

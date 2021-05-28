@@ -4,11 +4,11 @@
 
 #include "ExecuteScene.h"
 #include "../RenderCore/LightingEngine/LightingEngine.h"
-#include "../RenderCore/LightingEngine/LightDesc.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
+#include "../Assets/AssetFuture.h"
 
 namespace SceneEngine
 {
@@ -32,24 +32,37 @@ namespace SceneEngine
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
-		RenderCore::LightingEngine::SceneLightingDesc lightingDesc;
-		lightingDesc._env = lightingState.GetEnvironmentalLightingDesc();
-		auto lightCount = lightingState.GetLightCount();
-		auto shadowProjCount = lightingState.GetShadowProjectionCount();
-		lightingDesc._lights.reserve(lightCount);
-		lightingDesc._shadowProjections.reserve(shadowProjCount);
-		for (unsigned c=0; c<lightCount; ++c) lightingDesc._lights.push_back(lightingState.GetLightDesc(c));
-		for (unsigned c=0; c<shadowProjCount; ++c) lightingDesc._shadowProjections.push_back(lightingState.GetShadowProjectionDesc(c, parsingContext.GetProjectionDesc()));
-		return RenderCore::LightingEngine::LightingTechniqueInstance{
-			threadContext, parsingContext, pipelineAccelerators,
-			lightingDesc, compiledTechnique};
+		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
+		lightingState.ConfigureLightScene(parsingContext.GetProjectionDesc(), lightScene);
+		return RenderCore::LightingEngine::LightingTechniqueInstance { threadContext, parsingContext, pipelineAccelerators, compiledTechnique };
 	}
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
-		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene)
 	{
-		return nullptr;
+		using namespace RenderCore;
+		LightingEngine::LightingTechniqueInstance prepareLightingIterator(pipelineAccelerators, compiledTechnique);
+
+		for (;;) {
+			auto next = prepareLightingIterator.GetNextStep();
+			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
+			if (next._type == LightingEngine::StepType::DrawSky) continue;
+			assert(next._type == LightingEngine::StepType::ParseScene);
+			assert(next._pkt);
+
+			SceneView view { SceneView::Type::PrepareResources };
+			scene.ExecuteScene(threadContext, ExecuteSceneContext{view, Techniques::BatchFilter::General, next._pkt});
+		}
+
+		return prepareLightingIterator.GetResourcePreparationMarker();
+	}
+
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::AssetFuture<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
+	{
+		future.StallWhilePending();
+		return future.Actualize();
 	}
 }

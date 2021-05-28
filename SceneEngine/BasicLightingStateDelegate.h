@@ -6,9 +6,8 @@
 
 #pragma once
 
-#include "ShadowConfiguration.h"
 #include "IScene.h"
-#include "../RenderCore/LightingEngine/LightDesc.h"
+#include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../SceneEngine/Tonemap.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
@@ -26,6 +25,8 @@ namespace Assets { class DirectorySearchRules; }
 
 namespace SceneEngine
 {
+    using SunSourceFrustumSettings = RenderCore::LightingEngine::SunSourceFrustumSettings;
+
     /// <summary>Describes a lighting environment</summary>
     /// This contains all of the settings and properties required
     /// for constructing a basic lighting environment.
@@ -34,18 +35,17 @@ namespace SceneEngine
     class EnvironmentSettings
     {
     public:
-        std::vector<RenderCore::LightingEngine::LightDesc> _lights;
-        RenderCore::LightingEngine::EnvironmentalLightingDesc _environmentalLightingDesc;
+        std::vector<LightDesc> _lights;
+        EnvironmentalLightingDesc _environmentalLightingDesc;
         ToneMapSettings _toneMapSettings;
 
-        class ShadowProj
+        class SunSourceShadowProj
         {
         public:
-            RenderCore::LightingEngine::LightDesc _light;
-            RenderCore::LightingEngine::LightId _lightId;
-            DefaultShadowFrustumSettings _shadowFrustumSettings;
+            unsigned _lightIdx;
+            SunSourceFrustumSettings _shadowFrustumSettings;
         };
-        std::vector<ShadowProj> _shadowProj;
+        std::vector<SunSourceShadowProj> _sunSourceShadowProj;
 
 #if 0
         VolumetricFogConfig::Renderer _volFogRenderer;
@@ -73,16 +73,12 @@ namespace SceneEngine
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
     public:
-        unsigned    GetShadowProjectionCount() const;
-        auto        GetShadowProjectionDesc(
-            ShadowProjIndex index, 
-            const ProjectionDesc& mainSceneProj) const
-            -> RenderCore::LightingEngine::ShadowProjectionDesc;
+        void        ConfigureLightScene(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) const override;
+        auto        GetEnvironmentalLightingDesc() const -> EnvironmentalLightingDesc override;
+        auto        GetToneMapSettings() const -> ToneMapSettings override;
 
-        unsigned    GetLightCount() const;
-        auto        GetLightDesc(unsigned index) const -> const RenderCore::LightingEngine::LightDesc&;
-        auto        GetEnvironmentalLightingDesc() const -> RenderCore::LightingEngine::EnvironmentalLightingDesc;
-        auto        GetToneMapSettings() const -> ToneMapSettings;
+        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() const override;
+		std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() const override;
 
 		BasicLightingStateDelegate(
 			const std::shared_ptr<EnvironmentSettings>& envSettings);
@@ -99,11 +95,12 @@ namespace SceneEngine
 		std::shared_ptr<EnvironmentSettings>	_envSettings;
     };
 
-    RenderCore::LightingEngine::LightDesc                   DefaultDominantLight();
-    RenderCore::LightingEngine::EnvironmentalLightingDesc   DefaultEnvironmentalLightingDesc();
-    EnvironmentSettings                                     DefaultEnvironmentSettings();
+    LightDesc                   DefaultDominantLight();
+    EnvironmentalLightingDesc   DefaultEnvironmentalLightingDesc();
+    EnvironmentSettings         DefaultEnvironmentSettings();
+    SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
 
-    RenderCore::LightingEngine::EnvironmentalLightingDesc MakeEnvironmentalLightingDesc(const ParameterBox& props);
-    RenderCore::LightingEngine::LightDesc MakeLightDesc(const Utility::ParameterBox& props);
+    EnvironmentalLightingDesc MakeEnvironmentalLightingDesc(const ParameterBox& props);
+    LightDesc MakeLightDesc(const Utility::ParameterBox& props);
 }
 

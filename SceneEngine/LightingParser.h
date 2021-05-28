@@ -22,14 +22,6 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool; 
 }}
 
-namespace RenderCore { namespace LightingEngine 
-{ 
-    class LightDesc;
-    class SceneLightingDesc;
-    class ShadowProjectionDesc;
-    class ShadowGeneratorDesc;
-}}
-
 namespace RenderCore { class IThreadContext; class AttachmentDesc; }
 
 namespace Assets { class IAsyncMarker; }

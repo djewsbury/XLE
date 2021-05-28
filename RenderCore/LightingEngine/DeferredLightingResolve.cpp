@@ -391,7 +391,7 @@ namespace RenderCore { namespace LightingEngine
 				// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
 				// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
 				// generated for a light that doesn't exist
-				assert(shadowIterator != preparedShadows.end() || shadowIterator->first > lightScene._lights[l]._id);
+				assert(shadowIterator == preparedShadows.end() || shadowIterator->first > lightScene._lights[l]._id);
 				pipeline = &lightResolveOperators._pipelines[i._operatorId];
 			}
 			

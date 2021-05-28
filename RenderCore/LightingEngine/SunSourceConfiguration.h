@@ -54,10 +54,10 @@ namespace RenderCore { namespace LightingEngine
     /// <param name="mainSceneCameraDesc">This is the projection desc used when rendering the 
     /// the main scene from this camera (it's the project desc for the shadows render). This
     /// is required for adapting the shadows projection to the main scene camera.</param>
-    void ConfigureShadowCascades(
+    ILightScene::ShadowProjectionId CreateShadowCascades(
         ILightScene& lightScene,
-        ILightScene::ShadowProjectionId shadowProjectionId,
-        const Float3& negativeLightDirection,
+        ILightScene::ShadowOperatorId shadowOperatorId,
+        ILightScene::LightSourceId associatedLightId,
         const Techniques::ProjectionDesc& mainSceneCameraDesc,
         const SunSourceFrustumSettings& settings);
 
