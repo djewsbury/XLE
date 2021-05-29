@@ -425,8 +425,9 @@ namespace UnitTests
 		sceneCamera._farClip = 150.f;
 		sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
 
-		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
-//		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
+ 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
+// 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
+//		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
 
 		testHelper->BeginFrameCapture();
 
@@ -435,7 +436,7 @@ namespace UnitTests
 			sunSourceFrustumSettings._flags = 0;
 			sunSourceFrustumSettings._maxDistanceFromCamera = 100.f;
 			sunSourceFrustumSettings._focusDistance = ExtractTranslation(sceneCamera._cameraToWorld)[1] / -ExtractForward_Cam(sceneCamera._cameraToWorld)[1];
-			sunSourceFrustumSettings._maxFrustumCount = 4;
+			sunSourceFrustumSettings._maxFrustumCount = 5;
 			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
 			LightingOperatorsPipelineLayout pipelineLayout(*testHelper);

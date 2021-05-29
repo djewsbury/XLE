@@ -52,7 +52,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		SharedPkt				_cbSource;
 
 		void InitialiseConstants(
-			const MultiProjection<MaxShadowTexturesPerLight>&);
+			const MultiProjection<MaxShadowTexturesPerLight>&,
+			unsigned operatorMaxFrustumCount);
 
 		PreparedShadowFrustum();
 		PreparedShadowFrustum(PreparedShadowFrustum&& moveFrom) never_throws;
@@ -177,7 +178,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(!worldToCamera.empty());
 			assert(worldToCamera.size() == cameraToProjection.size());
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, worldToCamera.size());
-            assert(projCount == _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
+            assert(projCount <= _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
 			for (unsigned c=0; c<projCount; ++c) {
 				_projections._fullProj[c]._worldToProjTransform = Combine(worldToCamera[c], cameraToProjection[c]);
 				_projections._minimalProjection[c] = ExtractMinimalProjection(cameraToProjection[c]);
@@ -197,7 +198,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(projections.size() < Internal::MaxShadowTexturesPerLight);
 			assert(!projections.empty());
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
-			assert(projCount == _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
+			assert(projCount <= _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
             for (unsigned c=0; c<projCount; ++c) {
 				_projections._orthoSub[c]._leftTopFront = projections[c]._leftTopFront;
 				_projections._orthoSub[c]._rightBottomBack = projections[c]._rightBottomBack;

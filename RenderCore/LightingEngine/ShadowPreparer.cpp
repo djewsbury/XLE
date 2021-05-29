@@ -75,6 +75,7 @@ namespace RenderCore { namespace LightingEngine
 		DescriptorSetSignature _descSetSig;
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _descSetSlotBindings;
 		float _shadowTextureSize = 0.f;
+		unsigned _maxFrustumCount = 0;
 		ILightScene::ShadowOperatorId _operatorId;
 
 		class UniformDelegate : public Techniques::IShaderResourceDelegate
@@ -115,8 +116,8 @@ namespace RenderCore { namespace LightingEngine
 
 	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
 
-	Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
-		ILightBase& projectionBase, float shadowTextureSize)
+	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
+		ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
 	{
 		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
 		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
@@ -125,7 +126,7 @@ namespace RenderCore { namespace LightingEngine
 			return Internal::PreparedDMShadowFrustum{};
 
 		Internal::PreparedDMShadowFrustum preparedResult;
-		preparedResult.InitialiseConstants(projection._projections);
+		preparedResult.InitialiseConstants(projection._projections, operatorMaxFrustumCount);
 		preparedResult._resolveParameters._worldSpaceBias = projection._worldSpaceResolveBias;
 		preparedResult._resolveParameters._tanBlurAngle = projection._tanBlurAngle;
 		preparedResult._resolveParameters._minBlurSearchNorm = projection._minBlurSearchPixels / shadowTextureSize;
@@ -146,7 +147,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
 		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
-		_workingDMFrustum = SetupPreparedDMShadowFrustum(projection, _shadowTextureSize);
+		_workingDMFrustum = SetupPreparedDMShadowFrustum(projection, _shadowTextureSize, _maxFrustumCount);
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
@@ -318,6 +319,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		_shadowTextureSize = (float)std::min(desc._width, desc._height);
+		_maxFrustumCount = desc._normalProjCount;
 	}
 
 	DMShadowPreparer::~DMShadowPreparer() {}

@@ -41,31 +41,35 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	};
 
 	SharedPkt BuildShadowConstantBuffers(
-		const MultiProjection<MaxShadowTexturesPerLight>& desc)
+		const MultiProjection<MaxShadowTexturesPerLight>& desc,
+		unsigned operatorMaxFrustumCount)
 	{
 		if (desc._mode == ShadowProjectionMode::Arbitrary || desc._mode == ShadowProjectionMode::ArbitraryCubeMap) {
 
-			auto result = MakeSharedPktSize((sizeof(Float4)+sizeof(Float4x4))*desc._normalProjCount);
+			auto result = MakeSharedPktSize((sizeof(Float4)+sizeof(Float4x4))*operatorMaxFrustumCount + sizeof(UInt4));
 			auto* subProj = (Float4x4*)result.begin();
-			auto* miniProj = (Float4*)PtrAdd(result.begin(), sizeof(Float4x4)*desc._normalProjCount);
+			auto* miniProj = (Float4*)PtrAdd(result.begin(), sizeof(Float4x4)*operatorMaxFrustumCount);
+			auto* subProjectionCount = (UInt4*)PtrAdd(result.begin(), (sizeof(Float4x4)+sizeof(Float4))*operatorMaxFrustumCount);
 
 			for (unsigned c=0; c<desc._normalProjCount; ++c) {
 				subProj[c] = desc._fullProj[c]._worldToProjTransform;
 				miniProj[c] = desc._minimalProjection[c];
 			}
 
+			*subProjectionCount = UInt4(desc._normalProjCount, 0, 0, 0);
 			return result;
 
 		} else if (desc._mode == ShadowProjectionMode::Ortho) {
 
-			size_t pktSize = sizeof(CB_OrthoShadowProjection) + sizeof(Float4) * 2 * desc._normalProjCount + (desc._useNearProj?sizeof(CB_OrthoShadowNearCascade):0);
+			size_t pktSize = sizeof(CB_OrthoShadowProjection) + sizeof(Float4) * 2 * operatorMaxFrustumCount + (desc._useNearProj?sizeof(CB_OrthoShadowNearCascade):0 + sizeof(UInt4));
 			auto result = MakeSharedPktSize(pktSize);
 			auto baseWorldToView = desc._definitionViewMatrix;
 
 			auto* baseCB = (CB_OrthoShadowProjection*)result.begin();
 			auto* cascadeScale = (Float4*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection));
-			auto* cascadeTrans = (Float4*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + sizeof(Float4) * desc._normalProjCount);
-			auto* nearProj = (CB_OrthoShadowNearCascade*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + desc._normalProjCount*sizeof(Float4)*2);
+			auto* cascadeTrans = (Float4*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + sizeof(Float4) * operatorMaxFrustumCount);
+			auto* nearProj = (CB_OrthoShadowNearCascade*)PtrAdd(result.begin(), sizeof(CB_OrthoShadowProjection) + operatorMaxFrustumCount*sizeof(Float4)*2);
+			auto* subProjectionCount = (UInt4*)PtrAdd(nearProj, desc._useNearProj ? sizeof(CB_OrthoShadowNearCascade) : 0);
 
 			for (unsigned c=0; c<desc._normalProjCount; ++c) {
 
@@ -99,6 +103,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				nearProj->_nearMinimalProjection = desc._specialNearMinimalProjection;
 			}
 
+			*subProjectionCount = UInt4(desc._normalProjCount, 0, 0, 0);
+
 			return result;
 
 		} else {
@@ -108,12 +114,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	void PreparedShadowFrustum::InitialiseConstants(
-		const MultiProjection<MaxShadowTexturesPerLight>& desc)
+		const MultiProjection<MaxShadowTexturesPerLight>& desc,
+		unsigned operatorMaxFrustumCount)
 	{
 		_frustumCount = desc._normalProjCount;
 		_mode = desc._mode;
 		_enableNearCascade = desc._useNearProj;
-		_cbSource = BuildShadowConstantBuffers(desc);
+		_cbSource = BuildShadowConstantBuffers(desc, operatorMaxFrustumCount);
 	}
 
 	PreparedShadowFrustum::PreparedShadowFrustum()

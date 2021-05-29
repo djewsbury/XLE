@@ -29,6 +29,7 @@ cbuffer ShadowProjection ShadowProjectionBinding
 	#if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP)
 		row_major float4x4 ShadowWorldToProj[SHADOW_SUB_PROJECTION_COUNT];
 		float4 ShadowMinimalProjection[SHADOW_SUB_PROJECTION_COUNT];
+		uint SubProjectionCount;
 	#elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
 		row_major float3x4 OrthoShadowWorldToView;
 		float4 OrthoShadowMinimalProjection;
@@ -38,6 +39,7 @@ cbuffer ShadowProjection ShadowProjectionBinding
 			row_major float3x4 OrthoNearCascade;
 			float4 OrthoShadowNearMinimalProjection;
 		#endif
+		uint SubProjectionCount;
 	#endif
 }
 
@@ -64,7 +66,7 @@ uint GetShadowSubProjectionCount()
 	#if !defined(SHADOW_CASCADE_MODE) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_NONE)
 		return 0;
 	#else
-		return SHADOW_SUB_PROJECTION_COUNT;
+		return SubProjectionCount;
 	#endif
 }
 

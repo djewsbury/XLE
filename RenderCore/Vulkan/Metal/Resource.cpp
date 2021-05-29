@@ -796,7 +796,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				c.bufferImageHeight = std::max(height, minDims);
 				c.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, m, a, 1 };
 				c.imageOffset = VkOffset3D{0,0,0};
-				c.imageExtent = VkExtent3D{std::max(width, minDims), std::max(height, minDims), std::max(depth, 1u)};
+				c.imageExtent = VkExtent3D{width, height, std::max(depth, 1u)};
 			}
 
 			width >>= 1u;

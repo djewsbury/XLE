@@ -20,6 +20,7 @@ namespace RenderCore { namespace Techniques
     DepthStencilDesc CommonResourceBox::s_dsDisable { CompareOp::Always, false };
     DepthStencilDesc CommonResourceBox::s_dsReadWriteWriteStencil { CompareOp::LessEqual, true, true, 0xff, 0xff, StencilDesc::AlwaysWrite, StencilDesc::AlwaysWrite };
     DepthStencilDesc CommonResourceBox::s_dsWriteOnly { CompareOp::Always, true };
+    DepthStencilDesc CommonResourceBox::s_dsReadWriteLessThan { CompareOp::Less };
 
     AttachmentBlendDesc CommonResourceBox::s_abStraightAlpha { true, Blend::SrcAlpha, Blend::InvSrcAlpha, BlendOp::Add };
     AttachmentBlendDesc CommonResourceBox::s_abAlphaPremultiplied { true, Blend::One, Blend::InvSrcAlpha, BlendOp::Add };

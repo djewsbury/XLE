@@ -450,6 +450,9 @@ namespace RenderCore { namespace Techniques
 			if (stateSet._flag & Assets::RenderStateSet::Flag::DoubleSided)
 				cullDisable = !!stateSet._doubleSided;
 			nascentDesc->_rasterization = _rs[cullDisable];
+			// always use less than (not less than or equal) here, because writing equally deep pixels is redundant
+			// (and we can potentially skip a texture lookup for alpha test geo sometimes)
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);

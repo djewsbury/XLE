@@ -23,30 +23,6 @@ namespace Sample
 	{
 	}
 
-	static void RenderTrackingOverlay(
-        RenderOverlays::IOverlayContext& context,
-		const RenderOverlays::DebuggingDisplay::Rect& viewport,
-		const ToolsRig::VisMouseOver& mouseOver, 
-		const SceneEngine::IScene& scene)
-    {
-        using namespace RenderOverlays::DebuggingDisplay;
-
-        auto textHeight = (int)RenderOverlays::GetDefaultFont()->GetFontProperties()._lineHeight;
-        std::string matName = "matName";
-        DrawText(
-            &context,
-            Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-3), Coord2(viewport._bottomRight[0]-3, viewport._bottomRight[1]-3)),
-            nullptr, RenderOverlays::ColorB(0xffafafaf),
-            StringMeld<512>() 
-                << "Material: {Color:7f3faf}" << matName
-                << "{Color:afafaf}, Draw call: " << mouseOver._drawCallIndex
-                << std::setprecision(4)
-                << ", (" << mouseOver._intersectionPt[0]
-                << ", "  << mouseOver._intersectionPt[1]
-                << ", "  << mouseOver._intersectionPt[2]
-                << ")");
-    }
-
 	void NativeModelViewerOverlay::OnStartup(const SampleGlobals& globals)
 	{
 		auto pipelineAccelerators = globals._drawingApparatus->_pipelineAccelerators;
