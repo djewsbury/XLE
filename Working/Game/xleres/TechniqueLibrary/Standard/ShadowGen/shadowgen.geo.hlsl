@@ -47,6 +47,28 @@
 				float4 p0 = float4(AdjustForOrthoCascade(input[0].position.xyz, c), 1.f);
 				float4 p1 = float4(AdjustForOrthoCascade(input[1].position.xyz, c), 1.f);
 				float4 p2 = float4(AdjustForOrthoCascade(input[2].position.xyz, c), 1.f);
+				// When using orthogonal projection, we can flatten geometry that is closer
+				// to the light than the view frustum onto the near plane
+				// We don't care about the relative depth of geometry within that range, so
+				// we can afford to just flatten it against a single plane. This allows us
+				// to maximize the depth range available in the opposite direction
+				//
+				// However, be aware that we pay rasterization costs for geometry in this 
+				// range (whereas, if we just clipped it out, we wouldn't). The geometry
+				// can end up fairly large in the projection, which can add up. It's
+				// particularly can issue if that geometry is alpha tested -- because
+				// the pixel shader must do some texture lookups.
+				//
+				// So we should still be careful to cull geometry in that range and try
+				// to only bring in the geometry that's truly needed 
+				//
+				// The other thing to be careful of is that this really only makes sense
+				// for lights with infinite projections (ie, light from the sun). All geometry
+				// is assumed to be in front of the light -- so if there's any geometry that's
+				// actually behind the light, this won't actually give the correct result. 
+				p0.z = max(0, p0.z);
+				p1.z = max(0, p1.z);
+				p2.z = max(0, p2.z);
 			#else
 				float4 p0 = 0.0.xxxx;
 				float4 p1 = 0.0.xxxx;

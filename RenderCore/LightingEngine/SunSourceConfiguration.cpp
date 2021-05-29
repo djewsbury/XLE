@@ -305,7 +305,6 @@ namespace RenderCore { namespace LightingEngine
     {
         // We need to test the edges of ortho box against the camera frustum
         // and the edges of the ortho box against the frustum
-
         const unsigned edges[] = {
             0, 1,
             1, 2,
@@ -428,6 +427,132 @@ namespace RenderCore { namespace LightingEngine
         return {{}, depthRangeCovered};
     }
 
+    static Float2 MinAndMaxOrthoSpaceZ(
+        const Float4x4& cameraWorldToClip,
+        const Float3* absFrustumCorners,
+        const Float4x4& orthoViewToWorld,
+        const Float2& leftTop2D, const Float2& rightBottom2D)
+    {
+        const unsigned edges[] = {
+            0, 1,
+            1, 2,
+            2, 3,
+            3, 0,
+
+            4, 5,
+            5, 6,
+            6, 7,
+            7, 4,
+
+            0, 4,
+            1, 5,
+            2, 6,
+            3, 7
+        };
+
+        auto orthoToClip = Combine(orthoViewToWorld, cameraWorldToClip);
+        auto orthoWorldToView = InvertOrthonormalTransform(orthoViewToWorld);
+        auto clipToWorld = Inverse(cameraWorldToClip);
+        auto clipToOrthoView = Combine(clipToWorld, orthoWorldToView);
+
+        Float2 result { FLT_MAX, -FLT_MAX };
+        Float3 leftTopFront{leftTop2D[0], leftTop2D[1], -1e7f};
+        Float3 rightBottomBack{rightBottom2D[0], rightBottom2D[1], 1e7f};
+
+        {
+            const Float4 clipSpaceCorners[] = {
+                orthoToClip * Expand(Float3{leftTopFront[0], leftTopFront[1], leftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], leftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{leftTopFront[0], rightBottomBack[1], leftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], rightBottomBack[1], leftTopFront[2]}, 1.0f),
+
+                orthoToClip * Expand(Float3{leftTopFront[0], leftTopFront[1], rightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], rightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{leftTopFront[0], rightBottomBack[1], rightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], rightBottomBack[1], rightBottomBack[2]}, 1.0f)
+            };
+
+            for (unsigned e=0; e<dimof(edges); e+=2) {
+                auto start = clipSpaceCorners[edges[e+0]];
+                auto end = clipSpaceCorners[edges[e+1]];
+
+                for (unsigned ele=0; ele<3; ++ele) {
+                    float a = start[ele] / start[3], b = start[ele] / start[3]; 
+                    if ((a < -1.0f) != (b < -1.0f)) {
+                        auto alpha = (-1.0f - a) / (b - a);
+                        auto intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele] / intersection[3], -1.0f, 1e-4f));
+                        if (std::abs(intersection[(ele+1)%3]) <= intersection[3] && std::abs(intersection[(ele+2)%3]) <= intersection[3]) {
+                            auto orthoView = clipToOrthoView * intersection;
+                            float z = orthoView[2];
+                            result[0] = std::min(result[0], z);
+                            result[1] = std::max(result[1], z);
+                        }
+                    }
+
+                    if ((a > 1.0f) != (b > 1.0f)) {
+                        auto alpha = (1.0f - a) / (b - a);
+                        auto intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele] / intersection[3], 1.0f, 1e-4f));
+                        if (std::abs(intersection[(ele+1)%3]) <= intersection[3] && std::abs(intersection[(ele+2)%3]) <= intersection[3]) {
+                            auto orthoView = clipToOrthoView * intersection;
+                            float z = orthoView[2];
+                            result[0] = std::min(result[0], z);
+                            result[1] = std::max(result[1], z);
+                        }
+                    }
+                }
+            }
+        }
+
+        {
+            assert(leftTopFront[0] < rightBottomBack[0]);
+            assert(leftTopFront[1] < rightBottomBack[1]);
+
+            for (unsigned e=0; e<dimof(edges); e+=2) {
+                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+0]]);
+                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+1]]);
+
+                // points inside of the projection area count
+                if (start[0] >= leftTopFront[0] && start[1] >= leftTopFront[1] && start[0] <= rightBottomBack[0] && start[1] <= rightBottomBack[1]) {
+                    result[0] = std::min(result[0], start[2]);
+                    result[1] = std::max(result[1], start[2]);
+                }
+
+                if (end[0] >= leftTopFront[0] && end[1] >= leftTopFront[1] && end[0] <= rightBottomBack[0] && end[1] <= rightBottomBack[1]) {
+                    result[0] = std::min(result[0], end[2]);
+                    result[1] = std::max(result[1], end[2]);
+                }
+
+                for (unsigned ele=0; ele<3; ++ele) {
+                    if ((start[ele] < leftTopFront[ele]) != (end[ele] < leftTopFront[ele])) {
+                        float alpha = (leftTopFront[ele] - start[ele]) / (end[ele] - start[ele]);
+                        Float3 intersection = start + (end-start)*alpha;
+                        if (    intersection[(ele+1)%3] >= leftTopFront[(ele+1)%3] && intersection[(ele+1)%3] <= rightBottomBack[(ele+1)%3]
+                            &&  intersection[(ele+2)%3] >= leftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= rightBottomBack[(ele+2)%3]) {
+                            float z = intersection[2];
+                            result[0] = std::min(result[0], z);
+                            result[1] = std::max(result[1], z);
+                        }
+                    } 
+                    
+                    if ((start[ele] > rightBottomBack[ele]) != (end[ele] > rightBottomBack[ele])) {
+                        float alpha = (rightBottomBack[ele] - start[ele]) / (end[ele] - start[ele]);
+                        Float3 intersection = start + (end-start)*alpha;
+                        if (    intersection[(ele+1)%3] >= leftTopFront[(ele+1)%3] && intersection[(ele+1)%3] <= rightBottomBack[(ele+1)%3]
+                            &&  intersection[(ele+2)%3] >= leftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= rightBottomBack[(ele+2)%3]) {
+                            float z = intersection[2];
+                            result[0] = std::min(result[0], z);
+                            result[1] = std::max(result[1], z);
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
     static Float4x4 MakeOrientedShadowViewToWorld(const Float3& lightDirection, const Float3& positiveX, const Float3& focusPoint)
     {
         Float3 up = Normalize(Cross(positiveX, lightDirection));
@@ -470,8 +595,8 @@ namespace RenderCore { namespace LightingEngine
             //
             // let's do this in ortho space, where it's going to be a lot easier
 
-            auto newProjectionDimsXY = 2.f * (prev._rightBottomBack[0] - prev._leftTopFront[0]);
-            auto newProjectionDimsZ = 2.f * (prev._rightBottomBack[2] - prev._leftTopFront[2]);
+            auto newProjectionDimsXY = 3.f * (prev._rightBottomBack[0] - prev._leftTopFront[0]);
+            auto newProjectionDimsZ = 3.f * (prev._rightBottomBack[2] - prev._leftTopFront[2]);
 
             auto worldToLightView = InvertOrthonormalTransform(lightViewToWorld);
             auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
@@ -517,8 +642,19 @@ namespace RenderCore { namespace LightingEngine
             Float3 focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
 
             IOrthoShadowProjections::OrthoSubProjection result;
-            result._leftTopFront = Float3{ focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, prev._leftTopFront[2] };
-            result._rightBottomBack = Float3{ focusPositionInOrtho[0] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] + 0.5f * newProjectionDimsXY, prev._rightBottomBack[2] };
+            result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
+            result._rightBottomBack = Float3 { focusPositionInOrtho[0] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] + 0.5f * newProjectionDimsZ };
+
+            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack));
+            if (Dot(ExtractForward_Cam(lightViewToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld)) < 0) {
+                result._leftTopFront[2] = -minAndMaxDepth[0] - newProjectionDimsZ;
+                result._rightBottomBack[2] = -minAndMaxDepth[0];
+            } else {
+                result._leftTopFront[2] = -minAndMaxDepth[1];
+                result._rightBottomBack[2] = -minAndMaxDepth[1] + newProjectionDimsZ;
+            }
+            assert(result._leftTopFront[2] < result._rightBottomBack[2]);
+
             return {result, closestUncoveredPart.second};
         }
 
@@ -595,18 +731,24 @@ namespace RenderCore { namespace LightingEngine
             firstSubProjection._rightBottomBack[1] = focusLightView[1] + 0.5f * projectionDimsXY;
         }
 
-        // todo -- we should instead set the "near" part to just touch the view frustum, and clamp depth values 
-        // less than zero to just zero
-        const float depthRangeAmountBeyondFocus = 0.1f;
-        firstSubProjection._leftTopFront[2] = focusLightView[2] - (1.f - depthRangeAmountBeyondFocus) * projectionDimsZ;
-        firstSubProjection._rightBottomBack[2] = focusLightView[2] + depthRangeAmountBeyondFocus * projectionDimsZ;
-
         if (firstSubProjection._leftTopFront[0] > firstSubProjection._rightBottomBack[0])
             std::swap(firstSubProjection._leftTopFront[0], firstSubProjection._rightBottomBack[0]);
         if (firstSubProjection._leftTopFront[1] > firstSubProjection._rightBottomBack[1])
             std::swap(firstSubProjection._leftTopFront[1], firstSubProjection._rightBottomBack[1]);
-        if (firstSubProjection._leftTopFront[2] > firstSubProjection._rightBottomBack[2])
-            std::swap(firstSubProjection._leftTopFront[2], firstSubProjection._rightBottomBack[2]);
+
+        // We're assuming that geometry closer to the light than the view frustum will be clamped
+        // to zero depth here -- so the shadow projection doesn't need to extend all the way to
+        // the light
+        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack));
+        assert(projectionDimsZ > 0);
+        if (Dot(ExtractForward_Cam(lightViewToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld)) < 0) {
+            firstSubProjection._leftTopFront[2] = -minAndMaxDepth[0] - projectionDimsZ;
+            firstSubProjection._rightBottomBack[2] = -minAndMaxDepth[0];
+        } else {
+            firstSubProjection._leftTopFront[2] = -minAndMaxDepth[1];
+            firstSubProjection._rightBottomBack[2] = -minAndMaxDepth[1] + projectionDimsZ;
+        }
+        assert(firstSubProjection._leftTopFront[2] < firstSubProjection._rightBottomBack[2]);
 
         OrthoProjections result;
         result._worldToView = worldToLightView;
