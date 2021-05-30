@@ -70,6 +70,11 @@ namespace RenderCore { namespace Techniques
 		}
 		if (metadata.IsCubemap())
 			desc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+
+		if (desc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
+			assert(desc._arrayCount == 6u);		// arrays of cubemaps not supported; we consider this to be the face count
+		}
+
 		return desc;
 	}
 

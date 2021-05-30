@@ -156,7 +156,7 @@ namespace RenderCore { namespace Metal_Vulkan
             if (adjWindow._dimensionality == TextureDesc::Dimensionality::CubeMap) {
                 // The "array layer" range values are a bit awkward for cubemaps. Let's Support only 
                 // views of the entire cubemap resource for now
-                assert(adjWindow._arrayLayerRange._count == 6 || adjWindow._arrayLayerRange._count == 0 || adjWindow._arrayLayerRange._count == 1 || adjWindow._arrayLayerRange._count == TextureViewDesc::Unlimited);
+                assert(adjWindow._arrayLayerRange._count == 6 || adjWindow._arrayLayerRange._count == TextureViewDesc::Unlimited);
                 assert(adjWindow._arrayLayerRange._min == 0);
             }
 

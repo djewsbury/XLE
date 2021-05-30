@@ -449,8 +449,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			if (tDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
 				image_create_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-				assert(image_create_info.arrayLayers == 1u);		// arrays of cubemaps not supported currently
-				image_create_info.arrayLayers = 6;
+				assert(image_create_info.arrayLayers == 6u);		// arrays of cubemaps not supported currently
 			}
 
             // We don't need to use mutable formats in many cases in Vulkan. 
@@ -1187,7 +1186,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto& resource = *checked_cast<Resource*>(&iresource);
 
 		auto desc = resource.GetDesc();
-		assert(desc._textureDesc._dimensionality != TextureDesc::Dimensionality::CubeMap);		// cubemap support may be a problem here, due to wierdness around the "arrayCount" variable
+		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap)
+			assert(desc._textureDesc._arrayCount == 6u);
 		result.reserve(std::max(1u, (unsigned)desc._textureDesc._arrayCount) * std::max(1u, (unsigned)desc._textureDesc._mipCount));
 
 		auto* image = resource.GetImage();

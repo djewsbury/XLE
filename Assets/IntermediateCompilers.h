@@ -59,9 +59,9 @@ namespace Assets
 
 		//
 
-		// RegisterExtensions & GetExtensionsForTargetCodes are both used for FileOpen dialogs in tools
+		// AssociateExtensions & GetExtensionsForTargetCodes are both used for FileOpen dialogs in tools
 		// It's so the tool knows what model formats are available to load (for example)
-		virtual void RegisterExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) = 0;
+		virtual void AssociateExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) = 0;
 		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(TargetCode typeCode) = 0;
 		virtual std::vector<uint64_t> GetTargetCodesForExtension(StringSection<>) = 0;
 

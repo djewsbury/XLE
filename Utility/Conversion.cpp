@@ -7,8 +7,11 @@
 #include "Conversion.h"
 #include "StringUtils.h"
 #include "PtrUtils.h"
+#include "FastParseValue.h"
 #include "../Core/SelectConfiguration.h"
+#include "../Core/Exceptions.h"
 #include <algorithm>
+#include <stdexcept>
 
 namespace Conversion
 {
@@ -27,55 +30,60 @@ namespace Conversion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    template<> float Convert(const char input[])    { return XlAtoF32(input); }
-	template<> double Convert(const char input[])   { return XlAtoF64(input); }
-    template<> uint32_t Convert(const char input[])   { return XlAtoUI32(input); }
-    template<> int32_t Convert(const char input[])    { return XlAtoI32(input); }
-    template<> int64_t Convert(const char input[])    { return XlAtoI64(input); }
-    template<> uint64_t Convert(const char input[])   { return XlAtoUI64(input); }
-
     // todo -- these could be implemented more effectively, particularly with C++17's std::from_string
     //          (or just by custom coding the appropriate
     template<> float Convert(StringSection<> input)
     {
-        char buffer[32];
-        XlCopyString(buffer, input);
-        return Convert<float>(buffer);
+        float result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to float"));
+        return result;
     }
 
 	template<> double Convert(StringSection<> input)
     {
-        char buffer[64];
-        XlCopyString(buffer, input);
-        return Convert<double>(buffer);
+        double result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to double"));
+        return result;
     }
 
     template<> uint32_t Convert(StringSection<> input)
     {
-        char buffer[32];
-        XlCopyString(buffer, input);
-        return Convert<uint32_t>(buffer);
+        uint32_t result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to uint32_t"));
+        return result;
     }
 
     template<> int32_t Convert(StringSection<> input)
     {
-        char buffer[32];
-        XlCopyString(buffer, input);
-        return Convert<int32_t>(buffer);
+        int32_t result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to int32_t"));
+        return result;
     }
 
     template<> int64_t Convert(StringSection<> input)
     {
-        char buffer[32];
-        XlCopyString(buffer, input);
-        return Convert<int64_t>(buffer);
+        int64_t result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to int64_t"));
+        return result;
     }
 
     template<> uint64_t Convert(StringSection<> input)
     {
-        char buffer[32];
-        XlCopyString(buffer, input);
-        return Convert<uint64_t>(buffer);
+        uint64_t result;
+        auto* parseEnd = FastParseValue(input, result);
+        if (parseEnd != input.end())
+            Throw(std::runtime_error("Bad value converting (" + input.AsString() + ") to uint64_t"));
+        return result;
     }
 
     template<> bool Convert(StringSection<> input)
@@ -85,24 +93,32 @@ namespace Conversion
             ||  !XlCompareStringI(input, "t")
             ||  !XlCompareStringI(input, "y")) {
             return true;
+        } else if (    !XlCompareStringI(input, "false")
+            ||  !XlCompareStringI(input, "no")
+            ||  !XlCompareStringI(input, "f")
+            ||  !XlCompareStringI(input, "n")) {
+            return true;
         }
         auto asInt = Conversion::Convert<int>(input);
         return !!asInt;
     }
 
-    template<> bool Convert(const char input[])
-    {
-        return Convert<bool>(MakeStringSection(input));
-    }
-
-    template<> float Convert(const std::basic_string<utf8>& input)      { return Convert<float>((const char*)input.c_str()); }
-	template<> double Convert(const std::basic_string<utf8>& input)		{ return Convert<double>((const char*)input.c_str()); }
-    template<> uint32_t Convert(const std::basic_string<utf8>& input)     { return Convert<uint32_t>((const char*)input.c_str()); }
-    template<> int32_t Convert(const std::basic_string<utf8>& input)      { return Convert<int32_t>((const char*)input.c_str()); }
-    template<> int64_t Convert(const std::basic_string<utf8>& input)      { return Convert<int64_t>((const char*)input.c_str()); }
-    template<> uint64_t Convert(const std::basic_string<utf8>& input)     { return Convert<uint64_t>((const char*)input.c_str()); }
-    template<> bool Convert(const std::basic_string<utf8>& input)       { return Convert<bool>((const char*)input.c_str()); }
+    template<> float Convert(const std::basic_string<utf8>& input)          { return Convert<float>(MakeStringSection(input)); }
+	template<> double Convert(const std::basic_string<utf8>& input)         { return Convert<double>(MakeStringSection(input)); }
+    template<> uint32_t Convert(const std::basic_string<utf8>& input)       { return Convert<uint32_t>(MakeStringSection(input)); }
+    template<> int32_t Convert(const std::basic_string<utf8>& input)        { return Convert<int32_t>(MakeStringSection(input)); }
+    template<> int64_t Convert(const std::basic_string<utf8>& input)        { return Convert<int64_t>(MakeStringSection(input)); }
+    template<> uint64_t Convert(const std::basic_string<utf8>& input)       { return Convert<uint64_t>(MakeStringSection(input)); }
+    template<> bool Convert(const std::basic_string<utf8>& input)           { return Convert<bool>(MakeStringSection(input)); }
     
+    template<> float Convert(const char input[])        { return Convert<float>(MakeStringSection(input)); }
+	template<> double Convert(const char input[])       { return Convert<double>(MakeStringSection(input)); }
+    template<> uint32_t Convert(const char input[])     { return Convert<uint32_t>(MakeStringSection(input)); }
+    template<> int32_t Convert(const char input[])      { return Convert<int32_t>(MakeStringSection(input)); }
+    template<> int64_t Convert(const char input[])      { return Convert<int64_t>(MakeStringSection(input)); }
+    template<> uint64_t Convert(const char input[])     { return Convert<uint64_t>(MakeStringSection(input)); }
+    template<> bool Convert(const char input[])         { return Convert<bool>(MakeStringSection(input)); }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     template<> std::basic_string<ucs2> Convert(const std::basic_string<utf8>& input)

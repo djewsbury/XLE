@@ -493,7 +493,6 @@ namespace ShaderSourceParser
             if (i->_type != RenderCore::DescriptorType::SampledTexture || i->_name.empty())
                 continue;
 			auto descriptorIdx = std::distance(descriptorSet._slots.begin(), i);
-			std::string type = "<<unknown type>>";
 			auto cap = std::find_if(
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p) 
@@ -505,10 +504,9 @@ namespace ShaderSourceParser
 						return p._name == i->_name; 
 					}
 				});
-			if (cap != captures.end())
-				type = cap->_type;
-
-			result << type << " " << i->_name << " BIND_MAT_T" << descriptorIdx << ";" << std::endl;
+			if (cap != captures.end()) {
+    			result << cap->_type << " " << i->_name << " BIND_MAT_T" << descriptorIdx << ";" << std::endl;
+            }
 		}
 
 		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
@@ -516,7 +514,6 @@ namespace ShaderSourceParser
                 continue;
 
 			auto descriptorIdx = std::distance(descriptorSet._slots.begin(), i);
-			std::string type = "<<unknown type>>";
 			auto cap = std::find_if(
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p)
@@ -528,10 +525,9 @@ namespace ShaderSourceParser
 						return p._name == i->_name; 
 					}
 				});
-			if (cap != captures.end())
-				type = cap->_type;
-
-			result << type << " " << i->_name << " BIND_MAT_S" << descriptorIdx << ";" << std::endl;
+			if (cap != captures.end()) {
+                result << cap->_type << " " << i->_name << " BIND_MAT_S" << descriptorIdx << ";" << std::endl;
+            }
 		}
 
 		for (auto cb=descriptorSet._slots.begin(); cb!=descriptorSet._slots.end(); ++cb) {

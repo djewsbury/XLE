@@ -190,5 +190,48 @@ float3 VSOUT_GetVertexNormal(VSOUT geo)
 	#endif
 }
 
+float3 TransformNormalMapToWorld(float3 normalTextureSample, VSOUT geo)
+{
+	#if VSOUT_HAS_TANGENT_FRAME==1
+
+		TangentFrame tangentFrame = VSOUT_GetWorldTangentFrame(geo);
+		float3x3 normalsTextureToWorld = float3x3(tangentFrame.tangent.xyz, tangentFrame.bitangent, tangentFrame.normal);
+		return mul(normalTextureSample, normalsTextureToWorld);
+
+    #elif VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+
+		TangentFrame localTangentFrame = VSOUT_GetLocalTangentFrame(geo);
+		float3x3 normalsTextureToLocal = float3x3(localTangentFrame.tangent.xyz, localTangentFrame.bitangent, localTangentFrame.normal);
+		float3 localNormal = mul(normalTextureSample, normalsTextureToLocal);
+
+            // note --  Problems when there is a scale on SysUniform_GetLocalToWorld() here.
+            //          There are many objects with uniform scale values, and they require a normalize here.
+            //          Ideally we'd have a SysUniform_GetLocalToWorld() matrix with the scale removed,
+            //          or at least a "uniform scale" scalar to remove the scaling
+        return normalize(mul(GetLocalToWorldUniformScale(), localNormal));
+
+	#elif (VSOUT_HAS_NORMAL==1) && ((VSOUT_HAS_WORLD_VIEW_VECTOR==1) || (VSOUT_HAS_WORLD_VIEW_VECTOR==1)) && (VSOUT_HAS_TEXCOORD > 0)
+
+	    float3x3 normalsTextureToWorld = AutoCotangentFrame(normalize(geo.normal), VSOUT_GetWorldViewVector(geo), geo.texCoord);
+			// Note -- matrix multiply opposite from normal (so we can initialise normalsTextureToWorld easily)
+		return mul(normalTextureSample, normalsTextureToWorld);
+
+    #elif (VSOUT_HAS_LOCAL_NORMAL==1) && (VSOUT_HAS_LOCAL_VIEW_VECTOR==1) && (VSOUT_HAS_TEXCOORD > 0)
+
+		float3x3 normalsTextureToWorld = AutoCotangentFrame(normalize(geo.localNormal), VSOUT_GetLocalViewVector(geo), geo.texCoord);
+			// Note -- matrix multiply opposite from normal (so we can initialise normalsTextureToWorld easily)
+		return mul(normalTextureSample, normalsTextureToWorld);
+
+    #elif (VSOUT_HAS_NORMAL==1)
+
+        return normalize(geo.normal);
+
+	#else
+
+		return 0.0.xxx;
+
+	#endif
+}
+
 #endif
 

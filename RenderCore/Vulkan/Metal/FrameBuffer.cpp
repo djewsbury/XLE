@@ -519,7 +519,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		result._width = std::max(result._width, desc._textureDesc._width);
 		result._height = std::max(result._height, desc._textureDesc._height);
 		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
-			assert(desc._textureDesc._arrayCount == 0 || desc._textureDesc._arrayCount == 1);
+			assert(desc._textureDesc._arrayCount == 6u);
 			result._layers = std::max(result._layers, 6u);
 		} else
 			result._layers = std::max(result._layers, (unsigned)desc._textureDesc._arrayCount);

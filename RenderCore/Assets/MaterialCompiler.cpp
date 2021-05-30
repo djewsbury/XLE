@@ -25,8 +25,6 @@
 
 namespace RenderCore { namespace Assets
 {
-	static const auto ChunkType_Log = ConstHash64<'Log'>::Value;
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static void AddDep(

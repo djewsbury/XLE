@@ -181,7 +181,10 @@ namespace PlatformRig
                     _mainOverlaySys->Render(context, parserContext);
                 } else {
                     // We must at least clear, because the _debugScreenOverlaySystem might have something to render
+                    // (also redefine AttachmentSemantics::ColorLDR as initialized here)
                     RenderCore::Metal::DeviceContext::Get(context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
+                    using namespace RenderCore::Techniques;
+                    stitchingContext.DefineAttachment(PreregisteredAttachment {AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized});
                 }
 			}
 			CATCH_ASSETS(parserContext)

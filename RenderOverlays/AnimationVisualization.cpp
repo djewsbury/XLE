@@ -57,7 +57,7 @@ namespace RenderOverlays
 		auto& box = ConsoleRig::FindCachedBoxDep2<SkeletonPreviewResourceBox>();
 
 		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
-        auto vertexCount = outputMatrixCount * 2 * 3;
+        auto vertexCount = outputMatrixCount * 2 * 2 * 3;
 		Techniques::ImmediateDrawableMaterial material;
 		material._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
 		material._stateSet._writeMask = 0;		// disable depth read & write
@@ -124,6 +124,8 @@ namespace RenderOverlays
 			workingVertices[workingVertexIterator++] = {corners[1], 0x00af00};
 			workingVertices[workingVertexIterator++] = {corners[3], 0x00af00};
 		}
+
+		assert(workingVertexIterator <= vertexCount); 
 
 		if (drawBoneNames) {
 			auto viewport = parserContext.GetViewport();

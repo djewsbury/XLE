@@ -380,6 +380,13 @@ namespace Utility
         return newEnd;
     }
 
+    template<typename CharType>
+        const CharType* FastParseValue(StringSection<CharType> input, double& dst)
+    {
+        assert(0);      // not implemented
+        return input.begin();
+    }
+
     template const utf8* FastParseValue(StringSection<utf8> input, int32_t& dst);
     template const utf8* FastParseValue(StringSection<utf8> input, int64_t& dst);
     template const utf8* FastParseValue(StringSection<utf8> input, uint64_t& dst);
@@ -389,4 +396,5 @@ namespace Utility
     template const utf8* FastParseValue(StringSection<utf8> input, uint64_t& dst, unsigned);
     template const utf8* FastParseValue(StringSection<utf8> input, uint32_t& dst, unsigned);
     template const utf8* FastParseValue(StringSection<utf8> input, float& dst);
+    template const utf8* FastParseValue(StringSection<utf8> input, double& dst);
 }

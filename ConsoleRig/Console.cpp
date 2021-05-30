@@ -574,13 +574,12 @@ namespace ConsoleRig
                 // a pointer to the value object (which is contained in the same heap block)
                 // It's awkward here, but it's convenient otherwise
                 std::unique_ptr<Pair> p(new Pair(defaultValue, ConsoleVariable<Type>()));
-                Type& result = std::get<0>(*p);
                 ConsoleVariable<Type>& var = std::get<1>(*p);
                 var.~ConsoleVariable<Type>();
-                new(&var) ConsoleVariable<Type>(name, result);
+                new(&var) ConsoleVariable<Type>(name, std::get<0>(*p));
 
-                table.insert(i, std::move(p));
-                return result;
+                i = table.insert(i, std::move(p));
+                return (*i)->first;
             }
 
         #if defined(DEBUG_NEW)

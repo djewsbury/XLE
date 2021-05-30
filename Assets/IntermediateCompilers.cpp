@@ -78,7 +78,7 @@ namespace Assets
 			const std::string& initializerRegexFilter
 			) override;
 
-		virtual void RegisterExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) override;
+		virtual void AssociateExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) override;
 		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(TargetCode typeCode) override;
 		virtual std::vector<uint64_t> GetTargetCodesForExtension(StringSection<>) override;
 
@@ -430,7 +430,7 @@ namespace Assets
 		return result;
 	}
 
-	void IntermediateCompilers::RegisterExtensions(
+	void IntermediateCompilers::AssociateExtensions(
 		RegisteredCompilerId associatedCompiler,
 		const std::string& commaSeparatedExtensions)
 	{
@@ -588,7 +588,7 @@ namespace Assets
 						MakeIteratorRange(kind._targetCodes),
 						kind._identifierFilter);
 					if (!kind._extensionsForOpenDlg.empty())
-						compilerManager.RegisterExtensions(registrationId._registrationId, kind._extensionsForOpenDlg);
+						compilerManager.AssociateExtensions(registrationId._registrationId, kind._extensionsForOpenDlg);
 					opsFromThisLibrary.push_back(registrationId._registrationId);
 				}
 

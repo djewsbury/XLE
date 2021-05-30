@@ -341,7 +341,7 @@ namespace RenderCore
 		result._format = format;
 		result._dimensionality = Dimensionality::CubeMap;
 		result._mipCount = mipCount;
-		result._arrayCount = 0;
+		result._arrayCount = 6;
 		result._samples = TextureSamples::Create();
 		return result;
     }

@@ -25,6 +25,11 @@ namespace XLEMath
 
     Quaternion SphericalInterpolate(const Quaternion& lhs, const Quaternion& rhs, float alpha);
 
+    inline auto Magnitude(const Quaternion& q) -> decltype(cml::length(q))
+        { return cml::length(q); }
+
+    inline auto MagnitudeSquared(const Quaternion& q) -> decltype(cml::length_squared(q))
+        { return cml::length_squared(q); }
 
     template<typename BasicType>
         inline bool Equivalent(
