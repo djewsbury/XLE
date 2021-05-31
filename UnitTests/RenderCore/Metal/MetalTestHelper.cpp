@@ -484,18 +484,17 @@ namespace UnitTests
 			{DescriptorType::SampledTexture},				// 12
 			{DescriptorType::SampledTexture},				// 13
 			{DescriptorType::SampledTexture},				// 14
-			{DescriptorType::SampledTexture},				// 15
 
+			{DescriptorType::Sampler},						// 15
 			{DescriptorType::Sampler},						// 16
 			{DescriptorType::Sampler},						// 17
-			{DescriptorType::Sampler},						// 18
 
+			{DescriptorType::UniformBuffer},				// 18
 			{DescriptorType::UniformBuffer},				// 19
 			{DescriptorType::UniformBuffer},				// 20
 			{DescriptorType::UniformBuffer},				// 21
-			{DescriptorType::UniformBuffer},				// 22
 
-			{DescriptorType::Sampler}						// 23
+			{DescriptorType::Sampler}						// 22
 		};
 
 		RenderCore::PipelineLayoutInitializer desc;

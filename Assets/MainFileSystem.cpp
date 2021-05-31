@@ -556,6 +556,7 @@ namespace Assets
 							fsIdx, std::move(m), 
 							std::move(desc), hash});
 					} else {
+						// If you hit this assert, it might mean that a filesystem is producing multiple entries with the same name
 						assert(existing->_filesystemIndex != fsIdx);
 					}
 				}

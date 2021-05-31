@@ -50,7 +50,7 @@ namespace XLEMath
     class AccurateFrustumTester
     {
     public:
-        AABBIntersection::Enum TestSphere(const Float3& centerPoint, float radius);
+        AABBIntersection::Enum TestSphere(Float3 centerPoint, float radius);
 
         AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType);
         ~AccurateFrustumTester();

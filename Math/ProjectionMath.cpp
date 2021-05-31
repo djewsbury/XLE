@@ -444,7 +444,7 @@ namespace XLEMath
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo) { return (1<<faceOne) | (1<<faceTwo); }
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo, unsigned faceThree) { return (1<<faceOne) | (1<<faceTwo) | (1<<faceThree); }
 
-    AABBIntersection::Enum AccurateFrustumTester::TestSphere(const Float3& centerPoint, float radius)
+    AABBIntersection::Enum AccurateFrustumTester::TestSphere(Float3 centerPoint, float radius)
     {
         // This actually tests an axially aligned bounding box that just contains the sphere against the 
         // frustum. It's quick, but not completely accurate. But many cases can accurately be found to be
@@ -454,19 +454,23 @@ namespace XLEMath
             centerPoint - Float3{radius, radius, radius},
             centerPoint + Float3{radius, radius, radius},
             _clipSpaceType);
-        if (quickTest != AABBIntersection::Boundary)
+        if (quickTest != AABBIntersection::Boundary) {
             return quickTest;
+        }
 
         unsigned straddlingFlags = 0;
         Float3 intersectionCenters[6];
         for (unsigned f=0; f<6; ++f) {
             auto distance = SignedDistance(centerPoint, _frustumPlanes[f]);
-            if (__builtin_expect(distance >= radius, false))
+            if (__builtin_expect(distance >= radius, false)) {
                 return AABBIntersection::Culled;        // this should be rare given the quick test above
+            }
             straddlingFlags |= (distance > -radius) << f;
             intersectionCenters[f] = centerPoint - distance * Truncate(_frustumPlanes[f]);
         }
-        if (!straddlingFlags) return AABBIntersection::Within;
+        if (!straddlingFlags) {
+            return AABBIntersection::Within;
+        }
 
         // Check each corner -- 
         // This is cheap to do, and if it's inside, then we know we've got a intersection
@@ -488,8 +492,9 @@ namespace XLEMath
             if (__builtin_expect((straddlingFlags & c) != c, true)) continue;
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
-            if (__builtin_expect(MagnitudeSquared(_frustumCorners[c] - centerPoint) < radiusSq, true))
+            if (__builtin_expect(MagnitudeSquared(_frustumCorners[c] - centerPoint) < radiusSq, true)) {
                 return AABBIntersection::Boundary;
+            }
         }
 
         // Check the non-aligned faces for any intersection centers we got. If it's inside
@@ -516,8 +521,9 @@ namespace XLEMath
             withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face1]) < 0.f;
             withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face2]) < 0.f;
             withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face3]) < 0.f;
-            if (withinCount == 4)
+            if (withinCount == 4) {
                 return AABBIntersection::Boundary;
+            }
         }
 
         struct Edge
@@ -549,8 +555,9 @@ namespace XLEMath
             if (__builtin_expect((straddlingFlags & e._faceBitField) != e._faceBitField, true)) continue;
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
-            if (RayVsSphere(_frustumCorners[e._cornerZero] - centerPoint, _frustumCorners[e._cornerOne] - centerPoint, radiusSq))
+            if (RayVsSphere(_frustumCorners[e._cornerZero] - centerPoint, _frustumCorners[e._cornerOne] - centerPoint, radiusSq)) {
                 return AABBIntersection::Boundary;
+            }
         }
 
         // The sphere is on 2 sides of at least one plane... However, for all of those planes:
