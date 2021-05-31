@@ -23,6 +23,8 @@ namespace RenderCore { namespace LightingEngine
 		struct Pipeline
 		{
 			std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
+			LightSourceOperatorDesc::Flags::BitField _flags = 0;
+			LightSourceShape _stencilingGeoShape = LightSourceShape::Directional;
 		};
 
 		std::vector<Pipeline> _pipelines;
@@ -32,6 +34,9 @@ namespace RenderCore { namespace LightingEngine
 		Metal::BoundUniforms _boundUniforms;
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
         bool _debuggingOn = false;
+		std::shared_ptr<IResource> _stencilingGeometry;
+		std::pair<unsigned, unsigned> _sphereOffsetAndCount;
+		std::pair<unsigned, unsigned> _cubeOffsetAndCount;
 
 		std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 	};

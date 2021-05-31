@@ -92,6 +92,9 @@ namespace UnitTests
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
 		REQUIRE(positional);
 
+		auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(lightSourceId);
+		REQUIRE(finite);
+
 		// Build 6 projection for the cube faces
 		// Using DirectX conventions for face order here:
 		//		+X, -X
@@ -117,7 +120,7 @@ namespace UnitTests
 		Float4x4 cameraToProjection[6];
 		for (unsigned c=0; c<6; ++c) {
 			cameraToProjection[c] = PerspectiveProjection(
-				gPI/2.0f, 1.0f, 0.01f, positional->GetCutoffRange(), 
+				gPI/2.0f, 1.0f, 0.01f, finite->GetCutoffRange(), 
 				GeometricCoordinateSpace::RightHanded,
 				RenderCore::Techniques::GetDefaultClipSpaceType());
 			auto camToWorld = MakeCameraToWorld(faceForward[c], faceUp[c], ExtractTranslation(positional->GetLocalToWorld()));

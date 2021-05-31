@@ -266,5 +266,44 @@ namespace ToolsRig
 
         return result;
     }
+
+    std::vector<Float3>     BuildGeodesicSphereP(int detail)
+    {
+        return BuildGeodesicSpherePts(detail);
+    }
+
+    std::vector<Float3>     BuildCubeP()
+    {
+        Float3 normals[] = { 
+            Float3(0.f, 0.f, -1.f), Float3(0.f, 0.f, 1.f),
+            Float3(1.f, 0.f, 0.f), Float3(-1.f, 0.f, 0.f),
+            Float3(0.f, 1.f, 0.f), Float3(0.f, -1.f, 0.f)
+        };
+        Float3 Us[] = {
+            Float3(1.f, 0.f, 0.f), Float3(-1.f, 0.f, 0.f),
+            Float3(0.f, 1.f, 0.f), Float3(0.f, -1.f, 0.f),
+            Float3(-1.f, 0.f, 0.f), Float3(1.f, 0.f,  0.f)
+        };
+        Float3 Vs[] = {
+            Float3(0.f, 1.f, 0.f), Float3(0.f, 1.f, 0.f),
+            Float3(0.f, 0.f, -1.f), Float3(0.f, 0.f, -1.f),
+            Float3(0.f, 0.f, -1.f), Float3(0.f, 0.f, -1.f)
+        };
+
+        float faceCoord[4][2] = {{ -1.f, -1.f }, { -1.f, 1.f }, { 1.f, -1.f }, { 1.f, 1.f }};
+
+        std::vector<Float3> result;
+        for (unsigned c=0; c<6; ++c) {
+            auto normal = normals[c], u = Us[c], v = Vs[c];
+
+            Float3 a[4];
+            for (unsigned q=0; q<4; ++q)
+                a[q] = normal + faceCoord[q][0] * u + faceCoord[q][1] * v;
+            result.push_back(a[0]); result.push_back(a[1]); result.push_back(a[2]);
+            result.push_back(a[2]); result.push_back(a[1]); result.push_back(a[3]);
+        }
+
+        return result;
+    }
 }
 

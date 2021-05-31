@@ -72,8 +72,6 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		virtual void SetLocalToWorld(const Float4x4&) = 0;
 		virtual Float4x4 GetLocalToWorld() const = 0;
-		virtual void SetCutoffRange(float) = 0;
-		virtual float GetCutoffRange() const = 0;
 		virtual ~IPositionalLightSource();
 	};
 
@@ -85,6 +83,14 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetDiffuseWideningFactors(Float2) = 0;
 		virtual Float2 GetDiffuseWideningFactors() const = 0;
 		virtual ~IUniformEmittance();
+	};
+
+	class IFiniteLightSource
+	{
+	public:
+		virtual void SetCutoffRange(float cutoff) = 0;
+		virtual float GetCutoffRange() const = 0;
+		virtual ~IFiniteLightSource();
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

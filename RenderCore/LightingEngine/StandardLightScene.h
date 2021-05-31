@@ -48,7 +48,7 @@ namespace RenderCore { namespace LightingEngine
 		~StandardLightScene();
 	};
 
-	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance
+	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
 	{
 	public:
 		Float3x3    _orientation;
@@ -56,8 +56,7 @@ namespace RenderCore { namespace LightingEngine
 		Float2      _radii;
 
 		float       _cutoffRange;
-		Float3      _diffuseColor;
-		Float3      _specularColor;
+		Float3      _brightness;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
 
@@ -78,8 +77,8 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetCutoffRange(float cutoff) override { _cutoffRange = cutoff; }
 		virtual float GetCutoffRange() const override { return _cutoffRange; }
 
-		virtual void SetBrightness(Float3 rgb) override { _diffuseColor = rgb; }
-		virtual Float3 GetBrightness() const override { return _diffuseColor; }
+		virtual void SetBrightness(Float3 rgb) override { _brightness = rgb; }
+		virtual Float3 GetBrightness() const override { return _brightness; }
 		virtual void SetDiffuseWideningFactors(Float2 minAndMax) override
 		{
 			_diffuseWideningMin = minAndMax[0];
@@ -92,14 +91,21 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
 
-		StandardLightDesc()
+		struct Flags
+		{
+			enum Enum { SupportFiniteRange = 1<<0 };
+			using BitField = unsigned;
+		};
+		Flags::BitField _flags;
+
+		StandardLightDesc(Flags::BitField flags)
+		: _flags(flags)
 		{
 			_position = Normalize(Float3(-.1f, 0.33f, 1.f));
 			_orientation = Identity<Float3x3>();
 			_cutoffRange = 10000.f;
 			_radii = Float2(1.f, 1.f);
-			_diffuseColor = Float3(1.f, 1.f, 1.f);
-			_specularColor = Float3(1.f, 1.f, 1.f);
+			_brightness = Float3(1.f, 1.f, 1.f);
 
 			_diffuseWideningMin = 0.5f;
 			_diffuseWideningMax = 2.5f;

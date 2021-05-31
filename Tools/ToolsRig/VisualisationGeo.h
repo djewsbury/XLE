@@ -31,7 +31,6 @@ namespace ToolsRig
             Float3      _normal;
             Float2      _texCoord;
             Float4      _tangent;
-            // Float3      _bitangent;
         };
         #pragma pack(pop)
     }
@@ -45,5 +44,8 @@ namespace ToolsRig
     std::vector<Internal::Vertex3D>     BuildGeodesicSphere(int detail = 4);
     std::vector<Internal::Vertex3D>     BuildCube();
     std::vector<Internal::Vertex3D>     BuildTriangleBasePyramid();
+
+    std::vector<Float3>     BuildGeodesicSphereP(int detail = 4);
+    std::vector<Float3>     BuildCubeP();
 }
 

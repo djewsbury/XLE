@@ -101,6 +101,18 @@ namespace XLEMath
 		return true;
 	}
 
+    bool RayVsSphere(Float3 rayStart, Float3 rayEnd, float sphereRadiusSq)
+    {
+        Float3 rayDirection = rayEnd - rayStart;
+        float rayLength = Magnitude(rayDirection);
+        Float3 unitRayDirection = rayDirection / rayLength;
+        auto d = Dot(-rayStart, unitRayDirection);
+        d = Clamp(d, 0.f, rayLength);
+		const Float3 closestPoint = rayStart + d * unitRayDirection;
+		const auto closestDistanceSq = MagnitudeSquared(closestPoint);
+		return closestDistanceSq <= sphereRadiusSq;
+    }
+
     bool RayVsAABB(const std::pair<Float3, Float3>& worldSpaceRay, const Float4x4& aabbToWorld, const Float3& mins, const Float3& maxs)
     {
             //  Does this ray intersect the aabb? 
@@ -322,8 +334,11 @@ namespace XLEMath
 				Note -- this the most straightforward fashion to calculate a plane, but unfortunately it's inaccurate
 						(particularly if the points are close together). There are better methods, but they require
 						more complex math (see, for example, the Triangle library)
+
+                The cross product is ordered so that if we pass in 3 points in counter clockwise winding from our
+                perspective, then we should get a vector pointing towards us (ie, inline with CCW being front facing)
 			*/
-		auto normal = Normalize( Cross( pt0 - pt1, pt2 - pt1 ) );
+		auto normal = Normalize( Cross( pt2 - pt1, pt0 - pt1 ) );
 		Primitive w = (-Dot( pt0, normal ) - Dot( pt1, normal ) - Dot( pt2, normal )) * Primitive(1./3.);
 		return Expand( normal, w );
 	}
@@ -335,13 +350,8 @@ namespace XLEMath
 		const Vector3T<Primitive>& pt2)
 	{
         assert(result);
-			/*
-				Note -- this the most straightforward fashion to calculate a plane, but unfortunately it's inaccurate
-						(particularly if the points are close together). There are better methods, but they require
-						more complex math (see, for example, the Triangle library)
-			*/
 		Vector3T<Primitive> normal;
-        if (!Normalize_Checked(&normal, Vector3T<Primitive>(Cross(pt0 - pt1, pt2 - pt1))))
+        if (!Normalize_Checked(&normal, Vector3T<Primitive>(Cross(pt2 - pt1, pt0 - pt1))))
             return false;
 
         auto w = (-Dot( pt0, normal ) - Dot( pt1, normal ) - Dot( pt2, normal )) * Primitive(1./3.);

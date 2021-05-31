@@ -34,11 +34,10 @@ struct VolumeFogDesc
 struct LightDesc
 {
     float3	Position; 		float	CutoffRange;
-	float3	Diffuse; 		float	SourceRadiusX;
-	float3	Specular; 		float	SourceRadiusY;
-	float3	OrientationX; 	float	DiffuseWideningMin;
-	float3	OrientationY; 	float	DiffuseWideningMax;
-	float3	OrientationZ; 	uint	Dummy;
+	float3	Brightness; 	float	SourceRadiusX;
+	float3	OrientationX; 	float	SourceRadiusY;
+	float3	OrientationY; 	float	DiffuseWideningMin;
+	float3	OrientationZ; 	float	DiffuseWideningMax;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

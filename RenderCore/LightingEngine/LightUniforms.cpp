@@ -28,11 +28,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
         return CB_Light 
             {
                 light._position, light._cutoffRange, 
-                light._diffuseColor, light._radii[0],
-                light._specularColor, light._radii[1],
-                ExtractRight(light._orientation), light._diffuseWideningMin, 
-                ExtractForward(light._orientation), light._diffuseWideningMax, 
-                ExtractUp(light._orientation), 0
+                light._brightness, light._radii[0],
+                ExtractRight(light._orientation), light._radii[1],
+                ExtractForward(light._orientation), light._diffuseWideningMin, 
+                ExtractUp(light._orientation), light._diffuseWideningMax
             };
     }
 
@@ -43,8 +42,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
                 Float3(0.f, 0.f, 0.f), 0.f,
                 Float3(0.f, 0.f, 0.f), 0.f,
                 Float3(0.f, 0.f, 0.f), 0.f,
-                Float3(0.f, 0.f, 0.f), 0.f,
-                Float3(0.f, 0.f, 0.f), 0 };
+                Float3(0.f, 0.f, 0.f), 0.f };
     }
 
     CB_VolumeFog MakeBlankVolumeFogDesc()

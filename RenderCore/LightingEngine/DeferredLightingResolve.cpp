@@ -18,13 +18,16 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"
 #include "../IAnnotator.h"
+#include "../BufferView.h"
 
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/StringFormat.h"
 #include "../../xleres/FileList.h"
 
-#include "../ConsoleRig/Console.h"
+#include "../../ConsoleRig/Console.h"
+
+#include "../../Tools/ToolsRig/VisualisationGeo.h"
 
 static Int2 GetCursorPos();
 
@@ -32,7 +35,10 @@ namespace RenderCore { namespace LightingEngine
 {
 	std::unique_ptr<ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
-		return std::make_unique<StandardLightDesc>();
+		StandardLightDesc::Flags::BitField flags = 0;
+		if (_pipelines[opId]._stencilingGeoShape != LightSourceShape::Directional && !(_pipelines[opId]._flags & LightSourceOperatorDesc::Flags::NeverStencil))
+			flags |= StandardLightDesc::Flags::SupportFiniteRange;
+		return std::make_unique<StandardLightDesc>(flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,12 +105,20 @@ namespace RenderCore { namespace LightingEngine
 		if (!shadowSelectors.empty())
 			definesTable << ";" << shadowSelectors;
 
-		const char* vertexShader_viewFrustumVector = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+		const char* vertexShader = nullptr;
 		auto stencilRefValue = 0;
 
 		Techniques::VertexInputStates inputStates;
-		inputStates._inputLayout = {};
-		inputStates._topology = Topology::TriangleStrip;
+		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
+		if (desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) {
+			inputStates._inputLayout = {};
+			vertexShader = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			inputStates._topology = Topology::TriangleStrip;
+		} else {
+			inputStates._inputLayout = MakeIteratorRange(inputElements);
+			vertexShader = BASIC2D_VERTEX_HLSL ":P_viewfrustumvector";
+			inputStates._topology = Topology::TriangleList;
+		}
 
 		Techniques::PixelOutputStates outputStates;
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
@@ -117,12 +131,15 @@ namespace RenderCore { namespace LightingEngine
 			stencilRefValue = 0x0;
 		}
 
+		if (!(desc._flags & LightSourceOperatorDesc::Flags::NeverStencil))
+			outputStates._depthStencil._depthBoundsTestEnable = true;
+
 		AttachmentBlendDesc blends[] { Techniques::CommonResourceBox::s_abAdditive };
 		outputStates._attachmentBlend = MakeIteratorRange(blends);
 		outputStates._fbTarget = {&fbDesc, subpassIdx};
 
 		return pipelineCollection.CreatePipeline(
-			vertexShader_viewFrustumVector, {},
+			vertexShader, {},
 			DEFERRED_RESOLVE_LIGHT ":main", definesTable.AsStringSection(),
 			inputStates, outputStates);
 	}
@@ -182,8 +199,14 @@ namespace RenderCore { namespace LightingEngine
 		bool hasScreenSpaceAO,
 		GBufferType gbufferType)
 	{
+		struct AttachedData
+		{
+			LightSourceOperatorDesc::Flags::BitField _flags = 0;
+			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
+		};
 		using PipelineFuture = ::Assets::FuturePtr<Metal::GraphicsPipeline>;
 		std::vector<PipelineFuture> pipelineFutures;
+		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
 		
 		pipelineFutures.reserve(resolveOperators.size() * (1+shadowOperators.size()));
@@ -197,6 +220,7 @@ namespace RenderCore { namespace LightingEngine
 					fbDesc, subpassIdx,
 					hasScreenSpaceAO, 
 					gbufferType));
+			attachedData.push_back(AttachedData{resolveOperators[lightOperatorId]._flags, resolveOperators[lightOperatorId]._shape});
 		}
 
 		for (unsigned lightOperatorId=0; lightOperatorId!=resolveOperators.size(); ++lightOperatorId) {
@@ -235,6 +259,7 @@ namespace RenderCore { namespace LightingEngine
 						fbDesc, subpassIdx,
 						hasScreenSpaceAO, 
 						gbufferType));
+				attachedData.push_back(AttachedData{resolveOperators[lightOperatorId]._flags, resolveOperators[lightOperatorId]._shape});
 			}
 		}
 
@@ -251,10 +276,11 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("No SharedDescriptors descriptor set in lighting operator pipeline layout"));
 
 		auto fixedDescSetFuture = BuildFixedLightResolveDescriptorSet(pipelineCollection.GetDevice(), *sig);
+		auto device = pipelineCollection.GetDevice();
 
 		auto result = std::make_shared<::Assets::AssetFuture<LightResolveOperators>>("light-operators");
 		result->SetPollingFunction(
-			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap)](::Assets::AssetFuture<LightResolveOperators>& future) -> bool {
+			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)](::Assets::AssetFuture<LightResolveOperators>& future) -> bool {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<Metal::GraphicsPipeline>> actualized;
 				actualized.resize(pipelineFutures.size());
@@ -285,8 +311,9 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				finalResult->_pipelines.reserve(actualized.size());
-				for (auto& a:actualized)
-					finalResult->_pipelines.push_back({std::move(a)});
+				assert(actualized.size() == attachedData.size());
+				for (unsigned c=0; c<actualized.size(); ++c)
+					finalResult->_pipelines.push_back({std::move(actualized[c]), attachedData[c]._flags, attachedData[c]._stencilingShape});
 				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 
 				UniformsStreamInterface sharedUsi;
@@ -304,6 +331,20 @@ namespace RenderCore { namespace LightingEngine
 				finalResult->_boundUniforms = Metal::BoundUniforms {
 					*finalResult->_pipelineLayout,
 					usi, sharedUsi};
+
+				{
+					auto sphereGeo = ToolsRig::BuildGeodesicSphereP(4);
+					auto cubeGeo = ToolsRig::BuildCubeP();
+					std::vector<uint8_t> geoInitBuffer;
+					geoInitBuffer.resize((sphereGeo.size() + cubeGeo.size()) * sizeof(Float3));
+					std::memcpy(geoInitBuffer.data(), cubeGeo.data(), cubeGeo.size() * sizeof(Float3));
+					std::memcpy(PtrAdd(geoInitBuffer.data(), cubeGeo.size() * sizeof(Float3)), sphereGeo.data(), sphereGeo.size() * sizeof(Float3));
+					finalResult->_stencilingGeometry = device->CreateResource(
+						CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(geoInitBuffer.size()), "light-stenciling-geometry"),
+						SubResourceInitData{MakeIteratorRange(geoInitBuffer)});
+					finalResult->_cubeOffsetAndCount = {0u, (unsigned)cubeGeo.size()};
+					finalResult->_sphereOffsetAndCount = {(unsigned)cubeGeo.size(), (unsigned)sphereGeo.size()};
+				} 
 
 				future.SetAsset(decltype(finalResult){finalResult}, nullptr);
 				return false;
@@ -339,7 +380,8 @@ namespace RenderCore { namespace LightingEngine
 			cbvs[CB::Debugging] = MakeOpaqueIteratorRange(debuggingGlobals);
 		}
 
-		auto globalTransformUniforms = Techniques::BuildGlobalTransformConstants(parsingContext.GetProjectionDesc());
+		const auto& projectionDesc = parsingContext.GetProjectionDesc();
+		auto globalTransformUniforms = Techniques::BuildGlobalTransformConstants(projectionDesc);
 		cbvs[CB::GlobalTransform] = MakeOpaqueIteratorRange(globalTransformUniforms);
 		srvs[SR::GBuffer_Diffuse] = rpi.GetInputAttachmentSRV(0);
 		srvs[SR::GBuffer_Normals] = rpi.GetInputAttachmentSRV(1);
@@ -356,13 +398,33 @@ namespace RenderCore { namespace LightingEngine
 		IDescriptorSet* fixedDescSets[] = { lightResolveOperators._fixedDescriptorSet.get() };
 		boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(fixedDescSets), 1);
 
+		VertexBufferView vbvs[] = {
+			VertexBufferView { lightResolveOperators._stencilingGeometry.get() }
+		};
+		encoder.Bind(MakeIteratorRange(vbvs), {});
+
+		AccurateFrustumTester frustumTester(projectionDesc._worldToProjection, Techniques::GetDefaultClipSpaceType());
+
+		auto cameraForward = ExtractForward_Cam(projectionDesc._cameraToWorld);
+		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 		auto lightCount = lightScene._lights.size();
 		auto shadowIterator = preparedShadows.begin();
 		for (unsigned l=0; l<lightCount; ++l) {
 			const auto& i = lightScene._lights[l];
 
 			assert(i._desc->QueryInterface(typeid(StandardLightDesc).hash_code()) == i._desc.get());
-			auto lightUniforms = Internal::MakeLightUniforms(*(StandardLightDesc*)i._desc.get());
+			auto& standardLightDesc = *(StandardLightDesc*)i._desc.get();
+
+			auto lightShape = lightResolveOperators._pipelines[i._operatorId]._stencilingGeoShape;
+			if (lightShape == LightSourceShape::Sphere) {
+				// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
+				// do an accurate culling check for them here... 
+				auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._radii[0]);
+				if (cullResult == AABBIntersection::Culled)
+					continue;
+			}
+
+			auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc);
 			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);
@@ -399,7 +461,26 @@ namespace RenderCore { namespace LightingEngine
 			uniformsStream._immediateData = MakeIteratorRange(cbvs);
 			uniformsStream._resourceViews = MakeIteratorRange(srvs);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
-			encoder.Draw(*pipeline->_pipeline, 4);
+
+			if (pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) {
+				encoder.Draw(*pipeline->_pipeline, 4);
+			} else {
+				if (pipeline->_stencilingGeoShape == LightSourceShape::Sphere) {
+					// We need to calculate the correct min and max depth of sphere projected into clip space
+					// Here the smallest and largest depth value aren't necessarily at the points that are closest and furtherest
+					// from the camera; but rather by the pointer intersected by the camera forward direction through the center
+					// (at least assuming the entire sphere is onscreen)
+					// I suppose we could reduce this depth range when we know that the center point is onscreen
+					Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
+					Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
+					float d0 = extremePoint0[2] / extremePoint0[3], d1 = extremePoint1[2] / extremePoint1[3];
+
+					encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
+					encoder.Draw(*pipeline->_pipeline, lightResolveOperators._sphereOffsetAndCount.second, lightResolveOperators._sphereOffsetAndCount.first);
+				} else {
+					assert(0);
+				}
+			}
 		}
 	}
    

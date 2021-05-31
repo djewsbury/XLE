@@ -46,11 +46,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			// if we want to store a large number of lights for forward
 			// rendering.
 		Float3 _position;           float _cutoffRange;
-		Float3 _diffuse;            float _sourceRadiusX;
-		Float3 _specular;           float _sourceRadiusY;
-		Float3 _orientationX;       float _diffuseWideningMin;
-		Float3 _orientationY;       float _diffuseWideningMax;
-		Float3 _orientationZ;       unsigned _dummy;
+		Float3 _brightness;         float _sourceRadiusX;
+		Float3 _orientationX;       float _sourceRadiusY;
+		Float3 _orientationY;       float _diffuseWideningMin;
+		Float3 _orientationZ;       float _diffuseWideningMax;
 	};
 
 	struct CB_BasicEnvironment

@@ -24,7 +24,9 @@
 
 struct ViewFrustumInterpolator
 {
-	float3 oViewFrustumVector : VIEWFRUSTUMVECTOR;
+	// We must use the "no persepective" flag on this attribute; because we can actually use this with 3d geometry
+	// and as long as the vectors are corerct on the vertices, we'll still end up with the correct result
+	noperspective float3 oViewFrustumVector : VIEWFRUSTUMVECTOR;
 };
 
 struct FullscreenCorner
@@ -173,6 +175,34 @@ void screenspacerect(
 		 2.f * coord.x / OutputDimensions.x - 1.f,
 		-2.f * coord.y / OutputDimensions.y + 1.f,
 		 0.f, 1.f);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+void P_viewfrustumvector(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out float2 oTexCoord : TEXCOORD0, out ViewFrustumInterpolator vfi)
+{
+	oPosition = mul(SysUniform_GetWorldToClip(), float4(iPosition, 1));
+	
+	#if NDC == NDC_POSITIVE_RIGHT_HANDED
+		oTexCoord.y = (oPosition.y + 1.0f) / 2.0f;
+	#else
+		oTexCoord.y = (1.0f - oPosition.y) / 2.0f;
+	#endif
+	oTexCoord.x = (oPosition.x + 1.0f) / 2.0f;
+
+	// We can use bilinear interpolation here to find the correct view frustum vector
+	// Note that this require we use "noperspective" interpolation between vertices for this attribute, though
+	float w0 = (1.0f - oTexCoord.x) * (1.0f - oTexCoord.y);
+	float w1 = (1.0f - oTexCoord.x) * oTexCoord.y;
+	float w2 = oTexCoord.x * (1.0f - oTexCoord.y);
+	float w3 = oTexCoord.x * oTexCoord.y;
+
+	vfi.oViewFrustumVector = 
+		  w0 * SysUniform_GetFrustumCorners(0)
+		+ w1 * SysUniform_GetFrustumCorners(1)
+		+ w2 * SysUniform_GetFrustumCorners(2)
+		+ w3 * SysUniform_GetFrustumCorners(3)
+		;
 }
 
 //////////////

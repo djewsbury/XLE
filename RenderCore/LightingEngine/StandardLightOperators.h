@@ -17,6 +17,13 @@ namespace RenderCore { namespace LightingEngine
 		LightSourceShape _shape = LightSourceShape::Directional;
 		DiffuseModel _diffuseModel = DiffuseModel::Disney;
 
+		struct Flags
+		{
+			enum Enum { NeverStencil = 1<<0 };
+			using BitField = unsigned;
+		};
+		Flags::BitField _flags = 0;
+
 		uint64_t Hash(uint64_t seed = DefaultSeed64) const;
 	};
 

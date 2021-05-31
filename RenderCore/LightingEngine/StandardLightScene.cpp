@@ -14,6 +14,9 @@ namespace RenderCore { namespace LightingEngine
 			return (IPositionalLightSource*)this;
 		} else if (interfaceTypeCode == typeid(IUniformEmittance).hash_code()) {
 			return (IUniformEmittance*)this;
+		} else if (interfaceTypeCode == typeid(IFiniteLightSource).hash_code()) {
+			if (_flags & Flags::SupportFiniteRange)
+				return (IFiniteLightSource*)this;
 		} else if (interfaceTypeCode == typeid(StandardLightDesc).hash_code()) {
 			return this;
 		}
@@ -107,7 +110,7 @@ namespace RenderCore { namespace LightingEngine
 	uint64_t LightSourceOperatorDesc::Hash(uint64_t seed) const
 	{
 		uint64_t h = 
-			(uint64_t(_shape) & 0xff) << 8ull | (uint64_t(_diffuseModel) & 0xff);
+			(uint64_t(_shape) & 0xff) << 8ull | (uint64_t(_diffuseModel) & 0xff) | (uint64_t(_flags) << 16ull);
 		return HashCombine(h, seed);
 	}
 
@@ -115,6 +118,7 @@ namespace RenderCore { namespace LightingEngine
 	ILightScene::~ILightScene() {}
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}
+	IFiniteLightSource::~IFiniteLightSource() {}
 	IShadowPreparer::~IShadowPreparer() {}
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}

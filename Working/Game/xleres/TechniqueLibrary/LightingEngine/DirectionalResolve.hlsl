@@ -42,7 +42,7 @@ float3 DirectionalLightResolve_Diffuse_NdotL(
 	float result = rawDiffuse * (1.0f - metal);
 	result *= sample.cookedLightOcclusion;
 	result *= NdotL;
-	return result * light.Diffuse.rgb * sample.diffuseAlbedo.rgb;
+	return result * light.Brightness.rgb * sample.diffuseAlbedo.rgb;
 }
 
 float3 DirectionalLightResolve_Diffuse(
@@ -60,8 +60,7 @@ float3 DirectionalLightResolve_Specular(
 	float3 directionToEye,
 	float3 negativeLightDirection,
 	LightDesc light,
-	float screenSpaceOcclusion = 1.f,
-	bool mirrorSpecular = false)
+	float screenSpaceOcclusion = 1.f)
 {
 		// HACK! preventing problems at very low roughness values
 	float roughnessValue = max(0.03f, GetRoughness(sample));
@@ -110,7 +109,7 @@ float3 DirectionalLightResolve_Specular(
 	float norm = 1.f;
 
 	// note -- specular occlusion is going to apply to both reflected and transmitted specular
-	return spec0 * (specularOcclusion * norm) * light.Specular;
+	return spec0 * (specularOcclusion * norm) * light.Brightness;
 }
 
 #endif

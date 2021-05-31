@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
@@ -45,6 +46,10 @@ namespace UnitTests
 		auto* emittance = lightScene.TryGetLightSourceInterface<IUniformEmittance>(lightId);
 		REQUIRE(emittance);
 		emittance->SetBrightness(Float3(10.f, 10.f, 10.f));
+
+		auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(lightId);
+		if (finite)
+			finite->SetCutoffRange(10.0f);
 
 		return lightId;
 	}
@@ -118,6 +123,10 @@ namespace UnitTests
 		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		camera._nearClip = 0.f;
 		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
+		camera._left = -10.f;
+		camera._top = 10.f;
+		camera._right = 10.f;
+		camera._bottom = -10.f;
 		
 		testHelper->BeginFrameCapture();
 
@@ -155,7 +164,7 @@ namespace UnitTests
 			SECTION("sphere light")
 			{
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-				auto lightId = ConfigureLightScene(lightScene, {0.f, 15.f, 0.f});
+				auto lightId = ConfigureLightScene(lightScene, {0.f, 5.f, 0.f});
 
 				auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 				auto query = statsQuery.Begin(metalContext);

@@ -47,6 +47,20 @@ namespace XLEMath
             == AABBIntersection::Culled;
     }
 
+    class AccurateFrustumTester
+    {
+    public:
+        AABBIntersection::Enum TestSphere(const Float3& centerPoint, float radius);
+
+        AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType);
+        ~AccurateFrustumTester();
+    private:
+        Float4 _frustumPlanes[6];
+        Float3 _frustumCorners[8];
+        Float4x4 _localToProjection;
+        ClipSpaceType _clipSpaceType;
+    };
+
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix);
     bool IsOrthogonalProjection(const Float4x4& projectionMatrix);
     

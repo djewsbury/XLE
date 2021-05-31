@@ -62,6 +62,9 @@ namespace XLEMath
 		float& distance,
 		Float3 rayStart, Float3 rayDirection, float sphereRadiusSq);
 
+    /// Returns true iff the given (finite length) ray intersects a sphere at the origin with the given radius squared
+    bool RayVsSphere(Float3 rayStart, Float3 rayEnd, float sphereRadiusSq);
+
     unsigned ClipTriangle(Float3 dst[], const Float3 source[], float clippingParam[]);
     
     

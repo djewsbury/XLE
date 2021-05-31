@@ -352,6 +352,12 @@ namespace XLEMath
             //  plane... We can do this in clip space (assuming we can do a fast position transform on
             //  the CPU). We can also do this in world space by finding the planes of the frustum, and
             //  comparing each corner point to each plane.
+            //
+            // This method is quite fast and conveninent, but isn't actually 100% correct. There are some cases where 
+            // the bounding box is straddling a plane, but all points that are on the inside of that plane are 
+            // still outside of the frustum. Ie, it's just the box is just diagonally off an edge or corner of the frustum.
+            // This is a lot more likely with large bounding boxes -- in those cases we should do a more accurate (and
+            // more expensive) test
         Float3 corners[8] = 
         {
             Float3(mins[0], mins[1], mins[2]),
@@ -433,6 +439,154 @@ namespace XLEMath
 #else
         return TestAABB(localToProjection, mins, maxs, clipSpaceType);
 #endif
+    }
+
+    constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo) { return (1<<faceOne) | (1<<faceTwo); }
+    constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo, unsigned faceThree) { return (1<<faceOne) | (1<<faceTwo) | (1<<faceThree); }
+
+    AABBIntersection::Enum AccurateFrustumTester::TestSphere(const Float3& centerPoint, float radius)
+    {
+        // This actually tests an axially aligned bounding box that just contains the sphere against the 
+        // frustum. It's quick, but not completely accurate. But many cases can accurately be found to be
+        // completely within, or completely without, by using this method
+        auto quickTest = TestAABB(
+            _localToProjection, 
+            centerPoint - Float3{radius, radius, radius},
+            centerPoint + Float3{radius, radius, radius},
+            _clipSpaceType);
+        if (quickTest != AABBIntersection::Boundary)
+            return quickTest;
+
+        unsigned straddlingFlags = 0;
+        Float3 intersectionCenters[6];
+        for (unsigned f=0; f<6; ++f) {
+            auto distance = SignedDistance(centerPoint, _frustumPlanes[f]);
+            if (__builtin_expect(distance >= radius, false))
+                return AABBIntersection::Culled;        // this should be rare given the quick test above
+            straddlingFlags |= (distance > -radius) << f;
+            intersectionCenters[f] = centerPoint - distance * Truncate(_frustumPlanes[f]);
+        }
+        if (!straddlingFlags) return AABBIntersection::Within;
+
+        // Check each corner -- 
+        // This is cheap to do, and if it's inside, then we know we've got a intersection
+        const unsigned faceBitFieldForCorner[] {
+            ToFaceBitField(1, 2, 4),
+            ToFaceBitField(1, 3, 4),
+            ToFaceBitField(0, 2, 4),
+            ToFaceBitField(0, 3, 4),
+
+            ToFaceBitField(1, 2, 5),
+            ToFaceBitField(1, 3, 5),
+            ToFaceBitField(0, 2, 5),
+            ToFaceBitField(0, 3, 5)
+        };
+
+        const float radiusSq = radius*radius;
+
+        for (auto c:faceBitFieldForCorner) {
+            if (__builtin_expect((straddlingFlags & c) != c, true)) continue;
+            // the sphere is straddling all 3 edges of this corner. Check if it's
+            // inside of the sphere
+            if (__builtin_expect(MagnitudeSquared(_frustumCorners[c] - centerPoint) < radiusSq, true))
+                return AABBIntersection::Boundary;
+        }
+
+        // Check the non-aligned faces for any intersection centers we got. If it's inside
+        // all, then the sphere does intersect the frustum
+        // All faces have a "pair" (ie, front and back, left and right, top and bottom). The
+        // non-aligned faces are just the ones other than a given face and it's pair
+        struct NonAlignedFaces { unsigned _face0, _face1, _face2, _face3; };
+        const NonAlignedFaces nonAlignedFaces[] {
+            { 2, 4, 3, 5 },
+            { 2, 4, 3, 5 },
+
+            { 0, 5, 1, 4 },
+            { 0, 5, 1, 4 },
+
+            { 0, 3, 1, 2 },
+            { 0, 3, 1, 2 }        
+        };
+        for (unsigned f=0; f<6; ++f) {
+            if (__builtin_expect(!(straddlingFlags & (1<<f)), true)) continue;
+            auto intersectionCenter = intersectionCenters[f];
+            auto naFaces = nonAlignedFaces[f];
+            unsigned withinCount = 0;
+            withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face0]) < 0.f;
+            withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face1]) < 0.f;
+            withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face2]) < 0.f;
+            withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face3]) < 0.f;
+            if (withinCount == 4)
+                return AABBIntersection::Boundary;
+        }
+
+        struct Edge
+        {
+            unsigned _cornerZero, _cornerOne;
+            unsigned _faceBitField;
+        };
+        const Edge faceBitFieldForEdge[] {
+            // ringing around front
+            Edge { 0, 1,      ToFaceBitField(4, 1) },
+            Edge { 1, 3,      ToFaceBitField(4, 3) },
+            Edge { 3, 2,      ToFaceBitField(4, 0) },
+            Edge { 2, 0,      ToFaceBitField(4, 2) },
+
+            // ringing around back
+            Edge { 4, 6,      ToFaceBitField(5, 2) },
+            Edge { 6, 7,      ToFaceBitField(5, 0) },
+            Edge { 7, 5,      ToFaceBitField(5, 3) },
+            Edge { 5, 4,      ToFaceBitField(5, 1) },
+
+            // joining front to back
+            Edge { 0, 4,      ToFaceBitField(2, 1) },
+            Edge { 1, 5,      ToFaceBitField(1, 3) },
+            Edge { 3, 7,      ToFaceBitField(3, 0) },
+            Edge { 2, 6,      ToFaceBitField(0, 2) }
+        };
+
+        for (auto e:faceBitFieldForEdge) {
+            if (__builtin_expect((straddlingFlags & e._faceBitField) != e._faceBitField, true)) continue;
+            // the sphere is straddling both planes of this edge. Check the edge to see
+            // if it intersects the sphere
+            if (RayVsSphere(_frustumCorners[e._cornerZero] - centerPoint, _frustumCorners[e._cornerOne] - centerPoint, radiusSq))
+                return AABBIntersection::Boundary;
+        }
+
+        // The sphere is on 2 sides of at least one plane... However, for all of those planes:
+        //      . the point on the plane closest to the sphere center is outside of the frustum
+        //      . the sphere does not intersect with any edges
+        //      . the sphere does not contain any corners
+        // Therefore, we'll conclude that this sphere is outside of the frustum
+        return AABBIntersection::Culled;
+    }
+
+    AccurateFrustumTester::AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType)
+    : _localToProjection(localToProjection)
+    , _clipSpaceType(clipSpaceType)
+    {
+        // Decompose the frustum into a set of planes. We'll do this such that the normal
+        // points outwards.
+        // planes 5-6 are the near & far
+        CalculateAbsFrustumCorners(_frustumCorners, localToProjection, clipSpaceType);
+
+        // There are a bunch of potential ways we can fit these planes
+        // 1. use 3 point input version of PlaneFit and frustum corners calculated from worldToProjection
+        // 2. use 4 point input version of PlaneFit (should give us a nicer fit)
+        // 3. calculate from the parameters used to construct the projection matrix (ie, verticalFOV, etc)
+        // Method 3 might actually be most efficient & also most numerically stable... but at the same time, 
+        // building from an arbitrary input transformation seems convenient
+        _frustumPlanes[0] = PlaneFit(_frustumCorners[2], _frustumCorners[3], _frustumCorners[7]);      // +X (note, these are based on an identity view matrix)
+        _frustumPlanes[1] = PlaneFit(_frustumCorners[1], _frustumCorners[0], _frustumCorners[4]);      // -X
+        _frustumPlanes[2] = PlaneFit(_frustumCorners[0], _frustumCorners[2], _frustumCorners[6]);      // +Y
+        _frustumPlanes[3] = PlaneFit(_frustumCorners[3], _frustumCorners[1], _frustumCorners[5]);      // -Y
+        _frustumPlanes[4] = PlaneFit(_frustumCorners[0], _frustumCorners[1], _frustumCorners[3]);      // +Z
+        _frustumPlanes[5] = PlaneFit(_frustumCorners[6], _frustumCorners[7], _frustumCorners[5]);      // -Z
+    }
+
+    AccurateFrustumTester::~AccurateFrustumTester()
+    {
+
     }
 
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix)
