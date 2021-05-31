@@ -305,21 +305,24 @@ namespace RenderCore { namespace LightingEngine
     {
         // We need to test the edges of ortho box against the camera frustum
         // and the edges of the ortho box against the frustum
-        const unsigned edges[] = {
+        //
+        // Note that the points in "absFrustumCorners" are actually arranged so first 4 and last 4
+        // make Z-patterns
+        const unsigned edges_zpattern[] = {
             0, 1,
-            1, 2,
-            2, 3,
-            3, 0,
+            1, 3,
+            3, 2,
+            2, 0,
 
-            4, 5,
-            5, 6,
+            4, 6,
             6, 7,
-            7, 4,
+            7, 5,
+            5, 4,
 
             0, 4,
             1, 5,
-            2, 6,
-            3, 7
+            3, 7,
+            2, 6
         };
 
         auto orthoToClip = Combine(orthoViewToWorld, cameraWorldToClip);
@@ -331,19 +334,19 @@ namespace RenderCore { namespace LightingEngine
         {
             const Float4 clipSpaceCorners[] = {
                 orthoToClip * Expand(Float3{projection._leftTopFront[0], projection._leftTopFront[1], projection._leftTopFront[2]}, 1.0f),
-                orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._leftTopFront[1], projection._leftTopFront[2]}, 1.0f),
                 orthoToClip * Expand(Float3{projection._leftTopFront[0], projection._rightBottomBack[1], projection._leftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._leftTopFront[1], projection._leftTopFront[2]}, 1.0f),
                 orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._rightBottomBack[1], projection._leftTopFront[2]}, 1.0f),
 
                 orthoToClip * Expand(Float3{projection._leftTopFront[0], projection._leftTopFront[1], projection._rightBottomBack[2]}, 1.0f),
-                orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._leftTopFront[1], projection._rightBottomBack[2]}, 1.0f),
                 orthoToClip * Expand(Float3{projection._leftTopFront[0], projection._rightBottomBack[1], projection._rightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._leftTopFront[1], projection._rightBottomBack[2]}, 1.0f),
                 orthoToClip * Expand(Float3{projection._rightBottomBack[0], projection._rightBottomBack[1], projection._rightBottomBack[2]}, 1.0f)
             };
 
-            for (unsigned e=0; e<dimof(edges); e+=2) {
-                auto start = clipSpaceCorners[edges[e+0]];
-                auto end = clipSpaceCorners[edges[e+1]];
+            for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
+                auto start = clipSpaceCorners[edges_zpattern[e+0]];
+                auto end = clipSpaceCorners[edges_zpattern[e+1]];
 
                 for (unsigned ele=0; ele<2; ++ele) {
                     float a = start[ele] / start[3], b = start[ele] / start[3]; 
@@ -379,9 +382,9 @@ namespace RenderCore { namespace LightingEngine
             assert(projection._leftTopFront[1] < projection._rightBottomBack[1]);
             assert(projection._leftTopFront[2] < projection._rightBottomBack[2]);
 
-            for (unsigned e=0; e<dimof(edges); e+=2) {
-                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+0]]);
-                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+1]]);
+            for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
+                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+0]]);
+                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+1]]);
 
                 for (unsigned ele=0; ele<3; ++ele) {
                     if ((start[ele] < projection._leftTopFront[ele]) != (end[ele] < projection._leftTopFront[ele])) {
@@ -433,21 +436,21 @@ namespace RenderCore { namespace LightingEngine
         const Float4x4& orthoViewToWorld,
         const Float2& leftTop2D, const Float2& rightBottom2D)
     {
-        const unsigned edges[] = {
+        const unsigned edges_zpattern[] = {
             0, 1,
-            1, 2,
-            2, 3,
-            3, 0,
+            1, 3,
+            3, 2,
+            2, 0,
 
-            4, 5,
-            5, 6,
+            4, 6,
             6, 7,
-            7, 4,
+            7, 5,
+            5, 4,
 
             0, 4,
             1, 5,
-            2, 6,
-            3, 7
+            3, 7,
+            2, 6
         };
 
         auto orthoToClip = Combine(orthoViewToWorld, cameraWorldToClip);
@@ -462,19 +465,19 @@ namespace RenderCore { namespace LightingEngine
         {
             const Float4 clipSpaceCorners[] = {
                 orthoToClip * Expand(Float3{leftTopFront[0], leftTopFront[1], leftTopFront[2]}, 1.0f),
-                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], leftTopFront[2]}, 1.0f),
                 orthoToClip * Expand(Float3{leftTopFront[0], rightBottomBack[1], leftTopFront[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], leftTopFront[2]}, 1.0f),
                 orthoToClip * Expand(Float3{rightBottomBack[0], rightBottomBack[1], leftTopFront[2]}, 1.0f),
 
                 orthoToClip * Expand(Float3{leftTopFront[0], leftTopFront[1], rightBottomBack[2]}, 1.0f),
-                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], rightBottomBack[2]}, 1.0f),
                 orthoToClip * Expand(Float3{leftTopFront[0], rightBottomBack[1], rightBottomBack[2]}, 1.0f),
+                orthoToClip * Expand(Float3{rightBottomBack[0], leftTopFront[1], rightBottomBack[2]}, 1.0f),
                 orthoToClip * Expand(Float3{rightBottomBack[0], rightBottomBack[1], rightBottomBack[2]}, 1.0f)
             };
 
-            for (unsigned e=0; e<dimof(edges); e+=2) {
-                auto start = clipSpaceCorners[edges[e+0]];
-                auto end = clipSpaceCorners[edges[e+1]];
+            for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
+                auto start = clipSpaceCorners[edges_zpattern[e+0]];
+                auto end = clipSpaceCorners[edges_zpattern[e+1]];
 
                 for (unsigned ele=0; ele<3; ++ele) {
                     float a = start[ele] / start[3], b = start[ele] / start[3]; 
@@ -509,9 +512,9 @@ namespace RenderCore { namespace LightingEngine
             assert(leftTopFront[0] < rightBottomBack[0]);
             assert(leftTopFront[1] < rightBottomBack[1]);
 
-            for (unsigned e=0; e<dimof(edges); e+=2) {
-                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+0]]);
-                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges[e+1]]);
+            for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
+                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+0]]);
+                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+1]]);
 
                 // points inside of the projection area count
                 if (start[0] >= leftTopFront[0] && start[1] >= leftTopFront[1] && start[0] <= rightBottomBack[0] && start[1] <= rightBottomBack[1]) {
