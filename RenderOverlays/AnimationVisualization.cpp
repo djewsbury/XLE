@@ -86,12 +86,12 @@ namespace RenderOverlays
 				position + scale * cameraUp + scale * cameraRight
 			};
 
-			workingVertices[workingVertexIterator++] = {corners[0], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[3], 0x00af00};
+			workingVertices[workingVertexIterator++] = {corners[0], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[3], 0xff00af00};
 		}
 
 		std::vector<uint32_t> parents(outputMatrixCount);
@@ -117,12 +117,12 @@ namespace RenderOverlays
 				parentPosition + scaleP * tangent
 			};
 
-			workingVertices[workingVertexIterator++] = {corners[0], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0x00af00};
-			workingVertices[workingVertexIterator++] = {corners[3], 0x00af00};
+			workingVertices[workingVertexIterator++] = {corners[0], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[3], 0xff00af00};
 		}
 
 		assert(workingVertexIterator <= vertexCount); 
