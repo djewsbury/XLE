@@ -174,6 +174,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	void		GraphicsEncoder::SetDepthBounds(float minDepthValue, float maxDepthValue)
+	{
+		// See 26.5. Depth Bounds Test
+		// The depth bounds test compares the depth value za in the depth/stencil attachment at each sample’s
+		// framebuffer coordinates (xf,yf) and sample index i against a set of depth bounds.
+		// (the interval is inclusive, so minDepthValue <= za <= maxDepthValue)
+		vkCmdSetDepthBounds(_sharedState->_commandList.GetUnderlying().get(), minDepthValue, maxDepthValue);
+	}
+
 	void        GraphicsEncoder::BindDescriptorSet(
 		unsigned index, VkDescriptorSet set
 		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description))
@@ -948,6 +957,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		vkCmdSetViewport(_sharedState->_commandList.GetUnderlying().get(), 0, 1, &defaultViewport);
 		vkCmdSetScissor(_sharedState->_commandList.GetUnderlying().get(), 0, 1, &defaultScissor);
 		vkCmdSetStencilReference(_sharedState->_commandList.GetUnderlying().get(), VK_STENCIL_FACE_FRONT_AND_BACK, 0);		// we must set this to something, because all the pipelines we use have this marked as a dynamic state
+		vkCmdSetDepthBounds(_sharedState->_commandList.GetUnderlying().get(), 0.0f, 1.0f);
 	}
 
 	void DeviceContext::EndRenderPass()

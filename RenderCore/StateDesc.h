@@ -167,6 +167,7 @@ namespace RenderCore
         uint8_t         _stencilWriteMask = 0x0;
         StencilDesc     _frontFaceStencil;
         StencilDesc     _backFaceStencil;
+        bool            _depthBoundsTestEnable = false;
 
 		uint64_t Hash() const;
     };

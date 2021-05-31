@@ -150,6 +150,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		dynamicStateEnables[dynamicState.dynamicStateCount++] = VK_DYNAMIC_STATE_STENCIL_REFERENCE;
 
+		if (_depthStencilState.depthBoundsTestEnable)
+			dynamicStateEnables[dynamicState.dynamicStateCount++] = VK_DYNAMIC_STATE_DEPTH_BOUNDS;
+
 		VkPipelineVertexInputStateCreateInfo vi = {};
 		vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vi.pNext = nullptr;

@@ -248,7 +248,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		//	------ Non-pipeline states (that can be changed mid-render pass) -------
 		void        Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView);
 		void		SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef);
-		void 		Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
+		void		SetDepthBounds(float minDepthValue, float maxDepthValue);		// the 0-1 value stored in the depth buffer is compared directly to these bounds
 
 		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
 

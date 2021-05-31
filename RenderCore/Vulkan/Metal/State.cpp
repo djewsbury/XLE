@@ -211,7 +211,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		depthTestEnable = desc._depthTest != CompareOp::Always;
 		depthWriteEnable = desc._depthWrite;
 		depthCompareOp = AsVkCompareOp(desc._depthTest);
-		depthBoundsTestEnable = VK_FALSE;
+		depthBoundsTestEnable = desc._depthBoundsTestEnable;
 		minDepthBounds = 0;
 		maxDepthBounds = 0;
 		stencilTestEnable = desc._stencilEnable;
