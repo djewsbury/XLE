@@ -86,8 +86,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
 					b._queryStart, firstPartCount,
-					sizeof(uint64)*firstPartCount,
-					&_timestampsBuffer[b._queryStart], sizeof(uint64),
+					sizeof(uint64_t)*firstPartCount,
+					&_timestampsBuffer[b._queryStart], sizeof(uint64_t),
 					VK_QUERY_RESULT_64_BIT);
 				if (res == VK_NOT_READY)
 					return FrameResults{ false };
@@ -97,8 +97,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
 					0, b._queryEnd,
-					sizeof(uint64)*b._queryEnd,
-					_timestampsBuffer.get(), sizeof(uint64),
+					sizeof(uint64_t)*b._queryEnd,
+					_timestampsBuffer.get(), sizeof(uint64_t),
 					VK_QUERY_RESULT_64_BIT);
 				if (res == VK_NOT_READY)
 					return FrameResults{ false };
@@ -108,8 +108,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
 					b._queryStart, b._queryEnd - b._queryStart, 
-					sizeof(uint64)*(b._queryEnd - b._queryStart),
-					&_timestampsBuffer[b._queryStart], sizeof(uint64),
+					sizeof(uint64_t)*(b._queryEnd - b._queryStart),
+					&_timestampsBuffer[b._queryStart], sizeof(uint64_t),
 					VK_QUERY_RESULT_64_BIT);
 
 				// we should frequently get "not ready" -- this means the query hasn't completed yet.
@@ -137,7 +137,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_activeBuffer = 0;
 		_nextFrameId = 0;
 		_device = factory.GetDevice().get();
-		_timestampsBuffer = std::make_unique<uint64[]>(_queryCount);
+		_timestampsBuffer = std::make_unique<uint64_t[]>(_queryCount);
 		_timeStamps = factory.CreateQueryPool(VK_QUERY_TYPE_TIMESTAMP, _queryCount);
 		_nextAllocation = _nextFree = _allocatedCount = 0;
 
@@ -152,17 +152,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		vkGetPhysicalDeviceProperties(factory.GetPhysicalDevice(), &physDevProps);
 		auto nanosecondsPerTick = physDevProps.limits.timestampPeriod;
 		// awkwardly, DX uses frequency while Vulkan uses period. We have to use a divide somewhere to convert
-		_frequency = uint64(1e9f / nanosecondsPerTick);
+		_frequency = uint64_t(1e9f / nanosecondsPerTick);
 	}
 
 	TimeStampQueryPool::~TimeStampQueryPool() {}
-
-
-	struct UnderlyingStreamOutputQueryResult
-	{
-		unsigned _primitivesWritten;
-		unsigned _primitivesRequired;
-	};
 
 	auto QueryPool::Begin(DeviceContext& context) -> QueryId
 	{
@@ -204,33 +197,75 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(queryId != ~0u);
 		assert(_queryStates[queryId] == QueryState::Ended);
 
-		UnderlyingStreamOutputQueryResult results = {};
+		unsigned results[5] = { 0, 0, 0, 0, 0 };
+		assert(_outputCount <= dimof(results));
 		auto res = vkGetQueryPoolResults(
 			context.GetUnderlyingDevice(),
 			_underlying.get(),
-			queryId, 1, sizeof(results), &results, sizeof(results),
+			queryId, 1, _outputCount * sizeof(unsigned), &results, sizeof(unsigned),
 			VK_QUERY_RESULT_WAIT_BIT);
 		assert(res == VK_SUCCESS); (void)res;
 		_queryStates[queryId] = QueryState::PendingReset;
 
-		if (dst.size() >= sizeof(QueryResult_StreamOutput)) {
-			((QueryResult_StreamOutput*)dst.begin())->_primitivesWritten = (unsigned)results._primitivesWritten;
-			((QueryResult_StreamOutput*)dst.begin())->_primitivesNeeded = (unsigned)results._primitivesRequired;
+		switch (_type) {
+		case QueryPool::QueryType::StreamOutput_Stream0:
+			if (dst.size() >= sizeof(QueryResult_StreamOutput)) {
+				((QueryResult_StreamOutput*)dst.begin())->_primitivesWritten = results[0];
+				((QueryResult_StreamOutput*)dst.begin())->_primitivesNeeded = results[1];
+			}
+			break;
+		case QueryPool::QueryType::ShaderInvocations:
+			if (dst.size() >= sizeof(QueryResult_ShaderInvocations)) {
+				auto& factory = GetObjectFactory(context);
+				auto& result = *(QueryResult_ShaderInvocations*)dst.begin();
+				XlZeroMemory(result);
+				unsigned idx = 0;
+				result._invocations[(unsigned)ShaderStage::Vertex] = results[idx++];
+				if (factory.GetPhysicalDeviceFeatures().geometryShader)
+					result._invocations[(unsigned)ShaderStage::Geometry] = results[idx++];
+				result._invocations[(unsigned)ShaderStage::Pixel] = results[idx++];
+				if (factory.GetPhysicalDeviceFeatures().tessellationShader)
+					result._invocations[(unsigned)ShaderStage::Hull] = results[idx++];
+				result._invocations[(unsigned)ShaderStage::Compute] = results[idx++];
+				assert(idx == _outputCount);
+			}
+			break;
+		default:
+			assert(0);
 		}
 		return true;
-	}
-
-	static VkQueryType AsVkQueryType(QueryPool::QueryType type)
-	{
-		assert(type == QueryPool::QueryType::StreamOutput_Stream0);
-		return VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT;
 	}
 
 	QueryPool::QueryPool(ObjectFactory& factory, QueryType type, unsigned count)
 	: _type(type)
 	{
 		_queryStates = std::vector<QueryState>(count, QueryState::PendingReset);
-		_underlying = factory.CreateQueryPool(AsVkQueryType(type), count, 0);
+		switch (type) {
+		case QueryPool::QueryType::StreamOutput_Stream0:
+			_underlying = factory.CreateQueryPool(VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT, count, 0);
+			_outputCount = 2;
+			break;
+		case QueryPool::QueryType::ShaderInvocations:
+			{
+				VkQueryPipelineStatisticFlags pipelineStatistics =
+					VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
+					VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
+					VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
+				_outputCount = 3;
+				if (factory.GetPhysicalDeviceFeatures().geometryShader) {
+					pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT;
+					++_outputCount;
+				}
+				if (factory.GetPhysicalDeviceFeatures().tessellationShader) {
+					pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
+					++_outputCount;
+				}
+				_underlying = factory.CreateQueryPool(VK_QUERY_TYPE_PIPELINE_STATISTICS, count, pipelineStatistics);
+			}
+			break;
+		default:
+			Throw(std::runtime_error("Unknown query type"));
+		}
 	}
 
 	QueryPool::~QueryPool() {}

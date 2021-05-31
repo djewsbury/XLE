@@ -83,6 +83,7 @@ extern "C"
 	typedef struct VkVertexInputBindingDescription VkVertexInputBindingDescription;
 
     typedef struct VkPhysicalDeviceMemoryProperties VkPhysicalDeviceMemoryProperties;
+    typedef struct VkPhysicalDeviceFeatures VkPhysicalDeviceFeatures;
     typedef struct VkPhysicalDeviceProperties VkPhysicalDeviceProperties;
     typedef struct VkAllocationCallbacks VkAllocationCallbacks;
 

@@ -135,6 +135,7 @@ namespace RenderCore { namespace Metal_Vulkan
             VkMemoryPropertyFlags requirementsMask = 0) const;
 		VkFormatProperties GetFormatProperties(VkFormat_ fmt) const;
         const VkPhysicalDeviceProperties& GetPhysicalDeviceProperties() const { return *_physDevProperties; }
+        const VkPhysicalDeviceFeatures& GetPhysicalDeviceFeatures() const { return *_physDevFeatures; }
 
 		std::shared_ptr<IDestructionQueue> CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>&);
 
@@ -168,6 +169,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         std::unique_ptr<VkPhysicalDeviceMemoryProperties> _memProps;
         std::unique_ptr<VkPhysicalDeviceProperties> _physDevProperties;
+        std::unique_ptr<VkPhysicalDeviceFeatures> _physDevFeatures;
         std::shared_ptr<ExtensionFunctions> _extensionFunctions;
 	};
 

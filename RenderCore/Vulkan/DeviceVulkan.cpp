@@ -359,6 +359,7 @@ namespace RenderCore { namespace ImplVulkan
 		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
 		physicalDeviceFeatures.geometryShader = true;
 		physicalDeviceFeatures.samplerAnisotropy = true;
+		physicalDeviceFeatures.pipelineStatisticsQuery = true;
 		// physicalDeviceFeatures.independentBlend = true;
 		// physicalDeviceFeatures.robustBufferAccess = true;
 		// physicalDeviceFeatures.multiViewport = true;

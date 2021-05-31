@@ -427,6 +427,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _immediateDestruction(std::move(moveFrom._immediateDestruction))
     , _memProps(std::move(moveFrom._memProps))
     , _physDevProperties(std::move(moveFrom._physDevProperties))
+    , _physDevFeatures(std::move(moveFrom._physDevFeatures))
     , _extensionFunctions(std::move(moveFrom._extensionFunctions))
     {}
 
@@ -438,6 +439,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_immediateDestruction = std::move(moveFrom._immediateDestruction);
         _memProps = std::move(moveFrom._memProps);
         _physDevProperties = std::move(moveFrom._physDevProperties);
+        _physDevFeatures = std::move(moveFrom._physDevFeatures);
         _extensionFunctions = std::move(moveFrom._extensionFunctions);
         return *this;
     }
@@ -450,6 +452,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _physDevProperties = std::make_unique<VkPhysicalDeviceProperties>(VkPhysicalDeviceProperties{});
         vkGetPhysicalDeviceProperties(physDev, _physDevProperties.get());
+
+        _physDevFeatures = std::make_unique<VkPhysicalDeviceFeatures>(VkPhysicalDeviceFeatures{});
+        vkGetPhysicalDeviceFeatures(physDev, _physDevFeatures.get());
 
 		_immediateDestruction = CreateImmediateDestroyer(_device);
 		_destruction = _immediateDestruction;
