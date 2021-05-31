@@ -173,6 +173,11 @@ namespace RenderCore { namespace LightingEngine
 		return technique.GetLightScene();
 	}
 
+	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique& technique)
+	{
+		return technique.GetDependencyValidation();
+	}
+
 	CompiledLightingTechnique::CompiledLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		Techniques::FragmentStitchingContext& stitchingContext,

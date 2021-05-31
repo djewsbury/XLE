@@ -110,15 +110,6 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::VertexInputStates inputStates;
 		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
-		if (desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) {
-			inputStates._inputLayout = {};
-			vertexShader = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
-			inputStates._topology = Topology::TriangleStrip;
-		} else {
-			inputStates._inputLayout = MakeIteratorRange(inputElements);
-			vertexShader = BASIC2D_VERTEX_HLSL ":P_viewfrustumvector";
-			inputStates._topology = Topology::TriangleList;
-		}
 
 		Techniques::PixelOutputStates outputStates;
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
@@ -131,8 +122,16 @@ namespace RenderCore { namespace LightingEngine
 			stencilRefValue = 0x0;
 		}
 
-		if (!(desc._flags & LightSourceOperatorDesc::Flags::NeverStencil))
+		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
+			inputStates._inputLayout = {};
+			vertexShader = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			inputStates._topology = Topology::TriangleStrip;
+		} else {
+			inputStates._inputLayout = MakeIteratorRange(inputElements);
+			vertexShader = BASIC2D_VERTEX_HLSL ":P_viewfrustumvector";
+			inputStates._topology = Topology::TriangleList;
 			outputStates._depthStencil._depthBoundsTestEnable = true;
+		}
 
 		AttachmentBlendDesc blends[] { Techniques::CommonResourceBox::s_abAdditive };
 		outputStates._attachmentBlend = MakeIteratorRange(blends);
@@ -310,10 +309,13 @@ namespace RenderCore { namespace LightingEngine
 					}
 				}
 
+				finalResult->_depVal = ::Assets::GetDepValSys().Make();
 				finalResult->_pipelines.reserve(actualized.size());
 				assert(actualized.size() == attachedData.size());
-				for (unsigned c=0; c<actualized.size(); ++c)
+				for (unsigned c=0; c<actualized.size(); ++c) {
+					finalResult->_depVal.RegisterDependency(actualized[c]->GetDependencyValidation());
 					finalResult->_pipelines.push_back({std::move(actualized[c]), attachedData[c]._flags, attachedData[c]._stencilingShape});
+				}
 				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 
 				UniformsStreamInterface sharedUsi;
@@ -462,7 +464,7 @@ namespace RenderCore { namespace LightingEngine
 			uniformsStream._resourceViews = MakeIteratorRange(srvs);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
 
-			if (pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) {
+			if ((pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) || pipeline->_stencilingGeoShape == LightSourceShape::Directional) {
 				encoder.Draw(*pipeline->_pipeline, 4);
 			} else {
 				if (pipeline->_stencilingGeoShape == LightSourceShape::Sphere) {

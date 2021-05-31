@@ -39,6 +39,9 @@ namespace RenderCore { namespace LightingEngine
 		std::pair<unsigned, unsigned> _cubeOffsetAndCount;
 
 		std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId);
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		::Assets::DependencyValidation _depVal;
 	};
 
 	class IPreparedShadowResult;

@@ -50,5 +50,6 @@ namespace RenderCore { namespace LightingEngine
 
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);
+	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
 
 }}

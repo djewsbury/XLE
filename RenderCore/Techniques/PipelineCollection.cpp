@@ -55,12 +55,19 @@ namespace RenderCore { namespace Techniques
         hash = Hash64(psDefines, hash);
 
         std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
+        bool replaceExisting = false;
         auto i = LowerBound(_pipelines, hash);
-        if (i != _pipelines.end() && i->first == hash)
-            return i->second;
+        if (i != _pipelines.end() && i->first == hash) {
+            if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
+                return i->second;
+            replaceExisting = true;
+        }
 
         auto result = std::make_shared<::Assets::AssetFuture<Metal::GraphicsPipeline>>();
-        _pipelines.insert(i, std::make_pair(hash, result));
+        if (replaceExisting) {
+            i->second = result;
+        } else
+            _pipelines.insert(i, std::make_pair(hash, result));
         lk = {};
         ConstructToFuture(result, vsName, vsDefines, psName, psDefines, inputStates, outputStates);
         return result;

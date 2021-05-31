@@ -402,6 +402,7 @@ namespace RenderCore { namespace LightingEngine
 					[lightingTechnique, captures, lightScene](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;
 						lightScene->_lightSourceFactory = resolveOperators;
+						lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
 						return lightingTechnique;
 					});
 			});

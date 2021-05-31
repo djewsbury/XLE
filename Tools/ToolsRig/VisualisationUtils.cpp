@@ -145,7 +145,10 @@ namespace ToolsRig
 		public:
 			std::shared_ptr<SceneEngine::BasicLightingStateDelegate> _envSettings;
 			std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
+			::Assets::DependencyValidation _depVal;
 			bool _pendingCameraReset = false;
+
+			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		};
 		::Assets::FuturePtr<PreparedScene> _preparedSceneFuture;
 
@@ -248,8 +251,13 @@ namespace ToolsRig
 		#endif
 
 		PreparedScene* actualizedScene = nullptr;
-		if (_preparedSceneFuture)
-			actualizedScene = _preparedSceneFuture->TryActualize().get();
+		if (_preparedSceneFuture) {
+			if (_preparedSceneFuture->GetDependencyValidation() && _preparedSceneFuture->GetDependencyValidation().GetValidationIndex() != 0) {
+				RebuildPreparedScene();
+			} else {
+				actualizedScene = _preparedSceneFuture->TryActualize().get();
+			}
+		}
 
 		if (actualizedScene) {
 
@@ -371,6 +379,9 @@ namespace ToolsRig
 						preparedScene->_envSettings = envSettings;
 						preparedScene->_compiledLightingTechnique = actualizedLightingTechnique;
 						preparedScene->_pendingCameraReset = true;
+						preparedScene->_depVal = ::Assets::GetDepValSys().Make();
+						preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
+						preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
 
 						auto pendingResources = SceneEngine::PrepareResources(
 							*RenderCore::Techniques::GetThreadContext(),
