@@ -34,29 +34,24 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, Float3 lightPosition)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, Float3 lightPosition, unsigned lightingOperator)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto lightId = lightScene.CreateLightSource(0);
+		auto lightId = lightScene.CreateLightSource(lightingOperator);
 
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
 		REQUIRE(positional);
-		positional->SetLocalToWorld(AsFloat4x4(lightPosition));
+		positional->SetLocalToWorld(AsFloat4x4(UniformScaleYRotTranslation{0.05f, 0.f, lightPosition}));
 
 		auto* emittance = lightScene.TryGetLightSourceInterface<IUniformEmittance>(lightId);
 		REQUIRE(emittance);
-		emittance->SetBrightness(Float3(10.f, 10.f, 10.f));
+		emittance->SetBrightness(Float3(100.f, 100.f, 100.f));
 
 		auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(lightId);
 		if (finite)
-			finite->SetCutoffRange(10.0f);
+			finite->SetCutoffRange(7.5f);
 
 		return lightId;
-	}
-
-	static RenderCore::LightingEngine::ILightScene::LightSourceId ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, Float3 lightPosition)
-	{
-		return CreateTestLight(lightScene, lightPosition);
 	}
 
 	template<typename Type>
@@ -110,6 +105,34 @@ namespace UnitTests
 		testApparatus._bufferUploads->Update(immContext);
 	}
 
+	static unsigned CountPixelShaderInvocations(
+		RenderCore::IThreadContext& threadContext, 
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique,
+		LightingEngineTestApparatus& testApparatus,
+		IDrawablesWriter& drawableWriter)
+	{ 
+		using namespace RenderCore;
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+		Metal::QueryPool statsQuery { Metal::GetObjectFactory(), Metal::QueryPool::QueryType::ShaderInvocations, 8 };
+		auto query = statsQuery.Begin(metalContext);
+
+		{
+			RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+				threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, lightingTechnique);
+			ParseScene(lightingIterator, drawableWriter);
+		}
+
+		statsQuery.End(metalContext, query);
+		threadContext.CommitCommands();
+
+		Metal::QueryPool::QueryResult_ShaderInvocations shaderInvocationsCount;
+		if (statsQuery.GetResults_Stall(metalContext, query, MakeOpaqueIteratorRange(shaderInvocationsCount))) {
+			return shaderInvocationsCount._invocations[(unsigned)ShaderStage::Pixel];
+		}
+		return 0;
+	}
+
 	TEST_CASE( "LightingEngine-LightShapeStencil", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -119,9 +142,9 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		RenderCore::Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 20.0f, 0.0f});
+		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 10.f, 0.0f});
 		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
-		camera._nearClip = 0.f;
+		camera._nearClip = 0.0f;
 		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
 		camera._left = -10.f;
 		camera._top = 10.f;
@@ -137,7 +160,8 @@ namespace UnitTests
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Sphere },
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Tube },
 				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Rectangle },
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Disc }
+				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Disc },
+				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Sphere, LightingEngine::DiffuseModel::Disney, LightingEngine::LightSourceOperatorDesc::Flags::NeverStencil },
 			};
 
 			auto targetDesc = CreateDesc(
@@ -158,32 +182,32 @@ namespace UnitTests
 			auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
-			Metal::QueryPool statsQuery { Metal::GetObjectFactory(), Metal::QueryPool::QueryType::ShaderInvocations, 8 };
-
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")
 			{
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-				auto lightId = ConfigureLightScene(lightScene, {0.f, 5.f, 0.f});
+				auto baseInvocations = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 
-				auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-				auto query = statsQuery.Begin(metalContext);
-
-				{
-					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-						*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
-					ParseScene(lightingIterator, *drawableWriter);
-				}
-
-				statsQuery.End(metalContext, query);
-				threadContext->CommitCommands();
-
-				Metal::QueryPool::QueryResult_ShaderInvocations shaderInvocationsCount;
-				if (statsQuery.GetResults_Stall(metalContext, query, MakeOpaqueIteratorRange(shaderInvocationsCount))) {
-					Log(Warning) << "Pixel shader invocations: " << shaderInvocationsCount._invocations[(unsigned)ShaderStage::Pixel] / float(1024*1024) << " million" << std::endl;
-				}
-
+				auto lightId = CreateTestLight(lightScene, {0.f, 2.0f, 0.f}, 4);
+				auto dontStencilCount = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 				lightScene.DestroyLightSource(lightId);
+
+				lightId = CreateTestLight(lightScene, {0.f, 2.0f, 0.f}, 0);
+				auto stencilLowLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
+				lightScene.DestroyLightSource(lightId);
+
+				lightId = CreateTestLight(lightScene, {0.f, 6.0f, 8.f}, 0);
+				auto stencilMedLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
+				lightScene.DestroyLightSource(lightId);
+
+				lightId = CreateTestLight(lightScene, {0.f, 8.0f, 0.f}, 0);
+				auto stencilHighLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
+				lightScene.DestroyLightSource(lightId);
+
+				REQUIRE(stencilHighLight == baseInvocations);		// depth bounds should prevent this "high light" from effect any pixels
+				REQUIRE(stencilHighLight < stencilMedLight);
+				REQUIRE(stencilMedLight < stencilLowLight);			// because were using orthogonal projection, we won't see a big different between low and mid lights -- but we shift one off the to the side a bit
+				REQUIRE(stencilLowLight < dontStencilCount);
 			}
 		}
 
