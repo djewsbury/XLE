@@ -249,6 +249,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		void        Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView);
 		void		SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef);
 		void		SetDepthBounds(float minDepthValue, float maxDepthValue);		// the 0-1 value stored in the depth buffer is compared directly to these bounds
+		void 		Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
 
 		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
 

@@ -73,6 +73,40 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
+    ::Assets::FuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
+        StringSection<> vsName, StringSection<> vsDefines,
+        StringSection<> gsName, StringSection<> gsDefines,
+        StringSection<> psName, StringSection<> psDefines,
+        const VertexInputStates& inputStates,
+        const PixelOutputStates& outputStates)
+    {
+        auto hash = HashCombine(inputStates.GetHash(), outputStates.GetHash());
+        hash = Hash64(vsName, hash);
+        hash = Hash64(vsDefines, hash);
+        hash = Hash64(gsName, hash);
+        hash = Hash64(gsDefines, hash);
+        hash = Hash64(psName, hash);
+        hash = Hash64(psDefines, hash);
+
+        std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
+        bool replaceExisting = false;
+        auto i = LowerBound(_pipelines, hash);
+        if (i != _pipelines.end() && i->first == hash) {
+            if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
+                return i->second;
+            replaceExisting = true;
+        }
+
+        auto result = std::make_shared<::Assets::AssetFuture<Metal::GraphicsPipeline>>();
+        if (replaceExisting) {
+            i->second = result;
+        } else
+            _pipelines.insert(i, std::make_pair(hash, result));
+        lk = {};
+        ConstructToFuture(result, vsName, vsDefines, gsName, gsDefines, psName, psDefines, inputStates, outputStates);
+        return result;
+    }
+
     static ::Assets::FuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
         ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
     {
@@ -118,6 +152,43 @@ namespace RenderCore { namespace Techniques
             fbDesc=*outputStates._fbTarget._fbDesc, subpassIdx=outputStates._fbTarget._subpassIdx
             ](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
                 Metal::ShaderProgram shader(Metal::GetObjectFactory(), pipelineLayout, *vsActual, *psActual);
+                Metal::GraphicsPipelineBuilder builder;
+                builder.Bind(shader);
+                builder.Bind(attachmentBlends);
+                builder.Bind(depthStencil);
+                builder.Bind(rasterization);
+
+                Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(inputAssembly), 0 };
+                Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
+                builder.Bind(ia, topology);
+
+                builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
+
+                return builder.CreatePipeline(Metal::GetObjectFactory());
+            });
+    }
+
+    void GraphicsPipelineCollection::ConstructToFuture(
+        std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+        StringSection<> vsName, StringSection<> vsDefines,
+        StringSection<> gsName, StringSection<> gsDefines,
+        StringSection<> psName, StringSection<> psDefines,
+        const VertexInputStates& inputStates,
+        const PixelOutputStates& outputStates)
+    {
+        auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, vsDefines);
+        auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, gsDefines);
+        auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, psDefines);
+        ::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture<Metal::GraphicsPipeline>(
+            *future,
+            [pipelineLayout=_pipelineLayout,
+            attachmentBlends=AsVector(outputStates._attachmentBlend),
+            depthStencil=outputStates._depthStencil,
+            rasterization=outputStates._rasterization,
+            inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
+            fbDesc=*outputStates._fbTarget._fbDesc, subpassIdx=outputStates._fbTarget._subpassIdx
+            ](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
+                Metal::ShaderProgram shader(Metal::GetObjectFactory(), pipelineLayout, *vsActual, *gsActual, *psActual);
                 Metal::GraphicsPipelineBuilder builder;
                 builder.Bind(shader);
                 builder.Bind(attachmentBlends);

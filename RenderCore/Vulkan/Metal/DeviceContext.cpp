@@ -117,8 +117,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		// maxviewports: VkPhysicalDeviceLimits::maxViewports
 		// VkPhysicalDeviceFeatures::multiViewport must be enabled
 		// need VK_DYNAMIC_STATE_VIEWPORT & VK_DYNAMIC_STATE_SCISSOR set
-		assert(viewports.size() == 1);		// to allow multiple viewports, we need to set the flag VkPhysicalDeviceFeatures::multiViewport during construction
-		assert(scissorRects.size() == 1);
+		assert(viewports.size() >= 1);
+		assert(scissorRects.size() >= 1);
+		assert(viewports.size() == scissorRects.size());
+		assert(viewports.size() <= GetObjectFactory().GetPhysicalDeviceProperties().limits.maxViewports);
 
 		assert(_sharedState->_commandList.GetUnderlying());
 		VkViewport vkViewports[viewports.size()];
@@ -1061,6 +1063,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void DeviceContext::RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuidsInit)
 	{
+		return;
+		
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			auto& cmdList = _sharedState->_commandList;
 

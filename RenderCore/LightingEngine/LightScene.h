@@ -88,6 +88,7 @@ namespace RenderCore { namespace LightingEngine
 	class IFiniteLightSource
 	{
 	public:
+		virtual void SetCutoffBrightness(float brightness) = 0;
 		virtual void SetCutoffRange(float cutoff) = 0;
 		virtual float GetCutoffRange() const = 0;
 		virtual ~IFiniteLightSource();

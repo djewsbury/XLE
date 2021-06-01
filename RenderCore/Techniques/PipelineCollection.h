@@ -49,6 +49,13 @@ namespace RenderCore { namespace Techniques
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);
 
+		::Assets::FuturePtr<Metal::GraphicsPipeline> CreatePipeline(
+			StringSection<> vsName, StringSection<> vsDefines,
+			StringSection<> gsName, StringSection<> gsDefines,
+			StringSection<> psName, StringSection<> psDefines,
+			const VertexInputStates& inputStates,
+			const PixelOutputStates& outputStates);
+
         const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
 
@@ -65,6 +72,14 @@ namespace RenderCore { namespace Techniques
 		void ConstructToFuture(
 			std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
 			StringSection<> vsName, StringSection<> vsDefines,
+			StringSection<> psName, StringSection<> psDefines,
+			const VertexInputStates& inputStates,
+			const PixelOutputStates& outputStates);
+
+		void ConstructToFuture(
+			std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+			StringSection<> vsName, StringSection<> vsDefines,
+			StringSection<> gsName, StringSection<> gsDefines,
 			StringSection<> psName, StringSection<> psDefines,
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);

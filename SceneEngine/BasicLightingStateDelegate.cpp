@@ -48,8 +48,13 @@ namespace SceneEngine
 
             auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
             if (emittance) {
-                emittance->SetBrightness(light._diffuseColor);
+                emittance->SetBrightness(light._brightness);
                 emittance->SetDiffuseWideningFactors({light._diffuseWideningMin, light._diffuseWideningMax});
+            }
+
+            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(lightId);
+            if (finite) {
+                finite->SetCutoffBrightness(light._cutoffBrightness);
             }
         }
 
@@ -131,9 +136,8 @@ namespace SceneEngine
 		_position = Float3{0, 1, 0};
 		_radii = Float2{0, 0};
 
-        _cutoffRange = 10.f;
-        _diffuseColor = Float3{1,1,1};
-		_specularColor = Float3{1,1,1};
+        _cutoffBrightness = 0.01f;
+        _brightness = Float3{1,1,1};
 		_diffuseWideningMin = 1.0f;
 		_diffuseWideningMax = 1.0f;
 
@@ -146,9 +150,8 @@ namespace SceneEngine
         LightDesc light;
         light._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
         light._position = Normalize(Float3(-0.15046243f, 0.97377890f, 0.17063323f));
-        light._cutoffRange = 10000.f;
-        light._diffuseColor = Float3(3.2803922f, 2.2372551f, 1.9627452f);
-        light._specularColor = Float3(6.7647061f, 6.4117646f, 4.7647061f);
+        light._cutoffBrightness = 0.01f;
+        light._brightness = Float3(3.2803922f, 2.2372551f, 1.9627452f);
         light._diffuseWideningMax = .9f;
         light._diffuseWideningMin = 0.2f;
         return light;
@@ -182,9 +185,8 @@ namespace SceneEngine
             LightDesc secondaryLight;
             secondaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
             secondaryLight._position = Normalize(Float3(0.71622938f, 0.48972201f, -0.49717990f));
-            secondaryLight._cutoffRange = 10000.f;
-            secondaryLight._diffuseColor = Float3(3.2803922f, 2.2372551f, 1.9627452f);
-            secondaryLight._specularColor = Float3(5.f, 5.f, 5.f);
+            secondaryLight._cutoffBrightness = 0.01f;
+            secondaryLight._brightness = Float3(3.2803922f, 2.2372551f, 1.9627452f);
             secondaryLight._diffuseWideningMax = 2.f;
             secondaryLight._diffuseWideningMin = 0.5f;
             result._lights.push_back(secondaryLight);
@@ -192,9 +194,8 @@ namespace SceneEngine
             LightDesc tertiaryLight;
             tertiaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
             tertiaryLight._position = Normalize(Float3(-0.75507462f, -0.62672323f, 0.19256261f));
-            tertiaryLight._cutoffRange = 10000.f;
-            tertiaryLight._diffuseColor = Float3(0.13725491f, 0.18666667f, 0.18745099f);
-            tertiaryLight._specularColor = Float3(3.5f, 3.5f, 3.5f);
+            tertiaryLight._cutoffBrightness = 0.01f;
+            tertiaryLight._brightness = Float3(0.13725491f, 0.18666667f, 0.18745099f);
             tertiaryLight._diffuseWideningMax = 2.f;
             tertiaryLight._diffuseWideningMin = 0.5f;
             result._lights.push_back(tertiaryLight);
@@ -302,24 +303,20 @@ namespace SceneEngine
 
     LightDesc MakeLightDesc(const Utility::ParameterBox& props)
     {
-        static const auto diffuseHash = ParameterBox::MakeParameterNameHash("Diffuse");
-        static const auto diffuseBrightnessHash = ParameterBox::MakeParameterNameHash("DiffuseBrightness");
+        static const auto colorHash = ParameterBox::MakeParameterNameHash("Color");
+        static const auto brightnessHash = ParameterBox::MakeParameterNameHash("Brightness");
         static const auto diffuseModel = ParameterBox::MakeParameterNameHash("DiffuseModel");
         static const auto diffuseWideningMin = ParameterBox::MakeParameterNameHash("DiffuseWideningMin");
         static const auto diffuseWideningMax = ParameterBox::MakeParameterNameHash("DiffuseWideningMax");
-        static const auto specularHash = ParameterBox::MakeParameterNameHash("Specular");
-        static const auto specularBrightnessHash = ParameterBox::MakeParameterNameHash("SpecularBrightness");
-        // static const auto shadowResolveModel = ParameterBox::MakeParameterNameHash("ShadowResolveModel");
-        static const auto cutoffRange = ParameterBox::MakeParameterNameHash("CutoffRange");
+        static const auto cutoffBrightness = ParameterBox::MakeParameterNameHash("CutoffBrightness");
         static const auto shape = ParameterBox::MakeParameterNameHash("Shape");
 
         LightDesc result;
-        result._diffuseColor = props.GetParameter(diffuseBrightnessHash, 1.f) * AsFloat3Color(props.GetParameter(diffuseHash, ~0x0u));
-        result._specularColor = props.GetParameter(specularBrightnessHash, 1.f) * AsFloat3Color(props.GetParameter(specularHash, ~0x0u));
+        result._brightness = props.GetParameter(brightnessHash, 1.f) * AsFloat3Color(props.GetParameter(colorHash, ~0x0u));
 
         result._diffuseWideningMin = props.GetParameter(diffuseWideningMin, result._diffuseWideningMin);
         result._diffuseWideningMax = props.GetParameter(diffuseWideningMax, result._diffuseWideningMax);
-        result._cutoffRange = props.GetParameter(cutoffRange, result._cutoffRange);
+        result._cutoffBrightness = props.GetParameter(cutoffBrightness, result._cutoffBrightness);
 
         result._shape = (RenderCore::LightingEngine::LightSourceShape)props.GetParameter(shape, unsigned(result._shape));
 

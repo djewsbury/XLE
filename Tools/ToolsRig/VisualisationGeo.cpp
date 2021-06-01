@@ -272,6 +272,23 @@ namespace ToolsRig
         return BuildGeodesicSpherePts(detail);
     }
 
+    std::vector<Float3>     BuildRoughGeodesicHemiSphereP(int detail)
+    {
+        //  Return only the triangles from a Geodesic sphere that are in the +Z hemisphere
+        // It's a little awkward to remove the unwanted hemisphere cleanly. We're
+        // just going to do it the easy way by deleting the triangles we don't want
+        std::vector<Float3> result = BuildGeodesicSpherePts(detail);
+        auto i = result.begin();
+        while (i != result.end()) {
+            if (i[0][2] < 0.f && i[1][2] < 0.f && i[2][2] < 0.f) {
+                i = result.erase(i, i+3);
+            } else {
+                i += 3;
+            }
+        }
+        return result;
+    }
+
     std::vector<Float3>     BuildCubeP()
     {
         Float3 normals[] = { 

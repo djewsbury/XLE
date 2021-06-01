@@ -77,6 +77,23 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetCutoffRange(float cutoff) override { _cutoffRange = cutoff; }
 		virtual float GetCutoffRange() const override { return _cutoffRange; }
 
+		virtual void SetCutoffBrightness(float cutoffBrightness) override
+		{
+			// distance attenuation formula:
+			//		1.0f / (distanceSq+1)
+			// 
+			// brightness / (distanceSq+1) = cutoffBrightness
+			// (distanceSq+1) / brightness = 1.0f / cutoffBrightness
+			// distanceSq = brightness / cutoffBrightness - 1
+			float brightness = std::max(std::max(_brightness[0], _brightness[1]), _brightness[2]);
+			if (cutoffBrightness < brightness) {
+				SetCutoffRange(std::sqrt(brightness / cutoffBrightness - 1.0f));
+			} else {
+				// The light can't actually get as bright as the cutoff brightness.. just set to a small value
+				SetCutoffRange(1e-3f);
+			}
+		}
+
 		virtual void SetBrightness(Float3 rgb) override { _brightness = rgb; }
 		virtual Float3 GetBrightness() const override { return _brightness; }
 		virtual void SetDiffuseWideningFactors(Float2 minAndMax) override

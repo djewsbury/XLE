@@ -236,41 +236,32 @@
   <xs:complexType name="staticLightType">
     <xs:annotation>
       <xs:appinfo>
-        <LeGe.NativeProperty name="Diffuse" nativeName="Diffuse"/>
-        <LeGe.NativeProperty name="DiffuseBrightness" nativeName="DiffuseBrightness"/>
+        <LeGe.NativeProperty name="Color" nativeName="Color"/>
+        <LeGe.NativeProperty name="Brightness" nativeName="Brightness"/>
         <LeGe.NativeProperty name="DiffuseModel" nativeName="DiffuseModel"/>
         <LeGe.NativeProperty name="DiffuseWideningMin" nativeName="DiffuseWideningMin"/>
         <LeGe.NativeProperty name="DiffuseWideningMax" nativeName="DiffuseWideningMax"/>
-        <LeGe.NativeProperty name="Specular" nativeName="Specular"/>
-        <LeGe.NativeProperty name="SpecularBrightness" nativeName="SpecularBrightness"/>
 
-        <scea.dom.editors.attribute category="Diffuse" name="Diffuse" displayName="Diffuse" description="Diffuse Color"
+        <scea.dom.editors.attribute category="Light" name="Color" displayName="Color" description="Color"
           editor="Sce.Atf.Controls.PropertyEditing.ColorPickerEditor,Atf.Gui.WinForms" converter="Sce.Atf.Controls.PropertyEditing.IntColorConverter"/>
-        <scea.dom.editors.attribute category="Diffuse" name="DiffuseBrightness" displayName="Diffuse Brightness" description="Brightness of the diffuse part of the light"
+        <scea.dom.editors.attribute category="Light" name="Brightness" displayName="Brightness" description="Brightness of the light"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,100"/>
-        <scea.dom.editors.attribute category="Diffuse" name="DiffuseModel" displayName="Diffuse Model"
+        <scea.dom.editors.attribute category="Light" name="DiffuseModel" displayName="Diffuse Model"
           enum="Lambert=0,Soft=1"/>
-        <scea.dom.editors.attribute category="Diffuse" name="DiffuseWideningMin" displayName="Widening Min" description="Minimum value for the widening effect for diffuse light"
+        <scea.dom.editors.attribute category="Light" name="DiffuseWideningMin" displayName="Widening Min" description="Minimum value for the widening effect for diffuse light"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,2.5"/>
-        <scea.dom.editors.attribute category="Diffuse" name="DiffuseWideningMax" displayName="Widening Max" description="Maximum value for the widening effect for diffuse light"
+        <scea.dom.editors.attribute category="Light" name="DiffuseWideningMax" displayName="Widening Max" description="Maximum value for the widening effect for diffuse light"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,5"/>
-
-        <scea.dom.editors.attribute category="Specular" name="Specular" displayName="Specular" description="Specular Color"
-          editor="Sce.Atf.Controls.PropertyEditing.ColorPickerEditor,Atf.Gui.WinForms" converter="Sce.Atf.Controls.PropertyEditing.IntColorConverter"/>
-        <scea.dom.editors.attribute category="Specular" name="SpecularBrightness" displayName="Specular Brightness" description="Brightness of the specular part of the light"
-          editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,100"/>
       </xs:appinfo>
     </xs:annotation>
 
     <xs:complexContent>
       <xs:extension base="envObjectType">
-        <xs:attribute name="Diffuse" type="xs:int" default="-1"/>
-        <xs:attribute name="DiffuseBrightness" type="xs:float" default="1"/>
+        <xs:attribute name="Color" type="xs:int" default="-1"/>
+        <xs:attribute name="Brightness" type="xs:float" default="1"/>
         <xs:attribute name="DiffuseModel" type="xs:int" default="1"/>
         <xs:attribute name="DiffuseWideningMin" type="xs:float" default="0.5"/>
         <xs:attribute name="DiffuseWideningMax" type="xs:float" default="2.5"/>
-        <xs:attribute name="Specular" type="xs:int" default="-1"/>
-        <xs:attribute name="SpecularBrightness" type="xs:float" default="1"/>
       </xs:extension>
     </xs:complexContent>
   </xs:complexType>
@@ -306,8 +297,11 @@
       <xs:appinfo>
         <LeGe.NativeType nativeName="AreaLight"/>
         <LeGe.NativeProperty name="Shape" nativeName="Shape"/>
+        <LeGe.NativeProperty name="CutoffBrightness" nativeName="CutoffBrightness"/>
         <scea.dom.editors.attribute name="Shape" enum="Sphere=1,Tube=2,Rectangle=3,Disc=4" 
           category="Light" displayName="Shape" description="The shape of the area light"/>
+        <scea.dom.editors.attribute category="Shape" name="CutoffBrightness" displayName="Cutoff brightness" description="Create a finite limit for the range of the light by darkening it to zero when it would otherwise hit the given brightness"
+           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,1"/>
         <scea.dom.editors category="Environment" name="AreaLight" menuText="Environment/AreaLight" description="An area light (eg, sphere, tube, rectangle, disc)" image="LevelEditorCore.Resources.Lighting16.png"/>
         <LeGe.NativeVis geo="AreaLight"/>
       </xs:appinfo>
@@ -316,6 +310,7 @@
     <xs:complexContent>
       <xs:extension base="staticLightType">
         <xs:attribute name="Shape" type="xs:int" default="1"/>
+        <xs:attribute name="CutoffBrightness" type="xs:float" default="0.01"/>
       </xs:extension>
     </xs:complexContent>
   </xs:complexType>
@@ -327,7 +322,7 @@
         <LeGe.NativeType nativeName="ShadowFrustumSettings"/>
         <LeGe.NativeProperty name="Name" nativeName="Name"/>
         <LeGe.NativeProperty name="Flags" nativeName="Flags"/>
-        <LeGe.NativeProperty name="FrustumCount" nativeName="FrustumCount"/>
+        <LeGe.NativeProperty name="MaxFrustumCount" nativeName="MaxFrustumCount"/>
         <LeGe.NativeProperty name="MaxDistanceFromCamera" nativeName="MaxDistanceFromCamera"/>
         <LeGe.NativeProperty name="FrustumSizeFactor" nativeName="FrustumSizeFactor"/>
         <LeGe.NativeProperty name="FocusDistance" nativeName="FocusDistance"/>
@@ -344,7 +339,7 @@
         <LeGe.NativeProperty name="MaxBlurSearch" nativeName="MaxBlurSearch"/>
         <LeGe.NativeProperty name="Light" nativeName="Light"/>
 
-        <scea.dom.editors.attribute category="Projection" name="FrustumCount" displayName="Frustum Count" description="Number of separate shadow frustums (1 to 6)"/>
+        <scea.dom.editors.attribute category="Projection" name="MaxFrustumCount" displayName="Max Frustum Count" description="Number of separate shadow frustums (1 to 6)"/>
         <scea.dom.editors.attribute category="Projection" name="MaxDistanceFromCamera" displayName="Max Distance From Camera" description="Furtherest distance from camera for objects to cast shadows"/>
         <scea.dom.editors.attribute category="Projection" name="FrustumSizeFactor" displayName="Frustum Size Factor" description="Factor controlling the size of the shadow frustums"
           editor="Sce.Atf.Controls.PropertyEditing.BoundedFloatEditor,Atf.Gui.WinForms:0,8"/>
@@ -391,7 +386,7 @@
       <xs:extension base="envMiscType">
         <xs:attribute name="Name" type="xs:string" default="shadows"/>
         <xs:attribute name="Flags" type="xs:int" default="1"/>
-        <xs:attribute name="FrustumCount" type="xs:int" default="5"/>
+        <xs:attribute name="MaxFrustumCount" type="xs:int" default="5"/>
         <xs:attribute name="MaxDistanceFromCamera" type="xs:float" default="1000"/>
         <xs:attribute name="FrustumSizeFactor" type="xs:float" default="3.8"/>
         <xs:attribute name="FocusDistance" type="xs:float" default="3"/>

@@ -181,7 +181,7 @@ void screenspacerect(
 
 void P_viewfrustumvector(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out float2 oTexCoord : TEXCOORD0, out ViewFrustumInterpolator vfi)
 {
-	oPosition = mul(SysUniform_GetWorldToClip(), float4(iPosition, 1));
+	oPosition = TransformPosition(iPosition);
 	
 	#if NDC == NDC_POSITIVE_RIGHT_HANDED
 		oTexCoord.y = (oPosition.y + 1.0f) / 2.0f;
@@ -198,10 +198,10 @@ void P_viewfrustumvector(float3 iPosition : POSITION, out float4 oPosition : SV_
 	float w3 = oTexCoord.x * oTexCoord.y;
 
 	vfi.oViewFrustumVector = 
-		  w0 * SysUniform_GetFrustumCorners(0)
-		+ w1 * SysUniform_GetFrustumCorners(1)
-		+ w2 * SysUniform_GetFrustumCorners(2)
-		+ w3 * SysUniform_GetFrustumCorners(3)
+		  w0 * SysUniform_GetFrustumCorners(0).xyz
+		+ w1 * SysUniform_GetFrustumCorners(1).xyz
+		+ w2 * SysUniform_GetFrustumCorners(2).xyz
+		+ w3 * SysUniform_GetFrustumCorners(3).xyz
 		;
 }
 

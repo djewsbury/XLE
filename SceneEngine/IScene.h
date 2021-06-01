@@ -51,11 +51,10 @@ namespace SceneEngine
 		Float3      _position;
 		Float2      _radii;
 
-        float       _cutoffRange;
-        Float3      _diffuseColor;
-		Float3      _specularColor;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
+        Float3      _brightness;
+        float       _cutoffBrightness;
 
         RenderCore::LightingEngine::LightSourceShape _shape;
         RenderCore::LightingEngine::DiffuseModel _diffuseModel;

@@ -105,7 +105,11 @@ namespace RenderCore { namespace LightingEngine
 		if (!shadowSelectors.empty())
 			definesTable << ";" << shadowSelectors;
 
+		StringMeld<256, ::Assets::ResChar> vsDefinesTable;
+		vsDefinesTable << "LIGHT_SHAPE=" << unsigned(desc._shape);
+
 		const char* vertexShader = nullptr;
+		const char* geometryShader = nullptr;
 		auto stencilRefValue = 0;
 
 		Techniques::VertexInputStates inputStates;
@@ -114,7 +118,6 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::PixelOutputStates outputStates;
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
 		if (doSampleFrequencyOptimisation && sampleCount._sampleCount > 1) {
-			outputStates._rasterization = Techniques::CommonResourceBox::s_rsCullDisable;
 			outputStates._depthStencil = s_dsWritePixelFrequencyPixel;
 			stencilRefValue = StencilSampleCount;
 		} else {
@@ -128,19 +131,29 @@ namespace RenderCore { namespace LightingEngine
 			inputStates._topology = Topology::TriangleStrip;
 		} else {
 			inputStates._inputLayout = MakeIteratorRange(inputElements);
-			vertexShader = BASIC2D_VERTEX_HLSL ":P_viewfrustumvector";
+			vertexShader = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":main";
+			geometryShader = BASIC_GEO_HLSL ":PT_viewfrustumVector_clipToNear";
 			inputStates._topology = Topology::TriangleList;
 			outputStates._depthStencil._depthBoundsTestEnable = true;
 		}
+
+		outputStates._rasterization = Techniques::CommonResourceBox::s_rsDefault;
 
 		AttachmentBlendDesc blends[] { Techniques::CommonResourceBox::s_abAdditive };
 		outputStates._attachmentBlend = MakeIteratorRange(blends);
 		outputStates._fbTarget = {&fbDesc, subpassIdx};
 
-		return pipelineCollection.CreatePipeline(
-			vertexShader, {},
-			DEFERRED_RESOLVE_LIGHT ":main", definesTable.AsStringSection(),
-			inputStates, outputStates);
+		if (geometryShader) {
+			return pipelineCollection.CreatePipeline(
+				vertexShader, vsDefinesTable.AsStringSection(),
+				geometryShader, {},
+				DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main", definesTable.AsStringSection(),
+				inputStates, outputStates);
+		} else
+			return pipelineCollection.CreatePipeline(
+				vertexShader, vsDefinesTable.AsStringSection(),
+				DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main", definesTable.AsStringSection(),
+				inputStates, outputStates);
 	}
 
 	::Assets::FuturePtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
@@ -335,7 +348,7 @@ namespace RenderCore { namespace LightingEngine
 					usi, sharedUsi};
 
 				{
-					auto sphereGeo = ToolsRig::BuildGeodesicSphereP(4);
+					auto sphereGeo = ToolsRig::BuildRoughGeodesicHemiSphereP(4);
 					auto cubeGeo = ToolsRig::BuildCubeP();
 					std::vector<uint8_t> geoInitBuffer;
 					geoInitBuffer.resize((sphereGeo.size() + cubeGeo.size()) * sizeof(Float3));
@@ -408,7 +421,11 @@ namespace RenderCore { namespace LightingEngine
 		AccurateFrustumTester frustumTester(projectionDesc._worldToProjection, Techniques::GetDefaultClipSpaceType());
 
 		auto cameraForward = ExtractForward_Cam(projectionDesc._cameraToWorld);
+		auto cameraRight = ExtractRight_Cam(projectionDesc._cameraToWorld);
+		auto cameraUp = ExtractUp_Cam(projectionDesc._cameraToWorld);
+		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
+
 		auto lightCount = lightScene._lights.size();
 		auto shadowIterator = preparedShadows.begin();
 		for (unsigned l=0; l<lightCount; ++l) {
@@ -421,7 +438,7 @@ namespace RenderCore { namespace LightingEngine
 			if (lightShape == LightSourceShape::Sphere) {
 				// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
 				// do an accurate culling check for them here... 
-				auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._radii[0]);
+				auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._cutoffRange);
 				if (cullResult == AABBIntersection::Culled)
 					continue;
 			}
@@ -458,7 +475,7 @@ namespace RenderCore { namespace LightingEngine
 				assert(shadowIterator == preparedShadows.end() || shadowIterator->first > lightScene._lights[l]._id);
 				pipeline = &lightResolveOperators._pipelines[i._operatorId];
 			}
-			
+
 			UniformsStream uniformsStream;
 			uniformsStream._immediateData = MakeIteratorRange(cbvs);
 			uniformsStream._resourceViews = MakeIteratorRange(srvs);
@@ -475,9 +492,11 @@ namespace RenderCore { namespace LightingEngine
 					// I suppose we could reduce this depth range when we know that the center point is onscreen
 					Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
 					Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
-					float d0 = extremePoint0[2] / extremePoint0[3], d1 = extremePoint1[2] / extremePoint1[3];
-
+					float d0 = extremePoint0[2] / std::abs(extremePoint0[3]), d1 = extremePoint1[2] / std::abs(extremePoint1[3]);
 					encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
+
+					// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,
+					// though, but in that case we can flatten the front of the sphere to the near clip plane
 					encoder.Draw(*pipeline->_pipeline, lightResolveOperators._sphereOffsetAndCount.second, lightResolveOperators._sphereOffsetAndCount.first);
 				} else {
 					assert(0);

@@ -96,6 +96,9 @@ namespace GUILayer
 
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
 		EditorLightingParserDelegate lightingDelegate(_scene.GetNativePtr());
+        lightingDelegate.PrepareEnvironmentalSettings(
+			clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
+
 		auto compiledTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 			_lightingApparatus.GetNativePtr(),
             lightingDelegate.GetLightResolveOperators(),
@@ -107,9 +110,6 @@ namespace GUILayer
 			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
 
             {
-				lightingDelegate.PrepareEnvironmentalSettings(
-					clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
-
 				auto lightingIterator = SceneEngine::BeginLightingTechnique(
 					threadContext, parserContext, *_pipelineAcceleratorPool.get(),
 					lightingDelegate, *compiledTechnique);

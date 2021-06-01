@@ -24,9 +24,9 @@ cbuffer LightBuffer BIND_SEQ_B1
 float4 main(
     float4 position : SV_Position,
 	float2 texCoord : TEXCOORD0,
-	float3 viewFrustumVector : VIEWFRUSTUMVECTOR,
+	noperspective float3 viewFrustumVector : VIEWFRUSTUMVECTOR,
 	SystemInputs sys) : SV_Target0
-{	
+{
 	GBufferValues sample = LoadGBuffer(position.xy, sys);
     ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
 
@@ -45,7 +45,7 @@ float4 main(
     float shadow = ResolveShadows(cascade, resolvePixel.screenDest);
 
     // return float4(cascade.frustumCoordinates.xyz, 1.0f);
-    return float4(shadow.xxx, 1.f);
+    // return float4(shadow.xxx, 1.f);
 	return float4((LightingScale*shadow)*result, 1.f);
 }
 
