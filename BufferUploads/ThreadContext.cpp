@@ -63,7 +63,6 @@ namespace BufferUploads
             return;
         }
 
-        const bool preserveRenderState = false;
         auto immContext = RenderCore::Metal::DeviceContext::Get(commitTo);
         
         TimeMarker stallStart = OSServices::GetPerformanceCounter();
@@ -88,7 +87,7 @@ namespace BufferUploads
 
                 commandList->_commitStep.CommitToImmediate_PreCommandList(commitTo);
                 if (commandList->_deviceCommandList)
-                    immContext->ExecuteCommandList(*commandList->_deviceCommandList.get(), preserveRenderState);
+                    immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
                 commandList->_commitStep.CommitToImmediate_PostCommandList(commitTo);
                 _commandListIDCommittedToImmediate = std::max(_commandListIDCommittedToImmediate, commandList->_id);
             

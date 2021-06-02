@@ -49,6 +49,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         #RenderCore/Metal/QueryPool.cpp
         RenderCore/Metal/ResourceUpdateAndReadBack.cpp
         RenderCore/Metal/StreamOutputTests.cpp
+        RenderCore/Metal/ThreadedRendering.cpp
         )
 
     xle_configure_executable(UnitTests-RenderCore-${metal_name})

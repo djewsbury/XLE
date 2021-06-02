@@ -11,11 +11,9 @@ namespace RenderCore { namespace Techniques
 {
     void Draw(
 		RenderCore::Metal::DeviceContext& metalContext,
-        RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
-		ParsingContext& parserContext,
+		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
+        ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerContext& sequencerTechnique,
-		const DrawablesPacket& drawablePkt,
-		const IResourcePtr& temporaryVB, 
-		const IResourcePtr& temporaryIB);
+		const DrawablesPacket& drawablePkt);
 }}

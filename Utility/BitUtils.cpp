@@ -77,7 +77,7 @@ namespace Utility
         unsigned idx = 0;
         for (auto i=_heap.begin(); i!=_heap.end(); ++i, idx+=64) {
             auto trailingZeroes = xl_ctz8(*i);      // zeroes are allocated
-            if (trailingZeroes == 64) continue;
+            if (*i == 0) continue;
             assert(!IsAllocated(idx + trailingZeroes));
             return idx + trailingZeroes;
         }

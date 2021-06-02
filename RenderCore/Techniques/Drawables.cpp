@@ -80,15 +80,21 @@ namespace RenderCore { namespace Techniques
 		const Metal::BoundUniforms*			_boundUniforms;
 	};
 
-	void Draw(
+	struct TemporaryStorageLocator
+	{
+		IResource* _res = nullptr;
+		size_t _begin = 0, _end = 0;
+	};
+
+	static void Draw(
 		RenderCore::Metal::DeviceContext& metalContext,
         RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
 		ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerContext& sequencerTechnique,
 		const DrawablesPacket& drawablePkt,
-		const IResourcePtr& temporaryVB, 
-		const IResourcePtr& temporaryIB)
+		const TemporaryStorageLocator& temporaryVB, 
+		const TemporaryStorageLocator& temporaryIB)
 	{
 		// Modern style drawing using GraphicsEncoder_Optimized
 		//		-- descriptor sets & graphics pipelines
@@ -128,15 +134,20 @@ namespace RenderCore { namespace Techniques
 			if (drawable._geo) {
 				for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
 					auto& stream = drawable._geo->_vertexStreams[c];
-					vbv[c]._resource = stream._resource ? stream._resource.get() : temporaryVB.get();
-					vbv[c]._offset = stream._vbOffset;
+					if (stream._resource) {
+						vbv[c]._resource = stream._resource.get();
+						vbv[c]._offset = stream._vbOffset;
+					} else {
+						vbv[c]._resource = temporaryVB._res;
+						vbv[c]._offset = stream._vbOffset + temporaryVB._begin;
+					}
 				}
 
 				if (drawable._geo->_ibFormat != Format(0)) {
 					if (drawable._geo->_ib) {
 						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat});
 					} else {
-						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB.get(), drawable._geo->_ibFormat, drawable._geo->_dynIBBegin});
+						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB._res, drawable._geo->_ibFormat, unsigned(drawable._geo->_dynIBBegin + temporaryIB._begin)});
 					}
 				} else {
 					encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
@@ -169,7 +180,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void Draw(
-		IThreadContext& context,
+		RenderCore::Metal::DeviceContext& metalContext,
+		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerContext& sequencerTechnique,
@@ -177,22 +189,35 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(sequencerTechnique._sequencerConfig);
 
-		IResourcePtr temporaryVB, temporaryIB;
+		TemporaryStorageLocator temporaryVB, temporaryIB;
 		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::VB).empty()) {
-			temporaryVB = CreateStaticVertexBuffer(*context.GetDevice(), drawablePkt.GetStorage(DrawablesPacket::Storage::VB));
+			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::VB);
+			auto mappedData = metalContext.MapTemporaryStorage(srcData.size(), BindFlag::VertexBuffer);
+			assert(mappedData.GetData().size() == srcData.size());
+			std::memcpy(mappedData.GetData().begin(), srcData.begin(), srcData.size());
+			temporaryVB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::IB).empty()) {
-			temporaryIB = CreateStaticIndexBuffer(*context.GetDevice(), drawablePkt.GetStorage(DrawablesPacket::Storage::IB));
+			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::IB);
+			auto mappedData = metalContext.MapTemporaryStorage(srcData.size(), BindFlag::IndexBuffer);
+			assert(mappedData.GetData().size() == srcData.size());
+			std::memcpy(mappedData.GetData().begin(), srcData.begin(), srcData.size());
+			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 
-		const bool useOptimizedPath = true;
-		if (useOptimizedPath) {
-			auto& metalContext = *Metal::DeviceContext::Get(context);
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerTechnique, drawablePkt, temporaryVB, temporaryIB);
-		} else {
-			assert(0);
-		}
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerTechnique, drawablePkt, temporaryVB, temporaryIB);
+	}
+
+	void Draw(
+		IThreadContext& context,
+        ParsingContext& parserContext,
+		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const SequencerContext& sequencerTechnique,
+		const DrawablesPacket& drawablePkt)
+	{
+		auto& metalContext = *Metal::DeviceContext::Get(context);
+		auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerTechnique, drawablePkt);
 	}
 
 	static const std::string s_graphicsPipeline { "graphics-pipeline" };

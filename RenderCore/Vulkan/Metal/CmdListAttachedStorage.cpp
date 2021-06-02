@@ -6,10 +6,11 @@
 #include "ObjectFactory.h"
 #include "DeviceContext.h"
 #include "IncludeVulkan.h"
-#include "../../OSServices/Log.h"
-#include "../../Utility/HeapUtils.h"
-#include "../../Utility/BitUtils.h"
-#include "../../Utility/Threading/Mutex.h"
+#include "../../BufferView.h"
+#include "../../../OSServices/Log.h"
+#include "../../../Utility/HeapUtils.h"
+#include "../../../Utility/BitUtils.h"
+#include "../../../Utility/Threading/Mutex.h"
 #include <thread>
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -141,6 +142,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (; i!=_pages.size(); ++i) {
 			auto& page = *_pages[i];
 			if (page._type != type) continue;
+			if (_pageReservations.IsAllocated(i)) continue;
 
 			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, page._alignment);
 			auto space = page._heap.AllocateBack(alignedByteCount);
@@ -177,6 +179,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void TemporaryStorageManager::Pimpl::FlushDestroys()
 	{
+		ScopedLock(_lock);
 		assert(std::this_thread::get_id() == _boundThreadId);
 		for (auto i = 0u; i!=_pages.size(); ++i) {
 			auto& page = *_pages[i];
@@ -382,6 +385,21 @@ namespace RenderCore { namespace Metal_Vulkan
 			moveFrom._manager = nullptr;
 		}
 		return *this;
+	}
+
+	VertexBufferView TemporaryStorageResourceMap::AsVertexBufferView()
+	{
+		return VertexBufferView { _resource.get(), (unsigned)_beginAndEndInResource.first };
+	}
+	
+	IndexBufferView TemporaryStorageResourceMap::AsIndexBufferView(Format indexFormat)
+	{
+		return IndexBufferView { _resource.get(), indexFormat, (unsigned)_beginAndEndInResource.first };
+	}
+
+	ConstantBufferView TemporaryStorageResourceMap::AsConstantBufferView()
+	{
+		return ConstantBufferView { _resource.get(), (unsigned)_beginAndEndInResource.first, (unsigned)_beginAndEndInResource.second };
 	}
 
 	TemporaryStorageResourceMap::TemporaryStorageResourceMap(

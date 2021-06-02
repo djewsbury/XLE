@@ -978,7 +978,7 @@ namespace RenderCore { namespace ImplVulkan
             shared_from_this(), 
             nullptr, 
             Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr),
-            Metal_Vulkan::CommandBufferType::Secondary);
+            Metal_Vulkan::CommandBufferType::Primary);
     }
 
 	IResourcePtr Device::CreateResource(
@@ -1352,7 +1352,8 @@ namespace RenderCore { namespace ImplVulkan
 		IteratorRange<const VkSemaphore*> completionSignals,
 		VkFence fence)
 	{
-		_metalContext->ValidateCommitToQueue();
+		auto immediateCommands = _metalContext->ResolveCommandList();	
+		immediateCommands->ValidateCommitToQueue(*_factory);
 		
 		VkSubmitInfo submitInfo;
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1378,12 +1379,56 @@ namespace RenderCore { namespace ImplVulkan
 		submitInfo.signalSemaphoreCount = completionSignals.size();
 		submitInfo.pSignalSemaphores = completionSignals.begin();
 
-		auto immediateCommands = _metalContext->ResolveCommandList();	
+		immediateCommands->OnSubmitToQueue();
 		VkCommandBuffer rawCmdBuffers[] = { immediateCommands->GetUnderlying().get() };
 		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
 		submitInfo.pCommandBuffers = rawCmdBuffers;
 	
 		auto res = vkQueueSubmit(_queue, 1, &submitInfo, fence);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
+
+		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
+		_nextQueueShouldWaitOnInterimBuffer = false;
+	}
+
+	void ThreadContext::CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList)
+	{
+		cmdList.ValidateCommitToQueue(*_factory);
+		cmdList.OnSubmitToQueue();
+
+		if (!_interimCommandBufferComplete)
+			_interimCommandBufferComplete = _factory->CreateSemaphore();
+
+		VkSubmitInfo submitInfo;
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pNext = nullptr;
+
+		VkSemaphore waitSema[2];
+		VkPipelineStageFlags waitStages[2];
+		unsigned waitCount = 0;
+		if (_nextQueueShouldWaitOnAcquire != VK_NULL_HANDLE) {
+			waitSema[waitCount] = _nextQueueShouldWaitOnAcquire;
+			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			++waitCount;
+		}
+		if (_nextQueueShouldWaitOnInterimBuffer) {
+			waitSema[waitCount] = _interimCommandBufferComplete.get();
+			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			++waitCount;
+		}
+		submitInfo.waitSemaphoreCount = waitCount;
+		submitInfo.pWaitSemaphores = waitSema;
+		submitInfo.pWaitDstStageMask = waitStages;
+
+		submitInfo.signalSemaphoreCount = 0;
+		submitInfo.pSignalSemaphores = nullptr;
+
+		VkCommandBuffer rawCmdBuffers[] = { cmdList.GetUnderlying().get() };
+		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
+		submitInfo.pCommandBuffers = rawCmdBuffers;
+	
+		auto res = vkQueueSubmit(_queue, 1, &submitInfo, nullptr);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
 
@@ -1464,23 +1509,27 @@ namespace RenderCore { namespace ImplVulkan
 
 	void	ThreadContext::CommitCommands(CommitCommandsFlags::BitField flags)
 	{
-		if (!_metalContext->HasActiveCommandList())
-			return;		// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
-
 		// Queue any commands that are prepared, and wait for the GPU to complete
 		// processing them
 		//
 		// Note that we want to wait not just for any commands that are in _metalContext
 		// now; but also any other command buffers that have already been submitted
 		// and are still being processed
-		if (!_interimCommandBufferComplete)
-			_interimCommandBufferComplete = _factory->CreateSemaphore();
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
+		bool actuallySubmittedSomething = false;
+		if (!_metalContext->HasActiveCommandList()) {
+			if (!_interimCommandBufferComplete)
+				_interimCommandBufferComplete = _factory->CreateSemaphore();
 
-		auto trackingFence = _gpuTracker->GetFenceForCurrentFrame();
-		VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
-		QueuePrimaryContext(MakeIteratorRange(signalSema), trackingFence);
-		_nextQueueShouldWaitOnInterimBuffer = true;
+			auto trackingFence = _gpuTracker->GetFenceForCurrentFrame();
+			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
+			QueuePrimaryContext(MakeIteratorRange(signalSema), trackingFence);
+			_nextQueueShouldWaitOnInterimBuffer = true;
+			actuallySubmittedSomething = true;
+		} else {
+			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
+			// however, we still flush out the destruction queues, etc
+		}
 
 		// We need to flush the destruction queues at some point for clients that never actually call Present
 		// We have less control over the frequency of CommitCommands, though, so it's going to be less clear
@@ -1492,13 +1541,15 @@ namespace RenderCore { namespace ImplVulkan
 		_renderingCommandPool.FlushDestroys();
 		_globalPools->_temporaryStorageManager->FlushDestroys();
 
-		// Note IncrementProducerFrame() must happen before the wait here
-		auto markerToWaitFor = _gpuTracker->GetProducerMarker();
-		if (_gpuTracker)
-			_gpuTracker->IncrementProducerFrame();
+		if (actuallySubmittedSomething) {
+			// Note IncrementProducerFrame() must happen before the wait here
+			auto markerToWaitFor = _gpuTracker->GetProducerMarker();
+			if (_gpuTracker)
+				_gpuTracker->IncrementProducerFrame();
 
-		if (waitForCompletion)
-			_gpuTracker->WaitForFence(markerToWaitFor);
+			if (waitForCompletion)
+				_gpuTracker->WaitForFence(markerToWaitFor);
+		}
 	}
 
     bool ThreadContext::IsImmediate() const

@@ -363,16 +363,14 @@ namespace RenderCore { namespace Techniques
     {
 		if (_attachedContext) {
 			assert(_frameBuffer);
-			Metal::EndSubpass(*_attachedContext, *_frameBuffer);
-			Metal::BeginNextSubpass(*_attachedContext, *_frameBuffer);
+			_attachedContext->BeginNextSubpass(*_frameBuffer);
 		}
     }
 
     void RenderPassInstance::End()
     {
 		if (_attachedContext) {
-			Metal::EndSubpass(*_attachedContext, *_frameBuffer);
-			Metal::EndRenderPass(*_attachedContext);
+            _attachedContext->EndRenderPass();
 			_attachedContext = nullptr;
 		}
     }
@@ -380,7 +378,7 @@ namespace RenderCore { namespace Techniques
     unsigned RenderPassInstance::GetCurrentSubpassIndex() const
     {
 		if (_attachedContext) {
-			return Metal::GetCurrentSubpassIndex(*_attachedContext);
+			return _attachedContext->GetCurrentSubpassIndex();
 		} else {
 			return 0;
 		}
@@ -500,7 +498,7 @@ namespace RenderCore { namespace Techniques
         _layout = *fb._completedDesc;
         // todo -- we might need to pass offset & extent parameters to BeginRenderPass
         // this could be derived from _attachmentPool->GetFrameBufferProperties()?
-        Metal::BeginRenderPass(*_attachedContext, *_frameBuffer, beginInfo._clearValues);
+        _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
     }
 
     RenderPassInstance::RenderPassInstance(

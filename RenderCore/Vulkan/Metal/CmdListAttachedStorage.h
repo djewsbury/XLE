@@ -8,6 +8,13 @@
 #include "VulkanCore.h"
 #include "../../ResourceDesc.h"
 
+namespace RenderCore
+{
+	class VertexBufferView;
+	class IndexBufferView;
+	class ConstantBufferView;
+}
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	///
@@ -35,6 +42,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		const std::shared_ptr<IResource>& GetResource() const { return _resource; }
 		std::pair<size_t, size_t> GetBeginAndEndInResource() const { return _beginAndEndInResource; }
 		unsigned GetPageId() const { return _pageId; }
+
+		VertexBufferView AsVertexBufferView();
+		IndexBufferView AsIndexBufferView(Format indexFormat);
+		ConstantBufferView AsConstantBufferView();
 
 		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&) = delete;
 		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&) = delete;

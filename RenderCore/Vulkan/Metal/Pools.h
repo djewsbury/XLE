@@ -12,6 +12,7 @@
 #include "PipelineLayout.h"
 #include "../../../Utility/IteratorUtils.h"
 #include "../../../Utility/HeapUtils.h"
+#include "../../../Utility/Threading/Mutex.h"
 #include <vector>
 
 #if defined(CHECK_COMMAND_POOL)
@@ -81,6 +82,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		struct MarkedDestroys { IAsyncTracker::Marker _marker; unsigned _pendingCount; };
 		CircularBuffer<MarkedDestroys, 8> _markedDestroys;
         std::vector<VkDescriptorSet> _pendingDestroys;
+        Threading::Mutex _lock;
 
 		void QueueDestroy(VkDescriptorSet buffer);
     };

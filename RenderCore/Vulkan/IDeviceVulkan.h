@@ -16,7 +16,7 @@ namespace Assets { class DependentFileState; }
 
 namespace RenderCore
 {
-	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class PipelineLayout; }
+	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class PipelineLayout; class CommandList; }
 
 	enum class VulkanShaderMode
 	{
@@ -34,9 +34,6 @@ namespace RenderCore
 
 	////////////////////////////////////////////////////////////////////////////////
 
-	/// <summary>IDevice extension for DX11</summary>
-	/// Use IDevice::QueryInterface to query for this type from a
-	/// plain IDevice.
 	class IDeviceVulkan
 	{
 	public:
@@ -51,11 +48,11 @@ namespace RenderCore
 
 	////////////////////////////////////////////////////////////////////////////////
 
-	/// <summary>IThreadContext extension for DX11</summary>
 	class IThreadContextVulkan
 	{
 	public:
 		virtual const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() = 0;
+		virtual void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) = 0;
 		~IThreadContextVulkan();
 	};
 

@@ -123,6 +123,8 @@ namespace RenderCore { namespace ImplVulkan
 		IResourcePtr	BeginFrame(IPresentationChain& presentationChain) override;
 		void			CommitCommands(CommitCommandsFlags::BitField) override;
 
+        void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) override;
+
         bool                        IsImmediate() const override;
         ThreadContextStateDesc      GetStateDesc() const override;
         std::shared_ptr<IDevice>    GetDevice() const override;
@@ -155,7 +157,7 @@ namespace RenderCore { namespace ImplVulkan
 
 		VkDevice							_underlyingDevice;
 		VkQueue								_queue;
-		const Metal_Vulkan::ObjectFactory*	_factory;
+		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
 
 		std::shared_ptr<FenceBasedTracker>	_gpuTracker;

@@ -909,7 +909,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		// We will release our reference on _command list here.
 		auto result = std::make_shared<CommandList>(std::move(_sharedState->_commandList));
 		assert(!_sharedState->_commandList.GetUnderlying() && !_sharedState->_commandList._attachedStorage);
-		result->_attachedStorage.OnSubmitToQueue();
 		return result;
 	}
 
@@ -1126,7 +1125,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-	void DeviceContext::ValidateCommitToQueue()
+	void CommandList::ValidateCommitToQueue(ObjectFactory& factory)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			// We're going to commit the current command list to the queue. Let's validate resource visibility
@@ -1135,34 +1134,37 @@ namespace RenderCore { namespace Metal_Vulkan
 			//   - that the resource was never made visible on a command list
 			//   - the command list in which it was made visible hasn't yet been commited to the queue
 			//   - it's made visible after it was used on this command list
-			auto& cmdList = _sharedState->_commandList;
-
-			auto factoryi = _factory->_resourcesVisibleToQueue.begin();
-			auto searchi = cmdList._resourcesThatMustBeVisible.begin();
-			while (searchi != cmdList._resourcesThatMustBeVisible.end()) {
-				while (factoryi != _factory->_resourcesVisibleToQueue.end() && *factoryi < *searchi)
+			auto factoryi = factory._resourcesVisibleToQueue.begin();
+			auto searchi = _resourcesThatMustBeVisible.begin();
+			while (searchi != _resourcesThatMustBeVisible.end()) {
+				while (factoryi != factory._resourcesVisibleToQueue.end() && *factoryi < *searchi)
 					++factoryi;
 
-				if (factoryi == _factory->_resourcesVisibleToQueue.end() || *factoryi != *searchi)
+				if (factoryi == factory._resourcesVisibleToQueue.end() || *factoryi != *searchi)
 					Throw(std::runtime_error("Attempting to use resource that hasn't been made visible. Ensure that all used resources have had Metal::CompleteInitialization() called on them"));
 
 				++searchi;
 			}
-			cmdList._resourcesThatMustBeVisible.clear();
+			_resourcesThatMustBeVisible.clear();
 
 			// Now register the resources in _resourcesBecomingVisible as visible to the queue
-			auto becomingVisibleEnd = std::unique(cmdList._resourcesBecomingVisible.begin(), cmdList._resourcesBecomingVisible.end());
-			if (cmdList._resourcesBecomingVisible.begin() != becomingVisibleEnd) {
+			auto becomingVisibleEnd = std::unique(_resourcesBecomingVisible.begin(), _resourcesBecomingVisible.end());
+			if (_resourcesBecomingVisible.begin() != becomingVisibleEnd) {
 				std::vector<uint64_t> newVisibleToQueue;
-				newVisibleToQueue.reserve(becomingVisibleEnd - cmdList._resourcesBecomingVisible.begin() + _factory->_resourcesVisibleToQueue.size());
+				newVisibleToQueue.reserve(becomingVisibleEnd - _resourcesBecomingVisible.begin() + factory._resourcesVisibleToQueue.size());
 				std::set_union(
-					_factory->_resourcesVisibleToQueue.begin(), _factory->_resourcesVisibleToQueue.end(),
-					cmdList._resourcesBecomingVisible.begin(), becomingVisibleEnd,
+					factory._resourcesVisibleToQueue.begin(), factory._resourcesVisibleToQueue.end(),
+					_resourcesBecomingVisible.begin(), becomingVisibleEnd,
 					std::back_inserter(newVisibleToQueue));
 
-				std::swap(newVisibleToQueue, _factory->_resourcesVisibleToQueue);
+				std::swap(newVisibleToQueue, factory._resourcesVisibleToQueue);
 			}
 		#endif
+	}
+
+	void CommandList::OnSubmitToQueue()
+	{
+		_attachedStorage.OnSubmitToQueue();
 	}
 
 	DeviceContext::DeviceContext(

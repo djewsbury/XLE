@@ -221,6 +221,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		void ResetEvent(VkEvent evnt, VkPipelineStageFlags stageMask);
 
 		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
+		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
+		void OnSubmitToQueue();
+
+		void ValidateCommitToQueue(ObjectFactory& factory);
 
 		CommandList();
 		explicit CommandList(const VulkanSharedPtr<VkCommandBuffer>& underlying);
@@ -435,7 +439,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
-		void ValidateCommitToQueue();
 
 		std::shared_ptr<Internal::CaptureForBindRecords> _captureForBindRecords;
 

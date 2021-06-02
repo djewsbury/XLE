@@ -157,6 +157,7 @@ namespace RenderCore { namespace Metal_Vulkan
         IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
         IteratorRange<const VkDescriptorSetLayout*> layouts)
     {
+        ScopedLock(_lock);
         assert(dst.size() == layouts.size());
         assert(dst.size() > 0);
 
@@ -200,6 +201,8 @@ namespace RenderCore { namespace Metal_Vulkan
     void DescriptorPool::FlushDestroys()
     {
 		if (!_device || !_pool) return;
+
+        ScopedLock(_lock);
         
 		auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
 		size_t countToDestroy = 0;
@@ -221,6 +224,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void DescriptorPool::QueueDestroy(VkDescriptorSet set)
 	{
+        ScopedLock(_lock);
 		auto currentMarker = _gpuTracker ? _gpuTracker->GetProducerMarker() : ~0u;
 		if (_markedDestroys.empty() || _markedDestroys.back()._marker != currentMarker) {
 			bool success = _markedDestroys.try_emplace_back(MarkedDestroys{ currentMarker, 1u });
