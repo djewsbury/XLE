@@ -207,7 +207,7 @@ namespace UnitTests
 
 		// final cmd lists...
 		for (auto& cmdList:pendingCommandList)
-			RenderCore::Metal::DeviceContext::Get(*threadContext)->ExecuteCommandList(std::move(*cmdList));
+			vulkanThreadContext->CommitPrimaryCommandBufferToQueue(*cmdList);
 		pendingCommandList.clear();
 
 		auto readBackData = fbHelper.GetMainTarget()->ReadBackSynchronized(*threadContext);

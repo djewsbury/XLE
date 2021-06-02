@@ -90,7 +90,7 @@ namespace Utility
         _heap.resize(longLongCount, ~uint64_t(0x0));
         if ((slotCount % 64) != 0) {
                 // prevent top bits from being allocated
-            _heap[longLongCount-1] = ((slotCount % 64) - 1);
+            _heap[longLongCount-1] = ((1ull << (slotCount % 64ull)) - 1ull);
         }
     }
 

@@ -143,12 +143,12 @@ namespace RenderCore { namespace ImplVulkan
         virtual void*   QueryInterface(size_t guid) override;
         const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() override;
 
-		void SetGPUTracker(const std::shared_ptr<Metal_Vulkan::FenceBasedTracker>&);
 		void AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>&);
 
         ThreadContext(
             std::shared_ptr<Device> device, 
 			VkQueue queue,
+            std::shared_ptr<Metal_Vulkan::FenceBasedTracker> gpuTracker,
             Metal_Vulkan::CommandPool&& cmdPool,
 			Metal_Vulkan::CommandBufferType cmdBufferType);
         ~ThreadContext();

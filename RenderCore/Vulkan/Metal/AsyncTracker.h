@@ -5,16 +5,18 @@
 #include "ObjectFactory.h"
 #include "VulkanCore.h"
 #include "../../../Utility/BitUtils.h"
+#include "../../../Utility/Threading/Mutex.h"
 #include <optional>
 #include <chrono>
 #include <vector>
+#include <thread>
 
 namespace RenderCore { namespace Metal_Vulkan
 {
 	class FenceBasedTracker : public IAsyncTracker
 	{
 	public:
-		virtual Marker GetConsumerMarker() const { return _lastCompletedConsumerFrame; }
+		virtual Marker GetConsumerMarker() const { return _lastCompletedConsumerFrameMarker; }
 		virtual Marker GetProducerMarker() const { return _currentProducerFrameMarker; }
 
 		Marker IncrementProducerFrame();
@@ -29,24 +31,32 @@ namespace RenderCore { namespace Metal_Vulkan
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
 	private:
-		enum class State { Unused, WritingCommands, SubmittedToQueue, Abandoned }; 
+		enum class State { SubmittedToQueue, Abandoned, Unused }; 
 		struct Tracker
 		{
 			VkFence _fence = nullptr;
 			Marker _frameMarker = Marker_Invalid;
 			State _state = State::Unused;
 		};
-		std::vector<Tracker> _trackers;
-		std::vector<VulkanUniquePtr<VkFence>> _fences;
-		BitHeap _fenceAllocationFlags;
+		std::vector<Tracker> _trackersSubmittedToQueue;				// protected by _queueThreadId
+		std::vector<Tracker> _trackersSubmittedPendingOrdering;		// protected by _queueThreadId
+		std::vector<VulkanUniquePtr<VkFence>> _fences;				// protected by _queueThreadId
+		BitHeap _fenceAllocationFlags;								// protected by _queueThreadId
+		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _queueThreadId
 
-		Tracker* _nextProducerFrameToStart = nullptr;
-		Tracker* _nextConsumerFrameToComplete = nullptr;
-		Marker _currentProducerFrameMarker = Marker_Invalid;
-		Marker _lastCompletedConsumerFrame = Marker_Invalid;
+		std::vector<unsigned> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
+		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
+		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
+		Threading::Mutex _trackersWritingCommandsLock;
+
+		std::atomic<Marker> _currentProducerFrameMarker = Marker_Invalid;
+		std::atomic<Marker> _lastCompletedConsumerFrameMarker = Marker_Invalid;
 		VkDevice _device;
 
+		std::thread::id _queueThreadId;
+
 		void CheckFenceReset(VkFence fence);
+		void FlushTrackersPendingAbandon();
 	};
 
 	class EventBasedTracker : public IAsyncTracker

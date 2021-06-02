@@ -534,10 +534,10 @@ namespace RenderCore { namespace ImplVulkan
             _foregroundPrimaryContext = std::make_shared<ThreadContext>(
 				shared_from_this(), 
 				GetQueue(_underlying.get(), _physDev._renderingQueueFamily),
+				_gpuTracker,
                 Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _gpuTracker),
 				Metal_Vulkan::CommandBufferType::Primary);
 			_foregroundPrimaryContext->AttachDestroyer(destroyer);
-			_foregroundPrimaryContext->SetGPUTracker(_gpuTracker);
 
 			// We need to ensure that the "dummy" resources get their layout change to complete initialization
 			_pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
@@ -702,7 +702,7 @@ namespace RenderCore { namespace ImplVulkan
         DoSecondStageInit();
 		return std::make_unique<ThreadContext>(
             shared_from_this(), 
-            nullptr, 
+            nullptr, _gpuTracker,
             Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr),
             Metal_Vulkan::CommandBufferType::Primary);
     }
@@ -1203,7 +1203,7 @@ namespace RenderCore { namespace ImplVulkan
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
 		VkFence fenceToWaitFor = nullptr;
-		if (!_metalContext->HasActiveCommandList()) {
+		if (_metalContext->HasActiveCommandList()) {
 			if (!_interimCommandBufferComplete)
 				_interimCommandBufferComplete = _factory->CreateSemaphore();
 
@@ -1265,12 +1265,12 @@ namespace RenderCore { namespace ImplVulkan
 		return *_annotator;
 	}
 
-	void ThreadContext::SetGPUTracker(const std::shared_ptr<Metal_Vulkan::FenceBasedTracker>& tracker) { _gpuTracker = tracker; }
 	void ThreadContext::AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>& queue) { _destrQueue = queue; }
 
     ThreadContext::ThreadContext(
 		std::shared_ptr<Device> device,
 		VkQueue queue,
+		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> gpuTracker,
         Metal_Vulkan::CommandPool&& cmdPool,
 		Metal_Vulkan::CommandBufferType cmdBufferType)
     : _device(device)
@@ -1284,6 +1284,7 @@ namespace RenderCore { namespace ImplVulkan
 	, _globalPools(&device->GetGlobalPools())
 	, _queue(queue)
 	, _underlyingDevice(device->GetUnderlyingDevice())
+	, _gpuTracker(std::move(gpuTracker))
     {}
 
     ThreadContext::~ThreadContext() 

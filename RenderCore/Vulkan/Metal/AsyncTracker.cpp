@@ -13,142 +13,163 @@ namespace RenderCore { namespace Metal_Vulkan
 {
 	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
 	{
-		// If we use up all of the markers, we need stall and wait for the GPU to catch up
-		for (;;) {
-			// If "next' is ready to go for the next producer frame, we'll break out 
-			if (_nextProducerFrameToStart->_state == State::Unused) break;
-
-			using namespace std::chrono_literals;
-			static std::chrono::steady_clock::time_point lastReport{};		// (defaults to start of epoch)
-			auto now = std::chrono::steady_clock::now();
-			if ((now - lastReport) > 1s) {
-				Log(Verbose) << "Stalling due to insufficient trackers in Vulkan FenceBasedTracker" << std::endl;
-				lastReport = now;
-			}
-
-			Threading::YieldTimeSlice();
-			UpdateConsumer();
+		ScopedLock(_trackersWritingCommandsLock);
+		if (_initialMarker) {
+			// special case to ensure that the initial marker actually gets submitted (or abandoned) by something
+			assert(_currentProducerFrameMarker == 1);
+			_trackersWritingCommands.push_back(_currentProducerFrameMarker);
+			_initialMarker = false;
+			return _currentProducerFrameMarker;
+		} else {
+			auto result = ++_currentProducerFrameMarker;
+			_trackersWritingCommands.push_back(result);
+			return result;
 		}
-
-        auto result = ++_currentProducerFrameMarker;
-		_nextProducerFrameToStart->_frameMarker = result;
-		_nextProducerFrameToStart->_state = State::WritingCommands;
-        assert(_nextProducerFrameToStart->_fence == nullptr);
-
-		++_nextProducerFrameToStart;
-		if (_nextProducerFrameToStart >= AsPointer(_trackers.end()))
-			_nextProducerFrameToStart = &_trackers[0];
-
-        return result;
 	}
 
 	void FenceBasedTracker::OnSubmitToQueue(Marker marker, VkFence fence)
 	{
-        unsigned fenceIndex = 0;
-        for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
-        if (fenceIndex > _fences.size())
-            Throw(std::runtime_error("Incorrect fence passed to FenceBasedTracker::OnSubmitToQueue"));
+		assert(std::this_thread::get_id() == _queueThreadId);
 
-        if (!_fenceAllocationFlags.IsAllocated(fenceIndex))
-            _fenceAllocationFlags.Allocate(fenceIndex);
+		unsigned fenceIndex = 0;
+		for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
+		if (fenceIndex > _fences.size())
+			Throw(std::runtime_error("Incorrect fence passed to FenceBasedTracker::OnSubmitToQueue"));
 
-        for (auto& tracker:_trackers) {
-            if (tracker._frameMarker != marker) continue;
+		if (!_fenceAllocationFlags.IsAllocated(fenceIndex))
+			_fenceAllocationFlags.Allocate(fenceIndex);
 
-            assert(tracker._state == State::WritingCommands && tracker._fence == nullptr);
-            tracker._state = State::SubmittedToQueue;
-            tracker._fence = fence;
-            return;
-        }
+		FlushTrackersPendingAbandon();
 
-        Throw(std::runtime_error("Could not find marker (" + std::to_string(marker) + ") in tracker records"));
+		Tracker tracker { fence, marker, State::SubmittedToQueue };
+		if (marker == _nextSubmittedToQueueMarker) {
+			_trackersSubmittedToQueue.push_back(tracker);
+			++_nextSubmittedToQueueMarker;
+
+			for (;;) {
+				auto i = std::find_if(
+					_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
+					[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
+				if (i != _trackersSubmittedPendingOrdering.end()) {
+					_trackersSubmittedToQueue.push_back(*i);
+					++_nextSubmittedToQueueMarker;
+					_trackersSubmittedPendingOrdering.erase(i);
+				} else
+					break;
+			}
+		} else {
+			_trackersSubmittedPendingOrdering.push_back(tracker);
+		}
 	}
 
-    void FenceBasedTracker::AbandonMarker(Marker marker)
-    {
-        for (auto& tracker:_trackers) {
-            if (tracker._frameMarker != marker) continue;
+	void FenceBasedTracker::AbandonMarker(Marker marker)
+	{
+		ScopedLock(_trackersWritingCommandsLock);
+		_trackersPendingAbandon.push_back(marker);
+	}
 
-            assert(tracker._state == State::WritingCommands && tracker._fence == nullptr);
-            tracker._state = State::Abandoned;
-            return;
-        }
+	void FenceBasedTracker::FlushTrackersPendingAbandon()
+	{
+		assert(std::this_thread::get_id() == _queueThreadId);
+		ScopedLock(_trackersWritingCommandsLock);
+		std::sort(_trackersPendingAbandon.begin(), _trackersPendingAbandon.end());
+		for (const auto& marker:_trackersPendingAbandon) {
+			Tracker tracker { nullptr, marker, State::Abandoned };
+			if (marker == _nextSubmittedToQueueMarker) {
+				_trackersSubmittedToQueue.push_back(tracker);
+				++_nextSubmittedToQueueMarker;
 
-        Throw(std::runtime_error("Could not find marker (" + std::to_string(marker) + ") in tracker records"));
-    }
+				for (;;) {
+					auto i = std::find_if(
+						_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
+						[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
+					if (i != _trackersSubmittedPendingOrdering.end()) {
+						_trackersSubmittedToQueue.push_back(*i);
+						++_nextSubmittedToQueueMarker;
+						_trackersSubmittedPendingOrdering.erase(i);
+					} else
+						break;
+				}
+			} else {
+				_trackersSubmittedPendingOrdering.push_back(tracker);
+			}
+		}
+		_trackersPendingAbandon.clear();
+	}
 
 	VkFence FenceBasedTracker::FindAvailableFence()
-    {
-        auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
-        assert(firstAvailable != ~0u);
-        return _fences[firstAvailable].get();
-    }
+	{
+		assert(std::this_thread::get_id() == _queueThreadId);
+		auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
+		assert(firstAvailable != ~0u);
+		return _fences[firstAvailable].get();
+	}
 
-    void FenceBasedTracker::CheckFenceReset(VkFence fence)
-    {
-        for (auto& tracker:_trackers)
-            if (tracker._fence == fence)
-                return;
+	void FenceBasedTracker::CheckFenceReset(VkFence fence)
+	{
+		assert(std::this_thread::get_id() == _queueThreadId);
+		for (auto& tracker:_trackersSubmittedToQueue)
+			if (tracker._fence == fence)
+				return;
+		for (auto& tracker:_trackersSubmittedPendingOrdering)
+			if (tracker._fence == fence)
+				return;
 
-        unsigned fenceIndex = 0;
-        for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
-        assert(fenceIndex < _fences.size());
-        assert(_fenceAllocationFlags.IsAllocated(fenceIndex));
-        _fenceAllocationFlags.Deallocate(fenceIndex);
-        vkResetFences(_device, 1, &fence);
-    }
+		unsigned fenceIndex = 0;
+		for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
+		assert(fenceIndex < _fences.size());
+		assert(_fenceAllocationFlags.IsAllocated(fenceIndex));
+		_fenceAllocationFlags.Deallocate(fenceIndex);
+		vkResetFences(_device, 1, &fence);
+	}
 
 	void FenceBasedTracker::UpdateConsumer()
 	{
-		for (;;) {
-			if (_nextConsumerFrameToComplete == _nextProducerFrameToStart) break;
+		assert(std::this_thread::get_id() == _queueThreadId);
+		while (!_trackersSubmittedToQueue.empty()) {
+			auto next = *_trackersSubmittedToQueue.begin();
 
-            if (_nextConsumerFrameToComplete->_state == State::SubmittedToQueue) {
-                assert(!_nextConsumerFrameToComplete->_fence);
-                auto res = vkGetFenceStatus(_device, _nextConsumerFrameToComplete->_fence);
-                if (res == VK_SUCCESS) {
-                    assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
-                    _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
-                    
-                    VkFence fence = _nextConsumerFrameToComplete->_fence;
-                    _nextConsumerFrameToComplete->_fence = nullptr;
-                    CheckFenceReset(fence);
-                    _nextConsumerFrameToComplete->_state = State::Unused;
-                    _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
-                } else {
-                    if (res == VK_ERROR_DEVICE_LOST)
-                        Throw(std::runtime_error("Vulkan device lost"));
-                    assert(res == VK_NOT_READY); (void)res;
-                    break;
-                }
-            } else if (_nextConsumerFrameToComplete->_state == State::Abandoned) {
-                assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
-                _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+			if (next._state == State::SubmittedToQueue) {
+				assert(next._fence);
+				auto res = vkGetFenceStatus(_device, next._fence);
+				if (res == VK_SUCCESS) {
+					assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
+					_lastCompletedConsumerFrameMarker = next._frameMarker;
+					
+					auto fence = next._fence;
+					_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
+					CheckFenceReset(fence);
+				} else {
+					if (res == VK_ERROR_DEVICE_LOST)
+						Throw(std::runtime_error("Vulkan device lost"));
+					assert(res == VK_NOT_READY); (void)res;
+					break;
+				}
+			} else if (next._state == State::Abandoned) {
+				assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
+				_lastCompletedConsumerFrameMarker = next._frameMarker;
 
-                assert(_nextConsumerFrameToComplete->_fence == nullptr);
-                _nextConsumerFrameToComplete->_state = State::Unused;
-                _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
-            } else {
-                break;  // Unusued/WritingCommands -- end looping
-            }
-
-            ++_nextConsumerFrameToComplete;
-            if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
-                _nextConsumerFrameToComplete = &_trackers[0];
+				assert(next._fence == nullptr);
+				_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
+			} else {
+				assert(0);
+				break;
+			}
 		}
 	}
 
 	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
+		assert(std::this_thread::get_id() == _queueThreadId);
 		auto start = std::chrono::steady_clock::now();
 
-		if (marker <= _lastCompletedConsumerFrame)
+		if (marker <= _lastCompletedConsumerFrameMarker)
 			return true;
 
 		bool foundTheFence = false;
-		for (unsigned c=0; c<_trackers.size(); ++c)
-			if (_trackers[c]._frameMarker == marker) {
-				assert(_trackers[c]._state == State::SubmittedToQueue);
+		for (unsigned c=0; c<_trackersSubmittedToQueue.size(); ++c)
+			if (_trackersSubmittedToQueue[c]._frameMarker == marker) {
+				assert(_trackersSubmittedToQueue[c]._state == State::SubmittedToQueue);
 				foundTheFence = true;
 				break;
 			}
@@ -157,48 +178,43 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!foundTheFence) return false;
 
 		// Wait in order until we complete the one requested
-		while (_lastCompletedConsumerFrame != marker) {
-			if (_nextConsumerFrameToComplete == _nextProducerFrameToStart) break;
+		while (!_trackersSubmittedToQueue.empty()) {
+			auto next = *_trackersSubmittedToQueue.begin();
 
-            if (_nextConsumerFrameToComplete->_state == State::SubmittedToQueue) {
-                assert(_nextConsumerFrameToComplete->_fence);
-                VkFence fence = _nextConsumerFrameToComplete->_fence;
-                VkResult res;
-                if (timeout.has_value()) {
-                    auto timeoutRemaining = ((start + timeout.value()) - std::chrono::steady_clock::now());
-                    if (timeoutRemaining < std::chrono::seconds(0)) return false;
-                    res = vkWaitForFences(_device, 1, &fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeoutRemaining).count());
-                } else {
-                    res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
-                }
-                if (res == VK_SUCCESS) {
-                    assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
-                    _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
-                    
-                    VkFence fence = _nextConsumerFrameToComplete->_fence;
-                    _nextConsumerFrameToComplete->_fence = nullptr;
-                    CheckFenceReset(fence);
-                    _nextConsumerFrameToComplete->_state = State::Unused;
-                    _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
-                } else {
-                    if (res == VK_ERROR_DEVICE_LOST)
-                        Throw(std::runtime_error("Vulkan device lost"));
-                    break;
-                }
-            } else if (_nextConsumerFrameToComplete->_state == State::Abandoned) {
-                assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
-                _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+			if (next._state == State::SubmittedToQueue) {
+				assert(next._fence);
+				VkResult res;
+				if (timeout.has_value()) {
+					auto timeoutRemaining = ((start + timeout.value()) - std::chrono::steady_clock::now());
+					if (timeoutRemaining < std::chrono::seconds(0)) return false;
+					res = vkWaitForFences(_device, 1, &next._fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeoutRemaining).count());
+				} else {
+					res = vkWaitForFences(_device, 1, &next._fence, true, UINT64_MAX);
+				}
+				if (res == VK_SUCCESS) {
+					assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
+					_lastCompletedConsumerFrameMarker = next._frameMarker;
+					
+					auto fence = next._fence;
+					_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
+					CheckFenceReset(fence);
+				} else {
+					if (res == VK_ERROR_DEVICE_LOST)
+						Throw(std::runtime_error("Vulkan device lost"));
+					break;
+				}
+			} else if (next._state == State::Abandoned) {
+				assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
+				_lastCompletedConsumerFrameMarker = next._frameMarker;
 
-                assert(_nextConsumerFrameToComplete->_fence == nullptr);
-                _nextConsumerFrameToComplete->_state = State::Unused;
-                _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
-            } else {
-                break;  // Unusued/WritingCommands -- end looping
-            }
+				assert(next._fence == nullptr);
+				_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
+			} else {
+				break;  // Unusued/WritingCommands -- end looping
+			}
 
-            ++_nextConsumerFrameToComplete;
-            if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
-                _nextConsumerFrameToComplete = &_trackers[0];
+			if (_lastCompletedConsumerFrameMarker == marker)
+				return true;
 		}
 
 		// completed all pending markers, but still didn't find the one requested (or timed out)
@@ -206,26 +222,24 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	FenceBasedTracker::FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth)
-    : _fenceAllocationFlags(queueDepth)
+	: _fenceAllocationFlags(queueDepth)
 	{
-		_trackers.resize(queueDepth);
-		for (unsigned c=0; c<queueDepth; ++c) {
-			_trackers[c]._fence = nullptr;
-			_trackers[c]._frameMarker = 0;
-			_trackers[c]._state = State::Unused;
-		}
-        _fences.resize(queueDepth);
-        for (unsigned c=0; c<queueDepth; ++c)
-            _fences[c] = factory.CreateFence();
+		_trackersSubmittedToQueue.reserve(queueDepth);
+		_trackersSubmittedPendingOrdering.reserve(queueDepth);
+		_trackersWritingCommands.reserve(queueDepth);
+		_trackersPendingAbandon.reserve(queueDepth);
 
-		_nextProducerFrameToStart = &_trackers[1];
-		_nextConsumerFrameToComplete = &_trackers[0];
-		_lastCompletedConsumerFrame = 0;
-        // Start writing frame 1
-        _currentProducerFrameMarker = 1;
-        _trackers[0]._frameMarker = 1;
-        _trackers[0]._state = State::WritingCommands;
+		_fences.resize(queueDepth);
+		for (unsigned c=0; c<queueDepth; ++c)
+			_fences[c] = factory.CreateFence();
+
+		// We start with frame 1;
+		_currentProducerFrameMarker = 1;
+		_lastCompletedConsumerFrameMarker = 0;
+		_nextSubmittedToQueueMarker = 1;
+		_initialMarker = true;
 		_device = factory.GetDevice().get();
+		_queueThreadId = std::this_thread::get_id();
 	}
 
 	FenceBasedTracker::~FenceBasedTracker() {}

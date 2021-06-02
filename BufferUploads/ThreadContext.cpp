@@ -15,9 +15,8 @@ namespace BufferUploads
 {
     void ThreadContext::BeginCommandList()
     {
-        auto& metalContext = *RenderCore::Metal::DeviceContext::Get(*_underlyingContext);
-        if (!metalContext.HasActiveCommandList())
-            metalContext.BeginCommandList();
+        // note -- this will automatically begin a command list for us
+        RenderCore::Metal::DeviceContext::Get(*_underlyingContext);
     }
 
     void ThreadContext::ResolveCommandList()

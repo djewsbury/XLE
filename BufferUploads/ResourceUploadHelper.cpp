@@ -104,7 +104,7 @@ namespace BufferUploads { namespace PlatformInterface
         }
 
         auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();
-        metalContext.MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
+        metalContext.GetActiveCommandList().MakeResourcesVisible({&finalContainingGuid, &finalContainingGuid+1});
     }
 
     unsigned ResourceUploadHelper::WriteToBufferViaMap(

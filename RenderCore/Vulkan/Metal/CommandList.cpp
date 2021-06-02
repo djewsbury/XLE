@@ -289,6 +289,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (auto m:_asyncTrackerMarkers)
 			checked_cast<FenceBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(m, fence);
 		_asyncTrackerMarkers.clear();
+		_asyncTracker = nullptr;
 		return std::move(_underlying);
 	}
 
