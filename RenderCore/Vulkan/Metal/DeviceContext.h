@@ -7,8 +7,9 @@
 #include "Forward.h"
 #include "State.h"
 #include "PipelineLayout.h"		// for PipelineDescriptorsLayoutBuilder
-#include "Shader.h"
 #include "CmdListAttachedStorage.h"
+#include "CommandList.h"
+#include "Shader.h"
 #include "VulkanCore.h"
 #include "../../ResourceList.h"
 #include "../../ResourceDesc.h"
@@ -143,109 +144,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const ComputeShader* GetBoundComputeShader() const { return _shader; }
 	};
 
-	class CommandList
-	{
-	public:
-		// --------------- Vulkan specific interface --------------- 
-		void UpdateBuffer(
-			VkBuffer buffer, VkDeviceSize offset, 
-			VkDeviceSize byteCount, const void* data);
-		void BindDescriptorSets(
-			VkPipelineBindPoint pipelineBindPoint,
-			VkPipelineLayout layout,
-			uint32_t firstSet,
-			uint32_t descriptorSetCount,
-			const VkDescriptorSet* pDescriptorSets,
-			uint32_t dynamicOffsetCount,
-			const uint32_t* pDynamicOffsets);
-		void CopyBuffer(
-			VkBuffer srcBuffer,
-			VkBuffer dstBuffer,
-			uint32_t regionCount,
-			const VkBufferCopy* pRegions);
-		void CopyImage(
-			VkImage srcImage,
-			VkImageLayout srcImageLayout,
-			VkImage dstImage,
-			VkImageLayout dstImageLayout,
-			uint32_t regionCount,
-			const VkImageCopy* pRegions);
-		void CopyBufferToImage(
-			VkBuffer srcBuffer,
-			VkImage dstImage,
-			VkImageLayout dstImageLayout,
-			uint32_t regionCount,
-			const VkBufferImageCopy* pRegions);
-		void CopyImageToBuffer(
-			VkImage srcImage,
-			VkImageLayout srcImageLayout,
-			VkBuffer dstBuffer,
-			uint32_t regionCount,
-			const VkBufferImageCopy* pRegions);
-		void ClearColorImage(
-			VkImage image,
-			VkImageLayout imageLayout,
-			const VkClearColorValue* pColor,
-			uint32_t rangeCount,
-			const VkImageSubresourceRange* pRanges);
-		void ClearDepthStencilImage(
-			VkImage image,
-			VkImageLayout imageLayout,
-			const VkClearDepthStencilValue* pDepthStencil,
-			uint32_t rangeCount,
-			const VkImageSubresourceRange* pRanges);
-		void PipelineBarrier(
-			VkPipelineStageFlags            srcStageMask,
-			VkPipelineStageFlags            dstStageMask,
-			VkDependencyFlags               dependencyFlags,
-			uint32_t                        memoryBarrierCount,
-			const VkMemoryBarrier*          pMemoryBarriers,
-			uint32_t                        bufferMemoryBarrierCount,
-			const VkBufferMemoryBarrier*    pBufferMemoryBarriers,
-			uint32_t                        imageMemoryBarrierCount,
-			const VkImageMemoryBarrier*     pImageMemoryBarriers);
-		void PushConstants(
-			VkPipelineLayout layout,
-			VkShaderStageFlags stageFlags,
-			uint32_t offset,
-			uint32_t size,
-			const void* pValues);
-		void WriteTimestamp(
-			VkPipelineStageFlagBits pipelineStage, 
-			VkQueryPool queryPool, uint32_t query);
-		void BeginQuery(VkQueryPool queryPool, uint32_t query, VkQueryControlFlags flags = 0);
-		void EndQuery(VkQueryPool queryPool, uint32_t query);
-		void ResetQueryPool(
-			VkQueryPool queryPool, uint32_t firstQuery, uint32_t queryCount);
-		void SetEvent(VkEvent evnt, VkPipelineStageFlags stageMask);
-		void ResetEvent(VkEvent evnt, VkPipelineStageFlags stageMask);
-
-		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
-		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
-		void OnSubmitToQueue();
-
-		void ValidateCommitToQueue(ObjectFactory& factory);
-
-		CommandList();
-		explicit CommandList(const VulkanSharedPtr<VkCommandBuffer>& underlying);
-		~CommandList();
-
-		CommandList(CommandList&&) = default;
-		CommandList& operator=(CommandList&&) = default;
-	private:
-		VulkanSharedPtr<VkCommandBuffer> _underlying;
-
-		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			std::vector<uint64_t> _resourcesBecomingVisible;
-			std::vector<uint64_t> _resourcesThatMustBeVisible;
-		#endif
-
-		CmdListAttachedStorage _attachedStorage;
-
-		friend class DeviceContext;
-		friend class GraphicsEncoder;
-	};
-
+	class CommandList;
 	class VulkanEncoderSharedState;
 	class NumericUniformsInterface;
 
@@ -377,6 +276,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	};
 
 	class BlitEncoder;
+	class TemporaryStorageResourceMap;
 
 	class DeviceContext
 	{

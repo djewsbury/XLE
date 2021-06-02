@@ -26,6 +26,13 @@
 #include <vector>
 #include <type_traits>
 
+
+namespace RenderCore { namespace Metal_Vulkan
+{
+    class EventBasedTracker;
+    class FenceBasedTracker;
+}}
+
 namespace RenderCore { namespace ImplVulkan
 {
     class SelectedPhysicalDevice
@@ -44,9 +51,6 @@ namespace RenderCore { namespace ImplVulkan
 ////////////////////////////////////////////////////////////////////////////////
 
     class Device;
-    class EventBasedTracker;
-    class SemaphoreBasedTracker;
-    class FenceBasedTracker;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -82,7 +86,7 @@ namespace RenderCore { namespace ImplVulkan
 			VectorPattern<unsigned, 2> extent,
 			unsigned queueFamilyIndex,
             const void* platformValue,
-            std::shared_ptr<FenceBasedTracker> gpuTracker);
+            std::shared_ptr<Metal_Vulkan::FenceBasedTracker> gpuTracker);
         ~PresentationChain();
     private:
 		VulkanSharedPtr<VkSurfaceKHR>   _surface;
@@ -109,7 +113,7 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::CommandPool _primaryBufferPool;
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
 
-        std::shared_ptr<FenceBasedTracker>	_gpuTracker;
+        std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
 
         void BuildImages();
     };
@@ -139,7 +143,7 @@ namespace RenderCore { namespace ImplVulkan
         virtual void*   QueryInterface(size_t guid) override;
         const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() override;
 
-		void SetGPUTracker(const std::shared_ptr<FenceBasedTracker>&);
+		void SetGPUTracker(const std::shared_ptr<Metal_Vulkan::FenceBasedTracker>&);
 		void AttachDestroyer(const std::shared_ptr<Metal_Vulkan::IDestructionQueue>&);
 
         ThreadContext(
@@ -160,7 +164,7 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
 
-		std::shared_ptr<FenceBasedTracker>	_gpuTracker;
+		std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
 		std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
 
         VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete;
@@ -216,7 +220,7 @@ namespace RenderCore { namespace ImplVulkan
         SelectedPhysicalDevice              _physDev;
 		Metal_Vulkan::ObjectFactory		    _objectFactory;
         Metal_Vulkan::GlobalPools           _pools;
-        std::shared_ptr<FenceBasedTracker>	_gpuTracker;
+        std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
 
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
 

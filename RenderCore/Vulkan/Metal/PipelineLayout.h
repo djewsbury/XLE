@@ -6,7 +6,7 @@
 
 #include "VulkanForward.h"
 #include "VulkanCore.h"
-#include "DescriptorSet.h"		// (for DescriptorSetVerboseDescription)
+#include "DescriptorSet.h"		// (for DescriptorSetDebugInfo)
 #include "../../IDevice.h"
 #include "../../Types.h"
 #include "../../UniformsStream.h"
