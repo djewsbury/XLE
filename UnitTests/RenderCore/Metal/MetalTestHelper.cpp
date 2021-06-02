@@ -164,15 +164,14 @@ namespace UnitTests
 
 		~RenderPassToken()
 		{
-			RenderCore::Metal::EndSubpass(*_devContext, *_fb);
-			RenderCore::Metal::EndRenderPass(*_devContext);
+			_devContext->EndRenderPass();
 		}
 	};
 
 	auto UnitTestFBHelper::BeginRenderPass(RenderCore::IThreadContext& threadContext) -> std::shared_ptr<IRenderPassToken>
 	{
 		auto devContext = RenderCore::Metal::DeviceContext::Get(threadContext);
-		RenderCore::Metal::BeginRenderPass(*devContext, *_pimpl->_fb);
+		devContext->BeginRenderPass(*_pimpl->_fb);
 		return std::make_shared<RenderPassToken>(devContext, _pimpl->_fb);
 	}
 

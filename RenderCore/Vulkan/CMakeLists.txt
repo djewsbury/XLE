@@ -2,6 +2,7 @@
 set(Src
 	Annotator.cpp
 	DeviceVulkan.cpp
+	Metal/CmdListAttachedStorage.cpp
 	Metal/CompiledShaderByteCode.cpp
 	Metal/DescriptorSet.cpp
 	Metal/DeviceContext.cpp

@@ -9,10 +9,12 @@
 #include "Pools.h"
 #include "DescriptorSet.h"
 #include "DeviceContext.h"
+#include "CmdListAttachedStorage.h"
 #include "../../BufferView.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/ArithmeticUtils.h"
+#include "../../../Utility/BitUtils.h"
 
 #include "IncludeVulkan.h"
 
@@ -26,7 +28,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         DescriptorPool*     _descriptorPool = nullptr;
 		GlobalPools*		_globalPools = nullptr;
-		TemporaryBufferSpace* _temporaryBufferSpace = nullptr;
+		CmdListAttachedStorage* _cmdListAttachedStorage = nullptr;
 
 		struct Binding
 		{
@@ -165,7 +167,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(_pimpl);
 
-		VkDescriptorBufferInfo buffers[constantBuffers.size()];
+		size_t totalSize = 0;
+		auto alignment = GetObjectFactory().GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment;
 		for (unsigned c=0; c<constantBuffers.size(); ++c) {
 			if (constantBuffers[c].empty()) continue;
 
@@ -175,16 +178,39 @@ namespace RenderCore { namespace Metal_Vulkan
 				continue;
 			}
 
-			auto pkt = constantBuffers[c];
-			auto tempSpace = _pimpl->_temporaryBufferSpace->AllocateBuffer(pkt);
-			if (!tempSpace.buffer) {
-				Log(Warning) << "Failed to allocate temporary buffer space in numeric uniforms interface" << std::endl;
-				continue;
-			}
+			auto alignedSize = CeilToMultiple((unsigned)constantBuffers[c].size(), alignment);
+			totalSize += alignedSize;
+		}
 
+		auto temporaryMapping = _pimpl->_cmdListAttachedStorage->MapStorage(totalSize, BindFlag::ConstantBuffer);
+		if (temporaryMapping.GetData().empty()) {
+			Log(Warning) << "Failed to allocate temporary buffer space in numeric uniforms interface" << std::endl;
+			return;
+		}
+
+		size_t iterator = 0;
+		auto beginInResource = temporaryMapping.GetBeginAndEndInResource().first;
+
+		for (unsigned c=0; c<constantBuffers.size(); ++c) {
+			if (constantBuffers[c].empty()) continue;
+
+			const auto& binding = _pimpl->_constantBufferRegisters[startingPoint + c];
+			if (binding._slotIndex == ~0u) continue;
+
+			auto pkt = constantBuffers[c];
+			assert(!pkt.empty());
+			std::memcpy(PtrAdd(temporaryMapping.GetData().begin(), iterator), pkt.data(), pkt.size());
+			VkDescriptorBufferInfo tempSpace;
+			tempSpace.buffer = checked_cast<Resource*>(temporaryMapping.GetResource().get())->GetBuffer();
+			tempSpace.offset = beginInResource + iterator;
+			tempSpace.range = pkt.size();
 			_pimpl->_descSet[binding._descSetIndex]._builder.Bind(
 				binding._slotIndex, tempSpace
 				VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+
+			auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
+			iterator += alignedSize;
+
 			_pimpl->_hasChanges |= _pimpl->_descSet[binding._descSetIndex]._builder.HasChanges();
         }
 	}
@@ -270,7 +296,7 @@ namespace RenderCore { namespace Metal_Vulkan
     NumericUniformsInterface::NumericUniformsInterface(
         const ObjectFactory& factory,
 		const ICompiledPipelineLayout& ipipelineLayout,
-		TemporaryBufferSpace& temporaryBufferSpace,
+		CmdListAttachedStorage& cmdListAttachedStorage,
         const LegacyRegisterBindingDesc& bindings)
     {
 		const auto& pipelineLayout = *checked_cast<const CompiledPipelineLayout*>(&ipipelineLayout);
@@ -278,7 +304,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _pimpl->_globalPools = Internal::VulkanGlobalsTemp::GetInstance()._globalPools;
 		_pimpl->_descriptorPool = &_pimpl->_globalPools->_mainDescriptorPool;
 		_pimpl->_legacyRegisterBindings = bindings;		// we store this only so we can return it from the GetLegacyRegisterBindings() query
-		_pimpl->_temporaryBufferSpace = &temporaryBufferSpace;
+		_pimpl->_cmdListAttachedStorage = &cmdListAttachedStorage;
 		_pimpl->_hasChanges = false;
         
         Reset();

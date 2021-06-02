@@ -58,7 +58,6 @@
     <ClInclude Include="..\RawFS.h" />
     <ClInclude Include="..\TimeUtils.h" />
     <ClInclude Include="..\BitHeap.h" />
-    <ClInclude Include="..\HeapUtils.h" />
     <ClInclude Include="..\IntrusivePtr.h" />
     <ClInclude Include="..\IteratorUtils.h" />
     <ClInclude Include="..\MiniHeap.h" />

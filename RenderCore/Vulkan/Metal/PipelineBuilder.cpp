@@ -6,7 +6,6 @@
 #include "ObjectFactory.h"
 #include "InputLayout.h"
 #include "Shader.h"
-#include "Buffer.h"
 #include "State.h"
 #include "Pools.h"
 #include "ShaderReflection.h"

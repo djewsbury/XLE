@@ -31,27 +31,27 @@ namespace Utility
     //      bit twiddling web site:
     //          https://graphics.stanford.edu/~seander/bithacks.html
 
-    inline uint32 IntegerLog2(uint8 x)
+    inline uint32_t IntegerLog2(uint8 x)
     {
         return xl_bsr1(x);
     }
 
-    inline uint32 IntegerLog2(uint16 x)
+    inline uint32_t IntegerLog2(uint16_t x)
     {
         return xl_bsr2(x);
     }
 
-    inline uint32 IntegerLog2(uint32 x)
+    inline uint32_t IntegerLog2(uint32_t x)
     {
         return xl_bsr4(x);
     }
 
-    inline uint32 IntegerLog2(uint64 x)
+    inline uint32_t IntegerLog2(uint64_t x)
     {
         return xl_bsr8(x);
     }
 
-    inline uint32 LeastSignificantBitSet(uint64 input)
+    inline uint32_t LeastSignificantBitSet(uint64_t input)
     {
             // (same as count-trailing-zeroes)
         return xl_ctz8(input);
@@ -80,6 +80,26 @@ namespace Utility
         return input + multiple - 1 - (input - 1) % multiple;
     }
 
+    class BitHeap
+    {
+    public:
+        uint32_t  Allocate();
+        uint32_t  AllocateNoExpand();
+        void    Allocate(uint32_t value);       ///< allocate a specific entry
+        void    Deallocate(uint32_t value);
+        bool    IsAllocated(uint32_t value) const;
+        void    Reserve(uint32_t count);
+        unsigned FirstUnallocated() const;
+
+        BitHeap(unsigned slotCount = 8 * 64);
+        BitHeap(BitHeap&& moveFrom) = default;
+        BitHeap& operator=(BitHeap&& moveFrom) = default;
+        BitHeap(const BitHeap& cloneFrom) = default;
+        BitHeap& operator=(const BitHeap& cloneFrom) = default;;
+        ~BitHeap();
+    private:
+        std::vector<uint64>         _heap;
+    };
 }
 
 using namespace Utility;

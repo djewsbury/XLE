@@ -1,5 +1,3 @@
-// Copyright 2015 XLGAMES Inc.
-//
 // Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
@@ -7,7 +5,6 @@
 #pragma once
 
 #include "TextureView.h"
-#include "Buffer.h"
 #include "State.h"
 #include "FrameBuffer.h"
 #include "ObjectFactory.h"
@@ -55,22 +52,6 @@ namespace RenderCore { namespace Metal_Vulkan
         #endif
 
 		void QueueDestroy(VkCommandBuffer buffer);
-	};
-
-	class TemporaryBufferSpace
-	{
-	public:
-		VkDescriptorBufferInfo	AllocateBuffer(IteratorRange<const void*> data);
-		void FlushDestroys();
-		void WriteBarrier(DeviceContext& context);
-
-		TemporaryBufferSpace(
-			ObjectFactory& factory,
-			const std::shared_ptr<IAsyncTracker>& asyncTracker);
-		~TemporaryBufferSpace();
-	private:
-		class Pimpl;
-		std::unique_ptr<Pimpl> _pimpl;
 	};
 
     class DescriptorPool
@@ -145,10 +126,12 @@ namespace RenderCore { namespace Metal_Vulkan
     };
 
     namespace Internal { class CompiledDescriptorSetLayoutCache; }
+    class TemporaryStorageManager;
 
     class GlobalPools
     {
     public:
+        std::unique_ptr<TemporaryStorageManager> _temporaryStorageManager;
         DescriptorPool                      _mainDescriptorPool;
 		DescriptorPool                      _longTermDescriptorPool;
         VulkanRenderPassPool                _renderPassPool;

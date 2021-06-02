@@ -355,18 +355,9 @@ namespace SceneEngine
 		projDesc._worldToProjection = Combine(InvertOrthonormalTransform(projDesc._cameraToWorld), projDesc._cameraToProjection);
 		parsingContext.GetProjectionDesc() = projDesc;
 
-		using namespace RenderCore::Techniques;
-		IResourcePtr temporaryVB, temporaryIB;
-		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::VB).empty()) {
-			temporaryVB = CreateStaticVertexBuffer(*context.GetDevice(), drawablePkt.GetStorage(DrawablesPacket::Storage::VB));
-		}
-		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::IB).empty()) {
-			temporaryIB = CreateStaticIndexBuffer(*context.GetDevice(), drawablePkt.GetStorage(DrawablesPacket::Storage::IB));
-		}
-
 		auto& metalContext = *Metal::DeviceContext::Get(context);
 		auto sequencerTechnique = MakeRayTestSequencerTechnique();
-		RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, sequencerTechnique, drawablePkt, temporaryVB, temporaryIB);
+		RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, sequencerTechnique, drawablePkt);
 	}
 
 	static const InputElementDesc s_soEles[] = {

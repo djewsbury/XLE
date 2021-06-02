@@ -28,8 +28,6 @@
     #define ENABLE_DEBUG_EXTENSIONS
 #endif
 
-// #define HACK_FORCE_SYNC
-
 namespace RenderCore { namespace ImplVulkan
 {
     using VulkanAPIFailure = Metal_Vulkan::VulkanAPIFailure;
@@ -360,6 +358,7 @@ namespace RenderCore { namespace ImplVulkan
 		physicalDeviceFeatures.geometryShader = true;
 		physicalDeviceFeatures.samplerAnisotropy = true;
 		physicalDeviceFeatures.pipelineStatisticsQuery = true;
+		// physicalDeviceFeatures.wideLines = true;
 		// physicalDeviceFeatures.independentBlend = true;
 		// physicalDeviceFeatures.robustBufferAccess = true;
 		// physicalDeviceFeatures.multiViewport = true;
@@ -428,6 +427,7 @@ namespace RenderCore { namespace ImplVulkan
 
     Device::~Device()
     {
+		_foregroundPrimaryContext.reset();
 		Metal_Vulkan::Internal::VulkanGlobalsTemp::GetInstance()._globalPools = nullptr;
 
         Metal_Vulkan::SetDefaultObjectFactory(nullptr);
@@ -802,14 +802,13 @@ namespace RenderCore { namespace ImplVulkan
 			_pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(_objectFactory);
             _pools._mainPipelineCache = _objectFactory.CreatePipelineCache();
             _pools._dummyResources = Metal_Vulkan::DummyResources(_objectFactory);
+			_pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(_objectFactory, _gpuTracker);
 
-			auto tempBufferSpace = std::make_unique<Metal_Vulkan::TemporaryBufferSpace>(_objectFactory, _gpuTracker);
             _foregroundPrimaryContext = std::make_shared<ThreadContext>(
 				shared_from_this(), 
 				GetQueue(_underlying.get(), _physDev._renderingQueueFamily),
                 Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _gpuTracker),
-				Metal_Vulkan::CommandBufferType::Primary,
-				std::move(tempBufferSpace));
+				Metal_Vulkan::CommandBufferType::Primary);
 			_foregroundPrimaryContext->AttachDestroyer(destroyer);
 			_foregroundPrimaryContext->SetGPUTracker(_gpuTracker);
 
@@ -979,7 +978,7 @@ namespace RenderCore { namespace ImplVulkan
             shared_from_this(), 
             nullptr, 
             Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr),
-            Metal_Vulkan::CommandBufferType::Secondary, nullptr);
+            Metal_Vulkan::CommandBufferType::Secondary);
     }
 
 	IResourcePtr Device::CreateResource(
@@ -1129,11 +1128,6 @@ namespace RenderCore { namespace ImplVulkan
 
     Metal_Vulkan::ResourceView* PresentationChain::AcquireNextImage()
     {
-		#if defined(HACK_FORCE_SYNC)
-			// hack -- just slow us down
-			Threading::Sleep(16);
-		#endif
-
         _activePresentSync = (_activePresentSync+1) % dimof(_presentSyncs);
         auto& sync = _presentSyncs[_activePresentSync];
 		if (sync._presentFence.has_value())
@@ -1384,7 +1378,7 @@ namespace RenderCore { namespace ImplVulkan
 		submitInfo.signalSemaphoreCount = completionSignals.size();
 		submitInfo.pSignalSemaphores = completionSignals.begin();
 
-		auto immediateCommands = _metalContext->ResolveCommandList();
+		auto immediateCommands = _metalContext->ResolveCommandList();	
 		VkCommandBuffer rawCmdBuffers[] = { immediateCommands->GetUnderlying().get() };
 		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
 		submitInfo.pCommandBuffers = rawCmdBuffers;
@@ -1423,11 +1417,6 @@ namespace RenderCore { namespace ImplVulkan
 			_nextQueueShouldWaitOnInterimBuffer = true;
 		}
 
-		#if defined(HACK_FORCE_SYNC)
-			// Hack -- complete GPU synchronize
-			vkQueueWaitIdle(_queue);
-		#endif
-
 		PresentationChain* swapChain = checked_cast<PresentationChain*>(&presentationChain);
 		auto nextImage = swapChain->AcquireNextImage();
 		_nextQueueShouldWaitOnAcquire = swapChain->GetSyncs()._onAcquireComplete.get();
@@ -1462,7 +1451,7 @@ namespace RenderCore { namespace ImplVulkan
 		_globalPools->_mainDescriptorPool.FlushDestroys();
 		_globalPools->_longTermDescriptorPool.FlushDestroys();
 		_renderingCommandPool.FlushDestroys();
-		_tempBufferSpace->FlushDestroys();
+		_globalPools->_temporaryStorageManager->FlushDestroys();
 
 		//////////////////////////////////////////////////////////////////
 		// Finally, we can queue the present
@@ -1493,11 +1482,6 @@ namespace RenderCore { namespace ImplVulkan
 		QueuePrimaryContext(MakeIteratorRange(signalSema), trackingFence);
 		_nextQueueShouldWaitOnInterimBuffer = true;
 
-		#if defined(HACK_FORCE_SYNC)
-			// Hack -- complete GPU synchronize
-			vkQueueWaitIdle(_queue);
-		#endif
-
 		// We need to flush the destruction queues at some point for clients that never actually call Present
 		// We have less control over the frequency of CommitCommands, though, so it's going to be less clear
 		// when is the right time to call it
@@ -1506,7 +1490,7 @@ namespace RenderCore { namespace ImplVulkan
 		_globalPools->_mainDescriptorPool.FlushDestroys();
 		_globalPools->_longTermDescriptorPool.FlushDestroys();
 		_renderingCommandPool.FlushDestroys();
-		_tempBufferSpace->FlushDestroys();
+		_globalPools->_temporaryStorageManager->FlushDestroys();
 
 		// Note IncrementProducerFrame() must happen before the wait here
 		auto markerToWaitFor = _gpuTracker->GetProducerMarker();
@@ -1549,16 +1533,14 @@ namespace RenderCore { namespace ImplVulkan
 		std::shared_ptr<Device> device,
 		VkQueue queue,
         Metal_Vulkan::CommandPool&& cmdPool,
-		Metal_Vulkan::CommandBufferType cmdBufferType,
-		std::unique_ptr<Metal_Vulkan::TemporaryBufferSpace>&& tempBufferSpace)
+		Metal_Vulkan::CommandBufferType cmdBufferType)
     : _device(device)
 	, _frameId(0)
     , _renderingCommandPool(std::move(cmdPool))
-	, _tempBufferSpace(std::move(tempBufferSpace))
 	, _metalContext(
 		std::make_shared<Metal_Vulkan::DeviceContext>(
 			device->GetObjectFactory(), device->GetGlobalPools(), 
-            _renderingCommandPool, cmdBufferType, *_tempBufferSpace))
+            _renderingCommandPool, cmdBufferType))
 	, _factory(&device->GetObjectFactory())
 	, _globalPools(&device->GetGlobalPools())
 	, _queue(queue)
@@ -1567,11 +1549,10 @@ namespace RenderCore { namespace ImplVulkan
 
     ThreadContext::~ThreadContext() 
 	{
+		_metalContext.reset();
+		_annotator.reset();
 		_gpuTracker.reset();
 		_destrQueue.reset();
-		_annotator.reset();
-		_metalContext.reset();
-		_tempBufferSpace.reset();
 	}
 
     std::shared_ptr<IDevice> ThreadContext::GetDevice() const

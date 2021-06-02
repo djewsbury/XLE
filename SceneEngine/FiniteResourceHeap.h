@@ -2,7 +2,6 @@
 
 #include "../RenderCore/Format.h"
 #include "../Math/Vector.h"
-#include "../Utility/BitHeap.h"
 #include "../Utility/HeapUtils.h"
 #include <assert.h>
 

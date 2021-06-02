@@ -6,7 +6,6 @@
 #include "ObjectFactory.h"
 #include "InputLayout.h"
 #include "Shader.h"
-#include "Buffer.h"
 #include "State.h"
 #include "TextureView.h"
 #include "FrameBuffer.h"
@@ -95,18 +94,17 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		DescriptorCollection	_graphicsDescriptors;
 		DescriptorCollection	_computeDescriptors;
-		TemporaryBufferSpace*	_tempBufferSpace = nullptr;
 
 		void* _currentEncoder = nullptr;
 		enum class EncoderType { None, Graphics, ProgressiveGraphics, ProgressiveCompute };
 		EncoderType _currentEncoderType = EncoderType::None;
 
 		bool _ibBound = false;		// (for debugging, validates that an index buffer actually is bound when calling DrawIndexed & alternatives)
+		GlobalPools* _globalPools = nullptr;
 
 		VulkanEncoderSharedState(
 			const ObjectFactory&    factory, 
-			GlobalPools&            globalPools,
-			TemporaryBufferSpace&	tempBufferSpace);
+			GlobalPools&            globalPools);
 		~VulkanEncoderSharedState();
 	};
 
@@ -227,10 +225,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	NumericUniformsInterface	GraphicsEncoder::BeginNumericUniformsInterface()
 	{
+		auto& cmdList = _sharedState->_commandList;
+		if (!cmdList._attachedStorage)
+			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
+
 		return NumericUniformsInterface { 
 			_sharedState->_graphicsDescriptors.GetObjectFactory(),
 			*_pipelineLayout,
-			*_sharedState->_tempBufferSpace,
+			cmdList._attachedStorage,
 			Internal::VulkanGlobalsTemp::GetInstance()._legacyRegisterBindings};
 	}
 
@@ -838,12 +840,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _factory->GetDevice().get();
 	}
 
-	TemporaryBufferSpace& DeviceContext::GetTemporaryBufferSpace()
-	{
-		assert(_sharedState->_tempBufferSpace);
-		return *_sharedState->_tempBufferSpace;
-	}
-
 	void		DeviceContext::BeginCommandList()
 	{
 		if (!_cmdPool) return;
@@ -876,15 +872,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(VulkanAPIFailure(res, "Failure while beginning command buffer"));
 	}
 
-	void		DeviceContext::ExecuteCommandList(CommandList& cmdList, bool preserveState)
+	void		DeviceContext::ExecuteCommandList(CommandList&& cmdList)
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
-		(void)preserveState;		// we can't handle this properly in Vulkan
 
 		const VkCommandBuffer buffers[] = { cmdList.GetUnderlying().get() };
 		vkCmdExecuteCommands(
 			_sharedState->_commandList.GetUnderlying().get(),
 			dimof(buffers), buffers);
+
+		_sharedState->_commandList._attachedStorage.MergeIn(std::move(cmdList._attachedStorage));
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 
@@ -896,6 +893,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			RequireResourceVisbility(cmdList._resourcesThatMustBeVisible);
 			MakeResourcesVisible(cmdList._resourcesBecomingVisible);
 		#endif
+
+		cmdList = {};
 	}
 
 	auto        DeviceContext::ResolveCommandList() -> std::shared_ptr<CommandList>
@@ -909,7 +908,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// We will release our reference on _command list here.
 		auto result = std::make_shared<CommandList>(std::move(_sharedState->_commandList));
-		assert(!_sharedState->_commandList.GetUnderlying());
+		assert(!_sharedState->_commandList.GetUnderlying() && !_sharedState->_commandList._attachedStorage);
+		result->_attachedStorage.OnSubmitToQueue();
 		return result;
 	}
 
@@ -988,6 +988,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _sharedState->_renderPassSubpass;
 	}
 
+	void DeviceContext::BeginRenderPass(
+        FrameBuffer& frameBuffer,
+        IteratorRange<const ClearValue*> clearValues)
+    {
+        BeginRenderPass(
+            frameBuffer, TextureSamples::Create(),
+            frameBuffer.GetDefaultOffset(), frameBuffer.GetDefaultExtent(),
+            clearValues);
+    }
+
+    void DeviceContext::BeginNextSubpass(FrameBuffer& frameBuffer)
+    {
+		NextSubpass(VK_SUBPASS_CONTENTS_INLINE);
+    }
+
 	BlitEncoder DeviceContext::BeginBlitEncoder()
 	{
 		if (_sharedState->_renderPass)
@@ -1059,6 +1074,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	bool DeviceContext::HasActiveCommandList()
 	{
 		return _sharedState->_commandList.GetUnderlying() != nullptr;
+	}
+
+	TemporaryStorageResourceMap DeviceContext::MapTemporaryStorage(size_t byteCount, BindFlag::Enum type)
+	{
+		auto& cmdList = _sharedState->_commandList;
+		if (!cmdList._attachedStorage)
+			cmdList._attachedStorage = _globalPools->_temporaryStorageManager->BeginCmdListReservation();
+		return cmdList._attachedStorage.MapStorage(byteCount, type);
 	}
 
 	void DeviceContext::RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuidsInit)
@@ -1146,13 +1169,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		ObjectFactory&			factory, 
 		GlobalPools&            globalPools,
 		CommandPool&            cmdPool, 
-		CommandBufferType		cmdBufferType,
-		TemporaryBufferSpace&	tempBufferSpace)
+		CommandBufferType		cmdBufferType)
 	: _cmdPool(&cmdPool), _cmdBufferType(cmdBufferType)
 	, _factory(&factory)
 	, _globalPools(&globalPools)
 	{
-		_sharedState = std::make_shared<VulkanEncoderSharedState>(*_factory, *_globalPools, tempBufferSpace);
+		_sharedState = std::make_shared<VulkanEncoderSharedState>(*_factory, *_globalPools);
 
 		auto& globals = Internal::VulkanGlobalsTemp::GetInstance();
 		globals._globalPools = &globalPools;
@@ -1168,11 +1190,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
 		const ObjectFactory&    factory, 
-		GlobalPools&            globalPools,
-		TemporaryBufferSpace&	tempBufferSpace)
+		GlobalPools&            globalPools)
 	: _graphicsDescriptors(factory, globalPools, 4)
 	, _computeDescriptors(factory, globalPools, 4)
-	, _tempBufferSpace(&tempBufferSpace)	
+	, _globalPools(&globalPools)	
 	{
 		_renderPass = nullptr;
 		_renderPassSubpass = 0u;
@@ -1357,7 +1378,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	CommandList::CommandList() {}
 	CommandList::CommandList(const VulkanSharedPtr<VkCommandBuffer>& underlying)
 	: _underlying(underlying) {}
-	CommandList::~CommandList() {}
+	CommandList::~CommandList() 
+	{
+		_attachedStorage.AbandonAllocations();
+	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

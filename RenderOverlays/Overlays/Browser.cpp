@@ -16,7 +16,6 @@
 #include "../../RenderCore/Metal/Shader.h"
 #include "../../RenderCore/Metal/DeviceContext.h"
 #include "../../RenderCore/Metal/TextureView.h"
-#include "../../RenderCore/Metal/Buffer.h"
 #include "../../RenderCore/Metal/ObjectFactory.h"
 #include "../../FixedFunctionModel/SharedStateSet.h"
 #include "../../FixedFunctionModel/ModelCache.h"

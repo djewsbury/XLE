@@ -29,6 +29,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		unsigned GetSubpassCount() const { return _subpassCount; }
 
+        VectorPattern<int, 2> GetDefaultOffset() const { return _defaultOffset; };
+        VectorPattern<unsigned, 2> GetDefaultExtent() const { return _defaultExtent; }
+
 		FrameBuffer(
 			const ObjectFactory& factory,
             const FrameBufferDesc& desc,
@@ -53,16 +56,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
         friend void BeginRenderPass(DeviceContext&, FrameBuffer&, IteratorRange<const ClearValue*>);
 	};
-
-    void BeginRenderPass(
-        DeviceContext& context,
-        FrameBuffer& frameBuffer,
-        IteratorRange<const ClearValue*> clearValues = {});
-
-    void BeginNextSubpass(DeviceContext& context, FrameBuffer& frameBuffer);
-	void EndSubpass(DeviceContext& context, FrameBuffer& frameBuffer);
-    void EndRenderPass(DeviceContext& context);
-	unsigned GetCurrentSubpassIndex(DeviceContext& context);
 
     VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
         const Metal_Vulkan::ObjectFactory& factory,

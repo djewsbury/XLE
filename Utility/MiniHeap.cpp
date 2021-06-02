@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "MiniHeap.h"
-#include "BitHeap.h"
+#include "BitUtils.h"
 #include "HeapUtils.h"
 #include "PtrUtils.h"
 #include "Threading/ThreadingUtils.h"

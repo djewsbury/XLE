@@ -18,7 +18,6 @@ set(Src
     xl_snprintf.cpp)
 set(Headers
     ArithmeticUtils.h
-    BitHeap.h
     BitUtils.h
     Conversion.h
     Documentation.h

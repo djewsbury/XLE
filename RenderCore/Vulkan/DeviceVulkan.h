@@ -144,14 +144,12 @@ namespace RenderCore { namespace ImplVulkan
             std::shared_ptr<Device> device, 
 			VkQueue queue,
             Metal_Vulkan::CommandPool&& cmdPool,
-			Metal_Vulkan::CommandBufferType cmdBufferType,
-			std::unique_ptr<Metal_Vulkan::TemporaryBufferSpace>&& tempBufferSpace);
+			Metal_Vulkan::CommandBufferType cmdBufferType);
         ~ThreadContext();
     protected:
         std::weak_ptr<Device>           _device;  // (must be weak, because Device holds a shared_ptr to the immediate context)
 		unsigned                        _frameId;
         Metal_Vulkan::CommandPool		_renderingCommandPool;
-		std::unique_ptr<Metal_Vulkan::TemporaryBufferSpace> _tempBufferSpace;
 		std::shared_ptr<Metal_Vulkan::DeviceContext>     _metalContext;
 		std::unique_ptr<IAnnotator>		_annotator;
 

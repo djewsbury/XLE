@@ -470,7 +470,7 @@ namespace UnitTests
 			ScopedLock(queue._lock);
 			while (queue._items.size() >= 2) {
 				auto& immediateContext = *Metal::DeviceContext::Get(*metalHelper->_device->GetImmediateContext());
-				immediateContext.ExecuteCommandList(*queue._items.begin()->_cmdList, false);
+				immediateContext.ExecuteCommandList(std::move(*queue._items.begin()->_cmdList));
 				queue._items.erase(queue._items.begin());
 			}
 

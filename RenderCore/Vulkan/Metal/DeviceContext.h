@@ -8,6 +8,7 @@
 #include "State.h"
 #include "PipelineLayout.h"		// for PipelineDescriptorsLayoutBuilder
 #include "Shader.h"
+#include "CmdListAttachedStorage.h"
 #include "VulkanCore.h"
 #include "../../ResourceList.h"
 #include "../../ResourceDesc.h"
@@ -32,7 +33,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	class DescriptorPool;
 	class DummyResources;
 	enum class CommandBufferType;
-	class TemporaryBufferSpace;
 	class Resource;
 
 	class GraphicsPipeline : public VulkanUniquePtr<VkPipeline>
@@ -236,7 +236,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<uint64_t> _resourcesThatMustBeVisible;
 		#endif
 
+		CmdListAttachedStorage _attachedStorage;
+
 		friend class DeviceContext;
+		friend class GraphicsEncoder;
 	};
 
 	class VulkanEncoderSharedState;
@@ -395,13 +398,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		void ClearFloat(const IResourceView& unorderedAccess, const VectorPattern<float,4>& clearColour);
 		void ClearStencil(const IResourceView& depthStencil, unsigned stencil);
 
+		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
+
 		static std::shared_ptr<DeviceContext> Get(IThreadContext& threadContext);
 
 		// --------------- Vulkan specific interface --------------- 
 
 		void		BeginCommandList();
 		void		BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList);
-		void		ExecuteCommandList(CommandList&, bool);
+		void		ExecuteCommandList(CommandList&&);
 		auto        ResolveCommandList() -> std::shared_ptr<CommandList>;
 
 		CommandList& GetActiveCommandList();
@@ -410,7 +415,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		GlobalPools&    GetGlobalPools();
 		VkDevice        GetUnderlyingDevice();
 		ObjectFactory&	GetFactory() const				{ return *_factory; }
-		TemporaryBufferSpace& GetTemporaryBufferSpace();
 
 		void BeginRenderPass(
 			const FrameBuffer& fb,
@@ -424,8 +428,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory, 
 			GlobalPools& globalPools,
 			CommandPool& cmdPool, 
-			CommandBufferType cmdBufferType,
-			TemporaryBufferSpace& tempBufferSpace);
+			CommandBufferType cmdBufferType);
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
 		DeviceContext& operator=(const DeviceContext&) = delete;

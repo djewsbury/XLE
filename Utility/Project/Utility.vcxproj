@@ -64,7 +64,6 @@
   <PropertyGroup />
   <ItemGroup>
     <ClInclude Include="..\ArithmeticUtils.h" />
-    <ClInclude Include="..\BitHeap.h" />
     <ClInclude Include="..\BitUtils.h" />
     <ClInclude Include="..\Conversion.h" />
     <ClInclude Include="..\Documentation.h" />

@@ -638,38 +638,5 @@ namespace RenderCore { namespace Metal_Vulkan
 	FrameBuffer::FrameBuffer() : _subpassCount(0) {}
     FrameBuffer::~FrameBuffer() {}
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    void BeginRenderPass(
-        DeviceContext& context,
-        FrameBuffer& frameBuffer,
-        IteratorRange<const ClearValue*> clearValues)
-    {
-        context.BeginRenderPass(
-            frameBuffer, TextureSamples::Create(),
-            frameBuffer._defaultOffset, frameBuffer._defaultExtent,
-            clearValues);
-    }
-
-    void BeginNextSubpass(DeviceContext& context, FrameBuffer& frameBuffer)
-    {
-		if ((context.GetCurrentSubpassIndex()+1) < frameBuffer.GetSubpassCount())
-			context.NextSubpass(VK_SUBPASS_CONTENTS_INLINE);
-    }
-
-	void EndSubpass(DeviceContext& context, FrameBuffer& frameBuffer)
-	{
-	}
-
-    void EndRenderPass(DeviceContext& context)
-    {
-        context.EndRenderPass();
-    }
-
-	unsigned GetCurrentSubpassIndex(DeviceContext& context)
-	{
-		return context.GetCurrentSubpassIndex();
-	}
-
 }}
 

@@ -810,36 +810,64 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		static uint64_t WriteImmediateDataBindings(
+			DeviceContext& context,
 			ProgressiveDescriptorSetBuilder& builder,
-			TemporaryBufferSpace& temporaryBufferSpace,
-			bool& requiresTemporaryBufferBarrier,
 			ObjectFactory& factory,
 			IteratorRange<const UniformsStream::ImmediateData*> pkts,
 			IteratorRange<const LooseUniformBind*> bindingIndicies)
 		{
-			uint64_t bindingsWrittenTo = 0u;
+			if (bindingIndicies.empty()) return {};
 
+			uint64_t bindingsWrittenTo = 0u;
+			size_t totalSize = 0;
+
+			auto alignment = factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment;
 			for (auto bind:bindingIndicies) {
 				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
-				
-				auto& pkt = pkts[bind._inputUniformStreamIdx];
-				assert(!pkt.empty());
-				// We must either allocate some memory from a temporary pool, or 
-				// (or we could use push constants)
-				auto tempSpace = temporaryBufferSpace.AllocateBuffer(pkt);
-				if (!tempSpace.buffer) {
-					Log(Warning) << "Failed to allocate temporary buffer space. Falling back to new buffer." << std::endl;
+				assert(bind._inputUniformStreamIdx < pkts.size());
+				auto alignedSize = CeilToMultiple((unsigned)pkts[bind._inputUniformStreamIdx].size(), alignment);
+				totalSize += alignedSize;
+			}
+			assert(totalSize != 0);
+
+			auto temporaryMapping = context.MapTemporaryStorage(totalSize, BindFlag::ConstantBuffer);
+			if (!temporaryMapping.GetData().empty()) {
+				assert(temporaryMapping.GetData().size() == totalSize);
+				size_t iterator = 0;
+				auto beginInResource = temporaryMapping.GetBeginAndEndInResource().first;
+
+				for (auto bind:bindingIndicies) {
+					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
+					
+					auto& pkt = pkts[bind._inputUniformStreamIdx];
+					assert(!pkt.empty());
+											
+					std::memcpy(PtrAdd(temporaryMapping.GetData().begin(), iterator), pkt.data(), pkt.size());
+					VkDescriptorBufferInfo tempSpace;
+					tempSpace.buffer = checked_cast<Resource*>(temporaryMapping.GetResource().get())->GetBuffer();
+					tempSpace.offset = beginInResource + iterator;
+					tempSpace.range = pkt.size();
+					builder.Bind(bind._descSetSlot, tempSpace VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+
+					auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
+					iterator += alignedSize;
+
+					bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
+				}
+			} else {
+				// This path is very much not recommended. It's just here to catch extreme cases
+				Log(Warning) << "Failed to allocate temporary buffer space. Falling back to new buffer." << std::endl;
+				for (auto bind:bindingIndicies) {
+					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
+					auto& pkt = pkts[bind._inputUniformStreamIdx];
+					assert(!pkt.empty());
 					Resource cb{
 						factory, 
 						CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(unsigned(pkt.size())), "overflow-buf"), 
 						SubResourceInitData{pkt}};
 					builder.Bind(bind._descSetSlot, { cb.GetBuffer(), 0, VK_WHOLE_SIZE } VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
-				} else {
-					builder.Bind(bind._descSetSlot, tempSpace VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
-					requiresTemporaryBufferBarrier |= true;
+					bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
 				}
-
-				bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
 			}
 
 			return bindingsWrittenTo;
@@ -919,8 +947,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				verboseDescription._descriptorSetInfo = s_looseUniforms;
 			#endif
 
-			bool requiresTemporaryBufferBarrier = false;
-
 			// -------- write descriptor set --------
 			ProgressiveDescriptorSetBuilder builderT { MakeIteratorRange(adaptiveSet._sig) };
 			bool doFlushNow = true;
@@ -940,9 +966,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			
 			auto cbBindingFlag = BindingHelper::WriteImmediateDataBindings(
+				context,
 				*builder,
-				context.GetTemporaryBufferSpace(),
-				requiresTemporaryBufferBarrier,
 				context.GetFactory(),
 				stream._immediateData,
 				MakeIteratorRange(adaptiveSet._immediateDataBinds));
@@ -981,9 +1006,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				encoder.BindDescriptorSet(
 					adaptiveSet._descriptorSetIdx, descriptorSet.get()
 					VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
-
-				if (requiresTemporaryBufferBarrier)
-					context.GetTemporaryBufferSpace().WriteBarrier(context);
 			}
 		}
 

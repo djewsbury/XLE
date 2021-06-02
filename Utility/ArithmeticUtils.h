@@ -20,7 +20,7 @@ namespace Utility
 {
 
     // clz := count leading zeros
-    // ctl := count trailing zeros
+    // ctz := count trailing zeros
     // bsf := bit scan forward
     // bsr := bit scan reverse
 

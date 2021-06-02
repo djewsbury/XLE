@@ -70,7 +70,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkBufferView& ProgressiveDescriptorSetBuilder::AllocateInfo(const VkBufferView& init)
 	{
 		assert(0);
-		return *(VkBufferView*)nullptr;
+		static VkBufferView dummy;
+		return dummy;
 	}
 
 	template<typename BindingInfo>
@@ -79,10 +80,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description))
 	{
 			// (we're limited by the number of bits in _sinceLastFlush)
-		if (bindingPoint >= 64u) {
-			Log(Warning) << "Cannot bind to binding point " << bindingPoint << std::endl;
-			return;
-		}
+		assert(bindingPoint < 64u);
 
 		if (_sinceLastFlush & (1ull<<bindingPoint)) {
 			// we already have a pending write to this slot. Let's find it, and just
@@ -182,41 +180,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(0);
 		}
 	}
-
-#if 0
-	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ConstantBufferView& resource)
-	{
-		#if defined(VULKAN_VERBOSE_DEBUG)
-			std::string description = checked_cast<const Resource*>(resource._prebuiltBuffer)->GetDesc()._name;
-		#endif
-
-		assert(descriptorSetBindPoint < _signature.size());
-		auto slotType = _signature[descriptorSetBindPoint]._type;
-		assert(_signature[descriptorSetBindPoint]._count == 1);
-
-		switch (slotType) {
-		case DescriptorType::UniformBuffer:
-		case DescriptorType::UnorderedAccessBuffer:
-			{
-				assert(resource._prebuiltBuffer);
-				VkDescriptorBufferInfo bufferInfo { checked_cast<const Resource*>(resource._prebuiltBuffer)->GetBuffer(), 0, VK_WHOLE_SIZE };
-				if (resource._prebuiltRangeBegin != 0 || resource._prebuiltRangeEnd != 0) {
-					bufferInfo.offset = resource._prebuiltRangeBegin;
-					bufferInfo.range = resource._prebuiltRangeEnd - resource._prebuiltRangeBegin;
-				}
-				WriteBinding(
-					descriptorSetBindPoint,
-					AsVkDescriptorType(slotType),
-					bufferInfo, true
-					VULKAN_VERBOSE_DEBUG_ONLY(, description));
-			}
-			break;
-
-		default:
-			assert(0);
-		}
-	}
-#endif
 
 	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> description)
 	{
@@ -696,14 +659,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	}
 
-	/*VkShaderStageFlags shaderStageFlags = 0;
-		if (pipelineType == PipelineType::Compute) {
-			shaderStageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		} else {
-			assert(pipelineType == PipelineType::Graphics);
-			shaderStageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-		}*/
-
 	CompiledDescriptorSet::CompiledDescriptorSet(
 		ObjectFactory& factory,
 		GlobalPools& globalPools,
@@ -828,8 +783,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		switch (type) {
 		case DescriptorType::Sampler:					return VK_DESCRIPTOR_TYPE_SAMPLER;
-		case DescriptorType::SampledTexture:					return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		case DescriptorType::UniformBuffer:			return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case DescriptorType::SampledTexture:			return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		case DescriptorType::UniformBuffer:				return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		case DescriptorType::UnorderedAccessTexture:	return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 		case DescriptorType::UnorderedAccessBuffer:		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		default:										return VK_DESCRIPTOR_TYPE_SAMPLER;
