@@ -91,16 +91,22 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
 		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
-		void OnSubmitToQueue();
+		VulkanSharedPtr<VkCommandBuffer> OnSubmitToQueue(VkFence);
 
+		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
+		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
 		void ValidateCommitToQueue(ObjectFactory& factory);
 
-		CommandList();
-		explicit CommandList(const VulkanSharedPtr<VkCommandBuffer>& underlying);
-		~CommandList();
+		void ExecuteSecondaryCommandList(CommandList&& cmdList);
 
-		CommandList(CommandList&&) = default;
-		CommandList& operator=(CommandList&&) = default;
+		CommandList();
+		CommandList(
+			VulkanSharedPtr<VkCommandBuffer> underlying,
+			std::shared_ptr<IAsyncTracker> asyncTracker);
+		~CommandList();
+		CommandList(CommandList&&);
+		CommandList& operator=(CommandList&&);
+		
 	private:
 		VulkanSharedPtr<VkCommandBuffer> _underlying;
 
@@ -110,6 +116,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		CmdListAttachedStorage _attachedStorage;
+		std::shared_ptr<IAsyncTracker> _asyncTracker;
 		std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 
 		friend class DeviceContext;

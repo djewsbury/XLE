@@ -258,7 +258,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					d._slotsFilled,
 					resourceVisibilityList
 					VULKAN_VERBOSE_DEBUG_ONLY(, d._description));
-				context.RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
+				context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
 
 				d._slotsFilled |= written;
 				d._activeDescSet = std::move(newSets[0]);

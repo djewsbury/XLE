@@ -519,7 +519,7 @@ namespace RenderCore { namespace ImplVulkan
 
 			// Set up the object factory with a default destroyer that tracks the current
 			// GPU frame progress
-			_gpuTracker = std::make_shared<Metal_Vulkan::FenceBasedTracker>(_objectFactory, 5);
+			_gpuTracker = std::make_shared<Metal_Vulkan::FenceBasedTracker>(_objectFactory, 32);
 			auto destroyer = _objectFactory.CreateMarkerTrackingDestroyer(_gpuTracker);
 			_objectFactory.SetDefaultDestroyer(destroyer);
             Metal_Vulkan::SetDefaultObjectFactory(&_objectFactory);
@@ -540,7 +540,6 @@ namespace RenderCore { namespace ImplVulkan
 			_foregroundPrimaryContext->SetGPUTracker(_gpuTracker);
 
 			// We need to ensure that the "dummy" resources get their layout change to complete initialization
-			_foregroundPrimaryContext->GetMetalContext()->BeginCommandList();
 			_pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
 		}
     }
@@ -1075,54 +1074,22 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void ThreadContext::QueuePrimaryContext(
-		IteratorRange<const VkSemaphore*> completionSignals,
-		VkFence fence)
+	VkFence ThreadContext::QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals)
 	{
-		auto immediateCommands = _metalContext->ResolveCommandList();	
-		immediateCommands->ValidateCommitToQueue(*_factory);
-		
-		VkSubmitInfo submitInfo;
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.pNext = nullptr;
-
-		VkSemaphore waitSema[2];
-		VkPipelineStageFlags waitStages[2];
-		unsigned waitCount = 0;
-		if (_nextQueueShouldWaitOnAcquire != VK_NULL_HANDLE) {
-			waitSema[waitCount] = _nextQueueShouldWaitOnAcquire;
-			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-			++waitCount;
-		}
-		if (_nextQueueShouldWaitOnInterimBuffer) {
-			waitSema[waitCount] = _interimCommandBufferComplete.get();
-			waitStages[waitCount] = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-			++waitCount;
-		}
-		submitInfo.waitSemaphoreCount = waitCount;
-		submitInfo.pWaitSemaphores = waitSema;
-		submitInfo.pWaitDstStageMask = waitStages;
-
-		submitInfo.signalSemaphoreCount = completionSignals.size();
-		submitInfo.pSignalSemaphores = completionSignals.begin();
-
-		immediateCommands->OnSubmitToQueue();
-		VkCommandBuffer rawCmdBuffers[] = { immediateCommands->GetUnderlying().get() };
-		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
-		submitInfo.pCommandBuffers = rawCmdBuffers;
-	
-		auto res = vkQueueSubmit(_queue, 1, &submitInfo, fence);
-		if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
-
-		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
-		_nextQueueShouldWaitOnInterimBuffer = false;
+		auto immediateCommands = _metalContext->ResolveCommandList();
+		return CommitPrimaryCommandBufferToQueue_Internal(*immediateCommands, completionSignals);
 	}
 
 	void ThreadContext::CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList)
 	{
+		CommitPrimaryCommandBufferToQueue_Internal(cmdList, {});
+	}
+
+	VkFence ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals)
+	{
 		cmdList.ValidateCommitToQueue(*_factory);
-		cmdList.OnSubmitToQueue();
+		auto fence = _gpuTracker->FindAvailableFence();
+		auto underlyingCmdList = cmdList.OnSubmitToQueue(fence);
 
 		if (!_interimCommandBufferComplete)
 			_interimCommandBufferComplete = _factory->CreateSemaphore();
@@ -1148,19 +1115,21 @@ namespace RenderCore { namespace ImplVulkan
 		submitInfo.pWaitSemaphores = waitSema;
 		submitInfo.pWaitDstStageMask = waitStages;
 
-		submitInfo.signalSemaphoreCount = 0;
-		submitInfo.pSignalSemaphores = nullptr;
+		submitInfo.signalSemaphoreCount = completionSignals.size();
+		submitInfo.pSignalSemaphores = completionSignals.begin();
 
-		VkCommandBuffer rawCmdBuffers[] = { cmdList.GetUnderlying().get() };
+		VkCommandBuffer rawCmdBuffers[] = { underlyingCmdList.get() };
 		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
 		submitInfo.pCommandBuffers = rawCmdBuffers;
 	
-		auto res = vkQueueSubmit(_queue, 1, &submitInfo, nullptr);
+		auto res = vkQueueSubmit(_queue, 1, &submitInfo, fence);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
 
 		_nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 		_nextQueueShouldWaitOnInterimBuffer = false;
+
+		return fence;
 	}
 
 	IResourcePtr    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
@@ -1198,7 +1167,7 @@ namespace RenderCore { namespace ImplVulkan
 			auto res = vkResetCommandBuffer(cmdList.get(), VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 			if (res != VK_SUCCESS)
 				Throw(VulkanAPIFailure(res, "Failure while resetting command buffer"));
-			_metalContext->BeginCommandList(std::move(cmdList));
+			_metalContext->BeginCommandList(std::move(cmdList), _gpuTracker);
 		}
 
         return nextImage->GetResource();
@@ -1211,27 +1180,17 @@ namespace RenderCore { namespace ImplVulkan
 
 		//////////////////////////////////////////////////////////////////
 
-		auto fence = _gpuTracker->GetFenceForCurrentFrame();
-
 		VkSemaphore signalSema[] = { syncs._onCommandBufferComplete.get() };
-		QueuePrimaryContext(MakeIteratorRange(signalSema), fence);
+		QueuePrimaryContext(MakeIteratorRange(signalSema));
 		assert(!syncs._presentFence);
 		syncs._presentFence = _gpuTracker->GetProducerMarker();
 
-		if (_gpuTracker) _gpuTracker->UpdateConsumer();
-		if (_destrQueue) _destrQueue->Flush();
-		_globalPools->_mainDescriptorPool.FlushDestroys();
-		_globalPools->_longTermDescriptorPool.FlushDestroys();
-		_renderingCommandPool.FlushDestroys();
-		_globalPools->_temporaryStorageManager->FlushDestroys();
+		PumpDestructionQueues();
 
 		//////////////////////////////////////////////////////////////////
 		// Finally, we can queue the present
 		//		-- do it here to allow it to run in parallel as much as possible
 		swapChain->PresentToQueue(_queue);
-
-		if (_gpuTracker)
-			_gpuTracker->IncrementProducerFrame();
 	}
 
 	void	ThreadContext::CommitCommands(CommitCommandsFlags::BitField flags)
@@ -1243,16 +1202,15 @@ namespace RenderCore { namespace ImplVulkan
 		// now; but also any other command buffers that have already been submitted
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
-		bool actuallySubmittedSomething = false;
+		VkFence fenceToWaitFor = nullptr;
 		if (!_metalContext->HasActiveCommandList()) {
 			if (!_interimCommandBufferComplete)
 				_interimCommandBufferComplete = _factory->CreateSemaphore();
 
-			auto trackingFence = _gpuTracker->GetFenceForCurrentFrame();
+			fenceToWaitFor = _gpuTracker->FindAvailableFence();
 			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
-			QueuePrimaryContext(MakeIteratorRange(signalSema), trackingFence);
+			fenceToWaitFor = QueuePrimaryContext(MakeIteratorRange(signalSema));
 			_nextQueueShouldWaitOnInterimBuffer = true;
-			actuallySubmittedSomething = true;
 		} else {
 			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
 			// however, we still flush out the destruction queues, etc
@@ -1261,22 +1219,25 @@ namespace RenderCore { namespace ImplVulkan
 		// We need to flush the destruction queues at some point for clients that never actually call Present
 		// We have less control over the frequency of CommitCommands, though, so it's going to be less clear
 		// when is the right time to call it
+		PumpDestructionQueues();
+
+		if (fenceToWaitFor && waitForCompletion) {
+			auto res = vkWaitForFences(_underlyingDevice, 1, &fenceToWaitFor, true, UINT64_MAX);
+			assert(res == VK_SUCCESS);
+			
+			// flush everything out again...
+			PumpDestructionQueues();
+		}
+	}
+
+	void ThreadContext::PumpDestructionQueues()
+	{
 		if (_gpuTracker) _gpuTracker->UpdateConsumer();
 		if (_destrQueue) _destrQueue->Flush();
 		_globalPools->_mainDescriptorPool.FlushDestroys();
 		_globalPools->_longTermDescriptorPool.FlushDestroys();
 		_renderingCommandPool.FlushDestroys();
 		_globalPools->_temporaryStorageManager->FlushDestroys();
-
-		if (actuallySubmittedSomething) {
-			// Note IncrementProducerFrame() must happen before the wait here
-			auto markerToWaitFor = _gpuTracker->GetProducerMarker();
-			if (_gpuTracker)
-				_gpuTracker->IncrementProducerFrame();
-
-			if (waitForCompletion)
-				_gpuTracker->WaitForFence(markerToWaitFor);
-		}
 	}
 
     bool ThreadContext::IsImmediate() const
@@ -1353,6 +1314,8 @@ namespace RenderCore { namespace ImplVulkan
 
     const std::shared_ptr<Metal_Vulkan::DeviceContext>& ThreadContext::GetMetalContext()
     {
+		if (!_metalContext->HasActiveCommandList())
+			_metalContext->BeginCommandList(_gpuTracker);
         return _metalContext;
     }
 }}

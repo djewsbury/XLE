@@ -1000,7 +1000,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (cbBindingFlag | srvBindingFlag | ssBindingFlag | dummyDescWriteMask) {
 					std::vector<uint64_t> resourceVisibilityList;
 					builder->FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
-					context.RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
+					context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
 				}
 			
 				encoder.BindDescriptorSet(
@@ -1031,7 +1031,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-				context.RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
+				context.GetActiveCommandList().RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
 			#endif
 		}
 	}

@@ -164,7 +164,7 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
 
-		std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
+		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> _gpuTracker;
 		std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
 
         VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete;
@@ -172,9 +172,9 @@ namespace RenderCore { namespace ImplVulkan
         bool                                _nextQueueShouldWaitOnInterimBuffer = false;
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
 
-        void QueuePrimaryContext(
-		    IteratorRange<const VkSemaphore*> completionSignals,
-		    VkFence fence = VK_NULL_HANDLE);
+        VkFence QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
+        VkFence CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
+        void PumpDestructionQueues();
     };
 
 ////////////////////////////////////////////////////////////////////////////////

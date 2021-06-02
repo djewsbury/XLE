@@ -11,6 +11,227 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
+	{
+		// If we use up all of the markers, we need stall and wait for the GPU to catch up
+		for (;;) {
+			// If "next' is ready to go for the next producer frame, we'll break out 
+			if (_nextProducerFrameToStart->_state == State::Unused) break;
+
+			using namespace std::chrono_literals;
+			static std::chrono::steady_clock::time_point lastReport{};		// (defaults to start of epoch)
+			auto now = std::chrono::steady_clock::now();
+			if ((now - lastReport) > 1s) {
+				Log(Verbose) << "Stalling due to insufficient trackers in Vulkan FenceBasedTracker" << std::endl;
+				lastReport = now;
+			}
+
+			Threading::YieldTimeSlice();
+			UpdateConsumer();
+		}
+
+        auto result = ++_currentProducerFrameMarker;
+		_nextProducerFrameToStart->_frameMarker = result;
+		_nextProducerFrameToStart->_state = State::WritingCommands;
+        assert(_nextProducerFrameToStart->_fence == nullptr);
+
+		++_nextProducerFrameToStart;
+		if (_nextProducerFrameToStart >= AsPointer(_trackers.end()))
+			_nextProducerFrameToStart = &_trackers[0];
+
+        return result;
+	}
+
+	void FenceBasedTracker::OnSubmitToQueue(Marker marker, VkFence fence)
+	{
+        unsigned fenceIndex = 0;
+        for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
+        if (fenceIndex > _fences.size())
+            Throw(std::runtime_error("Incorrect fence passed to FenceBasedTracker::OnSubmitToQueue"));
+
+        if (!_fenceAllocationFlags.IsAllocated(fenceIndex))
+            _fenceAllocationFlags.Allocate(fenceIndex);
+
+        for (auto& tracker:_trackers) {
+            if (tracker._frameMarker != marker) continue;
+
+            assert(tracker._state == State::WritingCommands && tracker._fence == nullptr);
+            tracker._state = State::SubmittedToQueue;
+            tracker._fence = fence;
+            return;
+        }
+
+        Throw(std::runtime_error("Could not find marker (" + std::to_string(marker) + ") in tracker records"));
+	}
+
+    void FenceBasedTracker::AbandonMarker(Marker marker)
+    {
+        for (auto& tracker:_trackers) {
+            if (tracker._frameMarker != marker) continue;
+
+            assert(tracker._state == State::WritingCommands && tracker._fence == nullptr);
+            tracker._state = State::Abandoned;
+            return;
+        }
+
+        Throw(std::runtime_error("Could not find marker (" + std::to_string(marker) + ") in tracker records"));
+    }
+
+	VkFence FenceBasedTracker::FindAvailableFence()
+    {
+        auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
+        assert(firstAvailable != ~0u);
+        return _fences[firstAvailable].get();
+    }
+
+    void FenceBasedTracker::CheckFenceReset(VkFence fence)
+    {
+        for (auto& tracker:_trackers)
+            if (tracker._fence == fence)
+                return;
+
+        unsigned fenceIndex = 0;
+        for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
+        assert(fenceIndex < _fences.size());
+        assert(_fenceAllocationFlags.IsAllocated(fenceIndex));
+        _fenceAllocationFlags.Deallocate(fenceIndex);
+        vkResetFences(_device, 1, &fence);
+    }
+
+	void FenceBasedTracker::UpdateConsumer()
+	{
+		for (;;) {
+			if (_nextConsumerFrameToComplete == _nextProducerFrameToStart) break;
+
+            if (_nextConsumerFrameToComplete->_state == State::SubmittedToQueue) {
+                assert(!_nextConsumerFrameToComplete->_fence);
+                auto res = vkGetFenceStatus(_device, _nextConsumerFrameToComplete->_fence);
+                if (res == VK_SUCCESS) {
+                    assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
+                    _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+                    
+                    VkFence fence = _nextConsumerFrameToComplete->_fence;
+                    _nextConsumerFrameToComplete->_fence = nullptr;
+                    CheckFenceReset(fence);
+                    _nextConsumerFrameToComplete->_state = State::Unused;
+                    _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
+                } else {
+                    if (res == VK_ERROR_DEVICE_LOST)
+                        Throw(std::runtime_error("Vulkan device lost"));
+                    assert(res == VK_NOT_READY); (void)res;
+                    break;
+                }
+            } else if (_nextConsumerFrameToComplete->_state == State::Abandoned) {
+                assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
+                _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+
+                assert(_nextConsumerFrameToComplete->_fence == nullptr);
+                _nextConsumerFrameToComplete->_state = State::Unused;
+                _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
+            } else {
+                break;  // Unusued/WritingCommands -- end looping
+            }
+
+            ++_nextConsumerFrameToComplete;
+            if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
+                _nextConsumerFrameToComplete = &_trackers[0];
+		}
+	}
+
+	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
+	{
+		auto start = std::chrono::steady_clock::now();
+
+		if (marker <= _lastCompletedConsumerFrame)
+			return true;
+
+		bool foundTheFence = false;
+		for (unsigned c=0; c<_trackers.size(); ++c)
+			if (_trackers[c]._frameMarker == marker) {
+				assert(_trackers[c]._state == State::SubmittedToQueue);
+				foundTheFence = true;
+				break;
+			}
+
+		assert(foundTheFence);
+		if (!foundTheFence) return false;
+
+		// Wait in order until we complete the one requested
+		while (_lastCompletedConsumerFrame != marker) {
+			if (_nextConsumerFrameToComplete == _nextProducerFrameToStart) break;
+
+            if (_nextConsumerFrameToComplete->_state == State::SubmittedToQueue) {
+                assert(_nextConsumerFrameToComplete->_fence);
+                VkFence fence = _nextConsumerFrameToComplete->_fence;
+                VkResult res;
+                if (timeout.has_value()) {
+                    auto timeoutRemaining = ((start + timeout.value()) - std::chrono::steady_clock::now());
+                    if (timeoutRemaining < std::chrono::seconds(0)) return false;
+                    res = vkWaitForFences(_device, 1, &fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeoutRemaining).count());
+                } else {
+                    res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
+                }
+                if (res == VK_SUCCESS) {
+                    assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
+                    _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+                    
+                    VkFence fence = _nextConsumerFrameToComplete->_fence;
+                    _nextConsumerFrameToComplete->_fence = nullptr;
+                    CheckFenceReset(fence);
+                    _nextConsumerFrameToComplete->_state = State::Unused;
+                    _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
+                } else {
+                    if (res == VK_ERROR_DEVICE_LOST)
+                        Throw(std::runtime_error("Vulkan device lost"));
+                    break;
+                }
+            } else if (_nextConsumerFrameToComplete->_state == State::Abandoned) {
+                assert(_nextConsumerFrameToComplete->_frameMarker > _lastCompletedConsumerFrame);
+                _lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
+
+                assert(_nextConsumerFrameToComplete->_fence == nullptr);
+                _nextConsumerFrameToComplete->_state = State::Unused;
+                _nextConsumerFrameToComplete->_frameMarker = Marker_Invalid;
+            } else {
+                break;  // Unusued/WritingCommands -- end looping
+            }
+
+            ++_nextConsumerFrameToComplete;
+            if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
+                _nextConsumerFrameToComplete = &_trackers[0];
+		}
+
+		// completed all pending markers, but still didn't find the one requested (or timed out)
+		return false;
+	}
+
+	FenceBasedTracker::FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth)
+    : _fenceAllocationFlags(queueDepth)
+	{
+		_trackers.resize(queueDepth);
+		for (unsigned c=0; c<queueDepth; ++c) {
+			_trackers[c]._fence = nullptr;
+			_trackers[c]._frameMarker = 0;
+			_trackers[c]._state = State::Unused;
+		}
+        _fences.resize(queueDepth);
+        for (unsigned c=0; c<queueDepth; ++c)
+            _fences[c] = factory.CreateFence();
+
+		_nextProducerFrameToStart = &_trackers[1];
+		_nextConsumerFrameToComplete = &_trackers[0];
+		_lastCompletedConsumerFrame = 0;
+        // Start writing frame 1
+        _currentProducerFrameMarker = 1;
+        _trackers[0]._frameMarker = 1;
+        _trackers[0]._state = State::WritingCommands;
+		_device = factory.GetDevice().get();
+	}
+
+	FenceBasedTracker::~FenceBasedTracker() {}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	void EventBasedTracker::SetConsumerEndOfFrame(DeviceContext& context)
 	{
 		// set the marker on the frame that has just finished --
@@ -98,134 +319,5 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	EventBasedTracker::~EventBasedTracker() {}
 
-	void FenceBasedTracker::IncrementProducerFrame()
-	{
-		assert(_currentProducerFrame->_submittedToGPU);
-		auto nextFrameMarker = _currentProducerFrame->_frameMarker+1; 
-		auto next = _currentProducerFrame + 1;
-		if (next >= AsPointer(_trackers.end()))
-			next = &_trackers[0];
-
-		// If we use up all of the markers, we need stall and wait for the GPU to catch up
-		for (;;) {
-			// If "next' is ready to go for the next producer frame, we'll break out 
-			if (!next->_submittedToGPU || next->_gotGPUCompletion) break;
-
-			using namespace std::chrono_literals;
-			static std::chrono::steady_clock::time_point lastReport{};		// (defaults to start of epoch)
-			auto now = std::chrono::steady_clock::now();
-			if ((now - lastReport) > 1s) {
-				Log(Verbose) << "Stalling due to insufficient trackers in Vulkan FenceBasedTracker" << std::endl;
-				lastReport = now;
-			}
-
-			Threading::YieldTimeSlice();
-			UpdateConsumer();
-		}
-		assert(_nextConsumerFrameToComplete != next);
-		_currentProducerFrame = next;
-		_currentProducerFrame->_frameMarker = nextFrameMarker;
-		_currentProducerFrame->_submittedToGPU = false;
-		_currentProducerFrame->_gotGPUCompletion = false;
-	}
-
-	VkFence FenceBasedTracker::GetFenceForCurrentFrame()
-	{
-		assert(!_currentProducerFrame->_submittedToGPU);
-		_currentProducerFrame->_submittedToGPU = true;
-		return _currentProducerFrame->_fence.get();
-	}
-
-	void FenceBasedTracker::UpdateConsumer()
-	{
-		for (;;) {
-			if (!_nextConsumerFrameToComplete->_submittedToGPU || _nextConsumerFrameToComplete == _currentProducerFrame) break;
-			assert(!_nextConsumerFrameToComplete->_gotGPUCompletion);
-			auto res = vkGetFenceStatus(_device, _nextConsumerFrameToComplete->_fence.get());
-			if (res == VK_SUCCESS) {
-				VkFence fence = _nextConsumerFrameToComplete->_fence.get();
-				vkResetFences(_device, 1, &fence);
-				_lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
-				_nextConsumerFrameToComplete->_gotGPUCompletion = true;
-				++_nextConsumerFrameToComplete;
-				if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
-					_nextConsumerFrameToComplete = &_trackers[0];
-			} else {
-				if (res == VK_ERROR_DEVICE_LOST)
-					Throw(std::runtime_error("Vulkan device lost"));
-				assert(res == VK_NOT_READY); (void)res;
-				break;
-			}
-		}
-	}
-
-	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
-	{
-		auto start = std::chrono::steady_clock::now();
-
-		if (marker <= _lastCompletedConsumerFrame)
-			return true;
-
-		bool foundTheFence = false;
-		for (unsigned c=0; c<_trackers.size(); ++c)
-			if (_trackers[c]._frameMarker == marker) {
-				assert(_trackers[c]._submittedToGPU);
-				foundTheFence = true;
-				break;
-			}
-
-		assert(foundTheFence);
-		if (!foundTheFence) return false;
-
-		// Wait in order until we complete the one requested
-		for (;;) {
-			if (!_nextConsumerFrameToComplete->_submittedToGPU || _nextConsumerFrameToComplete == _currentProducerFrame) break;
-
-			VkFence fence = _nextConsumerFrameToComplete->_fence.get();
-			VkResult res;
-			if (timeout.has_value()) {
-				auto timeoutRemaining = ((start + timeout.value()) - std::chrono::steady_clock::now());
-				if (timeoutRemaining < std::chrono::seconds(0)) return false;
-				res = vkWaitForFences(_device, 1, &fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeoutRemaining).count());
-			} else {
-				res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
-			}
-			if (res == VK_SUCCESS) {
-				vkResetFences(_device, 1, &fence);
-				_lastCompletedConsumerFrame = _nextConsumerFrameToComplete->_frameMarker;
-				_nextConsumerFrameToComplete->_gotGPUCompletion = true;
-				++_nextConsumerFrameToComplete;
-				if (_nextConsumerFrameToComplete >= AsPointer(_trackers.end()))
-					_nextConsumerFrameToComplete = &_trackers[0];
-
-				if (_lastCompletedConsumerFrame == marker) return true;
-			} else {
-				if (res == VK_ERROR_DEVICE_LOST)
-					Throw(std::runtime_error("Vulkan device lost"));
-				assert(res == VK_NOT_READY); (void)res;
-				break;
-			}
-		}
-
-		// completed all pending markers, but still didn't find the one requested
-		return false;
-	}
-
-	FenceBasedTracker::FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth)
-	{
-		_trackers.resize(queueDepth);
-		for (unsigned c=0; c<queueDepth; ++c) {
-			_trackers[c]._fence = factory.CreateFence();
-			_trackers[c]._frameMarker = 1;
-			_trackers[c]._submittedToGPU = false;
-			_trackers[c]._gotGPUCompletion = false;
-		}
-		_currentProducerFrame = &_trackers[0];
-		_nextConsumerFrameToComplete = &_trackers[0];
-		_lastCompletedConsumerFrame = 0;
-		_device = factory.GetDevice().get();
-	}
-
-	FenceBasedTracker::~FenceBasedTracker() {}
 }}
 

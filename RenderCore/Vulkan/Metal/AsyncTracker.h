@@ -4,6 +4,7 @@
 
 #include "ObjectFactory.h"
 #include "VulkanCore.h"
+#include "../../../Utility/BitUtils.h"
 #include <optional>
 #include <chrono>
 #include <vector>
@@ -14,28 +15,38 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		virtual Marker GetConsumerMarker() const { return _lastCompletedConsumerFrame; }
-		virtual Marker GetProducerMarker() const { return _currentProducerFrame->_frameMarker; }
+		virtual Marker GetProducerMarker() const { return _currentProducerFrameMarker; }
 
-		void IncrementProducerFrame();
-		VkFence GetFenceForCurrentFrame();
+		Marker IncrementProducerFrame();
+		void OnSubmitToQueue(Marker, VkFence);
+		void AbandonMarker(Marker);
+
+		VkFence FindAvailableFence();
+
 		void UpdateConsumer();
 		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
 
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
 	private:
+		enum class State { Unused, WritingCommands, SubmittedToQueue, Abandoned }; 
 		struct Tracker
 		{
-			VulkanUniquePtr<VkFence> _fence;
-			Marker _frameMarker;
-			bool _submittedToGPU = false;
-			bool _gotGPUCompletion = false;
+			VkFence _fence = nullptr;
+			Marker _frameMarker = Marker_Invalid;
+			State _state = State::Unused;
 		};
 		std::vector<Tracker> _trackers;
-		Tracker* _currentProducerFrame = nullptr;
+		std::vector<VulkanUniquePtr<VkFence>> _fences;
+		BitHeap _fenceAllocationFlags;
+
+		Tracker* _nextProducerFrameToStart = nullptr;
 		Tracker* _nextConsumerFrameToComplete = nullptr;
-		Marker _lastCompletedConsumerFrame;
+		Marker _currentProducerFrameMarker = Marker_Invalid;
+		Marker _lastCompletedConsumerFrame = Marker_Invalid;
 		VkDevice _device;
+
+		void CheckFenceReset(VkFence fence);
 	};
 
 	class EventBasedTracker : public IAsyncTracker

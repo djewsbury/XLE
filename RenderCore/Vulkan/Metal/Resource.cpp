@@ -369,7 +369,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!_transitions.empty())
 					SetImageLayouts(*_devContext, MakeIteratorRange(_transitions));
 				if (!_makeResourcesVisible.empty())
-					_devContext->MakeResourcesVisible(MakeIteratorRange(_makeResourcesVisible));
+					_devContext->GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(_makeResourcesVisible));
 			}
 
 			ResourceInitializationHelper(DeviceContext& devContext) : _devContext(&devContext) {}

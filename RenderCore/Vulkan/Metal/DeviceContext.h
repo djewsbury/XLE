@@ -308,8 +308,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// --------------- Vulkan specific interface --------------- 
 
-		void		BeginCommandList();
-		void		BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList);
+		void		BeginCommandList(std::shared_ptr<IAsyncTracker> asyncTracker);
+		void		BeginCommandList(const VulkanSharedPtr<VkCommandBuffer>& cmdList, std::shared_ptr<IAsyncTracker> asyncTracker);
 		void		ExecuteCommandList(CommandList&&);
 		auto        ResolveCommandList() -> std::shared_ptr<CommandList>;
 
@@ -336,9 +336,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
 		DeviceContext& operator=(const DeviceContext&) = delete;
-
-		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
-		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
 
 		std::shared_ptr<Internal::CaptureForBindRecords> _captureForBindRecords;
 
