@@ -132,7 +132,10 @@ namespace ToolsRig
 				std::memcpy(space._data.begin(), vertices, sizeof(vertices));
 
 				auto& drawable = *executeContext._destinationPkt->_drawables.Allocate<MaterialSceneParserDrawable>();
-				drawable._descriptorSet = pipeline->_descriptorSet ? pipeline->_descriptorSet->TryActualize() : nullptr;
+				if (pipeline->_descriptorSet) {
+					auto* t = pipeline->_descriptorSet->TryActualize();
+					drawable._descriptorSet = t ? *t : nullptr;
+				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
 				drawable._geo = std::make_shared<Techniques::DrawableGeo>();
 				drawable._geo->_vertexStreams[0]._vbOffset = space._startOffset;
@@ -154,7 +157,10 @@ namespace ToolsRig
                 } else return;
 
 				auto& drawable = *executeContext._destinationPkt->_drawables.Allocate<MaterialSceneParserDrawable>();
-				drawable._descriptorSet = pipeline->_descriptorSet ? pipeline->_descriptorSet->TryActualize() : nullptr;
+				if (pipeline->_descriptorSet) {
+					auto* t = pipeline->_descriptorSet->TryActualize();
+					drawable._descriptorSet = t ? *t : nullptr;
+				}
 				drawable._pipeline = pipeline->_pipelineAccelerator;
 				drawable._geo = std::make_shared<Techniques::DrawableGeo>();
 				drawable._geo->_vertexStreams[0]._resource = vb;
@@ -187,7 +193,7 @@ namespace ToolsRig
 			std::weak_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> weakPipelineAcceleratorPool = _pipelineAcceleratorPool;
 
 			_pipelineFuture = std::make_shared<::Assets::FuturePtr<PendingPipeline>>("MaterialVisualizationScene pipeline");
-			::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<PendingPipeline>(
+			::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
 				*_pipelineFuture,
 				[weakPipelineAcceleratorPool, mat](const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& patchCollection) {
 

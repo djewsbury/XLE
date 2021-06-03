@@ -190,11 +190,7 @@ namespace Assets
 			if (idx != 0) str << "-";
 			using TT = std::tuple<Args...>;
 			const auto& value = std::any_cast<const std::tuple_element_t<idx, TT>&>(variantPack[idx]);
-			if (idx == 0) {
-				StreamWithHashFallback(str, value, idx == 0);		// filesystem characters (ie directory separators) only allowed on the first initializer
-			} else {
-				str << HashParam_Single(value);
-			}
+			StreamWithHashFallback(str, value, idx == 0);		// filesystem characters (ie directory separators) only allowed on the first initializer
 			if constexpr ((idx+1) != sizeof...(Args)) {
 				return MakeArchivableName_Pack<idx+1, Args...>(str, variantPack);
 			} else

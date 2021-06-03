@@ -18,8 +18,8 @@ namespace RenderCore { namespace Techniques
     public:
         std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
 
-        ::Assets::AssetLRUHeap<RenderCore::Assets::ModelScaffold>		_modelScaffolds;
-        ::Assets::AssetLRUHeap<RenderCore::Assets::MaterialScaffold>	_materialScaffolds;
+        ::Assets::AssetLRUHeap<std::shared_ptr<RenderCore::Assets::ModelScaffold>>		_modelScaffolds;
+        ::Assets::AssetLRUHeap<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
 
 		Threading::Mutex _modelRenderersLock;
         LRUCache<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;
@@ -66,7 +66,7 @@ namespace RenderCore { namespace Techniques
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
 
-		::Assets::AutoConstructToFuture<SimpleModelRenderer>(*newFuture, _pimpl->_pipelineAcceleratorPool, modelScaffold, materialScaffold);
+		::Assets::AutoConstructToFuture(*newFuture, _pimpl->_pipelineAcceleratorPool, modelScaffold, materialScaffold);
 		return newFuture;
     }
 

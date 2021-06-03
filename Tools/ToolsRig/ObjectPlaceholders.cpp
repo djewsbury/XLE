@@ -291,7 +291,7 @@ namespace ToolsRig
 			nullptr,
 			ParameterBox {}, ParameterBox {}, ParameterBox {});
 
-		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToFuture<VisGeoBox>(
+		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToFuture(
 			future,
 			[pipelineAcceleratorPool, dsa](
 				std::shared_ptr<RenderCore::Assets::RawMaterial> sphereMat,
@@ -362,9 +362,9 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
-		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize().get();
+		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset)
-			asset->BuildDrawables(pkts, matParams, localToWorld);
+			(*asset)->BuildDrawables(pkts, matParams, localToWorld);
     }
 
 	static void DrawPointerStandIn(
@@ -373,9 +373,9 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
-		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize().get();
+		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset)
-			asset->BuildDrawables(pkts, matParams, localToWorld);
+			(*asset)->BuildDrawables(pkts, matParams, localToWorld);
 	}
 
 	static void DrawTriMeshMarker(
@@ -451,7 +451,8 @@ namespace ToolsRig
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::BatchFilter::Max];
 		pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
 		if (Tweakable("DrawMarkers", true)) {
-			auto visBox = ::Assets::MakeAsset<VisGeoBox>(_pipelineAcceleratorPool)->TryActualize();
+			auto visBoxTry = ::Assets::MakeAsset<VisGeoBox>(_pipelineAcceleratorPool)->TryActualize();
+			VisGeoBox* visBox = visBoxTry ? visBoxTry->get() : nullptr;
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeId);
 				for (const auto&o:objects) {

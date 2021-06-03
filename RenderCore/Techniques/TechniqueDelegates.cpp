@@ -83,14 +83,15 @@ namespace RenderCore { namespace Techniques
 
 		auto technique = _techniqueFuture->TryActualize();
 		if (technique) {
-			nascentDesc->_depVal = technique->GetDependencyValidation();
-			auto& entry = technique->GetEntry(_techniqueIndex);
+			auto& actualTechnique = *technique->get();
+			nascentDesc->_depVal = actualTechnique.GetDependencyValidation();
+			auto& entry = actualTechnique.GetEntry(_techniqueIndex);
 			PrepareShadersFromTechniqueEntry(nascentDesc, entry);
 			result->SetAsset(std::move(nascentDesc), {});
 		} else {
 			// We need to poll until the technique file is ready, and then continue on to figuring out the shader
 			// information as usual
-			::Assets::WhenAll(_techniqueFuture).ThenConstructToFuture<GraphicsPipelineDesc>(
+			::Assets::WhenAll(_techniqueFuture).ThenConstructToFuture(
 				*result,
 				[techniqueIndex = _techniqueIndex, nascentDesc](std::shared_ptr<Technique> technique) {
 					nascentDesc->_depVal = technique->GetDependencyValidation();
@@ -211,7 +212,7 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture<GraphicsPipelineDesc>(
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
@@ -255,7 +256,7 @@ namespace RenderCore { namespace Techniques
 		: _sharedResources(sharedResources)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
@@ -332,7 +333,7 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture<GraphicsPipelineDesc>(
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
@@ -375,7 +376,7 @@ namespace RenderCore { namespace Techniques
 			_sharedResources = sharedResources;
 
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
@@ -457,7 +458,7 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture<GraphicsPipelineDesc>(
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 					std::vector<uint64_t> patchExpansions;
@@ -493,7 +494,7 @@ namespace RenderCore { namespace Techniques
 			_sharedResources = sharedResources;
 
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
 				*_techniqueFileHelper, 
 				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
 
@@ -579,7 +580,7 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture<GraphicsPipelineDesc>(
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 					std::vector<uint64_t> patchExpansions;
@@ -615,7 +616,7 @@ namespace RenderCore { namespace Techniques
 			_sharedResources = sharedResources;
 			
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 
 			_soElements = NormalizeInputAssembly(soInit._outputElements);
 			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());

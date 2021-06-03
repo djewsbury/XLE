@@ -217,8 +217,10 @@ namespace Sample
 		RenderCore::IThreadContext& context, 
         SceneEngine::SceneExecuteContext& executeContext)
     {
-		auto renderer = _simpleModelRenderer->TryActualize();
-		if (!renderer) return;
+		auto t = _simpleModelRenderer->TryActualize();
+		if (!t) return;
+
+        auto renderer = t->get();
 
 		{
 			auto& skeletonScaffold = ::Assets::Legacy::GetAsset<RenderCore::Assets::SkeletonScaffold>(

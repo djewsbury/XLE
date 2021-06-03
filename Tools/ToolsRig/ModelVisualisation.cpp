@@ -224,7 +224,7 @@ namespace ToolsRig
 			if (!_settings._animationFileName.empty() && !_settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(_settings._animationFileName);
 				auto skeletonFuture = ::Assets::MakeAsset<SkeletonScaffold>(_settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToFuture<RendererState>(
+				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToFuture(
 					*_rendererStateFuture, 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
@@ -248,7 +248,7 @@ namespace ToolsRig
 					});
 			} else if (!_settings._animationFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(_settings._animationFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToFuture<RendererState>(
+				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToFuture(
 					*_rendererStateFuture, 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet) {
@@ -269,7 +269,7 @@ namespace ToolsRig
 							});
 					});
 			} else {
-				::Assets::WhenAll(rendererFuture).ThenConstructToFuture<RendererState>(
+				::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
 					*_rendererStateFuture, 
 					[](std::shared_ptr<SimpleModelRenderer> renderer) {
 						return std::make_shared<RendererState>(
@@ -342,7 +342,8 @@ namespace ToolsRig
 				BuildRendererStateFuture();
 			}
 
-			_actualized = _rendererStateFuture->TryActualize();
+			auto* t = _rendererStateFuture->TryActualize();
+			_actualized = t ? *t : nullptr;
 			if (_actualized && _animationState) {
 				_actualized->BindAnimState(*_animationState);
 			}

@@ -22,7 +22,7 @@ namespace Assets
     {
     public:
         template<typename Type>
-			DefaultAssetHeap<Type>& GetSetForType();
+			DefaultAssetHeap<std::shared_ptr<Type>>& GetSetForType();
 
         void Clear();
         std::vector<AssetHeapRecord> LogRecords() const;
@@ -49,7 +49,7 @@ namespace Assets
     };
 
     template<typename Type>
-		DefaultAssetHeap<Type>& AssetSetManager::GetSetForType()
+		DefaultAssetHeap<std::shared_ptr<Type>>& AssetSetManager::GetSetForType()
     {
             // The lock here is frustratingly redundant in 99% of cases. But 
             // we still need it for the rest of the cases. If we could force the
@@ -60,13 +60,13 @@ namespace Assets
         auto existing = GetSetForTypeCode(typeid(Type).hash_code());
         if (existing) {
             Unlock();
-            return *static_cast<DefaultAssetHeap<Type>*>(existing);
+            return *static_cast<DefaultAssetHeap<std::shared_ptr<Type>>*>(existing);
         }
 
-		DefaultAssetHeap<Type>* result = nullptr;
+		DefaultAssetHeap<std::shared_ptr<Type>>* result = nullptr;
         try 
         {
-            auto newPtr = std::make_unique<DefaultAssetHeap<Type>>();
+            auto newPtr = std::make_unique<DefaultAssetHeap<std::shared_ptr<Type>>>();
             result = newPtr.get();
             Add(typeid(Type).hash_code(), std::move(newPtr));
         } catch (...) {

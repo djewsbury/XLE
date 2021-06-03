@@ -163,7 +163,7 @@ namespace RenderCore { namespace LightingEngine
 		auto balancedNoiseFuture = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/balanced_noise.dds:LT");
 
 		auto result = std::make_shared<::Assets::FuturePtr<IDescriptorSet>>();
-		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToFuture<IDescriptorSet>(
+		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToFuture(
 			*result,
 			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
 				SamplerDesc shadowComparisonSamplerDesc { FilterMode::ComparisonBilinear, AddressMode::Border, AddressMode::Border, CompareOp::LessEqual };

@@ -433,7 +433,7 @@ namespace RenderCore { namespace Assets
 
 		std::string containerInitializerString = containerInitializer.AsString();
 		std::string section = splitName.Parameters().AsString();
-        ::Assets::WhenAll(containerFuture).ThenConstructToFuture<RawMaterial>(
+        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
             future,
             [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
                 auto fmttr = containerActual->GetFormatter(MakeStringSection(section));

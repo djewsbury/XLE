@@ -35,12 +35,14 @@ namespace Assets
 			static auto HasDirectAutoConstructAsset_Helper(...) -> std::false_type;
 
 		template<typename AssetType, typename... Params>
-			struct HasDirectAutoConstructAsset : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params...>(0)) {};
+			struct HasDirectAutoConstructAsset_ : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params...>(0)) {};
 
+		template<typename AssetType, typename... Params>
+			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<std::decay_t<RemoveSmartPtrType<AssetType>>, Params...>;
 
 		template<typename AssetType, typename... Params>
 			static auto HasConstructToFutureOverride_Helper(int) -> decltype(
-				AssetType::ConstructToFuture(std::declval<::Assets::FuturePtr<AssetType>&>(), std::declval<Params>()...), 
+				Internal::RemoveSmartPtrType<AssetType>::ConstructToFuture(std::declval<::Assets::Future<AssetType>&>(), std::declval<Params>()...), 
 				std::true_type{});
 
 		template<typename...>
@@ -58,13 +60,13 @@ namespace Assets
 	// To achieve this, we either need to use namespace tricks, or to use SFINAE to disable the implementation 
 	// we don't need.
 	template<
-		typename AssetType, typename... Params, 
-		typename std::enable_if<Internal::HasDirectAutoConstructAsset<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFutureDirect(FuturePtr<AssetType>& future, Params... initialisers)
+		typename Future, typename... Params, 
+		typename std::enable_if<Internal::HasDirectAutoConstructAsset<typename Future::PromisedType, Params...>::value>::type* = nullptr>
+		void AutoConstructToFutureDirect(Future& future, Params... initialisers)
 	{
-		Internal::FutureResolutionMoment<AssetType> moment(future);
+		Internal::FutureResolutionMoment<typename Future::PromisedType> moment(future);
 		TRY {
-			auto asset = AutoConstructAsset<AssetType>(std::forward<Params>(initialisers)...);
+			auto asset = AutoConstructAsset<typename Future::PromisedType>(std::forward<Params>(initialisers)...);
 			future.SetAsset(std::move(asset), {});
 		} CATCH (const Exceptions::ConstructionError& e) {
 			future.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
@@ -76,8 +78,8 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename AssetType, typename std::enable_if_t<!Internal::AssetTraits<AssetType>::HasChunkRequests>* =nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
+	template<typename Future, typename std::enable_if_t<!Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests>* =nullptr>
+		void AutoConstructToFuture(Future& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			future.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
@@ -97,25 +99,25 @@ namespace Assets
 		}
 	}
 
-	template<typename AssetType, typename std::enable_if_t<Internal::AssetTraits<AssetType>::HasChunkRequests>* =nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
+	template<typename Future, typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests>* =nullptr>
+		void AutoConstructToFuture(Future& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			future.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
 			return;
 		}
 
-		auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(AssetType::ChunkRequests));
+		auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<typename Future::PromisedType>::ChunkRequests));
 		AutoConstructToFutureDirect(future, MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
 	}
 
-	template<typename AssetType>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, TargetCode targetCode = AssetType::CompileProcessType)
+	template<typename Future>
+		void AutoConstructToFuture(Future& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, TargetCode targetCode = Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType)
 	{
 		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
 		// still going to end up constructing the asset in the main thread.
 		future.SetPollingFunction(
-			[pendingCompile, targetCode](FuturePtr<AssetType>& thatFuture) -> bool {
+			[pendingCompile, targetCode](Future& thatFuture) -> bool {
 				auto state = pendingCompile->GetAssetState();
 				if (state == AssetState::Pending) return true;
 				
@@ -135,10 +137,10 @@ namespace Assets
 			});
 	}
 
-	template<typename AssetType, typename... Args>
+	template<typename Future, typename... Args>
 		static void DefaultCompilerConstruction(
-			FuturePtr<AssetType>& future,
-			TargetCode targetCode, 		// typically AssetType::CompileProcessType,
+			Future& future,
+			TargetCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
 			Args... args)
 	{
 		// Begin a compilation operation via the registered compilers for this type.
@@ -187,44 +189,44 @@ namespace Assets
 	}
 
 	template<
-		typename AssetType, typename... Params, 
-		typename std::enable_if<Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
+		typename Future, typename... Params, 
+		typename std::enable_if<Internal::HasConstructToFutureOverride<typename Future::PromisedType, Params...>::value>::type* = nullptr>
+		void AutoConstructToFuture(Future& future, Params... initialisers)
 	{
-		AssetType::ConstructToFuture(future, std::forward<Params>(initialisers)...);
+		Internal::RemoveSmartPtrType<typename Future::PromisedType>::ConstructToFuture(future, std::forward<Params>(initialisers)...);
 	}
 
 	template<
-		typename AssetType, typename... Params, 
-		typename std::enable_if<Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
+		typename Future, typename... Params, 
+		typename std::enable_if<Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, Params...>::value>::type* = nullptr>
+		void AutoConstructToFuture(Future& future, Params... initialisers)
 	{
-		DefaultCompilerConstruction<AssetType>(future, AssetType::CompileProcessType, std::forward<Params>(initialisers)...);
+		DefaultCompilerConstruction(future, Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType, std::forward<Params>(initialisers)...);
 	}
 
 	template<
-		typename AssetType, typename... Params, 
-		typename std::enable_if<!Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
+		typename Future, typename... Params, 
+		typename std::enable_if<!Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, Params...>::value>::type* = nullptr>
+		void AutoConstructToFuture(Future& future, Params... initialisers)
 	{
 		AutoConstructToFutureDirect(future, std::forward<Params>(initialisers)...);
 	}
 
 	template<
-		typename AssetType, 
-		typename std::enable_if_t<Internal::AssetTraits<AssetType>::Constructor_Formatter && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
+		typename Future, 
+		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::Constructor_Formatter && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		const char* p = XlFindChar(initializer, ':');
 		if (p) {
 			std::string containerName = MakeStringSection(initializer.begin(), p).AsString();
 			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
 			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToFuture<AssetType>(
+			WhenAll(containerFuture).ThenConstructToFuture(
 				future,
 				[containerName, sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
 					auto fmttr = container->GetFormatter(sectionName);
-					return std::make_unique<AssetType>(
+					return Internal::ConstructFinalAssetObject<typename Future::PromisedType>(
 						fmttr, 
 						DefaultDirectorySearchRules(containerName),
 						container->GetDependencyValidation());
@@ -232,11 +234,11 @@ namespace Assets
 		} else {
 			std::string containerName = initializer.AsString();
 			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToFuture<AssetType>(
+			WhenAll(containerFuture).ThenConstructToFuture(
 				future,
 				[containerName](const std::shared_ptr<ConfigFileContainer<>>& container) {
 					auto fmttr = container->GetRootFormatter();
-					return std::make_unique<AssetType>(
+					return Internal::ConstructFinalAssetObject<typename Future::PromisedType>(
 						fmttr, 
 						DefaultDirectorySearchRules(containerName),
 						container->GetDependencyValidation());
@@ -245,29 +247,29 @@ namespace Assets
 	}
 
 	template<
-		typename AssetType,
-		typename std::enable_if_t<Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
+		typename Future,
+		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::Constructor_ChunkFileContainer && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		void AutoConstructAssetToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
-		WhenAll(containerFuture).ThenConstructToFuture<AssetType>(
+		WhenAll(containerFuture).ThenConstructToFuture(
 			future,
 			[](const std::shared_ptr<ChunkFileContainer>& container) {
-				return std::make_unique<AssetType>(*container);
+				return Internal::ConstructFinalAssetObject<typename Future::PromisedType>(*container);
 			});
 	}
 
 	template<
-		typename AssetType,
-		typename std::enable_if_t<Internal::AssetTraits<AssetType>::HasChunkRequests && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
+		typename Future,
+		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		void AutoConstructAssetToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
-		WhenAll(containerFuture).ThenConstructToFuture<AssetType>(
+		WhenAll(containerFuture).ThenConstructToFuture(
 			future,
 			[](const std::shared_ptr<ChunkFileContainer>& container) {
-				auto chunks = container->ResolveRequests(MakeIteratorRange(AssetType::ChunkRequests));
-				return std::make_unique<AssetType>(MakeIteratorRange(chunks), container->GetDependencyValidation());
+				auto chunks = container->ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<typename Future::PromisedType>::ChunkRequests));
+				return Internal::ConstructFinalAssetObject<typename Future::PromisedType>(MakeIteratorRange(chunks), container->GetDependencyValidation());
 			});
 	}
 }

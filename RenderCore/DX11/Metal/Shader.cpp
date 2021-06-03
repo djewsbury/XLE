@@ -266,7 +266,7 @@ namespace RenderCore { namespace Metal_DX11
 		auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture<ShaderProgram>(
+		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture(
 			future,
 			[](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), *vsActual, *psActual);
@@ -284,7 +284,7 @@ namespace RenderCore { namespace Metal_DX11
 		auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture<ShaderProgram>(
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture(
 			future,
 			[](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), *vsActual, *gsActual, *psActual);
@@ -308,7 +308,7 @@ namespace RenderCore { namespace Metal_DX11
 		auto hsFuture = MakeByteCodeFuture(ShaderStage::Hull, hsName, definesTable);
 		auto dsFuture = MakeByteCodeFuture(ShaderStage::Domain, dsName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToFuture<ShaderProgram>(
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToFuture(
 			future,
 			[](	std::shared_ptr<CompiledShaderByteCode> vsActual,
 				std::shared_ptr<CompiledShaderByteCode> gsActual,
@@ -327,7 +327,7 @@ namespace RenderCore { namespace Metal_DX11
 	{
 		auto code = MakeByteCodeFuture(ShaderStage::Compute, codeName, definesTable);
 
-		::Assets::WhenAll(code).ThenConstructToFuture<ComputeShader>(
+		::Assets::WhenAll(code).ThenConstructToFuture(
 			future,
 			[](std::shared_ptr<CompiledShaderByteCode> csActual) {
 				return std::make_shared<ComputeShader>(GetObjectFactory(), *csActual);

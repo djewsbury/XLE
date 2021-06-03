@@ -1092,7 +1092,7 @@ namespace RenderCore { namespace Techniques
 		const std::string& materialScaffoldNameString)
 	{
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToFuture<SimpleModelRenderer>(
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToFuture(
 			future,
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) {
@@ -1244,10 +1244,10 @@ namespace RenderCore { namespace Techniques
 		StringSection<> deformOperations,
 		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
 	{
-		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToFuture<RendererSkeletonInterface>(*skeletonInterfaceFuture);
+		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToFuture(*skeletonInterfaceFuture);
 
 		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, skeletonInterfaceFuture).ThenConstructToFuture<SimpleModelRenderer>(
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, skeletonInterfaceFuture).ThenConstructToFuture(
 			*rendererFuture,
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 

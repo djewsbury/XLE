@@ -121,7 +121,7 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
-		auto layoutFile = ::Assets::AutoConstructAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>("ut-data/graphics-main.pipeline");
+		auto layoutFile = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>>("ut-data/graphics-main.pipeline");
 		REQUIRE(layoutFile->_pipelineLayouts.size() == 1);
 		REQUIRE(layoutFile->_pipelineLayouts.begin()->first == "GraphicsMain");
 		auto& pipelineLayout = *layoutFile->_pipelineLayouts.begin()->second;

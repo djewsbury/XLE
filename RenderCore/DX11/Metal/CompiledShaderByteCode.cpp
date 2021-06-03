@@ -33,6 +33,8 @@
 #include <D3D11Shader.h>
 #include <D3Dcompiler.h>
 
+#pragma GCC diagnostic ignored "-Wmicrosoft-exception-spec"         // warning: exception specification of overriding function is more lax than base version
+
 namespace RenderCore { namespace Metal_DX11
 {
     using ::Assets::ResChar;
@@ -1022,6 +1024,9 @@ namespace RenderCore { namespace Metal_DX11
                     Throw(FormatException("Duplicate alias name found", startLoc));
                 _aliases.insert(i, std::make_pair(varNameStr, target));
             }
+            break;
+
+        default:
             break;
         }
     }

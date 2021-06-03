@@ -360,7 +360,7 @@ namespace SceneEngine
     void PlacementsCache::Item::Reload()
     {
         _placements.reset();
-        _placements = ::Assets::AutoConstructAsset<Placements>(MakeStringSection(_filename));
+        _placements = ::Assets::AutoConstructAsset<std::unique_ptr<Placements>>(MakeStringSection(_filename));
     }
 
     PlacementsCache::PlacementsCache() {}
@@ -675,7 +675,7 @@ namespace SceneEngine
                 //  if we have internal transforms, we must use them.
                 //  But some models don't have any internal transforms -- in these
                 //  cases, the _defaultTransformCount will be zero
-            current->BuildDrawables(pkts, AsFloat4x4(localToWorld));
+            (*current)->BuildDrawables(pkts, AsFloat4x4(localToWorld));
 
             ++_metrics._instancesPrepared;
             _metrics._uniqueModelsPrepared += !_currentModelRendered;
@@ -1700,7 +1700,7 @@ namespace SceneEngine
 		auto actual = scaff->TryActualize();
 		if (!actual) return std::string();
 
-        return actual->GetMaterialName(materialGuid).AsString();
+        return (*actual)->GetMaterialName(materialGuid).AsString();
     }
 
     void    Transaction::SetObject(unsigned index, const ObjTransDef& newState)

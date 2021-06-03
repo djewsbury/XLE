@@ -208,7 +208,7 @@ namespace UnitTests
 				// Resolve artifacts implicitly via calling ::Assets::AutoConstructAsset
 				// The ChunkRequests array within TestChunkRequestsAsset is used to bind input artifacts
 				//
-				auto implicitlyConstructed = ::Assets::AutoConstructAsset<TestChunkRequestsAsset>(*compile->GetArtifactCollection(Type_UnitTestArtifact));
+				auto implicitlyConstructed = ::Assets::AutoConstructAsset<std::unique_ptr<TestChunkRequestsAsset>>(*compile->GetArtifactCollection(Type_UnitTestArtifact));
 				REQUIRE(implicitlyConstructed->_data0 == "This is file data from TestCompileOperation for unit-test-asset-one");
 				REQUIRE(implicitlyConstructed->_data1 == "This is extra file data");
 			}

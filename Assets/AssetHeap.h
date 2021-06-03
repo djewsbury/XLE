@@ -43,11 +43,13 @@ namespace Assets
 		class DefaultAssetHeap : public IDefaultAssetHeap
 	{
 	public:
-		template<typename... Params>
-			PtrToFuturePtr<AssetType> Get(Params...);
+		using PtrToFuture = std::shared_ptr<Future<AssetType>>;
 
 		template<typename... Params>
-			uint64_t SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params...);
+			PtrToFuture Get(Params...);
+
+		template<typename... Params>
+			uint64_t SetShadowingAsset(AssetType&& newShadowingAsset, Params...);
 
 		void            Clear();
 		uint64_t		GetTypeCode() const;
@@ -61,17 +63,17 @@ namespace Assets
 		DefaultAssetHeap& operator=(const DefaultAssetHeap&) = delete;
 	private:
 		mutable Threading::Mutex _lock;		
-		std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _assets;
-		std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _shadowingAssets;
+		std::vector<std::pair<uint64_t, PtrToFuture>> _assets;
+		std::vector<std::pair<uint64_t, PtrToFuture>> _shadowingAssets;
 	};
 
 	template<typename AssetType>
-		static bool IsInvalidated(FuturePtr<AssetType>& future)
+		static bool IsInvalidated(Future<AssetType>& future)
 	{
 		// We must check the "background state" here. If it's invalidated in the
 		// background, we can restart the compile; even if that invalidated state hasn't
 		// reached the "foreground" yet.
-		AssetPtr<AssetType> actualized;
+		AssetType actualized;
 		DependencyValidation depVal;
 		Blob actualizationLog;
 		auto state = future.CheckStatusBkgrnd(actualized, depVal, actualizationLog);
@@ -84,11 +86,11 @@ namespace Assets
 
 	template<typename AssetType>
 		template<typename... Params>
-			auto DefaultAssetHeap<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
+			auto DefaultAssetHeap<AssetType>::Get(Params... initialisers) -> PtrToFuture
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
-		PtrToFuturePtr<AssetType> newFuture;
+		PtrToFuture newFuture;
 		{
 			ScopedLock(_lock);
 			auto shadowing = LowerBound(_shadowingAssets, hash);
@@ -101,7 +103,7 @@ namespace Assets
 					return i->second;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
+			newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
 			if (i != _assets.end() && i->first == hash) {
 				i->second = newFuture;
 			} else 
@@ -112,13 +114,13 @@ namespace Assets
 		// after the future has been constructed but before we complete AutoConstructToFuture, the asset is considered to be
 		// in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
 		// another thread grabs the future before AutoConstructToFuture is done
-		AutoConstructToFuture<AssetType>(*newFuture, std::forward<Params>(initialisers)...);
+		AutoConstructToFuture(*newFuture, std::forward<Params>(initialisers)...);
 		return newFuture;
 	}
 
 	template<typename AssetType>
 		template<typename... Params>
-			uint64_t DefaultAssetHeap<AssetType>::SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params... initialisers)
+			uint64_t DefaultAssetHeap<AssetType>::SetShadowingAsset(AssetType&& newShadowingAsset, Params... initialisers)
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
@@ -136,7 +138,7 @@ namespace Assets
 
 		if (newShadowingAsset) {
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			auto newShadowingFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
+			auto newShadowingFuture = std::make_shared<Future<AssetType>>(stringInitializer);
 			newShadowingFuture->SetAssetForeground(std::move(newShadowingAsset), nullptr);
 			_shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
 		}

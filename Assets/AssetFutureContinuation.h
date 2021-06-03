@@ -16,8 +16,8 @@ namespace Assets
 				AssetState& currentState, 
 				Blob& actualizationBlob, 
 				DependencyValidation& exceptionDepVal,
-				std::tuple<std::shared_ptr<Tp>...>& actualized,
-				const std::tuple<PtrToFuturePtr<Tp>...>& futures)
+				std::tuple<Tp...>& actualized,
+				const std::tuple<std::shared_ptr<Future<Tp>>...>& futures)
 		{
 			Blob queriedLog;
 			DependencyValidation queriedDepVal;
@@ -41,13 +41,13 @@ namespace Assets
 		// pattern. Using std::make_index_sequence to expand out a sequence of integers in a parameter pack, and then using this to
 		// index the tuple
 		template<typename Ty, typename Tuple, std::size_t ... I>
-		auto ApplyMakeShared_impl(Tuple&& t, std::index_sequence<I...>) {
-			return std::make_shared<Ty>(std::get<I>(std::forward<Tuple>(t))...);
+		auto ApplyConstructFinalAssetObject_impl(Tuple&& t, std::index_sequence<I...>) {
+			return ConstructFinalAssetObject<Ty>(std::get<I>(std::forward<Tuple>(t))...);
 		}
 		template<typename Ty, typename Tuple>
-		auto ApplyMakeShared(Tuple&& t) {
+		auto ApplyConstructFinalAssetObject(Tuple&& t) {
 			using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
-			return ApplyMakeShared_impl<Ty>(std::forward<Tuple>(t), Indices());
+			return ApplyConstructFinalAssetObject_impl<Ty>(std::forward<Tuple>(t), Indices());
 		}
 	}
 
@@ -55,18 +55,18 @@ namespace Assets
 		class MultiAssetFuture
 	{
 	public:
-		template<typename FinalAssetType>
+		template<typename FinalFutureType>
 			void ThenConstructToFuture(
-				FuturePtr<FinalAssetType>& future,
-				std::function<std::shared_ptr<FinalAssetType>(const std::shared_ptr<AssetTypes>&...)>&& continuationFunction)
+				FinalFutureType& future,
+				std::function<typename FinalFutureType::PromisedType(AssetTypes...)>&& continuationFunction)
 		{
 			future.SetPollingFunction(
-				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FuturePtr<FinalAssetType>& thatFuture) {
+				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FinalFutureType& thatFuture) {
 
 					AssetState currentState = AssetState::Ready;
 					Blob actualizationBlob;
 					DependencyValidation exceptionDepVal;
-					std::tuple<std::shared_ptr<AssetTypes>...> actualized;
+					std::tuple<AssetTypes...> actualized;
 					Internal::CheckAssetState(currentState, actualizationBlob, exceptionDepVal, actualized, subFutures);
 
 					if (currentState == AssetState::Invalid) {
@@ -74,7 +74,7 @@ namespace Assets
 						thatFuture.SetInvalidAsset(exceptionDepVal, actualizationBlob);
 						return false;
 					} else if (currentState == AssetState::Ready) {
-						Internal::FutureResolutionMoment<FinalAssetType> moment(thatFuture);
+						Internal::FutureResolutionMoment<typename FinalFutureType::PromisedType> moment(thatFuture);
 						TRY
 						{
 							auto finalConstruction = std::apply(continuationFunction, std::move(actualized));
@@ -93,18 +93,18 @@ namespace Assets
 				});
 		}
 
-		template<typename FinalAssetType>
+		template<typename FinalFutureType>
 			void ThenConstructToFuture(
-				FuturePtr<FinalAssetType>& future,
-				std::function<void(FuturePtr<FinalAssetType>&, const std::shared_ptr<AssetTypes>&...)>&& continuationFunction)
+				FinalFutureType& future,
+				std::function<void(FinalFutureType&, AssetTypes...)>&& continuationFunction)
 		{
 			future.SetPollingFunction(
-				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FuturePtr<FinalAssetType>& thatFuture) {
+				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FinalFutureType& thatFuture) {
 
 					AssetState currentState = AssetState::Ready;
 					Blob actualizationBlob;
 					DependencyValidation exceptionDepVal;
-					std::tuple<std::shared_ptr<AssetTypes>...> actualized;
+					std::tuple<AssetTypes...> actualized;
 					Internal::CheckAssetState(currentState, actualizationBlob, exceptionDepVal, actualized, subFutures);
 						
 					if (currentState == AssetState::Invalid) {
@@ -135,16 +135,16 @@ namespace Assets
 				});
 		}
 
-		template<typename FinalAssetType>
-			void ThenConstructToFuture(FuturePtr<FinalAssetType>& future)
+		template<typename FinalFutureType>
+			void ThenConstructToFuture(FinalFutureType& future)
 		{
 			future.SetPollingFunction(
-				[subFutures{std::move(_subFutures)}](FuturePtr<FinalAssetType>& thatFuture) {
+				[subFutures{std::move(_subFutures)}](FinalFutureType& thatFuture) {
 
 					AssetState currentState = AssetState::Ready;
 					Blob actualizationBlob;
 					DependencyValidation exceptionDepVal;
-					std::tuple<std::shared_ptr<AssetTypes>...> actualized;
+					std::tuple<AssetTypes...> actualized;
 					Internal::CheckAssetState(currentState, actualizationBlob, exceptionDepVal, actualized, subFutures);
 						
 					if (currentState == AssetState::Invalid) {
@@ -152,10 +152,10 @@ namespace Assets
 						thatFuture.SetInvalidAsset(exceptionDepVal, actualizationBlob);
 						return false;
 					} else if (currentState == AssetState::Ready) {
-						Internal::FutureResolutionMoment<FinalAssetType> moment(thatFuture);
+						Internal::FutureResolutionMoment<typename FinalFutureType::PromisedType> moment(thatFuture);
 						TRY
 						{
-							auto finalConstruction = Internal::ApplyMakeShared<FinalAssetType>(std::move(actualized));
+							auto finalConstruction = Internal::ApplyConstructFinalAssetObject<typename FinalFutureType::PromisedType>(std::move(actualized));
 							thatFuture.SetAsset(std::move(finalConstruction), {});
 						} CATCH (const Exceptions::ConstructionError& e) {
 							thatFuture.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());	
@@ -171,14 +171,14 @@ namespace Assets
 				});
 		}
 
-		std::tuple<PtrToFuturePtr<AssetTypes>...> _subFutures;
+		std::tuple<std::shared_ptr<Future<AssetTypes>>...> _subFutures;
 	};
 
 	template<typename... AssetTypes>
-		MultiAssetFuture<AssetTypes...> WhenAll(const PtrToFuturePtr<AssetTypes>&... subFutures)
+		MultiAssetFuture<AssetTypes...> WhenAll(const std::shared_ptr<Future<AssetTypes>>&... subFutures)
 	{
 		return {
-			std::tuple<PtrToFuturePtr<AssetTypes>...>{ subFutures... }
+			std::tuple<std::shared_ptr<Future<AssetTypes>>...>{ subFutures... }
 		};
 	}
 

@@ -478,13 +478,14 @@ namespace UnitTests
 					compiledPatchCollection->GetInterface(),
 					stateSet);
 				pipelineDescFuture->StallWhilePending();
-				auto pipelineDesc = pipelineDescFuture->TryActualize();
+				auto* pipelineDesc = pipelineDescFuture->TryActualize();
 				if (!pipelineDesc) {
 					auto log = ::Assets::AsString(pipelineDescFuture->GetActualizationLog());
 					std::cout << "Failed to get pipeline from technique delegate; with exception message: " << std::endl << log << std::endl;
 				}
 				REQUIRE(pipelineDesc);
-				REQUIRE(!pipelineDesc->_shaders[0].empty());
+				REQUIRE(*pipelineDesc);
+				REQUIRE(!(*pipelineDesc)->_shaders[0].empty());
 			}
 		}
 

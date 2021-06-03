@@ -142,7 +142,7 @@ namespace RenderCore { namespace Techniques
     {
         auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, vsDefines);
         auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, psDefines);
-        ::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture<Metal::GraphicsPipeline>(
+        ::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture(
             *future,
             [pipelineLayout=_pipelineLayout,
             attachmentBlends=AsVector(outputStates._attachmentBlend),
@@ -179,7 +179,7 @@ namespace RenderCore { namespace Techniques
         auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, vsDefines);
         auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, gsDefines);
         auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, psDefines);
-        ::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture<Metal::GraphicsPipeline>(
+        ::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture(
             *future,
             [pipelineLayout=_pipelineLayout,
             attachmentBlends=AsVector(outputStates._attachmentBlend),

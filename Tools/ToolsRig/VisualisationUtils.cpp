@@ -260,7 +260,8 @@ namespace ToolsRig
 			if (_preparedSceneFuture->GetDependencyValidation() && _preparedSceneFuture->GetDependencyValidation().GetValidationIndex() != 0) {
 				RebuildPreparedScene();
 			} else {
-				actualizedScene = _preparedSceneFuture->TryActualize().get();
+				auto* t = _preparedSceneFuture->TryActualize();
+				if (t) actualizedScene = t->get();
 			}
 		}
 
@@ -349,7 +350,7 @@ namespace ToolsRig
 		//
 		_preparedSceneFuture = std::make_shared<::Assets::FuturePtr<PreparedScene>>("simple-scene-layer");
 
-		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture<PreparedScene>(
+		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture<::Assets::FuturePtr<PreparedScene>>(
 			*_preparedSceneFuture,
 			[targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, scene = _scene, pipelineAccelerators = _pipelineAccelerators](
 				::Assets::FuturePtr<PreparedScene>& thatFuture, 

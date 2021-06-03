@@ -87,7 +87,7 @@ namespace UnitTests
 			compile->StallWhilePending();
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
 
-			auto finalScaffold = ::Assets::AutoConstructAsset<RenderCore::Assets::MaterialScaffold>(
+			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				*compile->GetArtifactCollection(targetCode));
 			(void)finalScaffold;
 

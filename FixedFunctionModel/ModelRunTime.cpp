@@ -837,7 +837,7 @@ namespace FixedFunctionModel
         for (unsigned c=0; c<_texturesPerMaterial; c++) {
             auto t = _boundTextures[resourcesIndex * _texturesPerMaterial + c];
 			auto a = t ? t->TryActualize() : nullptr;
-            srvs[c] = a ? (&a->GetShaderResource()) : nullptr;
+            srvs[c] = a ? (&(*a)->GetShaderResource()) : nullptr;
         }
 
 		assert(_constantBuffers[constantsIndex].IsGood());

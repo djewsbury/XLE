@@ -30,14 +30,14 @@ namespace Sample
     {
 		auto actual = _animationSet->TryActualize();
 		if (!actual) Throw(::Exceptions::BasicLabel("Pending or invalid data in CharacterModel (%s)", AnimationSetInitialiser()));
-        return actual->ImmutableData(); 
+        return (*actual)->ImmutableData(); 
     }
 
     const RenderCore::Assets::AnimationSet& CharacterModel::GetAnimationSet() const
     {
 		auto actual = _animationSet->TryActualize();
 		if (!actual) Throw(::Exceptions::BasicLabel("Pending or invalid data in CharacterModel (%s)", AnimationSetInitialiser()));
-        return actual->ImmutableData()._animationSet; 
+        return (*actual)->ImmutableData()._animationSet; 
     }
 
     const RenderCore::Assets::ModelRenderer& CharacterModel::GetRenderer() const
@@ -56,7 +56,7 @@ namespace Sample
     {
 		auto actual = _model->TryActualize();
 		if (!actual) Throw(::Exceptions::BasicLabel("Pending or invalid data in CharacterModel (%s)", SkinInitialiser()));
-        return *actual;
+        return **actual;
     }
 
 ///////////////////////////////////////////////////////////////////////////////

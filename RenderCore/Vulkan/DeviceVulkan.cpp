@@ -1207,7 +1207,6 @@ namespace RenderCore { namespace ImplVulkan
 			if (!_interimCommandBufferComplete)
 				_interimCommandBufferComplete = _factory->CreateSemaphore();
 
-			fenceToWaitFor = _gpuTracker->FindAvailableFence();
 			VkSemaphore signalSema[] = { _interimCommandBufferComplete.get() };
 			fenceToWaitFor = QueuePrimaryContext(MakeIteratorRange(signalSema));
 			_nextQueueShouldWaitOnInterimBuffer = true;

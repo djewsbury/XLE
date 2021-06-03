@@ -80,7 +80,7 @@ namespace RenderCore { namespace LightingEngine
 		auto result = std::make_shared<::Assets::FuturePtr<RenderStepFragmentInterface>>("build-gbuffer");
 		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
-		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture<RenderStepFragmentInterface>(
+		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture(
 			*result,
 			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](std::shared_ptr<Techniques::DeferredShaderResource> deferredShaderResource) {
 
@@ -313,7 +313,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
-		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture<CompiledLightingTechnique>(
+		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture<::Assets::FuturePtr<CompiledLightingTechnique>>(
 			*result,
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
@@ -397,7 +397,7 @@ namespace RenderCore { namespace LightingEngine
 					*resolvedFB.first, resolvedFB.second+1,
 					false, GBufferType::PositionNormalParameters);
 
-				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture<CompiledLightingTechnique>(
+				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture(
 					thatFuture,
 					[lightingTechnique, captures, lightScene](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;

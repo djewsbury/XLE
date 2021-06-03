@@ -109,11 +109,15 @@ namespace FixedFunctionModel
             if (materialFuture || insertType == LRUCacheInsertType::EvictAndReplace) ++_pimpl->_reloadId;
         }
 
-		if (modelFuture)
-			result._model = modelFuture->TryActualize().get();
+		if (modelFuture) {
+            auto* t = modelFuture->TryActualize();
+			result._model = t ? t->get() : nullptr;
+        }
 
-		if (materialFuture)
-			result._material = materialFuture->TryActualize().get();
+		if (materialFuture) {
+            auto* t = materialFuture->TryActualize();
+			result._material = t ? t->get() : nullptr;
+        }
 
         return result;
     }
@@ -147,8 +151,8 @@ namespace FixedFunctionModel
                     if (insertType == LRUCacheInsertType::EvictAndReplace) { ++_reloadId; }
                 }
             }
-			const auto* actual = supp->TryActualize().get();
-            if (actual) result.push_back(actual);
+			auto* actual = supp->TryActualize();
+            if (actual) result.push_back(*actual);
         }
         return std::move(result);
     }

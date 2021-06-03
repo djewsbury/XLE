@@ -82,7 +82,7 @@ namespace RenderOverlays
             HIGHLIGHT_VIS_PIXEL_HLSL ":HighlightByStencil:ps_*",
             params.AsStringSection())->TryActualize();
         if (highlightShader) {
-            encoder.Bind(*highlightShader);
+            encoder.Bind(**highlightShader);
             encoder.Draw(4);
         }
 
@@ -92,7 +92,7 @@ namespace RenderOverlays
             HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
             params.AsStringSection())->TryActualize();
         if (outlineShader) {                
-            encoder.Bind(*outlineShader);
+            encoder.Bind(**outlineShader);
             encoder.Draw(4);
         }
     }
@@ -282,8 +282,8 @@ namespace RenderOverlays
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);
             us._immediateData = MakeIteratorRange(immd);
-            shaders->_drawHighlightUniforms.ApplyLooseUniforms(metalContext, encoder, us);
-			encoder.Bind(*shaders->_drawHighlight);
+            (*shaders)->_drawHighlightUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			encoder.Bind(*(*shaders)->_drawHighlight);
 			encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abAlphaPremultiplied, &Techniques::CommonResourceBox::s_abAlphaPremultiplied+1));
 			encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 			encoder.Bind({}, Topology::TriangleStrip);
@@ -313,8 +313,8 @@ namespace RenderOverlays
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);
             us._immediateData = MakeIteratorRange(immd);
-			shaders->_drawShadowUniforms.ApplyLooseUniforms(metalContext, encoder, us);
-			encoder.Bind(*shaders->_drawShadow);
+			(*shaders)->_drawShadowUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			encoder.Bind(*(*shaders)->_drawShadow);
 			encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abStraightAlpha, &Techniques::CommonResourceBox::s_abStraightAlpha+1));
 			encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 			encoder.Bind({}, Topology::TriangleStrip);

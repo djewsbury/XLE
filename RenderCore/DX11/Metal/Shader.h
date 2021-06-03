@@ -11,7 +11,7 @@
 #include "../../ShaderService.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../../Utility/IntrusivePtr.h"
-#include <memory>.
+#include <memory>
 
 namespace Assets { class DependencyValidation; }
 namespace RenderCore { class InputElementDesc; class CompiledShaderByteCode; class IDevice; }

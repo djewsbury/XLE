@@ -141,7 +141,7 @@ namespace RenderCore { namespace Techniques
 				// Construct the final descriptor set; even if we got some (or all) invalid assets
 				for (const auto&d:working._resources) {
 					if (d._pendingResource) {
-						::Assets::AssetPtr<DeferredShaderResource> actualized;
+						std::shared_ptr<DeferredShaderResource> actualized;
 						::Assets::DependencyValidation depVal;
 						::Assets::Blob actualizationLog;
 						auto status = d._pendingResource->CheckStatusBkgrnd(actualized, depVal, actualizationLog);

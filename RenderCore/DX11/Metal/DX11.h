@@ -8,6 +8,9 @@
 
 #include "../../../Core/Prefix.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmicrosoft-enum-forward-reference"
+
     //
     //      Forward declarations for many DX11 types.
     //
@@ -139,3 +142,5 @@ namespace IDXGI
     using Adapter       = IDXGIAdapter1;
     using Factory       = IDXGIFactory1;
 }
+
+#pragma GCC diagnostic pop

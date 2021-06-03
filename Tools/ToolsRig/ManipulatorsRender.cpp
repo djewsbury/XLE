@@ -202,7 +202,7 @@ namespace ToolsRig
         const AttachmentBlendDesc& ab = Techniques::CommonResourceBox::s_abStraightAlpha,
         const DepthStencilDesc& ds = Techniques::CommonResourceBox::s_dsReadWrite)
     {
-        auto* actualShader = shader.TryActualize().get();
+        auto* actualShader = shader.TryActualize()->get();
 
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);            
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(actualShader->GetPipelineLayout());

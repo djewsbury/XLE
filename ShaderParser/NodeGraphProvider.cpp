@@ -123,7 +123,7 @@ namespace GraphLanguage
 			if (!resolvedFile[0])
 				return {};
 
-			std::shared_ptr<ShaderFragment> fragment = ::Assets::AutoConstructAsset<ShaderFragment>(resolvedFile);
+			std::shared_ptr<ShaderFragment> fragment = ::Assets::AutoConstructAsset<std::shared_ptr<ShaderFragment>>(resolvedFile);
 			existing = _pimpl->_cache.insert(std::make_pair(hash, fragment)).first;
 		}
 

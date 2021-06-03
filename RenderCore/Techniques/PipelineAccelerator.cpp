@@ -204,7 +204,7 @@ namespace RenderCore { namespace Techniques
 
 		auto result = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>();
 		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture<Metal::ShaderProgram>(
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture(
 				*result,
 				[pipelineLayout](
 					std::shared_ptr<CompiledShaderByteCode_InstantiateShaderGraph> vsCode, 
@@ -216,7 +216,7 @@ namespace RenderCore { namespace Techniques
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			auto soElements = pipelineDesc._soElements;
 			auto soBufferStrides = pipelineDesc._soBufferStrides;
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture<Metal::ShaderProgram>(
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 				*result,
 				[pipelineLayout, soElements, soBufferStrides](
 					std::shared_ptr<CompiledShaderByteCode_InstantiateShaderGraph> vsCode, 
@@ -230,7 +230,7 @@ namespace RenderCore { namespace Techniques
 		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			auto soElements = pipelineDesc._soElements;
 			auto soBufferStrides = pipelineDesc._soBufferStrides;
-			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture<Metal::ShaderProgram>(
+			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 				*result,
 				[pipelineLayout, soElements, soBufferStrides](
 					std::shared_ptr<CompiledShaderByteCode_InstantiateShaderGraph> vsCode, 
@@ -291,7 +291,7 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToFuturePtr<ITechniqueDelegate::GraphicsPipelineDesc>& pipelineDescFuture)
 		{
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
-			::Assets::WhenAll(pipelineDescFuture).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+			::Assets::WhenAll(pipelineDescFuture).ThenConstructToFuture<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(
 				*result,
 				[](	::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>& resultFuture,
 					std::shared_ptr<ITechniqueDelegate::GraphicsPipelineDesc> pipelineDesc) {
@@ -309,7 +309,7 @@ namespace RenderCore { namespace Techniques
 					if (filteringFuture[(unsigned)ShaderStage::Pixel] && !filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
 						if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -323,7 +323,7 @@ namespace RenderCore { namespace Techniques
 								});
 						} else {
 							auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -342,7 +342,7 @@ namespace RenderCore { namespace Techniques
 					} else if (filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
 						if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -358,7 +358,7 @@ namespace RenderCore { namespace Techniques
 								});
 						} else {
 							auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -379,7 +379,7 @@ namespace RenderCore { namespace Techniques
 					} else if (!filteringFuture[(unsigned)ShaderStage::Pixel] && filteringFuture[(unsigned)ShaderStage::Geometry]) {
 
 						if (pipelineDesc->_selectorPreconfigurationFile.empty()) {
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -393,7 +393,7 @@ namespace RenderCore { namespace Techniques
 								});
 						} else {
 							auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
-							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
+							::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToFuture(
 								resultFuture,
 								[pipelineDesc](
 									std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -443,7 +443,7 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the 
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<IPipelineAcceleratorPool::Pipeline>(
+		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>>(
 			*result._future,
 			[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis](
 				::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
@@ -458,7 +458,7 @@ namespace RenderCore { namespace Techniques
 				auto pipelineDescFuture = cfg._delegate->Resolve(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
 				auto resolvedTechnique = GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture);
 				
-				::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture<IPipelineAcceleratorPool::Pipeline>(
+				::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture<::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>>(
 					resultFuture,
 					[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
 						::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
@@ -518,7 +518,7 @@ namespace RenderCore { namespace Techniques
 							psd = MakeShaderDescription(ShaderStage::Pixel, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Pixel]);
 							gsd = MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
 						#endif
-						::Assets::WhenAll(shaderProgram).ThenConstructToFuture<IPipelineAcceleratorPool::Pipeline>(
+						::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
 							resultFuture,
 							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](std::shared_ptr<Metal::ShaderProgram> shaderProgram) {
 								auto containingPipelineAccelerator = weakThis.lock();
@@ -781,8 +781,8 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Bad sequencer config id"));
 		#endif
 		
-		auto p = pipelineAccelerator._finalPipelines[sequencerIdx]._future->TryActualize().get();
-		if (p) return p->_metalPipeline.get();
+		auto p = pipelineAccelerator._finalPipelines[sequencerIdx]._future->TryActualize();
+		if (p) return (*p)->_metalPipeline.get();
 		return nullptr;
 	}
 
@@ -793,7 +793,8 @@ namespace RenderCore { namespace Techniques
 
 	const IDescriptorSet* PipelineAcceleratorPool::TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const
 	{
-		return accelerator._descriptorSet->TryActualize().get();
+		auto* t= accelerator._descriptorSet->TryActualize();
+		return t ? t->get() : nullptr;
 	}
 
 	const DescriptorSetBindingInfo* PipelineAcceleratorPool::TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const
@@ -965,14 +966,14 @@ namespace RenderCore { namespace Techniques
 
 			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 			// future continuation functions
-			if (auto* patchCollection = patchCollectionFuture->TryActualize().get()) {
+			if (auto* patchCollection = patchCollectionFuture->TryActualize()) {
 				ConstructDescriptorSet(
 					*result->_descriptorSet,
 					_device,
 					constantBindings,
 					resourceBindings,
 					MakeIteratorRange(metalSamplers),
-					patchCollection->GetInterface().GetMaterialDescriptorSet(),
+					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
 					(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo) ? &result->_bindingInfo : nullptr);
 			} else {
 				ParameterBox constantBindingsCopy = constantBindings;
@@ -982,7 +983,7 @@ namespace RenderCore { namespace Techniques
 				std::shared_ptr<DescriptorSetAccelerator> bindingInfoHolder;
 				if (_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo)
 					bindingInfoHolder = result;
-				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<RenderCore::IDescriptorSet>(
+				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<::Assets::FuturePtr<RenderCore::IDescriptorSet>>(
 					*result->_descriptorSet,
 					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, bindingInfoHolder](
 						::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,

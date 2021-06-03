@@ -151,7 +151,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
 	{
 		auto scaffoldFuture = ::Assets::MakeAsset<Technique>(modelScaffoldName);
-		::Assets::WhenAll(scaffoldFuture).ThenConstructToFuture<TechniqueShaderVariationSet>(
+		::Assets::WhenAll(scaffoldFuture).ThenConstructToFuture(
 			future,
 			[pipelineLayout](std::shared_ptr<Technique> technique) {
 				return std::make_shared<TechniqueShaderVariationSet>(technique, pipelineLayout);

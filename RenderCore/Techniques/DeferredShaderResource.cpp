@@ -262,7 +262,7 @@ namespace RenderCore { namespace Techniques
             res->StallWhilePending();
             auto actual = res->TryActualize();
             if (actual)
-                finalColSpace = actual->_colorSpace;
+                finalColSpace = (*actual)->_colorSpace;
 
             if (finalColSpace == SourceColorSpace::Unspecified)
                 finalColSpace = (init._colSpaceDefault != SourceColorSpace::Unspecified) ? init._colSpaceDefault : SourceColorSpace::SRGB;

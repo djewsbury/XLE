@@ -9,11 +9,13 @@ namespace Assets
         class AssetHeapLRU : public IDefaultAssetHeap
     {
     public:
-        template<typename... Params>
-            PtrToFuturePtr<AssetType> Get(Params...);
+        using PtrToFuture = std::shared_ptr<Future<AssetType>>;
 
         template<typename... Params>
-            uint64_t SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params...);
+            PtrToFuture Get(Params...);
+
+        template<typename... Params>
+            uint64_t SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params...);
 
         void            Clear();
         uint64_t        GetTypeCode() const;
@@ -31,8 +33,8 @@ namespace Assets
         AssetHeapLRU& operator=(const AssetHeapLRU&) = delete;
     private:
         mutable Threading::Mutex _lock;
-        LRUCache<FuturePtr<AssetType>> _assets;
-        std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _shadowingAssets;
+        LRUCache<PtrToFuture> _assets;
+        std::vector<std::pair<uint64_t, PtrToFuture>> _shadowingAssets;
 
         #if defined(_DEBUG)
             std::vector<std::pair<uint64_t, AssetHeapRecord>> _initializationRecords;
@@ -41,11 +43,11 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
+            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuture
     {
         auto hash = Internal::BuildParamHash(initialisers...);
 
-        PtrToFuturePtr<AssetType> newFuture;
+        PtrToFuture newFuture;
         {
             ScopedLock(_lock);
             auto shadowing = LowerBound(_shadowingAssets, hash);
@@ -57,7 +59,7 @@ namespace Assets
                 return i;
 
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
+            newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
             _assets.Insert(hash, newFuture);
 
             #if defined(_DEBUG)
@@ -83,13 +85,13 @@ namespace Assets
         // after the future has been constructed but before we complete AutoConstructToFuture, the asset is considered to be
         // in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
         // another thread grabs the future before AutoConstructToFuture is done
-        AutoConstructToFuture<AssetType>(*newFuture, std::forward<Params>(initialisers)...);
+        AutoConstructToFuture(*newFuture, std::forward<Params>(initialisers)...);
         return newFuture;
     }
 
     template<typename AssetType>
         template<typename... Params>
-            uint64_t AssetHeapLRU<AssetType>::SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params... initialisers)
+            uint64_t AssetHeapLRU<AssetType>::SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params... initialisers)
     {
         auto hash = Internal::BuildParamHash(initialisers...);
 
@@ -107,7 +109,7 @@ namespace Assets
 
         if (newShadowingAsset) {
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            auto newShadowingFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
+            auto newShadowingFuture = std::make_shared<Future<AssetType>>(stringInitializer);
             newShadowingFuture->SetAsset(std::move(newShadowingAsset), nullptr);
             _shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
         }
@@ -140,7 +142,7 @@ namespace Assets
     {
         ScopedLock(_lock);
         unsigned cacheSize = _assets.GetCacheSize();
-        _assets = LRUCache<FuturePtr<AssetType>>{cacheSize};
+        _assets = LRUCache<Future<AssetType>>{cacheSize};
         _shadowingAssets.clear();
     }
 
@@ -148,7 +150,7 @@ namespace Assets
         void AssetHeapLRU<AssetType>::SetCacheSize(unsigned newCacheSize)
     {
         ScopedLock(_lock);
-        _assets = LRUCache<FuturePtr<AssetType>>{newCacheSize};
+        _assets = LRUCache<Future<AssetType>>{newCacheSize};
     }
 
     template<typename AssetType>
@@ -168,7 +170,7 @@ namespace Assets
         #if defined(_DEBUG)
             for (const auto&r : _initializationRecords) {
                 auto record = r.second;
-                auto item = const_cast<LRUCache<FuturePtr<AssetType>>&>(_assets).Get(r.first);
+                auto item = const_cast<LRUCache<Future<AssetType>>&>(_assets).Get(r.first);
                 if (item) {
                     record._state = item->GetAssetState();
                     record._depVal = item->GetDependencyValidation();

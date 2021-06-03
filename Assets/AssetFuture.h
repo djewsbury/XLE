@@ -17,15 +17,12 @@ namespace Assets
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template<typename AssetType>
-		using AssetPtr = std::shared_ptr<AssetType>;
-
-	template<typename AssetType>
+	template<typename Type>
 		class Future : public IAsyncMarker
 	{
 	public:
-		const AssetType& Actualize() const;
-		const AssetType& TryActualize() const;
+		const Type& Actualize() const;
+		const Type* TryActualize() const;
 
 		bool			IsOutOfDate() const;
 		void			SimulateChange();
@@ -34,7 +31,7 @@ namespace Assets
         std::optional<AssetState>   StallWhilePending(std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const;
 
 		AssetState		CheckStatusBkgrnd(
-			AssetType& actualized,
+			Type& actualized,
 			DependencyValidation& depVal,
 			Blob& actualizationLog);
 
@@ -42,68 +39,67 @@ namespace Assets
 		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
 		const Blob&				    GetActualizationLog() const { return _actualizationLog; }
 
+		using PromisedType = Type;
+
 		explicit Future(const std::string& initializer = {});
 		~Future();
 
 		Future(Future&&);
 		Future& operator=(Future&&);
 
-		void SetAsset(AssetType&&, const Blob& log);
+		void SetAsset(Type&&, const Blob& log);
 		void SetInvalidAsset(DependencyValidation depVal, const Blob& log);
-		void SetAssetForeground(AssetType&& newAsset, const Blob& log);
-		void SetPollingFunction(std::function<bool(Future<AssetType>&)>&&);
+		void SetAssetForeground(Type&& newAsset, const Blob& log);
+		void SetPollingFunction(std::function<bool(Future<Type>&)>&&);
 		
 	private:
 		mutable Threading::Mutex		_lock;
 		mutable Threading::Conditional	_conditional;
 
 		volatile AssetState 	_state;
-		AssetType 				_actualized;
+		Type 					_actualized;
 		Blob					_actualizationLog;
 		DependencyValidation	_actualizedDepVal;
 
-		AssetType 				_pending;
+		Type 					_pending;
 		AssetState				_pendingState;
 		Blob					_pendingActualizationLog;
 		DependencyValidation	_pendingDepVal;
 
-		std::function<bool(Future<AssetType>&)> _pollingFunction;
+		std::function<bool(Future<Type>&)> _pollingFunction;
 
 		std::string			_initializer;	// stored for debugging purposes
 		
 		void				OnFrameBarrier();
 
-		struct CallbackMarker { unsigned _markerId; Future<AssetType>* _parent; };
+		struct CallbackMarker { unsigned _markerId; Future<Type>* _parent; };
 		mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
 
 		void RegisterFrameBarrierCallbackAlreadyLocked();
 		void ClearFrameBarrierCallbackAlreadyLocked() const;
 	};
 
-	template<typename AssetType>
-		using AssetFuture = Future<std::shared_ptr<AssetType>>;
-
-	template<typename AssetType>
-		using PtrToFuturePtr = std::shared_ptr<FuturePtr<AssetType>>;
+	template<typename Type>
+		using PtrToFuturePtr = std::shared_ptr<FuturePtr<Type>>;
 
 	namespace Internal
 	{
-		template<typename AssetType> static auto HasGetDependencyValidation_Helper(int) -> decltype(std::declval<AssetType>().GetDependencyValidation(), std::true_type{});
+		template<typename Type> static auto HasGetDependencyValidation_Helper(int) -> decltype(std::declval<Type>().GetDependencyValidation(), std::true_type{});
 		template<typename...> static auto HasGetDependencyValidation_Helper(...) -> std::false_type;
-		template<typename AssetType> struct HasGetDependencyValidation : decltype(HasGetDependencyValidation_Helper<AssetType>(0)) {};
+		template<typename Type> struct HasGetDependencyValidation : decltype(HasGetDependencyValidation_Helper<Type>(0)) {};
 
-		template<typename AssetType> static auto HasDerefGetDependencyValidation_Helper(int) -> decltype((*std::declval<AssetType>()).GetDependencyValidation(), std::true_type{});
+		template<typename Type> static auto HasDerefGetDependencyValidation_Helper(int) -> decltype((*std::declval<Type>()).GetDependencyValidation(), std::true_type{});
 		template<typename...> static auto HasDerefGetDependencyValidation_Helper(...) -> std::false_type;
-		template<typename AssetType> struct HasDerefGetDependencyValidation : decltype(HasDerefGetDependencyValidation_Helper<AssetType>(0)) {};
+		template<typename Type> struct HasDerefGetDependencyValidation : decltype(HasDerefGetDependencyValidation_Helper<Type>(0)) {};
 
-		template<typename AssetType, typename std::enable_if<HasGetDependencyValidation<AssetType>::value>::type* =nullptr>
-			decltype(std::declval<AssetType>().GetDependencyValidation()) GetDependencyValidation(const AssetType& asset) { return asset.GetDependencyValidation(); }
+		template<typename Type, typename std::enable_if<HasGetDependencyValidation<Type>::value>::type* =nullptr>
+			decltype(std::declval<Type>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
 
-		template<typename AssetType, typename std::enable_if<!HasGetDependencyValidation<AssetType>::value && HasDerefGetDependencyValidation<AssetType>::value>::type* =nullptr>
-			decltype((*std::declval<AssetType>()).GetDependencyValidation()) GetDependencyValidation(const AssetType& asset) { return (*asset).GetDependencyValidation(); }
+		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
+			decltype((*std::declval<Type>()).GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return (*asset).GetDependencyValidation(); }
 
-		template<typename AssetType, typename std::enable_if<!HasGetDependencyValidation<AssetType>::value && !HasDerefGetDependencyValidation<AssetType>::value>::type* =nullptr>
-			inline const DependencyValidation& GetDependencyValidation(const AssetType&) { static DependencyValidation dummy; return dummy; }
+		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && !HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
+			inline const DependencyValidation& GetDependencyValidation(const Type&) { static DependencyValidation dummy; return dummy; }
 
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
 		void DeregisterFrameBarrierCallback(unsigned);
@@ -125,20 +121,20 @@ namespace Assets
 			It's used to detect deadlock scenarios. That is, we can't stall waiting for a future
 			during it's own resolution moment.
 		*/
-		template<typename AssetType>
+		template<typename Type>
 			class FutureResolutionMoment
 		{
 		public:
-			FutureResolutionMoment(Future<std::shared_ptr<AssetType>>& future) : _future(&future)
+			FutureResolutionMoment(Future<Type>& future) : _future(&future)
 			{
 				assert(future.GetAssetState() == AssetState::Pending);
 				FutureResolution_BeginMoment(
 					&future,
 					[](void* inputFuture) {
-						std::shared_ptr<AssetType> actualized;
+						Type actualized;
 						DependencyValidation depVal;
 						Blob actualizationLog;
-						return ((Future<std::shared_ptr<AssetType>>*)inputFuture)->CheckStatusBkgrnd(actualized, depVal, actualizationLog);
+						return ((Future<Type>*)inputFuture)->CheckStatusBkgrnd(actualized, depVal, actualizationLog);
 					});
 			}
 			~FutureResolutionMoment()
@@ -146,14 +142,14 @@ namespace Assets
 				FutureResolution_EndMoment(_future);
 			}
 		private:
-			Future<std::shared_ptr<AssetType>>* _future;
+			Future<Type>* _future;
 		};
 	}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template<typename AssetType>
-		const AssetType& Future<AssetType>::Actualize() const
+	template<typename Type>
+		const Type& Future<Type>::Actualize() const
 	{
 		auto state = _state;
 		if (state == AssetState::Ready)
@@ -169,18 +165,14 @@ namespace Assets
 		Throw(Exceptions::InvalidAsset(MakeStringSection(_initializer), _actualizedDepVal, _actualizationLog));
 	}
 
-	template<typename AssetType>
-		const AssetType& Future<AssetType>::TryActualize() const
+	template<typename Type>
+		const Type* Future<Type>::TryActualize() const
 	{
-		if (_state == AssetState::Ready)
-			return _actualized;
-
-		static AssetType dummy;
-		return dummy;
+		return (_state == AssetState::Ready) ? &_actualized : nullptr;
 	}
 
-	template<typename AssetType>
-		AssetState		Future<AssetType>::CheckStatusBkgrnd(AssetType& actualized, DependencyValidation& depVal, Blob& actualizationLog)
+	template<typename Type>
+		AssetState		Future<Type>::CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog)
 	{
 		if (_state == AssetState::Ready) {
 			actualized = _actualized;
@@ -206,7 +198,7 @@ namespace Assets
 				return _pendingState;
 			}
 			if (_pollingFunction) {
-				std::function<bool(Future<AssetType>&)> pollingFunction;
+				std::function<bool(Future<Type>&)> pollingFunction;
 				std::swap(pollingFunction, _pollingFunction);
 				lock = {};
 				bool pollingResult = false;
@@ -252,8 +244,8 @@ namespace Assets
 		return AssetState::Pending;
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::OnFrameBarrier() 
+	template<typename Type>
+		void Future<Type>::OnFrameBarrier() 
 	{
 		auto state = _state;
 		if (state != AssetState::Pending) return;
@@ -262,7 +254,7 @@ namespace Assets
 			// prevent assets from changing in the middle of a single frame.
 		std::unique_lock<decltype(_lock)> lock(_lock);
 		if (_pollingFunction) {
-			std::function<bool(Future<AssetType>&)> pollingFunction;
+			std::function<bool(Future<Type>&)> pollingFunction;
             std::swap(pollingFunction, _pollingFunction);
 			lock = {};
 			TRY {
@@ -298,16 +290,16 @@ namespace Assets
 		}
 	}
 
-	template<typename AssetType>
-		bool			Future<AssetType>::IsOutOfDate() const
+	template<typename Type>
+		bool			Future<Type>::IsOutOfDate() const
 	{
 		auto state = _state;
 		if (state == AssetState::Pending) return false;
 		return _actualizedDepVal.GetValidationIndex() > 0;
 	}
 
-	template<typename AssetType>
-		void			Future<AssetType>::SimulateChange()
+	template<typename Type>
+		void			Future<Type>::SimulateChange()
 	{
 		assert(0);
 		/*auto state = _state;
@@ -320,14 +312,14 @@ namespace Assets
 		// else, still pending -- can't do anything right now
 	}
 
-	template<typename AssetType>
-		AssetState		Future<AssetType>::GetAssetState() const
+	template<typename Type>
+		AssetState		Future<Type>::GetAssetState() const
 	{
 		return _state;
 	}
 
-	template<typename AssetType>
-        std::optional<AssetState>   Future<AssetType>::StallWhilePending(std::chrono::milliseconds timeout) const
+	template<typename Type>
+        std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::milliseconds timeout) const
 	{
 		if (Internal::FutureResolution_DeadlockDetection((void*)this)) {
 			// This future is currently in a "resolution moment"
@@ -342,7 +334,7 @@ namespace Assets
 		auto startTime = std::chrono::steady_clock::now();
         auto timeToCancel = startTime + timeout;
 
-		auto* that = const_cast<Future<AssetType>*>(this);	// hack to defeat the "const" on this method
+		auto* that = const_cast<Future<Type>*>(this);	// hack to defeat the "const" on this method
 		std::unique_lock<decltype(that->_lock)> lock(that->_lock);
 
 		// If we have polling function assigned, we have to poll waiting for
@@ -455,8 +447,8 @@ namespace Assets
 		}
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::SetAsset(AssetType&& newAsset, const Blob& log)
+	template<typename Type>
+		void Future<Type>::SetAsset(Type&& newAsset, const Blob& log)
 	{
 		{
 			ScopedLock(_lock);
@@ -477,8 +469,8 @@ namespace Assets
 		_conditional.notify_all();
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::SetAssetForeground(AssetType&& newAsset, const Blob& log)
+	template<typename Type>
+		void Future<Type>::SetAssetForeground(Type&& newAsset, const Blob& log)
 	{
 		// this is intended for "shadowing" assets only; it sets the asset directly into the foreground
 		// asset and goes immediately into ready state
@@ -496,8 +488,8 @@ namespace Assets
 		_conditional.notify_all();
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
+	template<typename Type>
+		void Future<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
 	{
 		assert(depVal);
 		{
@@ -511,8 +503,8 @@ namespace Assets
 		_conditional.notify_all();
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::SetPollingFunction(std::function<bool(Future<AssetType>&)>&& newFunction)
+	template<typename Type>
+		void Future<Type>::SetPollingFunction(std::function<bool(Future<Type>&)>&& newFunction)
 	{
 		// We can often just resolve the polling operation immediately. So go ahead and
 		// execute it now to see if we can resolve the polling operation straight out of the block
@@ -546,8 +538,8 @@ namespace Assets
 		RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::RegisterFrameBarrierCallbackAlreadyLocked()
+	template<typename Type>
+		void Future<Type>::RegisterFrameBarrierCallbackAlreadyLocked()
 	{
 		if (_frameBarrierCallbackMarker)
 			return;
@@ -563,8 +555,8 @@ namespace Assets
 			});
 	}
 
-	template<typename AssetType>
-		void Future<AssetType>::ClearFrameBarrierCallbackAlreadyLocked() const
+	template<typename Type>
+		void Future<Type>::ClearFrameBarrierCallbackAlreadyLocked() const
 	{
 		if (!_frameBarrierCallbackMarker)
 			return;
@@ -573,8 +565,8 @@ namespace Assets
 		_frameBarrierCallbackMarker.reset();
 	}
 
-	template<typename AssetType>
-		Future<AssetType>::Future(Future&& moveFrom)
+	template<typename Type>
+		Future<Type>::Future(Future&& moveFrom)
 	{
 		ScopedLock(moveFrom._lock);
 
@@ -598,8 +590,8 @@ namespace Assets
 			RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
-	template<typename AssetType>
-		Future<AssetType>& Future<AssetType>::operator=(Future&& moveFrom)
+	template<typename Type>
+		Future<Type>& Future<Type>::operator=(Future&& moveFrom)
 	{
 		std::lock(_lock, moveFrom._lock);
         std::lock_guard<Threading::Mutex> lk1(_lock, std::adopt_lock);
@@ -629,8 +621,8 @@ namespace Assets
 		return *this;
 	}
 
-	template<typename AssetType>
-		Future<AssetType>::Future(const std::string& initializer)
+	template<typename Type>
+		Future<Type>::Future(const std::string& initializer)
 	: _initializer(initializer)
 	{
 		// Technically, we're not actually "pending" yet, because no background operation has begun.
@@ -640,8 +632,8 @@ namespace Assets
 		_pendingState = AssetState::Pending;
 	}
 
-	template<typename AssetType>
-		Future<AssetType>::~Future() 
+	template<typename Type>
+		Future<Type>::~Future() 
 	{
 		if (_frameBarrierCallbackMarker)
 			Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);

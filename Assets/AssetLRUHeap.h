@@ -13,8 +13,10 @@ namespace Assets
 		class AssetLRUHeap : public IDefaultAssetHeap
 	{
 	public:
+		using PtrToFuture = std::shared_ptr<Future<AssetType>>;
+		
 		template<typename... Params>
-			PtrToFuturePtr<AssetType> Get(Params...);
+			PtrToFuture Get(Params...);
 
 		void            Clear();
 		uint64_t		GetTypeCode() const;
@@ -28,16 +30,16 @@ namespace Assets
 		AssetLRUHeap& operator=(const AssetLRUHeap&) = delete;
 	private:
 		mutable Threading::Mutex _lock;		
-		LRUCache<FuturePtr<AssetType>> _assets;
+		LRUCache<Future<AssetType>> _assets;
 	};
 
 	template<typename AssetType>
 		template<typename... Params>
-			auto AssetLRUHeap<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
+			auto AssetLRUHeap<AssetType>::Get(Params... initialisers) -> PtrToFuture
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
-		PtrToFuturePtr<AssetType> newFuture;
+		PtrToFuture newFuture;
 		{
 			ScopedLock(_lock);
 
@@ -47,7 +49,7 @@ namespace Assets
 					return existing;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
+			newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
 			_assets.Insert(hash, newFuture);
 		}
 
@@ -55,7 +57,7 @@ namespace Assets
 		// after the future has been constructed but before we complete AutoConstructToFuture, the asset is considered to be
 		// in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
 		// another thread grabs the future before AutoConstructToFuture is done
-		AutoConstructToFuture<AssetType>(*newFuture, std::forward<Params>(initialisers)...);
+		AutoConstructToFuture(*newFuture, std::forward<Params>(initialisers)...);
 		return newFuture;
 	}
 
@@ -70,7 +72,7 @@ namespace Assets
     {
         ScopedLock(_lock);
 		auto heapSize = _assets.GetCacheSize();
-        _assets = LRUCache<FuturePtr<AssetType>> { heapSize };
+        _assets = LRUCache<Future<AssetType>> { heapSize };
     }
 
 	template<typename AssetType>

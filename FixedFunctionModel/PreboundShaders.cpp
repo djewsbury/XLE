@@ -164,7 +164,7 @@ namespace FixedFunctionModel
 			if (!actual)	// invalid or still pending
 				return {};
 
-			auto shr = Entry::MakeBoundShader(actual, techEntry, shaderSelectors, techniqueInterface);
+			auto shr = Entry::MakeBoundShader(*actual, techEntry, shaderSelectors, techniqueInterface);
 			i = boundShaders.insert(i, std::make_pair(base._variationHash, std::move(shr)));
 		}
 		return Entry::AsResolvedShader(i->first, i->second);

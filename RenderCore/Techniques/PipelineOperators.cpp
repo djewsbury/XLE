@@ -50,7 +50,7 @@ namespace RenderCore { namespace Techniques
 				pixelShader,
 				definesTable);
 
-			::Assets::WhenAll(shaderProgram).ThenConstructToFuture<FullViewportOperator>(
+			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
 				future,
 				[usi=usi, pipelineLayout, fbDesc=*fbTarget._fbDesc, subpassIdx=fbTarget._subpassIdx](std::shared_ptr<Metal::ShaderProgram> shader) {
 					auto op = std::make_shared<FullViewportOperator>();

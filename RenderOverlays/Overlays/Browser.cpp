@@ -644,7 +644,7 @@ namespace Overlays
         }
 
 		auto a = res->TryActualize();
-        return std::make_pair(a ? &a->GetShaderResource() : nullptr, hashedName);
+        return std::make_pair(a ? &(*a)->GetShaderResource() : nullptr, hashedName);
     }
 
     bool TextureBrowser::Filter(const std::basic_string<ucs2>& filename)
