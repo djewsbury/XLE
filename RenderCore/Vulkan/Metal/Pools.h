@@ -90,9 +90,7 @@ namespace RenderCore { namespace Metal_Vulkan
     class VulkanRenderPassPool
     {
     public:
-        VulkanSharedPtr<VkRenderPass> CreateVulkanRenderPass(
-            const FrameBufferDesc& layout,
-            TextureSamples samples);
+        VulkanSharedPtr<VkRenderPass> CreateVulkanRenderPass(const FrameBufferDesc& layout);
 
         VulkanRenderPassPool(ObjectFactory& factory);
         VulkanRenderPassPool();

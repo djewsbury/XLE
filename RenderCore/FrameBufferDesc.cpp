@@ -29,11 +29,17 @@ namespace RenderCore
             _hash = HashCombine(_hash, a.CalculateHash());
         for (const auto&sp:_subpasses)
             _hash = HashCombine(_hash, sp.CalculateHash());
+        _hashExcludingDimensions = _hash;
         _hash = HashCombine(_hash, _props.CalculateHash());
+
+        _hashExcludingDimensions =
+            _hashExcludingDimensions
+            ^ (uint64_t(_props._samples._sampleCount) << 48ull)
+            ^ (uint64_t(_props._samples._samplingQuality) << 56ull);
     }
 
 	FrameBufferDesc::FrameBufferDesc()
-    : _hash(0)
+    : _hash(0), _hashExcludingDimensions(0)
     {
     }
 

@@ -59,7 +59,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
     VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
         const Metal_Vulkan::ObjectFactory& factory,
-        const FrameBufferDesc& layout,
-        TextureSamples samples);
+        const FrameBufferDesc& layout);
 
 }}

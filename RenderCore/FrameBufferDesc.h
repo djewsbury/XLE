@@ -138,6 +138,7 @@ namespace RenderCore
         const FrameBufferProperties& GetProperties() const { return _props; }
 
         uint64_t    GetHash() const { return _hash; }
+        uint64_t    GetHashExcludingDimensions() const { return _hashExcludingDimensions; }
 
 		FrameBufferDesc(
             std::vector<AttachmentDesc>&& attachments,
@@ -152,7 +153,7 @@ namespace RenderCore
         std::vector<AttachmentDesc>     _attachments;
         std::vector<SubpassDesc>        _subpasses;
         FrameBufferProperties           _props;
-        uint64_t                        _hash;
+        uint64_t                        _hash, _hashExcludingDimensions;
 	};
 
     union ClearValue

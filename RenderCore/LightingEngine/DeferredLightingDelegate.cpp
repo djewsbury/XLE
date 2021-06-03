@@ -29,6 +29,7 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"
 #include "../Techniques/CommonResources.h"
+#include "../Techniques/Techniques.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/Console.h"
 

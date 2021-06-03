@@ -168,7 +168,8 @@ namespace PlatformRig
                 RenderCore::Techniques::PreregisteredAttachment {
                     RenderCore::Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized
+                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
+                    RenderCore::BindFlag::PresentationSrc
                 });
             stitchingContext._workingProps = RenderCore::FrameBufferProperties { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
             parserContext.GetViewport() = RenderCore::ViewportDesc { 0.f, 0.f, (float)targetDesc._textureDesc._width, (float)targetDesc._textureDesc._height };
@@ -233,6 +234,11 @@ namespace PlatformRig
             if (parserContext._requiredBufferUploadsCommandList)
                 RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(context, parserContext._requiredBufferUploadsCommandList);
 
+            RenderCore::Metal::Internal::SetImageLayout(
+                *RenderCore::Metal::DeviceContext::Get(context), *checked_cast<RenderCore::Metal::Resource*>(presentationTarget.get()),
+                RenderCore::Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                RenderCore::Metal::Internal::ImageLayout::PresentSrc, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
 				context.Present(presChain);
@@ -287,7 +293,8 @@ namespace PlatformRig
                 RenderCore::Techniques::PreregisteredAttachment {
                     RenderCore::Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized
+                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
+                    RenderCore::BindFlag::PresentationSrc
                 });
             _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps);
             _pimpl->_mainOverlayRigTargetConfig = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
@@ -301,7 +308,8 @@ namespace PlatformRig
                 RenderCore::Techniques::PreregisteredAttachment {
                     RenderCore::Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Initialized
+                    RenderCore::Techniques::PreregisteredAttachment::State::Initialized,
+                    RenderCore::BindFlag::RenderTarget
                 });
             _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps);
             _pimpl->_debugScreensTargetConfig = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);

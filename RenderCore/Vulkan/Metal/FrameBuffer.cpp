@@ -112,13 +112,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	static VkImageLayout AsShaderReadLayout(unsigned attachmentUsage)
-	{
-		if (attachmentUsage & unsigned(Internal::AttachmentUsageType::DepthStencil))
-			return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-		return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	}
-
 	static bool HasRetain(LoadStore ls)
 	{
 		return ls == LoadStore::Retain
@@ -154,12 +147,61 @@ namespace RenderCore { namespace Metal_Vulkan
 			dst._aspect = src._aspect;
 	}
 
+	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlags, Internal::AttachmentUsageType::BitField usage)
+	{
+		if (bindFlags == BindFlag::ShaderResource) {
+			// make VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL accessible?
+			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		} else if (bindFlags == BindFlag::TransferSrc) {
+			return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		} else if (bindFlags == BindFlag::TransferDst) {
+			return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		} else if (bindFlags == BindFlag::PresentationSrc) {
+			return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		} else if (bindFlags == BindFlag::RenderTarget) {
+			return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		} else if (bindFlags == BindFlag::DepthStencil) {
+			//
+			// VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+			// VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+			// VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL,
+			// VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+			// VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+			// VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
+			// VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
+			// are not accessible here -- but would it be useful?
+			//
+			return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		} else if (bindFlags != 0) {
+			return VK_IMAGE_LAYOUT_GENERAL;
+		} else {
+			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentUsageType::DepthStencil));
+			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentUsageType::Output));
+			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentUsageType::Input));
+			if (isDepthStencil) {
+				assert(!isColorOutput);
+				if (isAttachmentInput)
+					return VK_IMAGE_LAYOUT_GENERAL;
+				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			} else if (isColorOutput) {
+				if (isAttachmentInput)
+					return VK_IMAGE_LAYOUT_GENERAL;
+				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			} else if (isAttachmentInput) {
+				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			} else {
+				assert(0);
+				return VK_IMAGE_LAYOUT_UNDEFINED;	// no usage, no bind flags
+			}
+		}
+	}
+
 	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
         const Metal_Vulkan::ObjectFactory& factory,
-        const FrameBufferDesc& layout,
-        TextureSamples samples)
+        const FrameBufferDesc& layout)
 	{
 		const auto subpasses = layout.GetSubpasses();
+		auto samples = layout.GetProperties()._samples;
 
 		struct AttachmentUsage
 		{
@@ -244,10 +286,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the VkAttachmentDescription objects
-		std::vector<VkAttachmentDescription> attachmentDesc;
-        attachmentDesc.reserve(workingAttachments.size());
+		std::vector<VkAttachmentDescription> attachmentDescs;
+        attachmentDescs.reserve(workingAttachments.size());
         for (auto&a:workingAttachments) {
-            const auto& resourceDesc = a.second._desc;
+            const auto& attachmentDesc = a.second._desc;
 
 			// We need to look through all of the places we use this attachment to finalize the
 			// format filter
@@ -266,10 +308,10 @@ namespace RenderCore { namespace Metal_Vulkan
             BindFlag::Enum formatUsage = BindFlag::ShaderResource;
             if (a.second._attachmentUsage & Internal::AttachmentUsageType::Output) formatUsage = BindFlag::RenderTarget;
             if (a.second._attachmentUsage & Internal::AttachmentUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
-            auto resolvedFormat = ResolveFormat(resourceDesc._format, formatFilter, formatUsage);
+            auto resolvedFormat = ResolveFormat(attachmentDesc._format, formatFilter, formatUsage);
 
-			LoadStore originalLoad = resourceDesc._loadFromPreviousPhase;
-			LoadStore finalStore = resourceDesc._storeToNextPhase;
+			LoadStore originalLoad = attachmentDesc._loadFromPreviousPhase;
+			LoadStore finalStore = attachmentDesc._storeToNextPhase;
 
             VkAttachmentDescription desc;
             desc.flags = 0;
@@ -281,60 +323,22 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.stencilStoreOp = AsStoreOpStencil(finalStore);
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
-			// If the attachment explicitly requests a specific final layout, let's use that
-			// This needs to mirror the logic for "steady state" layouts for resources
-			//    -- that is, where a resource is used in multiple ways, we will tend to
-			//		default to just the "general" layout
-			// Otherwise we default to keeping the layout that corresponds to how we where
-			// using it in the render pass
-			if (resourceDesc._finalLayout == BindFlag::ShaderResource) {
-				desc.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			} else if (resourceDesc._finalLayout == BindFlag::TransferSrc) {
-				desc.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-				desc.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			} else if (resourceDesc._finalLayout == BindFlag::TransferDst) {
-				desc.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-				desc.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			} else if (resourceDesc._finalLayout == BindFlag::PresentationSrc) {
-				desc.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-				desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			} else if (resourceDesc._finalLayout != 0) {
-				desc.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-				desc.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-			} else {
-				bool isDepthStencil = !!(a.second._attachmentUsage & unsigned(Internal::AttachmentUsageType::DepthStencil));
-				bool isColorOutput = !!(a.second._attachmentUsage & unsigned(Internal::AttachmentUsageType::Output));
-				bool isAttachmentInput = !!(a.second._attachmentUsage & unsigned(Internal::AttachmentUsageType::Input));
-				if (isDepthStencil) {
-					assert(!isColorOutput);
-					desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-					desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-				} else if (isColorOutput) {
-					desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-					desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-				} else if (isAttachmentInput) {
-					desc.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-					desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				} else {
-					assert(0);
-					desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-					desc.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				}
-			}
+			desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			desc.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-			// Just setting the initial layout across the board to "VK_IMAGE_LAYOUT_UNDEFINED" might be
-			// handy here; just not sure what the consequences would be
-			// desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            
-            if (resourceDesc._flags & AttachmentDesc::Flags::Multisampled)
+			// If we're loading or storing the data, we should set the initial and final layouts
+			// If the attachment desc has initial and/or final layout flags, those take precidence
+			// Otherwise 
+			if (HasRetain(attachmentDesc._loadFromPreviousPhase))
+				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, a.second._attachmentUsage);
+
+			if (HasRetain(attachmentDesc._storeToNextPhase))
+				desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, a.second._attachmentUsage);
+
+            if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
                 desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(samples);
 
-            // note --  do we need to set VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL or 
-            //          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL as appropriate for input attachments
-            //          (we should be able to tell this from the subpasses)?
-
-            attachmentDesc.push_back(desc);
+            attachmentDescs.push_back(desc);
         }
 
 
@@ -361,7 +365,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, AsShaderReadLayout(i->second._attachmentUsage)});
+				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
             }
             desc.pInputAttachments = (const VkAttachmentReference*)(beforeInputs+1);
             desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
@@ -372,7 +376,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}); // AsShaderReadLayout(i->second._attachmentUsage)});
+				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
             }
             desc.pColorAttachments = (const VkAttachmentReference*)(beforeOutputs+1);
             desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
@@ -386,7 +390,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
 				desc.pDepthStencilAttachment = (const VkAttachmentReference*)(attachReferences.size()+1);
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL}); // AsShaderReadLayout(i->second._attachmentUsage)});
+				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
@@ -470,25 +474,18 @@ namespace RenderCore { namespace Metal_Vulkan
 			vkDeps.insert(vkDeps.end(), deps.begin(), deps.end());
         }
 
-		// Also create subpass dependencies for every subpass. This is required currently, because we can sometimes
-		// use vkCmdPipelineBarrier with a global memory barrier to push through dynamic constants data. However, this
-		// might defeat some of the key goals of the render pass system!
 		/*
-			Note -- this currently crashes the VK_LAYER_LUNARG_draw_state validation code... But it seems like we need it!
-		for (unsigned c = 0; c<unsigned(subpasses.size()); ++c) {
-			vkDeps.push_back(VkSubpassDependency{
-				c, c, 
-				VK_PIPELINE_STAGE_HOST_BIT,
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-				VK_ACCESS_HOST_WRITE_BIT,
-				VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-				| VK_ACCESS_INDEX_READ_BIT
-				| VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT
-				| VK_ACCESS_UNIFORM_READ_BIT
-				| VK_ACCESS_INPUT_ATTACHMENT_READ_BIT
-				| VK_ACCESS_SHADER_READ_BIT,
-				0});
-		}
+			Vulkan samples tend to setup something like this:
+
+			    // Subpass dependency to wait for wsi image acquired semaphore before starting layout transition
+			VkSubpassDependency subpass_dependency = {};
+			subpass_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+			subpass_dependency.dstSubpass = 0;
+			subpass_dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			subpass_dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			subpass_dependency.srcAccessMask = 0;
+			subpass_dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			subpass_dependency.dependencyFlags = 0;
 		*/
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -497,8 +494,8 @@ namespace RenderCore { namespace Metal_Vulkan
         VkRenderPassCreateInfo rp_info = {};
         rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         rp_info.pNext = nullptr;
-        rp_info.attachmentCount = (uint32_t)attachmentDesc.size();
-        rp_info.pAttachments = attachmentDesc.data();
+        rp_info.attachmentCount = (uint32_t)attachmentDescs.size();
+        rp_info.pAttachments = attachmentDescs.data();
         rp_info.subpassCount = (uint32_t)subpassDesc.size();
         rp_info.pSubpasses = subpassDesc.data();
         rp_info.dependencyCount = (uint32_t)vkDeps.size();
@@ -541,7 +538,7 @@ namespace RenderCore { namespace Metal_Vulkan
         const FrameBufferDesc& fbDesc,
         const INamedAttachments& namedResources)
     {
-		_layout = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc, fbDesc.GetProperties()._samples);
+		_layout = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc);
 
         // We must create the frame buffer, including all views required.
         // We need to order the list of views in VkFramebufferCreateInfo in the

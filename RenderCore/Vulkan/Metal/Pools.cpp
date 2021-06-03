@@ -296,16 +296,14 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
-	VulkanSharedPtr<VkRenderPass> VulkanRenderPassPool::CreateVulkanRenderPass(
-		const FrameBufferDesc& layout,
-		TextureSamples samples)
+	VulkanSharedPtr<VkRenderPass> VulkanRenderPassPool::CreateVulkanRenderPass(const FrameBufferDesc& layout)
 	{
-		auto hash = HashCombine(layout.GetHash(), samples._sampleCount << 8 | samples._samplingQuality);
+		auto hash = layout.GetHashExcludingDimensions();
 		auto i = LowerBound(_cachedRenderPasses, hash);
 		if (i != _cachedRenderPasses.end() && i->first == hash) {
 			return i->second;
 		} else {
-			VulkanSharedPtr<VkRenderPass> newRenderPass = Metal_Vulkan::CreateVulkanRenderPass(*_factory, layout, samples);
+			VulkanSharedPtr<VkRenderPass> newRenderPass = Metal_Vulkan::CreateVulkanRenderPass(*_factory, layout);
 			_cachedRenderPasses.insert(i, std::make_pair(hash, newRenderPass));
 			return newRenderPass;
 		}

@@ -116,7 +116,6 @@ namespace RenderCore { namespace Techniques
             std::string _log;
         };
 
-        StitchResult TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment);
         StitchResult TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments);
 
         void UpdateAttachments(const StitchResult& res);
@@ -128,6 +127,7 @@ namespace RenderCore { namespace Techniques
         ~FragmentStitchingContext();
     private:
         std::vector<PreregisteredAttachment> _workingAttachments;
+        StitchResult TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment);
     };
 
     struct MergeFragmentsResult

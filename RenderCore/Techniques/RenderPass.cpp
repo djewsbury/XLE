@@ -546,7 +546,7 @@ namespace RenderCore { namespace Techniques
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
-        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(layout);
+        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
         *this = RenderPassInstance { context, parsingContext, stitchResult, beginInfo };
     }
 
@@ -1171,9 +1171,11 @@ namespace RenderCore { namespace Techniques
         _textureDesc = attachment._desc._textureDesc;
         _state = attachment._state;
         if (_state == PreregisteredAttachment::State::Initialized
+            || _state == PreregisteredAttachment::State::Initialized_StencilUninitialized
             || _state == PreregisteredAttachment::State::Uninitialized_StencilInitialized)
             _containsDataForSemantic = attachment._semantic;
         _shouldReceiveDataForSemantic = attachment._semantic;
+        _firstAccessInitialLayout = attachment._layoutFlags;
     }
 
     static TextureDesc MakeTextureDesc(
@@ -1328,7 +1330,7 @@ namespace RenderCore { namespace Techniques
         return IsCompatible(testAttachment._desc._textureDesc, MakeTextureDesc(request, fbProps));
     }
 
-    auto FragmentStitchingContext::TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment) -> StitchResult
+    auto FragmentStitchingContext::TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment) -> StitchResult
     {
         // Match the attachment requests to the given fragment to our list of working attachments
         // in order to fill out a full specified attachment list. Also update the preregistered
@@ -1409,6 +1411,7 @@ namespace RenderCore { namespace Techniques
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
                     desc._state = PreregisteredAttachment::State::Initialized;
+                    desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._newLayout;
                     DefineAttachment(desc);
                     break;
                 }
@@ -1416,6 +1419,7 @@ namespace RenderCore { namespace Techniques
                 {
                     auto desc = stitchResult._fullAttachmentDescriptions[aIdx];
                     desc._state = PreregisteredAttachment::State::Initialized;
+                    desc._layoutFlags = stitchResult._attachmentTransforms[aIdx]._newLayout;
                     DefineAttachment(desc);
                     break;
                 }
@@ -1429,7 +1433,7 @@ namespace RenderCore { namespace Techniques
     auto FragmentStitchingContext::TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments) -> StitchResult
     {
         auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, _workingProps);
-        auto stitched = TryStitchFrameBufferDesc(merged._mergedFragment);
+        auto stitched = TryStitchFrameBufferDescInternal(merged._mergedFragment);
         stitched._log = merged._log;
         return stitched;
     }
@@ -1731,7 +1735,8 @@ namespace RenderCore { namespace Techniques
                     newState._hasBeenAccessed = true;
                     newState._firstAccessSemantic = interfaceAttachment.GetInputSemanticBinding();
                     newState._firstAccessLoad = interfaceAttachment._desc._loadFromPreviousPhase;
-                    newState._firstAccessInitialLayout = interfaceAttachment._desc._initialLayout;
+                    if (interfaceAttachment._desc._initialLayout)       // otherwise inherit from what we set from the PreregisteredAttachment
+                        newState._firstAccessInitialLayout = interfaceAttachment._desc._initialLayout;
                 }
 
                 if (directionFlags & DirectionFlags::WritesData) {
@@ -1912,9 +1917,7 @@ namespace RenderCore { namespace Techniques
 
     static BindFlag::BitField CalculateBindFlags(const FrameBufferDescFragment& fragment, unsigned attachmentName)
     {
-        BindFlag::BitField result = 
-            fragment._attachments[attachmentName]._desc._initialLayout
-            | fragment._attachments[attachmentName]._desc._finalLayout;
+        BindFlag::BitField result = 0;
         for (const auto& spDesc:fragment._subpasses) {
             for (const auto& r:spDesc.GetOutputs())
                 if (r._resourceName == attachmentName)

@@ -230,7 +230,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		const auto& samples = fbDesc.GetProperties()._samples;
 		_renderPassConfigurationHash = HashCombine(fbDesc.GetSubpasses()[subPass].CalculateHash(), (samples._samplingQuality << 8) | samples._sampleCount);
-		_currentRenderPass = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc, fbDesc.GetProperties()._samples);
+		_currentRenderPass = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc);
 		_currentTextureSamples = fbDesc.GetProperties()._samples;
 		_currentSubpassIndex = subPass;
 	}

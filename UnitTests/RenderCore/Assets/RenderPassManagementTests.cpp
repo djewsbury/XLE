@@ -86,7 +86,7 @@ namespace UnitTests
 
 			for (auto& sp:subpass) fragment.AddSubpass(std::move(sp));
 
-			auto stitched = stitchingContext.TryStitchFrameBufferDesc(fragment);
+			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1));
 			(void)stitched;
 
 			RenderPassInstance rpi{
