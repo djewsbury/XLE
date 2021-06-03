@@ -406,8 +406,9 @@ namespace UnitTests
 			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSet(*descriptorSetAccelerator);
 			descriptorSetFuture->StallWhilePending();
 			auto descriptorSet = descriptorSetFuture->Actualize();
-			auto* bindingInfo = pipelineAcceleratorPool->TryGetBindingInfo(*descriptorSetAccelerator);
-			REQUIRE(bindingInfo);
+			auto* descSet = pipelineAcceleratorPool->TryGetDescriptorSet(*descriptorSetAccelerator);
+			REQUIRE(descSet);
+			auto* bindingInfo = &descSet->_bindingInfo;
 
 			// we should have 2 constant buffers and no shader resources
 			auto materialUniformsI = std::find_if(bindingInfo->_slots.begin(), bindingInfo->_slots.end(), [](const auto& slot) { return slot._layoutName == "MaterialUniforms"; });
@@ -509,8 +510,9 @@ namespace UnitTests
 
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				RequireReady(*descriptorSetFuture);
-				auto* bindingInfo = pipelineAcceleratorPool->TryGetBindingInfo(*descriptorSetAccelerator);
-				REQUIRE(bindingInfo);
+				auto* descSet = pipelineAcceleratorPool->TryGetDescriptorSet(*descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				auto boundTextureI = std::find_if(bindingInfo->_slots.begin(), bindingInfo->_slots.end(), [](const auto& slot) { return slot._layoutName == "BoundTexture"; });
 				REQUIRE(boundTextureI != bindingInfo->_slots.end());
 				REQUIRE(boundTextureI->_layoutSlotType == DescriptorType::SampledTexture);
@@ -612,8 +614,9 @@ namespace UnitTests
 				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSet(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				RequireReady(*descriptorSetFuture);
-				auto* bindingInfo = pipelineAcceleratorPool->TryGetBindingInfo(*descriptorSetAccelerator);
-				REQUIRE(bindingInfo);
+				auto* descSet = pipelineAcceleratorPool->TryGetDescriptorSet(*descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				REQUIRE(bindingInfo->_slots.size() > 0);
 				
 				{
@@ -665,8 +668,9 @@ namespace UnitTests
 				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSet(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				RequireReady(*descriptorSetFuture);
-				auto* bindingInfo = pipelineAcceleratorPool->TryGetBindingInfo(*descriptorSetAccelerator);
-				REQUIRE(bindingInfo);
+				auto* descSet = pipelineAcceleratorPool->TryGetDescriptorSet(*descriptorSetAccelerator);
+				REQUIRE(descSet);
+				auto* bindingInfo = &descSet->_bindingInfo;
 				REQUIRE(bindingInfo->_slots.size() > 0);
 
 				// If we try to create another accelerator with the same settings, we'll get the same

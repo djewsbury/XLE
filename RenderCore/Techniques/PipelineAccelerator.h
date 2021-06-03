@@ -84,8 +84,7 @@ namespace RenderCore { namespace Techniques
 		virtual const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 
 		virtual const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);

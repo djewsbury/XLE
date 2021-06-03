@@ -21,6 +21,8 @@
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/SubFrameEvents.h"
 #include "../RenderCore/Techniques/Techniques.h"
+#include "../RenderCore/Techniques/Services.h"
+#include "../BufferUploads/IBufferUploads.h"
 
 #include "../OSServices/Log.h"
 #include "../OSServices/TimeUtils.h"
@@ -227,6 +229,9 @@ namespace PlatformRig
 
             if (_subFrameEvents)
                 _subFrameEvents->_onPrePresent.Invoke(context);
+
+            if (parserContext._requiredBufferUploadsCommandList)
+                RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(context, parserContext._requiredBufferUploadsCommandList);
 
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);

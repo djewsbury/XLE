@@ -189,6 +189,8 @@ namespace BufferUploads
         virtual void                    Update  (RenderCore::IThreadContext& immediateContext) = 0;
             /// @}
 
+        virtual void                    StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id) = 0;
+
             /// \name Utilities, profiling & debugging
             /// @{
 

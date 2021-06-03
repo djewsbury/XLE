@@ -6,6 +6,7 @@
 #include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/Metal/DeviceContext.h"
+#include "../RenderCore/Vulkan/IDeviceVulkan.h"
 #include "../OSServices/TimeUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
@@ -85,8 +86,15 @@ namespace BufferUploads
                 }
 
                 commandList->_commitStep.CommitToImmediate_PreCommandList(commitTo);
-                if (commandList->_deviceCommandList)
-                    immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+                if (commandList->_deviceCommandList) {
+                    auto* deviceVulkan = (RenderCore::IThreadContextVulkan*)commitTo.QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
+                    if (deviceVulkan) {
+                        deviceVulkan->CommitPrimaryCommandBufferToQueue(*commandList->_deviceCommandList);
+                        commandList->_deviceCommandList = {};
+                    } else {
+                        immContext->ExecuteCommandList(std::move(*commandList->_deviceCommandList));
+                    }
+                }
                 commandList->_commitStep.CommitToImmediate_PostCommandList(commitTo);
                 _commandListIDCommittedToImmediate = std::max(_commandListIDCommittedToImmediate, commandList->_id);
             

@@ -1898,6 +1898,14 @@ namespace BufferUploads
         return id <= MainContext()->CommandList_GetCommittedToImmediate();
     }
 
+    void                    Manager::StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id)
+    {
+        while (!IsComplete(id)) {
+            Update(immediateContext);
+            std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
+        }
+    }
+
     CommandListMetrics      Manager::PopMetrics()
     {
         CommandListMetrics result = _backgroundContext->PopMetrics();

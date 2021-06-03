@@ -708,8 +708,7 @@ namespace RenderCore { namespace Techniques
 		const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 
 		const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
-		const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
-		const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const override;
+		const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 
 		void			SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
@@ -793,18 +792,9 @@ namespace RenderCore { namespace Techniques
 		return accelerator._descriptorSet;
 	}
 
-	const IDescriptorSet* PipelineAcceleratorPool::TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const
+	const ActualizedDescriptorSet* PipelineAcceleratorPool::TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const
 	{
-		auto* t = accelerator._descriptorSet->TryActualize();
-		return t ? t->_descriptorSet.get() : nullptr;
-	}
-
-	const DescriptorSetBindingInfo* PipelineAcceleratorPool::TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const
-	{
-		if (!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo))
-			return nullptr;
-		auto* t = accelerator._descriptorSet->TryActualize();
-		return t ? &t->_bindingInfo : nullptr;
+		return accelerator._descriptorSet->TryActualize();
 	}
 
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(

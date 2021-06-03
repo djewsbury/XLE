@@ -123,9 +123,11 @@ namespace RenderCore { namespace Techniques
 
 			const IDescriptorSet* matDescSet = nullptr;
 			if (drawable._descriptorSet) {
-				matDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-				if (!matDescSet)
+				auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
+				if (!actualizedDescSet)
 					continue;
+				matDescSet = actualizedDescSet->GetDescriptorSet().get();
+				parserContext._requiredBufferUploadsCommandList = std::max(parserContext._requiredBufferUploadsCommandList, actualizedDescSet->GetCompletionCommandList());
 			}
 
 			////////////////////////////////////////////////////////////////////////////// 
