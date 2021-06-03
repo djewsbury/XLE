@@ -44,7 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		BitHeap _fenceAllocationFlags;								// protected by _queueThreadId
 		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _queueThreadId
 
-		std::vector<unsigned> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
+		std::vector<std::pair<unsigned, std::chrono::steady_clock::time_point>> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
 		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
 		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
 		Threading::Mutex _trackersWritingCommandsLock;

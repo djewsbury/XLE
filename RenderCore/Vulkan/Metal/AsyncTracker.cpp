@@ -17,12 +17,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (_initialMarker) {
 			// special case to ensure that the initial marker actually gets submitted (or abandoned) by something
 			assert(_currentProducerFrameMarker == 1);
-			_trackersWritingCommands.push_back(_currentProducerFrameMarker);
+			_trackersWritingCommands.push_back({_currentProducerFrameMarker, std::chrono::steady_clock::now()});
 			_initialMarker = false;
 			return _currentProducerFrameMarker;
 		} else {
 			auto result = ++_currentProducerFrameMarker;
-			_trackersWritingCommands.push_back(result);
+			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now()});
 			return result;
 		}
 	}
@@ -58,13 +58,31 @@ namespace RenderCore { namespace Metal_Vulkan
 					break;
 			}
 		} else {
+			if (_trackersSubmittedPendingOrdering.size() > 16) {
+				Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
+				Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
+			}
 			_trackersSubmittedPendingOrdering.push_back(tracker);
+		}
+
+		{
+			ScopedLock(_trackersWritingCommandsLock);
+			auto i = std::find_if(
+				_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
+				[marker](const auto& c) { return c.first == marker; });
+			assert(i != _trackersWritingCommands.end());
+			_trackersWritingCommands.erase(i);
 		}
 	}
 
 	void FenceBasedTracker::AbandonMarker(Marker marker)
 	{
 		ScopedLock(_trackersWritingCommandsLock);
+		auto i = std::find_if(
+			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
+			[marker](const auto& c) { return c.first == marker; });
+		assert(i != _trackersWritingCommands.end());
+		_trackersWritingCommands.erase(i);
 		_trackersPendingAbandon.push_back(marker);
 	}
 
@@ -91,6 +109,10 @@ namespace RenderCore { namespace Metal_Vulkan
 						break;
 				}
 			} else {
+				if (_trackersSubmittedPendingOrdering.size() > 16) {
+					Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
+					Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
+				}
 				_trackersSubmittedPendingOrdering.push_back(tracker);
 			}
 		}
@@ -154,6 +176,20 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else {
 				assert(0);
 				break;
+			}
+		}
+
+		// Check for command lists in the "writing commands" state for a long period 
+		{
+			ScopedLock(_trackersWritingCommandsLock);
+			const auto warningAge = std::chrono::seconds(1);
+			if (!_trackersWritingCommands.empty()) {
+				auto age = std::chrono::steady_clock::now() - _trackersWritingCommands.begin()->second;
+				if (age > warningAge) {
+					Log(Warning) << "Command list (" << _trackersWritingCommands.begin()->first << ") has been in the writing state for (" << std::chrono::duration_cast<std::chrono::seconds>(age).count() << ") seconds." << std::endl;
+					Log(Warning) << "Command lists that say in this state for a long time reduce destruction queue efficiency. GPU objects cannot be destroyed until all command lists that were present during the object's lifetime have completed" << std::endl;
+					Log(Warning) << "So even single command lists that stay in the writing state will prevent all objects from being destroyed" << std::endl;
+				}
 			}
 		}
 	}
