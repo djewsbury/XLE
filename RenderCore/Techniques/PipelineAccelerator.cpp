@@ -666,7 +666,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator
 	{
 	public:
-		::Assets::PtrToFuturePtr<RenderCore::IDescriptorSet> _descriptorSet;
+		std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 	};
 
@@ -707,7 +707,7 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 		const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 
-		const ::Assets::PtrToFuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
+		const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const override;
 
@@ -788,24 +788,23 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
-	const ::Assets::PtrToFuturePtr<IDescriptorSet>& PipelineAcceleratorPool::GetDescriptorSet(DescriptorSetAccelerator& accelerator) const
+	const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& PipelineAcceleratorPool::GetDescriptorSet(DescriptorSetAccelerator& accelerator) const
 	{
 		return accelerator._descriptorSet;
 	}
 
 	const IDescriptorSet* PipelineAcceleratorPool::TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const
 	{
-		auto* t= accelerator._descriptorSet->TryActualize();
-		return t ? t->get() : nullptr;
+		auto* t = accelerator._descriptorSet->TryActualize();
+		return t ? t->_descriptorSet.get() : nullptr;
 	}
 
 	const DescriptorSetBindingInfo* PipelineAcceleratorPool::TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const
 	{
 		if (!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo))
 			return nullptr;
-		if (accelerator._descriptorSet->GetAssetState() == ::Assets::AssetState::Ready)
-			return &accelerator._bindingInfo;
-		return nullptr;
+		auto* t = accelerator._descriptorSet->TryActualize();
+		return t ? &t->_bindingInfo : nullptr;
 	}
 
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
@@ -956,7 +955,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto result = std::make_shared<DescriptorSetAccelerator>();
-		result->_descriptorSet = std::make_shared<::Assets::FuturePtr<IDescriptorSet>>("descriptorset-accelerator");
+		result->_descriptorSet = std::make_shared<::Assets::Future<ActualizedDescriptorSet>>("descriptorset-accelerator");
 
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
 		metalSamplers.reserve(samplerBindings.size());
@@ -976,19 +975,17 @@ namespace RenderCore { namespace Techniques
 					resourceBindings,
 					MakeIteratorRange(metalSamplers),
 					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
-					(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo) ? &result->_bindingInfo : nullptr);
+					!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 			} else {
 				ParameterBox constantBindingsCopy = constantBindings;
 				ParameterBox resourceBindingsCopy = resourceBindings;
 
 				std::weak_ptr<IDevice> weakDevice = _device;
-				std::shared_ptr<DescriptorSetAccelerator> bindingInfoHolder;
-				if (_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo)
-					bindingInfoHolder = result;
+				bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
 					*result->_descriptorSet,
-					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, bindingInfoHolder](
-						::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
+					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, generateBindingInfo](
+						::Assets::Future<ActualizedDescriptorSet>& future,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
 						auto d = weakDevice.lock();
@@ -1002,7 +999,7 @@ namespace RenderCore { namespace Techniques
 							resourceBindingsCopy,
 							MakeIteratorRange(metalSamplers),
 							patchCollection->GetInterface().GetMaterialDescriptorSet(),
-							bindingInfoHolder ? &bindingInfoHolder->_bindingInfo : nullptr);
+							generateBindingInfo);
 					});
 			}
 		} else {
@@ -1013,7 +1010,7 @@ namespace RenderCore { namespace Techniques
 				resourceBindings,
 				MakeIteratorRange(metalSamplers),
 				*_matDescSetLayout.GetLayout(),
-				(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo) ? &result->_bindingInfo : nullptr);
+				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 		}
 
 		if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {

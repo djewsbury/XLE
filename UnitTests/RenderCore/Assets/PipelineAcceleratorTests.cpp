@@ -14,6 +14,7 @@
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
+#include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Metal/State.h"
@@ -173,7 +174,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::FuturePtr<Type>& future)
+		void RequireReady(::Assets::Future<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
@@ -329,7 +330,7 @@ namespace UnitTests
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
 
-	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::FuturePtr<RenderCore::IDescriptorSet>& descriptorSetFuture)
+	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<RenderCore::Techniques::ActualizedDescriptorSet>& descriptorSetFuture)
 	{
 		// If we're running buffer uploads in single thread mode, we need to pump it while
 		// waiting for the descriptor set
@@ -517,7 +518,7 @@ namespace UnitTests
 				REQUIRE(!boundTextureI->_binding.empty());
 				
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize().get());
+				RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize()._descriptorSet.get());
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -617,7 +618,7 @@ namespace UnitTests
 				
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
-					RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize().get());
+					RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize()._descriptorSet.get());
 				}
 
 				auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);

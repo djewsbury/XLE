@@ -14,6 +14,7 @@
 #include "../BufferView.h"
 #include "../UniformsStream.h"
 #include "../StateDesc.h"
+#include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/ParameterBox.h"
@@ -21,13 +22,13 @@
 namespace RenderCore { namespace Techniques 
 {
 	void ConstructDescriptorSet(
-		::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
+		::Assets::Future<ActualizedDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
-		DescriptorSetBindingInfo* bindingInfo)
+		bool generateBindingInfo)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
 
@@ -51,14 +52,14 @@ namespace RenderCore { namespace Techniques
 			std::vector<Slot> _slots;
 
 			DescriptorSetSignature _signature;
+			DescriptorSetBindingInfo _bindingInfo;
 		};
 		DescriptorSetInProgress working;
 		working._slots.reserve(layout._slots.size());
 		working._signature._slots.reserve(working._slots.size());
-		if (bindingInfo) {
-			bindingInfo->_slots.clear();
-			bindingInfo->_slots.reserve(working._slots.size());
-		}
+		if (generateBindingInfo)
+			working._bindingInfo._slots.reserve(working._slots.size());
+
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
 			DescriptorSetInProgress::Slot slotInProgress;
@@ -83,7 +84,7 @@ namespace RenderCore { namespace Techniques
 				working._resources.push_back(res);
 				gotBinding = true;
 
-				if (bindingInfo)
+				if (generateBindingInfo)
 					slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "DeferredShaderResource: " << boundResource.value()).AsString();
 
 			} else if (s._type == DescriptorType::UniformBuffer && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
@@ -102,7 +103,7 @@ namespace RenderCore { namespace Techniques
 				working._resources.push_back(res);
 				gotBinding = true;
 
-				if (bindingInfo) {
+				if (generateBindingInfo) {
 					std::stringstream str;
 					cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
 					slotBindingInfo._binding = str.str();
@@ -115,7 +116,7 @@ namespace RenderCore { namespace Techniques
 					working._samplers.push_back(i->second);
 					gotBinding = true;
 
-					if (bindingInfo)
+					if (generateBindingInfo)
 						slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << i->second->GetDesc()).AsString();
 				}
 			} 
@@ -124,19 +125,20 @@ namespace RenderCore { namespace Techniques
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::Empty;
 			working._signature._slots.push_back(DescriptorSlot{s._type});
 			working._slots.push_back(slotInProgress);
-			if (bindingInfo) {
+			if (generateBindingInfo) {
 				slotBindingInfo._bindType = slotInProgress._bindType;
-				bindingInfo->_slots.push_back(slotBindingInfo);
+				working._bindingInfo._slots.push_back(slotBindingInfo);
 			}
 		}
 
 		future.SetPollingFunction(
-			[working, device](::Assets::FuturePtr<RenderCore::IDescriptorSet>& thatFuture) -> bool {
+			[working, device](::Assets::Future<ActualizedDescriptorSet>& thatFuture) -> bool {
 
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
 				subDepVals.reserve(working._resources.size());
+				BufferUploads::CommandListID completionCommandList = BufferUploads::CommandListID_Invalid;
 
 				// Construct the final descriptor set; even if we got some (or all) invalid assets
 				for (const auto&d:working._resources) {
@@ -149,6 +151,14 @@ namespace RenderCore { namespace Techniques
 							return true;		// keep waiting
 						} else if (status == ::Assets::AssetState::Ready) {
 							finalResources.push_back(actualized->GetShaderResource());
+
+							auto resCmdList = actualized->GetCompletionCommandList();
+							if (resCmdList != BufferUploads::CommandListID_Invalid) {
+								if (completionCommandList == BufferUploads::CommandListID_Invalid) {
+									completionCommandList = resCmdList;
+								} else  
+									completionCommandList = std::max(resCmdList, completionCommandList);
+							}
 						} else {
 							// If any subassets fail, we consider the entire descriptor set to be invalid
 							// We'll return, and propagate the actualization log back
@@ -187,8 +197,12 @@ namespace RenderCore { namespace Techniques
 				initializer._bindItems._samplers = MakeIteratorRange(samplers);
 				initializer._signature = &working._signature;
 
-				auto finalDescriptorSet = device->CreateDescriptorSet(initializer);
-				thatFuture.SetAsset(std::move(finalDescriptorSet), {});
+				ActualizedDescriptorSet actualized;
+				actualized._descriptorSet = device->CreateDescriptorSet(initializer);
+				actualized._depVal = std::move(depVal);
+				actualized._bindingInfo = std::move(working._bindingInfo);
+				actualized._completionCommandList = completionCommandList;
+				thatFuture.SetAsset(std::move(actualized), {});
 				return false;
 			});
 	}

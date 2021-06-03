@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Services.h"
+#include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Format.h"
@@ -362,7 +363,7 @@ namespace UnitTests
 			descSetFuture->StallWhilePending();
 			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
 			REQUIRE(descSetFuture->GetAssetState() == ::Assets::AssetState::Ready);
-			descriptorSet = descSetFuture->Actualize();
+			descriptorSet = descSetFuture->Actualize().GetDescriptorSet();
 			REQUIRE(descriptorSet != nullptr);
 		}
 
@@ -618,6 +619,8 @@ namespace UnitTests
 				thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 				auto textureLoader0 = techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
 				auto textureLoader1 = techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
+				std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
+				techniqueServices->SetBufferUploads(bufferUploads);
 
 				static const char sphericalCollectionFragments[] = R"--(
 				main=~

@@ -16,6 +16,7 @@
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/SequencerDescriptorSet.h"
+#include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/Format.h"
@@ -91,7 +92,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::FuturePtr<Type>& descriptorSetFuture)
+		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<Type>& descriptorSetFuture)
 	{
 		// If we're running buffer uploads in single thread mode, we need to pump it while
 		// waiting for the descriptor set
@@ -113,7 +114,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::FuturePtr<Type>& future)
+		void RequireReady(::Assets::Future<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);

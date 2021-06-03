@@ -31,6 +31,7 @@ namespace RenderCore { namespace Techniques
 	class SequencerConfig;
 	class ITechniqueDelegate;
 	class DescriptorSetLayoutAndBinding;
+	class ActualizedDescriptorSet;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -82,7 +83,7 @@ namespace RenderCore { namespace Techniques
 		virtual const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 		virtual const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 
-		virtual const ::Assets::PtrToFuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const = 0;
 

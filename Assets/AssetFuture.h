@@ -96,7 +96,7 @@ namespace Assets
 			decltype(std::declval<Type>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
 
 		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
-			decltype((*std::declval<Type>()).GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return (*asset).GetDependencyValidation(); }
+			DependencyValidation GetDependencyValidation(const Type& asset) { return asset ? (*asset).GetDependencyValidation() : DependencyValidation{}; }
 
 		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && !HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
 			inline const DependencyValidation& GetDependencyValidation(const Type&) { static DependencyValidation dummy; return dummy; }
@@ -455,10 +455,7 @@ namespace Assets
 			_pending = std::move(newAsset);
 			_pendingState = AssetState::Ready;
 			_pendingActualizationLog = log;
-			if (_pending) {
-				_pendingDepVal = Internal::GetDependencyValidation(_pending);
-			} else
-				_pendingDepVal = {};
+			_pendingDepVal = Internal::GetDependencyValidation(_pending);
 			RegisterFrameBarrierCallbackAlreadyLocked();
 
 			// If we are already in invalid / ready state, we will never move the pending
@@ -494,7 +491,7 @@ namespace Assets
 		assert(depVal);
 		{
 			ScopedLock(_lock);
-			_pending = nullptr;
+			_pending = {};
 			_pendingState = AssetState::Invalid;
 			_pendingActualizationLog = log;
 			_pendingDepVal = std::move(depVal);
@@ -533,7 +530,7 @@ namespace Assets
 		ScopedLock(_lock);
 		assert(!_pollingFunction);
 		assert(_state == AssetState::Pending);
-		assert(_pendingState == AssetState::Pending && !_pending);
+		assert(_pendingState == AssetState::Pending);
 		_pollingFunction = std::move(newFunction);
 		RegisterFrameBarrierCallbackAlreadyLocked();
 	}

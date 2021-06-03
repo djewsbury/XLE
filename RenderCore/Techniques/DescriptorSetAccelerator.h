@@ -12,6 +12,7 @@
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 namespace RenderCore { class IDevice; class IDescriptorSet; }
 namespace Utility { class ParameterBox; }
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -33,13 +34,26 @@ namespace RenderCore { namespace Techniques
 		std::vector<Slot> _slots;
 	};
 
+	class ActualizedDescriptorSet
+	{
+	public:
+		const std::shared_ptr<RenderCore::IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+
+		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
+		DescriptorSetBindingInfo _bindingInfo;
+		BufferUploads::CommandListID _completionCommandList;
+		::Assets::DependencyValidation _depVal;
+	};
+
 	void ConstructDescriptorSet(
-		::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
+		::Assets::Future<ActualizedDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
-		DescriptorSetBindingInfo* bindingInfo = nullptr);
+		bool generateBindingInfo = false);
 
 }}

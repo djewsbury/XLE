@@ -89,7 +89,7 @@ namespace UnitTests
 	};
 
 	template<typename Type>
-		void RequireReady(::Assets::FuturePtr<Type>& future)
+		void RequireReady(::Assets::Future<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
