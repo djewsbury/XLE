@@ -257,6 +257,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     break;
                 }
 
+            for (size_t c=influenceCount; c<AbsoluteMaxJointInfluenceCount; ++c) {
+                normalizedWeights[c] = 0;
+                jointIndices[c] = 0;
+            }
+
                 //
                 // \todo -- should we sort influcences by the strength of the influence, or by the joint
                 //          index?

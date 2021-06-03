@@ -418,7 +418,6 @@ namespace UnitTests
 		visCamera._bottom = -100.f;
 
 		RenderCore::Techniques::CameraDesc sceneCamera;
-//        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-40.0f, 10.0f, -40.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{-5.0f, 10.0f, -5.0f});
         sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-25.0f, 10.0f, -25.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
         sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
 		sceneCamera._nearClip = 0.05f;
@@ -428,6 +427,7 @@ namespace UnitTests
  		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
 // 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
 //		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
+//		const Float3 negativeLightDirection = Normalize(Float3{-2.69884f, 0.696449f, -2.16482f});
 
 		testHelper->BeginFrameCapture();
 

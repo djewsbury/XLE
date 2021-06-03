@@ -2,6 +2,7 @@
 get_filename_component(XLE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../" ABSOLUTE)
 get_filename_component(FOREIGN_DIR "${XLE_DIR}/Foreign/" ABSOLUTE)
 get_filename_component(XLE_MAIN_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
+get_filename_component(XLE_BINARY_OUTPUT_DIR "${XLE_DIR}/Finals_Debug64/" ABSOLUTE)
 
 # See https://stackoverflow.com/questions/375913/how-can-i-profile-c-code-running-on-linux for some examples of methods to profile
 # on linux, including tools that can interpret the -pg instrumentation output

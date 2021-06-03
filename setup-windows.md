@@ -6,7 +6,8 @@ If you haven't set up a windows dev environment like this before; you'll probabl
 
 Brief install instructions for windows (using clang & vscode)
 * install vscode
-* install llvm for windows (I'm using 11.0.0, win64) from https://releases.llvm.org/download.html
+* install llvm for windows (I'm using 11.0.0, win64) from https://releases.llvm.org/download.html (you must add LLVM to the path during installation; because otherwise CMake Tools & CMake can't find llvm-rc -- somewhat oddly and surprisingly)
+    - or use "choco install llvm"
 * install cmake (I used choco install cmake)
 * change vscode settings to point to cmake executable location
 * install ninja (I used choco install ninja)
@@ -35,3 +36,11 @@ For RenderCore you'll need a little more
 * install java jre (choco install javaruntime)
 
 * install vulkan sdk: https://vulkan.lunarg.com/sdk/home. You'll also need the "Additional SDK components" (unzip into the same SDK directory, this the debug libs). Debug libs are required to against debug XLE components because of the iterator debugging functionality in the MSVC standard library
+
+Some optional changes that make things a little bit nicer:
+* set cmake build directory to ${workspaceFolder}/build/${buildType}  ("cmake.buildDirectory": "${workspaceFolder}/build/${buildType}")
+* "choco install ccls" and install ccls vscode extension. also consider setting the following in settings.json:
+    - "C_Cpp.autocomplete": "Disabled",
+    - "C_Cpp.formatting": "Disabled",
+    - "C_Cpp.errorSquiggles": "Disabled",
+    - "C_Cpp.intelliSenseEngine": "Disabled"

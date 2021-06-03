@@ -30,6 +30,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         TextureLoaders.cpp
         SequencerDescriptorSet.cpp
         PipelineCollection.cpp
+        ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers
         Apparatuses.h

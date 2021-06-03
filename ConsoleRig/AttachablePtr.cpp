@@ -343,7 +343,7 @@ namespace ConsoleRig
 				for (auto i = 0u; i < (cbNeeded / sizeof(HMODULE)); i++) {
 					TCHAR szModName[MAX_PATH];
 					if (GetModuleFileNameEx(currentProcess, hMods[i], szModName, sizeof(szModName) / sizeof(TCHAR))) {
-						if (XlFindString(szModName, "GUILayer")) {
+						if (XlFindString(szModName, "XLEBridgeUtils")) {
 							realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(hMods[i], "RealCrossModuleGetInstance");
 							if (realGetInstance) break;
 						}
@@ -351,8 +351,10 @@ namespace ConsoleRig
 				}
 			}
 
-			auto fallbackModule = GetModuleHandleA("GUILayerVulkan");
-			realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(fallbackModule, "RealCrossModuleGetInstance");
+			if (!realGetInstance) {
+				auto fallbackModule = GetModuleHandleA("GUILayerVulkan");
+				realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(fallbackModule, "RealCrossModuleGetInstance");
+			}
 
 			if (!realGetInstance)
 				Throw(std::runtime_error("CrossModule instance not detected in host process"));

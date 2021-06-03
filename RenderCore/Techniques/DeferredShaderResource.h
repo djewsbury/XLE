@@ -49,7 +49,7 @@ namespace RenderCore { namespace Techniques
     {
     public:
 		const std::shared_ptr<IResourceView>&   GetShaderResource() const			{ return _srv; }
-        const ::Assets::DependencyValidation&				GetDependencyValidation() const     { return _depVal; }
+        const ::Assets::DependencyValidation&   GetDependencyValidation() const     { return _depVal; }
 		StringSection<>							Initializer() const					{ return MakeStringSection(_initializer); }
         BufferUploads::CommandListID            GetCompletionCommandList() const    { return _completionCommandList; }
 
