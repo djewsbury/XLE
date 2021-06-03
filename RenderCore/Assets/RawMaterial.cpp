@@ -411,7 +411,7 @@ namespace RenderCore { namespace Assets
 	static bool IsMaterialFile(StringSection<::Assets::ResChar> extension) { return XlEqStringI(extension, "material") || XlEqStringI(extension, "hlsl"); }
 
 	void RawMaterial::ConstructToFuture(
-		::Assets::AssetFuture<RawMaterial>& future,
+		::Assets::FuturePtr<RawMaterial>& future,
 		StringSection<::Assets::ResChar> initializer)
 	{
 		// If we're loading from a .material file, then just go head and use the
@@ -425,7 +425,7 @@ namespace RenderCore { namespace Assets
 
 		// 
         auto containerInitializer = splitName.AllExceptParameters();
-		auto containerFuture = std::make_shared<::Assets::AssetFuture<::Assets::ConfigFileContainer<>>>(containerInitializer.AsString());
+		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(containerInitializer.AsString());
 		::Assets::DefaultCompilerConstruction(
 			*containerFuture, 
             s_MaterialCompileProcessType,

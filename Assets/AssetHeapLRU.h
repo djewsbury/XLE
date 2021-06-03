@@ -10,7 +10,7 @@ namespace Assets
     {
     public:
         template<typename... Params>
-            FuturePtr<AssetType> Get(Params...);
+            PtrToFuturePtr<AssetType> Get(Params...);
 
         template<typename... Params>
             uint64_t SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params...);
@@ -31,8 +31,8 @@ namespace Assets
         AssetHeapLRU& operator=(const AssetHeapLRU&) = delete;
     private:
         mutable Threading::Mutex _lock;
-        LRUCache<AssetFuture<AssetType>> _assets;
-        std::vector<std::pair<uint64_t, FuturePtr<AssetType>>> _shadowingAssets;
+        LRUCache<FuturePtr<AssetType>> _assets;
+        std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _shadowingAssets;
 
         #if defined(_DEBUG)
             std::vector<std::pair<uint64_t, AssetHeapRecord>> _initializationRecords;
@@ -41,11 +41,11 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> FuturePtr<AssetType>
+            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
     {
         auto hash = Internal::BuildParamHash(initialisers...);
 
-        FuturePtr<AssetType> newFuture;
+        PtrToFuturePtr<AssetType> newFuture;
         {
             ScopedLock(_lock);
             auto shadowing = LowerBound(_shadowingAssets, hash);
@@ -57,7 +57,7 @@ namespace Assets
                 return i;
 
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            newFuture = std::make_shared<AssetFuture<AssetType>>(stringInitializer);
+            newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
             _assets.Insert(hash, newFuture);
 
             #if defined(_DEBUG)
@@ -107,7 +107,7 @@ namespace Assets
 
         if (newShadowingAsset) {
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            auto newShadowingFuture = std::make_shared<AssetFuture<AssetType>>(stringInitializer);
+            auto newShadowingFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
             newShadowingFuture->SetAsset(std::move(newShadowingAsset), nullptr);
             _shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
         }
@@ -140,7 +140,7 @@ namespace Assets
     {
         ScopedLock(_lock);
         unsigned cacheSize = _assets.GetCacheSize();
-        _assets = LRUCache<AssetFuture<AssetType>>{cacheSize};
+        _assets = LRUCache<FuturePtr<AssetType>>{cacheSize};
         _shadowingAssets.clear();
     }
 
@@ -148,7 +148,7 @@ namespace Assets
         void AssetHeapLRU<AssetType>::SetCacheSize(unsigned newCacheSize)
     {
         ScopedLock(_lock);
-        _assets = LRUCache<AssetFuture<AssetType>>{newCacheSize};
+        _assets = LRUCache<FuturePtr<AssetType>>{newCacheSize};
     }
 
     template<typename AssetType>
@@ -168,7 +168,7 @@ namespace Assets
         #if defined(_DEBUG)
             for (const auto&r : _initializationRecords) {
                 auto record = r.second;
-                auto item = const_cast<LRUCache<AssetFuture<AssetType>>&>(_assets).Get(r.first);
+                auto item = const_cast<LRUCache<FuturePtr<AssetType>>&>(_assets).Get(r.first);
                 if (item) {
                     record._state = item->GetAssetState();
                     record._depVal = item->GetDependencyValidation();

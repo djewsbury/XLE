@@ -14,6 +14,7 @@
 namespace Assets { namespace Exceptions { class RetrievalError; }}
 namespace Utility { class ParameterBox; }
 namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; }
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -56,6 +57,8 @@ namespace RenderCore { namespace Techniques
         auto GetShaderResourceDelegates() const { return MakeIteratorRange(_shaderResourceDelegates); }
 
         SystemUniformsDelegate& GetSystemUniformsDelegate() const;
+
+        BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
 
 			//  ----------------- Frame buffer / render pass state -----------------
         /*std::vector<PreregisteredAttachment> _preregisteredAttachments;

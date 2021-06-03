@@ -236,7 +236,7 @@ namespace RenderCore { namespace Metal_DX11
 		return false;
     }
 
-	static std::shared_ptr<::Assets::AssetFuture<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	static std::shared_ptr<::Assets::FuturePtr<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";
 		switch (stage) {
@@ -258,7 +258,7 @@ namespace RenderCore { namespace Metal_DX11
 	}
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> psName,
 		StringSection<::Assets::ResChar> definesTable)
@@ -274,7 +274,7 @@ namespace RenderCore { namespace Metal_DX11
 	}
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
 		StringSection<::Assets::ResChar> psName,
@@ -294,7 +294,7 @@ namespace RenderCore { namespace Metal_DX11
 	StreamOutputInitializers g_defaultStreamOutputInitializers = {};
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
 		StringSection<::Assets::ResChar> psName,
@@ -321,7 +321,7 @@ namespace RenderCore { namespace Metal_DX11
 	}
 
 	void ComputeShader::ConstructToFuture(
-		::Assets::AssetFuture<ComputeShader>& future,
+		::Assets::FuturePtr<ComputeShader>& future,
 		StringSection<::Assets::ResChar> codeName,
 		StringSection<::Assets::ResChar> definesTable)
 	{

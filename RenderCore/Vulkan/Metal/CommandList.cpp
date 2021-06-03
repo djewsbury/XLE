@@ -210,6 +210,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void CommandList::ValidateCommitToQueue(ObjectFactory& factory)
 	{
+		return;
+		
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			// We're going to commit the current command list to the queue. Let's validate resource visibility
 			// All resources in _resourcesBecomingVisible must be on the "_resourcesVisibleToQueue" list in ObjectFactory

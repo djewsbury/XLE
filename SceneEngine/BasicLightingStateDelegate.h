@@ -85,7 +85,7 @@ namespace SceneEngine
 		~BasicLightingStateDelegate();
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<BasicLightingStateDelegate>& future,
+			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
 			StringSection<::Assets::ResChar> envSettingFileName);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _envSettings->GetDependencyValidation(); }

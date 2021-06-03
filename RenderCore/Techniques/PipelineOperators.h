@@ -28,14 +28,14 @@ namespace RenderCore { namespace Techniques
 
 	class RenderPassInstance;
 
-	::Assets::FuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderPassInstance& rpi,
 		StringSection<> pixelShader,
 		StringSection<> definesTable,
 		const UniformsStreamInterface& usi);
 
-	::Assets::FuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const FrameBufferTarget& fbTarget,
 		StringSection<> pixelShader,

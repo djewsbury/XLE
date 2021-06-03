@@ -19,12 +19,12 @@ namespace Assets { namespace Internal
 		return ::Assets::Legacy::GetAsset<ChunkFileContainer>(identifier);
 	}
 
-	FuturePtr<ConfigFileContainer<>> GetConfigFileContainerFuture(StringSection<ResChar> identifier)
+	PtrToFuturePtr<ConfigFileContainer<>> GetConfigFileContainerFuture(StringSection<ResChar> identifier)
 	{
 		return ::Assets::MakeAsset<ConfigFileContainer<>>(identifier);
 	}
 
-	FuturePtr<ChunkFileContainer> GetChunkFileContainerFuture(StringSection<ResChar> identifier)
+	PtrToFuturePtr<ChunkFileContainer> GetChunkFileContainerFuture(StringSection<ResChar> identifier)
 	{
 		return ::Assets::MakeAsset<ChunkFileContainer>(identifier);
 	}

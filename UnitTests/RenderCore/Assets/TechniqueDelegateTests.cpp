@@ -287,7 +287,7 @@ namespace UnitTests
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
@@ -317,7 +317,7 @@ namespace UnitTests
 			if (hasDeformPosition)
 				desc->_patchExpansions.push_back(deformPositionPatchName);
 
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("pipeline-for-unit-test");
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
 			result->SetAsset(std::move(desc), {});
 			return result;
 		}

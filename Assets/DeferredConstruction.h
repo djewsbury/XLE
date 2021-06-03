@@ -40,7 +40,7 @@ namespace Assets
 
 		template<typename AssetType, typename... Params>
 			static auto HasConstructToFutureOverride_Helper(int) -> decltype(
-				AssetType::ConstructToFuture(std::declval<::Assets::AssetFuture<AssetType>&>(), std::declval<Params>()...), 
+				AssetType::ConstructToFuture(std::declval<::Assets::FuturePtr<AssetType>&>(), std::declval<Params>()...), 
 				std::true_type{});
 
 		template<typename...>
@@ -60,7 +60,7 @@ namespace Assets
 	template<
 		typename AssetType, typename... Params, 
 		typename std::enable_if<Internal::HasDirectAutoConstructAsset<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFutureDirect(AssetFuture<AssetType>& future, Params... initialisers)
+		void AutoConstructToFutureDirect(FuturePtr<AssetType>& future, Params... initialisers)
 	{
 		Internal::FutureResolutionMoment<AssetType> moment(future);
 		TRY {
@@ -77,7 +77,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename std::enable_if_t<!Internal::AssetTraits<AssetType>::HasChunkRequests>* =nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			future.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
@@ -98,7 +98,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename std::enable_if_t<Internal::AssetTraits<AssetType>::HasChunkRequests>* =nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = AssetType::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			future.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
@@ -110,12 +110,12 @@ namespace Assets
 	}
 
 	template<typename AssetType>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, TargetCode targetCode = AssetType::CompileProcessType)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, TargetCode targetCode = AssetType::CompileProcessType)
 	{
 		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
 		// still going to end up constructing the asset in the main thread.
 		future.SetPollingFunction(
-			[pendingCompile, targetCode](AssetFuture<AssetType>& thatFuture) -> bool {
+			[pendingCompile, targetCode](FuturePtr<AssetType>& thatFuture) -> bool {
 				auto state = pendingCompile->GetAssetState();
 				if (state == AssetState::Pending) return true;
 				
@@ -137,7 +137,7 @@ namespace Assets
 
 	template<typename AssetType, typename... Args>
 		static void DefaultCompilerConstruction(
-			AssetFuture<AssetType>& future,
+			FuturePtr<AssetType>& future,
 			TargetCode targetCode, 		// typically AssetType::CompileProcessType,
 			Args... args)
 	{
@@ -189,7 +189,7 @@ namespace Assets
 	template<
 		typename AssetType, typename... Params, 
 		typename std::enable_if<Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, Params... initialisers)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
 	{
 		AssetType::ConstructToFuture(future, std::forward<Params>(initialisers)...);
 	}
@@ -197,7 +197,7 @@ namespace Assets
 	template<
 		typename AssetType, typename... Params, 
 		typename std::enable_if<Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, Params... initialisers)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
 	{
 		DefaultCompilerConstruction<AssetType>(future, AssetType::CompileProcessType, std::forward<Params>(initialisers)...);
 	}
@@ -205,7 +205,7 @@ namespace Assets
 	template<
 		typename AssetType, typename... Params, 
 		typename std::enable_if<!Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, Params...>::value>::type* = nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, Params... initialisers)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, Params... initialisers)
 	{
 		AutoConstructToFutureDirect(future, std::forward<Params>(initialisers)...);
 	}
@@ -213,7 +213,7 @@ namespace Assets
 	template<
 		typename AssetType, 
 		typename std::enable_if_t<Internal::AssetTraits<AssetType>::Constructor_Formatter && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructToFuture(AssetFuture<AssetType>& future, StringSection<ResChar> initializer)
+		void AutoConstructToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
 	{
 		const char* p = XlFindChar(initializer, ':');
 		if (p) {
@@ -247,7 +247,7 @@ namespace Assets
 	template<
 		typename AssetType,
 		typename std::enable_if_t<Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(AssetFuture<AssetType>& future, StringSection<ResChar> initializer)
+		void AutoConstructAssetToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
 		WhenAll(containerFuture).ThenConstructToFuture<AssetType>(
@@ -260,7 +260,7 @@ namespace Assets
 	template<
 		typename AssetType,
 		typename std::enable_if_t<Internal::AssetTraits<AssetType>::HasChunkRequests && !Internal::AssetTraits<AssetType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<AssetType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(AssetFuture<AssetType>& future, StringSection<ResChar> initializer)
+		void AutoConstructAssetToFuture(FuturePtr<AssetType>& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
 		WhenAll(containerFuture).ThenConstructToFuture<AssetType>(

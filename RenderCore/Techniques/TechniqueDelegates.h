@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		};
 
-		virtual ::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 
@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<TechniqueSharedResources> CreateTechniqueSharedResources(IDevice&);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources);
 
 	namespace TechniqueDelegateForwardFlags { 
@@ -59,26 +59,26 @@ namespace RenderCore { namespace Techniques
 		using BitField = unsigned;
 	}
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		TechniqueDelegateForwardFlags::BitField flags = 0);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias = RSDepthBias(),
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias = RSDepthBias(),
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);

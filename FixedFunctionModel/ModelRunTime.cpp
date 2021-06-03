@@ -330,7 +330,7 @@ namespace FixedFunctionModel
             return materialResources;
         }
 
-        std::vector<::Assets::FuturePtr<RenderCore::Techniques::DeferredShaderResource>> BuildBoundTextures(
+        std::vector<::Assets::PtrToFuturePtr<RenderCore::Techniques::DeferredShaderResource>> BuildBoundTextures(
             const RenderCore::Assets::ModelScaffold& scaffold, const RenderCore::Assets::MaterialScaffold& matScaffold,
             const ::Assets::DirectorySearchRules* searchRules,
             const std::vector<std::pair<MaterialGuid, SubMatResources>>& materialResources,
@@ -339,7 +339,7 @@ namespace FixedFunctionModel
         {
             auto texturesPerMaterial = textureBindPoints.size();
 
-            std::vector<::Assets::FuturePtr<RenderCore::Techniques::DeferredShaderResource>> boundTextures;
+            std::vector<::Assets::PtrToFuturePtr<RenderCore::Techniques::DeferredShaderResource>> boundTextures;
             boundTextures.resize(textureSetCount * texturesPerMaterial);
             DEBUG_ONLY(boundTextureNames.resize(textureSetCount * texturesPerMaterial));
 

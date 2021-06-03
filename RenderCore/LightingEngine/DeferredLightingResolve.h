@@ -58,7 +58,7 @@ namespace RenderCore { namespace LightingEngine
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };
 
-    ::Assets::FuturePtr<LightResolveOperators> BuildLightResolveOperators(
+    ::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelineCollection& pipelineCollection,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,

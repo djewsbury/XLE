@@ -169,7 +169,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<::Assets::AssetFuture<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	static std::shared_ptr<::Assets::FuturePtr<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";
 		switch (stage) {
@@ -200,7 +200,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> psName,
@@ -217,7 +217,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -236,7 +236,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToFuture(
-		::Assets::AssetFuture<ShaderProgram>& future,
+		::Assets::FuturePtr<ShaderProgram>& future,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -264,7 +264,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ComputeShader::ConstructToFuture(
-		::Assets::AssetFuture<ComputeShader>& future,
+		::Assets::FuturePtr<ComputeShader>& future,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<::Assets::ResChar> codeName,
 		StringSection<::Assets::ResChar> definesTable)

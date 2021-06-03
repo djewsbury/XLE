@@ -128,7 +128,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
@@ -136,7 +136,7 @@ namespace RenderCore { namespace LightingEngine
 		return CreateForwardLightingTechnique(apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_sharedDelegates, preregisteredAttachments, fbProps);
 	}
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -154,7 +154,7 @@ namespace RenderCore { namespace LightingEngine
 		ShadowOperatorDesc defaultShadowGenerator;
 		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, 0, pipelineAccelerators, techDelBox, nullptr);
 
-		auto result = std::make_shared<::Assets::AssetFuture<CompiledLightingTechnique>>("forward-lighting-technique");
+		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
 		::Assets::WhenAll(shadowPreparerFuture).ThenConstructToFuture<CompiledLightingTechnique>(
 			*result,
 			[device, captures, lightingTechnique, techDelBox](std::shared_ptr<ICompiledShadowPreparer> shadowPreparer) {

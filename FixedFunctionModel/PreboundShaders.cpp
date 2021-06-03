@@ -195,13 +195,13 @@ namespace FixedFunctionModel
 	BoundShaderVariationSet::~BoundShaderVariationSet() {}
 
 	void BoundShaderVariationSet::ConstructToFuture(
-		::Assets::AssetFuture<BoundShaderVariationSet>& future,
+		::Assets::FuturePtr<BoundShaderVariationSet>& future,
 		StringSection<::Assets::ResChar> modelScaffoldName)
 	{
 		auto scaffoldFuture = ::Assets::MakeAsset<RenderCore::Techniques::Technique>(modelScaffoldName);
 
 		future.SetPollingFunction(
-			[scaffoldFuture](::Assets::AssetFuture<BoundShaderVariationSet>& thatFuture) -> bool {
+			[scaffoldFuture](::Assets::FuturePtr<BoundShaderVariationSet>& thatFuture) -> bool {
 
 			std::shared_ptr<RenderCore::Techniques::Technique> scaffoldActual; ::Assets::DependencyValidation scaffoldDepVal; ::Assets::Blob scaffoldLog;
 			auto scaffoldState = scaffoldFuture->CheckStatusBkgrnd(scaffoldActual, scaffoldDepVal, scaffoldLog);

@@ -12,12 +12,12 @@ namespace RenderCore { class IDevice; class FrameBufferProperties; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,

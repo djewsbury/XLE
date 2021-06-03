@@ -34,7 +34,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	void ConstructDescriptorSet(
-		::Assets::AssetFuture<RenderCore::IDescriptorSet>& future,
+		::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,

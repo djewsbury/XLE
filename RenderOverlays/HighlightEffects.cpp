@@ -27,7 +27,7 @@ namespace RenderOverlays
 {
     using namespace RenderCore;
 
-	::Assets::FuturePtr<Metal::ShaderProgram> LoadShaderProgram(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> LoadShaderProgram(
         const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> vs,
 		StringSection<> ps,
@@ -140,7 +140,7 @@ namespace RenderOverlays
 
         HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow);
         static void ConstructToFuture(
-			::Assets::AssetFuture<HighlightShaders>&,
+			::Assets::FuturePtr<HighlightShaders>&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
     protected:
         ::Assets::DependencyValidation  _validationCallback;
@@ -148,7 +148,7 @@ namespace RenderOverlays
     };
 
     void HighlightShaders::ConstructToFuture(
-        ::Assets::AssetFuture<HighlightShaders>& result,
+        ::Assets::FuturePtr<HighlightShaders>& result,
         const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
     {
         //// ////

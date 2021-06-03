@@ -82,17 +82,17 @@ namespace RenderCore { namespace Techniques
 		SimpleModelRenderer(const SimpleModelRenderer&) = delete;
 		
 		static void ConstructToFuture(
-			::Assets::AssetFuture<SimpleModelRenderer>& future,
+			::Assets::FuturePtr<SimpleModelRenderer>& future,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-			const ::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
 			StringSection<> deformOperations = {},
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
 			const std::string& modelScaffoldNameString = {},
 			const std::string& materialScaffoldNameString = {});
 		
 		static void ConstructToFuture(
-			::Assets::AssetFuture<SimpleModelRenderer>& future,
+			::Assets::FuturePtr<SimpleModelRenderer>& future,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
@@ -100,7 +100,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<SimpleModelRenderer>& future,
+			::Assets::FuturePtr<SimpleModelRenderer>& future,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
 
@@ -161,12 +161,12 @@ namespace RenderCore { namespace Techniques
 		~RendererSkeletonInterface();
 
 		static void ConstructToFuture(
-			::Assets::FuturePtr<RendererSkeletonInterface>& skeletonInterfaceFuture,
-			::Assets::FuturePtr<SimpleModelRenderer>& rendererFuture,
+			::Assets::PtrToFuturePtr<RendererSkeletonInterface>& skeletonInterfaceFuture,
+			::Assets::PtrToFuturePtr<SimpleModelRenderer>& rendererFuture,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-			const ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-			const ::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-			const ::Assets::FuturePtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
 			StringSection<> deformOperations = {},
 			IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates = {});
 	private:

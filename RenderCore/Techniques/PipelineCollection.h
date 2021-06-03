@@ -43,13 +43,13 @@ namespace RenderCore { namespace Techniques
     class GraphicsPipelineCollection
 	{
 	public:
-		::Assets::FuturePtr<Metal::GraphicsPipeline> CreatePipeline(
+		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
 			StringSection<> vsName, StringSection<> vsDefines,
 			StringSection<> psName, StringSection<> psDefines,
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);
 
-		::Assets::FuturePtr<Metal::GraphicsPipeline> CreatePipeline(
+		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
 			StringSection<> vsName, StringSection<> vsDefines,
 			StringSection<> gsName, StringSection<> gsDefines,
 			StringSection<> psName, StringSection<> psDefines,
@@ -67,17 +67,17 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Threading::Mutex _pipelinesLock;
-		std::vector<std::pair<uint64_t, ::Assets::FuturePtr<Metal::GraphicsPipeline>>> _pipelines;
+		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pipelines;
 
 		void ConstructToFuture(
-			std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
 			StringSection<> vsName, StringSection<> vsDefines,
 			StringSection<> psName, StringSection<> psDefines,
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);
 
 		void ConstructToFuture(
-			std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
 			StringSection<> vsName, StringSection<> vsDefines,
 			StringSection<> gsName, StringSection<> gsDefines,
 			StringSection<> psName, StringSection<> psDefines,

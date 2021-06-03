@@ -49,14 +49,14 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
-	::Assets::FuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& vsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& psCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& vsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& psCode,
 		const std::string& programName)
 	{
 		assert(vsCode && psCode);
-		auto future = std::make_shared<::Assets::AssetFuture<Metal::ShaderProgram>>(programName);
+		auto future = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>(programName);
 		::Assets::WhenAll(vsCode, psCode).ThenConstructToFuture<Metal::ShaderProgram>(
 			*future,
 			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
@@ -66,18 +66,18 @@ namespace RenderCore { namespace Techniques
 		return future;
 	}
 
-	::Assets::FuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& vsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& gsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& psCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& vsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& gsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& psCode,
 		const StreamOutputInitializers& soInit,
 		const std::string& programName)
 	{
 		assert(vsCode && psCode && gsCode);
 		std::vector<RenderCore::InputElementDesc> soElements { soInit._outputElements.begin(), soInit._outputElements.end() };
 		std::vector<unsigned> soStrides { soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end() };
-		auto future = std::make_shared<::Assets::AssetFuture<Metal::ShaderProgram>>(programName);
+		auto future = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>(programName);
 		::Assets::WhenAll(vsCode, gsCode, psCode).ThenConstructToFuture<Metal::ShaderProgram>(
 			*future,
 			[soElements, soStrides, pipelineLayout](
@@ -95,7 +95,7 @@ namespace RenderCore { namespace Techniques
 		return future;
 	}
 
-	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::FuturePtr<DescriptorSetAccelerator>>
+	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::PtrToFuturePtr<DescriptorSetAccelerator>>
 		CreatePipelineAccelerator(
 			IPipelineAcceleratorPool& pool,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,
@@ -103,7 +103,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const RenderCore::InputElementDesc*> inputLayout,
 			Topology topology)
 	{
-		::Assets::FuturePtr<DescriptorSetAccelerator> descriptorSetAccelerator;
+		::Assets::PtrToFuturePtr<DescriptorSetAccelerator> descriptorSetAccelerator;
 
 		auto matSelectors = material._matParams;
 

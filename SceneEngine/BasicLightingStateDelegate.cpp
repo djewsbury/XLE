@@ -108,7 +108,7 @@ namespace SceneEngine
     }
 
 	void BasicLightingStateDelegate::ConstructToFuture(
-		::Assets::AssetFuture<BasicLightingStateDelegate>& future,
+		::Assets::FuturePtr<BasicLightingStateDelegate>& future,
 		StringSection<::Assets::ResChar> envSettingFileName)
 	{
 		auto envSettingsFuture = ::Assets::MakeAsset<EnvironmentSettings>(envSettingFileName);

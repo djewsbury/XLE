@@ -65,7 +65,7 @@ namespace RenderCore { namespace Assets
         ~RawMaterial();
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<RawMaterial>&,
+			::Assets::FuturePtr<RawMaterial>&,
 			StringSection<::Assets::ResChar> initializer);
 
     private:

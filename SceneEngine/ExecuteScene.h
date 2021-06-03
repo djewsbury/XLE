@@ -5,6 +5,7 @@
 #pragma once 
 
 #include "IScene.h"
+#include "../Assets/AssetsCore.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques 
@@ -20,7 +21,7 @@ namespace RenderCore { namespace LightingEngine
     class LightingTechniqueInstance;
 }}
 namespace RenderCore { class IThreadContext; }
-namespace Assets { class IAsyncMarker; template<typename Type> class AssetFuture;}
+namespace Assets { class IAsyncMarker; }
 
 namespace SceneEngine
 {
@@ -45,5 +46,5 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::AssetFuture<RenderCore::LightingEngine::CompiledLightingTechnique>&);
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::FuturePtr<RenderCore::LightingEngine::CompiledLightingTechnique>&);
 }

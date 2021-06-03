@@ -252,7 +252,7 @@ namespace ToolsRig
         ~VisGeoBox();
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<VisGeoBox>&,
+			::Assets::FuturePtr<VisGeoBox>&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool);
     };
 
@@ -281,7 +281,7 @@ namespace ToolsRig
 	}
     
     void VisGeoBox::ConstructToFuture(
-		::Assets::AssetFuture<VisGeoBox>& future,
+		::Assets::FuturePtr<VisGeoBox>& future,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
     {
 		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(AREA_LIGHT_TECH":sphere");

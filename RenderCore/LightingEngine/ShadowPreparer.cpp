@@ -334,31 +334,31 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::FuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
+	::Assets::PtrToFuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::AssetFuture<ICompiledShadowPreparer>>();
+		auto result = std::make_shared<::Assets::FuturePtr<ICompiledShadowPreparer>>();
 		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, operatorId, pipelineAccelerators, delegatesBox, descSetLayout), nullptr);
 		return result;
 	}
 
-	::Assets::FuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
+	::Assets::PtrToFuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::AssetFuture<ShadowPreparationOperators>>();
+		auto result = std::make_shared<::Assets::FuturePtr<ShadowPreparationOperators>>();
 		if (shadowGenerators.empty()) {
 			result->SetAsset(std::make_shared<ShadowPreparationOperators>(), {});
 			return result;
 		}
 
-		using PreparerFuture = ::Assets::FuturePtr<ICompiledShadowPreparer>;
+		using PreparerFuture = ::Assets::PtrToFuturePtr<ICompiledShadowPreparer>;
 		std::vector<PreparerFuture> futures;
 		futures.reserve(shadowGenerators.size());
 		for (unsigned operatorId=0; operatorId<shadowGenerators.size(); ++operatorId)
@@ -366,7 +366,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
 		result->SetPollingFunction(
-			[futures=std::move(futures),shadowGeneratorCopy=std::move(shadowGeneratorCopy)](::Assets::AssetFuture<ShadowPreparationOperators>& future) -> bool {
+			[futures=std::move(futures),shadowGeneratorCopy=std::move(shadowGeneratorCopy)](::Assets::FuturePtr<ShadowPreparationOperators>& future) -> bool {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
 				actualized.resize(futures.size());

@@ -217,7 +217,7 @@ namespace ToolsRig
 	protected:
 		void BuildRendererStateFuture() const
 		{
-			_rendererStateFuture = std::make_shared<::Assets::AssetFuture<RendererState>>("Model Scene Renderer");
+			_rendererStateFuture = std::make_shared<::Assets::FuturePtr<RendererState>>("Model Scene Renderer");
 
 			auto rendererFuture = ::Assets::MakeAsset<SimpleModelRenderer>(_pipelineAcceleratorPool, _settings._modelName, _settings._materialName, "skin");
 
@@ -325,7 +325,7 @@ namespace ToolsRig
 				animState._changeEvent.Invoke();
 			}
 		};
-		mutable ::Assets::FuturePtr<RendererState> _rendererStateFuture;
+		mutable ::Assets::PtrToFuturePtr<RendererState> _rendererStateFuture;
 		mutable std::shared_ptr<RendererState> _actualized;
 
 		RendererState* TryActualize() const

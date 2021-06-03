@@ -20,24 +20,24 @@ namespace RenderCore { namespace Techniques {
 	std::shared_ptr<IResource> CreateStaticVertexBuffer(IDevice& device, IteratorRange<const void*> data);
 	std::shared_ptr<IResource> CreateStaticIndexBuffer(IDevice& device, IteratorRange<const void*> data);
 
-	::Assets::FuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& vsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& psCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& vsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& psCode,
 		const std::string& programName = {});
 
-	::Assets::FuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& vsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& gsCode,
-		const ::Assets::FuturePtr<CompiledShaderByteCode>& psCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& vsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& gsCode,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& psCode,
 		const StreamOutputInitializers& soInit,
 		const std::string& programName = {});
 
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
 	class IPipelineAcceleratorPool;
-	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::FuturePtr<DescriptorSetAccelerator>> 
+	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::PtrToFuturePtr<DescriptorSetAccelerator>> 
 		CreatePipelineAccelerator(
 			IPipelineAcceleratorPool& pool,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,

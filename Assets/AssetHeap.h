@@ -44,7 +44,7 @@ namespace Assets
 	{
 	public:
 		template<typename... Params>
-			FuturePtr<AssetType> Get(Params...);
+			PtrToFuturePtr<AssetType> Get(Params...);
 
 		template<typename... Params>
 			uint64_t SetShadowingAsset(AssetPtr<AssetType>&& newShadowingAsset, Params...);
@@ -61,12 +61,12 @@ namespace Assets
 		DefaultAssetHeap& operator=(const DefaultAssetHeap&) = delete;
 	private:
 		mutable Threading::Mutex _lock;		
-		std::vector<std::pair<uint64_t, FuturePtr<AssetType>>> _assets;
-		std::vector<std::pair<uint64_t, FuturePtr<AssetType>>> _shadowingAssets;
+		std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _assets;
+		std::vector<std::pair<uint64_t, PtrToFuturePtr<AssetType>>> _shadowingAssets;
 	};
 
 	template<typename AssetType>
-		static bool IsInvalidated(AssetFuture<AssetType>& future)
+		static bool IsInvalidated(FuturePtr<AssetType>& future)
 	{
 		// We must check the "background state" here. If it's invalidated in the
 		// background, we can restart the compile; even if that invalidated state hasn't
@@ -84,11 +84,11 @@ namespace Assets
 
 	template<typename AssetType>
 		template<typename... Params>
-			auto DefaultAssetHeap<AssetType>::Get(Params... initialisers) -> FuturePtr<AssetType>
+			auto DefaultAssetHeap<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
-		FuturePtr<AssetType> newFuture;
+		PtrToFuturePtr<AssetType> newFuture;
 		{
 			ScopedLock(_lock);
 			auto shadowing = LowerBound(_shadowingAssets, hash);
@@ -101,7 +101,7 @@ namespace Assets
 					return i->second;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<AssetFuture<AssetType>>(stringInitializer);
+			newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
 			if (i != _assets.end() && i->first == hash) {
 				i->second = newFuture;
 			} else 
@@ -136,7 +136,7 @@ namespace Assets
 
 		if (newShadowingAsset) {
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			auto newShadowingFuture = std::make_shared<AssetFuture<AssetType>>(stringInitializer);
+			auto newShadowingFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
 			newShadowingFuture->SetAssetForeground(std::move(newShadowingAsset), nullptr);
 			_shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
 		}

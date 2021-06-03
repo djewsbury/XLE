@@ -27,7 +27,7 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox
 	{
 	public:
-		::Assets::FuturePtr<Techniques::TechniqueSetFile> _techniqueSetFile;
+		::Assets::PtrToFuturePtr<Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;

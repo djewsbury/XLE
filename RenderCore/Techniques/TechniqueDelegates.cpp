@@ -41,7 +41,7 @@ namespace RenderCore { namespace Techniques
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
 	public:
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
@@ -56,7 +56,7 @@ namespace RenderCore { namespace Techniques
 		AttachmentBlendDesc _blend;
 		RasterizationDesc _rasterization;
 		DepthStencilDesc _depthStencil;
-		::Assets::FuturePtr<Technique> _techniqueFuture;
+		::Assets::PtrToFuturePtr<Technique> _techniqueFuture;
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
@@ -72,9 +72,9 @@ namespace RenderCore { namespace Techniques
 
 	auto TechniqueDelegate_Legacy::Resolve(
 		const CompiledShaderPatchCollection::Interface& shaderPatches,
-		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::FuturePtr<GraphicsPipelineDesc>
+		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::PtrToFuturePtr<GraphicsPipelineDesc>
 	{
-		auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("resolved-technique");
+		auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("resolved-technique");
 
 		auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 		nascentDesc->_blend.push_back(_blend);
@@ -193,11 +193,11 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("from-deferred-delegate");
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-deferred-delegate");
 
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
@@ -250,20 +250,20 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Deferred(
-			const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			const std::shared_ptr<TechniqueSharedResources>& sharedResources)
 		: _sharedResources(sharedResources)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::AssetFuture<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
 		}
 	private:
-		::Assets::FuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
 		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources)
 	{
 		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet, sharedResources);
@@ -311,11 +311,11 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
@@ -368,13 +368,13 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Forward(
-			const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
 			_sharedResources = sharedResources;
 
-			_techniqueFileHelper = std::make_shared<::Assets::AssetFuture<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
 
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
@@ -384,13 +384,13 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	private:
-		::Assets::FuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
 		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		DepthStencilDesc _depthStencil;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
@@ -439,11 +439,11 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -483,7 +483,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_DepthOnly(
-			const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
@@ -492,7 +492,7 @@ namespace RenderCore { namespace Techniques
 		{
 			_sharedResources = sharedResources;
 
-			_techniqueFileHelper = std::make_shared<::Assets::AssetFuture<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(
 				*_techniqueFileHelper, 
 				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
@@ -501,13 +501,13 @@ namespace RenderCore { namespace Techniques
             _rs[0x1] = RasterizationDesc{CullMode::None,  FaceWinding::CCW, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
 		}
 	private:
-		::Assets::FuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
 		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		RasterizationDesc _rs[2];
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
@@ -517,7 +517,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
@@ -564,11 +564,11 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
@@ -606,7 +606,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_RayTest(
-			const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			unsigned testTypeParameter,
 			const StreamOutputInitializers& soInit)
@@ -614,14 +614,14 @@ namespace RenderCore { namespace Techniques
 		{
 			_sharedResources = sharedResources;
 			
-			_techniqueFileHelper = std::make_shared<::Assets::AssetFuture<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture<TechniqueFileHelper>(*_techniqueFileHelper);
 
 			_soElements = NormalizeInputAssembly(soInit._outputElements);
 			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
 		}
 	private:
-		::Assets::FuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
 		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
@@ -629,7 +629,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
-		const ::Assets::FuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)

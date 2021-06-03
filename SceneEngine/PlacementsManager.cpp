@@ -598,7 +598,7 @@ namespace SceneEngine
         protected:
             uint64_t _currentModel, _currentMaterial;
             unsigned _currentSupplements;
-            ::Assets::FuturePtr<RenderCore::Techniques::SimpleModelRenderer> _current;
+            ::Assets::PtrToFuturePtr<RenderCore::Techniques::SimpleModelRenderer> _current;
             float _maxDistanceSq;
             bool _currentModelRendered;
             DynamicImposters* _imposters;

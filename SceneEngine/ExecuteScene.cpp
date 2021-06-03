@@ -60,7 +60,7 @@ namespace SceneEngine
 		return prepareLightingIterator.GetResourcePreparationMarker();
 	}
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::AssetFuture<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::FuturePtr<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
 	{
 		future.StallWhilePending();
 		return future.Actualize();

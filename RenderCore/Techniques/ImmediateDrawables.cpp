@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
-		::Assets::FuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates)
 		{
@@ -116,13 +116,13 @@ namespace RenderCore { namespace Techniques
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
 				nascentDesc->_depthStencil = dsModes[c];
 
-				_pipelineDescFuture[c] = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDesc>>("immediate-renderer");
+				_pipelineDescFuture[c] = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
 				_pipelineDescFuture[c]->SetAsset(std::move(nascentDesc), {});
 			}
 		}
 		~ImmediateRendererTechniqueDelegate() {}
 	private:
-		::Assets::FuturePtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
 	};
 
 	struct DrawableWithVertexCount : public Drawable 

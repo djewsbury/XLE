@@ -37,7 +37,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<FullViewportOperator>& future,
+			::Assets::FuturePtr<FullViewportOperator>& future,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			const FrameBufferTarget& fbTarget,
 			StringSection<> pixelShader,
@@ -73,7 +73,7 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	::Assets::FuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const RenderPassInstance& rpi,
 		StringSection<> pixelShader,
@@ -84,10 +84,10 @@ namespace RenderCore { namespace Techniques
 			pipelineLayout, 
 			FrameBufferTarget{&rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex()},
 			pixelShader, definesTable, usi);
-		return *reinterpret_cast<::Assets::FuturePtr<IShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 	}
 
-	::Assets::FuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const FrameBufferTarget& fbTarget,
 		StringSection<> pixelShader,
@@ -95,7 +95,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi)
 	{
 		auto op = ::Assets::MakeAsset<FullViewportOperator>(pipelineLayout, fbTarget, pixelShader, definesTable, usi);
-		return *reinterpret_cast<::Assets::FuturePtr<IShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 	}
 
 	IShaderOperator::~IShaderOperator() {}

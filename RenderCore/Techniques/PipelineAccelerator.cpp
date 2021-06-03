@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		Threading::Mutex _lock;
 		UniqueShaderVariationSet _selectorVariationsSet;
-		::Assets::FuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
+		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
 	};
 
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
@@ -70,7 +70,7 @@ namespace RenderCore { namespace Techniques
 	
 		struct Pipeline
 		{
-			::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline> _future;
+			::Assets::PtrToFuturePtr<IPipelineAcceleratorPool::Pipeline> _future;
 		};
 		std::vector<Pipeline> _finalPipelines;
 
@@ -136,7 +136,7 @@ namespace RenderCore { namespace Techniques
 		return str.str();
 	}
 
-	static ::Assets::FuturePtr<CompiledShaderByteCode_InstantiateShaderGraph> MakeByteCodeFuture(
+	static ::Assets::PtrToFuturePtr<CompiledShaderByteCode_InstantiateShaderGraph> MakeByteCodeFuture(
 		ShaderStage stage, StringSection<> initializer, const std::string& definesTable,
 		const std::shared_ptr<CompiledShaderPatchCollection>& patchCollection,
 		IteratorRange<const uint64_t*> patchExpansions,
@@ -177,14 +177,14 @@ namespace RenderCore { namespace Techniques
 			MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
 	}
 
-	static ::Assets::FuturePtr<Metal::ShaderProgram> MakeShaderProgram(
+	static ::Assets::PtrToFuturePtr<Metal::ShaderProgram> MakeShaderProgram(
 		const ITechniqueDelegate::GraphicsPipelineDesc& pipelineDesc,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
 		IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
 		StreamOutputInitializers so)
 	{
-		::Assets::FuturePtr<CompiledShaderByteCode_InstantiateShaderGraph> byteCodeFuture[3];
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode_InstantiateShaderGraph> byteCodeFuture[3];
 
 		for (unsigned c=0; c<3; ++c) {
 			if (pipelineDesc._shaders[c].empty())
@@ -202,7 +202,7 @@ namespace RenderCore { namespace Techniques
 		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
 
-		auto result = std::make_shared<::Assets::AssetFuture<Metal::ShaderProgram>>();
+		auto result = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>();
 		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture<Metal::ShaderProgram>(
 				*result,
@@ -287,16 +287,16 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> _automaticFiltering[3];
 		std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> _preconfiguration;
 
-		static ::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
-			const ::Assets::FuturePtr<ITechniqueDelegate::GraphicsPipelineDesc>& pipelineDescFuture)
+		static ::Assets::PtrToFuturePtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
+			const ::Assets::PtrToFuturePtr<ITechniqueDelegate::GraphicsPipelineDesc>& pipelineDescFuture)
 		{
-			auto result = std::make_shared<::Assets::AssetFuture<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
 			::Assets::WhenAll(pipelineDescFuture).ThenConstructToFuture<GraphicsPipelineDescWithFilteringRules>(
 				*result,
-				[](	::Assets::AssetFuture<GraphicsPipelineDescWithFilteringRules>& resultFuture,
+				[](	::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>& resultFuture,
 					std::shared_ptr<ITechniqueDelegate::GraphicsPipelineDesc> pipelineDesc) {
 
-					::Assets::FuturePtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
+					::Assets::PtrToFuturePtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
 					for (unsigned c=0; c<3; ++c) {
 						auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
 						if (!fn.IsEmpty())
@@ -425,11 +425,11 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<SharedPools>& sharedPools) -> Pipeline
 	{
 		Pipeline result;
-		result._future = std::make_shared<::Assets::AssetFuture<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
+		result._future = std::make_shared<::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
 		ParameterBox copyGlobalSelectors = globalSelectors;
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 
-		::Assets::FuturePtr<CompiledShaderPatchCollection> patchCollectionFuture;
+		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> patchCollectionFuture;
 		if (_shaderPatches) {
 			patchCollectionFuture = ::Assets::MakeAsset<CompiledShaderPatchCollection>(*_shaderPatches, matDescSetLayout);
 		} else {
@@ -446,7 +446,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<IPipelineAcceleratorPool::Pipeline>(
 			*result._future,
 			[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis](
-				::Assets::AssetFuture<IPipelineAcceleratorPool::Pipeline>& resultFuture,
+				::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
 				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) {
 
 				auto containingPipelineAccelerator = weakThis.lock();
@@ -461,7 +461,7 @@ namespace RenderCore { namespace Techniques
 				::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture<IPipelineAcceleratorPool::Pipeline>(
 					resultFuture,
 					[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
-						::Assets::AssetFuture<IPipelineAcceleratorPool::Pipeline>& resultFuture,
+						::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
 						std::shared_ptr<GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering) {
 
 						const auto& pipelineDesc = pipelineDescWithFiltering->_pipelineDesc;
@@ -664,7 +664,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator
 	{
 	public:
-		::Assets::FuturePtr<RenderCore::IDescriptorSet> _descriptorSet;
+		::Assets::PtrToFuturePtr<RenderCore::IDescriptorSet> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 	};
 
@@ -702,10 +702,10 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) override;
 
-		const ::Assets::FuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
+		const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 		const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 
-		const ::Assets::FuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
+		const ::Assets::PtrToFuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const override;
 
@@ -754,7 +754,7 @@ namespace RenderCore { namespace Techniques
 
 	auto PipelineAcceleratorPool::GetPipeline(
 		PipelineAccelerator& pipelineAccelerator, 
-		const SequencerConfig& sequencerConfig) const -> const ::Assets::FuturePtr<Pipeline>&
+		const SequencerConfig& sequencerConfig) const -> const ::Assets::PtrToFuturePtr<Pipeline>&
 	{
 		unsigned sequencerIdx = unsigned(sequencerConfig._cfgId);
 		#if defined(_DEBUG)
@@ -786,7 +786,7 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
-	const ::Assets::FuturePtr<IDescriptorSet>& PipelineAcceleratorPool::GetDescriptorSet(DescriptorSetAccelerator& accelerator) const
+	const ::Assets::PtrToFuturePtr<IDescriptorSet>& PipelineAcceleratorPool::GetDescriptorSet(DescriptorSetAccelerator& accelerator) const
 	{
 		return accelerator._descriptorSet;
 	}
@@ -953,7 +953,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto result = std::make_shared<DescriptorSetAccelerator>();
-		result->_descriptorSet = std::make_shared<::Assets::AssetFuture<IDescriptorSet>>("descriptorset-accelerator");
+		result->_descriptorSet = std::make_shared<::Assets::FuturePtr<IDescriptorSet>>("descriptorset-accelerator");
 
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
 		metalSamplers.reserve(samplerBindings.size());
@@ -985,7 +985,7 @@ namespace RenderCore { namespace Techniques
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<RenderCore::IDescriptorSet>(
 					*result->_descriptorSet,
 					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, bindingInfoHolder](
-						::Assets::AssetFuture<RenderCore::IDescriptorSet>& future,
+						::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
 						auto d = weakDevice.lock();
@@ -1218,7 +1218,7 @@ namespace RenderCore { namespace Techniques
 		_pipelineLayout = pipelineLayout;
 		_flags = flags;
 		_sharedPools = std::make_shared<SharedPools>();
-		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::AssetFuture<CompiledShaderPatchCollection>>("empty-patch-collection");
+		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
 
 		auto pipelineLayoutDesc = _pipelineLayout->GetInitializer();

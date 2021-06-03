@@ -55,7 +55,7 @@ namespace Sample
         std::unique_ptr<FixedFunctionModel::SharedStateSet> _sharedStateSet;
         mutable std::unique_ptr<FixedFunctionModel::ModelRenderer> _modelRenderer;
 
-		::Assets::FuturePtr<RenderCore::Techniques::SimpleModelRenderer> _simpleModelRenderer;
+		::Assets::PtrToFuturePtr<RenderCore::Techniques::SimpleModelRenderer> _simpleModelRenderer;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

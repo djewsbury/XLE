@@ -13,7 +13,7 @@ namespace Assets
 {
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<AssetFuture<AssetType>> MakeAsset(Params... initialisers)
+		std::shared_ptr<FuturePtr<AssetType>> MakeAsset(Params... initialisers)
 	{
 		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
 	}

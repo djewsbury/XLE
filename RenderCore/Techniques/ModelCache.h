@@ -48,10 +48,10 @@ namespace RenderCore { namespace Techniques
 
 		auto GetModelRenderer(
             StringSection<ResChar> modelFilename, 
-            StringSection<ResChar> materialFilename) -> ::Assets::FuturePtr<SimpleModelRenderer>;
+            StringSection<ResChar> materialFilename) -> ::Assets::PtrToFuturePtr<SimpleModelRenderer>;
 
-        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>;
-		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>;
+        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>;
+		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>;
 
         uint32_t GetReloadId() const;
 

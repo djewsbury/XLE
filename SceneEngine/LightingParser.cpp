@@ -451,7 +451,7 @@ namespace SceneEngine
 		auto pipelineAcceleratorPool = technique._pipelineAccelerators.get();
 		pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 
-		std::set<::Assets::FuturePtr<Techniques::IPipelineAcceleratorPool::Pipeline>> pendingPipelines;
+		std::set<::Assets::PtrToFuturePtr<Techniques::IPipelineAcceleratorPool::Pipeline>> pendingPipelines;
 
 		for (const auto&rp:technique._renderPasses) {
 			

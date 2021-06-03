@@ -109,7 +109,7 @@ namespace RenderCore { namespace Techniques
 #endif
 
 	void DeferredShaderResource::ConstructToFuture(
-		::Assets::AssetFuture<DeferredShaderResource>& future,
+		::Assets::FuturePtr<DeferredShaderResource>& future,
 		StringSection<> initializer)
     {
             // parse initialiser for flags
@@ -118,7 +118,7 @@ namespace RenderCore { namespace Techniques
 
 		assert(!splitter.File().IsEmpty());
 
-		std::shared_ptr<::Assets::AssetFuture<TextureMetaData>> metaDataFuture;
+		std::shared_ptr<::Assets::FuturePtr<TextureMetaData>> metaDataFuture;
 
 		::Assets::ResChar filename[MaxPath];
         if (init._colSpaceRequestString == SourceColorSpace::Unspecified) {
@@ -180,7 +180,7 @@ namespace RenderCore { namespace Techniques
 			[   metaDataFuture, init, 
                 initializerStr = initializer.AsString(), 
                 pkt,
-                captures](::Assets::AssetFuture<DeferredShaderResource>& thatFuture) -> bool {
+                captures](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
                     
                 using namespace std::chrono_literals;
                 auto resStatus = captures->_futureResource.wait_for(0s);

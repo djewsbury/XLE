@@ -58,7 +58,7 @@ namespace ToolsRig
 		std::unique_ptr<Pimpl> _pimpl;
 	};
 
-	using PatchCollectionFuture = ::Assets::FuturePtr<RenderCore::Techniques::CompiledShaderPatchCollection>;
+	using PatchCollectionFuture = ::Assets::PtrToFuturePtr<RenderCore::Techniques::CompiledShaderPatchCollection>;
 
 #if 0
 	std::unique_ptr<RenderCore::Techniques::ITechniqueDelegate> MakeShaderPatchAnalysisDelegate(

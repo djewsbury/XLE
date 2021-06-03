@@ -15,6 +15,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/BitUtils.h"
+#include "../../Core/Exceptions.h"
 #include <iterator>
 #include <queue>
 #include <cfloat>

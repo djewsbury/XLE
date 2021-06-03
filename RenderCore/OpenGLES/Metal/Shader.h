@@ -48,20 +48,20 @@ namespace RenderCore { namespace Metal_OpenGLES
 
         // Legacy asset based API --
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable);
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,

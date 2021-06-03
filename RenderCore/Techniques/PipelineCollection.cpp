@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 	template<typename Type>
 		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
-    ::Assets::FuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
+    ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
         StringSection<> vsName, StringSection<> vsDefines,
         StringSection<> psName, StringSection<> psDefines,
         const VertexInputStates& inputStates,
@@ -63,7 +63,7 @@ namespace RenderCore { namespace Techniques
             replaceExisting = true;
         }
 
-        auto result = std::make_shared<::Assets::AssetFuture<Metal::GraphicsPipeline>>();
+        auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>();
         if (replaceExisting) {
             i->second = result;
         } else
@@ -73,7 +73,7 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-    ::Assets::FuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
+    ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
         StringSection<> vsName, StringSection<> vsDefines,
         StringSection<> gsName, StringSection<> gsDefines,
         StringSection<> psName, StringSection<> psDefines,
@@ -97,7 +97,7 @@ namespace RenderCore { namespace Techniques
             replaceExisting = true;
         }
 
-        auto result = std::make_shared<::Assets::AssetFuture<Metal::GraphicsPipeline>>();
+        auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>();
         if (replaceExisting) {
             i->second = result;
         } else
@@ -107,7 +107,7 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-    static ::Assets::FuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
+    static ::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
         ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
     {
         char temp[MaxPath];
@@ -134,7 +134,7 @@ namespace RenderCore { namespace Techniques
     }
 
     void GraphicsPipelineCollection::ConstructToFuture(
-        std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+        std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
         StringSection<> vsName, StringSection<> vsDefines,
         StringSection<> psName, StringSection<> psDefines,
         const VertexInputStates& inputStates,
@@ -169,7 +169,7 @@ namespace RenderCore { namespace Techniques
     }
 
     void GraphicsPipelineCollection::ConstructToFuture(
-        std::shared_ptr<::Assets::AssetFuture<Metal::GraphicsPipeline>> future,
+        std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
         StringSection<> vsName, StringSection<> vsDefines,
         StringSection<> gsName, StringSection<> gsDefines,
         StringSection<> psName, StringSection<> psDefines,

@@ -14,7 +14,7 @@ namespace Assets
 	{
 	public:
 		template<typename... Params>
-			FuturePtr<AssetType> Get(Params...);
+			PtrToFuturePtr<AssetType> Get(Params...);
 
 		void            Clear();
 		uint64_t		GetTypeCode() const;
@@ -28,16 +28,16 @@ namespace Assets
 		AssetLRUHeap& operator=(const AssetLRUHeap&) = delete;
 	private:
 		mutable Threading::Mutex _lock;		
-		LRUCache<AssetFuture<AssetType>> _assets;
+		LRUCache<FuturePtr<AssetType>> _assets;
 	};
 
 	template<typename AssetType>
 		template<typename... Params>
-			auto AssetLRUHeap<AssetType>::Get(Params... initialisers) -> FuturePtr<AssetType>
+			auto AssetLRUHeap<AssetType>::Get(Params... initialisers) -> PtrToFuturePtr<AssetType>
 	{
 		auto hash = Internal::BuildParamHash(initialisers...);
 
-		FuturePtr<AssetType> newFuture;
+		PtrToFuturePtr<AssetType> newFuture;
 		{
 			ScopedLock(_lock);
 
@@ -47,7 +47,7 @@ namespace Assets
 					return existing;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<AssetFuture<AssetType>>(stringInitializer);
+			newFuture = std::make_shared<FuturePtr<AssetType>>(stringInitializer);
 			_assets.Insert(hash, newFuture);
 		}
 
@@ -70,7 +70,7 @@ namespace Assets
     {
         ScopedLock(_lock);
 		auto heapSize = _assets.GetCacheSize();
-        _assets = LRUCache<AssetFuture<AssetType>> { heapSize };
+        _assets = LRUCache<FuturePtr<AssetType>> { heapSize };
     }
 
 	template<typename AssetType>

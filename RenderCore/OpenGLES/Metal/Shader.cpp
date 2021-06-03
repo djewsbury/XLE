@@ -602,7 +602,7 @@ namespace RenderCore { namespace Metal_OpenGLES
     }
 
     void ShaderProgram::ConstructToFuture(
-        ::Assets::AssetFuture<ShaderProgram>&,
+        ::Assets::FuturePtr<ShaderProgram>&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> psName,
         StringSection<::Assets::ResChar> definesTable)
@@ -611,7 +611,7 @@ namespace RenderCore { namespace Metal_OpenGLES
     }
 
     void ShaderProgram::ConstructToFuture(
-        ::Assets::AssetFuture<ShaderProgram>&,
+        ::Assets::FuturePtr<ShaderProgram>&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> gsName,
         StringSection<::Assets::ResChar> psName,
@@ -621,7 +621,7 @@ namespace RenderCore { namespace Metal_OpenGLES
     }
 
     void ShaderProgram::ConstructToFuture(
-        ::Assets::AssetFuture<ShaderProgram>&,
+        ::Assets::FuturePtr<ShaderProgram>&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> gsName,
         StringSection<::Assets::ResChar> psName,

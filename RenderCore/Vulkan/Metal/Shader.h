@@ -72,14 +72,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// Legacy asset based API --
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
@@ -87,7 +87,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			StringSection<::Assets::ResChar> definesTable);
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
@@ -132,7 +132,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// Legacy asset based API --
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ComputeShader>&,
+			::Assets::FuturePtr<ComputeShader>&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<::Assets::ResChar> codeName,
 			StringSection<::Assets::ResChar> definesTable = {});

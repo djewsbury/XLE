@@ -79,10 +79,10 @@ namespace RenderCore { namespace Techniques
 			#endif
 		};
 
-		virtual const ::Assets::FuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
+		virtual const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 		virtual const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 
-		virtual const ::Assets::FuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual const ::Assets::PtrToFuturePtr<IDescriptorSet>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const IDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const DescriptorSetBindingInfo* TryGetBindingInfo(DescriptorSetAccelerator& accelerator) const = 0;
 

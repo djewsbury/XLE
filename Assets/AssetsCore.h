@@ -6,8 +6,7 @@
 
 #pragma once
 
-#include "DepVal.h"
-#include "../Core/Exceptions.h"
+#include "DepVal.h"     // require for exception types below
 #include <string>
 #include <memory>
 #include <vector>
@@ -24,9 +23,11 @@ namespace Assets
     enum class AssetState { Pending, Ready, Invalid };
     class DependencyValidation;
 
-	template<typename AssetType> class AssetFuture;
+	template<typename AssetType> class Future;
+    template<typename AssetType>
+		using FuturePtr = Future<std::shared_ptr<AssetType>>;
 	template<typename AssetType>
-		using FuturePtr = std::shared_ptr<AssetFuture<AssetType>>;
+		using PtrToFuturePtr = std::shared_ptr<FuturePtr<AssetType>>;
 
 	Blob AsBlob(const std::exception& e);
 	Blob AsBlob(IteratorRange<const void*> copyFrom);

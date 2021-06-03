@@ -186,7 +186,7 @@ namespace ToolsRig
 
 			std::weak_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> weakPipelineAcceleratorPool = _pipelineAcceleratorPool;
 
-			_pipelineFuture = std::make_shared<::Assets::AssetFuture<PendingPipeline>>("MaterialVisualizationScene pipeline");
+			_pipelineFuture = std::make_shared<::Assets::FuturePtr<PendingPipeline>>("MaterialVisualizationScene pipeline");
 			::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<PendingPipeline>(
 				*_pipelineFuture,
 				[weakPipelineAcceleratorPool, mat](const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& patchCollection) {
@@ -253,10 +253,10 @@ namespace ToolsRig
 			::Assets::DependencyValidation		_depVal;
 			std::shared_ptr<RenderCore::Assets::MaterialScaffoldMaterial> _material;
 			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
-			::Assets::FuturePtr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSet;
+			::Assets::PtrToFuturePtr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSet;
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		};
-		::Assets::FuturePtr<PendingPipeline> _pipelineFuture;
+		::Assets::PtrToFuturePtr<PendingPipeline> _pipelineFuture;
 
 		::Assets::DependencyValidation				_depVal;
 
@@ -274,14 +274,14 @@ namespace ToolsRig
 		return std::make_shared<MaterialVisualizationScene>(visObject, pipelineAcceleratorPool, material);
 	}
 
-	/*::Assets::FuturePtr<SceneEngine::IScene> ConvertToFuture(const std::shared_ptr<SceneEngine::IScene>& scene)
+	/*::Assets::PtrToFuturePtr<SceneEngine::IScene> ConvertToFuture(const std::shared_ptr<SceneEngine::IScene>& scene)
 	{
 		// HACK -- we have to use MaterialVisualizationScene as in intermediate type, 
 		// because AssetFuture requires GetDependencyValidation()
-		auto result = std::make_shared<::Assets::AssetFuture<MaterialVisualizationScene>>("SceneFuture");
+		auto result = std::make_shared<::Assets::FuturePtr<MaterialVisualizationScene>>("SceneFuture");
 		if (dynamic_cast<::Assets::IAsyncMarker*>(scene.get())) {
 			result->SetPollingFunction(
-				[scene](::Assets::AssetFuture<MaterialVisualizationScene>& thatFuture) {
+				[scene](::Assets::FuturePtr<MaterialVisualizationScene>& thatFuture) {
 					auto marker = std::dynamic_pointer_cast<MaterialVisualizationScene>(scene);
 					auto state = marker->GetAssetState();
 					if (state == ::Assets::AssetState::Pending)
@@ -297,7 +297,7 @@ namespace ToolsRig
 		} else {
 			result->SetAsset(std::dynamic_pointer_cast<MaterialVisualizationScene>(scene), nullptr);
 		}
-		return std::reinterpret_pointer_cast<::Assets::AssetFuture<SceneEngine::IScene>>(result);
+		return std::reinterpret_pointer_cast<::Assets::FuturePtr<SceneEngine::IScene>>(result);
 	}*/
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,7 +322,7 @@ namespace ToolsRig
 	class PatchAnalysisHelper
 	{
 	public:
-		::Assets::FuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
 			ShaderStage stage, StringSection<> patchCollectionCode, StringSection<> techniqueCode, StringSection<> entryPoint, StringSection<> definesTable)
 		{
 			char profileStr[] = "?s_*";
@@ -342,12 +342,12 @@ namespace ToolsRig
 				str.str(), entryPoint,
 				profileStr, definesTable);
 
-			auto result = std::make_shared<::Assets::AssetFuture<CompiledShaderByteCode>>();
+			auto result = std::make_shared<::Assets::FuturePtr<CompiledShaderByteCode>>();
 			::Assets::AutoConstructToFuture(*result, artifactFuture);
 			return result;
 		}
 
-		::Assets::FuturePtr<Metal::ShaderProgram> MakeShaderVariation(const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout, StringSection<> defines)
+		::Assets::PtrToFuturePtr<Metal::ShaderProgram> MakeShaderVariation(const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout, StringSection<> defines)
 		{
 			using namespace RenderCore::Techniques;
 			auto patchCollection = RenderCore::Techniques::AssembleShader(
@@ -379,7 +379,7 @@ namespace ToolsRig
 	class ShaderPatchAnalysisDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::FuturePtr<RenderCore::Metal::ShaderProgram> ResolveVariation(
+		::Assets::PtrToFuturePtr<RenderCore::Metal::ShaderProgram> ResolveVariation(
 			const RenderCore::Techniques::CompiledShaderPatchCollection& shaderPatches,
 			IteratorRange<const ParameterBox**> selectors)
 		{
@@ -502,7 +502,7 @@ namespace ToolsRig
 
 	template<typename Function, typename... Args>
 		void AsyncConstructToFuture(
-			const ::Assets::FuturePtr<
+			const ::Assets::PtrToFuturePtr<
 				std::decay_t<decltype(*std::declval<std::invoke_result_t<std::decay_t<Function>, std::decay_t<Args>...>>())>
 			>& future,
 			Function&& function, Args&&... args)
@@ -536,7 +536,7 @@ namespace ToolsRig
 		uint32_t previewNodeId,
 		const std::shared_ptr<GraphLanguage::INodeGraphProvider>& subProvider)
 	{
-		auto future = std::make_shared<::Assets::AssetFuture<RenderCore::Techniques::CompiledShaderPatchCollection>>("MakeCompiledShaderPatchCollectionAsync");
+		auto future = std::make_shared<::Assets::FuturePtr<RenderCore::Techniques::CompiledShaderPatchCollection>>("MakeCompiledShaderPatchCollectionAsync");
 		AsyncConstructToFuture(
 			future,
 			[nodeGraph{std::move(nodeGraph)}, nodeGraphSignature{std::move(nodeGraphSignature)}, previewNodeId, subProvider]() {

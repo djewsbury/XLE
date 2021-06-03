@@ -618,7 +618,7 @@ namespace Overlays
     class TextureBrowser::Pimpl
     {
     public:
-        LRUCache<::Assets::AssetFuture<RenderCore::Techniques::DeferredShaderResource>> _resources;
+        LRUCache<::Assets::FuturePtr<RenderCore::Techniques::DeferredShaderResource>> _resources;
         Pimpl();
     };
 

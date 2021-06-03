@@ -44,6 +44,11 @@
 
 #pragma warning(disable:4505) // unreferenced local function has been removed
 
+/*namespace RenderCore { namespace LightingEngine
+{
+	extern std::string g_shadowLog;
+}}*/
+
 namespace ToolsRig
 {
     RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings)
@@ -150,9 +155,9 @@ namespace ToolsRig
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		};
-		::Assets::FuturePtr<PreparedScene> _preparedSceneFuture;
+		::Assets::PtrToFuturePtr<PreparedScene> _preparedSceneFuture;
 
-		::Assets::FuturePtr<SceneEngine::BasicLightingStateDelegate> _envSettingsFuture;
+		::Assets::PtrToFuturePtr<SceneEngine::BasicLightingStateDelegate> _envSettingsFuture;
 		void RebuildPreparedScene();
 		
 		unsigned _loadingIndicatorCounter = 0;
@@ -342,12 +347,12 @@ namespace ToolsRig
 		// envSettings -> compiledLightingTechnique -> preparedShaders -> PreparedScene
 		//                SceneEngine::IScene ----------------^
 		//
-		_preparedSceneFuture = std::make_shared<::Assets::AssetFuture<PreparedScene>>("simple-scene-layer");
+		_preparedSceneFuture = std::make_shared<::Assets::FuturePtr<PreparedScene>>("simple-scene-layer");
 
 		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture<PreparedScene>(
 			*_preparedSceneFuture,
 			[targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, scene = _scene, pipelineAccelerators = _pipelineAccelerators](
-				::Assets::AssetFuture<PreparedScene>& thatFuture, 
+				::Assets::FuturePtr<PreparedScene>& thatFuture, 
 				std::shared_ptr<SceneEngine::BasicLightingStateDelegate> envSettings) {
 
 				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
@@ -357,7 +362,7 @@ namespace ToolsRig
 					targets, fbProps);
 				
 				thatFuture.SetPollingFunction(
-					[compiledLightingTechniqueFuture, scene, pipelineAccelerators, envSettings](::Assets::AssetFuture<PreparedScene>& thatFuture) {
+					[compiledLightingTechniqueFuture, scene, pipelineAccelerators, envSettings](::Assets::FuturePtr<PreparedScene>& thatFuture) {
 						auto state = GetAsyncSceneState(*scene);
 						if (state == ::Assets::AssetState::Pending) return true;
 						if (state == ::Assets::AssetState::Invalid) {
@@ -388,7 +393,7 @@ namespace ToolsRig
 							*pipelineAccelerators, *actualizedLightingTechnique, *scene);
 						if (pendingResources) {
 							thatFuture.SetPollingFunction(
-								[pendingResources, preparedScene](::Assets::AssetFuture<PreparedScene>& thatFuture) {
+								[pendingResources, preparedScene](::Assets::FuturePtr<PreparedScene>& thatFuture) {
 									auto state = pendingResources->GetAssetState();
 									if (state == ::Assets::AssetState::Pending) return true;
 									if (state == ::Assets::AssetState::Invalid) {
@@ -409,7 +414,7 @@ namespace ToolsRig
 
     void SimpleSceneLayer::Set(const VisEnvSettings& envSettings)
     {
-		_envSettingsFuture = std::make_shared<::Assets::AssetFuture<SceneEngine::BasicLightingStateDelegate>>("VisualizationEnvironment");
+		_envSettingsFuture = std::make_shared<::Assets::FuturePtr<SceneEngine::BasicLightingStateDelegate>>("VisualizationEnvironment");
 		::Assets::AutoConstructToFuture(*_envSettingsFuture, envSettings._envConfigFile);
 		RebuildPreparedScene();
     }
@@ -615,6 +620,12 @@ namespace ToolsRig
                 << ", "  << mouseOver._intersectionPt[1]
                 << ", "  << mouseOver._intersectionPt[2]
                 << ")");
+
+		/*DrawText(
+            &context,
+            Rect(Coord2(viewport._topLeft[0]+3, viewport._topLeft[1]+3), Coord2(viewport._bottomRight[0]-3, viewport._bottomRight[1]-3)),
+            nullptr, RenderOverlays::ColorB(0xffffffff),
+			RenderCore::LightingEngine::g_shadowLog);*/
     }
 
     void VisualisationOverlay::Render(
@@ -1069,14 +1080,14 @@ namespace ToolsRig
 			marker->StallWhilePending();
 	}
 	
-	/*const std::shared_ptr<SceneEngine::IScene>& TryActualize(const ::Assets::AssetFuture<SceneEngine::IScene>& future)
+	/*const std::shared_ptr<SceneEngine::IScene>& TryActualize(const ::Assets::FuturePtr<SceneEngine::IScene>& future)
 	{
 		// This function exists because we can't call TryActualize() from a C++/CLR source file because
 		// of the problem related to including <mutex>
 		return future.TryActualize();
 	}
 
-	std::optional<std::string> GetActualizationError(const ::Assets::AssetFuture<SceneEngine::IScene>& future)
+	std::optional<std::string> GetActualizationError(const ::Assets::FuturePtr<SceneEngine::IScene>& future)
 	{
 		auto state = future.GetAssetState();
 		if (state != ::Assets::AssetState::Invalid)

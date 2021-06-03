@@ -173,7 +173,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::AssetFuture<Type>& future)
+		void RequireReady(::Assets::FuturePtr<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
@@ -329,7 +329,7 @@ namespace UnitTests
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
 
-	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::AssetFuture<RenderCore::IDescriptorSet>& descriptorSetFuture)
+	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::FuturePtr<RenderCore::IDescriptorSet>& descriptorSetFuture)
 	{
 		// If we're running buffer uploads in single thread mode, we need to pump it while
 		// waiting for the descriptor set

@@ -27,8 +27,8 @@ namespace FixedFunctionModel
     public:
         std::map<uint64, BoundingBox> _boundingBoxes;
 
-        LRUCache<::Assets::AssetFuture<RenderCore::Assets::ModelScaffold>>     _modelScaffolds;
-        LRUCache<::Assets::AssetFuture<RenderCore::Assets::MaterialScaffold>>  _materialScaffolds;
+        LRUCache<::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>>     _modelScaffolds;
+        LRUCache<::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>>  _materialScaffolds;
         LRUCache<ModelRenderer>     _modelRenderers;
 
         std::unique_ptr<SharedStateSet> _sharedStateSet;
@@ -38,7 +38,7 @@ namespace FixedFunctionModel
         Pimpl(const ModelCache::Config& cfg);
         ~Pimpl();
 
-        LRUCache<::Assets::AssetFuture<RenderCore::Assets::ModelSupplementScaffold>>   _supplements;
+        LRUCache<::Assets::FuturePtr<RenderCore::Assets::ModelSupplementScaffold>>   _supplements;
 
         std::vector<const RenderCore::Assets::ModelSupplementScaffold*> 
             LoadSupplementScaffolds(
@@ -58,12 +58,12 @@ namespace FixedFunctionModel
 
     namespace Internal
     {
-        static ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold> CreateModelScaffold(StringSection<::Assets::ResChar> filename)
+        static ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold> CreateModelScaffold(StringSection<::Assets::ResChar> filename)
         {
             return ::Assets::MakeAsset<RenderCore::Assets::ModelScaffold>(filename);
         }
 
-        static ::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold> CreateMaterialScaffold(
+        static ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold> CreateMaterialScaffold(
             StringSection<::Assets::ResChar> model, 
             StringSection<::Assets::ResChar> material)
         {
@@ -120,7 +120,7 @@ namespace FixedFunctionModel
 
     namespace Internal
     {
-        static ::Assets::FuturePtr<RenderCore::Assets::ModelSupplementScaffold> CreateSupplement(
+        static ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelSupplementScaffold> CreateSupplement(
             uint64 compilerHash,
             StringSection<::Assets::ResChar> modelFilename,
             StringSection<::Assets::ResChar> materialFilename)
@@ -218,7 +218,7 @@ namespace FixedFunctionModel
         return ::Assets::AssetState::Ready;
     }
 
-    ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold> ModelCache::GetModelScaffold(StringSection<ResChar> modelFilename)
+    ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold> ModelCache::GetModelScaffold(StringSection<ResChar> modelFilename)
     {
         auto hashedModelName = Hash64(modelFilename.begin(), modelFilename.end());
         auto modelFuture = _pimpl->_modelScaffolds.Get(hashedModelName);

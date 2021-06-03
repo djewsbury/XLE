@@ -22,7 +22,7 @@ namespace RenderCore { namespace LightingEngine
 		using BitField = unsigned;
 	};
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -30,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags = 0);
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,

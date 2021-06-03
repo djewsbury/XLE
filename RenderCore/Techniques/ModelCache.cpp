@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
         ::Assets::AssetLRUHeap<RenderCore::Assets::MaterialScaffold>	_materialScaffolds;
 
 		Threading::Mutex _modelRenderersLock;
-        LRUCache<::Assets::AssetFuture<SimpleModelRenderer>>			_modelRenderers;
+        LRUCache<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool>  _pipelineAcceleratorPool;
 
         uint32_t _reloadId;
@@ -44,11 +44,11 @@ namespace RenderCore { namespace Techniques
 
     auto ModelCache::GetModelRenderer(
         StringSection<ResChar> modelFilename,
-		StringSection<ResChar> materialFilename) -> ::Assets::FuturePtr<SimpleModelRenderer>
+		StringSection<ResChar> materialFilename) -> ::Assets::PtrToFuturePtr<SimpleModelRenderer>
     {
 		auto hash = HashCombine(Hash64(modelFilename), Hash64(materialFilename));
 
-		::Assets::FuturePtr<SimpleModelRenderer> newFuture;
+		::Assets::PtrToFuturePtr<SimpleModelRenderer> newFuture;
 		{
 			ScopedLock(_pimpl->_modelRenderersLock);
 			auto& existing = _pimpl->_modelRenderers.Get(hash);
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<::Assets::AssetFuture<SimpleModelRenderer>>(stringInitializer);
+			newFuture = std::make_shared<::Assets::FuturePtr<SimpleModelRenderer>>(stringInitializer);
 			_pimpl->_modelRenderers.Insert(hash, newFuture);
 		}
 
@@ -70,12 +70,12 @@ namespace RenderCore { namespace Techniques
 		return newFuture;
     }
 
-	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>
+	auto ModelCache::GetModelScaffold(StringSection<ResChar> name) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>
 	{
 		return _pimpl->_modelScaffolds.Get(name);
 	}
 
-	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>
+	auto ModelCache::GetMaterialScaffold(StringSection<ResChar> materialName, StringSection<ResChar> modelName) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>
 	{
 		return _pimpl->_materialScaffolds.Get(materialName, modelName);
 	}

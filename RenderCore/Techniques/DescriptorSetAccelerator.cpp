@@ -21,7 +21,7 @@
 namespace RenderCore { namespace Techniques 
 {
 	void ConstructDescriptorSet(
-		::Assets::AssetFuture<RenderCore::IDescriptorSet>& future,
+		::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 		{
 			struct Resource
 			{
-				::Assets::FuturePtr<DeferredShaderResource> _pendingResource;
+				::Assets::PtrToFuturePtr<DeferredShaderResource> _pendingResource;
 				std::shared_ptr<IResourceView> _fixedResource;
 			};
 			std::vector<Resource> _resources;
@@ -131,7 +131,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		future.SetPollingFunction(
-			[working, device](::Assets::AssetFuture<RenderCore::IDescriptorSet>& thatFuture) -> bool {
+			[working, device](::Assets::FuturePtr<RenderCore::IDescriptorSet>& thatFuture) -> bool {
 
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;

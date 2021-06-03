@@ -72,12 +72,12 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _normalsFitting;
 	};
 
-	static ::Assets::FuturePtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
+	static ::Assets::PtrToFuturePtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
 		SharedTechniqueDelegateBox& techDelBox,
 		GBufferType gbufferType, 
 		bool precisionTargets = false)
 	{
-		auto result = std::make_shared<::Assets::AssetFuture<RenderStepFragmentInterface>>("build-gbuffer");
+		auto result = std::make_shared<::Assets::FuturePtr<RenderStepFragmentInterface>>("build-gbuffer");
 		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture<RenderStepFragmentInterface>(
@@ -291,7 +291,7 @@ namespace RenderCore { namespace LightingEngine
 		encoder.Draw(4);
 	}
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -311,14 +311,14 @@ namespace RenderCore { namespace LightingEngine
 		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet->second);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
 
-		auto result = std::make_shared<::Assets::AssetFuture<CompiledLightingTechnique>>("deferred-lighting-technique");
+		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture<CompiledLightingTechnique>(
 			*result,
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
 			resolveOperators=std::move(resolveOperators), pipelineCollection, flags](
-				::Assets::AssetFuture<CompiledLightingTechnique>& thatFuture,
+				::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<ShadowPreparationOperators> shadowPreparationOperators) {
 
@@ -410,7 +410,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::FuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,

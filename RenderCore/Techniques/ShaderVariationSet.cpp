@@ -102,10 +102,10 @@ namespace RenderCore { namespace Techniques
 	class TechniqueShaderVariationSet::Variation
 	{
 	public:
-		::Assets::FuturePtr<Metal::ShaderProgram> _shaderFuture;
+		::Assets::PtrToFuturePtr<Metal::ShaderProgram> _shaderFuture;
 	};
 
-	::Assets::FuturePtr<Metal::ShaderProgram> TechniqueShaderVariationSet::FindVariation(
+	::Assets::PtrToFuturePtr<Metal::ShaderProgram> TechniqueShaderVariationSet::FindVariation(
 		int techniqueIndex,
 		const ParameterBox* shaderSelectors[SelectorStages::Max])
 	{
@@ -146,7 +146,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void TechniqueShaderVariationSet::ConstructToFuture(
-		::Assets::AssetFuture<TechniqueShaderVariationSet>& future,
+		::Assets::FuturePtr<TechniqueShaderVariationSet>& future,
 		StringSection<::Assets::ResChar> modelScaffoldName,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
 	{

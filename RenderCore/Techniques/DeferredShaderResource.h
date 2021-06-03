@@ -61,7 +61,7 @@ namespace RenderCore { namespace Techniques
         ~DeferredShaderResource();
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<DeferredShaderResource>&,
+			::Assets::FuturePtr<DeferredShaderResource>&,
 			StringSection<> initializer);
     private:
 		std::shared_ptr<IResourceView> _srv;

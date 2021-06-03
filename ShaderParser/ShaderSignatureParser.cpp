@@ -13,6 +13,7 @@
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/Stream.h"
+#include "../Core/Exceptions.h"
 #include <assert.h>
 #include <vector>
 #include <iostream>

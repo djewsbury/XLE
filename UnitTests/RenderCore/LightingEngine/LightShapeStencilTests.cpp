@@ -55,7 +55,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static std::shared_ptr<Type> StallAndRequireReady(::Assets::AssetFuture<Type>& future)
+		static std::shared_ptr<Type> StallAndRequireReady(::Assets::FuturePtr<Type>& future)
 	{
 		future.StallWhilePending();
 		INFO(::Assets::AsString(future.GetActualizationLog()));

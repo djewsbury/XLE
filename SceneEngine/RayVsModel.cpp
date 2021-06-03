@@ -36,7 +36,7 @@ namespace SceneEngine
     using namespace RenderCore;
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::FuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter);
 
@@ -370,7 +370,7 @@ namespace SceneEngine
     static const unsigned s_soStrides[] = { sizeof(ModelIntersectionStateContext::ResultEntry) };
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::FuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
 		const std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter)
 	{

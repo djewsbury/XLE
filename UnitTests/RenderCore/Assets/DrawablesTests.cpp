@@ -91,7 +91,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::AssetFuture<Type>& descriptorSetFuture)
+		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::FuturePtr<Type>& descriptorSetFuture)
 	{
 		// If we're running buffer uploads in single thread mode, we need to pump it while
 		// waiting for the descriptor set
@@ -113,7 +113,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::AssetFuture<Type>& future)
+		void RequireReady(::Assets::FuturePtr<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);

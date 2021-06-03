@@ -9,10 +9,11 @@
 #include "DX11.h"
 #include "../../Types.h"
 #include "../../ShaderService.h"
+#include "../../Assets/AssetsCore.h"
 #include "../../../Utility/IntrusivePtr.h"
-#include <memory>
+#include <memory>.
 
-namespace Assets { class DependencyValidation; template<typename AssetType> class AssetFuture; }
+namespace Assets { class DependencyValidation; }
 namespace RenderCore { class InputElementDesc; class CompiledShaderByteCode; class IDevice; }
 
 namespace RenderCore { namespace Metal_DX11
@@ -110,20 +111,20 @@ namespace RenderCore { namespace Metal_DX11
 
 		// Legacy asset based API --
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable);
 
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ShaderProgram>&,
+			::Assets::FuturePtr<ShaderProgram>&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
@@ -172,7 +173,7 @@ namespace RenderCore { namespace Metal_DX11
 
 		// Legacy asset based API --
 		static void ConstructToFuture(
-			::Assets::AssetFuture<ComputeShader>&,
+			::Assets::FuturePtr<ComputeShader>&,
 			StringSection<::Assets::ResChar> codeName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
