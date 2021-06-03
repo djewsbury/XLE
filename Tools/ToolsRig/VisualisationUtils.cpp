@@ -350,7 +350,7 @@ namespace ToolsRig
 		//
 		_preparedSceneFuture = std::make_shared<::Assets::FuturePtr<PreparedScene>>("simple-scene-layer");
 
-		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture<::Assets::FuturePtr<PreparedScene>>(
+		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture(
 			*_preparedSceneFuture,
 			[targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, scene = _scene, pipelineAccelerators = _pipelineAccelerators](
 				::Assets::FuturePtr<PreparedScene>& thatFuture, 

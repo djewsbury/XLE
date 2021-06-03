@@ -291,10 +291,12 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToFuturePtr<ITechniqueDelegate::GraphicsPipelineDesc>& pipelineDescFuture)
 		{
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
-			::Assets::WhenAll(pipelineDescFuture).ThenConstructToFuture<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(
+			::Assets::WhenAll(pipelineDescFuture).ThenConstructToFuture(
 				*result,
 				[](	::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>& resultFuture,
 					std::shared_ptr<ITechniqueDelegate::GraphicsPipelineDesc> pipelineDesc) {
+
+					static_assert(std::is_same_v<decltype(resultFuture), ::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>&>);
 
 					::Assets::PtrToFuturePtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
 					for (unsigned c=0; c<3; ++c) {
@@ -443,7 +445,7 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the 
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>>(
+		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
 			*result._future,
 			[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis](
 				::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
@@ -458,7 +460,7 @@ namespace RenderCore { namespace Techniques
 				auto pipelineDescFuture = cfg._delegate->Resolve(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
 				auto resolvedTechnique = GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture);
 				
-				::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture<::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>>(
+				::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
 					resultFuture,
 					[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
 						::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
@@ -983,7 +985,7 @@ namespace RenderCore { namespace Techniques
 				std::shared_ptr<DescriptorSetAccelerator> bindingInfoHolder;
 				if (_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo)
 					bindingInfoHolder = result;
-				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture<::Assets::FuturePtr<RenderCore::IDescriptorSet>>(
+				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
 					*result->_descriptorSet,
 					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, bindingInfoHolder](
 						::Assets::FuturePtr<RenderCore::IDescriptorSet>& future,

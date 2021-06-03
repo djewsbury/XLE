@@ -6,6 +6,9 @@
 
 #include "AssetFuture.h"
 #include "AssetUtils.h"
+#include "AssetTraits.h"		// just for ConstructFinalAssetObject
+#include <tuple>
+#include <utility>
 
 namespace Assets
 {
@@ -58,7 +61,7 @@ namespace Assets
 		template<typename FinalFutureType>
 			void ThenConstructToFuture(
 				FinalFutureType& future,
-				std::function<typename FinalFutureType::PromisedType(AssetTypes...)>&& continuationFunction)
+				std::function<typename std::decay_t<FinalFutureType>::PromisedType(AssetTypes...)>&& continuationFunction)
 		{
 			future.SetPollingFunction(
 				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FinalFutureType& thatFuture) {
@@ -96,7 +99,7 @@ namespace Assets
 		template<typename FinalFutureType>
 			void ThenConstructToFuture(
 				FinalFutureType& future,
-				std::function<void(FinalFutureType&, AssetTypes...)>&& continuationFunction)
+				std::function<void(std::decay_t<FinalFutureType>&, AssetTypes...)>&& continuationFunction)		// std::decay_t here is standing in for std::type_identity_t -- it resolved ambiguity when the compiler is determining the value of FinalFutureType
 		{
 			future.SetPollingFunction(
 				[subFutures{std::move(_subFutures)}, continuationFunction{std::move(continuationFunction)}](FinalFutureType& thatFuture) {

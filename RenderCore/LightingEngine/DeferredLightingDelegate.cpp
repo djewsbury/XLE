@@ -313,7 +313,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
-		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture<::Assets::FuturePtr<CompiledLightingTechnique>>(
+		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture(
 			*result,
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
