@@ -16,6 +16,7 @@
 #include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Techniques.h"
+#include "../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/BufferView.h"
 #include "../../Assets/Assets.h"
@@ -45,6 +46,71 @@ namespace RenderOverlays
         _backgroundMarker = 0;
     }
 
+    class HighlightShaders
+    {
+    public:
+        std::shared_ptr<Metal::ShaderProgram> _drawHighlight;
+        Metal::BoundUniforms _drawHighlightUniforms;
+
+		std::shared_ptr<Metal::ShaderProgram> _drawShadow;
+        Metal::BoundUniforms _drawShadowUniforms;
+
+        std::shared_ptr<RenderCore::IResourceView> _distinctColorsSRV;
+
+        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
+
+        HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors);
+        static void ConstructToFuture(
+			::Assets::FuturePtr<HighlightShaders>&,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
+    protected:
+        ::Assets::DependencyValidation  _validationCallback;
+        
+    };
+
+    void HighlightShaders::ConstructToFuture(
+        ::Assets::FuturePtr<HighlightShaders>& result,
+        const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
+    {
+        //// ////
+        auto drawHighlightFuture = LoadShaderProgram(
+            pipelineLayout,
+            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+            OUTLINE_VIS_PIXEL_HLSL ":main:ps_*");
+        auto drawShadowFuture = LoadShaderProgram(
+            pipelineLayout,
+            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+            OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
+
+        auto tex = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
+
+        ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToFuture(result);
+    }
+
+    HighlightShaders::HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors)
+    : _drawHighlight(std::move(drawHighlight))
+    , _drawShadow(std::move(drawShadow))
+    , _distinctColorsSRV(distinctColors->GetShaderResource())
+    {
+		UniformsStreamInterface drawHighlightInterface;
+		drawHighlightInterface.BindImmediateData(0, Hash64("Settings"));
+        drawHighlightInterface.BindResourceView(0, Hash64("InputTexture"));
+		_drawHighlightUniforms = Metal::BoundUniforms(*_drawHighlight, drawHighlightInterface);
+
+        //// ////
+        
+		UniformsStreamInterface drawShadowInterface;
+		drawShadowInterface.BindImmediateData(0, Hash64("ShadowHighlightSettings"));
+        drawShadowInterface.BindResourceView(0, Hash64("InputTexture"));
+		_drawShadowUniforms = Metal::BoundUniforms(*_drawShadow, drawShadowInterface);
+
+        //// ////
+        _validationCallback = ::Assets::GetDepValSys().Make();
+        _validationCallback.RegisterDependency(_drawHighlight->GetDependencyValidation());
+        _validationCallback.RegisterDependency(_drawShadow->GetDependencyValidation());
+        _validationCallback.RegisterDependency(distinctColors->GetDependencyValidation());
+    }
+
     static void ExecuteHighlightByStencil(
         Metal::DeviceContext& metalContext,
         Metal::GraphicsEncoder_ProgressivePipeline& encoder,
@@ -53,12 +119,18 @@ namespace RenderOverlays
         bool onlyHighlighted)
     {
         assert(stencilSrv);
+        auto shaders = ::Assets::MakeAsset<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
+
         UniformsStream::ImmediateData cbData[] = {
             MakeOpaqueIteratorRange(settings)
         };
         auto numericUniforms = encoder.BeginNumericUniformsInterface();
         numericUniforms.BindConstantBuffers(0, cbData);
         numericUniforms.Bind(0, MakeIteratorRange(&stencilSrv, &stencilSrv+1));
+        if (shaders) {
+            IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get() };
+            numericUniforms.Bind(3, MakeIteratorRange(srvs));
+        }
         numericUniforms.Apply(metalContext, encoder);
         encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
         encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abAlphaPremultiplied, &Techniques::CommonResourceBox::s_abAlphaPremultiplied+1));
@@ -126,65 +198,6 @@ namespace RenderOverlays
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    class HighlightShaders
-    {
-    public:
-        std::shared_ptr<Metal::ShaderProgram> _drawHighlight;
-        Metal::BoundUniforms _drawHighlightUniforms;
-
-		std::shared_ptr<Metal::ShaderProgram> _drawShadow;
-        Metal::BoundUniforms _drawShadowUniforms;
-
-        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
-
-        HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow);
-        static void ConstructToFuture(
-			::Assets::FuturePtr<HighlightShaders>&,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
-    protected:
-        ::Assets::DependencyValidation  _validationCallback;
-        
-    };
-
-    void HighlightShaders::ConstructToFuture(
-        ::Assets::FuturePtr<HighlightShaders>& result,
-        const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
-    {
-        //// ////
-        auto drawHighlightFuture = LoadShaderProgram(
-            pipelineLayout,
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            OUTLINE_VIS_PIXEL_HLSL ":main:ps_*");
-        auto drawShadowFuture = LoadShaderProgram(
-            pipelineLayout,
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
-
-        ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture).ThenConstructToFuture(result);
-    }
-
-    HighlightShaders::HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow)
-    : _drawHighlight(std::move(drawHighlight))
-    , _drawShadow(std::move(drawShadow))
-    {
-		UniformsStreamInterface drawHighlightInterface;
-		drawHighlightInterface.BindImmediateData(0, Hash64("Settings"));
-        drawHighlightInterface.BindResourceView(0, Hash64("InputTexture"));
-		_drawHighlightUniforms = Metal::BoundUniforms(*_drawHighlight, drawHighlightInterface);
-
-        //// ////
-        
-		UniformsStreamInterface drawShadowInterface;
-		drawShadowInterface.BindImmediateData(0, Hash64("ShadowHighlightSettings"));
-        drawShadowInterface.BindResourceView(0, Hash64("InputTexture"));
-		_drawShadowUniforms = Metal::BoundUniforms(*_drawShadow, drawShadowInterface);
-
-        //// ////
-        _validationCallback = ::Assets::GetDepValSys().Make();
-        _validationCallback.RegisterDependency(_drawHighlight->GetDependencyValidation());
-        _validationCallback.RegisterDependency(_drawShadow->GetDependencyValidation());
-    }
 
     class BinaryHighlight::Pimpl
     {

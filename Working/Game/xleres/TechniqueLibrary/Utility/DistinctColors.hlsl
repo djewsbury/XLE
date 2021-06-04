@@ -38,12 +38,12 @@
     }
 #else
 
-    Texture1D DistinctColors BIND_SEQ_T12;
+    Texture1D DistinctColors BIND_NUMERIC_T3;
     float3 GetDistinctFloatColour(uint index)
     {
         uint dims;
         DistinctColors.GetDimensions(dims);
-        return DistinctColors[index % dims];
+        return DistinctColors.Load(index % dims);
     }
 
 #endif

@@ -40,7 +40,11 @@ uint GetHighlightMarker()
 uint Marker(uint2 pos)
 {
 	#if INPUT_MODE == 0
-		uint result = StencilInput.Load(uint3(pos, 0)).g;
+		#if defined(VULKAN)
+			uint result = StencilInput.Load(uint3(pos, 0)).r;
+		#else
+			uint result = StencilInput.Load(uint3(pos, 0)).g;
+		#endif
 	#elif INPUT_MODE == 1
 		uint result = uint(255.f * StencilInput.Load(uint3(pos, 0)).a);
 	#endif
