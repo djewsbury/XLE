@@ -103,7 +103,7 @@ namespace RenderCore { namespace LightingEngine
 					Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f,
 					// Main multisampled depth stencil
 					{ RenderCore::Format::D24_UNORM_S8_UINT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear_ClearStencil, LoadStore::Retain });
+						LoadStore::Clear, LoadStore::Retain });
 
 						// Generally the deferred pixel shader will just copy information from the albedo
 						// texture into the first deferred buffer. So the first deferred buffer should
@@ -150,7 +150,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_ClearStencil, LoadStore::Retain_RetainStencil);
+		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_StencilClear, LoadStore::Retain);
 		auto lightResolveTarget = fragment.DefineAttachmentRelativeDims(
 			Techniques::AttachmentSemantics::ColorHDR, 1.0f, 1.0f,
 			{ (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled, LoadStore::Clear });
@@ -198,7 +198,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain_RetainStencil, LoadStore::DontCare);
+		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain, LoadStore::DontCare);
 		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::DontCare, LoadStore::Retain);
 
 		SubpassDesc subpass;

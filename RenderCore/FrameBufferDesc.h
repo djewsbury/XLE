@@ -18,8 +18,10 @@ namespace RenderCore
 	enum class LoadStore
 	{
 		DontCare, Retain, Clear,
-		DontCare_RetainStencil, Retain_RetainStencil, Clear_RetainStencil,
-		DontCare_ClearStencil, Retain_ClearStencil, Clear_ClearStencil
+
+		DontCare_StencilRetain, DontCare_StencilClear, 
+        Retain_StencilDontCare, Retain_StencilClear, 
+		Clear_StencilDontCare, Clear_StencilRetain
 	};
 
     const char* AsString(LoadStore);
@@ -48,8 +50,8 @@ namespace RenderCore
             using BitField = unsigned;
         };
         Flags::BitField _flags = 0; // Flags::OutputRelativeDimensions;
-        LoadStore _loadFromPreviousPhase = LoadStore::Retain_RetainStencil;       ///< equivalent to "load op" in a Vulkan attachment
-        LoadStore _storeToNextPhase = LoadStore::Retain_RetainStencil;            ///< equivalent to "store op" in a Vulkan attachment
+        LoadStore _loadFromPreviousPhase = LoadStore::Retain;       ///< equivalent to "load op" in a Vulkan attachment
+        LoadStore _storeToNextPhase = LoadStore::Retain;            ///< equivalent to "store op" in a Vulkan attachment
         BindFlag::BitField _initialLayout = 0u;  ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
         BindFlag::BitField _finalLayout = 0u;  ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
 

@@ -74,16 +74,16 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         switch (load) {
             case RenderCore::LoadStore::DontCare:
-            case RenderCore::LoadStore::DontCare_RetainStencil:
-            case RenderCore::LoadStore::DontCare_ClearStencil:
+            case RenderCore::LoadStore::DontCare_StencilRetain:
+            case RenderCore::LoadStore::DontCare_StencilClear:
                 return MTLLoadActionDontCare;
             case RenderCore::LoadStore::Retain:
-            case RenderCore::LoadStore::Retain_RetainStencil:
-            case RenderCore::LoadStore::Retain_ClearStencil:
+            case RenderCore::LoadStore::Retain_StencilDontCare:
+            case RenderCore::LoadStore::Retain_StencilClear:
                 return MTLLoadActionLoad;
             case RenderCore::LoadStore::Clear:
-            case RenderCore::LoadStore::Clear_RetainStencil:
-            case RenderCore::LoadStore::Clear_ClearStencil:
+            case RenderCore::LoadStore::Clear_StencilDontCare:
+            case RenderCore::LoadStore::Clear_StencilRetain:
                 return MTLLoadActionClear;
         }
     }
@@ -92,8 +92,8 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         switch (store) {
             case RenderCore::LoadStore::Retain:
-            case RenderCore::LoadStore::Retain_RetainStencil:
-            case RenderCore::LoadStore::Retain_ClearStencil:
+            case RenderCore::LoadStore::Retain_StencilDontCare:
+            case RenderCore::LoadStore::Retain_StencilClear:
                 return MTLStoreActionStore;
             default:
                 return MTLStoreActionDontCare;
@@ -104,16 +104,16 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         switch (load) {
             case RenderCore::LoadStore::Retain:
-            case RenderCore::LoadStore::DontCare_RetainStencil:
-            case RenderCore::LoadStore::Retain_RetainStencil:
-            case RenderCore::LoadStore::Clear_RetainStencil:
+            case RenderCore::LoadStore::DontCare_StencilRetain:
+            case RenderCore::LoadStore::Clear_StencilRetain:
                 return MTLLoadActionLoad;
             case RenderCore::LoadStore::Clear:
-            case RenderCore::LoadStore::DontCare_ClearStencil:
-            case RenderCore::LoadStore::Retain_ClearStencil:
-            case RenderCore::LoadStore::Clear_ClearStencil:
+            case RenderCore::LoadStore::DontCare_StencilClear:
+            case RenderCore::LoadStore::Retain_StencilClear:
                 return MTLLoadActionClear;
             case RenderCore::LoadStore::DontCare:
+            case RenderCore::LoadStore::Retain_StencilDontCare:
+            case RenderCore::LoadStore::Clear_StencilDontCare:
                 return MTLLoadActionDontCare;
         }
     }
@@ -122,9 +122,8 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         switch (store) {
             case RenderCore::LoadStore::Retain:
-            case RenderCore::LoadStore::DontCare_RetainStencil:
-            case RenderCore::LoadStore::Retain_RetainStencil:
-            case RenderCore::LoadStore::Clear_RetainStencil:
+            case RenderCore::LoadStore::DontCare_StencilRetain:
+            case RenderCore::LoadStore::Clear_StencilRetain:
                 return MTLStoreActionStore;
             default:
                 return MTLStoreActionDontCare;
@@ -143,10 +142,10 @@ namespace RenderCore { namespace Metal_AppleMetal
     static bool HasRetain(LoadStore loadStore)
     {
         return  loadStore == LoadStore::Retain
-            ||  loadStore == LoadStore::DontCare_RetainStencil
-            ||  loadStore == LoadStore::Retain_RetainStencil
-            ||  loadStore == LoadStore::Clear_RetainStencil
-            ||  loadStore == LoadStore::Retain_ClearStencil
+            ||  loadStore == LoadStore::DontCare_StencilRetain
+            ||  loadStore == LoadStore::Clear_StencilRetain
+            ||  loadStore == LoadStore::Retain_StencilDontCare
+            ||  loadStore == LoadStore::Retain_StencilClear
             ;
     }
 

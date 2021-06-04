@@ -1099,10 +1099,10 @@ namespace RenderCore { namespace Techniques
     static bool HasRetain(LoadStore loadStore)
     {
         return  loadStore == LoadStore::Retain
-            ||  loadStore == LoadStore::DontCare_RetainStencil
-            ||  loadStore == LoadStore::Retain_RetainStencil
-            ||  loadStore == LoadStore::Clear_RetainStencil
-            ||  loadStore == LoadStore::Retain_ClearStencil
+            ||  loadStore == LoadStore::DontCare_StencilRetain
+            ||  loadStore == LoadStore::Clear_StencilRetain
+            ||  loadStore == LoadStore::Retain_StencilDontCare
+            ||  loadStore == LoadStore::Retain_StencilClear
             ;
     }
 

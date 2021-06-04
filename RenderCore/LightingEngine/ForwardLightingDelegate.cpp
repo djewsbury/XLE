@@ -99,7 +99,7 @@ namespace RenderCore { namespace LightingEngine
 		AttachmentDesc msDepthDesc =
             {   Format::D24_UNORM_S8_UINT,
                 AttachmentDesc::Flags::Multisampled,
-				LoadStore::Clear_ClearStencil, LoadStore::Retain_RetainStencil,
+				LoadStore::Clear, LoadStore::Retain,
 				0, BindFlag::ShaderResource };
 
 		RenderStepFragmentInterface result(PipelineType::Graphics);

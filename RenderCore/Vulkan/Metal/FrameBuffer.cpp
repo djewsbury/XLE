@@ -28,16 +28,16 @@ namespace RenderCore { namespace Metal_Vulkan
         {
         default:
         case LoadStore::DontCare: 
-        case LoadStore::DontCare_RetainStencil: 
-        case LoadStore::DontCare_ClearStencil: 
+        case LoadStore::DontCare_StencilRetain: 
+        case LoadStore::DontCare_StencilClear: 
             return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         case LoadStore::Retain: 
-        case LoadStore::Retain_RetainStencil: 
-        case LoadStore::Retain_ClearStencil: 
+        case LoadStore::Retain_StencilDontCare: 
+        case LoadStore::Retain_StencilClear: 
             return VK_ATTACHMENT_LOAD_OP_LOAD;
         case LoadStore::Clear: 
-        case LoadStore::Clear_RetainStencil: 
-        case LoadStore::Clear_ClearStencil: 
+        case LoadStore::Clear_StencilDontCare: 
+        case LoadStore::Clear_StencilRetain: 
             return VK_ATTACHMENT_LOAD_OP_CLEAR;
         }
     }
@@ -47,16 +47,10 @@ namespace RenderCore { namespace Metal_Vulkan
         switch (loadStore)
         {
         default:
-        case LoadStore::Clear: 
-        case LoadStore::Clear_RetainStencil: 
-        case LoadStore::Clear_ClearStencil: 
-        case LoadStore::DontCare: 
-        case LoadStore::DontCare_RetainStencil: 
-        case LoadStore::DontCare_ClearStencil: 
             return VK_ATTACHMENT_STORE_OP_DONT_CARE;
         case LoadStore::Retain: 
-        case LoadStore::Retain_RetainStencil: 
-        case LoadStore::Retain_ClearStencil: 
+        case LoadStore::Retain_StencilDontCare: 
+        case LoadStore::Retain_StencilClear: 
             return VK_ATTACHMENT_STORE_OP_STORE;
         }
     }
@@ -66,19 +60,19 @@ namespace RenderCore { namespace Metal_Vulkan
         switch (loadStore)
         {
         default:
-        case LoadStore::Clear: 
         case LoadStore::DontCare: 
-        case LoadStore::Retain: 
+        case LoadStore::Retain_StencilDontCare: 
+        case LoadStore::Clear_StencilDontCare: 
             return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
-        case LoadStore::Clear_ClearStencil: 
-        case LoadStore::DontCare_ClearStencil: 
-        case LoadStore::Retain_ClearStencil: 
+        case LoadStore::Clear: 
+        case LoadStore::DontCare_StencilClear: 
+        case LoadStore::Retain_StencilClear: 
             return VK_ATTACHMENT_LOAD_OP_CLEAR;
 
-        case LoadStore::Clear_RetainStencil: 
-        case LoadStore::DontCare_RetainStencil: 
-        case LoadStore::Retain_RetainStencil: 
+        case LoadStore::Retain: 
+        case LoadStore::DontCare_StencilRetain: 
+        case LoadStore::Clear_StencilRetain: 
             return VK_ATTACHMENT_LOAD_OP_LOAD;
         }
     }
@@ -88,17 +82,11 @@ namespace RenderCore { namespace Metal_Vulkan
         switch (loadStore)
         {
         default:
-        case LoadStore::Clear: 
-        case LoadStore::DontCare: 
-        case LoadStore::Retain: 
-        case LoadStore::Clear_ClearStencil: 
-        case LoadStore::DontCare_ClearStencil: 
-        case LoadStore::Retain_ClearStencil: 
             return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-        case LoadStore::Clear_RetainStencil: 
-        case LoadStore::DontCare_RetainStencil: 
-        case LoadStore::Retain_RetainStencil: 
+        case LoadStore::Retain: 
+        case LoadStore::DontCare_StencilRetain: 
+        case LoadStore::Clear_StencilRetain: 
             return VK_ATTACHMENT_STORE_OP_STORE;
         }
     }
@@ -116,13 +104,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	static bool HasRetain(LoadStore ls)
+	static bool HasRetain(LoadStore loadStore)
 	{
-		return ls == LoadStore::Retain
-			|| ls == LoadStore::DontCare_RetainStencil
-			|| ls == LoadStore::Retain_RetainStencil
-			|| ls == LoadStore::Clear_RetainStencil
-			|| ls == LoadStore::Retain_ClearStencil;
+        return  loadStore == LoadStore::Retain
+            ||  loadStore == LoadStore::DontCare_StencilRetain
+            ||  loadStore == LoadStore::Clear_StencilRetain
+            ||  loadStore == LoadStore::Retain_StencilDontCare
+            ||  loadStore == LoadStore::Retain_StencilClear
+            ;
 	}
 
 	static void MergeFormatFilter(TextureViewDesc::FormatFilter& dst, TextureViewDesc::FormatFilter src)

@@ -658,7 +658,7 @@ namespace ToolsRig
 			SubpassDesc mainPass;
 			mainPass.SetName("VisualisationOverlay");
 			mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-			mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_ClearStencil));		// ensure stencil is cleared (but ok to keep depth)
+			mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_StencilClear));		// ensure stencil is cleared (but ok to keep depth)
 			fbDesc.AddSubpass(std::move(mainPass));
 			Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
