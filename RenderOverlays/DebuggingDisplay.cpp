@@ -754,12 +754,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (partMask & 0x1) {
             Float3 triangles[6*2*3];
             SetQuadPts(&triangles[0*2*3], corners._worldSpacePts[0], corners._worldSpacePts[1], corners._worldSpacePts[2], corners._worldSpacePts[3]);
-            SetQuadPts(&triangles[1*2*3], corners._worldSpacePts[1], corners._worldSpacePts[5], corners._worldSpacePts[6], corners._worldSpacePts[2]);
-            SetQuadPts(&triangles[2*2*3], corners._worldSpacePts[5], corners._worldSpacePts[4], corners._worldSpacePts[7], corners._worldSpacePts[6]);
-            SetQuadPts(&triangles[3*2*3], corners._worldSpacePts[4], corners._worldSpacePts[0], corners._worldSpacePts[3], corners._worldSpacePts[7]);
+            SetQuadPts(&triangles[1*2*3], corners._worldSpacePts[4], corners._worldSpacePts[5], corners._worldSpacePts[0], corners._worldSpacePts[1]);
+            SetQuadPts(&triangles[2*2*3], corners._worldSpacePts[2], corners._worldSpacePts[3], corners._worldSpacePts[6], corners._worldSpacePts[7]);
+            SetQuadPts(&triangles[3*2*3], corners._worldSpacePts[6], corners._worldSpacePts[7], corners._worldSpacePts[4], corners._worldSpacePts[5]);
 
-            SetQuadPts(&triangles[4*2*3], corners._worldSpacePts[4], corners._worldSpacePts[5], corners._worldSpacePts[1], corners._worldSpacePts[0]);
-            SetQuadPts(&triangles[5*2*3], corners._worldSpacePts[3], corners._worldSpacePts[2], corners._worldSpacePts[6], corners._worldSpacePts[7]);
+            SetQuadPts(&triangles[4*2*3], corners._worldSpacePts[4], corners._worldSpacePts[0], corners._worldSpacePts[6], corners._worldSpacePts[2]);
+            SetQuadPts(&triangles[5*2*3], corners._worldSpacePts[1], corners._worldSpacePts[5], corners._worldSpacePts[3], corners._worldSpacePts[7]);
 
             context->DrawTriangles(
                 ProjectionMode::P3D, 

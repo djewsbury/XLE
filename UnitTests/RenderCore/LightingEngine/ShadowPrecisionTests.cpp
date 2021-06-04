@@ -36,6 +36,8 @@
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
+#include <fstream>
+#include <filesystem>
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
@@ -319,6 +321,15 @@ namespace UnitTests
 		}
 	};
 
+	static const RenderOverlays::ColorB cols[]= {
+		RenderOverlays::ColorB(196, 230, 230),
+		RenderOverlays::ColorB(255, 128, 128),
+		RenderOverlays::ColorB(128, 255, 128),
+		RenderOverlays::ColorB(128, 128, 255),
+		RenderOverlays::ColorB(255, 255, 128),
+		RenderOverlays::ColorB(128, 255, 255)
+	};
+
 	static void DrawCameraAndShadowFrustums(
 		RenderCore::IThreadContext& threadContext,
 		ImmediateDrawingHelper& immediateDrawingHelper,
@@ -331,14 +342,6 @@ namespace UnitTests
 		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
 			threadContext, *immediateDrawingHelper._immediateDrawables, immediateDrawingHelper._fontRenderingManager.get());
 
-		RenderOverlays::ColorB cols[]= {
-			RenderOverlays::ColorB(196, 230, 230),
-			RenderOverlays::ColorB(255, 128, 128),
-			RenderOverlays::ColorB(128, 255, 128),
-			RenderOverlays::ColorB(128, 128, 255),
-			RenderOverlays::ColorB(255, 255, 128),
-			RenderOverlays::ColorB(128, 255, 255)
-		};
 		unsigned colorIterator = 0;
 		auto* shadowProj = lightScene.TryGetShadowProjectionInterface<LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
 		if (shadowProj) {
@@ -398,6 +401,44 @@ namespace UnitTests
 		op->Actualize()->Draw(threadContext, parsingContext, us);
 	}
 
+	static void WriteFrustumListToPLY(std::ostream& str, IteratorRange<const Float4x4*> worldToProjs)
+	{
+		str << "ply" << std::endl;
+		str << "format ascii 1.0" << std::endl;
+		str << "element vertex " << 8 * worldToProjs.size() << std::endl;
+		str << "property float x" << std::endl;
+		str << "property float y" << std::endl;
+		str << "property float z" << std::endl;
+		str << "property uchar red" << std::endl;
+		str << "property uchar green" << std::endl;
+		str << "property uchar blue" << std::endl;
+		str << "element face " << 6 * worldToProjs.size() << std::endl;
+		str << "property list uchar int vertex_index" << std::endl;
+		str << "end_header" << std::endl;
+
+		unsigned q=0;
+		for (auto worldToProj:worldToProjs) {
+			Float3 frustumCorners[8];
+			CalculateAbsFrustumCorners(frustumCorners, worldToProj, RenderCore::Techniques::GetDefaultClipSpaceType());
+			auto col = cols[(q++)%dimof(cols)];
+			for (unsigned c=0; c<8; ++c)
+				str << frustumCorners[c][0] << " " << frustumCorners[c][1] << " " << frustumCorners[c][2] << " " << (unsigned)col.r << " " << (unsigned)col.g << " " << (unsigned)col.b << std::endl;
+		}
+
+		const UInt4 faceIndices[] {		// these are in Z-pattern ordering
+			UInt4 { 0, 1, 2, 3 },
+			UInt4 { 4, 5, 0, 1 },
+			UInt4 { 2, 3, 6, 7 },
+			UInt4 { 6, 7, 4, 5 },
+			UInt4 { 4, 0, 6, 2 },
+			UInt4 { 1, 5, 3, 7 }
+		};
+
+		for (unsigned p=0; p<worldToProjs.size(); ++p)
+			for (unsigned f=0; f<dimof(faceIndices); ++f)
+				str << "4 " << (p*8)+faceIndices[f][0] << " " << (p*8)+faceIndices[f][1] << " " << (p*8)+faceIndices[f][3] << " " << (p*8)+faceIndices[f][2] << std::endl;
+	}
+
 	TEST_CASE( "LightingEngine-SunSourceCascades", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -407,25 +448,34 @@ namespace UnitTests
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
-		RenderCore::Techniques::CameraDesc visCamera;
-        visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
-        visCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
-		visCamera._nearClip = 0.f;
-		visCamera._farClip = 400.f;
-		visCamera._left = 0.f;
-		visCamera._right = 100.f;
-		visCamera._top = 0.f;
-		visCamera._bottom = -100.f;
+		RenderCore::Techniques::CameraDesc visCameras[2];
+        visCameras[0]._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
+        visCameras[0]._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		visCameras[0]._nearClip = 0.f;
+		visCameras[0]._farClip = 400.f;
+		visCameras[0]._left = 0.f;
+		visCameras[0]._right = 100.f;
+		visCameras[0]._top = 0.f;
+		visCameras[0]._bottom = -100.f;
+
+		visCameras[1]._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, 0.0f, -1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{0.0f, 0.f, 200.0f});
+        visCameras[1]._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		visCameras[1]._nearClip = 0.f;
+		visCameras[1]._farClip = 400.f;
+		visCameras[1]._left = 0.f;
+		visCameras[1]._right = 100.f;
+		visCameras[1]._top = 50.f;
+		visCameras[1]._bottom = -50.f;
 
 		RenderCore::Techniques::CameraDesc sceneCamera;
-        sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-25.0f, 10.0f, -25.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
+		sceneCamera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-25.0f, 10.0f, -25.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{5.0f, 10.0f, 5.0f});
         sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
 		sceneCamera._nearClip = 0.05f;
 		sceneCamera._farClip = 150.f;
 		sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
 
- 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
-// 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
+// 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
+ 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
 //		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
 //		const Float3 negativeLightDirection = Normalize(Float3{-2.69884f, 0.696449f, -2.16482f});
 
@@ -435,7 +485,11 @@ namespace UnitTests
 			RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceFrustumSettings;
 			sunSourceFrustumSettings._flags = 0;
 			sunSourceFrustumSettings._maxDistanceFromCamera = 100.f;
-			sunSourceFrustumSettings._focusDistance = ExtractTranslation(sceneCamera._cameraToWorld)[1] / -ExtractForward_Cam(sceneCamera._cameraToWorld)[1];
+			float A = -ExtractForward_Cam(sceneCamera._cameraToWorld)[1];
+			if (!Equivalent(A, 0.0f, 1e-3f)) {
+				sunSourceFrustumSettings._focusDistance = ExtractTranslation(sceneCamera._cameraToWorld)[1] / A;
+			} else
+				sunSourceFrustumSettings._focusDistance = 5.0f;
 			sunSourceFrustumSettings._maxFrustumCount = 5;
 			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
@@ -504,9 +558,9 @@ namespace UnitTests
 					Log(Warning) << "Cascade[4]: " << cascadePixelCount[4] << std::endl;
 				}
 
-				// and once from the "vis camera"
-				{
-					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCamera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+				// and from the "vis cameras"
+				for (unsigned c=0; c<dimof(visCameras); ++c) {
+					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 					{
 						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
 							*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
@@ -521,9 +575,26 @@ namespace UnitTests
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
 
-					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-vis-camera");
+					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-vis-camera-" + std::to_string(c));
 				}
 
+				std::vector<Float4x4> worldToProjs;
+				worldToProjs.push_back(BuildProjectionDesc(sceneCamera, UInt2{2048, 2048})._worldToProjection);
+				auto* orthoShadowProjections = lightScene.TryGetShadowProjectionInterface<RenderCore::LightingEngine::IOrthoShadowProjections>(shadowProjectionId);
+				REQUIRE(orthoShadowProjections);
+				auto subProjections = orthoShadowProjections->GetOrthoSubProjections();
+				REQUIRE(!subProjections.empty());
+				for (const auto& subProj:subProjections) {
+					auto projMatrix = OrthogonalProjection(
+						subProj._leftTopFront[0], subProj._leftTopFront[1], 
+						subProj._rightBottomBack[0], subProj._rightBottomBack[1], 
+						subProj._leftTopFront[2], subProj._rightBottomBack[2],
+						Techniques::GetDefaultClipSpaceType());
+					worldToProjs.push_back(Combine(orthoShadowProjections->GetWorldToOrthoView(), projMatrix));
+				}
+				auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / "sun-source-cascades.ply";
+				std::ofstream plyOut(outputName);
+				WriteFrustumListToPLY(plyOut, worldToProjs);
 			}
 
 		}
