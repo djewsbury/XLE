@@ -15,7 +15,10 @@
 #include "../../Format.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/MemoryUtils.h"
+#include "../../../Utility/Streams/SerializationUtils.h"
 #include <cmath>
+
+std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo& rp_info);
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -106,7 +109,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		{
 			enum Flags
 			{
-				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2
+				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2,
+				HintGeneral = 1<<3		// if "general" is explicitly requested in the input FrameBufferDesc
 			};
 			using BitField = unsigned;
 		}
@@ -178,7 +182,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentUsageType::DepthStencil));
 			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentUsageType::Output));
 			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentUsageType::Input));
-			if (isDepthStencil) {
+			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentUsageType::HintGeneral));
+			if (hintGeneral) {
+				return VK_IMAGE_LAYOUT_GENERAL;
+			} else if (isDepthStencil) {
 				assert(!isColorOutput);
 				if (isAttachmentInput)
 					return VK_IMAGE_LAYOUT_GENERAL;
@@ -190,8 +197,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			} else if (isAttachmentInput) {
 				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			} else {
-				assert(0);
-				return VK_IMAGE_LAYOUT_UNDEFINED;	// no usage, no bind flags
+				// (sometimes we use this function just to convert from BindFlag to a VkImageLayout -- in which case we can get here)
+				return VK_IMAGE_LAYOUT_UNDEFINED;
 			}
 		}
 	}
@@ -256,6 +263,13 @@ namespace RenderCore { namespace Metal_Vulkan
 					i = workingAttachments.insert(i, {attachmentName, WorkingAttachment{}});
 					assert(attachmentName < layout.GetAttachments().size());
 					i->second._desc = layout.GetAttachments()[attachmentName];
+
+					// If we're loading from general or storing to general, then we should encourage use of general
+					// within the render pass, also
+					if (HasRetain(i->second._desc._loadFromPreviousPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+						i->second._attachmentUsage |= Internal::AttachmentUsageType::HintGeneral;
+					if (HasRetain(i->second._desc._storeToNextPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+						i->second._attachmentUsage |= Internal::AttachmentUsageType::HintGeneral;
 				}
 
 				AttachmentUsage loadUsage { spIdx, usage };
@@ -332,8 +346,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (HasRetain(attachmentDesc._loadFromPreviousPhase))
 				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, a.second._attachmentUsage);
 
-			if (HasRetain(attachmentDesc._storeToNextPhase))
-				desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, a.second._attachmentUsage);
+			// Even if we don't have a "retain" on the store operation, we're still supposed to give the attachment
+			// a final layout. Using "undefined" here results in a validation warning
+			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, a.second._attachmentUsage);
 
             if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
                 desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(samples);
@@ -501,6 +516,9 @@ namespace RenderCore { namespace Metal_Vulkan
         rp_info.dependencyCount = (uint32_t)vkDeps.size();
         rp_info.pDependencies = vkDeps.data();
 
+		Log(Verbose) << "Vulkan render pass generated: " << std::endl;
+		Log(Verbose) << rp_info << std::endl;
+
         return factory.CreateRenderPass(rp_info);
 	}
 
@@ -637,3 +655,64 @@ namespace RenderCore { namespace Metal_Vulkan
 
 }}
 
+std::ostream& SerializationOperator(std::ostream& str, VkAttachmentLoadOp loadOp)
+{
+	switch (loadOp) {
+	case VK_ATTACHMENT_LOAD_OP_LOAD: return str << "load";
+    case VK_ATTACHMENT_LOAD_OP_CLEAR: return str << "clear";
+    case VK_ATTACHMENT_LOAD_OP_DONT_CARE: return str << "dontcare";
+	default: return str << "<<unknown>>";
+	}
+}
+
+std::ostream& SerializationOperator(std::ostream& str, VkAttachmentStoreOp loadOp)
+{
+	switch (loadOp) {
+	case VK_ATTACHMENT_STORE_OP_STORE: return str << "store";
+    case VK_ATTACHMENT_STORE_OP_DONT_CARE: return str << "dontcare";
+	default: return str << "<<unknown>>";
+	}
+}
+
+std::ostream& SerializationOperator(std::ostream& str, VkImageLayout layout)
+{
+	switch (layout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED: return str << "UNDEFINED";
+    case VK_IMAGE_LAYOUT_GENERAL: return str << "GENERAL";
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: return str << "COLOR_ATTACHMENT_OPTIMAL";
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: return str << "DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL: return str << "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: return str << "SHADER_READ_ONLY_OPTIMAL";
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: return str << "TRANSFER_SRC_OPTIMAL";
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: return str << "TRANSFER_DST_OPTIMAL";
+    case VK_IMAGE_LAYOUT_PREINITIALIZED: return str << "PREINITIALIZED";
+    case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL: return str << "DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL";
+    case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL: return str << "DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL";
+    case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL: return str << "DEPTH_ATTACHMENT_OPTIMAL";
+    case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL: return str << "DEPTH_READ_ONLY_OPTIMAL";
+    case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL: return str << "STENCIL_ATTACHMENT_OPTIMAL";
+    case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL: return str << "STENCIL_READ_ONLY_OPTIMAL";
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: return str << "PRESENT_SRC_KHR";
+    case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR: return str << "SHARED_PRESENT_KHR";
+    case VK_IMAGE_LAYOUT_SHADING_RATE_OPTIMAL_NV: return str << "SHADING_RATE_OPTIMAL_NV";
+    case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT: return str << "FRAGMENT_DENSITY_MAP_OPTIMAL_EXT";
+	default: return str << "<<unknown>>";
+	}
+}
+
+std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo& rp)
+{
+	using namespace RenderCore;
+	using namespace RenderCore::Metal_Vulkan;
+	str << "--- [" << rp.attachmentCount << "] Attachments ------" << std::endl;
+	for (unsigned c=0; c<rp.attachmentCount; ++c) {
+		const auto& a = rp.pAttachments[c];
+		str << "\t[" << c << "] " << AsString(AsFormat((VkFormat_)a.format)) << " L: " << a.loadOp << "/" << a.initialLayout << " S: " << a.storeOp << "/" << a.finalLayout << std::endl;
+	}
+	str << "--- [" << rp.dependencyCount << "] Subpass dependencies ------" << std::endl;
+	for (unsigned c=0; c<rp.dependencyCount; ++c) {
+		const auto& d = rp.pDependencies[c];
+		str << "\t[" << c << "] " << "pass " << d.srcSubpass << "->" << d.dstSubpass << " stageMask: 0x" << std::hex << d.srcStageMask << "->0x" << d.dstStageMask << " accessMask: 0x" << d.srcAccessMask << "->0x" << d.dstAccessMask << std::dec << std::endl;
+	}
+	return str;
+}

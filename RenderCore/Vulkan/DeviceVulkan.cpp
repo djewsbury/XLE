@@ -148,6 +148,8 @@ namespace RenderCore { namespace ImplVulkan
 		static bool s_debugInitialized = false;
         static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( VkFlags msgFlags, VkDebugReportObjectTypeEXT objType, uint64_t srcObject, size_t location, int32_t msgCode, const char *pLayerPrefix, const char *pMsg, void *pUserData )
         {
+			if (XlFindString(pMsg, "vkCmdDraw-None-04584"))		// using an attachment as a shader resource while it's bound as an input attachment. We can't properly solve this without going to native Vulkan HLSL compilation
+				return false;
 	        (void)msgFlags; (void)objType; (void)srcObject; (void)location; (void)pUserData; (void)msgCode;
             Log(Verbose) << pLayerPrefix << ": " << pMsg << std::endl;
 	        return false;
@@ -1215,18 +1217,18 @@ namespace RenderCore { namespace ImplVulkan
 			// however, we still flush out the destruction queues, etc
 		}
 
+		if (fenceToWaitFor && waitForCompletion) {
+			// This must be done before calling _gpuTracker->UpdateConsumer();
+			// (otherwise the gpu tracker can check the status of fenceToWaitFor and reset it before
+			// we get to our wait)
+			auto res = vkWaitForFences(_underlyingDevice, 1, &fenceToWaitFor, true, UINT64_MAX);
+			assert(res == VK_SUCCESS);
+		}
+			
 		// We need to flush the destruction queues at some point for clients that never actually call Present
 		// We have less control over the frequency of CommitCommands, though, so it's going to be less clear
 		// when is the right time to call it
 		PumpDestructionQueues();
-
-		if (fenceToWaitFor && waitForCompletion) {
-			auto res = vkWaitForFences(_underlyingDevice, 1, &fenceToWaitFor, true, UINT64_MAX);
-			assert(res == VK_SUCCESS);
-			
-			// flush everything out again...
-			PumpDestructionQueues();
-		}
 	}
 
 	void ThreadContext::PumpDestructionQueues()

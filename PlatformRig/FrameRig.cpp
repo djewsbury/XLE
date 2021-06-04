@@ -293,8 +293,7 @@ namespace PlatformRig
                 RenderCore::Techniques::PreregisteredAttachment {
                     RenderCore::Techniques::AttachmentSemantics::ColorLDR,
                     targetDesc,
-                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized,
-                    RenderCore::BindFlag::PresentationSrc
+                    RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized
                 });
             _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps);
             _pimpl->_mainOverlayRigTargetConfig = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);

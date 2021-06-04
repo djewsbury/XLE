@@ -1372,7 +1372,13 @@ namespace RenderCore { namespace Techniques
                     else transform._type = AttachmentTransform::Temporary;
                 }
 
-                transform._newLayout = a._desc._finalLayout ? a._desc._finalLayout : usageFlags;
+                // Unless we're actually generating the attachment from scratch, don't remove the layout flags that were
+                // previously on the attachment
+                if (transform._type == AttachmentTransform::Generated || transform._type == AttachmentTransform::Temporary) {
+                    transform._newLayout = a._desc._finalLayout ? a._desc._finalLayout : usageFlags;
+                } else {
+                    transform._newLayout = a._desc._finalLayout ? a._desc._finalLayout : (i->_layoutFlags | usageFlags);
+                }
                 result._attachmentTransforms.push_back(transform);
             } else {
                 auto newAttachment = BuildPreregisteredAttachment(a, usageFlags, _workingProps);
