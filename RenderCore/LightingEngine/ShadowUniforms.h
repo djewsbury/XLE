@@ -99,6 +99,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		ShadowProjectionMode	_mode = ShadowProjectionMode::Arbitrary;
 		unsigned                _normalProjCount = 0;
+		unsigned				_operatorNormalProjCount = 0;
 		bool                    _useNearProj = false;
 
 		unsigned Count() const { return _normalProjCount + (_useNearProj?1:0); }
@@ -178,11 +179,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(!worldToCamera.empty());
 			assert(worldToCamera.size() == cameraToProjection.size());
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, worldToCamera.size());
-            assert(projCount <= _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
+            assert(projCount <= _projections._operatorNormalProjCount);     // a mis-match here means it does not agree with the operator
 			for (unsigned c=0; c<projCount; ++c) {
 				_projections._fullProj[c]._worldToProjTransform = Combine(worldToCamera[c], cameraToProjection[c]);
 				_projections._minimalProjection[c] = ExtractMinimalProjection(cameraToProjection[c]);
 			}
+			_projections._normalProjCount = projCount;
 		}
 
 		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
@@ -198,7 +200,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(projections.size() < Internal::MaxShadowTexturesPerLight);
 			assert(!projections.empty());
 			auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
-			assert(projCount <= _projections._normalProjCount);     // a mis-match here means it does not agree with the operator
+			assert(projCount <= _projections._operatorNormalProjCount);     // a mis-match here means it does not agree with the operator
             for (unsigned c=0; c<projCount; ++c) {
 				_projections._orthoSub[c]._leftTopFront = projections[c]._leftTopFront;
 				_projections._orthoSub[c]._rightBottomBack = projections[c]._rightBottomBack;
@@ -211,6 +213,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
 				_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);
 			}
+			_projections._normalProjCount = projCount;
 		}
 
 		virtual Float4x4 GetWorldToOrthoView() const override

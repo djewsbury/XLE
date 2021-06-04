@@ -330,7 +330,7 @@ namespace RenderCore { namespace LightingEngine
 		auto result = std::make_unique<Internal::ShadowProjectionDesc>();
 		result->_projections._mode = _operators[opId]._desc._projectionMode;
 		result->_projections._useNearProj = _operators[opId]._desc._enableNearCascade;
-		result->_projections._normalProjCount = _operators[opId]._desc._normalProjCount;
+		result->_projections._operatorNormalProjCount = _operators[opId]._desc._normalProjCount;
 		return result;
 	}
 

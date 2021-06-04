@@ -12,6 +12,8 @@
 #include "../../Math/Matrix.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
+#include "../../Math/MathSerialization.h"
+#include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 
 #include <sstream>
@@ -329,7 +331,6 @@ namespace RenderCore { namespace LightingEngine
         auto orthoWorldToView = InvertOrthonormalTransform(orthoViewToWorld);
 
         std::vector<Float4> intersectionPts;
-        float closestZ = 0;
 
         {
             const Float4 clipSpaceCorners[] = {
@@ -349,27 +350,36 @@ namespace RenderCore { namespace LightingEngine
                 auto end = clipSpaceCorners[edges_zpattern[e+1]];
 
                 for (unsigned ele=0; ele<2; ++ele) {
-                    float a = start[ele] / start[3], b = start[ele] / start[3]; 
-                    if ((a < -1.0f) != (b < -1.0f)) {
-                        auto alpha = (-1.0f - a) / (b - a);
-                        auto intersection = start + (end-start)*alpha;
-                        assert(Equivalent(intersection[ele] / intersection[3], -1.0f, 1e-4f));
+                    if ((start[ele] < -start[3]) != (end[ele] < -end[3])) {
+                        // clip to the [ele] == -w plane
+                        // start[ele] + alpha * (end[ele] - start[ele]) = -start[3] + alpha * (start[3] - end[3])
+                        // alpha * (end[ele] - start[ele]) - alpha * (start[3] - end[3]) = -start[3] - start[ele]
+                        // alpha * ((end[ele] - start[ele]) - (start[3] - end[3])) = -start[3] - start[ele]
+                        // alpha = (-start[3] - start[ele]) / ((end[ele] - start[ele]) - (start[3] - end[3]))
+                        // alpha = (start[3] + start[ele]) / (start[ele] + start[3] - end[ele] - end[3])
+                        auto alpha = (start[3] + start[ele]) / (start[ele] + start[3] - end[ele] - end[3]);
+                        assert(alpha >= 0.f && alpha <= 1.0f);
+                        Float4 intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele], -intersection[3], 1e-1f));
                         if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
                             if (intersection[2] > depthRangeCovered) {
                                 intersectionPts.push_back(intersection);
-                                closestZ = std::max(closestZ, intersection[2]);
                             }
                         }
                     }
 
-                    if ((a > 1.0f) != (b > 1.0f)) {
-                        auto alpha = (1.0f - a) / (b - a);
-                        auto intersection = start + (end-start)*alpha;
-                        assert(Equivalent(intersection[ele] / intersection[3], 1.0f, 1e-4f));
+                    if ((start[ele] > start[3]) != (end[ele] > end[3])) {
+                        // clip to the [ele] == w plane
+                        // start[ele] + alpha * (end[ele] - start[ele]) = start[3] + alpha * (end[3] - start[3])
+                        // alpha * (end[ele] - start[ele]) - alpha * (end[3] - start[3]) = start[3] - start[ele]
+                        // alpha = (start[3] - start[ele]) / (end[ele] - end[3] - start[ele] + start[3])
+                        auto alpha = (start[3] - start[ele]) / (end[ele] - end[3] - start[ele] + start[3]);
+                        assert(alpha >= 0.f && alpha <= 1.0f);
+                        Float4 intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele], intersection[3], 1e-1f));
                         if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
                             if (intersection[2] > depthRangeCovered) {
                                 intersectionPts.push_back(intersection);
-                                closestZ = std::max(closestZ, intersection[2]);
                             }
                         }
                     }
@@ -396,7 +406,6 @@ namespace RenderCore { namespace LightingEngine
                             Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
                             if (clipSpace[2] > depthRangeCovered) {
                                 intersectionPts.push_back(clipSpace);
-                                closestZ = std::max(closestZ, clipSpace[2]);
                             }
                         }
                     } 
@@ -410,7 +419,6 @@ namespace RenderCore { namespace LightingEngine
                             Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
                             if (clipSpace[2] > depthRangeCovered) {
                                 intersectionPts.push_back(clipSpace);
-                                closestZ = std::max(closestZ, clipSpace[2]);
                             }
                         }
                     }
@@ -421,10 +429,11 @@ namespace RenderCore { namespace LightingEngine
         if (!intersectionPts.empty()) {
             auto clipToWorld = Inverse(cameraWorldToClip);
             std::vector<Float3> result;
+            std::sort(intersectionPts.begin(), intersectionPts.end(), [](const auto& lhs, const auto& rhs) { return lhs[2] < rhs[2]; });
             result.reserve(intersectionPts.size());
             for (auto& pt:intersectionPts)
                 result.push_back(Truncate(clipToWorld * pt));
-            return {result, closestZ};
+            return {result, intersectionPts[0][2]};
         }
 
         return {{}, depthRangeCovered};
@@ -434,7 +443,9 @@ namespace RenderCore { namespace LightingEngine
         const Float4x4& cameraWorldToClip,
         const Float3* absFrustumCorners,
         const Float4x4& orthoViewToWorld,
-        const Float2& leftTop2D, const Float2& rightBottom2D)
+        const Float2& leftTop2D, const Float2& rightBottom2D,
+        const Float4& cameraMiniProj,
+        float depthRangeCovered)
     {
         const unsigned edges_zpattern[] = {
             0, 1,
@@ -458,9 +469,16 @@ namespace RenderCore { namespace LightingEngine
         auto clipToWorld = Inverse(cameraWorldToClip);
         auto clipToOrthoView = Combine(clipToWorld, orthoWorldToView);
 
+        Float2 orthZMinAndMax { FLT_MAX, -FLT_MAX };
+        for (unsigned c=0; c<8; ++c) {
+            float z = (orthoWorldToView * Float4{absFrustumCorners[c], 1.0f})[2];
+            orthZMinAndMax[0] = std::min(orthZMinAndMax[0], z);
+            orthZMinAndMax[1] = std::max(orthZMinAndMax[1], z);
+        }
+
         Float2 result { FLT_MAX, -FLT_MAX };
-        Float3 leftTopFront{leftTop2D[0], leftTop2D[1], -1e7f};
-        Float3 rightBottomBack{rightBottom2D[0], rightBottom2D[1], 1e7f};
+        Float3 leftTopFront{leftTop2D[0], leftTop2D[1], orthZMinAndMax[0] - 0.1f};
+        Float3 rightBottomBack{rightBottom2D[0], rightBottom2D[1], orthZMinAndMax[1] + 0.1f};
 
         {
             const Float4 clipSpaceCorners[] = {
@@ -480,11 +498,11 @@ namespace RenderCore { namespace LightingEngine
                 auto end = clipSpaceCorners[edges_zpattern[e+1]];
 
                 for (unsigned ele=0; ele<3; ++ele) {
-                    float a = start[ele] / start[3], b = start[ele] / start[3]; 
-                    if ((a < -1.0f) != (b < -1.0f)) {
-                        auto alpha = (-1.0f - a) / (b - a);
-                        auto intersection = start + (end-start)*alpha;
-                        assert(Equivalent(intersection[ele] / intersection[3], -1.0f, 1e-4f));
+                    if ((start[ele] < -start[3]) != (end[ele] < -end[3])) {
+                        auto alpha = (start[3] + start[ele]) / (start[ele] + start[3] - end[ele] - end[3]);
+                        assert(alpha >= 0.f && alpha <= 1.0f);
+                        Float4 intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele], -intersection[3], 1e-1f));
                         if (std::abs(intersection[(ele+1)%3]) <= intersection[3] && std::abs(intersection[(ele+2)%3]) <= intersection[3]) {
                             auto orthoView = clipToOrthoView * intersection;
                             float z = orthoView[2];
@@ -493,10 +511,11 @@ namespace RenderCore { namespace LightingEngine
                         }
                     }
 
-                    if ((a > 1.0f) != (b > 1.0f)) {
-                        auto alpha = (1.0f - a) / (b - a);
-                        auto intersection = start + (end-start)*alpha;
-                        assert(Equivalent(intersection[ele] / intersection[3], 1.0f, 1e-4f));
+                    if ((start[ele] > start[3]) != (end[ele] > end[3])) {
+                        auto alpha = (start[3] - start[ele]) / (end[ele] - end[3] - start[ele] + start[3]);
+                        assert(alpha >= 0.f && alpha <= 1.0f);
+                        Float4 intersection = start + (end-start)*alpha;
+                        assert(Equivalent(intersection[ele], intersection[3], 1e-1f));
                         if (std::abs(intersection[(ele+1)%3]) <= intersection[3] && std::abs(intersection[(ele+2)%3]) <= intersection[3]) {
                             auto orthoView = clipToOrthoView * intersection;
                             float z = orthoView[2];
@@ -512,9 +531,20 @@ namespace RenderCore { namespace LightingEngine
             assert(leftTopFront[0] < rightBottomBack[0]);
             assert(leftTopFront[1] < rightBottomBack[1]);
 
+            float f, n;
+            std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, Techniques::GetDefaultClipSpaceType());
+            // cz = z * -f/(f-n) + -(f*n)/(f-n)
+            // z = cz + (f*n)/(f-n) * -(f-n)/f
+            float depthAlphaValue = (depthRangeCovered + (f*n)/(f-n)) * -(f-n)/f;
+            depthAlphaValue = (-depthAlphaValue - n) / f;
+
             for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
-                auto start = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+0]]);
-                auto end = TransformPoint(orthoWorldToView, absFrustumCorners[edges_zpattern[e+1]]);
+                unsigned startPt = edges_zpattern[e+0], endPt = edges_zpattern[e+1];
+                Float3 start, end;
+                if (startPt < 4) start = TransformPoint(orthoWorldToView, LinearInterpolate(absFrustumCorners[startPt], absFrustumCorners[startPt+4], depthAlphaValue));
+                else start = TransformPoint(orthoWorldToView, absFrustumCorners[startPt]);
+                if (endPt < 4) end = TransformPoint(orthoWorldToView, LinearInterpolate(absFrustumCorners[endPt], absFrustumCorners[endPt+4], depthAlphaValue));
+                else end = TransformPoint(orthoWorldToView, absFrustumCorners[endPt]);
 
                 // points inside of the projection area count
                 if (start[0] >= leftTopFront[0] && start[1] >= leftTopFront[1] && start[0] <= rightBottomBack[0] && start[1] <= rightBottomBack[1]) {
@@ -568,6 +598,7 @@ namespace RenderCore { namespace LightingEngine
         const Float3* absFrustumCorners,
         const Float4x4& lightViewToWorld,
         const IOrthoShadowProjections::OrthoSubProjection& prev,
+        const Float4& cameraMiniProj,
         float depthRangeCovered)
     {
         // Calculate the next frustum for a set of cascades, based on unfilled space
@@ -605,6 +636,7 @@ namespace RenderCore { namespace LightingEngine
             auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
             auto camPositionInOrtho = TransformPoint(worldToLightView, ExtractTranslation(mainSceneProjectionDesc._cameraToWorld));
 
+#if 0
             float alpha = FLT_MAX;
             float closestUncoveredDistance = FLT_MAX;
 
@@ -613,48 +645,72 @@ namespace RenderCore { namespace LightingEngine
 
                 if (Equivalent(camForwardInOrtho[0], 0.0f, 1e-6f)) {
                 } else if (camForwardInOrtho[0] > 0) {
-                    auto xAlpha = ((basisPointInOrtho[0] + 0.5f * newProjectionDimsXY) - camPositionInOrtho[0]) / camForwardInOrtho[0];
+                    auto xAlpha = (basisPointInOrtho[0] - (camPositionInOrtho[0] - 0.5f * newProjectionDimsXY)) / camForwardInOrtho[0];
                     alpha = std::min(alpha, xAlpha);
                 } else {
-                    auto xAlpha = ((basisPointInOrtho[0] - 0.5f * newProjectionDimsXY) - camPositionInOrtho[0]) / camForwardInOrtho[0];
+                    auto xAlpha = (basisPointInOrtho[0] - (camPositionInOrtho[0] + 0.5f * newProjectionDimsXY)) / camForwardInOrtho[0];
                     alpha = std::min(alpha, xAlpha);
                 }
+                
+                #if defined(_DEBUG)
+                    Float3 test = basisPointInOrtho - alpha * camForwardInOrtho;
+                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
+                #endif
 
                 if (Equivalent(camForwardInOrtho[1], 0.0f, 1e-6f)) {
                 } else if (camForwardInOrtho[1] > 0) {
-                    float yAlpha = ((basisPointInOrtho[1] + 0.5f * newProjectionDimsXY) - camPositionInOrtho[1]) / camForwardInOrtho[1];
-                    alpha = std::min(alpha, yAlpha);
+                    float yAlpha = (basisPointInOrtho[1] - (camPositionInOrtho[1] - 0.5f * newProjectionDimsXY)) / camForwardInOrtho[1];
+                    Float3 test = basisPointInOrtho - yAlpha * camForwardInOrtho;
+                    if (std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ)
+                        alpha = std::min(alpha, yAlpha);
                 } else {
-                    float yAlpha = ((basisPointInOrtho[1] - 0.5f * newProjectionDimsXY) - camPositionInOrtho[1]) / camForwardInOrtho[1];
+                    float yAlpha = (basisPointInOrtho[1] - (camPositionInOrtho[1] + 0.5f * newProjectionDimsXY)) / camForwardInOrtho[1];
                     alpha = std::min(alpha, yAlpha);
                 }
 
+                #if defined(_DEBUG)
+                    test = basisPointInOrtho - alpha * camForwardInOrtho;
+                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
+                #endif
+
                 if (Equivalent(camForwardInOrtho[2], 0.0f, 1e-6f)) {
                 } else if (camForwardInOrtho[2] > 0) {
-                    float yAlpha = ((basisPointInOrtho[2] + 0.5f * newProjectionDimsXY) - camPositionInOrtho[2]) / camForwardInOrtho[2];
-                    alpha = std::min(alpha, yAlpha);
+                    float zAlpha = (basisPointInOrtho[2] - (camPositionInOrtho[2] - 0.5f * newProjectionDimsZ)) / camForwardInOrtho[2];
+                    alpha = std::min(alpha, zAlpha);
                 } else {
-                    float yAlpha = ((basisPointInOrtho[2] - 0.5f * newProjectionDimsXY) - camPositionInOrtho[2]) / camForwardInOrtho[2];
-                    alpha = std::min(alpha, yAlpha);
+                    float zAlpha = (basisPointInOrtho[2] - (camPositionInOrtho[2] + 0.5f * newProjectionDimsZ)) / camForwardInOrtho[2];
+                    alpha = std::min(alpha, zAlpha);
                 }
+
+                #if defined(_DEBUG)
+                    test = basisPointInOrtho - alpha * camForwardInOrtho;
+                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
+                #endif
 
                 float distance = Dot(pt - ExtractTranslation(mainSceneProjectionDesc._cameraToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
                 closestUncoveredDistance = std::min(closestUncoveredDistance, distance);
             }
 
             Float3 focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
+#endif
+
+            Float3 focusPositionInOrtho = camPositionInOrtho + (Dot(closestUncoveredPart.first[0], camForwardInOrtho) + 0.5f * newProjectionDimsXY) * camForwardInOrtho;
 
             IOrthoShadowProjections::OrthoSubProjection result;
             result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
             result._rightBottomBack = Float3 { focusPositionInOrtho[0] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] + 0.5f * newProjectionDimsZ };
 
-            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack));
-            if (Dot(ExtractForward_Cam(lightViewToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld)) < 0) {
-                result._leftTopFront[2] = -minAndMaxDepth[0] - newProjectionDimsZ;
-                result._rightBottomBack[2] = -minAndMaxDepth[0];
+            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack), cameraMiniProj, closestUncoveredPart.second);
+            if (minAndMaxDepth[0] > minAndMaxDepth[1])
+                return {{}, closestUncoveredPart.second};
+
+            if (TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld))[2] > 0) {
+                // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
+                result._leftTopFront[2] = minAndMaxDepth[0];
+                result._rightBottomBack[2] = minAndMaxDepth[0] + newProjectionDimsZ;
             } else {
-                result._leftTopFront[2] = -minAndMaxDepth[1];
-                result._rightBottomBack[2] = -minAndMaxDepth[1] + newProjectionDimsZ;
+                result._leftTopFront[2] = minAndMaxDepth[1] - newProjectionDimsZ;
+                result._rightBottomBack[2] = minAndMaxDepth[1];
             }
             assert(result._leftTopFront[2] < result._rightBottomBack[2]);
 
@@ -674,7 +730,11 @@ namespace RenderCore { namespace LightingEngine
         const unsigned shadowMapDepthResolution = (1 << 16) - 1;
 
         Float3 cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
+        Float3 cameraForward = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
         Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
+
+        assert(!IsOrthogonalProjection(mainSceneProjectionDesc._cameraToProjection));
+        auto cameraMiniProj = ExtractMinimalProjection(mainSceneProjectionDesc._cameraToProjection);
 
         // find the dimensions in view space for the focus point
         auto worldToMainCamera = InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld);
@@ -695,7 +755,7 @@ namespace RenderCore { namespace LightingEngine
         float projectionDimsZ = viewSpacePixelDims * shadowMapDepthResolution;
 
         Float3 shadowAcross = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
-        auto lightViewToWorld = MakeOrientedShadowViewToWorld(-negativeLightDirection, shadowAcross, focusPoint);
+        auto lightViewToWorld = MakeOrientedShadowViewToWorld(-negativeLightDirection, shadowAcross, cameraPos);
         auto worldToLightView = InvertOrthonormalTransform(lightViewToWorld);
 
         // The first projection must include the near plane of the camera, as well as the focus point
@@ -715,6 +775,7 @@ namespace RenderCore { namespace LightingEngine
         }
 
         IOrthoShadowProjections::OrthoSubProjection firstSubProjection;
+        /*
         if (focusLightView[0] > nearPlaneLightViewMaxs[0]) {
             firstSubProjection._leftTopFront[0] = nearPlaneLightViewMins[0];
             firstSubProjection._rightBottomBack[0] = nearPlaneLightViewMins[0] + projectionDimsXY;
@@ -733,23 +794,36 @@ namespace RenderCore { namespace LightingEngine
             firstSubProjection._leftTopFront[1] = focusLightView[1] - 0.5f * projectionDimsXY;
             firstSubProjection._rightBottomBack[1] = focusLightView[1] + 0.5f * projectionDimsXY;
         }
-
+        
         if (firstSubProjection._leftTopFront[0] > firstSubProjection._rightBottomBack[0])
             std::swap(firstSubProjection._leftTopFront[0], firstSubProjection._rightBottomBack[0]);
         if (firstSubProjection._leftTopFront[1] > firstSubProjection._rightBottomBack[1])
             std::swap(firstSubProjection._leftTopFront[1], firstSubProjection._rightBottomBack[1]);
+        */
+
+        auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
+        Float3 centerProjectOrtho = 0.5f * projectionDimsXY * camForwardInOrtho;
+
+        firstSubProjection._leftTopFront[0]     = centerProjectOrtho[0] - 0.5f * projectionDimsXY;
+        firstSubProjection._rightBottomBack[0]  = centerProjectOrtho[0] + 0.5f * projectionDimsXY;
+        firstSubProjection._leftTopFront[1]     = centerProjectOrtho[1] - 0.5f * projectionDimsXY;
+        firstSubProjection._rightBottomBack[1]  = centerProjectOrtho[1] + 0.5f * projectionDimsXY;
 
         // We're assuming that geometry closer to the light than the view frustum will be clamped
         // to zero depth here -- so the shadow projection doesn't need to extend all the way to
         // the light
-        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack));
+        // However, we also have to consider when the camera is looking directly into the light
+        // ... in that case we may want to sometimes have shadow casters outside of the far clip
+        // still casting shadows in
+        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, 0.f);
         assert(projectionDimsZ > 0);
-        if (Dot(ExtractForward_Cam(lightViewToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld)) < 0) {
-            firstSubProjection._leftTopFront[2] = -minAndMaxDepth[0] - projectionDimsZ;
-            firstSubProjection._rightBottomBack[2] = -minAndMaxDepth[0];
+        if (TransformDirectionVector(worldToLightView, cameraForward)[2] > 0) {
+            // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
+            firstSubProjection._leftTopFront[2] = minAndMaxDepth[0];
+            firstSubProjection._rightBottomBack[2] = minAndMaxDepth[0] + projectionDimsZ;
         } else {
-            firstSubProjection._leftTopFront[2] = -minAndMaxDepth[1];
-            firstSubProjection._rightBottomBack[2] = -minAndMaxDepth[1] + projectionDimsZ;
+            firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - projectionDimsZ;
+            firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1];
         }
         assert(firstSubProjection._leftTopFront[2] < firstSubProjection._rightBottomBack[2]);
 
@@ -760,12 +834,19 @@ namespace RenderCore { namespace LightingEngine
 
         float depthRangeCovered = 0.f;
         while (result._normalProjCount < settings._maxFrustumCount) {
-            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], depthRangeCovered);
+            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, depthRangeCovered);
             if (!next.first.has_value()) break;
 
             result._orthSubProjections[result._normalProjCount] = next.first.value();
             ++result._normalProjCount;
             depthRangeCovered = next.second;
+        }
+
+        for (unsigned c=0; c<result._normalProjCount; ++c) {
+            std::swap(result._orthSubProjections[c]._leftTopFront[1], result._orthSubProjections[c]._rightBottomBack[1]);
+            result._orthSubProjections[c]._leftTopFront[2] = -result._orthSubProjections[c]._leftTopFront[2];
+            result._orthSubProjections[c]._rightBottomBack[2] = -result._orthSubProjections[c]._rightBottomBack[2];
+            std::swap(result._orthSubProjections[c]._leftTopFront[2], result._orthSubProjections[c]._rightBottomBack[2]);
         }
 
         /*

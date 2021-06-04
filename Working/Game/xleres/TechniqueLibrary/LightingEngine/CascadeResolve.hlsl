@@ -45,15 +45,13 @@ CascadeAddress CascadeAddress_Create(float4 frustumCoordinates, float3 frustumSp
 CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 worldNormal)
 {
         // find the first frustum we're within
-    uint projectionCount = min(GetShadowSubProjectionCount(), GetShadowCascadeSubProjectionCount());
-
     #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
         float3 basePosition = mul(OrthoShadowWorldToView, float4(worldPosition, 1));
         float3 viewSpaceNormal = mul(OrthoShadowWorldToView, float4(worldNormal, 0)).xyz;
         #if SHADOW_ENABLE_NEAR_CASCADE
             float4 frustumCoordinates = float4(mul(OrthoNearCascade, float4(basePosition, 1)), 1.f);
             if (PtInFrustum(frustumCoordinates))
-                return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), projectionCount, OrthoShadowNearMinimalProjection);
+                return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), SHADOW_SUB_PROJECTION_COUNT, OrthoShadowNearMinimalProjection);
         #endif
 
             // In ortho mode, all frustums have the same near and far depth
@@ -64,7 +62,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
         #else
             //[branch] if (PtInFrustumZ(float4(basePosition, 1.f))) {
-                [unroll] for (uint c=0; c<GetShadowCascadeSubProjectionCount(); c++) {
+                [unroll] for (uint c=0; c<GetShadowSubProjectionCount(); c++) {
                     float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, c), 1.f);
                     if (PtInFrustum(frustumCoordinates))
                         return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, c, ShadowProjection_GetMiniProj_NotNear(c));
@@ -77,7 +75,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             float4 frustumCoordinates = mul(ShadowWorldToProj[0], float4(worldPosition, 1));
             return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), 0, ShadowProjection_GetMiniProj(0));
         #else
-            [unroll] for (uint c=0; c<GetShadowCascadeSubProjectionCount(); c++) {
+            [unroll] for (uint c=0; c<GetShadowSubProjectionCount(); c++) {
                 float4 frustumCoordinates = mul(ShadowWorldToProj[c], float4(worldPosition, 1));
                 if (PtInFrustum(frustumCoordinates))
                     return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj(c));
@@ -132,7 +130,7 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
 {
     const float2 camCoordinate = XYScale * texCoord + XYTrans;
 
-    uint projectionCount = min(GetShadowSubProjectionCount(), GetShadowCascadeSubProjectionCount());
+    uint projectionCount = min(GetShadowSubProjectionCount(), GetShadowSubProjectionCount());
 
         // 	Find the first frustum we're within
         //	This first loop is kept separate and simple
@@ -171,7 +169,7 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
             float3 baseCoord = CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, OrthoCameraToShadow).xyz;
             [branch] if (PtInFrustumZ(float4(baseCoord, 1.f))) {
                 CascadeAddress result = CascadeAddress_Invalid();
-                [unroll] for (int c=GetShadowCascadeSubProjectionCount()-1; c>=0; c--) {
+                [unroll] for (int c=GetShadowSubProjectionCount()-1; c>=0; c--) {
                     float4 t = float4(AdjustForOrthoCascade(baseCoord, c), 1.f);
                     if (PtInFrustumXY(t))
                         result = CascadeAddress_Create(t, float3(0,0,0), c, ShadowProjection_GetMiniProj_NotNear(c));

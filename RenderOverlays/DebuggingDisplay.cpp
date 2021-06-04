@@ -674,8 +674,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ///////////////////////////////////////////////////////////////////////////////////
     static void SetQuadPts(Float3 destination[], const Float3& A, const Float3& B, const Float3& C, const Float3& D)
     {
+        // z pattern ordering
         destination[0] = A; destination[1] = B; destination[2] = C;
-        destination[3] = A; destination[4] = C; destination[5] = D;
+        destination[3] = C; destination[4] = B; destination[5] = D;
     }
 
     class HexahedronCorners
@@ -694,10 +695,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         HexahedronCorners result;
         const Float3 bbpts[] = 
         {
+            // z pattern ordering to match FromFrustumCorners
             Float3(0.f, 0.f, 0.f), Float3(0.f, 1.f, 0.f),
-            Float3(1.f, 1.f, 0.f), Float3(1.f, 0.f, 0.f),
+            Float3(1.f, 0.f, 0.f), Float3(1.f, 1.f, 0.f),
             Float3(0.f, 0.f, 1.f), Float3(0.f, 1.f, 1.f),
-            Float3(1.f, 1.f, 1.f), Float3(1.f, 0.f, 1.f)
+            Float3(1.f, 0.f, 1.f), Float3(1.f, 1.f, 1.f)
         };
 
         for (unsigned c=0; c<dimof(bbpts); ++c) {
@@ -715,9 +717,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         HexahedronCorners result;
         CalculateAbsFrustumCorners(result._worldSpacePts, worldToProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
-            // note -- we can swap 0 & 1 or 2 & 3 (depending on if we want inside or outside faces)
-        std::swap(result._worldSpacePts[0], result._worldSpacePts[1]);
-        std::swap(result._worldSpacePts[4+0], result._worldSpacePts[4+1]);
         return result;
     }
 
@@ -730,14 +729,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (partMask & 0x2) {
             Float3 lines[12*2];
             lines[ 0*2+0] = corners._worldSpacePts[0]; lines[ 0*2+1] = corners._worldSpacePts[1];
-            lines[ 1*2+0] = corners._worldSpacePts[1]; lines[ 1*2+1] = corners._worldSpacePts[2];
-            lines[ 2*2+0] = corners._worldSpacePts[2]; lines[ 2*2+1] = corners._worldSpacePts[3];
-            lines[ 3*2+0] = corners._worldSpacePts[3]; lines[ 3*2+1] = corners._worldSpacePts[0];
+            lines[ 1*2+0] = corners._worldSpacePts[1]; lines[ 1*2+1] = corners._worldSpacePts[3];
+            lines[ 2*2+0] = corners._worldSpacePts[3]; lines[ 2*2+1] = corners._worldSpacePts[2];
+            lines[ 3*2+0] = corners._worldSpacePts[2]; lines[ 3*2+1] = corners._worldSpacePts[0];
 
             lines[ 4*2+0] = corners._worldSpacePts[4]; lines[ 4*2+1] = corners._worldSpacePts[5];
-            lines[ 5*2+0] = corners._worldSpacePts[5]; lines[ 5*2+1] = corners._worldSpacePts[6];
-            lines[ 6*2+0] = corners._worldSpacePts[6]; lines[ 6*2+1] = corners._worldSpacePts[7];
-            lines[ 7*2+0] = corners._worldSpacePts[7]; lines[ 7*2+1] = corners._worldSpacePts[4];
+            lines[ 5*2+0] = corners._worldSpacePts[5]; lines[ 5*2+1] = corners._worldSpacePts[7];
+            lines[ 6*2+0] = corners._worldSpacePts[7]; lines[ 6*2+1] = corners._worldSpacePts[6];
+            lines[ 7*2+0] = corners._worldSpacePts[6]; lines[ 7*2+1] = corners._worldSpacePts[4];
 
             lines[ 8*2+0] = corners._worldSpacePts[0]; lines[ 8*2+1] = corners._worldSpacePts[4];
             lines[ 9*2+0] = corners._worldSpacePts[1]; lines[ 9*2+1] = corners._worldSpacePts[5];

@@ -65,6 +65,8 @@ uint GetShadowSubProjectionCount()
 {
 	#if !defined(SHADOW_CASCADE_MODE) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_NONE)
 		return 0;
+	#elif SHADOW_SUB_PROJECTION_COUNT == 1
+		return 1;
 	#else
 		return SubProjectionCount;
 	#endif
@@ -107,15 +109,10 @@ float4 ShadowProjection_GetMiniProj_NotNear(uint cascadeIndex)
 	#endif
 }
 
-uint GetShadowCascadeSubProjectionCount()
-{
-	return SHADOW_SUB_PROJECTION_COUNT;		// we could optionally make this a constant to give us room for frame-to-frame variation 
-}
-
 float4 ShadowProjection_GetMiniProj(uint cascadeIndex)
 {
 	#if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL) && SHADOW_ENABLE_NEAR_CASCADE
-		if (cascadeIndex == GetShadowCascadeSubProjectionCount())
+		if (cascadeIndex == SHADOW_SUB_PROJECTION_COUNT)
 			return OrthoShadowNearMinimalProjection;
 	#endif
 	return ShadowProjection_GetMiniProj_NotNear(cascadeIndex);
