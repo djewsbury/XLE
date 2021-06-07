@@ -15,11 +15,12 @@
 #include <chrono>
 
 namespace RenderCore { namespace Techniques { 
-	class CameraDesc; class TechniqueContext; class Technique; 
+	class CameraDesc;
 	class ITechniqueDelegate;
 	class IPipelineAcceleratorPool;
     class ImmediateDrawingApparatus;
     class IPreDrawDelegate;
+    class DrawingApparatus;
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
@@ -191,8 +192,7 @@ namespace ToolsRig
 
 		MouseOverTrackingOverlay(
             const std::shared_ptr<VisMouseOver>& mouseOver,
-            const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext,
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+            const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
             const std::shared_ptr<VisCameraSettings>& camera);
         ~MouseOverTrackingOverlay();
     protected:

@@ -27,7 +27,6 @@ namespace Sample
 	{
 		auto pipelineAccelerators = globals._drawingApparatus->_pipelineAccelerators;
 		auto lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus);
-		auto techniqueContext = globals._drawingApparatus->_techniqueContext;
 
 		auto modelLayer = ToolsRig::CreateSimpleSceneLayer(
 			globals._immediateDrawingApparatus,
@@ -54,13 +53,13 @@ namespace Sample
 		AddSystem(visOverlay);
 
 		auto trackingOverlay = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(
-			mouseOver, techniqueContext, pipelineAccelerators,
+			mouseOver, globals._drawingApparatus,
 			modelLayer->GetCamera());
 		trackingOverlay->Set(scene);
 		AddSystem(trackingOverlay);
 
 		{
-			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(modelLayer->GetCamera(), techniqueContext, pipelineAccelerators);
+			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(modelLayer->GetCamera(), globals._drawingApparatus);
 			manipulators->Register(
 				ToolsRig::ManipulatorStack::CameraManipulator,
 				ToolsRig::CreateCameraManipulator(modelLayer->GetCamera(), ToolsRig::CameraManipulatorMode::Blender_RightButton));

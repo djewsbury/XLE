@@ -10,7 +10,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class SubFrameEvents; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; }}
 namespace RenderOverlays { class FontRenderingManager; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
 namespace Utility { class HierarchicalCPUProfiler; }
@@ -18,6 +18,7 @@ namespace Utility { class HierarchicalCPUProfiler; }
 namespace PlatformRig
 {
     class IOverlaySystem;
+    class WindowApparatus;
 
     class FrameRig
     {
@@ -29,7 +30,12 @@ namespace PlatformRig
         };
 
         FrameResult ExecuteFrame(
-            RenderCore::IThreadContext& context,
+            WindowApparatus& windowApparatus,
+			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+            RenderCore::Techniques::DrawingApparatus* drawingApparatus = nullptr);
+
+        FrameResult ExecuteFrame(
+            std::shared_ptr<RenderCore::IThreadContext> context,
             RenderCore::IPresentationChain& presChain,
 			RenderCore::Techniques::ParsingContext& parserContext,
             Utility::HierarchicalCPUProfiler* profiler);

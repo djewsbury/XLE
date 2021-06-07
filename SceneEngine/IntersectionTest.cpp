@@ -14,6 +14,7 @@
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/Drawables.h"
+#include "../RenderCore/Techniques/Apparatuses.h"
 
 #include "../Math/Transformations.h"
 #include "../Math/Vector.h"
@@ -151,6 +152,14 @@ namespace SceneEngine
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
+    {
+        RenderCore::Techniques::TechniqueContext techniqueContext;
+        techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
+        techniqueContext._drawablesSharedResources = drawingApparatus._drawablesSharedResources;
+        return techniqueContext;
+    }
+
     auto IntersectionTestScene::FirstRayIntersection(
         const IntersectionTestContext& context,
         std::pair<Float3, Float3> worldSpaceRay,
@@ -160,7 +169,8 @@ namespace SceneEngine
         using Type = IntersectionTestResult::Type;
 
 		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
-		RenderCore::Techniques::ParsingContext parsingContext(*context._techniqueContext);
+        auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
+		RenderCore::Techniques::ParsingContext parsingContext(techniqueContext);
 
         if ((filter & Type::Terrain) && _terrainManager) {
             auto intersection = FindTerrainIntersection(
@@ -204,7 +214,7 @@ namespace SceneEngine
 
                         ModelIntersectionStateContext intersectionContext(
                             ModelIntersectionStateContext::RayTest,
-                            threadContext, *context._pipelineAcceleratorPool);
+                            threadContext, *context._drawingApparatus->_pipelineAccelerators);
                         intersectionContext.SetRay(worldSpaceRay);
                         auto results = PlacementsIntersection(
                             intersectionContext, parsingContext, intersectionContext, 
@@ -290,7 +300,8 @@ namespace SceneEngine
 
                 TRY
                 {
-					RenderCore::Techniques::ParsingContext parsingContext(*context._techniqueContext);
+                    auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
+					RenderCore::Techniques::ParsingContext parsingContext(techniqueContext);
 
                     // note --  we could do this all in a single render call, except that there
                     //          is no way to associate a low level intersection result with a specific
@@ -313,7 +324,7 @@ namespace SceneEngine
                         if (!isInside) {
                             ModelIntersectionStateContext intersectionContext(
                                 ModelIntersectionStateContext::FrustumTest,
-                                threadContext, *context._pipelineAcceleratorPool);
+                                threadContext, *context._drawingApparatus->_pipelineAccelerators);
                             intersectionContext.SetFrustum(worldToProjection);
 
                             auto results = PlacementsIntersection(

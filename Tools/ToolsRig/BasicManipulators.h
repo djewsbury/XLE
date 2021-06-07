@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 namespace SceneEngine { class IIntersectionScene; }
-namespace RenderCore { namespace Techniques { class TechniqueContext; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { class DrawingApparatus; } }
 
 namespace ToolsRig
 {
@@ -35,16 +35,14 @@ namespace ToolsRig
 
         ManipulatorStack(
 			const std::shared_ptr<VisCameraSettings>& camera,
-			const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext,
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool);
+			const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus);
         ~ManipulatorStack();
     protected:
         std::vector<std::shared_ptr<ToolsRig::IManipulator>> _activeManipulators;
         std::vector<std::pair<uint64_t, std::shared_ptr<ToolsRig::IManipulator>>> _registeredManipulators;
 
         std::shared_ptr<VisCameraSettings> _camera;
-		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<SceneEngine::IIntersectionScene> _intersectionScene;
     };
 

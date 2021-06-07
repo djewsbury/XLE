@@ -10,7 +10,7 @@
 #include "../Math/Vector.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class CameraDesc; class TechniqueContext; class IPipelineAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class CameraDesc; class DrawingApparatus; }}
 namespace RenderCore { class PresentationChainDesc; }
 
 namespace SceneEngine
@@ -82,8 +82,7 @@ namespace SceneEngine
 
 		RenderCore::Techniques::CameraDesc _cameraDesc;
 		Int2 _viewportMins, _viewportMaxs;
-		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
     };
 
     class TerrainManager;

@@ -842,15 +842,23 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
+    {
+        RenderCore::Techniques::TechniqueContext techniqueContext;
+        techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
+        techniqueContext._drawablesSharedResources = drawingApparatus._drawablesSharedResources;
+        return techniqueContext;
+    }
+
 	static SceneEngine::IntersectionTestResult FirstRayIntersection(
 		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::TechniqueContext& techniqueContext,
-		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+		RenderCore::Techniques::DrawingApparatus& drawingApparatus,
         std::pair<Float3, Float3> worldSpaceRay,
 		SceneEngine::IScene& scene)
 	{
 		using namespace RenderCore;
 
+		auto techniqueContext = MakeTechniqueContext(drawingApparatus);
 		Techniques::ParsingContext parserContext { techniqueContext };
 
 		RenderCore::Techniques::DrawablesPacket pkt;
@@ -858,7 +866,7 @@ namespace ToolsRig
 		
 		SceneEngine::ModelIntersectionStateContext stateContext {
             SceneEngine::ModelIntersectionStateContext::RayTest,
-            threadContext, pipelineAccelerators };
+            threadContext, *drawingApparatus._pipelineAccelerators };
         stateContext.SetRay(worldSpaceRay);
 		stateContext.ExecuteDrawables(parserContext, pkt);
 		
@@ -957,7 +965,7 @@ namespace ToolsRig
 				AsCameraDesc(*_camera), mousePosition, context._viewMins, context._viewMaxs);
 
             if (_scene) {
-				auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_techniqueContext, *_pipelineAccelerators, worldSpaceRay, *_scene);
+				auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
 				if (intr._type != 0) {
 					if (        intr._drawCallIndex != _mouseOver->_drawCallIndex
 							||  intr._materialGuid != _mouseOver->_materialGuid
@@ -982,20 +990,17 @@ namespace ToolsRig
 
         MouseOverTrackingListener(
             const std::shared_ptr<VisMouseOver>& mouseOver,
-            const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext,
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+            const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
             const std::shared_ptr<VisCameraSettings>& camera)
         : _mouseOver(mouseOver)
-        , _techniqueContext(techniqueContext)
-		, _pipelineAccelerators(pipelineAccelerators)
+        , _drawingApparatus(drawingApparatus)
         , _camera(camera)
         {}
         ~MouseOverTrackingListener() {}
 
     protected:
         std::shared_ptr<VisMouseOver> _mouseOver;
-        std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<VisCameraSettings> _camera;
         
         std::shared_ptr<SceneEngine::IScene> _scene;
@@ -1024,15 +1029,13 @@ namespace ToolsRig
 
     MouseOverTrackingOverlay::MouseOverTrackingOverlay(
         const std::shared_ptr<VisMouseOver>& mouseOver,
-        const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext,
-		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+        const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus,
         const std::shared_ptr<VisCameraSettings>& camera)
     {
         _mouseOver = mouseOver;
         _inputListener = std::make_shared<MouseOverTrackingListener>(
             mouseOver,
-            techniqueContext, 
-			pipelineAccelerators,
+            drawingApparatus, 
             camera);
     }
 

@@ -5,7 +5,7 @@
 #include "FrameRig.h"
 #include "AllocationProfiler.h"
 #include "OverlaySystem.h"
-// #include "MainInputHandler.h"
+#include "PlatformApparatuses.h"
 
 #include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/IAnnotator.h"
@@ -22,6 +22,7 @@
 #include "../RenderCore/Techniques/SubFrameEvents.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/Services.h"
+#include "../RenderCore/Techniques/Apparatuses.h"
 #include "../BufferUploads/IBufferUploads.h"
 
 #include "../OSServices/Log.h"
@@ -111,7 +112,7 @@ namespace PlatformRig
 ///////////////////////////////////////////////////////////////////////////////
 
     auto FrameRig::ExecuteFrame(
-        RenderCore::IThreadContext& context,
+        std::shared_ptr<RenderCore::IThreadContext> context,
         RenderCore::IPresentationChain& presChain,
 		RenderCore::Techniques::ParsingContext& parserContext,
         HierarchicalCPUProfiler* cpuProfiler) -> FrameResult
@@ -145,19 +146,21 @@ namespace PlatformRig
         }
         _pimpl->_prevFrameStartTime = startTime;
 
+        RenderCore::Techniques::SetThreadContext(context);
+
         bool endAnnotatorFrame = false;
 		TRY {
 
-            auto presentationTarget = context.BeginFrame(presChain);
+            auto presentationTarget = context->BeginFrame(presChain);
             auto presentationTargetDesc = presentationTarget->GetDesc();
 
-            context.GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
+            context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrame(), because that primes the command list in the vulkan device)
             endAnnotatorFrame = true;
 
                 //  We must invalidate the cached state at least once per frame.
                 //  It appears that the driver might forget bound constant buffers
                 //  during the begin frame or present
-            context.InvalidateCachedState();
+            context->InvalidateCachedState();
 
 			// Bind the presentation target as the default output for the parser context
 			// (including setting the normalized width and height)
@@ -181,11 +184,11 @@ namespace PlatformRig
                     #if defined(_DEBUG)
                         assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
                     #endif
-                    _mainOverlaySys->Render(context, parserContext);
+                    _mainOverlaySys->Render(*context, parserContext);
                 } else {
                     // We must at least clear, because the _debugScreenOverlaySystem might have something to render
                     // (also redefine AttachmentSemantics::ColorLDR as initialized here)
-                    RenderCore::Metal::DeviceContext::Get(context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
+                    RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
                     using namespace RenderCore::Techniques;
                     stitchingContext.DefineAttachment(PreregisteredAttachment {AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized});
                 }
@@ -198,7 +201,7 @@ namespace PlatformRig
 
 			TRY {
 				if (_debugScreenOverlaySystem)
-                    _debugScreenOverlaySystem->Render(context, parserContext);
+                    _debugScreenOverlaySystem->Render(*context, parserContext);
 			}
 			CATCH_ASSETS(parserContext)
 			CATCH(const std::exception& e) {
@@ -229,30 +232,31 @@ namespace PlatformRig
 			parserContext.GetTechniqueContext()._attachmentPool->UnbindAll();
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPrePresent.Invoke(context);
+                _subFrameEvents->_onPrePresent.Invoke(*context);
 
             if (parserContext._requiredBufferUploadsCommandList)
-                RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(context, parserContext._requiredBufferUploadsCommandList);
+                RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*context, parserContext._requiredBufferUploadsCommandList);
 
             RenderCore::Metal::Internal::SetImageLayout(
-                *RenderCore::Metal::DeviceContext::Get(context), *checked_cast<RenderCore::Metal::Resource*>(presentationTarget.get()),
+                *RenderCore::Metal::DeviceContext::Get(*context), *checked_cast<RenderCore::Metal::Resource*>(presentationTarget.get()),
                 RenderCore::Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                 RenderCore::Metal::Internal::ImageLayout::PresentSrc, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
-				context.Present(presChain);
+				context->Present(presChain);
 			}
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPostPresent.Invoke(context);
+                _subFrameEvents->_onPostPresent.Invoke(*context);
 
-            context.GetAnnotator().Frame_End();
+            context->GetAnnotator().Frame_End();
 
 		} CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
 		    if (endAnnotatorFrame)
-                context.GetAnnotator().Frame_End();
+                context->GetAnnotator().Frame_End();
+            RenderCore::Techniques::SetThreadContext(nullptr);
 	    } CATCH_END
 	
         if (_subFrameEvents)
@@ -273,6 +277,25 @@ namespace PlatformRig
         }
 
         return { frameElapsedTime, parserContext.HasPendingAssets() };
+    }
+
+    auto FrameRig::ExecuteFrame(
+        WindowApparatus& windowApparatus,
+        RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+        RenderCore::Techniques::DrawingApparatus* drawingApparatus) -> FrameResult
+    {
+        RenderCore::Techniques::TechniqueContext techniqueContext;
+        if (drawingApparatus) {
+    		techniqueContext._systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
+    		techniqueContext._drawablesSharedResources = drawingApparatus->_drawablesSharedResources;
+        }
+        techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
+        techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
+        RenderCore::Techniques::ParsingContext parserContext(techniqueContext);
+        return ExecuteFrame(
+            windowApparatus._immediateContext, *windowApparatus._presentationChain,
+            parserContext, 
+            frameRenderingApparatus._frameCPUProfiler.get());
     }
 
     void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)

@@ -13,7 +13,7 @@ namespace PlatformRig { class InputSnapshot; class IInputListener; }
 namespace RenderOverlays { class IOverlayContext; namespace DebuggingDisplay { class InterfaceState; struct Layout; class Interactables; class DebugScreensSystem; }; class Font; }
 namespace SceneEngine { class TerrainManager; class IIntersectionScene; }
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class TechniqueContext; class IPipelineAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class DrawingApparatus; class IPipelineAcceleratorPool; }}
 
 namespace ToolsRig
 {
@@ -38,16 +38,16 @@ namespace ToolsRig
             const std::shared_ptr<SceneEngine::TerrainManager>& terrainManager,
             const std::shared_ptr<TerrainManipulatorContext>& terrainManipulatorContext,
             const std::shared_ptr<VisCameraSettings>& camera,
-			const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext);
+			const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus);
         ~ManipulatorsInterface();
     private:
         std::vector<std::unique_ptr<IManipulator>> _manipulators;
         unsigned _activeManipulatorIndex;
 
-        std::shared_ptr<SceneEngine::TerrainManager>            _terrainManager;
-        std::shared_ptr<SceneEngine::IIntersectionScene>        _intersectionTestScene;
-		std::shared_ptr<VisCameraSettings>						_camera;
-		std::shared_ptr<RenderCore::Techniques::TechniqueContext>	_techniqueContext;
+        std::shared_ptr<SceneEngine::TerrainManager>                _terrainManager;
+        std::shared_ptr<SceneEngine::IIntersectionScene>            _intersectionTestScene;
+		std::shared_ptr<VisCameraSettings>						    _camera;
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus>	_drawingApparatus;
 
         class InputListener;
     };

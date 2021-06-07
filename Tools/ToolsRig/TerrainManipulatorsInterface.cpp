@@ -43,7 +43,7 @@ namespace ToolsRig
 			SceneEngine::IntersectionTestContext intersectionContext {
 				AsCameraDesc(*p->_camera),
 				context._viewMins, context._viewMaxs,
-				p->_techniqueContext };
+				p->_drawingApparatus };
 
             if (auto a = p->GetActiveManipulator()) {
                 return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get());
@@ -80,7 +80,7 @@ namespace ToolsRig
         const std::shared_ptr<SceneEngine::TerrainManager>& terrainManager,
         const std::shared_ptr<TerrainManipulatorContext>& terrainManipulatorContext,
         const std::shared_ptr<VisCameraSettings>& camera,
-		const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext)
+		const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus)
     {
         _activeManipulatorIndex = 0;
 #if defined(GUILAYER_SCENEENGINE)
@@ -92,7 +92,7 @@ namespace ToolsRig
         _terrainManager = terrainManager;
         _intersectionTestScene = intersectionTestScene;
 		_camera = camera;
-		_techniqueContext = techniqueContext;
+		_drawingApparatus = drawingApparatus;
     }
 
     ManipulatorsInterface::~ManipulatorsInterface()

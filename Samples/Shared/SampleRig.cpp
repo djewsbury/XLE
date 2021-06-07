@@ -77,8 +77,6 @@ namespace Sample
         auto v = sampleGlobals._renderDevice->GetDesc();
         sampleGlobals._windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE sample [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
-        Utility::HierarchicalCPUProfiler cpuProfiler;
-
             //  Create the debugging system, and add any "displays"
             //  If we have any custom displays to add, we can add them here. Often it's 
             //  useful to create a debugging display to go along with any new feature. 
@@ -86,7 +84,7 @@ namespace Sample
         Log(Verbose) << "Setup tools and debugging" << std::endl;
         PlatformRig::FrameRig frameRig(sampleGlobals._primaryResourcesApparatus->_subFrameEvents);
         auto debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-        PlatformRig::InitProfilerDisplays(*debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), cpuProfiler);
+        PlatformRig::InitProfilerDisplays(*debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
         frameRig.SetDebugScreensOverlaySystem(debugOverlaysApparatus->_debugScreensOverlaySystem);
         frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
 
@@ -113,24 +111,15 @@ namespace Sample
                     frameRig.UpdatePresentationChain(*presChain);
             });
 
-        auto techContext = sampleGlobals._drawingApparatus->_techniqueContext;
-        techContext->_attachmentPool = sampleGlobals._frameRenderingApparatus->_attachmentPool;
-        techContext->_frameBufferPool = sampleGlobals._frameRenderingApparatus->_frameBufferPool;
-
         RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
 
             //  Finally, we execute the frame loop
         while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
                 // ------- Render ----------------------------------------
-            RenderCore::Techniques::ParsingContext parserContext(*sampleGlobals._drawingApparatus->_techniqueContext);
-            auto frameResult = frameRig.ExecuteFrame(
-                *sampleGlobals._windowApparatus->_immediateContext, *sampleGlobals._windowApparatus->_presentationChain, 
-                parserContext, &cpuProfiler);
-
+            auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus, *sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get());
                 // ------- Update ----------------------------------------
-            
             sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
-            cpuProfiler.EndFrame();
+            sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
         }
 
 		RenderCore::Techniques::SetThreadContext(nullptr);

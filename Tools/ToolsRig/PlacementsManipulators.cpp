@@ -57,7 +57,7 @@ namespace ToolsRig
             const std::shared_ptr<SceneEngine::PlacementsRenderer>& renderer, 
             const std::shared_ptr<SceneEngine::IIntersectionScene>& intersectionTestScene,
 			const std::shared_ptr<VisCameraSettings>& camera,
-			const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext);
+			const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus);
         ~PlacementsWidgets();
 
     private:
@@ -65,7 +65,7 @@ namespace ToolsRig
 
         std::shared_ptr<ModelBrowser>       _browser;
         std::shared_ptr<VisCameraSettings> _camera;
-		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
+		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<SceneEngine::IIntersectionScene> _intersectionTestScene;
         std::shared_ptr<SceneEngine::PlacementsEditor> _editor;
         bool            _browserActive;
@@ -1524,7 +1524,7 @@ namespace ToolsRig
 			SceneEngine::IntersectionTestContext intersectionContext {
 				AsCameraDesc(*_camera),
 				inputContext._viewMins, inputContext._viewMaxs,
-				_techniqueContext };
+				_drawingApparatus };
 
             if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))
 				return true;
@@ -1575,7 +1575,7 @@ namespace ToolsRig
         const std::shared_ptr<SceneEngine::PlacementsRenderer>& renderer, 
         const std::shared_ptr<SceneEngine::IIntersectionScene>& intersectionTestScene,
 		const std::shared_ptr<VisCameraSettings>& camera,
-		const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& techniqueContext)
+		const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& drawingApparatus)
     {
         // auto browser = std::make_shared<ModelBrowser>("game\\model");
         _browserActive = false;
@@ -1589,7 +1589,7 @@ namespace ToolsRig
         _intersectionTestScene = intersectionTestScene;
         _manipulators = std::move(manipulators);
 		_camera = camera;
-		_techniqueContext = techniqueContext;
+		_drawingApparatus = drawingApparatus;
     }
     
     PlacementsWidgets::~PlacementsWidgets()
@@ -1651,7 +1651,7 @@ namespace ToolsRig
             terrainManager, placementCellSet, pimpl->_editor);
         pimpl->_placementsDispl = std::make_shared<PlacementsWidgets>(
             pimpl->_editor, placementsManager->GetRenderer(),
-            pimpl->_intersectionTestScene, camera, immediateDrawablesApparatus->_mainDrawingApparatus->_techniqueContext);
+            pimpl->_intersectionTestScene, camera, immediateDrawablesApparatus->_mainDrawingApparatus);
         pimpl->_screens->Register(pimpl->_placementsDispl, "Placements", DebugScreensSystem::SystemDisplay);
         pimpl->_immediateDrawables = immediateDrawablesApparatus->_immediateDrawables;
         pimpl->_fontRenderingManager = immediateDrawablesApparatus->_fontRenderingManager;

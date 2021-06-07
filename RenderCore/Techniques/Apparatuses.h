@@ -25,6 +25,7 @@ namespace RenderCore
 namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class Services; }
 namespace BufferUploads { class IManager; }
+namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -39,6 +40,7 @@ namespace RenderCore { namespace Techniques
 	class SubFrameEvents;
 	class CommonResourceBox;
 	class DrawablesSharedResources;
+	class SystemUniformsDelegate;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -71,7 +73,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<DrawablesSharedResources> _drawablesSharedResources;
-		std::shared_ptr<TechniqueContext> _techniqueContext;
+		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
@@ -137,6 +139,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
+		std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

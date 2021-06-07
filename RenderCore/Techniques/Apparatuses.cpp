@@ -31,6 +31,7 @@
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/CompilerLibrary.h"
+#include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include "thousandeyes/futures/Default.h"
@@ -82,9 +83,7 @@ namespace RenderCore { namespace Techniques
 
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
 		_drawablesSharedResources = CreateDrawablesSharedResources();
-		_techniqueContext = std::make_shared<TechniqueContext>();
-		_techniqueContext->_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device, *_commonResources);
-		_techniqueContext->_drawablesSharedResources = _drawablesSharedResources;
+		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device, *_commonResources);
 
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);
@@ -216,6 +215,7 @@ namespace RenderCore { namespace Techniques
 	{
 		_attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(device);
 		_frameBufferPool = RenderCore::Techniques::CreateFrameBufferPool();
+		_frameCPUProfiler = std::make_shared<Utility::HierarchicalCPUProfiler>();
 	}
 
 	FrameRenderingApparatus::~FrameRenderingApparatus()
