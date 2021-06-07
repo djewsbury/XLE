@@ -1340,7 +1340,7 @@ namespace SceneEngine
             if (assetState != ::Assets::AssetState::Ready)
                 continue;
 
-            if (!RayVsAABB( cellSpaceRay, AsFloat4x4(obj._localToCell), 
+            if (!RayVsAABB( cellSpaceRay, obj._localToCell, 
                             localBoundingBox.first, localBoundingBox.second)) {
                 continue;
             }

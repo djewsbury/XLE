@@ -18,7 +18,7 @@ namespace XLEMath
 
         /// <summary>Tests a ray against an AABB</summary>
         /// <param name="worldSpaceRay">The ray in world space. Start and end position</param>
-    bool    RayVsAABB(const std::pair<Float3, Float3>& worldSpaceRay, const Float4x4& aabbToWorld, const Float3& mins, const Float3& maxs);
+    bool    RayVsAABB(const std::pair<Float3, Float3>& worldSpaceRay, const Float3x4& aabbToWorld, const Float3& mins, const Float3& maxs);
     bool    RayVsAABB(const std::pair<Float3, Float3>& localSpaceRay, const Float3& mins, const Float3& maxs);
 
     bool    Ray2DVsAABB(const std::pair<Float2, Float2>& localSpaceRay, const Float2& mins, const Float2& maxs);

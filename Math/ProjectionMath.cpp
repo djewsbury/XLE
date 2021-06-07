@@ -9,9 +9,11 @@
 
 #include "ProjectionMath.h"
 #include "Geometry.h"
+#include "Transformations.h"
 #include "../Core/Prefix.h"
 #include "../Core/SelectConfiguration.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/ArithmeticUtils.h"
 #include <assert.h>
 #include <cfloat>
 #include <limits>
@@ -601,15 +603,15 @@ namespace XLEMath
 
     AABBIntersection::Enum ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius)
     {
-        unsigned straddlingFlags = 0;
-        auto planeCount = (unsigned)_planes.size();
+        uint64_t straddlingFlags = 0;
+        auto planeCount = (uint64_t)_planes.size();
         Float3 intersectionCenters[planeCount];
-        for (unsigned f=0; f<planeCount; ++f) {
+        for (uint64_t f=0; f<planeCount; ++f) {
             auto distance = SignedDistance(centerPoint, _planes[f]);
             if (__builtin_expect(distance >= radius, false)) {
-                return AABBIntersection::Culled;        // this should be rare given the quick test above
+                return AABBIntersection::Culled;
             }
-            straddlingFlags |= (distance > -radius) << f;
+            straddlingFlags |= uint64_t(distance > -radius) << f;
             intersectionCenters[f] = centerPoint - distance * Truncate(_planes[f]);
         }
         if (!straddlingFlags) {
@@ -632,14 +634,12 @@ namespace XLEMath
         // Check the faces for any intersection centers we got. If it's inside
         // all, then the sphere does intersect the frustum
         for (unsigned f=0; f<planeCount; ++f) {
-            if (__builtin_expect(!(straddlingFlags & (1<<f)), true)) continue;
+            if (__builtin_expect(!(straddlingFlags & (1ull<<f)), true)) continue;
             auto intersectionCenter = intersectionCenters[f];
-            unsigned withinCount = 0;
-            for (unsigned qf=0; qf<planeCount; ++qf) {
-                if (qf == f) continue;
-                withinCount += SignedDistance(intersectionCenter, _planes[qf]) < 0.f;
-            }
-            if (withinCount == planeCount-1)
+            unsigned qf=0;
+            for (; qf<planeCount; ++qf)
+                if (qf != f && SignedDistance(intersectionCenter, _planes[qf]) > 0.f) break;
+            if (qf == planeCount)
                 return AABBIntersection::Boundary;
         }
 
@@ -660,6 +660,114 @@ namespace XLEMath
         return AABBIntersection::Culled;
     }
 
+    AABBIntersection::Enum ArbitraryConvexVolumeTester::TestAABB(
+        const Float3x4& aabbToLocalSpace, 
+        Float3 mins, Float3 maxs)
+    {
+        assert(mins[0] <= maxs[0] && mins[1] <= maxs[1] && mins[2] <= maxs[2]);
+
+        // Is it better to do calculations in AABB space, or in local space?
+        // we can effectively do volume vs box or box vs volume...
+        // it might depend on the complexity of the volume -- probably we should
+        // assume it usually has more corners/planes than a box, though
+        // But then again, the box will usually be smaller, and we're far more likely to
+        // get a full rejection if we compare the box vs all of the volume planes first...
+
+        Float3 boxCornersLocalSpace[] {
+            aabbToLocalSpace * Float4{mins[0], mins[1], mins[2], 1.0f},
+            aabbToLocalSpace * Float4{maxs[0], mins[1], mins[2], 1.0f},
+            aabbToLocalSpace * Float4{mins[0], maxs[1], mins[2], 1.0f},
+            aabbToLocalSpace * Float4{maxs[0], maxs[1], mins[2], 1.0f},
+                
+            aabbToLocalSpace * Float4{mins[0], mins[1], maxs[2], 1.0f},
+            aabbToLocalSpace * Float4{maxs[0], mins[1], maxs[2], 1.0f},
+            aabbToLocalSpace * Float4{mins[0], maxs[1], maxs[2], 1.0f},
+            aabbToLocalSpace * Float4{maxs[0], maxs[1], maxs[2], 1.0f}
+        };
+
+        uint64_t straddlingFlags = 0;
+        auto planeCount = (unsigned)_planes.size();
+        Float3 intersectionCenters[planeCount];
+        for (uint64_t f=0; f<planeCount; ++f) {
+
+            unsigned outsideCount = 0;
+            for (unsigned c=0; c<dimof(boxCornersLocalSpace); ++c)
+                outsideCount += SignedDistance(boxCornersLocalSpace[c], _planes[f]) > 0.f;
+            
+            if (outsideCount == dimof(boxCornersLocalSpace))
+                return AABBIntersection::Culled;
+
+            straddlingFlags |= uint64_t(outsideCount != 0) << f;
+        }
+        if (!straddlingFlags) {
+            return AABBIntersection::Within;
+        }
+
+        for (unsigned cIdx=0; cIdx<_cornerFaceBitMasks.size(); cIdx++) {
+            auto faceBitMask = _cornerFaceBitMasks[cIdx];
+            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
+
+            Float3 aabbSpaceCorner = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[cIdx]);
+            bool inside = 
+                  (aabbSpaceCorner[0] >= mins[0]) & (aabbSpaceCorner[0] <= maxs[0])
+                & (aabbSpaceCorner[1] >= mins[1]) & (aabbSpaceCorner[1] <= maxs[1])
+                & (aabbSpaceCorner[2] >= mins[2]) & (aabbSpaceCorner[2] <= maxs[2])
+                ;
+            if (__builtin_expect(inside, true)) {
+                return AABBIntersection::Boundary;
+            }
+        }
+
+        // For each "straddling" face of this volume, check every edge of the aabb
+        // and find the intersection points. If the intersection point is inside all other
+        // volume planes, we know there is a real intersection
+        // this part is where it starts to get pretty calculation heavy!
+        const UInt2 aabbEdges[] = {
+            { 0, 1 }, { 1, 3 }, { 3, 2 }, { 2, 0 },
+            { 4, 5 }, { 5, 7 }, { 7, 6 }, { 6, 0 },
+            { 0, 4 }, { 1, 5 }, { 3, 7 }, { 2, 6 }
+        };
+
+        for (uint64_t f=0; f<planeCount; ++f) {
+            if (__builtin_expect(!(straddlingFlags & (1ull<<f)), true)) continue;
+
+            // The bounding volume is on both sides of this plane -- but is the intersection point point actually within the finite face area?
+            uint64_t surroundingFaceMask = 0;
+            for (auto e:_edges)
+                if (e._faceBitMask & (1ull<<f)) surroundingFaceMask |= e._faceBitMask;
+            surroundingFaceMask &= ~(1ull<<f);
+            assert(surroundingFaceMask);
+            auto faceBegin = xl_ctz8(surroundingFaceMask);
+            auto faceEnd = 64 - xl_clz8(surroundingFaceMask);
+
+            for (auto aabbEdge:aabbEdges) {
+                float A = SignedDistance(boxCornersLocalSpace[aabbEdge[0]], _planes[f]);
+                float B = SignedDistance(boxCornersLocalSpace[aabbEdge[1]], _planes[f]);
+                if ((A > 0.f) == (B > 0.f)) continue;
+                Float3 intr = LinearInterpolate(boxCornersLocalSpace[aabbEdge[0]], boxCornersLocalSpace[aabbEdge[1]], -A / (B-A));
+                // we're only checking the faces that share an edge here
+                uint64_t qf=faceBegin;
+                for (; qf!=faceEnd; ++qf)
+                    if ((surroundingFaceMask & (1ull<<qf)) && SignedDistance(intr, _planes[qf]) > 0.f) break;
+                if (qf == faceEnd)
+                    return AABBIntersection::Boundary;
+            }
+        }
+
+        for (auto e:_edges) {
+            if (__builtin_expect((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
+            // the sphere is straddling both planes of this edge. Check the edge to see
+            // if it intersects the sphere
+            Float3 aabbSpaceStart = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerZero]);
+            Float3 aabbSpaceEnd = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerOne]);
+            if (RayVsAABB({aabbSpaceStart, aabbSpaceEnd}, mins, maxs)) {
+                return AABBIntersection::Boundary;
+            }
+        }
+
+        return AABBIntersection::Culled;
+    }
+
     ArbitraryConvexVolumeTester::ArbitraryConvexVolumeTester(
         std::vector<Float4>&& planes,
         std::vector<Float3>&& corners,
@@ -671,6 +779,7 @@ namespace XLEMath
     , _cornerFaceBitMasks(std::move(cornerFaceBitMasks))
     {
         assert(_corners.size() == _cornerFaceBitMasks.size());
+        assert(_planes.size() <= 64);    // using uint64_t bit masks, so only up to 64 faces supported
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

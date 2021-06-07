@@ -113,15 +113,14 @@ namespace XLEMath
 		return closestDistanceSq <= sphereRadiusSq;
     }
 
-    bool RayVsAABB(const std::pair<Float3, Float3>& worldSpaceRay, const Float4x4& aabbToWorld, const Float3& mins, const Float3& maxs)
+    bool RayVsAABB(const std::pair<Float3, Float3>& worldSpaceRay, const Float3x4& aabbToWorld, const Float3& mins, const Float3& maxs)
     {
             //  Does this ray intersect the aabb? 
             //  transform the ray back into aabb space, and do tests against the edge planes of the bounding box
 
-        auto worldToAabb = Inverse(aabbToWorld);     // maybe not be orthonormal input. This is used for terrain, which has scale on aabbToWorld
         auto ray = std::make_pair(
-            TransformPoint(worldToAabb, worldSpaceRay.first), 
-            TransformPoint(worldToAabb, worldSpaceRay.second));
+            TransformPointByOrthonormalInverse(aabbToWorld, worldSpaceRay.first), 
+            TransformPointByOrthonormalInverse(aabbToWorld, worldSpaceRay.second));
         return RayVsAABB(ray, mins, maxs);
     }
 

@@ -66,6 +66,10 @@ namespace XLEMath
     public:
         AABBIntersection::Enum TestSphere(Float3 centerPoint, float radius);
 
+        AABBIntersection::Enum TestAABB(
+            const Float3x4& aabbToLocalSpace, 
+            Float3 mins, Float3 maxs);
+
         struct Edge { unsigned _cornerZero, _cornerOne; uint64_t _faceBitMask; }; 
         ArbitraryConvexVolumeTester(
             std::vector<Float4>&& planes,                   // A, B, C, D plane definition (eg, from PlaneFit)

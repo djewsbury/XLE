@@ -29,8 +29,9 @@ namespace UnitTests
 	public:
 		struct BoxObject
 		{
-			Float4x4 _localToWorld;
-			Float3 _mins, _maxs;
+			Float3 _center;
+			Float3 _radii;
+			float _rotation;
 		};
 		std::vector<BoxObject> _boxObjects;
 
@@ -48,18 +49,38 @@ namespace UnitTests
 			const PlatformRig::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
-			if (_sphereObjects.empty())
-				_sphereObjects.push_back(VolumeClipTestingOverlay::SphereObject { Zero<Float3>(), 1.0f });
+			const bool interactWithSphereObject = evnt.IsHeld(PlatformRig::KeyId_Make("shift"));
+			if (interactWithSphereObject) {
+				if (_sphereObjects.empty())
+					_sphereObjects.push_back(VolumeClipTestingOverlay::SphereObject { Zero<Float3>(), 1.0f });
 
-			if (evnt.IsHeld_LButton()) {
-				auto ray = testHelper.ScreenToWorldSpaceRay(evnt._mousePosition);
-				auto intr = RayVsPlane(ray.first, ray.second, Float4(0,1,0,0));
-				(_sphereObjects.end()-1)->_center = LinearInterpolate(ray.first, ray.second, intr);
-			}
+				if (evnt.IsHeld_LButton()) {
+					auto ray = testHelper.ScreenToWorldSpaceRay(evnt._mousePosition);
+					auto intr = RayVsPlane(ray.first, ray.second, Float4(0,1,0,0));
+					(_sphereObjects.end()-1)->_center = LinearInterpolate(ray.first, ray.second, intr);
+				}
 
-			if (evnt._wheelDelta != 0) {
-				auto& obj = *(_sphereObjects.end()-1);
-				obj._radius = std::max(0.5f, obj._radius + (float)evnt._wheelDelta / 128.0f);
+				if (evnt._wheelDelta != 0) {
+					auto& obj = *(_sphereObjects.end()-1);
+					obj._radius = std::max(0.5f, obj._radius + (float)evnt._wheelDelta / 128.0f);
+				}
+			} else {
+				if (_boxObjects.empty())
+					_boxObjects.push_back(VolumeClipTestingOverlay::BoxObject { Zero<Float3>(), Float3{1.0f, 1.0f, 1.0f}, 0.f });
+
+				if (evnt.IsHeld_LButton()) {
+					auto ray = testHelper.ScreenToWorldSpaceRay(evnt._mousePosition);
+					auto intr = RayVsPlane(ray.first, ray.second, Float4(0,1,0,0));
+					(_boxObjects.end()-1)->_center = LinearInterpolate(ray.first, ray.second, intr);
+				}
+
+				if (evnt._wheelDelta != 0) {
+					auto& obj = *(_boxObjects.end()-1);
+					if (evnt.IsHeld(PlatformRig::KeyId_Make("control"))) {
+						obj._rotation += (float)evnt._wheelDelta / 1024.0f;
+					} else
+						obj._radii[0] = std::max(0.5f, obj._radii[0] + (float)evnt._wheelDelta / 128.0f);
+				}
 			}
 
 			return false;
@@ -94,24 +115,19 @@ namespace UnitTests
 
 			auto planeIdx = (uint64_t)planes.size();
 			auto prevPlaneIdx = uint64_t(planeIdx+cutaway.size()-1)%unsigned(cutaway.size());
-			auto nextPlaneIdx = uint64_t(planeIdx+1)%unsigned(cutaway.size());
-			auto pt0Idx = (unsigned)corners.size();
-
-			REQUIRE(SignedDistance(Float3{50, 0, 50}, plane) < 0.f);
-
+			
 			planes.push_back(plane);
 			corners.push_back(pt0_min);
-			corners.push_back(pt1_min);
 			corners.push_back(pt0_max);
-			corners.push_back(pt1_max);
-			edges.push_back({pt0Idx, pt0Idx+1, (1ull<<planeIdx)|(1ull<<minCapPlane)});
-			edges.push_back({pt0Idx, pt0Idx+2, (1ull<<planeIdx)|(1ull<<prevPlaneIdx)});
-			edges.push_back({pt0Idx+3, pt0Idx+2, (1ull<<planeIdx)|(1ull<<maxCapPlane)});
+
+			auto pt0Idx = c*2;
+			auto pt1Idx = (c+1)%unsigned(cutaway.size())*2;
+			edges.push_back({pt0Idx, pt1Idx, (1ull<<planeIdx)|(1ull<<minCapPlane)});
+			edges.push_back({pt0Idx+1, pt0Idx+1, (1ull<<planeIdx)|(1ull<<maxCapPlane)});
+			edges.push_back({pt0Idx, pt0Idx+1, (1ull<<planeIdx)|(1ull<<prevPlaneIdx)});
 
 			cornerFaceBitMasks.push_back((1ull<<planeIdx)|(1ull<<minCapPlane)|(1ull<<prevPlaneIdx));
-			cornerFaceBitMasks.push_back((1ull<<planeIdx)|(1ull<<minCapPlane)|(1ull<<nextPlaneIdx));
 			cornerFaceBitMasks.push_back((1ull<<planeIdx)|(1ull<<maxCapPlane)|(1ull<<prevPlaneIdx));
-			cornerFaceBitMasks.push_back((1ull<<planeIdx)|(1ull<<maxCapPlane)|(1ull<<nextPlaneIdx));
 		}
 
 		planes.push_back(Float4(-axisDirection, axisMin));
@@ -224,6 +240,26 @@ namespace UnitTests
 						for (auto& p:transformedGeo)
 							p = obj._center + obj._radius * p;
 						overlayContext->DrawTriangles(RenderOverlays::ProjectionMode::P3D, transformedGeo.data(), transformedGeo.size(), col);
+					}
+				}
+
+				if (!_boxObjects.empty()) {
+					for (const auto& obj:_boxObjects) {
+						Float3x4 localToWorld = AsFloat3x4(AsFloat4x4(UniformScaleYRotTranslation { 1.0f, obj._rotation, obj._center }));
+						Float3 mins = -obj._radii, maxs = obj._radii;
+						auto result = frustumTester.TestAABB(localToWorld, mins, maxs);
+						RenderOverlays::ColorB col;
+						switch (result) {
+						case AABBIntersection::Culled: col = { 255, 100, 100 }; break;
+						case AABBIntersection::Boundary: col = { 100, 100, 255 }; break;
+						case AABBIntersection::Within: col = { 100, 255, 100 }; break;
+						default: FAIL("Unknown frustum result"); break;
+						}
+
+						RenderOverlays::DebuggingDisplay::DrawBoundingBox(
+							overlayContext.get(), { mins, maxs },
+							localToWorld,
+							col);
 					}
 				}
 
