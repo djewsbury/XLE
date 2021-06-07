@@ -119,8 +119,6 @@ namespace XLEMath
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, 
         Float3 absFrustumCorners[], 
-        const Float3& cameraPosition,
-        float nearClip, float farClip,
         const std::pair<Float2, Float2>& viewport);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

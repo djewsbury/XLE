@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 	}
 
     std::pair<Float3, Float3> BuildRayUnderCursor(
-        Int2 mousePosition, CameraDesc& sceneCamera, 
+        Int2 mousePosition, const CameraDesc& sceneCamera, 
         const std::pair<Float2, Float2>& viewport)
     {
             // calculate proper worldToProjection for this cameraDesc and viewport
@@ -79,10 +79,7 @@ namespace RenderCore { namespace Techniques
         CalculateAbsFrustumCorners(frustumCorners, worldToProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
 
         Float3 cameraPosition = ExtractTranslation(sceneCamera._cameraToWorld);
-        return XLEMath::BuildRayUnderCursor(
-            mousePosition, frustumCorners, cameraPosition, 
-            sceneCamera._nearClip, sceneCamera._farClip,
-            viewport);
+        return XLEMath::BuildRayUnderCursor(mousePosition, frustumCorners, viewport);
     }
 
     ProjectionDesc::ProjectionDesc()

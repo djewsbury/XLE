@@ -113,3 +113,32 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     add_dependencies(UnitTests-RenderCoreAssetsTechniques-${metal_name} ColladaConversion)
 
 endforeach()
+
+####################################################################################################
+    ## UnitTests-Interactive ##
+####################################################################################################
+
+foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
+
+    add_executable(
+        UnitTests-Interactive-${metal_name}
+        Interactive/InteractiveTestHelper.cpp
+        Interactive/VolumeClipTesting.cpp
+        EmbeddedRes.cpp
+        ../Tools/ToolsRig/VisualisationGeo.cpp
+        )
+
+    xle_configure_executable(UnitTests-Interactive-${metal_name})
+    target_compile_definitions(UnitTests-Interactive-${metal_name} PUBLIC ${metal_macro})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE Catch2WithMain)
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE ShaderParser RenderCoreAssets)
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore)
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCore_${metal_name})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreTechniques-${metal_name})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE BufferUploads-${metal_name})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE RenderOverlays-${metal_name})
+    target_link_libraries(UnitTests-Interactive-${metal_name} PRIVATE PlatformRig-${metal_name})
+    xle_executable_post_build(UnitTests-Interactive-${metal_name})
+
+endforeach()

@@ -26,6 +26,15 @@ namespace PlatformRig
         _listeners.push_back(std::move(listener));
     }
 
+    void    MainInputHandler::RemoveListened(IInputListener& listener)
+    {
+        for (auto i=_listeners.begin(); i!=_listeners.end(); ++i)
+            if (i->get() == &listener) {
+                _listeners.erase(i);
+                return;
+            }
+    }
+
     MainInputHandler::MainInputHandler()
     {}
 

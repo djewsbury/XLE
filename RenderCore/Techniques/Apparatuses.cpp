@@ -168,6 +168,9 @@ namespace RenderCore { namespace Techniques
 
 	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device)
 	{
+		if (!_techniqueServices)
+			_techniqueServices = std::make_shared<Services>(device);
+
 		_continuationExecutor = std::make_unique<ContinuationExecutor>();
 		_bufferUploads = BufferUploads::CreateManager(*device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
@@ -194,8 +197,6 @@ namespace RenderCore { namespace Techniques
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
 			});
 
-		if (!_techniqueServices)
-			_techniqueServices = std::make_shared<Services>(device);
 		assert(_assetServices != nullptr);
 	}
 

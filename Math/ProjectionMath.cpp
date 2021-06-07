@@ -863,8 +863,6 @@ namespace XLEMath
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, 
         Float3 absFrustumCorners[], 
-        const Float3& cameraPosition,
-        float nearClip, float farClip,
         const std::pair<Float2, Float2>& viewport)
     {
         float u = (float(mousePosition[0]) - viewport.first[0]) / (viewport.second[0] - viewport.first[0]);
@@ -873,21 +871,9 @@ namespace XLEMath
         float w1 = (1.0f - u) * v;
         float w2 = u * (1.0f - v);
         float w3 = u * v;
-
-        Float3 direction = 
-              w0 * (absFrustumCorners[0] - cameraPosition)
-            + w1 * (absFrustumCorners[1] - cameraPosition)
-            + w2 * (absFrustumCorners[2] - cameraPosition)
-            + w3 * (absFrustumCorners[3] - cameraPosition)
-            ;
-        direction = Normalize(direction);
-
-            // Getting some problems with the intersection ray finishing slightly before
-            // the far clip plane... Let's push the ray length slightly beyond, just to catch this.
-        const float farBias = 1.1f;
         return std::make_pair(
-            cameraPosition + nearClip * direction,
-            cameraPosition + (farBias * farClip) * direction);
+              w0 * absFrustumCorners[0] + w1 * absFrustumCorners[1] + w2 * absFrustumCorners[2] + w3 * absFrustumCorners[3],
+              w0 * absFrustumCorners[4] + w1 * absFrustumCorners[5] + w2 * absFrustumCorners[6] + w3 * absFrustumCorners[7]);
     }
 
     std::pair<Float2, Float2> GetPlanarMinMax(const Float4x4& worldToClip, const Float4& plane, ClipSpaceType clipSpaceType)

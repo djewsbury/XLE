@@ -404,10 +404,7 @@ namespace SceneEngine
         CalculateAbsFrustumCorners(frustumCorners, worldToProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
         Float3 cameraPosition = ExtractTranslation(sceneCamera._cameraToWorld);
 
-        return BuildRayUnderCursor(
-            screenCoord, frustumCorners, cameraPosition, 
-            sceneCamera._nearClip, sceneCamera._farClip,
-            std::make_pair(viewMins, viewMaxs));
+        return BuildRayUnderCursor(screenCoord, frustumCorners, std::make_pair(viewMins, viewMaxs));
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

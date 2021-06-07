@@ -19,6 +19,7 @@ namespace PlatformRig
     public:
         bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt);
         void    AddListener(std::shared_ptr<IInputListener> listener);
+        void    RemoveListened(IInputListener&);
 
         MainInputHandler();
         ~MainInputHandler();

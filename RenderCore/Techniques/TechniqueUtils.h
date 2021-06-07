@@ -85,7 +85,7 @@ namespace RenderCore { namespace Techniques
 	ShaderLanguage GetDefaultShaderLanguage();
 
     std::pair<Float3, Float3> BuildRayUnderCursor(
-        Int2 mousePosition, CameraDesc& sceneCamera, 
+        Int2 mousePosition, const CameraDesc& sceneCamera, 
         const std::pair<Float2, Float2>& viewport);
     
     GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc);
