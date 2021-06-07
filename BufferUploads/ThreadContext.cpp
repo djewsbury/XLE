@@ -14,12 +14,6 @@
 
 namespace BufferUploads
 {
-    void ThreadContext::BeginCommandList()
-    {
-        // note -- this will automatically begin a command list for us
-        RenderCore::Metal::DeviceContext::Get(*_underlyingContext);
-    }
-
     void ThreadContext::ResolveCommandList()
     {
         int64_t currentTime = OSServices::GetPerformanceCounter();

@@ -1974,10 +1974,6 @@ namespace BufferUploads
 
     uint32_t Manager::DoBackgroundThread()
     {
-        if (_backgroundContext) {
-            _backgroundContext->BeginCommandList();
-        }
-
         while (!_shutdownBackgroundThread && _backgroundStepMask) {
             _assemblyLine->Process(_backgroundStepMask, *_backgroundContext, _pendingFramePriority_CommandLists);
             if (!_shutdownBackgroundThread)

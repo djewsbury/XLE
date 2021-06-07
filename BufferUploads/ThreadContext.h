@@ -80,7 +80,6 @@ namespace BufferUploads
     class ThreadContext
     {
     public:
-        void                    BeginCommandList();
         void                    ResolveCommandList();
         void                    CommitToImmediate(RenderCore::IThreadContext& commitTo, LockFreeFixedSizeQueue<unsigned, 4>* framePriorityQueue = nullptr);
 

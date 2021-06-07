@@ -527,7 +527,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			{
 			public:
                 Threading::Mutex _lock;
-				CircularBuffer<std::pair<Marker, unsigned>, 8> _markerCounts;
+				CircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
 				std::deque<Type> _objects;
 			};
 

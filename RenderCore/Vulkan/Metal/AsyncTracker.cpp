@@ -210,8 +210,26 @@ namespace RenderCore { namespace Metal_Vulkan
 				break;
 			}
 
-		assert(foundTheFence);
-		if (!foundTheFence) return false;
+		if (!foundTheFence) {
+
+			// If the fence is in the "_trackersSubmittedPendingOrdering" list, we can still
+			// wait for it -- we just can't update _lastCompletedConsumerFrameMarker or reset the fence, etc
+			for (unsigned c=0; c<_trackersSubmittedPendingOrdering.size(); ++c)
+				if (_trackersSubmittedPendingOrdering[c]._frameMarker == marker) {
+					auto fence = _trackersSubmittedPendingOrdering[c]._fence;
+					if (timeout.has_value()) {
+						auto res = vkWaitForFences(_device, 1, &fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeout.value()).count());
+						assert(res == VK_SUCCESS);
+					} else {
+						auto res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
+						assert(res == VK_SUCCESS);
+					}
+					return true;
+				}
+
+			assert(foundTheFence);
+			return false;
+		}
 
 		// Wait in order until we complete the one requested
 		while (!_trackersSubmittedToQueue.empty()) {
