@@ -61,6 +61,27 @@ namespace XLEMath
         ClipSpaceType _clipSpaceType;
     };
 
+    class ArbitraryConvexVolumeTester
+    {
+    public:
+        AABBIntersection::Enum TestSphere(Float3 centerPoint, float radius);
+
+        struct Edge { unsigned _cornerZero, _cornerOne; uint64_t _faceBitMask; }; 
+        ArbitraryConvexVolumeTester(
+            std::vector<Float4>&& planes,                   // A, B, C, D plane definition (eg, from PlaneFit)
+            std::vector<Float3>&& corners,                  // corner points
+            std::vector<Edge>&& edges,
+            std::vector<unsigned>&& cornerFaceBitMasks);
+        ArbitraryConvexVolumeTester() = default;
+        ArbitraryConvexVolumeTester(ArbitraryConvexVolumeTester&&) = default;
+        ArbitraryConvexVolumeTester& operator=(ArbitraryConvexVolumeTester&&) = default;
+    private:
+        std::vector<Float4> _planes;
+        std::vector<Float3> _corners;
+        std::vector<Edge> _edges;
+        std::vector<unsigned> _cornerFaceBitMasks;
+    };
+
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix);
     bool IsOrthogonalProjection(const Float4x4& projectionMatrix);
     

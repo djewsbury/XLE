@@ -488,11 +488,12 @@ namespace XLEMath
 
         const float radiusSq = radius*radius;
 
-        for (auto c:faceBitFieldForCorner) {
-            if (__builtin_expect((straddlingFlags & c) != c, true)) continue;
+        for (unsigned cIdx=0; cIdx<dimof(faceBitFieldForCorner); cIdx++) {
+            auto faceBitMask = faceBitFieldForCorner[cIdx];
+            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
-            if (__builtin_expect(MagnitudeSquared(_frustumCorners[c] - centerPoint) < radiusSq, true)) {
+            if (__builtin_expect(MagnitudeSquared(_frustumCorners[cIdx] - centerPoint) < radiusSq, true)) {
                 return AABBIntersection::Boundary;
             }
         }
@@ -595,6 +596,84 @@ namespace XLEMath
     {
 
     }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    AABBIntersection::Enum ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius)
+    {
+        unsigned straddlingFlags = 0;
+        auto planeCount = (unsigned)_planes.size();
+        Float3 intersectionCenters[planeCount];
+        for (unsigned f=0; f<planeCount; ++f) {
+            auto distance = SignedDistance(centerPoint, _planes[f]);
+            if (__builtin_expect(distance >= radius, false)) {
+                return AABBIntersection::Culled;        // this should be rare given the quick test above
+            }
+            straddlingFlags |= (distance > -radius) << f;
+            intersectionCenters[f] = centerPoint - distance * Truncate(_planes[f]);
+        }
+        if (!straddlingFlags) {
+            return AABBIntersection::Within;
+        }
+
+        // Check each corner -- 
+        // This is cheap to do, and if it's inside, then we know we've got a intersection
+        const float radiusSq = radius*radius;
+        for (unsigned cIdx=0; cIdx<_cornerFaceBitMasks.size(); cIdx++) {
+            auto faceBitMask = _cornerFaceBitMasks[cIdx];
+            if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
+            // the sphere is straddling all 3 edges of this corner. Check if it's
+            // inside of the sphere
+            if (__builtin_expect(MagnitudeSquared(_corners[cIdx] - centerPoint) < radiusSq, true)) {
+                return AABBIntersection::Boundary;
+            }
+        }
+
+        // Check the faces for any intersection centers we got. If it's inside
+        // all, then the sphere does intersect the frustum
+        for (unsigned f=0; f<planeCount; ++f) {
+            if (__builtin_expect(!(straddlingFlags & (1<<f)), true)) continue;
+            auto intersectionCenter = intersectionCenters[f];
+            unsigned withinCount = 0;
+            for (unsigned qf=0; qf<planeCount; ++qf) {
+                if (qf == f) continue;
+                withinCount += SignedDistance(intersectionCenter, _planes[qf]) < 0.f;
+            }
+            if (withinCount == planeCount-1)
+                return AABBIntersection::Boundary;
+        }
+
+        for (auto e:_edges) {
+            if (__builtin_expect((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
+            // the sphere is straddling both planes of this edge. Check the edge to see
+            // if it intersects the sphere
+            if (RayVsSphere(_corners[e._cornerZero] - centerPoint, _corners[e._cornerOne] - centerPoint, radiusSq)) {
+                return AABBIntersection::Boundary;
+            }
+        }
+
+        // The sphere is on 2 sides of at least one plane... However, for all of those planes:
+        //      . the point on the plane closest to the sphere center is outside of the frustum
+        //      . the sphere does not intersect with any edges
+        //      . the sphere does not contain any corners
+        // Therefore, we'll conclude that this sphere is outside of the frustum
+        return AABBIntersection::Culled;
+    }
+
+    ArbitraryConvexVolumeTester::ArbitraryConvexVolumeTester(
+        std::vector<Float4>&& planes,
+        std::vector<Float3>&& corners,
+        std::vector<Edge>&& edges,
+        std::vector<unsigned>&& cornerFaceBitMasks)
+    : _planes(std::move(planes))
+    , _corners(std::move(corners))
+    , _edges(std::move(edges))
+    , _cornerFaceBitMasks(std::move(cornerFaceBitMasks))
+    {
+        assert(_corners.size() == _cornerFaceBitMasks.size());
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix)
     {
