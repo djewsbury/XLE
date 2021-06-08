@@ -24,6 +24,7 @@ set(Src
 	Metal/State.cpp
 	Metal/TextureView.cpp
 	../DX11/Metal/CompiledShaderByteCode.cpp
+	../DX11/Metal/NewShaderCompiler.cpp
 	)
 
 add_library(RenderCore_Vulkan STATIC ${Src} ${Headers})
@@ -80,9 +81,18 @@ macro(find_vulkan)
 endmacro ()
 ############################################################################################################################################
 
+include(${FOREIGN_DIR}/DirectXShaderCompiler/FindDXCompiler.cmake)
+
+############################################################################################################################################
+
 find_vulkan()
 target_link_libraries(RenderCore_Vulkan PUBLIC ${INTERNAL_FOUND_VULKAN_LIBRARY})
 target_include_directories(RenderCore_Vulkan PUBLIC ${INTERNAL_FOUND_VULKAN_INCLUDE_DIR})
+
+find_dxcompiler()
+target_link_libraries(RenderCore_Vulkan PRIVATE dxil dxcompiler)
+
+############################################################################################################################################
 
 message("todo -- nicer way to find vulkan files!")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")

@@ -37,6 +37,8 @@ For RenderCore you'll need a little more
 
 * install vulkan sdk: https://vulkan.lunarg.com/sdk/home. You'll also need the "Additional SDK components" (unzip into the same SDK directory, this the debug libs). Debug libs are required to against debug XLE components because of the iterator debugging functionality in the MSVC standard library
 
+* download dxcompiler from https://github.com/microsoft/DirectXShaderCompiler/releases (last used April 2021 release). You may need to set the XLE_DXCOMPILER_DIR cmake cache dir to the base dir where this is extracted
+
 Some optional changes that make things a little bit nicer:
 * set cmake build directory to ${workspaceFolder}/build/${buildType}  ("cmake.buildDirectory": "${workspaceFolder}/build/${buildType}")
 * "choco install ccls" and install ccls vscode extension. also consider setting the following in settings.json:
