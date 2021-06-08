@@ -22,12 +22,14 @@ namespace Conversion
     template<typename Output> Output Convert(const std::basic_string<ucs2>& input);
     template<typename Output> Output Convert(const std::basic_string<ucs4>& input);
     template<typename Output> Output Convert(const std::basic_string<char>& input);
+    template<typename Output> Output Convert(const std::basic_string<wchar_t>& input);
 
 	template<typename Output> Output Convert(StringSection<utf8> input);
 	template<typename Output> Output Convert(StringSection<utf16> input);
 	template<typename Output> Output Convert(StringSection<ucs2> input);
 	template<typename Output> Output Convert(StringSection<ucs4> input);
 	template<typename Output> Output Convert(StringSection<char> input);
+    template<typename Output> Output Convert(StringSection<wchar_t> input);
 
     template<typename OutputElement, typename InputElement>
         ptrdiff_t Convert(
@@ -60,6 +62,7 @@ namespace Conversion
     template<> inline std::basic_string<utf16> Convert(const std::basic_string<utf16>& input) { return input; }
     template<> inline std::basic_string<ucs2> Convert(const std::basic_string<ucs2>& input) { return input; }
     template<> inline std::basic_string<ucs4> Convert(const std::basic_string<ucs4>& input) { return input; }
+    template<> inline std::basic_string<wchar_t> Convert(const std::basic_string<wchar_t>& input) { return input; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

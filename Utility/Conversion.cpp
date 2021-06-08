@@ -10,6 +10,7 @@
 #include "FastParseValue.h"
 #include "../Core/SelectConfiguration.h"
 #include "../Core/Exceptions.h"
+#include "cutf/cutf.h"
 #include <algorithm>
 #include <stdexcept>
 
@@ -216,6 +217,16 @@ namespace Conversion
         return {};
     }
 
+    template<> std::basic_string<utf8> Convert(const std::basic_string<wchar_t>& input)
+    {
+        return widetoutf8(input);
+    }
+
+    template<> std::basic_string<wchar_t> Convert(const std::basic_string<utf8>& input)
+    {
+        return utf8towide(input);
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<> std::basic_string<ucs2> Convert(StringSection<utf8> input)
@@ -307,6 +318,16 @@ namespace Conversion
 			(ucs2*)AsPointer(result.begin()), result.size());
 		return result;
 	}
+
+    template<> std::basic_string<utf8> Convert(StringSection<wchar_t> input)
+    {
+        return widetoutf8(input.AsString());
+    }
+
+    template<> std::basic_string<wchar_t> Convert(StringSection<utf8> input)
+    {
+        return utf8towide(input.AsString());
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

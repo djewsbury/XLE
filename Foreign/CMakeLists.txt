@@ -13,8 +13,9 @@ if (NOT APPLE)
 endif ()
 set(StamSimpleFluidSrc StamSimpleFluid/solver.c)
 set(CParseSource cparse/containers.cpp cparse/functions.cpp cparse/packToken.cpp cparse/shunting-yard.cpp)
+set(CUTFSource cutf/cutf.cpp)
 
-add_library(ForeignMisc STATIC ${LuaSrc} ${HashSrc} ${FmtSrc} ${StackWalkerSrc} ${PlustacheSrc} ${StamSimpleFluidSrc} ${ZLibSrc} ${AntlrSrc} ${CParseSource})
+add_library(ForeignMisc STATIC ${LuaSrc} ${HashSrc} ${FmtSrc} ${StackWalkerSrc} ${PlustacheSrc} ${StamSimpleFluidSrc} ${ZLibSrc} ${AntlrSrc} ${CParseSource} ${CUTFSource})
 xle_configure_library(ForeignMisc)
 
 if (APPLE)

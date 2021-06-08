@@ -43,3 +43,6 @@
 [submodule "Foreign/HLSLCC"]
 	path = Foreign/HLSLCC
 	url = git@github.com:djewsbury/HLSLCrossCompiler
+[submodule "Foreign/cutf"]
+	path = Foreign/cutf
+	url = git@github.com:tapika/cutf
