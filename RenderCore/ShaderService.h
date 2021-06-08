@@ -131,10 +131,11 @@ namespace RenderCore
             unsigned _version = Version;
             char _identifier[128];
 			char _shaderModel[8];
+            char _entryPoint[64];
             unsigned _dynamicLinkageEnabled = false;
 
-			ShaderHeader() { _identifier[0] = '\0'; _shaderModel[0] = '\0'; }
-			ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, bool dynamicLinkageEnabled = false);
+			ShaderHeader() { _identifier[0] = '\0'; _shaderModel[0] = '\0'; _entryPoint[0] = '\0'; }
+			ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled = false);
         };
 
         void SetShaderSource(std::shared_ptr<IShaderSource> shaderSource);
@@ -185,6 +186,7 @@ namespace RenderCore
         
 		ShaderStage		GetStage() const;
         bool            DynamicLinkingEnabled() const;
+        StringSection<> GetEntryPoint() const;
 
 		CompiledShaderByteCode(const ::Assets::Blob&, const ::Assets::DependencyValidation&, StringSection<::Assets::ResChar>);
 		CompiledShaderByteCode();

@@ -44,6 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
                 case spv::DecorationDescriptorSet: i->second._descriptorSet = params[0]; break;
                 case spv::DecorationLocation: i->second._location = params[0]; break;
                 case spv::DecorationOffset: i->second._offset = params[0]; break;
+                default: break;
                 }
             }
         }
@@ -194,6 +195,9 @@ namespace RenderCore { namespace Metal_Vulkan
             case OpVariable:
                 if (wordCount > 3)
                     _variables.push_back(std::make_pair(paramStart[1], Variable{paramStart[0], AsStorageType(paramStart[2])}));
+                break;
+
+            default:
                 break;
             }
         }

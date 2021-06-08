@@ -25,6 +25,7 @@
 #include "../../../Assets/CompilerLibrary.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../Math/Transformations.h"
+#include "../../../Utility/Threading/CompletionThreadPool.h"
 #include <regex>
 #include <chrono>
 
@@ -74,6 +75,8 @@ namespace UnitTests
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()
 	{
+		_globalServices->GetShortTaskThreadPool().StallAndDrainQueue();
+		_globalServices->GetLongTaskThreadPool().StallAndDrainQueue();
 		::Assets::Services::GetAssetSets().Clear();
 	}
 

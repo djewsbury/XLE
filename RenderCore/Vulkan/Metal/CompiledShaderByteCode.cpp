@@ -309,7 +309,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		payload = std::make_shared<std::vector<uint8>>(spirvBlockSize + sizeof(ShaderService::ShaderHeader));
 
 		*(ShaderService::ShaderHeader*)AsPointer(payload->begin())
-			= ShaderService::ShaderHeader { identifier, shaderModel, false };
+			= ShaderService::ShaderHeader { identifier, shaderModel, "main", false };
 
 		// std::stringstream disassem;
 		// spv::Disassemble(disassem, spirv);

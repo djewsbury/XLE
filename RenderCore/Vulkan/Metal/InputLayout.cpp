@@ -54,8 +54,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		// exhaustively
 
 		auto v = LowerBound(reflection._variables, objectId);
-		if (v != reflection._variables.end() && v->first == objectId) {
-
+		// storage "Input/Output" should be attributes and can be ignored
+		if (v != reflection._variables.end() && v->first == objectId
+			&& v->second._storage != SPIRVReflection::StorageType::Input 
+			&& v->second._storage != SPIRVReflection::StorageType::Output
+			&& v->second._storage != SPIRVReflection::StorageType::Function) {
 			result._storageType = v->second._storage;
 			auto typeToLookup = v->second._type;
 
@@ -88,18 +91,26 @@ namespace RenderCore { namespace Metal_Vulkan
 					// a structure will require some kind of buffer as input
 					result._slotType = DescriptorType::UniformBuffer;
 
+					// When using the HLSLCC cross-compiler; we end up with the variable having name
+					// like "<cbuffername>_inst" and the type will be "<cbuffername>"
 					// In this case, the name we're interested in isn't actually the variable
 					// name itself, but instead the name of the struct type. As per HLSL, this
 					// is the name we use for binding
-					auto n = LowerBound(reflection._names, typeToLookup);
-					if (n != reflection._names.end() && n->first == typeToLookup)
-						result._name = n->second;
+					// By contrast, when using the DX HLSL compiler, the variable will have the name
+					// "<cbuffername>" and the type will be "<cbuffername>.type"
+					if (XlEndsWith(result._name, MakeStringSection("_inst"))) {
+						auto n = LowerBound(reflection._names, typeToLookup);
+						if (n != reflection._names.end() && n->first == typeToLookup)
+							result._name = n->second;
+					}
 				} else {
 					#if defined(_DEBUG)
 						std::cout << "Could not understand type information for input " << result._name << std::endl;
 					#endif
 				}
 			}
+		} else {
+			result._slotType = DescriptorType::Unknown;
 		}
 
 		return result;
@@ -140,8 +151,16 @@ namespace RenderCore { namespace Metal_Vulkan
 				trackingOffset = offset + BitsPerPixel(e._nativeFormat) / 8;
 
 				auto i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
-				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash)
-					continue;   // Could not be bound
+				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash) {
+					// HLSL compiler appends "in.var." to input attributes
+					char buffer[128] = "in.var.";
+					XlCatString(buffer, MakeStringSection(e._semanticName));
+					hash = Hash64(MakeStringSection(buffer)) + e._semanticIndex;
+
+					i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
+					if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash)
+						continue;   // Could not be bound
+				}
 
 				VkVertexInputAttributeDescription desc;
 				desc.location = i->second._location;
@@ -457,6 +476,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// We'll need an input value for every binding in the shader reflection
 			for (const auto&v:reflection._variables) {
 				auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
+				if (reflectionVariable._slotType == DescriptorType::Unknown) continue;
 				uint64_t hashName = reflectionVariable._name.IsEmpty() ? 0 : Hash64(reflectionVariable._name.begin(), reflectionVariable._name.end());
 
 				// The _descriptorSet value can be ~0u for push constants, vertex attribute inputs, etc

@@ -329,6 +329,11 @@ namespace UnitTests
 				parsingContext.AddShaderResourceDelegate(globalDelegate);
 				Techniques::SequencerContext sequencerContext;
 				sequencerContext._sequencerConfig = cfgId.get();
+				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
+				if (prepare) {
+					prepare->StallWhilePending();
+					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
+				}
 				Techniques::Draw(
 					*threadContext,
 					parsingContext, 
@@ -344,7 +349,11 @@ namespace UnitTests
 			testHelper->BeginFrameCapture();
 
 			auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
-			auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../ColladaConversion/*.dll");
+			#if defined(_DEBUG)
+				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../../../Finals_Debug64/ColladaConversion.dll");
+			#else
+				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../../../Finals_Release64/ColladaConversion.dll");
+			#endif
 			REQUIRE(!discoveredCompilations.empty());
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
@@ -367,6 +376,14 @@ namespace UnitTests
 			renderer->Actualize()->BuildDrawables(MakeIteratorRange(drawablePktsPtrs));
 				
 			auto globalDelegate = std::make_shared<UnitTestGlobalUniforms>(targetDesc);
+
+			for (const auto&pkt:pkts) {
+				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
+				if (prepare) {
+					prepare->StallWhilePending();
+					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
+				}
+			}
 
 			for (unsigned c=0; c<32; ++c) {
 				{
@@ -404,6 +421,9 @@ namespace UnitTests
 		}
 
 		/////////////////////////////////////////////////////////////////
+
+		globalServices->GetShortTaskThreadPool().StallAndDrainQueue();
+		globalServices->GetLongTaskThreadPool().StallAndDrainQueue();
 
 		pipelineAcceleratorPool.reset();
 		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);

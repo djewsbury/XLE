@@ -88,6 +88,16 @@ namespace RenderCore
 		return MakeStringSection(hdr._identifier);
     }
 
+    StringSection<>             CompiledShaderByteCode::GetEntryPoint() const
+    {
+        if (!_shader || _shader->empty()) return {};
+
+		assert(_shader->size() >= sizeof(ShaderService::ShaderHeader));
+		auto& hdr = *(const ShaderService::ShaderHeader*)AsPointer(_shader->begin());
+		assert(hdr._version == ShaderService::ShaderHeader::Version);
+		return MakeStringSection(hdr._entryPoint);
+    }
+
     const uint64 CompiledShaderByteCode::CompileProcessType = ConstHash64<'Shdr', 'Byte', 'Code'>::Value;
 
         ////////////////////////////////////////////////////////////
@@ -128,14 +138,15 @@ namespace RenderCore
     ILowLevelCompiler::~ILowLevelCompiler() {}
 
 
-	ShaderService::ShaderHeader::ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, bool dynamicLinkageEnabled)
+	ShaderService::ShaderHeader::ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled)
 	: _version(Version)
 	, _dynamicLinkageEnabled(unsigned(dynamicLinkageEnabled))
 	{
         XlCopyString(_identifier, identifier);
 		XlCopyString(_shaderModel, shaderModel);
+        XlCopyString(_entryPoint, entryPoint);
 	}
 
-    const unsigned ShaderService::ShaderHeader::Version = 2u;
+    const unsigned ShaderService::ShaderHeader::Version = 3u;
 }
 

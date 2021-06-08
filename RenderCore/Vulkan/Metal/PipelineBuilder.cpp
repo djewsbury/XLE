@@ -109,7 +109,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	static VkPipelineShaderStageCreateInfo BuildShaderStage(VkShaderModule shader, VkShaderStageFlagBits stage)
+	static VkPipelineShaderStageCreateInfo BuildShaderStage(VkShaderModule shader, VkShaderStageFlagBits stage, const std::string& entryPoint)
 	{
 		VkPipelineShaderStageCreateInfo result = {};
 		result.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -117,7 +117,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		result.flags = 0;
 		result.stage = stage;
 		result.module = shader;
-		result.pName = "main";
+		result.pName = entryPoint.c_str();
 		result.pSpecializationInfo = nullptr;
 		return result;
 	}
@@ -131,12 +131,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkPipelineShaderStageCreateInfo shaderStages[3];
 		uint32_t shaderStageCount = 0;
+		std::string vsEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Vertex).GetEntryPoint().AsString();
+		std::string psEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Geometry).GetEntryPoint().AsString();
+		std::string gsEntryPoint = _shaderProgram->GetCompiledCode(ShaderStage::Pixel).GetEntryPoint().AsString();
 		const auto& vs = _shaderProgram->GetModule(ShaderStage::Vertex);
 		const auto& gs = _shaderProgram->GetModule(ShaderStage::Geometry);
 		const auto& ps = _shaderProgram->GetModule(ShaderStage::Pixel);
-		if (vs) shaderStages[shaderStageCount++] = BuildShaderStage(vs.get(), VK_SHADER_STAGE_VERTEX_BIT);
-		if (gs) shaderStages[shaderStageCount++] = BuildShaderStage(gs.get(), VK_SHADER_STAGE_GEOMETRY_BIT);
-		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
+		if (vs) shaderStages[shaderStageCount++] = BuildShaderStage(vs.get(), VK_SHADER_STAGE_VERTEX_BIT, vsEntryPoint);
+		if (gs) shaderStages[shaderStageCount++] = BuildShaderStage(gs.get(), VK_SHADER_STAGE_GEOMETRY_BIT, psEntryPoint);
+		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT, gsEntryPoint);
 		assert(shaderStageCount != 0);
 
 		VkDynamicState dynamicStateEnables[4];
@@ -291,7 +294,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		pipeline.basePipelineIndex = 0;
 
 		assert(_shader);
-		pipeline.stage = BuildShaderStage(_shader->GetModule().get(), VK_SHADER_STAGE_COMPUTE_BIT);
+		std::string csEntryPoint = _shader->GetCompiledShaderByteCode().GetEntryPoint().AsString();
+		pipeline.stage = BuildShaderStage(_shader->GetModule().get(), VK_SHADER_STAGE_COMPUTE_BIT, csEntryPoint);
 
 		auto vkPipeline = factory.CreateComputePipeline(pipelineCache, pipeline);
 		auto result = std::make_shared<ComputePipeline>(std::move(vkPipeline));
