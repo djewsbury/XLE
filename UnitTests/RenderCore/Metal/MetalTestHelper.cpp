@@ -119,7 +119,7 @@ namespace UnitTests
 			// Vulkan allows for multiple ways for compiling shaders. The tests currently use a HLSL to GLSL to SPIRV 
 			// cross compilation approach
 			RenderCore::VulkanCompilerConfiguration cfg;
-			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLCrossCompiled;
+			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLToSPIRV;
 			cfg._legacyBindings = registerBindings;
 		 	return vulkanDevice->CreateShaderCompiler(cfg);
 		} else {

@@ -41,6 +41,7 @@
 namespace RenderCore { namespace Metal_DX11
 {
 	std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler();
+	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler();
 }}
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -767,8 +768,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			return std::make_shared<HLSLCCToSPIRVCompiler>(hlslCompiler, cfg);
 		} else if (cfg._shaderMode == VulkanShaderMode::GLSLToSPIRV) {
 			return std::make_shared<GLSLToSPIRVCompiler>(cfg);
+		} else if (cfg._shaderMode == VulkanShaderMode::HLSLToSPIRV) {
+			return Metal_DX11::CreateHLSLToSPIRVCompiler();
 		} else {
-			// todo -- alternative shader compilation modes not implemented yet!
 			assert(0);
 			return nullptr;
 		}

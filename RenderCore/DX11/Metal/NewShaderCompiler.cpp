@@ -11,6 +11,7 @@
 #include "../../../Utility/Threading/Mutex.h"
 #include "../../../Utility/Conversion.h"
 #include "../../../Utility/IntrusivePtr.h"
+#include "../../../Utility/StringFormat.h"
 
 #include "../../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "../../../OSServices/WinAPI/IncludeWindows.h"
@@ -69,7 +70,7 @@ namespace RenderCore { namespace Metal_DX11
 		return result;
 	}
 
-	class IncludeHandler : public IDxcIncludeHandler
+	class NewCompilerIncludeHandler : public IDxcIncludeHandler
 	{
 	public:
 		HRESULT LoadSource(LPCWSTR pFileName, IDxcBlob **ppIncludeSource) override
@@ -145,10 +146,19 @@ namespace RenderCore { namespace Metal_DX11
 		ULONG Release() override { return 0; }
 
 		IDxcUtils* _library = nullptr;
-		std::basic_string<utf16> _baseDirectory;
         std::vector<::Assets::DependentFileState> _includeFiles;
         std::vector<std::basic_string<utf16>> _searchDirectories;
 	};
+
+	template<typename OutputType, typename InputType>
+		static intrusive_ptr<OutputType> QueryInterfaceCast(InputType* input)
+	{
+		OutputType* result = nullptr;
+		auto hresult = input->QueryInterface(IID_PPV_ARGS(&result));
+		if (hresult == S_OK && result)
+			return moveptr(result);
+		return {};
+	}
 
 	class DXShaderCompiler : public ILowLevelCompiler
 	{
@@ -183,6 +193,29 @@ namespace RenderCore { namespace Metal_DX11
 				XlCopyString(destination, destinationCount, inputShaderModel);
 		}
 
+		static Payload AsPayload(IDxcBlob* input)
+		{
+			auto byteCount = input->GetBufferSize();
+			if (!byteCount) return {};
+
+			Payload result = std::make_shared<std::vector<uint8_t>>();
+			result->resize(byteCount);
+			std::memcpy(result->data(), input->GetBufferPointer(), byteCount);
+			return result;
+		}
+
+		static Payload AsCodePayload(IDxcBlob* input, const ShaderService::ShaderHeader& hdr)
+		{
+			auto byteCount = input->GetBufferSize();
+			if (!byteCount) return {};
+
+			Payload result = std::make_shared<std::vector<uint8_t>>();
+			result->resize(sizeof(hdr) + byteCount);
+			*(ShaderService::ShaderHeader*)result->data() = hdr;
+			std::memcpy(PtrAdd(result->data(), sizeof(hdr)), input->GetBufferPointer(), byteCount);
+			return result;
+		}
+
 		virtual bool DoLowLevelCompile(
 			/*out*/ Payload& payload,
 			/*out*/ Payload& errors,
@@ -192,21 +225,21 @@ namespace RenderCore { namespace Metal_DX11
 			StringSection<::Assets::ResChar> definesTable,
 			IteratorRange<const SourceLineMarker*> sourceLineMarkers) const override
 		{
-			auto& library = GetDXCompilerLibrary();
+			NewCompilerIncludeHandler includeHandler;
+			auto shaderDriveAndPath = MakeFileNameSplitter(shaderPath._filename).DriveAndPath();
+			if (!shaderDriveAndPath.IsEmpty())
+				includeHandler._searchDirectories.push_back(Conversion::Convert<std::basic_string<utf16>>(shaderDriveAndPath));
+			includeHandler._library = _utils.get();
 
-			auto utils = library.CreateDXCompilerInterface<IDxcUtils>(CLSID_DxcUtils);
-
-			IDxcBlobEncoding *pSource;
-			auto hresult = utils->CreateBlobFromPinned((LPBYTE)sourceCode, (UINT32)sourceCodeLength, CP_UTF8, &pSource);
+			IDxcBlobEncoding *sourceBlobRaw = nullptr;
+			auto hresult = _utils->CreateBlobFromPinned((LPBYTE)sourceCode, (UINT32)sourceCodeLength, CP_UTF8, &sourceBlobRaw);
 			if (hresult != S_OK)
 				return false;
+			intrusive_ptr<IDxcBlobEncoding> sourceBlob = moveptr(sourceBlobRaw);
 
-			auto compiler = library.CreateDXCompilerInterface<IDxcCompiler2>(CLSID_DxcCompiler);
+			auto shaderFN = Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._filename));
 
-			IncludeHandler includeHandler;
-
-			IDxcOperationResult *pResultPre = nullptr;
-			auto shaderFN = Conversion::Convert<std::u16string>(MakeStringSection(shaderPath._filename));
+			/*IDxcOperationResult *pResultPre = nullptr;
 			hresult = compiler->Preprocess(
 				pSource, 
 				(LPCWSTR)shaderFN.c_str(), 
@@ -215,8 +248,75 @@ namespace RenderCore { namespace Metal_DX11
 				&includeHandler, 
 				&pResultPre);
 			if (hresult == S_OK)
-				return true;
-			return false;
+				return true;*/
+
+			LPCWSTR arguments[] {
+				L"-spirv",
+				L"-fspv-target-env=vulkan1.0"
+			};
+
+			ResChar shaderModel[64];
+			AdaptShaderModel(shaderModel, dimof(shaderModel), shaderPath._shaderModel);
+
+			StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
+			identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "[" << definesTable << "]";
+
+			IDxcOperationResult* compileResultRaw = nullptr;
+			auto res = _compiler->Compile(
+				sourceBlob.get(),
+				shaderFN.c_str(), 
+				Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderPath._entryPoint)).c_str(), 
+				Conversion::Convert<std::basic_string<wchar_t>>(MakeStringSection(shaderModel)).c_str(), 
+				arguments, dimof(arguments), 
+				_fixedDefines.data(), _fixedDefines.size(),
+				&includeHandler, &compileResultRaw);
+			if (res != S_OK) {
+				assert(!compileResultRaw);
+				return false;
+			}
+			intrusive_ptr<IDxcOperationResult> compileResult = moveptr(compileResultRaw);
+
+			auto compileResult2 = QueryInterfaceCast<IDxcResult>(compileResult.get());
+			if (compileResult2) {
+				if (compileResult2->HasOutput(DXC_OUT_OBJECT)) {
+					IDxcBlob* payloadBlobRaw = nullptr;
+					auto hresult = compileResult2->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&payloadBlobRaw), nullptr);
+					intrusive_ptr<IDxcBlob> payloadBlob = moveptr(payloadBlobRaw);
+					if (hresult == S_OK && payloadBlob)
+						payload = AsCodePayload(payloadBlob, ShaderService::ShaderHeader { identifier, shaderModel, false });
+				}
+
+				if (compileResult2->HasOutput(DXC_OUT_ERRORS)) {
+					IDxcBlob* payloadBlobRaw = nullptr;
+					auto hresult = compileResult2->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&payloadBlobRaw), nullptr);
+					intrusive_ptr<IDxcBlob> payloadBlob = moveptr(payloadBlobRaw);
+					if (hresult == S_OK && payloadBlob)
+						errors = AsPayload(payloadBlob);
+				}
+
+				return payload != nullptr;
+			} else {
+				// IDxcOperationResult interface (older interface, replaced by IDxcResult)
+				HRESULT compileStatus = -1;
+				compileResult->GetStatus(&compileStatus);
+				if (compileStatus == S_OK) {
+					IDxcBlob* payloadBlobRaw = nullptr;
+					res = compileResult->GetResult(&payloadBlobRaw);
+					intrusive_ptr<IDxcBlob> payloadResult = moveptr(payloadBlobRaw);
+					if (res == S_OK && payloadResult)
+						payload = AsCodePayload(payloadResult, ShaderService::ShaderHeader { identifier, shaderModel, false });
+
+					IDxcBlobEncoding* errorBlobRaw = nullptr;
+					res = compileResult->GetErrorBuffer(&errorBlobRaw);
+					intrusive_ptr<IDxcBlobEncoding> errorBlob = moveptr(errorBlobRaw);
+					if (res == S_OK && errorBlob)
+						errors = AsPayload(errorBlob);
+
+					return payload != nullptr;
+				}
+
+				return false;
+			}
 		}
 
 		virtual std::string MakeShaderMetricsString(
@@ -228,17 +328,29 @@ namespace RenderCore { namespace Metal_DX11
 
 		virtual ShaderLanguage GetShaderLanguage() const override { return ShaderLanguage::HLSL; }
 
-		DXShaderCompiler(IteratorRange<const DxcDefine*> fixedDefines, ShaderFeatureLevel featureLevel);
-		~DXShaderCompiler();
+		DXShaderCompiler(IteratorRange<const DxcDefine*> fixedDefines, ShaderFeatureLevel featureLevel)
+		: _fixedDefines(fixedDefines.begin(), fixedDefines.end())
+		, _featureLevel(featureLevel)
+		{
+			auto& library = GetDXCompilerLibrary();
+			_utils = library.CreateDXCompilerInterface<IDxcUtils>(CLSID_DxcUtils);
+			_compiler = library.CreateDXCompilerInterface<IDxcCompiler2>(CLSID_DxcCompiler);
+		}
+
+		~DXShaderCompiler()
+		{}
 
 	protected:
-		mutable Threading::Mutex _moduleLock;
-		mutable HMODULE _module;
-		HMODULE GetShaderCompileModule() const;
-
 		std::vector<DxcDefine> _fixedDefines;
 		ShaderFeatureLevel _featureLevel;
+
+		intrusive_ptr<IDxcUtils> _utils;
+		intrusive_ptr<IDxcCompiler2> _compiler;
 	};
 
 
+	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler()
+	{
+		return std::make_shared<DXShaderCompiler>(IteratorRange<const DxcDefine*>{}, ShaderFeatureLevel::Level_11_0);
+	}
 }}
