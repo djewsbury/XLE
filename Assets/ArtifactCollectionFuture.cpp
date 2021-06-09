@@ -123,8 +123,7 @@ namespace Assets
 			if (dataType == ArtifactRequest::DataType::BlockSerializer)
 				Block_Initialize(chunkResult._buffer.get());
 		} else if (dataType == ArtifactRequest::DataType::ReopenFunction) {
-			auto blobCopy = blob;
-			chunkResult._reopenFunction = [blobCopy]() -> std::shared_ptr<IFileInterface> {
+			chunkResult._reopenFunction = [blobCopy=blob]() -> std::shared_ptr<IFileInterface> {
 				return CreateMemoryFile(blobCopy);
 			};
 		} else if (dataType == ArtifactRequest::DataType::SharedBlob) {

@@ -104,9 +104,9 @@ float GetNoisyValue(int2 randomizerValue, uint idx)
         }
     } else if (noiseMethod == 1) {
         if (idx == 0) {
-            return asfloat(IntegerHash(randomizerValue.y * 2048 + randomizerValue.x) & ((1 << 23) - 1) | 0x3f800000) - 1.0f;
+            return asfloat((IntegerHash(randomizerValue.y * 2048 + randomizerValue.x) & ((1 << 23) - 1)) | 0x3f800000) - 1.0f;
         } else {
-            return asfloat(IntegerHash((2048*2048)+randomizerValue.x * 2048 + randomizerValue.y) & ((1 << 23) - 1) | 0x3f800000) - 1.0f;
+            return asfloat((IntegerHash((2048*2048)+randomizerValue.x * 2048 + randomizerValue.y) & ((1 << 23) - 1)) | 0x3f800000) - 1.0f;
         }
     } else if (noiseMethod == 2) {
         if (idx == 0) {

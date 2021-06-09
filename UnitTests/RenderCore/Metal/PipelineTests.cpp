@@ -242,10 +242,8 @@ namespace UnitTests
 
 		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)testHelper->_device->QueryInterface(typeid(RenderCore::IDeviceVulkan).hash_code());
 		if (vulkanDevice) {
-			// Vulkan allows for multiple ways for compiling shaders. The tests currently use a HLSL to GLSL to SPIRV 
-			// cross compilation approach
 			RenderCore::VulkanCompilerConfiguration cfg;
-			cfg._shaderMode = RenderCore::VulkanShaderMode::GLSLToSPIRV;
+			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLToSPIRV;
 		 	auto shaderCompiler = vulkanDevice->CreateShaderCompiler(cfg);
 			customShaderSource = std::make_shared<RenderCore::MinimalShaderSource>(shaderCompiler);
 		} else {

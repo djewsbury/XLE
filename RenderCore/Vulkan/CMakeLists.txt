@@ -92,6 +92,18 @@ target_include_directories(RenderCore_Vulkan PUBLIC ${INTERNAL_FOUND_VULKAN_INCL
 find_dxcompiler()
 target_link_libraries(RenderCore_Vulkan PRIVATE dxil dxcompiler)
 
+add_custom_command(
+	TARGET RenderCore_Vulkan POST_BUILD 
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+	"$<TARGET_FILE:dxcompiler>"
+	"${XLE_BINARY_OUTPUT_DIR}/$<TARGET_FILE_NAME:dxcompiler>")
+
+add_custom_command(
+	TARGET RenderCore_Vulkan POST_BUILD 
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+	"$<TARGET_FILE:dxil>"
+	"${XLE_BINARY_OUTPUT_DIR}/$<TARGET_FILE_NAME:dxil>")
+
 ############################################################################################################################################
 
 message("todo -- nicer way to find vulkan files!")

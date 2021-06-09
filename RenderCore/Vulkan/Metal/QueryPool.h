@@ -99,6 +99,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		void End(DeviceContext& context, QueryId);
 
 		bool GetResults_Stall(DeviceContext& context, QueryId query, IteratorRange<void*> dst);
+		void AbandonResults(QueryId query);
 
 		QueryPool(ObjectFactory& factory, QueryType type, unsigned count);
 		~QueryPool();

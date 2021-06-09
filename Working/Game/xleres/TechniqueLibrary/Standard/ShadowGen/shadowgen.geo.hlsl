@@ -26,7 +26,7 @@
 	uint frustumFlagAnd = input[0].shadowFrustumFlags & input[1].shadowFrustumFlags & input[2].shadowFrustumFlags;
 	[unroll] for (uint c=0; c<count; ++c, mask <<= 4) {
 		#if defined(FRUSTUM_FILTER)
-			if ((FRUSTUM_FILTER & (1<<c)) == 0)
+			if ((FRUSTUM_FILTER & (1u<<c)) == 0)
 				continue;
 		#endif
 

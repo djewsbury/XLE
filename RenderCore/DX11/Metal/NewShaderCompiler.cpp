@@ -214,9 +214,25 @@ namespace RenderCore { namespace Metal_DX11
 			auto byteCount = input->GetBufferSize();
 			if (!byteCount) return {};
 
+			bool isText = false;
+			IDxcBlobEncoding* blobEncoding = nullptr;
+			input->QueryInterface(IID_PPV_ARGS(&blobEncoding));
+			if (blobEncoding) {
+				BOOL knownEncoding = false;
+				UINT32 codepage = 0;
+				auto hres = blobEncoding->GetEncoding(&knownEncoding, &codepage);
+				isText = hres == S_OK && knownEncoding == true && (codepage == CP_UTF8 || codepage == CP_ACP || codepage == CP_OEMCP || codepage == CP_MACCP || codepage == CP_THREAD_ACP);
+			}
+
 			Payload result = std::make_shared<std::vector<uint8_t>>();
 			result->resize(byteCount);
 			std::memcpy(result->data(), input->GetBufferPointer(), byteCount);
+
+			if (isText) {
+				// strip off zeroes from the end
+				while (!result->empty() && !*(result->end()-1))
+					result->erase(result->end()-1);
+			}
 			return result;
 		}
 

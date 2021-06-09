@@ -1604,7 +1604,8 @@ namespace RenderCore { namespace Metal_DX11
     std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler()
     {
         D3D10_SHADER_MACRO fixedDefines[] = { 
-            MakeShaderMacro("VULKAN", "1")
+            MakeShaderMacro("VULKAN", "1"),
+            MakeShaderMacro("HLSLCC", "1")
             #if defined(_DEBUG)
                 , MakeShaderMacro("_DEBUG", "1")
             #endif

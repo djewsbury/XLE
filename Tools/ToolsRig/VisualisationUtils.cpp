@@ -30,6 +30,8 @@
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/Services.h"
+#include "../../BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IThreadContext.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../Assets/ConfigFileContainer.h"
@@ -869,6 +871,11 @@ namespace ToolsRig
             threadContext, *drawingApparatus._pipelineAccelerators };
         stateContext.SetRay(worldSpaceRay);
 		stateContext.ExecuteDrawables(parserContext, pkt);
+
+		// Just bail if we haven't yet submitted required buffer uploads command lists
+		auto requiredBufferUploads = parserContext._requiredBufferUploadsCommandList;
+		if (requiredBufferUploads && !RenderCore::Techniques::Services::GetBufferUploads().IsComplete(requiredBufferUploads))
+			return {};
 		
         auto results = stateContext.GetResults();
         if (!results.empty()) {
@@ -1020,6 +1027,12 @@ namespace ToolsRig
         RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parsingContext) 
     {
+		const bool dummyCalculation = false;
+		if (dummyCalculation) {
+			PlatformRig::InputContext inputContext { {0, 0}, {256, 256} };
+			PlatformRig::Coord2 mousePosition {128, 128};
+			_inputListener->CalculateForMousePosition(inputContext, mousePosition);
+		}
     }
 
 	void MouseOverTrackingOverlay::Set(const std::shared_ptr<SceneEngine::IScene>& scene)
@@ -1050,7 +1063,7 @@ namespace ToolsRig
 
         void Render(
             RenderCore::IThreadContext& context,
-            RenderCore::Techniques::ParsingContext& parserContext) override; 
+            RenderCore::Techniques::ParsingContext& parserContext) override;
 
         InputLayer(std::shared_ptr<PlatformRig::IInputListener> listener);
         ~InputLayer();

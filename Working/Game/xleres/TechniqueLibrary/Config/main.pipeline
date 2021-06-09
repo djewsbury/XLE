@@ -9,7 +9,9 @@ DescriptorSet Draw
 		float3 LocalSpaceView;
 	};
 
-	SampledTexture tex0;					// 1
+	UniformBuffer DrawCallProperties;		// 1
+
+	SampledTexture tex0;					// 2
 };
 
 DescriptorSet Material

@@ -290,8 +290,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
             // Our shader path prepends "in_" infront of the semantic name
             // when generating a variable name. Remove it before we make a hash.
+            // Alternatively, the HLSL -> spirv compiler prepends "in.var.", and we should remove that
             if (XlBeginsWith(n->second, MakeStringSection("in_")))
                 nameStart += 3;
+            else if (XlBeginsWith(n->second, MakeStringSection("in.var.")))
+                nameStart += 7;
             while (nameEnd-1 > nameStart && isdigit(*(nameEnd-1)))
                 --nameEnd;
 

@@ -43,7 +43,7 @@
     {
         uint dims;
         DistinctColors.GetDimensions(dims);
-        return DistinctColors.Load(index % dims);
+        return DistinctColors.Load(int2(index % dims, 0)).rgb;
     }
 
 #endif

@@ -26,7 +26,7 @@ namespace RenderCore
 	};
 	struct VulkanCompilerConfiguration
 	{
-		VulkanShaderMode _shaderMode = VulkanShaderMode::GLSLToSPIRV;
+		VulkanShaderMode _shaderMode = VulkanShaderMode::HLSLToSPIRV;
 		LegacyRegisterBindingDesc _legacyBindings = {};
 		std::vector<PipelineLayoutInitializer::PushConstantsBinding> _pushConstants = {};
 		std::vector<::Assets::DependentFileState> _additionalDependencies = {};		// (if the legacy bindings, etc, are loaded from a file, you can register extra dependencies with this)

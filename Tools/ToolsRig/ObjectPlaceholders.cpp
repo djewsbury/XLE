@@ -573,13 +573,13 @@ namespace ToolsRig
 
         for (const auto& a:_placeHolders->_cubeAnnotations) {
             for (const auto& o: _placeHolders->_objects->FindEntitiesOfType(a._typeId))
-                if (RayVsAABB(worldSpaceRay, GetTransform(*o), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
+                if (RayVsAABB(worldSpaceRay, AsFloat3x4(GetTransform(*o)), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
 					return AsResult(worldSpaceRay.first, *o);
         }
 
 		for (const auto& a : _placeHolders->_directionalAnnotations) {
 			for (const auto& o : _placeHolders->_objects->FindEntitiesOfType(a._typeId))
-				if (RayVsAABB(worldSpaceRay, GetTransform(*o), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
+				if (RayVsAABB(worldSpaceRay, AsFloat3x4(GetTransform(*o)), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
 					return AsResult(worldSpaceRay.first, *o);
 		}
 
@@ -611,7 +611,7 @@ namespace ToolsRig
 					// Rectangle. We treat it as a box with some small width
 					const float boxWidth = 0.01f;		// 1cm
 					SetUp(trans, boxWidth * ExtractUp(trans));
-					if (RayVsAABB(worldSpaceRay, trans, Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
+					if (RayVsAABB(worldSpaceRay, AsFloat3x4(trans), Float3(-1.f, -1.f, -1.f), Float3(1.f, 1.f, 1.f)))
 						return AsResult(worldSpaceRay.first, *o);
 				} else {
 					// Sphere

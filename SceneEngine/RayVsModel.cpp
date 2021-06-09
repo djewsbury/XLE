@@ -190,6 +190,9 @@ namespace SceneEngine
 		if (_pimpl->_queryId != ~0u)
 			_pimpl->_res->_streamOutputQueryPool->End(metalContext, _pimpl->_queryId);
 		_pimpl->_pendingUnbind = false;
+		#if GFXAPI_TARGET == GFXAPI_VULKAN
+			BufferBarrier0(metalContext, *checked_cast<Metal::Resource*>(_pimpl->_res->_streamOutputBuffer.get()));
+		#endif
 		_pimpl->_threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);		// unfortunately we need a synchronize here
 
 		unsigned hitEventsWritten = 0;
@@ -326,8 +329,7 @@ namespace SceneEngine
 		}
 
 		if (_pimpl->_queryId != ~0u) {
-			Metal::QueryPool::QueryResult_StreamOutput out;
-			_pimpl->_res->_streamOutputQueryPool->GetResults_Stall(metalContext, _pimpl->_queryId, MakeOpaqueIteratorRange(out));
+			_pimpl->_res->_streamOutputQueryPool->AbandonResults(_pimpl->_queryId);
 			_pimpl->_queryId = ~0u;
 		}
     }

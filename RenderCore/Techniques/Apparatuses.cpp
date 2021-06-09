@@ -105,7 +105,7 @@ namespace RenderCore { namespace Techniques
 			// Vulkan allows for multiple ways for compiling shaders. The tests currently use a HLSL to GLSL to SPIRV 
 			// cross compilation approach
 			RenderCore::VulkanCompilerConfiguration cfg;
-			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLCrossCompiled;
+			cfg._shaderMode = RenderCore::VulkanShaderMode::HLSLToSPIRV;
 			cfg._legacyBindings = legacyRegisterBinding;
 		 	return vulkanDevice->CreateShaderCompiler(cfg);
 		} else {
@@ -125,7 +125,7 @@ namespace RenderCore { namespace Techniques
 		_depValPtr.RegisterDependency(_mainDrawingApparatus->GetDependencyValidation());
 		
 		auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(IMMEDIATE_PIPELINE);
-		pipelineLayoutFuture->StallWhilePending();
+		pipelineLayoutFuture->StallWhilePending(); 
 		_pipelineLayoutFile = pipelineLayoutFuture->Actualize();
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 

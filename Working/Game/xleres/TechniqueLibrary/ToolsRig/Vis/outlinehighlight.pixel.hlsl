@@ -32,7 +32,7 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 				//	kind of scalar. We could use luminance. But if we
 				//	just want to find the outline of a rendered area,
 				//	then we can use the alpha channel
-			float value = InputTexture.Load(int3(basePos, 0), 2*int2(x-2, y-2)).a > 0.01f;
+			float value = InputTexture.Load(int3(basePos + 2*int2(x-2, y-2), 0)).a > 0.01f;
 			dhdp.x += SharrHoriz5x5[x][y] * value;
 			dhdp.y += SharrVert5x5[x][y] * value;
 		}

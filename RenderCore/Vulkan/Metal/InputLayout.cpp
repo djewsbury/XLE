@@ -151,16 +151,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				trackingOffset = offset + BitsPerPixel(e._nativeFormat) / 8;
 
 				auto i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
-				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash) {
-					// HLSL compiler appends "in.var." to input attributes
-					char buffer[128] = "in.var.";
-					XlCatString(buffer, MakeStringSection(e._semanticName));
-					hash = Hash64(MakeStringSection(buffer)) + e._semanticIndex;
-
-					i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
-					if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash)
-						continue;   // Could not be bound
-				}
+				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash)
+					continue;   // Could not be bound
 
 				VkVertexInputAttributeDescription desc;
 				desc.location = i->second._location;

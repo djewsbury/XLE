@@ -22,6 +22,8 @@
 // Also, there's a "numeric interface" bindings, which are bound by number, rather than by name, from the CPU side
 // code. 
 
+#if defined(HLSLCC)
+
 #define BIND_SEQ_S0 : register(s0)
 #define BIND_SEQ_S1 : register(s1)
 #define BIND_SEQ_S2 : register(s2)
@@ -68,6 +70,8 @@
 #define BIND_NUMERIC_T13 : register(t13)
 #define BIND_NUMERIC_T14 : register(t14)
 
+#define BIND_DRAW_T1 : register(t15)
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define BIND_SEQ_B0 : register(b7)
@@ -87,7 +91,6 @@
 #define BIND_NUMERIC_B3 : register(b3)
 
 #define BIND_DRAW_B0 : register(b13)
-#define BIND_DRAW_T1 : register(t15)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,5 +114,104 @@
 
 #define BIND_SHARED_LIGHTING_S2 : register(s8)
 #define BIND_SHARED_LIGHTING_S3 : register(s9)
+
+#else
+
+#define BIND_SEQ_S0 : register(s13, space0)
+#define BIND_SEQ_S1 : register(s14, space0)
+#define BIND_SEQ_S2 : register(s15, space0)
+#define BIND_SEQ_S3 : register(s16, space0)
+
+#define BIND_NUMERIC_S0 : register(s15, space3)
+#define BIND_NUMERIC_S1 : register(s16, space3)
+#define BIND_NUMERIC_S2 : register(s17, space3)
+
+#define BIND_MAT_S12 : register(s12, space1)
+
+#define BIND_DRAW_S2 : register(s2, space2)
+#define BIND_DRAW_S3 : register(s3, space2)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define BIND_SEQ_T6 : register(t6, space0)
+#define BIND_SEQ_T7 : register(t7, space0)
+#define BIND_SEQ_T8 : register(t8, space0)
+#define BIND_SEQ_T9 : register(t9, space0)
+#define BIND_SEQ_T10 : register(t10, space0)
+#define BIND_SEQ_T11 : register(t11, space0)
+#define BIND_SEQ_T12 : register(t12, space10
+
+#define BIND_MAT_T3 : register(t3, space1)
+#define BIND_MAT_T4 : register(t4, space1)
+#define BIND_MAT_T5 : register(t5, space1)
+#define BIND_MAT_T6 : register(t6, space1)
+#define BIND_MAT_T7 : register(t7, space1)
+#define BIND_MAT_T8 : register(t8, space1)
+#define BIND_MAT_T9 : register(t9, space1)
+#define BIND_MAT_T10 : register(t10, space1)
+
+#define BIND_NUMERIC_T0 : register(t0, space3)
+#define BIND_NUMERIC_T1 : register(t1, space3)
+#define BIND_NUMERIC_T2 : register(t2, space3)
+#define BIND_NUMERIC_T3 : register(t3, space3)
+#define BIND_NUMERIC_T4 : register(t4, space3)
+#define BIND_NUMERIC_T5 : register(t5, space3)
+#define BIND_NUMERIC_T6 : register(t6, space3)
+#define BIND_NUMERIC_T7 : register(t7, space3)
+#define BIND_NUMERIC_T8 : register(t8, space3)
+#define BIND_NUMERIC_T9 : register(t9, space3)
+#define BIND_NUMERIC_T10 : register(t10, space3)
+#define BIND_NUMERIC_T11 : register(t11, space3)
+#define BIND_NUMERIC_T12 : register(t12, space3)
+#define BIND_NUMERIC_T13 : register(t13, space3)
+#define BIND_NUMERIC_T14 : register(t14, space3)
+
+#define BIND_DRAW_T2 : register(t2, space2)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define BIND_SEQ_B0 : register(b0, space0)
+#define BIND_SEQ_B1 : register(b1, space0)
+#define BIND_SEQ_B2 : register(b2, space0)
+#define BIND_SEQ_B3 : register(b3, space0)
+#define BIND_SEQ_B4 : register(b4, space0)
+#define BIND_SEQ_B5 : register(b5, space0)
+
+#define BIND_MAT_B0 : register(b0, space1)
+#define BIND_MAT_B1 : register(b1, space1)
+#define BIND_MAT_B2 : register(b2, space1)
+
+#define BIND_NUMERIC_B0 : register(b18, space3)
+#define BIND_NUMERIC_B1 : register(b19, space3)
+#define BIND_NUMERIC_B2 : register(b20, space3)
+#define BIND_NUMERIC_B3 : register(b21, space3)
+
+#define BIND_DRAW_B0 : register(b0, space2)
+#define BIND_DRAW_B1 : register(b1, space2)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define BIND_NUMERIC_U0 : register(u0)
+#define BIND_NUMERIC_U1 : register(u1)
+#define BIND_NUMERIC_U2 : register(u2)
+#define BIND_NUMERIC_U3 : register(u3)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define BIND_SHADOW_B0      BIND_MAT_B0
+#define BIND_SHADOW_B1      BIND_MAT_B1
+#define BIND_SHADOW_B2      BIND_MAT_B2
+
+#define BIND_SHADOW_T0      BIND_MAT_T3
+#define BIND_SHADOW_T1      BIND_MAT_T4
+#define BIND_SHADOW_T2      BIND_MAT_T5
+
+#define BIND_SHARED_LIGHTING_B0 : register(b0, space2)
+#define BIND_SHARED_LIGHTING_T1 : register(t1, space2)
+
+#define BIND_SHARED_LIGHTING_S2 : register(s2, space2)
+#define BIND_SHARED_LIGHTING_S3 : register(s3, space2)
+
+#endif
 
 #endif

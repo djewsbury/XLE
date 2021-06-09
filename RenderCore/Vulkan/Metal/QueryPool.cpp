@@ -236,6 +236,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		return true;
 	}
 
+	void QueryPool::AbandonResults(QueryId queryId)
+	{
+		assert(queryId != ~0u);
+		assert(_queryStates[queryId] == QueryState::Ended);
+		_queryStates[queryId] = QueryState::PendingReset;
+	}
+
 	QueryPool::QueryPool(ObjectFactory& factory, QueryType type, unsigned count)
 	: _type(type)
 	{
