@@ -116,11 +116,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				return i->second.get();
 
 			auto ds = std::make_unique<DescriptorSetCacheResult>();
-			ds->_layout = std::make_unique<CompiledDescriptorSetLayout>(*_objectFactory, MakeIteratorRange(signature._slots), stageFlags);
+			ds->_layout = std::make_unique<CompiledDescriptorSetLayout>(*_objectFactory, MakeIteratorRange(signature._slots), MakeIteratorRange(signature._fixedSamplers), stageFlags);
 			
 			{
 				ProgressiveDescriptorSetBuilder builder { MakeIteratorRange(signature._slots), 0 };
-				builder.BindDummyDescriptors(*_globalPools, (1ull<<uint64_t(signature._slots.size()))-1ull);
+				builder.BindDummyDescriptors(*_globalPools, ds->_layout->GetDummyMask());
 				ds->_blankBindings = _globalPools->_longTermDescriptorPool.Allocate(ds->_layout->GetUnderlying());
 				VULKAN_VERBOSE_DEBUG_ONLY(ds->_blankBindingsDescription._descriptorSetInfo = s_dummyDescriptorString);
 				std::vector<uint64_t> resourceVisibilityList;

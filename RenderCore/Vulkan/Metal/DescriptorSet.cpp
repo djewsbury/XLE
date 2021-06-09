@@ -637,26 +637,42 @@ namespace RenderCore { namespace Metal_Vulkan
 	CompiledDescriptorSetLayout::CompiledDescriptorSetLayout(
 		const ObjectFactory& factory, 
 		IteratorRange<const DescriptorSlot*> srcLayout,
+		IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
 		VkShaderStageFlags stageFlags)
 	: _shaderStageFlags(stageFlags)
 	, _descriptorSlots(srcLayout.begin(), srcLayout.end())
+	, _fixedSamplers(fixedSamplers.begin(), fixedSamplers.end())
 	{
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 		bindings.reserve(srcLayout.size());
+		VkSampler tempSamplerArray[_fixedSamplers.size()];
+		uint64_t dummyMask = 0;
 		for (unsigned bIndex=0; bIndex<(unsigned)srcLayout.size(); ++bIndex) {
 			VkDescriptorSetLayoutBinding dstBinding = {};
 			dstBinding.binding = bIndex;
 			dstBinding.descriptorType = (VkDescriptorType)AsVkDescriptorType(srcLayout[bIndex]._type);
 			dstBinding.descriptorCount = srcLayout[bIndex]._count;
 			dstBinding.stageFlags = stageFlags;
-			dstBinding.pImmutableSamplers = nullptr;
+			if (bIndex < _fixedSamplers.size() && _fixedSamplers[bIndex]) {
+				tempSamplerArray[bIndex] = checked_cast<SamplerState*>(_fixedSamplers[bIndex].get())->GetUnderlying();
+				dstBinding.pImmutableSamplers = &tempSamplerArray[bIndex];
+			} else {
+				dstBinding.pImmutableSamplers = nullptr;
+				dummyMask |= 1ull << uint64_t(bIndex);
+			}
 			bindings.push_back(dstBinding);
 		}
 		_layout = factory.CreateDescriptorSetLayout(MakeIteratorRange(bindings));
+		_dummyMask = dummyMask;
 	}
 
 	CompiledDescriptorSetLayout::~CompiledDescriptorSetLayout()
 	{
+	}
+
+	bool CompiledDescriptorSetLayout::IsFixedSampler(unsigned slotIdx)
+	{
+		return (slotIdx < _fixedSamplers.size()) && (_fixedSamplers[slotIdx] != nullptr);
 	}
 
 	CompiledDescriptorSet::CompiledDescriptorSet(
@@ -726,8 +742,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 		}
 
-		uint64_t signatureMask = (1ull<<uint64_t(layout->GetDescriptorSlots().size()))-1;
-		builder.BindDummyDescriptors(globalPools, signatureMask & ~writtenMask);
+		builder.BindDummyDescriptors(globalPools, layout->GetDummyMask() & ~writtenMask);
 
 		std::vector<uint64_t> resourceVisibilityList;
 		builder.FlushChanges(

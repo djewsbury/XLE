@@ -251,8 +251,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		samplerCreateInfo.pNext = nullptr;
 		samplerCreateInfo.flags = 0;
 
-		assert(desc._enableMipmaps == true);
-
 		samplerCreateInfo.compareEnable = VK_FALSE;
 		samplerCreateInfo.compareOp = VK_COMPARE_OP_NEVER;
 		samplerCreateInfo.anisotropyEnable = VK_FALSE;
@@ -299,7 +297,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		samplerCreateInfo.minLod = 0.f;
 		samplerCreateInfo.maxLod = VK_LOD_CLAMP_NONE;
 		samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;       // (interesting)
+		samplerCreateInfo.unnormalizedCoordinates = !!(desc._flags & SamplerDescFlags::UnnormalizedCoordinates);
 		_sampler = objectFactory.CreateSampler(samplerCreateInfo);
 	}
 

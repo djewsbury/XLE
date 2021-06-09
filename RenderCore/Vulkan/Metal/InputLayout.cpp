@@ -500,10 +500,17 @@ namespace RenderCore { namespace Metal_Vulkan
 								groupIdx, inputSlot, shaderStageMask);
 						} else {
 							// no binding found -- just mark it as an input variable we need, it will get filled in with a default binding
-							AddLooseUniformBinding(
-								UniformStreamType::Dummy,
-								reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-								groupIdxForDummies, ~0u, shaderStageMask);
+							bool isFixedSampler = false;
+							if (reflectionVariable._binding._descriptorSet < _pipelineLayout->GetDescriptorSetCount())
+								isFixedSampler = _pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet)->IsFixedSampler(reflectionVariable._binding._bindingPoint);
+
+							// we don't bind dummies to fixed samplers, because they just end up with a fixed value from the descriptor set layout
+							if (!isFixedSampler) {
+								AddLooseUniformBinding(
+									UniformStreamType::Dummy,
+									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
+									groupIdxForDummies, ~0u, shaderStageMask);
+							}
 						}
 					} else {
 

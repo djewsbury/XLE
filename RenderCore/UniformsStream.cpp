@@ -5,6 +5,8 @@
 #include "UniformsStream.h"
 #include "Types.h"
 #include "Format.h"
+#include "IDevice.h"
+#include "StateDesc.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/BitUtils.h"
 #include "../Core/SelectConfiguration.h"
@@ -129,7 +131,13 @@ namespace RenderCore
 
 	uint64_t DescriptorSetSignature::GetHashIgnoreNames() const
 	{
-		return Hash64(AsPointer(_slots.begin()), AsPointer(_slots.end()));
+		auto res = Hash64(AsPointer(_slots.begin()), AsPointer(_slots.end()));
+		for (unsigned c=0; c<_fixedSamplers.size(); ++c) {
+			if (!_fixedSamplers[c]) continue;
+			auto h = _fixedSamplers[c]->GetDesc().Hash();
+			res = HashCombine(rotl64(h, c), res);
+		}
+		return res;
 	}
 
 	void PipelineLayoutInitializer::AppendDescriptorSet(

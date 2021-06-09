@@ -116,6 +116,7 @@ namespace RenderCore
 	public:
 		std::vector<DescriptorSlot> _slots;
 		std::vector<uint64_t> _slotNames;
+		std::vector<std::shared_ptr<ISampler>> _fixedSamplers;		// this is parallel to "_slots" -- ie, it applies to the slot with the corresponding index
 		uint64_t GetHashIgnoreNames() const;
 
 		DescriptorSetSignature() {}

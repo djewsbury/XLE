@@ -186,6 +186,12 @@ namespace RenderCore
 		uint64_t Hash() const;
     };
 
+    namespace SamplerDescFlags
+    {
+        enum Flags { DisableMipmaps = 1u<<0u, UnnormalizedCoordinates = 1u<<1u };
+        using BitField = unsigned;
+    }
+
     class SamplerDesc
     {
     public:
@@ -193,7 +199,7 @@ namespace RenderCore
         AddressMode _addressU = AddressMode::Wrap;
         AddressMode _addressV = AddressMode::Wrap;
         CompareOp _comparison = CompareOp::Never;
-        bool _enableMipmaps = true;
+        SamplerDescFlags::BitField _flags = 0;
 
 		uint64_t Hash() const;
 		friend std::ostream& operator<<(std::ostream&, const SamplerDesc&);

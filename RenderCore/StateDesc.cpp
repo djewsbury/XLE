@@ -102,7 +102,7 @@ namespace RenderCore
             |   (uint64_t(_addressU) << 8ull)
             |   (uint64_t(_addressV) << 12ull)
             |   (uint64_t(_comparison) << 16ull)
-            |   (uint64_t(_enableMipmaps) << 20ull)
+            |   (uint64_t(_flags) << 20ull)
             ;
     }
 
@@ -111,8 +111,10 @@ namespace RenderCore
         str << "{Filter: " << AsString(desc._filter) << ", U: " << AsString(desc._addressU) << ", V: " << AsString(desc._addressV);
         if (desc._comparison != CompareOp::Never)
             str << ", Compare: " << AsString(desc._comparison);
-        if (!desc._enableMipmaps)
+        if (desc._flags & SamplerDescFlags::DisableMipmaps)
             str << ", Mipmaps disabled";
+        if (desc._flags & SamplerDescFlags::UnnormalizedCoordinates)
+            str << ", unnormalized coordinates";
         str << "}";
         return str;
     }
