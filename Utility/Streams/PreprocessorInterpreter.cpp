@@ -501,6 +501,18 @@ namespace Utility
 			return AsAbstractExpression(dictionary, std::move(rpn), substitutions);
 		}
 
+		std::optional<ExpressionTokenList> TryAsExpressionTokenList(
+			TokenDictionary& dictionary,
+			StringSection<> input,
+			const PreprocessorSubstitutions& substitutions)
+		{
+			TokenMap vars;
+			auto rpn = calculator::tryToRPN(input.AsString().c_str(), vars);
+			if (rpn.has_value())
+				return AsAbstractExpression(dictionary, rpn.get_value(), substitutions);
+			return {};
+		}
+
 		ExpressionTokenList AndExpression(const ExpressionTokenList& lhs, const ExpressionTokenList& rhs)
 		{
 			if (lhs.empty()) return rhs;

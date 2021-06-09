@@ -99,6 +99,11 @@ namespace Utility
 			TokenDictionary& dictionary,
 			StringSection<> input,
 			const PreprocessorSubstitutions& substitutions = {});
+
+		std::optional<ExpressionTokenList> TryAsExpressionTokenList(
+			TokenDictionary& dictionary,
+			StringSection<> input,
+			const PreprocessorSubstitutions& substitutions = {});
 		
 		WorkingRelevanceTable CalculatePreprocessorExpressionRevelance(
 			TokenDictionary& dictionary,

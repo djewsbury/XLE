@@ -748,12 +748,23 @@ namespace Utility
                         subst._symbol = symbol._value.AsString();
                         subst._type = XlEqStringI(directive._value, "define") ? Internal::PreprocessorSubstitutions::Type::Define : Internal::PreprocessorSubstitutions::Type::Undefine;
                         subst._condition = activeSubstitutions._dictionary.Translate(tokenDictionary, GetCurrentCondition(conditionsStack));
-                        bool expressionSubstitution = false;
-                        try {
-                            if (foundNonWhitespaceChar)
-                                subst._substitution = Internal::AsExpressionTokenList(activeSubstitutions._dictionary, remainingLine._value, activeSubstitutions);
-                            expressionSubstitution = true;
-                        } catch (const std::exception& e) {
+                        bool expressionSubstitution = true;
+
+                        if (foundNonWhitespaceChar) {
+                            try {
+                                auto maybeTokenList = Internal::TryAsExpressionTokenList(activeSubstitutions._dictionary, remainingLine._value, activeSubstitutions);
+                                if (maybeTokenList.has_value()) {
+                                    subst._substitution = std::move(maybeTokenList.value());
+                                    expressionSubstitution = true;
+                                } else {
+                                    expressionSubstitution = false;
+                                }
+                            } catch (const std::exception& e) {
+                                expressionSubstitution = false;
+                            }
+                        }
+
+                        if (!expressionSubstitution) {
                             #if defined(_DEBUG)
                                 std::cout << "Substitution for " << symbol._value << " is not an expression" << std::endl;
                             #endif
