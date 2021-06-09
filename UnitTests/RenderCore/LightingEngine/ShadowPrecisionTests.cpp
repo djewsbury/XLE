@@ -216,7 +216,7 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -263,7 +263,7 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -474,8 +474,8 @@ namespace UnitTests
 		sceneCamera._farClip = 150.f;
 		sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
 
-// 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
- 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
+ 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
+// 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
 //		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
 //		const Float3 negativeLightDirection = Normalize(Float3{-2.69884f, 0.696449f, -2.16482f});
 
@@ -512,7 +512,7 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);

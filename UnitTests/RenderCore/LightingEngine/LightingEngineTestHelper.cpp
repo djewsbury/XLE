@@ -63,7 +63,7 @@ namespace UnitTests
 			MakeSequencerDescriptorSetLayout());
 
 		_techniquesSharedResources = RenderCore::Techniques::CreateTechniqueSharedResources(*_metalTestHelper->_device);
-		_techDelBox = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>(_techniquesSharedResources);
+		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>(_techniquesSharedResources);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_drawablesSharedResources = Techniques::CreateDrawablesSharedResources();

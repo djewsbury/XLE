@@ -56,6 +56,8 @@ namespace UnitTests
 		auto* glesDevice = (RenderCore::IDeviceOpenGLES*)_device->QueryInterface(typeid(RenderCore::IDeviceOpenGLES).hash_code());
 		if (glesDevice)
 			glesDevice->InitializeRootContextHeadless();
+
+		_device->GetImmediateContext();	// on Vulkan this will cause an early "second stage init"
 		
 		_defaultLegacyBindings = CreateDefaultLegacyRegisterBindingDesc();
 		_pipelineLayout = CreateDefaultPipelineLayout(*_device);
@@ -442,6 +444,13 @@ namespace UnitTests
 			{DescriptorType::Sampler},						// 15
 			{DescriptorType::Sampler}						// 16
 		};
+
+		sequencerSet._fixedSamplers.resize(13, 0);
+		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Wrap, AddressMode::Wrap}));
+		// sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Clamp, AddressMode::Clamp}));
+		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp}));
+		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates}));
+		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}));
 
 		RenderCore::DescriptorSetSignature materialSet {
 			{DescriptorType::UniformBuffer},

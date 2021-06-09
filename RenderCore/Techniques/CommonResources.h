@@ -44,6 +44,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<ISampler> _linearClampSampler;
         std::shared_ptr<ISampler> _anisotropicWrapSampler;
         std::shared_ptr<ISampler> _pointClampSampler;
+        std::shared_ptr<ISampler> _unnormalizedBilinearClampSampler;
 
 		///////////////////////////////////////
 

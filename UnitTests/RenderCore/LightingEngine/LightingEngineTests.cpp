@@ -260,7 +260,7 @@ namespace UnitTests
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -337,7 +337,7 @@ namespace UnitTests
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._techDelBox, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
+				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayoutFile,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);

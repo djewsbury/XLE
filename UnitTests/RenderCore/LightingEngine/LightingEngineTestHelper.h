@@ -41,7 +41,7 @@ namespace UnitTests
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources> _techniquesSharedResources;
-		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _techDelBox;
+		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
 
 		LightingEngineTestApparatus();
