@@ -50,8 +50,7 @@ namespace ConsoleRig
 		void InfraModuleManager::PropagateChange(TypeKey id, const std::shared_ptr<void>& obj)
 		{
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
-			// If there are no pointers currently referencing this type, we will just early out now
-			if (i2 == _pimpl->_registeredTypes.end() || i2->first != id || (i2->second._localStrongReferenceCounts + i2->second._localWeakReferenceCounts) == 0)
+			if (i2 == _pimpl->_registeredTypes.end() || i2->first != id)
 				return;
 
 			if (i2->second._detachModuleFn && i2->second._currentValue)
@@ -108,19 +107,18 @@ namespace ConsoleRig
 						--i2->second._localWeakReferenceCounts;
 					}
 
-					if (isReleaseFinalStrongReference && i2->second._detachModuleFn && i2->second._currentValue) {
-						// Clear any weak pointers
-						for (const auto&ptr:_pimpl->_registeredPointers)
-							if (ptr.first == type) {
-								assert(!ptr.second._strong);
-								ptr.second._ptr->PropagateChange(nullptr);
-							}
-
-						i2->second._detachModuleFn(i2->second._currentValue);
-						i2->second._currentValue = nullptr;
-					}
+					if (isReleaseFinalStrongReference && i2->second._currentValue)
+						CrossModule::GetInstance().CheckExtinction(type);
 				}
 			}
+		}
+
+		unsigned InfraModuleManager::GetStrongCount(TypeKey id)
+		{
+			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
+			if (i2 != _pimpl->_registeredTypes.end() && i2->first == id)
+				return i2->second._localStrongReferenceCounts;
+			return 0;
 		}
 
 		void InfraModuleManager::ConfigureType(
@@ -167,7 +165,7 @@ namespace ConsoleRig
 		void InfraModuleManager::CrossModuleShuttingDown()
 		{
 			for (const auto&ptr:_pimpl->_registeredPointers)
-				ptr.second._ptr->ManagerShuttingDown();
+				ptr.second._ptr->ManagerShuttingDown(false);
 			if (_pimpl->_crossModuleRegistration != ~0u) {
 				CrossModule::GetInstance().Deregister(_pimpl->_crossModuleRegistration);
 				_pimpl->_crossModuleRegistration = ~0u;
@@ -190,7 +188,7 @@ namespace ConsoleRig
 		{
 			// We can detach all of the pointers before or after we deregister from the CrossModule manager
 			for (const auto&ptr:_pimpl->_registeredPointers)
-				ptr.second._ptr->ManagerShuttingDown();
+				ptr.second._ptr->ManagerShuttingDown(true);
 			_pimpl->_registeredPointers.clear();
 			for (const auto&type:_pimpl->_registeredTypes)
 				if ((type.second._localStrongReferenceCounts + type.second._localWeakReferenceCounts) != 0 && type.second._currentValue && type.second._detachModuleFn)
@@ -219,6 +217,8 @@ namespace ConsoleRig
 		std::vector<std::pair<RegisteredInfraModuleManagerId, Internal::InfraModuleManager*>> _moduleSpecificManagers;
 		RegisteredInfraModuleManagerId _nextInfraModuleManagerRegistration = 1u;
 
+		bool _iteratingModuleSpecificManagers = false;
+
 		#if PLATFORMOS_TARGET == PLATFORMOS_OSX
 			// There's something odd going on here on OSX. We must prepend the exported symbol with "_", but when
 			// we go to lookup that symbol with dlsym, we don't include the extra underscore. It seems like there's
@@ -237,6 +237,16 @@ namespace ConsoleRig
 		return nullptr;
 	}
 
+	void CrossModule::CheckExtinction(Internal::TypeKey id)
+	{
+		// This is awesomely not thread safe; but required to manage the attach/detach from module calls
+		unsigned strongCount = 0;
+		for (const auto&m:_pimpl->_moduleSpecificManagers)
+			strongCount += m.second->GetStrongCount(id);
+		if (!strongCount)
+			Reset(id, nullptr, ~0u);
+	}
+
 	void CrossModule::Reset(Internal::TypeKey id, const std::shared_ptr<void>& obj, RegisteredInfraModuleManagerId owner)
 	{
 		// Note that there's not any threading protection during this set
@@ -248,12 +258,16 @@ namespace ConsoleRig
 			i->second._owningInfraModuleManager = owner;
 		} else
 			_pimpl->_cannonicalPtrs.insert(i, {id, Pimpl::CannonicalPtr{obj, owner}});
+		assert(!_pimpl->_iteratingModuleSpecificManagers);
+		_pimpl->_iteratingModuleSpecificManagers = true;
 		for (auto& moduleManager:_pimpl->_moduleSpecificManagers)
 			moduleManager.second->PropagateChange(id, obj);
+		_pimpl->_iteratingModuleSpecificManagers = false;
 	}
 
 	auto CrossModule::Register(Internal::InfraModuleManager* ptr) -> RegisteredInfraModuleManagerId
 	{
+		assert(!_pimpl->_iteratingModuleSpecificManagers);
 		auto i = std::find_if(_pimpl->_moduleSpecificManagers.begin(), _pimpl->_moduleSpecificManagers.end(), [ptr](auto c) { return c.second == ptr; });
 		assert(i == _pimpl->_moduleSpecificManagers.end()); (void)i;
 
@@ -264,15 +278,17 @@ namespace ConsoleRig
 
 	void CrossModule::Deregister(RegisteredInfraModuleManagerId id)
 	{
+		assert(!_pimpl->_iteratingModuleSpecificManagers);
 		// reset all pointers associated with this module
-		// Note that this will also result in calls to PropagateChange() for the module that's actually getting shut down
-		for (const auto&ptr:_pimpl->_cannonicalPtrs)
-			if (ptr.second._owningInfraModuleManager == id)
-				Reset(ptr.first, nullptr, ~0u);
+		// Remove the manager first to avoid propagating this change back to the same manager
 		auto i = std::find_if(_pimpl->_moduleSpecificManagers.begin(), _pimpl->_moduleSpecificManagers.end(), [id](auto c) { return c.first == id; });
 		assert(i != _pimpl->_moduleSpecificManagers.end());
 		if (i != _pimpl->_moduleSpecificManagers.end())
 			_pimpl->_moduleSpecificManagers.erase(i);
+
+		for (const auto&ptr:_pimpl->_cannonicalPtrs)
+			if (ptr.second._owningInfraModuleManager == id)
+				Reset(ptr.first, nullptr, ~0u);
 	}
 
 	void CrossModule::EnsureReady()

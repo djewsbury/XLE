@@ -37,7 +37,7 @@ namespace ConsoleRig
 			{
 			public:
 				virtual void PropagateChange(const std::shared_ptr<void>& newValue) = 0;
-				virtual void ManagerShuttingDown() = 0;
+				virtual void ManagerShuttingDown(bool releaseFromInfraManager) = 0;
 				virtual ~IRegistrablePointer() = default;
 			};
 			RegisteredPointerId Register(TypeKey id, IRegistrablePointer* ptr, bool strong);
@@ -66,6 +66,7 @@ namespace ConsoleRig
 			friend class ConsoleRig::CrossModule;
 			void PropagateChange(TypeKey id, const std::shared_ptr<void>& obj);
 			void CrossModuleShuttingDown();
+			unsigned GetStrongCount(TypeKey id);
 
 			InfraModuleManager();
 			~InfraModuleManager();
@@ -144,7 +145,7 @@ namespace ConsoleRig
 		Internal::InfraModuleManager::RegisteredPointerId _managerRegistry;
 
 		void PropagateChange(const std::shared_ptr<void>& newValue) override;
-		void ManagerShuttingDown() override;
+		void ManagerShuttingDown(bool releaseFromInfraManager) override;
 	};
 
 	template<typename Obj, typename... Args>
@@ -158,7 +159,7 @@ namespace ConsoleRig
 		bool expired() const { return _internalPointer.expired(); }
 
         void PropagateChange(const std::shared_ptr<void>& newValue) override;
-		void ManagerShuttingDown() override;
+		void ManagerShuttingDown(bool releaseFromInfraManager) override;
 
 		WeakAttachablePtr();
 		~WeakAttachablePtr();
@@ -183,6 +184,7 @@ namespace ConsoleRig
 
 		auto Get(Internal::TypeKey id) -> std::shared_ptr<void>;
 		void Reset(Internal::TypeKey id, const std::shared_ptr<void>& obj, RegisteredInfraModuleManagerId owner);
+		void CheckExtinction(Internal::TypeKey id);
 
 		CrossModule();
 		~CrossModule();
@@ -255,9 +257,22 @@ namespace ConsoleRig
 	}
 
 	template<typename Obj>
-		void AttachablePtr<Obj>::ManagerShuttingDown()
+		void AttachablePtr<Obj>::ManagerShuttingDown(bool releaseFromInfraManager)
 	{
-		_internalPointer = nullptr;
+		// This is called when either the CrossModule manager or InfraModuleManager is being shut down
+		// In either case, we want to release the pointer
+		// However, only when the InfraModuleManager is begin shutdown do we clear _managerRegistry
+		// The InfraModuleManager can only be started up and shut down once (even though CrossModule manager
+		// can be cycled multiple times)
+		// We can't fully control the order in which any of these objects are destroyed. But if the
+		// InfraModuleManager is destroyed before the pointer is destroyed, we must not attempt to use it
+		// again (because it's gone and never coming back)
+		// Still, we must retain our registration with the InfraModuleManager if the CrossModule manager
+		// shutdown -- because the CrossModule manager may be initialized again, and we may attempt to use this
+		// pointer again 
+		_internalPointer.reset();
+		if (releaseFromInfraManager)
+			_managerRegistry = ~0u;
 	}
 
 	template<typename Obj>
@@ -319,10 +334,11 @@ namespace ConsoleRig
     }
 
     template<typename Obj>
-        void WeakAttachablePtr<Obj>::ManagerShuttingDown()
+        void WeakAttachablePtr<Obj>::ManagerShuttingDown(bool releaseFromInfraManager)
     {
-        _managerRegistry = ~0u;
         _internalPointer.reset();
+		if (releaseFromInfraManager)
+			_managerRegistry = ~0u;
     }
 
     template<typename Obj>
