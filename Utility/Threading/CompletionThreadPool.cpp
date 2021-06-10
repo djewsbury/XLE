@@ -247,11 +247,23 @@ namespace Utility
             _workerThreads.emplace_back([this] { this->RunBlocks(false); });
     }
 
-    void ThreadPool::StallAndDrainQueue()
+    bool ThreadPool::StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration)
     {
-        while (_runningWorkerCount) {
-            Threading::YieldTimeSlice();
-            RunBlocks(true);
+        if (stallDuration.has_value()) {
+            auto timeoutPt = std::chrono::steady_clock::now() + stallDuration.value();
+            while (_runningWorkerCount) {
+                Threading::YieldTimeSlice();
+                RunBlocks(true);
+                if (std::chrono::steady_clock::now() >= timeoutPt)
+                    return false;
+            }
+            return true;
+        } else {
+            while (_runningWorkerCount) {
+                Threading::YieldTimeSlice();
+                RunBlocks(true);
+            }
+            return true;
         }
     }
 

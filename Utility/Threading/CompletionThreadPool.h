@@ -15,6 +15,7 @@
 #include <thread>
 #include <functional>
 #include <queue>
+#include <optional>
 
 namespace Utility
 {
@@ -94,7 +95,7 @@ namespace Utility
 		void EnqueueBasic(std::function<void()>&& task);
 
         bool IsGood() const { return !_workerThreads.empty(); }
-        void StallAndDrainQueue();
+        bool StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration = {});
 
         ThreadPool(unsigned threadCount);
         ~ThreadPool();

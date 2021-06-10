@@ -89,10 +89,6 @@ namespace Assets
 		std::exception_ptr _capturedException;
     };
 
-	void QueueCompileOperation(
-		const std::shared_ptr<ArtifactCollectionFuture>& future,
-		std::function<void(ArtifactCollectionFuture&)>&& operation);
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class ChunkFileArtifactCollection : public IArtifactCollection

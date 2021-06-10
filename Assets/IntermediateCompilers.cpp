@@ -14,14 +14,17 @@
 #include "ArchiveCache.h"
 #include "../ConsoleRig/AttachableLibrary.h"
 #include "../ConsoleRig/GlobalServices.h"
+#include "../ConsoleRig/Plugins.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"		// for OSServices::GetProcessPath()
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/StringFormat.h"
+#include "../Utility/Threading/CompletionThreadPool.h"
 #include <regex>
 #include <set>
 #include <unordered_map>
+#include <atomic>
 
 namespace Assets 
 {
@@ -35,6 +38,8 @@ namespace Assets
 		IIntermediateCompilers::ArchiveNameDelegate _archiveNameDelegate;
 		DependencyValidation _compilerLibraryDepVal;
 		IntermediatesStore::CompileProductsGroupId _storeGroupId = 0;
+		std::atomic<bool> _shuttingDown = false;
+		std::atomic<unsigned> _activeOperationCount = 0;
 	};
 
 	struct DelegateAssociation
@@ -106,6 +111,7 @@ namespace Assets
         std::shared_ptr<IArtifactCollection> GetExistingAsset(TargetCode) const override;
         std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
+		void StallForActiveFuture();
 
         Marker(
             InitializerPack&& requestName,
@@ -255,6 +261,31 @@ namespace Assets
 		} CATCH_END
     }
 
+	static void QueueCompileOperation(
+		const std::shared_ptr<::Assets::ArtifactCollectionFuture>& future,
+		std::function<void(::Assets::ArtifactCollectionFuture&)>&& operation)
+	{
+        if (!ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().IsGood()) {
+            operation(*future);
+            return;
+        }
+
+		auto fn = std::move(operation);
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().EnqueueBasic(
+			[future, fn]() {
+				TRY
+				{
+					fn(*future);
+				}
+				CATCH(...)
+				{
+					future->StoreException(std::current_exception());
+				}
+				CATCH_END
+				assert(future->GetAssetState() != ::Assets::AssetState::Pending);	// if it is still marked "pending" at this stage, it will never change state
+		});
+	}
+
     std::shared_ptr<ArtifactCollectionFuture> IntermediateCompilers::Marker::InvokeCompile()
     {
 		auto activeFuture = _activeFuture.lock();
@@ -280,14 +311,36 @@ namespace Assets
 					return;
 				}
 
-				PerformCompile(*d, inits, op, store.get());
+				++d->_activeOperationCount;
+				if (!d->_shuttingDown) {
+					TRY {
+						PerformCompile(*d, inits, op, store.get());
+					} CATCH (...) {
+						--d->_activeOperationCount;
+						throw;
+					} CATCH_END
+				} else {
+					op.SetState(AssetState::Invalid);
+				}
+				--d->_activeOperationCount;
 			});
 		} else {
 			auto d = _delegate.lock();
 			if (!d) {
 				backgroundOp->SetState(AssetState::Invalid);
 			} else {
-				PerformCompile(*d, _initializers, *backgroundOp, _intermediateStore.get());
+				++d->_activeOperationCount;
+				if (!d->_shuttingDown) {
+					TRY {
+						PerformCompile(*d, _initializers, *backgroundOp, _intermediateStore.get());
+					} CATCH (...) {
+						--d->_activeOperationCount;
+						throw;
+					} CATCH_END
+				} else {
+					backgroundOp->SetState(AssetState::Invalid);
+				}
+				--d->_activeOperationCount;
 			}
 		}
         
@@ -376,6 +429,11 @@ namespace Assets
 
 		for (auto i=_delegates.begin(); i!=_delegates.end();)
 			if (i->first == id) {
+				i->second->_shuttingDown.store(true);
+				while (i->second->_activeOperationCount.load() != 0) {
+					bool completed = ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().StallAndDrainQueue(std::chrono::milliseconds(100));
+					if (completed) break;
+				}
 				i = _delegates.erase(i);
 			} else ++i;
 	}
@@ -503,33 +561,28 @@ namespace Assets
 	};
 
 	CompilerLibrary::CompilerLibrary(StringSection<> libraryName)
-	: _library(std::make_shared<ConsoleRig::AttachableLibrary>(libraryName))
 	{
-		std::string attachErrorMsg;
-		bool isAttached = _library->TryAttach(attachErrorMsg);
-		if (isAttached) {
-			_createCompileOpFunction = _library->GetFunction<decltype(_createCompileOpFunction)>("CreateCompileOperation");
+		auto& pluginSet = ConsoleRig::GlobalServices::GetInstance().GetPluginSet();
+		_library = pluginSet.LoadLibrary(libraryName.AsString());
 
-			auto compilerDescFn = _library->GetFunction<GetCompilerDescFn*>("GetCompilerDesc");
-			if (compilerDescFn) {
-				auto compilerDesc = (*compilerDescFn)();
-				auto targetCount = compilerDesc->FileKindCount();
-				for (unsigned c=0; c<targetCount; ++c) {
-					auto kind = compilerDesc->GetFileKind(c);
-					_kinds.push_back({
-						std::vector<uint64_t>{kind._targetCodes.begin(), kind._targetCodes.end()},
-						kind._regexFilter,
-						kind._name,
-						kind._shortName,
-						kind._extensionsForOpenDlg});
-				}
+		_createCompileOpFunction = _library->GetFunction<decltype(_createCompileOpFunction)>("CreateCompileOperation");
+
+		auto compilerDescFn = _library->GetFunction<GetCompilerDescFn*>("GetCompilerDesc");
+		if (compilerDescFn) {
+			auto compilerDesc = (*compilerDescFn)();
+			auto targetCount = compilerDesc->FileKindCount();
+			for (unsigned c=0; c<targetCount; ++c) {
+				auto kind = compilerDesc->GetFileKind(c);
+				_kinds.push_back({
+					std::vector<uint64_t>{kind._targetCodes.begin(), kind._targetCodes.end()},
+					kind._regexFilter,
+					kind._name,
+					kind._shortName,
+					kind._extensionsForOpenDlg});
 			}
 		}
 
 		// check for problems (missing functions or bad version number)
-		if (!isAttached)
-			Throw(::Exceptions::BasicLabel("Error while attaching asset conversion DLL. Msg: (%s), from DLL: (%s)", attachErrorMsg.c_str(), libraryName.AsString().c_str()));
-
 		if (!_createCompileOpFunction)
 			Throw(::Exceptions::BasicLabel("Error while linking asset conversion DLL. Some interface functions are missing. From DLL: (%s)", libraryName.AsString().c_str()));
 	}

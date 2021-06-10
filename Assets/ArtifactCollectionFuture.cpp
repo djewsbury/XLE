@@ -9,7 +9,6 @@
 #include "ChunkFileContainer.h"
 #include "MemoryFile.h"
 #include "../ConsoleRig/GlobalServices.h"
-#include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Core/Exceptions.h"
@@ -68,31 +67,6 @@ namespace Assets
 
 	ArtifactCollectionFuture::ArtifactCollectionFuture() {}
 	ArtifactCollectionFuture::~ArtifactCollectionFuture()  {}
-
-	void QueueCompileOperation(
-		const std::shared_ptr<::Assets::ArtifactCollectionFuture>& future,
-		std::function<void(::Assets::ArtifactCollectionFuture&)>&& operation)
-	{
-        if (!ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().IsGood()) {
-            operation(*future);
-            return;
-        }
-
-		auto fn = std::move(operation);
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().EnqueueBasic(
-			[future, fn]() {
-				TRY
-				{
-					fn(*future);
-				}
-				CATCH(...)
-				{
-					future->StoreException(std::current_exception());
-				}
-				CATCH_END
-				assert(future->GetAssetState() != ::Assets::AssetState::Pending);	// if it is still marked "pending" at this stage, it will never change state
-		});
-	}
 
 			////////////////////////////////////////////////////////////
 
