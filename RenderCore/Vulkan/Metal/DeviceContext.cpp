@@ -97,8 +97,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		DescriptorCollection	_computeDescriptors;
 
 		void* _currentEncoder = nullptr;
-		enum class EncoderType { None, Graphics, ProgressiveGraphics, ProgressiveCompute };
-		EncoderType _currentEncoderType = EncoderType::None;
+		SharedEncoder::EncoderType _currentEncoderType = SharedEncoder::EncoderType::None;
 
 		bool _ibBound = false;		// (for debugging, validates that an index buffer actually is bound when calling DrawIndexed & alternatives)
 		GlobalPools* _globalPools = nullptr;
@@ -184,87 +183,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		vkCmdSetDepthBounds(_sharedState->_commandList.GetUnderlying().get(), minDepthValue, maxDepthValue);
 	}
 
-	void        GraphicsEncoder::BindDescriptorSet(
-		unsigned index, VkDescriptorSet set
-		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description))
-	{
-		auto& collection = _sharedState->_graphicsDescriptors;
-		if (index < (unsigned)collection._descriptorSets.size() && collection._descriptorSets[index] != set) {
-			collection._descriptorSets[index] = set;
-			assert(index < GetDescriptorSetCount());
-			_sharedState->_commandList.BindDescriptorSets(
-				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				GetUnderlyingPipelineLayout(),
-				index, 1, &collection._descriptorSets[index], 
-				0, nullptr);
-
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				collection._currentlyBoundDesc[index] = description;
-			#endif
-		}
-	}
-
-	void        ComputeEncoder_ProgressivePipeline::BindDescriptorSet(
-		unsigned index, VkDescriptorSet set
-		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description))
-	{
-		auto& collection = _sharedState->_computeDescriptors;
-		if (index < (unsigned)collection._descriptorSets.size() && collection._descriptorSets[index] != set) {
-			collection._descriptorSets[index] = set;
-			assert(index < GetDescriptorSetCount());
-			_sharedState->_commandList.BindDescriptorSets(
-				VK_PIPELINE_BIND_POINT_COMPUTE,
-				GetUnderlyingPipelineLayout(),
-				index, 1, &collection._descriptorSets[index], 
-				0, nullptr);
-
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				collection._currentlyBoundDesc[index] = description;
-			#endif
-		}
-	}
-
-	NumericUniformsInterface	GraphicsEncoder::BeginNumericUniformsInterface()
-	{
-		auto& cmdList = _sharedState->_commandList;
-		if (!cmdList._attachedStorage)
-			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
-
-		return NumericUniformsInterface { 
-			_sharedState->_graphicsDescriptors.GetObjectFactory(),
-			*_pipelineLayout,
-			cmdList._attachedStorage,
-			Internal::VulkanGlobalsTemp::GetInstance()._legacyRegisterBindings};
-	}
-
-	void			GraphicsEncoder::PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data)
-	{
-		assert(!(stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
-		_sharedState->_commandList.PushConstants(
-			GetUnderlyingPipelineLayout(),
-			stageFlags, offset, (uint32_t)data.size(), data.begin());
-	}
-
-	unsigned GraphicsEncoder::GetDescriptorSetCount()
-	{
-		return _pipelineLayout->GetDescriptorSetCount();
-	}
-
-	VkPipelineLayout GraphicsEncoder::GetUnderlyingPipelineLayout()
-	{
-		return _pipelineLayout->GetUnderlying();
-	}
-
-	unsigned ComputeEncoder_ProgressivePipeline::GetDescriptorSetCount()
-	{
-		return _pipelineLayout->GetDescriptorSetCount();
-	}
-
-	VkPipelineLayout ComputeEncoder_ProgressivePipeline::GetUnderlyingPipelineLayout()
-	{
-		return _pipelineLayout->GetUnderlying();
-	}
-
 	bool GraphicsEncoder_ProgressivePipeline::BindGraphicsPipeline()
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
@@ -282,25 +200,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			_currentGraphicsPipeline->get());
 		// Bind(_boundViewport);
-		return true;
-	}
-
-	bool ComputeEncoder_ProgressivePipeline::BindComputePipeline()
-	{
-		assert(_sharedState->_commandList.GetUnderlying());
-
-		if (_currentComputePipeline && !ComputePipelineBuilder::IsPipelineStale()) return true;
-
-		_currentComputePipeline = ComputePipelineBuilder::CreatePipeline(
-			*_factory, _globalPools->_mainPipelineCache.get());
-		assert(_currentComputePipeline);
-		LogPipeline();
-
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			_currentComputePipeline->get());
-
 		return true;
 	}
 
@@ -346,26 +245,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				const auto& descriptors = _sharedState->_graphicsDescriptors;
-				_pipelineLayout->WriteDebugInfo(
-					Log(Verbose),
-					MakeIteratorRange(shaders),
-					MakeIteratorRange(descriptors._currentlyBoundDesc));
-			#endif
-		#endif
-	}
-
-	void ComputeEncoder_ProgressivePipeline::LogPipeline()
-	{
-		#if defined(_DEBUG)
-			if (!Verbose.IsEnabled()) return;
-
-			const CompiledShaderByteCode* shaders[(unsigned)ShaderStage::Max] = {};
-			Log(Verbose) << "-------------ComputeShader------------" << std::endl;
-			Log(Verbose) << SPIRVReflection(GetBoundComputeShader()->GetCompiledShaderByteCode().GetByteCode()) << std::endl;
-			shaders[(unsigned)ShaderStage::Compute] = &GetBoundComputeShader()->GetCompiledShaderByteCode();
-
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				const auto& descriptors = _sharedState->_computeDescriptors;
 				_pipelineLayout->WriteDebugInfo(
 					Log(Verbose),
 					MakeIteratorRange(shaders),
@@ -467,6 +346,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::Draw(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned startVertexLocation)
 	{
+		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		vkCmdBindPipeline(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -483,6 +363,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	
 	void GraphicsEncoder_Optimized::DrawIndexed(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned startIndexLocation)
 	{
+		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		assert(_sharedState->_ibBound);
 		vkCmdBindPipeline(
@@ -502,6 +383,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	void GraphicsEncoder_Optimized::DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
 	{
 		Log(Verbose) << "DrawInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
+		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		vkCmdBindPipeline(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -528,6 +410,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	void GraphicsEncoder_Optimized::DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
 	{
 		Log(Verbose) << "DrawIndexedInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
+		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		vkCmdBindPipeline(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -556,45 +439,137 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(0);      // not implemented
 	}
 
-	void ComputeEncoder_ProgressivePipeline::Dispatch(unsigned countX, unsigned countY, unsigned countZ)
+	void SharedEncoder::BindDescriptorSet(
+		unsigned index, VkDescriptorSet set
+		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description))
 	{
-		assert(_sharedState->_commandList.GetUnderlying());
-		if (BindComputePipeline()) {
-			vkCmdDispatch(
-				_sharedState->_commandList.GetUnderlying().get(),
-				countX, countY, countZ);
+		auto encoderType = _sharedState->_currentEncoderType;
+		assert(encoderType != EncoderType::None);
+		auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptors : _sharedState->_graphicsDescriptors;
+		if (index < (unsigned)collection._descriptorSets.size() && collection._descriptorSets[index] != set) {
+			collection._descriptorSets[index] = set;
+			assert(index < GetDescriptorSetCount());
+			_sharedState->_commandList.BindDescriptorSets(
+				(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+				GetUnderlyingPipelineLayout(),
+				index, 1, &collection._descriptorSets[index], 
+				0, nullptr);
+
+			#if defined(VULKAN_VERBOSE_DEBUG)
+				collection._currentlyBoundDesc[index] = description;
+			#endif
 		}
+	}
+
+	NumericUniformsInterface SharedEncoder::BeginNumericUniformsInterface()
+	{
+		auto& cmdList = _sharedState->_commandList;
+		if (!cmdList._attachedStorage)
+			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
+
+		return NumericUniformsInterface { 
+			_sharedState->_graphicsDescriptors.GetObjectFactory(),
+			*_pipelineLayout,
+			cmdList._attachedStorage,
+			Internal::VulkanGlobalsTemp::GetInstance()._legacyRegisterBindings};
+	}
+
+	void			SharedEncoder::PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data)
+	{
+		auto encoderType = _sharedState->_currentEncoderType;
+		if (encoderType == EncoderType::Compute) {
+			assert(stageFlags == VK_SHADER_STAGE_COMPUTE_BIT);
+		} else
+			assert(!(stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
+		_sharedState->_commandList.PushConstants(
+			GetUnderlyingPipelineLayout(),
+			stageFlags, offset, (uint32_t)data.size(), data.begin());
+	}
+
+	unsigned SharedEncoder::GetDescriptorSetCount()
+	{
+		return _pipelineLayout->GetDescriptorSetCount();
+	}
+
+	VkPipelineLayout SharedEncoder::GetUnderlyingPipelineLayout()
+	{
+		return _pipelineLayout->GetUnderlying();
+	}
+
+	SharedEncoder::SharedEncoder(
+		EncoderType encoderType,
+		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		std::shared_ptr<VulkanEncoderSharedState> sharedState)
+	: _pipelineLayout(std::move(pipelineLayout))
+	, _sharedState(std::move(sharedState))
+	{
+		if (_sharedState) {
+			assert(_sharedState->_currentEncoder == nullptr && _sharedState->_currentEncoderType == EncoderType::None);
+			assert(encoderType == EncoderType::Compute || _sharedState->_renderPass != nullptr);
+			assert(_pipelineLayout);
+			_sharedState->_currentEncoder = this;
+			_sharedState->_currentEncoderType = encoderType;
+
+			auto* descCollection = (encoderType == EncoderType::Compute) ? &_sharedState->_computeDescriptors : &_sharedState->_graphicsDescriptors;
+			descCollection->ResetState(*_pipelineLayout);
+
+			// bind descriptor sets that are pending
+			// If we've been using the pipeline layout builder directly, then we
+			// must flush those changes down to the GraphicsPipelineBuilder
+			if (descCollection->_hasSetsAwaitingFlush) {
+				_sharedState->_commandList.BindDescriptorSets(
+					(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+					GetUnderlyingPipelineLayout(),
+					0, GetDescriptorSetCount(), AsPointer(descCollection->_descriptorSets.begin()), 
+					0, nullptr);
+				descCollection->_hasSetsAwaitingFlush = false;
+			}
+		}
+	}
+
+	SharedEncoder::~SharedEncoder()
+	{
+		if (_sharedState) {
+			assert(_sharedState->_currentEncoder == this);
+			_sharedState->_currentEncoder = nullptr;
+			_sharedState->_currentEncoderType = EncoderType::None;
+		}
+	}
+	SharedEncoder::SharedEncoder(SharedEncoder&& moveFrom)
+	{
+		if (moveFrom._sharedState) {
+			assert(moveFrom._sharedState->_currentEncoder == &moveFrom);
+			_sharedState = std::move(moveFrom._sharedState);
+			_sharedState->_currentEncoder = this;
+		}
+		_pipelineLayout = std::move(moveFrom._pipelineLayout);
+	}
+
+	SharedEncoder& SharedEncoder::operator=(SharedEncoder&& moveFrom)
+	{
+		if (_sharedState) {
+			assert(_sharedState->_currentEncoder == this);
+			_sharedState->_currentEncoder = nullptr;
+			_sharedState->_currentEncoderType = EncoderType::None;
+			_sharedState.reset();
+		}
+
+		if (moveFrom._sharedState) {
+			assert(moveFrom._sharedState->_currentEncoder == &moveFrom);
+			_sharedState = std::move(moveFrom._sharedState);
+			_sharedState->_currentEncoder = this;
+		}
+		_pipelineLayout = std::move(moveFrom._pipelineLayout);
+		return *this;
 	}
 
 	GraphicsEncoder::GraphicsEncoder(
 		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState,
 		Type type)
-	: _pipelineLayout(std::move(pipelineLayout))
-	, _sharedState(std::move(sharedState))
+	: SharedEncoder(EncoderType::Graphics, pipelineLayout, sharedState)
 	, _type(type)
 	{
-		if (_sharedState) {
-			assert(_sharedState->_currentEncoder == nullptr && _sharedState->_currentEncoderType == VulkanEncoderSharedState::EncoderType::None);
-			assert(_sharedState->_renderPass != nullptr);
-			assert(_pipelineLayout);
-			_sharedState->_currentEncoder = this;
-			_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::Graphics;
-
-			_sharedState->_graphicsDescriptors.ResetState(*_pipelineLayout);
-
-			// bind descriptor sets that are pending
-			// If we've been using the pipeline layout builder directly, then we
-			// must flush those changes down to the GraphicsPipelineBuilder
-			if (_sharedState->_graphicsDescriptors._hasSetsAwaitingFlush) {
-				_sharedState->_commandList.BindDescriptorSets(
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
-					GetUnderlyingPipelineLayout(),
-					0, GetDescriptorSetCount(), AsPointer(_sharedState->_graphicsDescriptors._descriptorSets.begin()), 
-					0, nullptr);
-				_sharedState->_graphicsDescriptors._hasSetsAwaitingFlush = false;
-			}
-		}
 	}
 
 	GraphicsEncoder::~GraphicsEncoder()
@@ -605,48 +580,25 @@ namespace RenderCore { namespace Metal_Vulkan
 				_sharedState->_commandList.GetUnderlying().get(),
 				0, 0, nullptr, nullptr);
 		}
-
-		if (_sharedState) {
-			assert(_sharedState->_currentEncoder == this);
-			_sharedState->_currentEncoder = nullptr;
-			_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::None;
-		}
 	}
 
 	GraphicsEncoder::GraphicsEncoder(GraphicsEncoder&& moveFrom)
+	: SharedEncoder(std::move(moveFrom))
 	{
-		if (moveFrom._sharedState) {
-			assert(moveFrom._sharedState->_currentEncoder == &moveFrom);
-			_sharedState = std::move(moveFrom._sharedState);
-			_sharedState->_currentEncoder = this;
-		}
-		_pipelineLayout = std::move(moveFrom._pipelineLayout);
 		_type = moveFrom._type;
 		moveFrom._type = Type::Normal;
 	}
 
 	GraphicsEncoder& GraphicsEncoder::operator=(GraphicsEncoder&& moveFrom)
 	{
-		if (_sharedState) {
-			if (_type == Type::StreamOutput) {
-				assert(GetObjectFactory().GetExtensionFunctions()._endTransformFeedback);
-				(*GetObjectFactory().GetExtensionFunctions()._endTransformFeedback)(
-					_sharedState->_commandList.GetUnderlying().get(),
-					0, 0, nullptr, nullptr);
-			}
-			
-			assert(_sharedState->_currentEncoder == this);
-			_sharedState->_currentEncoder = nullptr;
-			_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::None;
-			_sharedState.reset();
+		if (_sharedState && _type == Type::StreamOutput) {
+			assert(GetObjectFactory().GetExtensionFunctions()._endTransformFeedback);
+			(*GetObjectFactory().GetExtensionFunctions()._endTransformFeedback)(
+				_sharedState->_commandList.GetUnderlying().get(),
+				0, 0, nullptr, nullptr);
 		}
 
-		if (moveFrom._sharedState) {
-			assert(moveFrom._sharedState->_currentEncoder == &moveFrom);
-			_sharedState = std::move(moveFrom._sharedState);
-			_sharedState->_currentEncoder = this;
-		}
-		_pipelineLayout = std::move(moveFrom._pipelineLayout);
+		SharedEncoder::operator=(std::move(moveFrom));
 		_type = moveFrom._type;
 		moveFrom._type = Type::Normal;
 		return *this;
@@ -686,7 +638,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _globalPools(&globalPools)
 	{
 		assert(_sharedState);
-		_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::ProgressiveGraphics;
+		_sharedState->_currentEncoderType = EncoderType::ProgressiveGraphics;
 	}
 
 	GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline()
@@ -722,41 +674,64 @@ namespace RenderCore { namespace Metal_Vulkan
 	GraphicsEncoder_Optimized::~GraphicsEncoder_Optimized()
 	{}
 
-	ComputeEncoder_ProgressivePipeline::ComputeEncoder_ProgressivePipeline(
-		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
-		std::shared_ptr<VulkanEncoderSharedState> sharedState,
-		ObjectFactory& objectFactory,
-		GlobalPools& globalPools)
-	: _pipelineLayout(std::move(pipelineLayout))
-	, _sharedState(std::move(sharedState))
-	, _factory(&objectFactory)
-	, _globalPools(&globalPools)
+	void ComputeEncoder::LogPipeline(const ComputePipeline& pipeline)
 	{
-		assert(_sharedState->_currentEncoder == nullptr && _sharedState->_currentEncoderType == VulkanEncoderSharedState::EncoderType::None);
-		assert(_sharedState->_renderPass == nullptr);	// don't start compute encoding during a render pass
-		_sharedState->_currentEncoder = this;
-		_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::ProgressiveCompute;
+		return;
+		#if defined(_DEBUG)
+			if (!Verbose.IsEnabled()) return;
 
-		_sharedState->_computeDescriptors.ResetState(*_pipelineLayout);
+			const CompiledShaderByteCode* shaders[(unsigned)ShaderStage::Max] = {};
+			Log(Verbose) << "-------------ComputeShader------------" << std::endl;
+			Log(Verbose) << SPIRVReflection(pipeline._shader.GetCompiledCode().GetByteCode()) << std::endl;
+			shaders[(unsigned)ShaderStage::Compute] = &pipeline._shader.GetCompiledCode();
 
-		// bind descriptor sets that are pending
-		if (_sharedState->_computeDescriptors._hasSetsAwaitingFlush) {
-			_sharedState->_commandList.BindDescriptorSets(
-				VK_PIPELINE_BIND_POINT_COMPUTE,
-				GetUnderlyingPipelineLayout(),
-				0, GetDescriptorSetCount(), AsPointer(_sharedState->_computeDescriptors._descriptorSets.begin()), 
-				0, nullptr);
-			_sharedState->_computeDescriptors._hasSetsAwaitingFlush = false;
-		}
+			#if defined(VULKAN_VERBOSE_DEBUG)
+				const auto& descriptors = _sharedState->_computeDescriptors;
+				_pipelineLayout->WriteDebugInfo(
+					Log(Verbose),
+					MakeIteratorRange(shaders),
+					MakeIteratorRange(descriptors._currentlyBoundDesc));
+			#endif
+		#endif
 	}
 
-	ComputeEncoder_ProgressivePipeline::~ComputeEncoder_ProgressivePipeline()
+	void ComputeEncoder::Dispatch(const ComputePipeline& pipeline, unsigned countX, unsigned countY, unsigned countZ)
 	{
-		if (_sharedState) {
-			assert(_sharedState->_currentEncoder == this);
-			_sharedState->_currentEncoder = nullptr;
-			_sharedState->_currentEncoderType = VulkanEncoderSharedState::EncoderType::None;
-		}
+		assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+		vkCmdBindPipeline(
+			_sharedState->_commandList.GetUnderlying().get(),
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			pipeline.get());
+		DEBUG_ONLY(LogPipeline(pipeline));
+
+		assert(countX && countY && countZ);
+		vkCmdDispatch(
+			_sharedState->_commandList.GetUnderlying().get(),
+			countX, countY, countZ);
+	}
+
+	ComputeEncoder::ComputeEncoder(ComputeEncoder&& moveFrom)
+	: SharedEncoder(std::move(moveFrom))
+	{
+	}
+
+	ComputeEncoder::ComputeEncoder() {}
+
+	ComputeEncoder& ComputeEncoder::operator=(ComputeEncoder&& moveFrom)
+	{
+		SharedEncoder::operator=(std::move(moveFrom));
+		return *this;
+	}
+
+	ComputeEncoder::ComputeEncoder(
+		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
+		std::shared_ptr<VulkanEncoderSharedState> sharedState)
+	: SharedEncoder(EncoderType::Compute, std::move(pipelineLayout), std::move(sharedState))
+	{
+	}
+
+	ComputeEncoder::~ComputeEncoder()
+	{
 	}
 
 	GraphicsEncoder_Optimized DeviceContext::BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
@@ -808,13 +783,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		return GraphicsEncoder_Optimized { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, GraphicsEncoder::Type::StreamOutput };
 	}
 
-	ComputeEncoder_ProgressivePipeline DeviceContext::BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
+	ComputeEncoder DeviceContext::BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
 	{
 		if (_sharedState->_renderPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a render pass is in progress"));
 		if (_sharedState->_inBltPass)
 			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a blt pass is in progress"));
-		return ComputeEncoder_ProgressivePipeline { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, *_factory, *_globalPools };
+		return ComputeEncoder { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState };
 	}
 
 	std::shared_ptr<DeviceContext> DeviceContext::Get(IThreadContext& threadContext)
@@ -1095,7 +1070,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_renderPassSubpass = 0u;
 		_renderPassSamples = TextureSamples::Create();
 		_currentEncoder = nullptr;
-		_currentEncoderType = EncoderType::None;
+		_currentEncoderType = SharedEncoder::SharedEncoder::EncoderType::None;
 		_ibBound = false;
 		_inBltPass = false;
 	}

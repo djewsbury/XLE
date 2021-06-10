@@ -763,7 +763,7 @@ namespace RenderCore { namespace ImplVulkan
 			auto compiled = _pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(
 				srcBinding._signature,
 				srcBinding._name,
-				VK_SHADER_STAGE_ALL_GRAPHICS);
+				srcBinding._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT );
 			descSetBindings[c]._layout = compiled->_layout;
 			descSetBindings[c]._blankDescriptorSet = compiled->_blankBindings;
 			#if defined(VULKAN_VERBOSE_DEBUG)

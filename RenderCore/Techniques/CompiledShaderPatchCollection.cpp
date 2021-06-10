@@ -203,13 +203,13 @@ namespace RenderCore { namespace Techniques
 			return {};
 
 		auto i = std::find_if(pipeline->second->_descriptorSets.begin(), pipeline->second->_descriptorSets.end(),
-			[descriptorSetName](const std::pair<std::string, std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>>& c) {
-				return c.first == descriptorSetName;
+			[descriptorSetName](const auto& c) {
+				return c._name == descriptorSetName;
 			});
 		if (i == pipeline->second->_descriptorSets.end())
 			return {};
 		
-		return DescriptorSetLayoutAndBinding { i->second, (unsigned)std::distance(pipeline->second->_descriptorSets.begin(), i) };
+		return DescriptorSetLayoutAndBinding { i->_descSet, (unsigned)std::distance(pipeline->second->_descriptorSets.begin(), i) };
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

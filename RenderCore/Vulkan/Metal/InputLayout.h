@@ -74,7 +74,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class GraphicsEncoder;
+	class SharedEncoder;
 	class GraphicsPipeline;
 	class ComputePipeline;
 	class CompiledDescriptorSetLayout;
@@ -84,14 +84,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		void ApplyLooseUniforms(
 			DeviceContext& context,
-			GraphicsEncoder& encoder,
+			SharedEncoder& encoder,
 			const UniformsStream& group,
 			unsigned groupIdx = 0) const;
-		void UnbindLooseUniforms(DeviceContext& context, GraphicsEncoder& encoder, unsigned groupIdx=0) const;
+		void UnbindLooseUniforms(DeviceContext& context, SharedEncoder& encoder, unsigned groupIdx=0) const;
 
 		void ApplyDescriptorSets(
 			DeviceContext& context,
-			GraphicsEncoder& encoder,
+			SharedEncoder& encoder,
 			IteratorRange<const IDescriptorSet* const*> descriptorSets,
 			unsigned groupIdx = 0) const;
 
@@ -101,12 +101,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		BoundUniforms(
 			const ShaderProgram& shader,
-			const UniformsStreamInterface& group0,
-			const UniformsStreamInterface& group1 = {},
-			const UniformsStreamInterface& group2 = {},
-			const UniformsStreamInterface& group3 = {});
-		BoundUniforms(
-			const ComputeShader& shader,
 			const UniformsStreamInterface& group0,
 			const UniformsStreamInterface& group1 = {},
 			const UniformsStreamInterface& group2 = {},
@@ -221,7 +215,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		void Apply(
 			DeviceContext& context,
-			GraphicsEncoder& encoder) const;
+			SharedEncoder& encoder) const;
 
 		NumericUniformsInterface(
 			const ObjectFactory& factory,

@@ -294,7 +294,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		pipeline.basePipelineIndex = 0;
 
 		assert(_shader);
-		std::string csEntryPoint = _shader->GetCompiledShaderByteCode().GetEntryPoint().AsString();
+		std::string csEntryPoint = _shader->GetCompiledCode().GetEntryPoint().AsString();
 		pipeline.stage = BuildShaderStage(_shader->GetModule().get(), VK_SHADER_STAGE_COMPUTE_BIT, csEntryPoint);
 
 		auto vkPipeline = factory.CreateComputePipeline(pipelineCache, pipeline);
@@ -302,6 +302,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		result->_shader = *_shader;
 		_pipelineStale = false;
 		return result;
+	}
+
+	std::shared_ptr<ComputePipeline> ComputePipelineBuilder::CreatePipeline(ObjectFactory& factory)
+	{
+		return CreatePipeline(factory, Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_mainPipelineCache.get());
 	}
 
 	ComputePipelineBuilder::ComputePipelineBuilder()

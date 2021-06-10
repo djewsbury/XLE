@@ -234,7 +234,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void NumericUniformsInterface::Apply(
 		DeviceContext& context,
-		GraphicsEncoder& encoder) const
+		SharedEncoder& encoder) const
 	{
 		assert(_pimpl);
         // If we've had any changes this last time, we must create new

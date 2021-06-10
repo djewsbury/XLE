@@ -506,10 +506,10 @@ namespace UnitTests
 		};
 
 		RenderCore::PipelineLayoutInitializer desc;
-		desc.AppendDescriptorSet("Sequencer", sequencerSet);
-		desc.AppendDescriptorSet("Material", materialSet);
-		desc.AppendDescriptorSet("Draw", drawSet);
-		desc.AppendDescriptorSet("Numeric", numericSet);
+		desc.AppendDescriptorSet("Sequencer", sequencerSet, RenderCore::PipelineType::Graphics);
+		desc.AppendDescriptorSet("Material", materialSet, RenderCore::PipelineType::Graphics);
+		desc.AppendDescriptorSet("Draw", drawSet, RenderCore::PipelineType::Graphics);
+		desc.AppendDescriptorSet("Numeric", numericSet, RenderCore::PipelineType::Graphics);
 		return device.CreatePipelineLayout(desc);
 	}
 

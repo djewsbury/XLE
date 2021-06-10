@@ -84,7 +84,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const DescriptorSetDebugInfo*> descriptorSets)
 		{
 			Log(Verbose) << "-------------Descriptors------------" << std::endl;
-			for (unsigned descSetIdx=0; descSetIdx<s_maxDescriptorSetCount; ++descSetIdx) {
+			for (unsigned descSetIdx=0; descSetIdx<_descriptorSetCount; ++descSetIdx) {
 				WriteDescriptorSet(
 					output,
 					(descSetIdx < descriptorSets.size()) ? descriptorSets[descSetIdx] : _blankDescriptorSetsDebugInfo[descSetIdx],

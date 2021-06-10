@@ -149,8 +149,8 @@ namespace UnitTests
 		};
 
 		RenderCore::PipelineLayoutInitializer desc;
-		desc.AppendDescriptorSet("Set0", set0);
-		desc.AppendDescriptorSet("Set1", set1);
+		desc.AppendDescriptorSet("Set0", set0, RenderCore::PipelineType::Graphics);
+		desc.AppendDescriptorSet("Set1", set1, RenderCore::PipelineType::Graphics);
 		desc.AppendPushConstants("PushConstants0", sizeof(TestBufferType), ShaderStage::Vertex);
 		desc.AppendPushConstants("PushConstants1", sizeof(TestBufferType), ShaderStage::Pixel);
 		return desc;

@@ -142,9 +142,10 @@ namespace RenderCore
 
 	void PipelineLayoutInitializer::AppendDescriptorSet(
 		const std::string& name,
-		const DescriptorSetSignature& signature)
+		const DescriptorSetSignature& signature,
+		PipelineType _pipelineType)
 	{
-		_descriptorSets.push_back({name, signature});
+		_descriptorSets.push_back({name, signature, _pipelineType});
 	}
 
 	void PipelineLayoutInitializer::AppendPushConstants(

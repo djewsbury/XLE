@@ -28,6 +28,14 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
+namespace RenderCore
+{
+	uint64_t Hash64(const IDevice& device, uint64_t seed = DefaultSeed64)
+	{
+		return seed;
+	}
+}
+
 using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
@@ -99,7 +107,7 @@ namespace UnitTests
 				result += InputTexture.Load(int3(4*base + int2(3,2), 0)).rgb;
 				result += InputTexture.Load(int3(4*base + int2(2,3), 0)).rgb;
 				result += InputTexture.Load(int3(4*base + int2(3,3), 0)).rgb;
-				return float4(result * 0.0625, 1);*/
+				return float4(result * 0.0625f, 1);*/
 
 				/*float2 offset = (floor(position.xy)%2) - 0.5.xx; 
 				return float4(InputTexture.SampleLevel(UnnormalizedBilinearClampSampler, 3*position.xy + offset, 0).rgb, 1);*/
@@ -121,7 +129,7 @@ namespace UnitTests
 				result += InputTexture.Load(int3(3*base + int2(1,2), 0)).rgb;
 				result += InputTexture.Load(int3(3*base + int2(2,2), 0)).rgb;
 				// result += v + v2 + v3;
-				result *= 0.1111;
+				result *= 0.1111f;
 				// result.x = rsqrt(result.x);
 				// result.y = rsqrt(result.y);
 				// result.z = rsqrt(result.z);
@@ -150,6 +158,54 @@ namespace UnitTests
 				if ((p.x == 1 || p.x == 2) && (p.y == 1 || p.y == 2))
 					return float4(0.0.xxx, 1);
 				return 1.0.xxxx;
+			}
+		)--")),
+
+		std::make_pair("minimal_compute.pipeline", ::Assets::AsBlob(R"--(
+			DescriptorSet ds
+			{
+				SampledTexture InputTexture;
+				UnorderedAccessTexture OutputTexture;
+				Sampler DynamicSampler;
+			};
+			PipelineLayout ComputeMain
+			{
+				ComputeDescriptorSet ds;
+			};
+		)--")),
+
+		std::make_pair("downsample.compute.hlsl", ::Assets::AsBlob(R"--(
+			Texture2D<float> InputTexture : register(t0, space0);
+			RWTexture2D<float> OutputTexture : register(u1, space0);
+			SamplerState DynamicSampler : register(s2, space0);
+
+			// [numthreads(16, 8, 1)]
+			[numthreads(2, 2, 1)]
+				void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+			{
+				// OutputTexture[dispatchThreadId.xy] = InputTexture.Load(uint3(dispatchThreadId.xy*4, 0));
+
+				float result = InputTexture.Load(uint3(dispatchThreadId.xy*4, 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(1,0), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(0,1), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(1,1), 0));
+
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(2,0), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(3,0), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(2,1), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(3,1), 0));
+
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(0,2), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(1,2), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(0,3), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(1,3), 0));
+
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(2,2), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(3,2), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(2,3), 0));
+				result += InputTexture.Load(uint3(dispatchThreadId.xy*4 + uint2(3,3), 0));
+
+				OutputTexture[dispatchThreadId.xy] = result * 0.0625f;
 			}
 		)--"))
 
@@ -234,10 +290,80 @@ namespace UnitTests
 		us._resourceViews = MakeIteratorRange(srvs);
 		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
+
 		auto op = Techniques::CreateFullViewportOperator(
 			testApparatus._metalTestHelper->_pipelineLayout,
 			rpi,
 			"ut-data/downsample.pixel.hlsl:main",
+			{}, usi);
+
+		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
+		op->Actualize()->Draw(
+			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
+			parsingContext, 
+			us);
+	}
+
+	class CompiledPipelineLayoutAsset
+	{
+	public:
+		std::unordered_map<std::string, std::shared_ptr<RenderCore::ICompiledPipelineLayout>> _pipelineLayouts;
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _predefinedLayouts;
+
+		CompiledPipelineLayoutAsset(
+			std::shared_ptr<RenderCore::IDevice> device,
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
+			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
+		: _predefinedLayouts(std::move(predefinedLayouts))
+		{
+			_pipelineLayouts.reserve(_predefinedLayouts->_pipelineLayouts.size());
+			for (const auto& l:_predefinedLayouts->_pipelineLayouts) {
+				auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage);
+				_pipelineLayouts.insert(std::make_pair(l.first, device->CreatePipelineLayout(initializer)));
+			}
+		}
+
+		static void ConstructToFuture(
+			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
+			const std::shared_ptr<RenderCore::IDevice>& device,
+			StringSection<> srcFile,
+			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
+		{
+			using namespace RenderCore;
+			auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(srcFile);
+			::Assets::WhenAll(src).ThenConstructToFuture(
+				future,
+				[device, shaderLanguage](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
+					return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), shaderLanguage);
+				});
+		}
+	};
+
+	static void ComputeShaderBasedDownsample(
+		LightingEngineTestApparatus& testApparatus, 
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::IResourceView& outputUAV,
+		RenderCore::IResourceView& inputSRV,
+		RenderCore::Techniques::CommonResourceBox& commonResourceBox)
+	{
+		using namespace RenderCore;
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Hash64("InputTexture"));
+		usi.BindResourceView(1, Hash64("OutputTexture"));
+		usi.BindSampler(0, Hash64("DynamicSampler"));
+		UniformsStream us;
+		IResourceView* srvs[] = { &inputSRV, &outputUAV };
+		us._resourceViews = MakeIteratorRange(srvs);
+		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
+		us._samplers = MakeIteratorRange(samplers);
+
+		auto pipelineLayouts = ::Assets::Actualize<CompiledPipelineLayoutAsset>(
+			testApparatus._metalTestHelper->_device,
+			"ut-data/minimal_compute.pipeline");
+		
+		auto op = Techniques::CreateComputeOperator(
+			pipelineLayouts->_pipelineLayouts["ComputeMain"],
+			"ut-data/downsample.compute.hlsl:main",
 			{}, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
@@ -286,7 +412,7 @@ namespace UnitTests
 			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
 			const unsigned iterationCount = 512;
 
-			IResourceView* downsampleSrcSRV = nullptr;
+			std::shared_ptr<IResourceView> downsampleSrcSRV = nullptr;
 			{
 				Techniques::FrameBufferDescFragment fragDesc;
 			
@@ -305,8 +431,8 @@ namespace UnitTests
 				downsampleSrcSRV = rpi.GetOutputAttachmentSRV(0, {});
 			}
 
-			IResource* downSampledResource = nullptr;
-			{
+			std::shared_ptr<IResource> downsampledResource = nullptr;
+			if (0) {
 				// downsample
 				// input 0: attachment to downsample
 				// output 0: downsampled result
@@ -321,7 +447,22 @@ namespace UnitTests
 				for (unsigned c=0; c<iterationCount; ++c)
 					PixelShaderBasedDownsample(testApparatus, parsingContext, rpi, *downsampleSrcSRV, commonResourceBox);
 				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
-				downSampledResource = rpi.GetOutputAttachmentResource(0).get();
+				downsampledResource = rpi.GetOutputAttachmentResource(0);
+			}
+
+			if (1) {
+				auto downsampledDesc = CreateDesc(
+					BindFlag::UnorderedAccess, 0, GPUAccess::Write,
+					TextureDesc::Plain2D(workingRes[0] / 4, workingRes[1] / 4, Format::R8_UNORM),
+					"downsampled");
+				downsampledResource = testApparatus._metalTestHelper->_device->CreateResource(downsampledDesc);
+				Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), { downsampledResource.get() });
+				auto downsampleDstUAV = downsampledResource->CreateTextureView(BindFlag::UnorderedAccess);
+
+				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+				for (unsigned c=0; c<iterationCount; ++c)
+					ComputeShaderBasedDownsample(testApparatus, parsingContext, *downsampleDstUAV, *downsampleSrcSRV, commonResourceBox);
+				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 			}
 
 			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
@@ -338,7 +479,7 @@ namespace UnitTests
 			}
 
 			// SaveImage(*threadContext, *downsampleSrcSRV->GetResource(), "downsampled-src");
-			SaveImage(*threadContext, *downSampledResource, "downsampled");
+			SaveImage(*threadContext, *downsampledResource, "downsampled");
 		}
 
 		testHelper->EndFrameCapture();

@@ -398,10 +398,10 @@ namespace RenderCore { namespace LightingEngine
 		const auto& projectionDesc = parsingContext.GetProjectionDesc();
 		auto globalTransformUniforms = Techniques::BuildGlobalTransformConstants(projectionDesc);
 		cbvs[CB::GlobalTransform] = MakeOpaqueIteratorRange(globalTransformUniforms);
-		srvs[SR::GBuffer_Diffuse] = rpi.GetInputAttachmentSRV(0);
-		srvs[SR::GBuffer_Normals] = rpi.GetInputAttachmentSRV(1);
-		srvs[SR::GBuffer_Parameters] = rpi.GetInputAttachmentSRV(2);
-		srvs[SR::DepthTexture] = rpi.GetInputAttachmentSRV(3);
+		srvs[SR::GBuffer_Diffuse] = rpi.GetInputAttachmentSRV(0).get();
+		srvs[SR::GBuffer_Normals] = rpi.GetInputAttachmentSRV(1).get();
+		srvs[SR::GBuffer_Parameters] = rpi.GetInputAttachmentSRV(2).get();
+		srvs[SR::DepthTexture] = rpi.GetInputAttachmentSRV(3).get();
 
 			////////////////////////////////////////////////////////////////////////
 

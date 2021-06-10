@@ -397,7 +397,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
     }
 
-    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> IResourceView*
+    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
     {
         assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -415,7 +415,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 
-    auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot) const -> IResourceView*
+    auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
@@ -425,7 +425,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 	
-	auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot, const TextureViewDesc& window) const -> IResourceView*
+	auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
@@ -445,7 +445,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 	
-	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> IResourceView*
+	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
@@ -455,7 +455,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 
-	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> IResourceView*
+	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetDepthStencil()._resourceName;
@@ -678,15 +678,16 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	IResourceView* AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window) const
+	const std::shared_ptr<IResourceView>& AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window) const
 	{
+        static std::shared_ptr<IResourceView> dummy;
         Pimpl::Attachment* attach = nullptr;
         if (attachName & (1u<<31u)) {
             auto semanticAttachIdx = attachName & ~(1u<<31u);
-            if (semanticAttachIdx >= _pimpl->_semanticAttachments.size()) return nullptr;
+            if (semanticAttachIdx >= _pimpl->_semanticAttachments.size()) return dummy;
             attach = &_pimpl->_semanticAttachments[semanticAttachIdx];
         } else {
-            if (attachName >= _pimpl->_attachments.size()) return nullptr;
+            if (attachName >= _pimpl->_attachments.size()) return dummy;
             attach = &_pimpl->_attachments[attachName];
         }
         assert(attach);
@@ -699,7 +700,7 @@ namespace RenderCore { namespace Techniques
 			defaultAspect = TextureViewDesc::Aspect::Stencil;
 		}
 		auto completeView = CompleteTextureViewDesc(window, defaultAspect);
-		return _pimpl->_srvPool.GetTextureView(attach->_resource, BindFlag::ShaderResource, completeView).get();
+		return _pimpl->_srvPool.GetTextureView(attach->_resource, BindFlag::ShaderResource, completeView);
 	}
 
     static unsigned GetArrayCount(unsigned arrayCount) { return (arrayCount == 0) ? 1 : arrayCount; }

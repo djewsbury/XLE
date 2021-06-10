@@ -285,7 +285,7 @@ namespace RenderCore { namespace LightingEngine
 		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
 		UniformsStream us;
-		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentSRV(0) };
+		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentSRV(0).get() };
 		us._resourceViews = MakeIteratorRange(srvs);
 		uniforms.ApplyLooseUniforms(metalContext, encoder, us);
 		encoder.Bind({}, Topology::TriangleStrip);
@@ -458,7 +458,7 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(0, Utility::Hash64("GBuffer_Normals"));
 		usi.BindResourceView(1, Utility::Hash64("DepthTexture"));
 		usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
-		IResourceView* srvs[] = { rpi.GetInputAttachmentSRV(0), rpi.GetInputAttachmentSRV(1) };
+		IResourceView* srvs[] = { rpi.GetInputAttachmentSRV(0).get(), rpi.GetInputAttachmentSRV(1).get() };
 		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);

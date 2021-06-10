@@ -120,7 +120,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 
 		friend class DeviceContext;
-		friend class GraphicsEncoder;
+		friend class SharedEncoder;
 	};
 }}
 

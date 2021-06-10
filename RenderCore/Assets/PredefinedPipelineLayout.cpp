@@ -33,7 +33,11 @@ namespace RenderCore { namespace Assets
 
 			iterator.GetNextToken();	// skip over what we peeked
 
-			if (XlEqString(next._value, "DescriptorSet")) {
+			if (XlEqString(next._value, "DescriptorSet") || XlEqString(next._value, "GraphicsDescriptorSet") || XlEqString(next._value, "ComputeDescriptorSet")) {
+				auto pipelineType = PipelineType::Graphics;
+				if (XlEqString(next._value, "ComputeDescriptorSet"))
+					pipelineType = PipelineType::Compute;
+					
 				auto name = iterator.GetNextToken();
 				auto semi = iterator.GetNextToken();
 				if (name._value.IsEmpty() || !XlEqString(semi._value, ";"))
@@ -44,10 +48,11 @@ namespace RenderCore { namespace Assets
 				if (i == _descriptorSets.end())
 					Throw(FormatException(StringMeld<256>() << "Descriptor set with the name (" << name._value << ") has not been declared", name._start));
 
-				result->_descriptorSets.push_back(std::make_pair(name._value.AsString(), i->second));
+				result->_descriptorSets.push_back({name._value.AsString(), i->second, pipelineType});
 			} else if (XlEqString(next._value, "VSPushConstants") 
 					|| XlEqString(next._value, "PSPushConstants") 
-					|| XlEqString(next._value, "GSPushConstants")) {
+					|| XlEqString(next._value, "GSPushConstants")
+					|| XlEqString(next._value, "CSPushConstants")) {
 
 				auto name = iterator.GetNextToken();
 				auto openBrace = iterator.GetNextToken();
@@ -64,6 +69,10 @@ namespace RenderCore { namespace Assets
 					if (result->_psPushConstants.second)
 						Throw(FormatException("Multiple PS push constant buffers declared. Only one is supported", next._start));
 					result->_psPushConstants = std::make_pair(name._value.AsString(), newLayout);
+				} else if (XlEqString(next._value, "CSPushConstants")) {
+					if (result->_csPushConstants.second)
+						Throw(FormatException("Multiple CS push constant buffers declared. Only one is supported", next._start));
+					result->_csPushConstants = std::make_pair(name._value.AsString(), newLayout);
 				} else {
 					assert(XlEqString(next._value, "GSPushConstants"));
 					if (result->_gsPushConstants.second)
@@ -159,8 +168,9 @@ namespace RenderCore { namespace Assets
 	{
 		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[_descriptorSets.size()];
 		for (size_t c=0; c<_descriptorSets.size(); ++c) {
-			descriptorSetBindings[c]._name = _descriptorSets[c].first;
-			descriptorSetBindings[c]._signature = _descriptorSets[c].second->MakeDescriptorSetSignature();
+			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
+			descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature();
+			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
 		}
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
@@ -187,6 +197,13 @@ namespace RenderCore { namespace Assets
 			binding._shaderStage = ShaderStage::Geometry;
 			binding._cbSize = _gsPushConstants.second->GetSize(language);
 			binding._cbElements = _gsPushConstants.second->MakeConstantBufferElements(language);
+		}
+		if (_csPushConstants.second) {
+			auto& binding = pushConstantBindings[pushConstantBindingsCount++];
+			binding._name = _csPushConstants.first;
+			binding._shaderStage = ShaderStage::Compute;
+			binding._cbSize = _csPushConstants.second->GetSize(language);
+			binding._cbElements = _csPushConstants.second->MakeConstantBufferElements(language);
 		}
 		assert(pushConstantBindingsCount <= dimof(pushConstantBindings));
 

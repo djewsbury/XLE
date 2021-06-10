@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Types.h"       // (for PipelineType)
 #include "../../Assets/DepVal.h"
 #include "../../Utility/StringUtils.h"
 #include <unordered_map>
@@ -32,10 +33,17 @@ namespace RenderCore { namespace Assets
         class PipelineLayout
         {
         public:
-            std::vector<std::pair<std::string, std::shared_ptr<PredefinedDescriptorSetLayout>>> _descriptorSets;
+            struct DescSetReference
+            {
+                std::string _name;
+                std::shared_ptr<PredefinedDescriptorSetLayout> _descSet;
+                PipelineType _pipelineType;
+            };
+            std::vector<DescSetReference> _descriptorSets;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _vsPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
+            std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _csPushConstants;
 
             PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language) const;
         };

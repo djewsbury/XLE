@@ -444,10 +444,10 @@ namespace UnitTests
 					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
 					UniformsStream us;
 					IResourceView* srvs[] = { 
-						rpi.GetInputAttachmentSRV(0),
-						rpi.GetInputAttachmentSRV(1),
-						rpi.GetInputAttachmentSRV(2),
-						rpi.GetInputAttachmentSRV(3)
+						rpi.GetInputAttachmentSRV(0).get(),
+						rpi.GetInputAttachmentSRV(1).get(),
+						rpi.GetInputAttachmentSRV(2).get(),
+						rpi.GetInputAttachmentSRV(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
 					RunSimpleFullscreen(*threadContext, parsingContext, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);

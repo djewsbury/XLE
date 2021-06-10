@@ -338,6 +338,25 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<DescriptorSetInfo> _descSetInfos;
 		unsigned _sharedDescSetWriterCount = 0;
 
+		void InitializeForPipelineLayout(const CompiledPipelineLayout& pipelineLayout)
+		{
+			_pipelineLayout = &pipelineLayout;
+
+			for (unsigned c=0; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
+				bool foundMapping = false;
+				for (signed gIdx=3; gIdx>=0 && !foundMapping; --gIdx) {
+					for (unsigned dIdx=0; dIdx<_looseUniforms[gIdx]->_fixedDescriptorSetBindings.size() && !foundMapping; ++dIdx) {
+						auto bindName = _looseUniforms[gIdx]->_fixedDescriptorSetBindings[dIdx];
+						if (_pipelineLayout->GetDescriptorSetBindingNames()[c] == bindName) {
+							// todo -- we should check compatibility between the given descriptor set and the pipeline layout
+							_fixedDescriptorSets.insert({c, std::make_tuple(gIdx, dIdx, _looseUniforms[gIdx]->GetDescriptorSetSignature(bindName))});
+							foundMapping = true;
+						}
+					}
+				}
+			}
+		}
+
 		void FinalizeRules()
 		{
 			unsigned firstLooseUniformsGroup = ~0u;
@@ -589,21 +608,37 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(_looseUniforms.size() <= 4);
 
 			for(unsigned descSetIdx=0; descSetIdx<pipelineLayout.GetDescriptorSets().size(); ++descSetIdx) {
-				const auto& descSet = pipelineLayout.GetDescriptorSets()[descSetIdx];
-				for (unsigned slotIdx=0; slotIdx<descSet._signature._slots.size(); ++slotIdx) {
-					auto bindingName = slotIdx<descSet._signature._slotNames.size() ? descSet._signature._slotNames[slotIdx] : 0ull;
-					if (!bindingName) continue;
 
-					unsigned inputSlot = ~0u, groupIdx = ~0u;
-					UniformStreamType bindingType = UniformStreamType::None;
-					std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, bindingName);
+				auto fixedDescSet = _fixedDescriptorSets.find(descSetIdx);
+				if (fixedDescSet == _fixedDescriptorSets.end()) {
+					const auto& descSet = pipelineLayout.GetDescriptorSets()[descSetIdx];
+					for (unsigned slotIdx=0; slotIdx<descSet._signature._slots.size(); ++slotIdx) {
+						auto bindingName = slotIdx<descSet._signature._slotNames.size() ? descSet._signature._slotNames[slotIdx] : 0ull;
+						if (!bindingName) continue;
 
-					if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
-						assert(SlotTypeCompatibleWithBinding(bindingType, descSet._signature._slots[slotIdx]._type));
-						AddLooseUniformBinding(
-							bindingType,
-							descSetIdx, slotIdx,
-							groupIdx, inputSlot, shaderStageMask);
+						unsigned inputSlot = ~0u, groupIdx = ~0u;
+						UniformStreamType bindingType = UniformStreamType::None;
+						std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, bindingName);
+
+						if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
+							assert(SlotTypeCompatibleWithBinding(bindingType, descSet._signature._slots[slotIdx]._type));
+							AddLooseUniformBinding(
+								bindingType,
+								descSetIdx, slotIdx,
+								groupIdx, inputSlot, shaderStageMask);
+						}
+					}
+				} else {
+					auto groupIdx = std::get<0>(fixedDescSet->second);
+					auto inputSlot = std::get<1>(fixedDescSet->second);
+					auto existing = std::find_if(
+						_group[groupIdx]._fixedDescriptorSetRules.begin(), _group[groupIdx]._fixedDescriptorSetRules.end(),
+						[inputSlot](const auto& c) { return c._inputSlot == inputSlot; });
+					if (existing == _group[groupIdx]._fixedDescriptorSetRules.end()) {
+						_group[groupIdx]._fixedDescriptorSetRules.push_back(
+							FixedDescriptorSetBindingRules {
+								inputSlot, descSetIdx, shaderStageMask
+							});
 					}
 				}
 			}
@@ -628,7 +663,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	};
 
-	void BoundUniforms::UnbindLooseUniforms(DeviceContext& context, GraphicsEncoder& encoder, unsigned groupIdx) const
+	void BoundUniforms::UnbindLooseUniforms(DeviceContext& context, SharedEncoder& encoder, unsigned groupIdx) const
 	{
 		assert(0);		// todo -- unimplemented
 	}
@@ -702,21 +737,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto* pipelineLayout = shader.GetPipelineLayout().get();
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
-		helper._pipelineLayout = pipelineLayout;
-		
-		for (unsigned c=0; c<pipelineLayout->GetDescriptorSetCount(); ++c) {
-			bool foundMapping = false;
-			for (signed gIdx=3; gIdx>=0 && !foundMapping; --gIdx) {
-				for (unsigned dIdx=0; dIdx<groups[gIdx]->_fixedDescriptorSetBindings.size() && !foundMapping; ++dIdx) {
-					auto bindName = groups[gIdx]->_fixedDescriptorSetBindings[dIdx];
-					if (pipelineLayout->GetDescriptorSetBindingNames()[c] == bindName) {
-						// todo -- we should check compatibility between the given descriptor set and the pipeline layout
-						helper._fixedDescriptorSets.insert({c, std::make_tuple(gIdx, dIdx, groups[gIdx]->GetDescriptorSetSignature(bindName))});
-						foundMapping = true;
-					}
-				}
-			}
-		}
+		helper.InitializeForPipelineLayout(*pipelineLayout);
 
 		for (unsigned stage=0; stage<ShaderProgram::s_maxShaderStages; ++stage) {
 			const auto& compiledCode = shader.GetCompiledCode((ShaderStage)stage);
@@ -725,6 +746,51 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
+		helper.FinalizeRules();
+
+		if (helper._sharedDescSetWriterCount) {
+			_sharedDescSetBuilders.reserve(helper._sharedDescSetWriterCount);
+			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
+				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
+				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
+				auto& i = _sharedDescSetBuilders.emplace_back(pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+					i._groupMask |= 1 << g;
+			}
+		}
+
+		for (unsigned c=0; c<4; ++c) {
+			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
+			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
+			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
+			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseUniformBuffers;
+			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
+			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+		}
+	}
+
+	BoundUniforms::BoundUniforms(
+		const ComputePipeline& pipeline,
+		const UniformsStreamInterface& group0,
+		const UniformsStreamInterface& group1,
+		const UniformsStreamInterface& group2,
+		const UniformsStreamInterface& group3)
+	{
+		_pipelineType = PipelineType::Compute;
+
+		const UniformsStreamInterface* groups[] = { &group0, &group1, &group2, &group3 };
+
+		// We need to map on the input descriptor set bindings to the slots understood
+		// by the shader's pipeline layout
+		auto& shader = pipeline._shader;
+		auto* pipelineLayout = &shader.GetPipelineLayout();
+		ConstructionHelper helper;
+		helper._looseUniforms = MakeIteratorRange(groups);
+		helper.InitializeForPipelineLayout(*pipelineLayout);
+		
+		const auto& compiledCode = shader.GetCompiledCode();
+		if (compiledCode.GetByteCode().size())
+			helper.BindReflection(SPIRVReflection(compiledCode.GetByteCode()), VK_SHADER_STAGE_COMPUTE_BIT);
 		helper.FinalizeRules();
 
 		if (helper._sharedDescSetWriterCount) {
@@ -771,30 +837,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		// by the shader's pipeline layout
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
-		helper._pipelineLayout = checked_cast<CompiledPipelineLayout*>(&pipelineLayout);
-
-		auto pipelineLayoutDescSetCount = pipelineLayoutInitializer.GetDescriptorSets().size();
-		uint64_t initializerDescSetBindNames[pipelineLayoutDescSetCount];
-		for (unsigned c=0; c<pipelineLayoutDescSetCount; ++c)
-			initializerDescSetBindNames[c] = Hash64(pipelineLayoutInitializer.GetDescriptorSets()[c]._name);
-
+		auto& metalPipelineLayout = *checked_cast<CompiledPipelineLayout*>(&pipelineLayout);
+		helper.InitializeForPipelineLayout(metalPipelineLayout);
 		auto shaderStageMask = Internal::AsVkShaderStageFlags(ShaderStage::Vertex)|Internal::AsVkShaderStageFlags(ShaderStage::Pixel);
-	
-		for (unsigned c=0; c<pipelineLayoutDescSetCount; ++c) {
-			bool foundMapping = false;
-			for (signed gIdx=3; gIdx>=0 && !foundMapping; --gIdx) {
-				for (unsigned dIdx=0; dIdx<groups[gIdx]->_fixedDescriptorSetBindings.size() && !foundMapping; ++dIdx) {
-					auto bindName = groups[gIdx]->_fixedDescriptorSetBindings[dIdx];
-					if (initializerDescSetBindNames[c] == bindName) {
-						helper._group[gIdx]._fixedDescriptorSetRules.push_back(FixedDescriptorSetBindingRules{dIdx, c, shaderStageMask});
-						foundMapping = true;
-					}
-				}
-			}
-		}
-
 		helper.BindPipelineLayout(pipelineLayoutInitializer, shaderStageMask);
-
 		helper.FinalizeRules();
 
 		if (helper._sharedDescSetWriterCount) {
@@ -939,7 +985,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void BoundUniforms::ApplyLooseUniforms(
 		DeviceContext& context,
-		GraphicsEncoder& encoder,
+		SharedEncoder& encoder,
 		const UniformsStream& stream,
 		unsigned groupIdx) const
 	{
@@ -1037,7 +1083,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void BoundUniforms::ApplyDescriptorSets(
 		DeviceContext& context,
-		GraphicsEncoder& encoder,
+		SharedEncoder& encoder,
 		IteratorRange<const IDescriptorSet* const*> descriptorSets,
 		unsigned groupIdx) const
 	{

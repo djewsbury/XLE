@@ -188,7 +188,7 @@ namespace RenderCore { namespace LightingEngine
 		DescriptorSetInitializer descSetInit;
 		descSetInit._signature = &_descSetSig;
 		descSetInit._slotBindings = _descSetSlotBindings;
-		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}) };
+		const IResourceView* srvs[] = { rpi.GetDepthStencilAttachmentSRV({}).get() };
 		IteratorRange<const void*> immediateData[3];
 		immediateData[0] = {_workingDMFrustum._cbSource.begin(), _workingDMFrustum._cbSource.end()};
 		immediateData[1] = MakeOpaqueIteratorRange(_workingDMFrustum._resolveParameters);

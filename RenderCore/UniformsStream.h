@@ -140,6 +140,7 @@ namespace RenderCore
 		{
 			std::string _name;
 			DescriptorSetSignature _signature;
+			PipelineType _pipelineType;
 		};
 
 		struct PushConstantsBinding
@@ -152,7 +153,8 @@ namespace RenderCore
 
 		void AppendDescriptorSet(
 			const std::string& name,
-			const DescriptorSetSignature& signature);
+			const DescriptorSetSignature& signature,
+			PipelineType _pipelineType);
 
 		void AppendPushConstants(
 			const std::string& name,

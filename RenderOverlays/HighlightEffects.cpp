@@ -194,7 +194,7 @@ namespace RenderOverlays
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
-        ExecuteHighlightByStencil(metalContext, encoder, stencilSrv, settings, onlyHighlighted);
+        ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,7 +251,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0);
+        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
         assert(srv);
 
         if (srv) {
@@ -280,7 +280,7 @@ namespace RenderOverlays
             //  using some filtering
 
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0);
+        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
         assert(srv);
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
@@ -309,7 +309,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0);
+        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
         assert(srv);
 
             //  now we can render these objects over the main image, 

@@ -243,7 +243,7 @@ namespace ToolsRig
             auto cbs = RenderCore::ImmediateDataStream { highlightParameters };
 
             auto& circleHighlight = *::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
-            const IResourceView* resources[] = { depthSrv, circleHighlight.GetShaderResource().get() };
+            const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Hash64("CircleHighlightParameters"));
@@ -300,7 +300,7 @@ namespace ToolsRig
             auto cbs = RenderCore::ImmediateDataStream { highlightParameters };
 
             auto& circleHighlight = *::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/circlehighlight.png:L")->Actualize();
-            const IResourceView* resources[] = { depthSrv, circleHighlight.GetShaderResource().get() };
+            const IResourceView* resources[] = { depthSrv.get(), circleHighlight.GetShaderResource().get() };
 
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Hash64("RectangleHighlightParameters"));

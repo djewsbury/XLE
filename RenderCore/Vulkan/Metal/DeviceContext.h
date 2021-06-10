@@ -130,6 +130,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// --------------- Vulkan specific interface --------------- 
 		std::shared_ptr<ComputePipeline> CreatePipeline(
+			ObjectFactory& factory);
+		std::shared_ptr<ComputePipeline> CreatePipeline(
 			ObjectFactory& factory, VkPipelineCache pipelineCache);
 		bool IsPipelineStale() const { return _pipelineStale; }
 
@@ -148,7 +150,35 @@ namespace RenderCore { namespace Metal_Vulkan
 	class VulkanEncoderSharedState;
 	class NumericUniformsInterface;
 
-	class GraphicsEncoder
+	class SharedEncoder
+	{
+	public:
+		NumericUniformsInterface	BeginNumericUniformsInterface();
+		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
+
+		// --------------- Vulkan specific interface --------------- 
+		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
+		void		PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data);
+	protected:
+		enum class EncoderType { None, Graphics, ProgressiveGraphics, Compute };
+		SharedEncoder(
+			EncoderType encoderType = EncoderType::None,
+			std::shared_ptr<CompiledPipelineLayout> pipelineLayout = nullptr,
+			std::shared_ptr<VulkanEncoderSharedState> sharedState = nullptr);
+		~SharedEncoder();
+		SharedEncoder(SharedEncoder&&);		// (hide these to avoid slicing in derived types)
+		SharedEncoder& operator=(SharedEncoder&&);
+
+		VkPipelineLayout GetUnderlyingPipelineLayout();
+		unsigned GetDescriptorSetCount();
+
+		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
+		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
+
+		friend class VulkanEncoderSharedState;
+	};
+
+	class GraphicsEncoder : public SharedEncoder
 	{
 	public:
 		//	------ Non-pipeline states (that can be changed mid-render pass) -------
@@ -156,14 +186,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		void		SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef);
 		void		SetDepthBounds(float minDepthValue, float maxDepthValue);		// the 0-1 value stored in the depth buffer is compared directly to these bounds
 		void 		Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
-
-		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
-
-		NumericUniformsInterface	BeginNumericUniformsInterface();
-
-		// --------------- Vulkan specific interface --------------- 
-		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
-		void		PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data);
 
 	protected:
 		enum class Type { Normal, StreamOutput };
@@ -175,11 +197,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		GraphicsEncoder(GraphicsEncoder&&);		// (hide these to avoid slicing in derived types)
 		GraphicsEncoder& operator=(GraphicsEncoder&&);
 
-		VkPipelineLayout GetUnderlyingPipelineLayout();
-		unsigned GetDescriptorSetCount();
-
-		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
 		Type _type;
 
 		friend class DeviceContext;
@@ -245,32 +262,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		friend class DeviceContext;
 	};
 
-	class ComputeEncoder_ProgressivePipeline : public ComputePipelineBuilder
+	class ComputeEncoder : public SharedEncoder
 	{
 	public:
-		void        Dispatch(unsigned countX, unsigned countY=1, unsigned countZ=1);
+		void        Dispatch(const ComputePipeline& pipeline, unsigned countX, unsigned countY=1, unsigned countZ=1);
 
-		// --------------- Vulkan specific interface --------------- 
-		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
-
-		~ComputeEncoder_ProgressivePipeline();
+		ComputeEncoder(ComputeEncoder&&);
+		ComputeEncoder& operator=(ComputeEncoder&&);
+		ComputeEncoder();
+		~ComputeEncoder();
 	protected:
-		bool 		BindComputePipeline();
-		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
-		std::shared_ptr<ComputePipeline>	_currentComputePipeline;
-		ObjectFactory*						_factory;
-		GlobalPools*                        _globalPools;
-
-		VkPipelineLayout GetUnderlyingPipelineLayout();
-		unsigned GetDescriptorSetCount();
-		void LogPipeline();
-
-		ComputeEncoder_ProgressivePipeline(
+		ComputeEncoder(
 			std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
-			std::shared_ptr<VulkanEncoderSharedState> sharedState,
-			ObjectFactory& objectFactory,
-			GlobalPools& globalPools);
+			std::shared_ptr<VulkanEncoderSharedState> sharedState);
+
+		void LogPipeline(const ComputePipeline& pipeline);
 
 		friend class DeviceContext;
 	};
@@ -292,7 +298,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		GraphicsEncoder_Optimized BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
 		GraphicsEncoder_ProgressivePipeline BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
-		ComputeEncoder_ProgressivePipeline BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
+		ComputeEncoder BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
 		GraphicsEncoder_Optimized BeginStreamOutputEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout, IteratorRange<const VertexBufferView*> outputBuffers);
 		BlitEncoder BeginBlitEncoder();
 

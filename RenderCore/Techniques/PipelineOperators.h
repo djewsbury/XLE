@@ -41,4 +41,10 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		StringSection<> definesTable,
 		const UniformsStreamInterface& usi);
+
+	::Assets::PtrToFuturePtr<IShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		StringSection<> computeShader,
+		StringSection<> definesTable,
+		const UniformsStreamInterface& usi);
 }}
