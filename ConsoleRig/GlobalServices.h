@@ -29,12 +29,15 @@ namespace ConsoleRig
         StartupConfig(const char applicationName[]);
     };
 
+    class PluginSet;
+
     class GlobalServices
     {
     public:
         Utility::ThreadPool& GetShortTaskThreadPool();
         Utility::ThreadPool& GetLongTaskThreadPool();
         const std::shared_ptr<OSServices::PollingThread>& GetPollingThread();
+        PluginSet& GetPluginSet();
 
         static GlobalServices& GetInstance() { assert(s_instance); return *s_instance; }
 

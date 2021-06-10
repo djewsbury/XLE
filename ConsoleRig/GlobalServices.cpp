@@ -201,11 +201,14 @@ namespace ConsoleRig
         const auto* cmdLine = OSServices::GetCommandLine();
         if (cmdLine && XlFindString(cmdLine, "-nsight"))
             CrossModule::GetInstance()._services.Add(Hash64("nsight"), []() { return true; });
+
+        _pimpl->_pluginSet = std::make_unique<PluginSet>();
     }
 
     GlobalServices::~GlobalServices() 
     {
         assert(s_instance == nullptr);  // (should already have been detached in the Withhold() call)
+        _pimpl->_pluginSet = nullptr;
         _pimpl->_shortTaskPool = nullptr;
         _pimpl->_longTaskPool = nullptr;
         _pimpl->_logCfg = nullptr;
@@ -219,13 +222,11 @@ namespace ConsoleRig
 
 	void GlobalServices::LoadDefaultPlugins()
 	{
-		if (!_pimpl->_pluginSet)
-			_pimpl->_pluginSet = std::make_unique<PluginSet>();
+		_pimpl->_pluginSet->LoadDefaultPlugins();
 	}
 
 	void GlobalServices::UnloadDefaultPlugins()
 	{
-		_pimpl->_pluginSet.reset();
 	}
 
     void GlobalServices::AttachCurrentModule()
@@ -251,6 +252,7 @@ namespace ConsoleRig
 	ThreadPool& GlobalServices::GetShortTaskThreadPool() { return *_pimpl->_shortTaskPool; }
     ThreadPool& GlobalServices::GetLongTaskThreadPool() { return *_pimpl->_longTaskPool; }
     const std::shared_ptr<OSServices::PollingThread>& GlobalServices::GetPollingThread() { return _pimpl->_pollingThread; }
+    PluginSet& GlobalServices::GetPluginSet() { return *_pimpl->_pluginSet; }
 
     IStep::~IStep() {}
     IProgress::~IProgress() {}

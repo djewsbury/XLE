@@ -7,22 +7,47 @@
 #include "AttachableLibrary.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"
-#include "../OSServices/RawFS.h"
+#include "../Utility/Streams/PathUtils.h"
 #include <vector>
+#include <set>
+#include <unordered_map>
 
 namespace ConsoleRig
 {
 	class PluginSet::Pimpl
 	{
 	public:
-		std::vector<AttachableLibrary> _pluginLibraries;
+		std::unordered_map<std::string, std::shared_ptr<AttachableLibrary>> _pluginLibraries;
+		std::unordered_map<std::string, std::string> _failedPlugins;
 		std::vector<std::shared_ptr<IStartupShutdownPlugin>> _plugins;
 	};
 
-	PluginSet::PluginSet()
+	std::shared_ptr<AttachableLibrary> PluginSet::LoadLibrary(std::string name)
 	{
-		_pimpl = std::make_unique<Pimpl>();
+		auto simplified = MakeSplitPath(name).Rebuild();
 
+		auto i = _pimpl->_pluginLibraries.find(simplified);
+		if (i != _pimpl->_pluginLibraries.end())
+			return i->second;
+		auto i2 = _pimpl->_failedPlugins.find(simplified);
+		if (i2 != _pimpl->_failedPlugins.end())
+			Throw(std::runtime_error(i2->second));
+
+		auto library = std::make_shared<ConsoleRig::AttachableLibrary>(simplified);
+		std::string errorMsg;
+		if (library->TryAttach(errorMsg)) {
+			_pimpl->_pluginLibraries.insert(std::make_pair(simplified, library));
+			return library;
+		} else {
+			auto msg = "Plugin failed to attach with error msg (" + errorMsg + ")";
+			Log(Error) << msg << std::endl;
+			_pimpl->_failedPlugins.insert(std::make_pair(simplified, msg));
+			Throw(std::runtime_error(msg));
+		}
+	}
+	
+	void PluginSet::LoadDefaultPlugins()
+	{
 		char processPath[MaxPath], cwd[MaxPath];
 		OSServices::GetProcessPath((utf8*)processPath, dimof(processPath));
     	OSServices::GetCurrentDirectory(dimof(cwd), cwd);
@@ -30,35 +55,45 @@ namespace ConsoleRig
 		auto group0 = OSServices::FindFiles(std::string(processPath) + "/*Plugin.dll");
 		auto group1 = OSServices::FindFiles(std::string(cwd) + "/*Plugin.dll");
 
-		std::vector<std::string> candidatePlugins = group0;
-		candidatePlugins.insert(candidatePlugins.end(), group1.begin(), group1.end());
+		std::set<std::string> candidatePlugins;
+		for (auto c:group0)
+			candidatePlugins.insert(MakeSplitPath(c).Rebuild());
+		for (auto c:group1)
+			candidatePlugins.insert(MakeSplitPath(c).Rebuild());
 
 		for (auto& c:candidatePlugins) {
-			ConsoleRig::AttachableLibrary library{c};
+			auto library = std::make_shared<ConsoleRig::AttachableLibrary>(c);
 			std::string errorMsg;
-			if (library.TryAttach(errorMsg)) {
+			if (library->TryAttach(errorMsg)) {
 				TRY {
 					using PluginFn = std::shared_ptr<ConsoleRig::IStartupShutdownPlugin>();
-					auto fn = library.GetFunction<PluginFn*>("GetStartupShutdownPlugin");
+					auto fn = library->GetFunction<PluginFn*>("GetStartupShutdownPlugin");
 					if (fn) {
 						auto plugin = (*fn)();
 						plugin->Initialize();
 						_pimpl->_plugins.emplace_back(std::move(plugin));
 					}
-					_pimpl->_pluginLibraries.emplace_back(std::move(library));
+					_pimpl->_pluginLibraries.insert(std::make_pair(c, std::move(library)));
 				} CATCH(const std::exception& e) {
-					Log(Error) << "Plugin failed during the Initialize method with error msg (" << e.what() << ")" << std::endl;
+					Log(Error) << "Plugin (" << c << ") failed during the Initialize method with error msg (" << e.what() << ")" << std::endl;
 				} CATCH_END
 			} else {
-				Log(Error) << "Plugin failed to attach with error msg (" << errorMsg << ")" << std::endl;
+				auto msg = "Plugin (" + c + ") failed to attach with error msg (" + errorMsg + ")";
+				Log(Error) << msg << std::endl;
+				_pimpl->_failedPlugins.insert(std::make_pair(c, msg));
 			}
 		}
+	}
+
+	PluginSet::PluginSet()
+	{
+		_pimpl = std::make_unique<Pimpl>();
 	}
 
 	PluginSet::~PluginSet()
 	{
 		_pimpl->_plugins.clear();
 		for (auto&a:_pimpl->_pluginLibraries)
-			a.Detach();
+			a.second->Detach();
 	}
 }

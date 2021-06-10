@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <memory>
 
 namespace ConsoleRig
@@ -17,10 +18,14 @@ namespace ConsoleRig
 		virtual ~IStartupShutdownPlugin();
 	};
 
+	class AttachableLibrary;
 
 	class PluginSet
 	{
 	public:
+		std::shared_ptr<AttachableLibrary> LoadLibrary(std::string name);
+		void LoadDefaultPlugins();
+
 		PluginSet();
 		~PluginSet();
 	private:

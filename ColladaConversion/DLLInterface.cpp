@@ -61,7 +61,7 @@ extern "C"
 		return ConsoleRig::GetLibVersionDesc();
 	}
 
-	static ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> s_attachRef;
+	static ConsoleRig::WeakAttachablePtr<ConsoleRig::GlobalServices> s_attachRef;
 
 	dll_export void AttachLibrary(ConsoleRig::CrossModule& crossModule)
 	{
