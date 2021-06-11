@@ -365,6 +365,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					firstLooseUniformsGroup = c;	// assign this to the first group that is not just fixed descriptor sets
 					break;
 				}
+			if (firstLooseUniformsGroup == ~0u)
+				firstLooseUniformsGroup = 0;		// no loose uniforms at all; just fall back to using group 0
 
 			for (unsigned descSetIdx=0; descSetIdx<_descSetInfos.size(); ++descSetIdx) {
 				auto& ds = _descSetInfos[descSetIdx];
@@ -539,11 +541,11 @@ namespace RenderCore { namespace Metal_Vulkan
 						auto* signature = std::get<2>(fixedDescSet->second);
 						if (signature) {
 							if (reflectionVariable._binding._bindingPoint >= signature->_slots.size())
-								Throw(std::runtime_error("Shader input variable is off the pipeline layout (variable: " + reflectionVariable._name.AsString() + ")"));
+								Throw(std::runtime_error("Shader input variable is not included in fixed descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 							
 							auto& descSetSlot = signature->_slots[reflectionVariable._binding._bindingPoint];
 							if (reflectionVariable._slotType != descSetSlot._type)
-								Throw(std::runtime_error("Shader input variable type does not agree with the type in the pipeline layout (variable: " + reflectionVariable._name.AsString() + ")"));
+								Throw(std::runtime_error("Shader input variable type does not agree with the type in the given fixed descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 						}
 
 						auto groupIdx = std::get<0>(fixedDescSet->second);

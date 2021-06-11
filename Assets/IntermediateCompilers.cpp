@@ -66,7 +66,7 @@ namespace Assets
         virtual std::shared_ptr<IIntermediateCompileMarker> Prepare(TargetCode, InitializerPack&&) override;
         virtual void StallOnPendingOperations(bool cancelAll) override;
 		
-		virtual CompilerRegistration RegisterCompiler(
+		virtual RegisteredCompilerId RegisterCompiler(
 			const std::string& name,
 			const std::string& shortName,
 			ConsoleRig::LibVersionDesc srcVersion,
@@ -401,7 +401,7 @@ namespace Assets
 		const DependencyValidation& compilerDepVal,
 		CompileOperationDelegate&& delegate,
 		ArchiveNameDelegate&& archiveNameDelegate
-		) -> CompilerRegistration
+		) -> RegisteredCompilerId
 	{
 		ScopedLock(_delegatesLock);
 		auto registration = std::make_shared<ExtensionAndDelegate>();
@@ -414,28 +414,35 @@ namespace Assets
 		if (_store)
 			registration->_storeGroupId = _store->RegisterCompileProductsGroup(MakeStringSection(shortName), srcVersion, !!registration->_archiveNameDelegate);
 		_delegates.push_back(std::make_pair(result, std::move(registration)));
-		return { result };
+		return result;
 	}
 
 	void IntermediateCompilers::DeregisterCompiler(RegisteredCompilerId id)
 	{
-		ScopedLock(_delegatesLock);
-		_extensionsAndDelegatesMap.erase(id);
-		_requestAssociations.erase(id);
-		for (auto i=_markers.begin(); i!=_markers.end();)
-			if (i->second->GetRegisteredCompilerId() == id) {
-				i = _markers.erase(i);
-			} else ++i;
+		std::shared_ptr<ExtensionAndDelegate> del;
+		{
+			ScopedLock(_delegatesLock);
+			_extensionsAndDelegatesMap.erase(id);
+			_requestAssociations.erase(id);
+			for (auto i=_markers.begin(); i!=_markers.end();)
+				if (i->second->GetRegisteredCompilerId() == id) {
+					i = _markers.erase(i);
+				} else ++i;
 
-		for (auto i=_delegates.begin(); i!=_delegates.end();)
-			if (i->first == id) {
-				i->second->_shuttingDown.store(true);
-				while (i->second->_activeOperationCount.load() != 0) {
-					bool completed = ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().StallAndDrainQueue(std::chrono::milliseconds(100));
-					if (completed) break;
-				}
-				i = _delegates.erase(i);
-			} else ++i;
+			for (auto i=_delegates.begin(); i!=_delegates.end();)
+				if (i->first == id) {
+					i->second->_shuttingDown.store(true);
+					del = std::move(i->second);
+					i = _delegates.erase(i);
+				} else ++i;
+		}
+
+		if (del) {
+			while (del->_activeOperationCount.load() != 0) {
+				bool completed = ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().StallAndDrainQueue(std::chrono::milliseconds(100));
+				if (completed) break;
+			}
+		}
 	}
 
 	void IntermediateCompilers::AssociateRequest(
@@ -604,12 +611,12 @@ namespace Assets
 		return result;
 	}
 
-	std::vector<IntermediateCompilers::RegisteredCompilerId> DiscoverCompileOperations(
+	std::vector<CompilerRegistration> DiscoverCompileOperations(
 		IIntermediateCompilers& compilerManager,
 		StringSection<> librarySearch,
 		const DirectorySearchRules& searchRules)
 	{
-		std::vector<IntermediateCompilers::RegisteredCompilerId> result;
+		std::vector<CompilerRegistration> result;
 
 		auto candidateCompilers = searchRules.FindFiles(librarySearch);
 		for (auto& c : candidateCompilers) {
@@ -620,13 +627,14 @@ namespace Assets
 				if (!library._library->TryGetVersion(srcVersion))
 					Throw(std::runtime_error("Querying version returned an error"));
 
-				std::vector<IntermediateCompilers::RegisteredCompilerId> opsFromThisLibrary;
+				std::vector<CompilerRegistration> opsFromThisLibrary;
 				auto lib = library._library;
 				auto fn = library._createCompileOpFunction;
 				for (const auto&kind:library._kinds) {
 					auto compilerFn = MakeStringSection(c);
 					auto compilerDepVal = GetDepValSys().Make(compilerFn);
-					auto registrationId = compilerManager.RegisterCompiler(
+					CompilerRegistration registration(
+						compilerManager,
 						kind._name + " (" + MakeSplitPath(c).Simplify().Rebuild() + ")",
 						kind._shortName,
 						srcVersion,
@@ -637,21 +645,62 @@ namespace Assets
 						});
 
 					compilerManager.AssociateRequest(
-						registrationId._registrationId,
+						registration.RegistrationId(),
 						MakeIteratorRange(kind._targetCodes),
 						kind._identifierFilter);
 					if (!kind._extensionsForOpenDlg.empty())
-						compilerManager.AssociateExtensions(registrationId._registrationId, kind._extensionsForOpenDlg);
-					opsFromThisLibrary.push_back(registrationId._registrationId);
+						compilerManager.AssociateExtensions(registration.RegistrationId(), kind._extensionsForOpenDlg);
+					opsFromThisLibrary.push_back(std::move(registration));
 				}
 
-				result.insert(result.end(), opsFromThisLibrary.begin(), opsFromThisLibrary.end());
+				result.reserve(result.size() + opsFromThisLibrary.size());
+				for (auto& op:opsFromThisLibrary) result.push_back(std::move(op));
 			} CATCH (const std::exception& e) {
 				Log(Warning) << "Failed while attempt to attach library: " << e.what() << std::endl;
 			} CATCH_END
 		}
 
 		return result;
+	}
+
+	CompilerRegistration::CompilerRegistration(
+		IIntermediateCompilers& compilers,
+		const std::string& name,
+		const std::string& shortName,
+		ConsoleRig::LibVersionDesc srcVersion,
+		const DependencyValidation& compilerDepVal,
+		IIntermediateCompilers::CompileOperationDelegate&& delegate,
+		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)
+	: _compilers(&compilers)
+	{
+		_registration = compilers.RegisterCompiler(name, shortName, srcVersion, compilerDepVal, std::move(delegate), std::move(archiveNameDelegate));
+	}
+	CompilerRegistration::CompilerRegistration()
+	: _compilers(nullptr)
+	, _registration(~0u)
+	{}
+	CompilerRegistration::~CompilerRegistration()
+	{
+		if (_compilers && _registration != ~0u)
+			_compilers->DeregisterCompiler(_registration);
+	}
+	CompilerRegistration::CompilerRegistration(CompilerRegistration&& moveFrom)
+	: _compilers(moveFrom._compilers)
+	, _registration(moveFrom._registration)
+	{
+		moveFrom._compilers = nullptr;
+		moveFrom._registration = ~0u;
+	}
+	CompilerRegistration& CompilerRegistration::operator=(CompilerRegistration&& moveFrom)
+	{
+		if (this == &moveFrom) return *this;
+		if (_compilers && _registration != ~0u)
+			_compilers->DeregisterCompiler(_registration);
+		_compilers = moveFrom._compilers;
+		_registration = moveFrom._registration;
+		moveFrom._compilers = nullptr;
+		moveFrom._registration = ~0u;
+		return *this;
 	}
 
 	ICompileOperation::~ICompileOperation() {}

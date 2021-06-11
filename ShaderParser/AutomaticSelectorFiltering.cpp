@@ -336,10 +336,11 @@ namespace ShaderSourceParser
 		std::exception_ptr _compilationException;
 	};
 
-	::Assets::IIntermediateCompilers::CompilerRegistration RegisterShaderSelectorFilteringCompiler(
+	::Assets::CompilerRegistration RegisterShaderSelectorFilteringCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = intermediateCompilers.RegisterCompiler(
+		::Assets::CompilerRegistration result{
+			intermediateCompilers,
 			"shader-selector-filtering-compiler",
 			"shader-selector-filtering-compiler",
 			ConsoleRig::GetLibVersionDesc(),
@@ -356,12 +357,11 @@ namespace ShaderSourceParser
 				result._archive = "filtering";
 				result._descriptiveName = fn;
 				return result;
-			}
-			);
+			}};
 
 		uint64_t outputAssetTypes[] = { SelectorFilteringRules::CompileProcessType };
 		intermediateCompilers.AssociateRequest(
-			result._registrationId,
+			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));
 		return result;
 	}

@@ -16,6 +16,8 @@
 #include "../../../RenderCore/ResourceUtils.h"
 #include "../../../Assets/AssetUtils.h"
 #include "../../../Assets/DepVal.h"
+#include "../../../Assets/AssetServices.h"
+#include "../../../Assets/AssetSetManager.h"
 #include "../../../Utility/Streams/StreamFormatter.h"
 #include "../../../Utility/Streams/StreamDOM.h"
 #include "../../../Utility/Streams/SerializationUtils.h"
@@ -80,6 +82,8 @@ namespace UnitTests
 
 	MetalTestHelper::~MetalTestHelper()
 	{
+		if (::Assets::Services::HasAssetSets())
+			::Assets::Services::GetAssetSets().Clear();
 		_pipelineLayout.reset();
 		_shaderSource.reset();
 		_shaderService.reset();
@@ -92,7 +96,11 @@ namespace UnitTests
 	}
 	void MetalTestHelper::EndFrameCapture()
 	{
-		_device->GetImmediateContext()->GetAnnotator().EndFrameCapture();
+		auto immediateContext = _device->GetImmediateContext();
+		if (immediateContext->GetAnnotator().IsCaptureToolAttached()) {
+			immediateContext->CommitCommands();
+			immediateContext->GetAnnotator().EndFrameCapture();
+		}
 	}
 
 	std::unique_ptr<MetalTestHelper> MakeTestHelper()
@@ -249,6 +257,11 @@ namespace UnitTests
 	const RenderCore::FrameBufferDesc& UnitTestFBHelper::GetDesc() const
 	{
 		return _pimpl->_fbDesc;
+	}
+
+	RenderCore::ViewportDesc UnitTestFBHelper::GetDefaultViewport() const
+	{
+		return _pimpl->_fb->GetDefaultViewport();
 	}
 
 	UnitTestFBHelper::UnitTestFBHelper(

@@ -313,11 +313,6 @@ namespace UnitTests
 
 		/////////////////////////////////////////////////////////////////
 
-		pipelineAcceleratorPool.reset();
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
-
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}

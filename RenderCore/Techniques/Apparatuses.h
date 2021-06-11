@@ -58,9 +58,9 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ShaderService> _shaderService;
 		std::shared_ptr<IShaderSource> _shaderSource;
 
-		::Assets::IIntermediateCompilers::CompilerRegistration _shaderFilteringRegistration;
-		::Assets::IIntermediateCompilers::CompilerRegistration _shaderCompilerRegistration;
-		::Assets::IIntermediateCompilers::CompilerRegistration _graphShaderCompiler2Registration;
+		::Assets::CompilerRegistration _shaderFilteringRegistration;
+		::Assets::CompilerRegistration _shaderCompilerRegistration;
+		::Assets::CompilerRegistration _graphShaderCompiler2Registration;
 
 		std::shared_ptr<TechniqueSharedResources> _techniqueSharedResources;
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegateDeferred;
@@ -113,8 +113,8 @@ namespace RenderCore { namespace Techniques
 	class PrimaryResourcesApparatus
 	{
 	public:
-		std::vector<::Assets::IIntermediateCompilers::RegisteredCompilerId> _modelCompilers;
-		::Assets::IIntermediateCompilers::CompilerRegistration _materialCompilerRegistration;
+		std::vector<::Assets::CompilerRegistration> _modelCompilers;
+		::Assets::CompilerRegistration _materialCompilerRegistration;
 
 		class ContinuationExecutor;
 		std::unique_ptr<ContinuationExecutor> _continuationExecutor;

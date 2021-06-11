@@ -15,7 +15,6 @@
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/IntermediateCompilers.h"
-#include "../../Assets/CompilerLibrary.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 

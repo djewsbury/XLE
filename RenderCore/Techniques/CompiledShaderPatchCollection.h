@@ -133,7 +133,7 @@ namespace RenderCore { namespace Techniques
 		using CompiledShaderByteCode::CompiledShaderByteCode;
 	};
 
-	::Assets::IIntermediateCompilers::CompilerRegistration RegisterInstantiateShaderGraphCompiler(
+	::Assets::CompilerRegistration RegisterInstantiateShaderGraphCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
 		::Assets::IIntermediateCompilers& intermediateCompilers);
 

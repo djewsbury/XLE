@@ -322,33 +322,15 @@ namespace UnitTests
 			REQUIRE(breakdown1.begin()->first == 0xff00ff00);
 		}
 
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
-
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
 
 	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<RenderCore::Techniques::ActualizedDescriptorSet>& descriptorSetFuture)
 	{
-		// If we're running buffer uploads in single thread mode, we need to pump it while
-		// waiting for the descriptor set
-		for (unsigned c=0; c<5; ++c) {
-			RenderCore::Techniques::Services::GetBufferUploads().Update(threadContext);
-			using namespace std::chrono_literals;
-			descriptorSetFuture.StallWhilePending(16ms);
-		}
-
-		descriptorSetFuture.StallWhilePending();
-
-		// hack -- 
-		// we need to pump buffer uploads a bit to ensure the texture load gets completed
-		for (unsigned c=0; c<5; ++c) {
-			RenderCore::Techniques::Services::GetBufferUploads().Update(threadContext);
-			using namespace std::chrono_literals;
-			std::this_thread::sleep_for(16ms);
-		}
+		auto state = descriptorSetFuture.StallWhilePending();
+		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
+			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, descriptorSetFuture.Actualize().GetCompletionCommandList());
 	}
 
 	TEST_CASE( "PipelineAcceleratorTests-DescriptorSetAcceleratorConstruction", "[rendercore_techniques]" )
@@ -370,10 +352,10 @@ namespace UnitTests
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 
 		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
 		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
@@ -383,10 +365,6 @@ namespace UnitTests
 		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
 		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, testHelper->_pipelineLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-
-		auto cleanup = AutoCleanup([]() {
-			::Assets::Services::GetAssetSets().Clear();
-		});
 
 		SECTION("FindShaderUniformBindings")
 		{
@@ -535,11 +513,6 @@ namespace UnitTests
 
 		// check that depvals react to texture updates
 
-		pipelineAcceleratorPool.reset();
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
-
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
@@ -560,6 +533,8 @@ namespace UnitTests
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
+		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
+		techniqueServices->SetBufferUploads(bufferUploads);
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 
@@ -714,11 +689,6 @@ namespace UnitTests
 		}
 
 		////////////////////////////////////////
-
-		pipelineAcceleratorPool.reset();
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);

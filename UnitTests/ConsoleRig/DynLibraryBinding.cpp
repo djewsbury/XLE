@@ -101,7 +101,7 @@ namespace UnitTests
 			REQUIRE(fnResult == "ConfiguredBeforeLibraryAttach and ConfiguredAfterLibraryAttach and PropagatedAsWeak");
 			REQUIRE(SingletonSharedFromMainModule1::s_aliveCount == 1);
 			REQUIRE(SingletonSharedFromMainModule2::s_aliveCount == 1);
-			REQUIRE(attachablePtrBeforeLibraryAttach->_attachedModuleCount == 1);
+			REQUIRE(attachablePtrBeforeLibraryAttach->_attachedModuleCount == 2);
 			REQUIRE(attachablePtrAfterLibraryAttach->_attachedModuleCount == 2);
 			REQUIRE(singletonFromAttachedModule != nullptr);		// should be embued with a value from the attached module
 
@@ -123,7 +123,6 @@ namespace UnitTests
 
 		REQUIRE(SingletonSharedFromMainModule1::s_aliveCount == 1);
 		REQUIRE(SingletonSharedFromMainModule2::s_aliveCount == 0);
-		REQUIRE(attachablePtrBeforeLibraryAttach->_attachedModuleCount == 1);
 		REQUIRE(singletonFromAttachedModule == nullptr);			// automatically reset to null when the attached module was detached
 	}
 

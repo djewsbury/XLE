@@ -187,14 +187,12 @@ namespace Assets
 				actualized = _actualized;
 				depVal = _actualizedDepVal;
 				actualizationLog = _actualizationLog;
-				if (_pendingState == AssetState::Invalid) { assert(depVal); }
 				return _state;
 			}
 			if (_pendingState != AssetState::Pending) {
 				actualized = _pending;
 				depVal = _pendingDepVal;
 				actualizationLog = _pendingActualizationLog;
-				if (_pendingState == AssetState::Invalid) { assert(depVal); }
 				return _pendingState;
 			}
 			if (_pollingFunction) {
@@ -211,7 +209,6 @@ namespace Assets
 					_pendingDepVal = e.GetDependencyValidation();
 					actualized = _pending;
 					depVal = _pendingDepVal;
-					assert(depVal);
 					actualizationLog = _pendingActualizationLog;
 					return _pendingState;
 				} CATCH (const std::exception& e) {
@@ -220,7 +217,6 @@ namespace Assets
 					_pendingActualizationLog = AsBlob(e);
 					actualized = _pending;
 					depVal = _pendingDepVal;
-					assert(depVal);
 					actualizationLog = _pendingActualizationLog;
 					return _pendingState;
 				} CATCH_END
@@ -235,7 +231,6 @@ namespace Assets
 					actualized = _pending;
 					depVal = _pendingDepVal;
 					actualizationLog = _pendingActualizationLog;
-					if (_pendingState == AssetState::Invalid) { assert(depVal); }
 					return _pendingState;
 				}
 			}
@@ -488,7 +483,6 @@ namespace Assets
 	template<typename Type>
 		void Future<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
 	{
-		assert(depVal);
 		{
 			ScopedLock(_lock);
 			_pending = {};

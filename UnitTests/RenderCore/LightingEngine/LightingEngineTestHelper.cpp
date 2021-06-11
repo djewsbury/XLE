@@ -22,7 +22,6 @@
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
-#include "../../../Assets/CompilerLibrary.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Utility/Threading/CompletionThreadPool.h"
@@ -53,9 +52,9 @@ namespace UnitTests
 		_futureExecSetter = std::make_unique<thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter>(_futureExecutor);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(_metalTestHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers);
+		_compilerRegistrations.push_back(ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers));
+		_compilerRegistrations.push_back(RenderCore::RegisterShaderCompiler(_metalTestHelper->_shaderSource, compilers));
+		_compilerRegistrations.push_back(RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers));
 
 		_pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
 			_metalTestHelper->_device, _metalTestHelper->_pipelineLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo,
@@ -75,9 +74,6 @@ namespace UnitTests
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()
 	{
-		_globalServices->GetShortTaskThreadPool().StallAndDrainQueue();
-		_globalServices->GetLongTaskThreadPool().StallAndDrainQueue();
-		::Assets::Services::GetAssetSets().Clear();
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

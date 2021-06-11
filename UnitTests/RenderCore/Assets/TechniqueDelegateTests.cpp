@@ -363,8 +363,10 @@ namespace UnitTests
 			descSetFuture->StallWhilePending();
 			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
 			REQUIRE(descSetFuture->GetAssetState() == ::Assets::AssetState::Ready);
-			descriptorSet = descSetFuture->Actualize().GetDescriptorSet();
+			auto actualizedDescSet = descSetFuture->Actualize();
+			descriptorSet = actualizedDescSet.GetDescriptorSet();
 			REQUIRE(descriptorSet != nullptr);
+			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*threadContext, actualizedDescSet.GetCompletionCommandList());
 		}
 
 		using namespace RenderCore;
@@ -451,10 +453,6 @@ namespace UnitTests
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		auto testHelper = MakeTestHelper();
-
-		auto cleanup = AutoCleanup([]() {
-			::Assets::Services::GetAssetSets().Clear();
-		});
 
 		SECTION("Retrieve minimal legacy technique")
 		{
@@ -655,14 +653,6 @@ namespace UnitTests
 					resourceBindings,
 					MakeIteratorRange(samplerBindings));
 
-				// hack -- 
-				// we need to pump buffer uploads a bit to ensure the texture load gets completed
-				for (unsigned c=0; c<5; ++c) {
-					Techniques::Services::GetBufferUploads().Update(*threadContext);
-					using namespace std::chrono_literals;
-					std::this_thread::sleep_for(16ms);
-				}
-
 				DrawViaPipelineAccelerator(
 					threadContext, fbHelper, globalTransform, pipelinePool,
 					pipelineAccelerator, descriptorSetAccelerator, cfg, 
@@ -671,12 +661,8 @@ namespace UnitTests
 				techniqueServices->DeregisterTextureLoader(textureLoader1);
 				techniqueServices->DeregisterTextureLoader(textureLoader0);
 			}
-
-			compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-			compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
 		}
 
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt1);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}

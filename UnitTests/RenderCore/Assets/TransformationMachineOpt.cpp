@@ -119,15 +119,13 @@ namespace UnitTests
         }
     }
 
-    static void LogTransMachines(IteratorRange<const uint32*> orig, IteratorRange<const uint32*> opt, unsigned index)
+    static void LogTransMachines(std::ostream& stream, IteratorRange<const uint32*> orig, IteratorRange<const uint32*> opt, unsigned index)
     {
         using namespace RenderCore::Assets;
-        std::stringstream stream;
         stream << "============== Machine (" << index << ") ==============" << std::endl;
         TraceTransformationMachine(stream, orig, nullptr, nullptr);
         stream << " O P T I M I Z E S   T O : " << std::endl;
         TraceTransformationMachine(stream, opt, nullptr, nullptr);
-        Log(Verbose) << stream.str() << std::endl;
     }
 
     class Optimizer : public RenderCore::Assets::ITransformationMachineOptimizer
@@ -191,16 +189,15 @@ namespace UnitTests
 
                 Optimizer opt;
                 auto optimized = OptimizeTransformationMachine(MakeIteratorRange(machine), opt);
-                LogTransMachines(MakeIteratorRange(machine), MakeIteratorRange(optimized), c);
+                // std::stringstream str;
+                // LogTransMachines(str, MakeIteratorRange(machine), MakeIteratorRange(optimized), c);
+                // INFO(str.str());
 
                 Float4x4 resultUnOpt, resultOpt;
                 GenerateOutputTransforms(MakeIteratorRange(&resultUnOpt, &resultUnOpt+1), nullptr, MakeIteratorRange(machine));
                 GenerateOutputTransforms(MakeIteratorRange(&resultOpt, &resultOpt+1), nullptr, MakeIteratorRange(optimized));
 
                 const float tolerance = 3e-2f;
-                if (!RelativeEquivalent(resultUnOpt, resultOpt, tolerance)) {
-                    assert(0);
-                }
                 REQUIRE(RelativeEquivalent(resultUnOpt, resultOpt, tolerance));
             }
         }

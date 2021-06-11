@@ -35,12 +35,4 @@ namespace Assets
 	};
 
 	using GetCompilerDescFn = std::shared_ptr<ICompilerDesc>();   
-
-	class DirectorySearchRules;
-	DirectorySearchRules DefaultLibrarySearchDirectories();
-
-	std::vector<IIntermediateCompilers::RegisteredCompilerId> DiscoverCompileOperations(
-		IIntermediateCompilers& compilerManager,
-		StringSection<> librarySearch,
-		const DirectorySearchRules& searchRules = DefaultLibrarySearchDirectories());
 }

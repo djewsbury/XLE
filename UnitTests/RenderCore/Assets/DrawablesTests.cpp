@@ -28,7 +28,6 @@
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
-#include "../../../Assets/CompilerLibrary.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Math/MathSerialization.h"
 #include "../../../Math/Transformations.h"
@@ -94,23 +93,9 @@ namespace UnitTests
 	template<typename Type>
 		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<Type>& descriptorSetFuture)
 	{
-		// If we're running buffer uploads in single thread mode, we need to pump it while
-		// waiting for the descriptor set
-		for (unsigned c=0; c<5; ++c) {
-			RenderCore::Techniques::Services::GetBufferUploads().Update(threadContext);
-			using namespace std::chrono_literals;
-			descriptorSetFuture.StallWhilePending(16ms);
-		}
-
-		descriptorSetFuture.StallWhilePending();
-
-		// hack -- 
-		// we need to pump buffer uploads a bit to ensure the texture load gets completed
-		for (unsigned c=0; c<5; ++c) {
-			RenderCore::Techniques::Services::GetBufferUploads().Update(threadContext);
-			using namespace std::chrono_literals;
-			std::this_thread::sleep_for(16ms);
-		}
+		auto state = descriptorSetFuture.StallWhilePending();
+		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
+			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(threadContext, descriptorSetFuture.Actualize().GetCompletionCommandList());
 	}
 
 	template<typename Type>
@@ -237,10 +222,10 @@ namespace UnitTests
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 
 		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
 		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
@@ -254,10 +239,6 @@ namespace UnitTests
 			testHelper->_device, testHelper->_pipelineLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo,
 			MakeMaterialDescriptorSetLayout(),
 			MakeSequencerDescriptorSetLayout());
-
-		auto cleanup = AutoCleanup([]() {
-			::Assets::Services::GetAssetSets().Clear();
-		});
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
@@ -350,9 +331,9 @@ namespace UnitTests
 
 			auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 			#if defined(_DEBUG)
-				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../../../Finals_Debug64/ColladaConversion.dll");
+				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");
 			#else
-				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../../../Finals_Release64/ColladaConversion.dll");
+				auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");
 			#endif
 			REQUIRE(!discoveredCompilations.empty());
 
@@ -366,8 +347,8 @@ namespace UnitTests
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",
 				"xleres/DefaultResources/materialsphere.material");
-			StallForDescriptorSet(*threadContext, *renderer);
 			INFO(::Assets::AsString(renderer->GetActualizationLog()));
+			renderer->StallWhilePending();
 			REQUIRE(renderer->GetAssetState() == ::Assets::AssetState::Ready);
 
 			Techniques::DrawablesPacket pkts[(unsigned)Techniques::BatchFilter::Max];
@@ -408,27 +389,18 @@ namespace UnitTests
 							*pipelineAcceleratorPool,
 							sequencerContext,
 							pkt);
+
+					if (parsingContext._requiredBufferUploadsCommandList)
+						bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
 				std::this_thread::sleep_for(16ms);
 			}
 
-			for (const auto&compiler:discoveredCompilations)
-				compilers.DeregisterCompiler(compiler);
-			compilers.DeregisterCompiler(matRegistration._registrationId);
-
 			testHelper->EndFrameCapture();
 		}
 
 		/////////////////////////////////////////////////////////////////
-
-		globalServices->GetShortTaskThreadPool().StallAndDrainQueue();
-		globalServices->GetLongTaskThreadPool().StallAndDrainQueue();
-
-		pipelineAcceleratorPool.reset();
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);

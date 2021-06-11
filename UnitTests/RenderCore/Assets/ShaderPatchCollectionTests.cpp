@@ -315,8 +315,6 @@ namespace UnitTests
 			REQUIRE(artifacts != nullptr);
 			REQUIRE((bool)artifacts->GetDependencyValidation());
 			REQUIRE(artifacts->GetAssetState() == ::Assets::AssetState::Ready);
-
-			compilers.DeregisterCompiler(compilerRegistration._registrationId);
 		}
 
 		SECTION( "CompileShaderPatchCollection1" )
@@ -440,7 +438,6 @@ namespace UnitTests
 			}
 		}
 
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt1);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
 	}

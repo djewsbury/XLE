@@ -62,7 +62,7 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
         {
-            ConsoleRig::AttachableLibrary lib("../ColladaConversion/ColladaConversion.dll");
+            ConsoleRig::AttachableLibrary lib("ColladaConversion.dll");
             std::string attachError;
             bool attachResult = lib.TryAttach(attachError);
             INFO(attachError);

@@ -21,63 +21,6 @@ namespace BufferUploads
 
     // ~~~~~~~~~~~~ // ~~~~~~<   >~~~~~~ // ~~~~~~~~~~~~ //
 
-//    #if !defined(XL_RELEASE)    // perhaps just _DEBUG? Adds a thread local storage variable
-//        #define REUSABLE_RESOURCE_DEBUGGING
-//    #endif
-
-    #if defined(REUSABLE_RESOURCE_DEBUGGING)
-
-        // #define THREAD_LOCAL_STORAGE __declspec( thread )
-
-        /*THREAD_LOCAL_STORAGE*/ Interlocked::Value g_oldToDeleteReusableResources = 0;
-
-        class ReusableResourceDestructionHelper : public IUnknown
-        {
-        public:
-            ReusableResourceDestructionHelper(const ResourceDesc& desc);
-            virtual ~ReusableResourceDestructionHelper();
-
-            virtual HRESULT STDMETHODCALLTYPE   QueryInterface(REFIID riid, __RPC__deref_out void __RPC_FAR *__RPC_FAR *ppvObject);
-            virtual ULONG STDMETHODCALLTYPE     AddRef();
-            virtual ULONG STDMETHODCALLTYPE     Release();
-        private:
-            ResourceDesc          _desc;
-            Interlocked::Value  _referenceCount;
-        };
-
-        // {2FB89B77-3946-48DE-8C78-09CF3DCE8651}
-        EXTERN_C const GUID DECLSPEC_SELECTANY GUID_ReusableResourceDestructionHelper = { 0x2fb89b77, 0x3946, 0x48de, { 0x8c, 0x78, 0x9, 0xcf, 0x3d, 0xce, 0x86, 0x51 } };
-
-        ReusableResourceDestructionHelper::ReusableResourceDestructionHelper(const ResourceDesc& desc) : _desc(desc), _referenceCount(0) {}
-        ReusableResourceDestructionHelper::~ReusableResourceDestructionHelper()
-        {
-            if (!Interlocked::Load(&g_oldToDeleteReusableResources)) {
-                LogWarningF("Warning -- destroying reusable resource at unexpected time");
-            }
-        }
-
-        HRESULT STDMETHODCALLTYPE ReusableResourceDestructionHelper::QueryInterface(REFIID riid, __RPC__deref_out void __RPC_FAR *__RPC_FAR *ppvObject)
-        {
-            ppvObject = NULL;
-            return E_NOINTERFACE;
-        }
-
-        ULONG STDMETHODCALLTYPE ReusableResourceDestructionHelper::AddRef()
-        {
-            return Interlocked::Increment(&_referenceCount) + 1;
-        }
-
-        ULONG STDMETHODCALLTYPE ReusableResourceDestructionHelper::Release()
-        {
-            Interlocked::Value newRefCount = Interlocked::Decrement(&_referenceCount) - 1;
-            if (!newRefCount) {
-                delete this;
-            }
-            return newRefCount;
-        }
-
-    #endif
-
     static unsigned RoundUpBufferSize(unsigned input)
     {
         unsigned log2 = IntegerLog2(input);
@@ -112,11 +55,6 @@ namespace BufferUploads
             } else if (allowDeviceCreation) {
                 auto result = _underlyingDevice->CreateResource(_desc);
                 if (result) {
-                    #if defined(REUSABLE_RESOURCE_DEBUGGING)
-                        PlatformInterface::AttachObject(
-                            result, GUID_ReusableResourceDestructionHelper, 
-                            new ReusableResourceDestructionHelper(_desc));
-                    #endif
                     _totalRealSize += realSize;
                     _totalCreateSize += RenderCore::ByteCount(_desc);
                     ++_recentDeviceCreateCount;
@@ -138,16 +76,7 @@ namespace BufferUploads
                     if (!_allocableResources.try_front(front) || (newFrameID - front->_returnFrameID) < _retainFrames) {
                         break;
                     }
-
-                    #if defined(REUSABLE_RESOURCE_DEBUGGING)
-                        Interlocked::Value oldOkToDeleteReusableResources = Interlocked::Exchange(&g_oldToDeleteReusableResources, 1);
-                    #endif
-
                     _allocableResources.pop();
-
-                    #if defined(REUSABLE_RESOURCE_DEBUGGING)
-                        Interlocked::Exchange(&g_oldToDeleteReusableResources, oldOkToDeleteReusableResources);
-                    #endif
                 }
             }
         }

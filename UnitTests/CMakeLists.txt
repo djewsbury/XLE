@@ -111,7 +111,27 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     target_link_libraries(UnitTests-RenderCoreAssetsTechniques-${metal_name} PRIVATE PlatformRig-${metal_name})
     xle_executable_post_build(UnitTests-RenderCoreAssetsTechniques-${metal_name})
 
+    # copy the collada dll into the same folder as the output executable
     add_dependencies(UnitTests-RenderCoreAssetsTechniques-${metal_name} ColladaConversion)
+    add_custom_command(
+        TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:ColladaConversion>"
+        "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:ColladaConversion>")
+
+    if (${metal_name} STREQUAL "Vulkan")
+        add_custom_command(
+            TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:dxil>"
+            "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxil>")
+
+        add_custom_command(
+            TARGET UnitTests-RenderCoreAssetsTechniques-${metal_name} POST_BUILD 
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:dxcompiler>"
+            "$<TARGET_FILE_DIR:UnitTests-RenderCoreAssetsTechniques-${metal_name}>/$<TARGET_FILE_NAME:dxcompiler>")
+    endif ()
 
 endforeach()
 

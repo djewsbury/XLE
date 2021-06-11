@@ -208,6 +208,9 @@ namespace ConsoleRig
     GlobalServices::~GlobalServices() 
     {
         assert(s_instance == nullptr);  // (should already have been detached in the Withhold() call)
+        _pimpl->_shortTaskPool->StallAndDrainQueue();
+        _pimpl->_longTaskPool->StallAndDrainQueue();
+        _pimpl->_assetsSetsManager->Clear();
         _pimpl->_pluginSet = nullptr;
         _pimpl->_shortTaskPool = nullptr;
         _pimpl->_longTaskPool = nullptr;

@@ -25,6 +25,8 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueInstance;
 }}
 
+namespace Assets { class CompilerRegistration; }
+
 namespace UnitTests
 {
 	class LightingEngineTestApparatus
@@ -39,11 +41,13 @@ namespace UnitTests
 		std::shared_ptr<thousandeyes::futures::DefaultExecutor> _futureExecutor;
 		std::unique_ptr<thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter> _futureExecSetter;
 
+		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
+
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources> _techniquesSharedResources;
 		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;
-
+		
 		LightingEngineTestApparatus();
 		~LightingEngineTestApparatus();
 	};

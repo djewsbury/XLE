@@ -13,6 +13,8 @@
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DeferredShaderResource.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"
 #include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -26,9 +28,9 @@
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
-#include "../../../Assets/CompilerLibrary.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
+#include "../../../Math/Transformations.h"
 #include "../../../ConsoleRig/Console.h"
 #include "../../../OSServices/Log.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
@@ -46,11 +48,11 @@ namespace UnitTests
 {
 	static const char* s_sequencerDescSetLayout = R"(
 		ConstantBuffer GlobalTransform;
-		ConstantBuffer LocalTransform;
-		ConstantBuffer ReciprocalViewportDimensionsCB;
 		ConstantBuffer cb0;
 		ConstantBuffer cb1;
 		ConstantBuffer cb2;
+		ConstantBuffer cb3;
+		ConstantBuffer cb4;
 
 		SampledTexture tex0;
 		SampledTexture tex1;
@@ -59,6 +61,11 @@ namespace UnitTests
 		SampledTexture tex4;
 		SampledTexture tex5;
 		SampledTexture tex6;
+
+		Sampler DefaultSampler;
+		Sampler ClampingSampler;
+		Sampler AnisotropicSampler;
+		Sampler PointClampSampler;
 	)";
 
 	TEST_CASE( "ImmediateDrawablesTests", "[rendercore_techniques]" )
@@ -71,6 +78,8 @@ namespace UnitTests
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
+		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
+		techniqueServices->SetBufferUploads(bufferUploads);
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
 
@@ -90,6 +99,11 @@ namespace UnitTests
 			RenderCore::Techniques::Internal::GetDefaultDescriptorSetLayoutAndBinding(),
 			RenderCore::Techniques::DescriptorSetLayoutAndBinding { sequencerDescriptorSetLayout, 0 });
 
+		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
+		techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
+		Techniques::CommonResourceBox commonResources { *testHelper->_device };
+		techniqueContext->_systemUniformsDelegate = std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device, commonResources);
+
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
 			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
@@ -101,9 +115,14 @@ namespace UnitTests
 
 		// Try drawing just a basic sphere with no material assigments
 		{
+			// Use remove the "TEXCOORD" input attribute from the IA (otherwise the system assume there's a texture to read)
+			auto vertexLayout = ToolsRig::Vertex3D_MiniInputLayout;
+			for (auto& attribute:vertexLayout)
+				if (attribute._semanticHash == RenderCore::Techniques::CommonSemantics::TEXCOORD)
+					attribute._semanticHash = 0;
 			auto data = immediateDrawables->QueueDraw(
 				sphereGeo.size(),
-				ToolsRig::Vertex3D_MiniInputLayout);
+				vertexLayout);
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			
@@ -117,33 +136,25 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-				techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
 				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext };
-				// parsingContext._fbProps = fbHelper.GetDesc().GetProperties();
+				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
+				Techniques::CameraDesc camera {};
+				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
+				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
 				immediateDrawables->ExecuteDraws(*threadContext, parsingContext, fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
-			REQUIRE(breakdown.size() != 1);
+			REQUIRE(breakdown.size() == 2);
+			REQUIRE(breakdown.find(0xff000000) != breakdown.end());
+			REQUIRE(breakdown.find(0xffffffff) != breakdown.end());
 		}
 
 		// Try drawing with a texture and a little bit of material information
 		{
 			auto tex = ::Assets::MakeAsset<Techniques::DeferredShaderResource>("xleres/DefaultResources/waternoise.png");
-			for (;;) {
-				using namespace std::chrono_literals;
-				auto res = tex->StallWhilePending(4ms);
-				if (res.has_value()) break;
-				RenderCore::Techniques::Services::GetBufferUploads().Update(*threadContext);
-			}
-			// hack -- 
-			// we need to pump buffer uploads a bit to ensure the texture load gets completed
-			for (unsigned c=0; c<5; ++c) {
-				RenderCore::Techniques::Services::GetBufferUploads().Update(*threadContext);
-				using namespace std::chrono_literals;
-				std::this_thread::sleep_for(16ms);
-			}
+			tex->StallWhilePending();
+			bufferUploads->StallUntilCompletion(*threadContext, tex->Actualize()->GetCompletionCommandList());
 
 			Techniques::ImmediateDrawableMaterial material;
 			material._uniformStreamInterface = std::make_shared<UniformsStreamInterface>();
@@ -166,20 +177,17 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-				techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
 				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext };
-				// parsingContext._fbProps = fbHelper.GetDesc().GetProperties();
+				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
+				Techniques::CameraDesc camera {};
+				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
+				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
 				immediateDrawables->ExecuteDraws(*threadContext, parsingContext, fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
 			REQUIRE(breakdown.size() > 5);
 		}
-
-		compilers.DeregisterCompiler(shaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(filteringRegistration._registrationId);
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}

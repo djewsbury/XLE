@@ -170,7 +170,7 @@ namespace UnitTests
 				});
 
 			compilers->AssociateRequest(
-				registration._registrationId,
+				registration,
 				MakeIteratorRange(outputTypes),
 				"unit-test-asset-.*");
 
@@ -252,7 +252,7 @@ namespace UnitTests
 				}());
 			}
 
-			compilers->DeregisterCompiler(registration._registrationId);
+			compilers->DeregisterCompiler(registration);
 		}
 
 		SECTION("Compiler marker management")
@@ -269,7 +269,7 @@ namespace UnitTests
 				});
 
 			compilers->AssociateRequest(
-				registration._registrationId,
+				registration,
 				MakeIteratorRange(outputTypes),
 				"unit-test-asset-.*");
 
@@ -281,15 +281,16 @@ namespace UnitTests
 			REQUIRE(marker0 == marker1);
 			REQUIRE(marker0 != marker2);
 
-			compilers->DeregisterCompiler(registration._registrationId);
+			compilers->DeregisterCompiler(registration);
 
 		}
 	}
 
-	static ::Assets::IIntermediateCompilers::CompilerRegistration RegisterUnitTestCompiler(::Assets::IIntermediateCompilers& compilers)
+	static ::Assets::CompilerRegistration RegisterUnitTestCompiler(::Assets::IIntermediateCompilers& compilers)
 	{
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };
-		auto registration = compilers.RegisterCompiler(
+		::Assets::CompilerRegistration registration{
+			compilers,
 			"UnitTestCompiler",
 			"UnitTestCompiler",
 			ConsoleRig::GetLibVersionDesc(),
@@ -297,10 +298,10 @@ namespace UnitTests
 			[](auto initializers) {
 				assert(!initializers.IsEmpty());
 				return std::make_shared<TestCompileOperation>(initializers);
-			});
+			}};
 
 		compilers.AssociateRequest(
-			registration._registrationId,
+			registration.RegistrationId(),
 			MakeIteratorRange(outputTypes),
 			"unit-test-asset-.*");
 		return registration;
@@ -384,8 +385,6 @@ namespace UnitTests
 			REQUIRE(::Assets::AsString(artifacts[1]._sharedBlob) == "This is extra file data");
 			REQUIRE(TestCompileOperation::s_serializeTargetCount == initialSerializeTargetCount+1);
 		}
-
-		compilers->DeregisterCompiler(registration._registrationId);
 	}
 
 	TEST_CASE( "AssetCompilers-HandlingCompilationFailures", "[assets]" )
@@ -467,7 +466,7 @@ namespace UnitTests
 
 			// reboot the compilers system entirely to ensure all internal caches are destroyed
 			intermediateStore->FlushToDisk();
-			compilers->DeregisterCompiler(registration._registrationId);
+			registration = {};
 			compilers.reset();
 			compilers = ::Assets::CreateIntermediateCompilers(intermediateStore);
 			registration = RegisterUnitTestCompiler(*compilers);
@@ -483,8 +482,6 @@ namespace UnitTests
 			// still expecting no new compiles started. We should be getting this error log from the intermediates store
 			REQUIRE(TestCompileOperation::s_constructionCount == initialCompileCount+1);
 		}
-
-		compilers->DeregisterCompiler(registration._registrationId);
 	}
 
 	struct TypeWithComplexMembers

@@ -363,8 +363,8 @@ struct VSOUT /////////////////////////////////////////////////////
 		REQUIRE(SimplifyExpression("!A == C") == "C == !A");
 
 		// We can simplify down many expressions just by identifying similar parts
-		REQUIRE(SimplifyExpression("((A < B) || (B >= A)) && ((B >= A) || (A < B))") == "A < B");
-		REQUIRE(SimplifyExpression("((A < B) || (C >= D)) && ((D < C) || (B >= A))") == "A < B || C >= D");
+		REQUIRE(SimplifyExpression("((A < B) || (B > A)) && ((B > A) || (A < B))") == "A < B");
+		REQUIRE(SimplifyExpression("((A < B) || (C >= D)) && ((D <= C) || (B > A))") == "A < B || C >= D");
 		REQUIRE(SimplifyExpression("!(A == B) || !(C < D) || !(E != (A&B))") == "E == (A & B) || (A != B || C >= D)");
 	}
 	

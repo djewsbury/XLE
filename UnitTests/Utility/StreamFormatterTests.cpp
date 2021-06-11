@@ -280,10 +280,10 @@ StrataMaterial=~
             Slopes=XXXSlopesTexXXX
             EndHeight = 3
             Mapping = {7,9,10,12,14,16,17}
-    MaterialId=2u
+    MaterialId=2
 
 GradFlagMaterial=~
-    MaterialId=0u
+    MaterialId=0
     Texture0=grassTextureNo9227
     Texture1=tr_canyon_rock_700b_800b
     Texture2=tr_canyon_rock3d_708a
@@ -291,7 +291,7 @@ GradFlagMaterial=~
     Texture4=grassTextureNo9227; Mapping={1.8f, 1f, 1f, 1f, 1f}
 
 GradFlagMaterial=~
-    MaterialId=1u
+    MaterialId=1
     Texture0=ProcTexture
     Texture1=stonesTextureNo8648
     Texture2=tr_canyon_rock3d_409a

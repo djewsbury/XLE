@@ -212,11 +212,12 @@ namespace RenderCore
 		::Assets::Blob _metrics;
 	};
 
-	::Assets::IIntermediateCompilers::CompilerRegistration RegisterShaderCompiler(
+	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = intermediateCompilers.RegisterCompiler(
+		::Assets::CompilerRegistration result{
+			intermediateCompilers,
 			"shader-compiler",
 			"shader-compiler",
 			ConsoleRig::GetLibVersionDesc(),
@@ -255,11 +256,11 @@ namespace RenderCore
 				}
 				return ::Assets::IIntermediateCompilers::SplitArchiveName { archiveName.AsString(), entryId, descriptiveName.AsString() };
 			}
-		);
+		};
 
 		uint64_t outputAssetTypes[] = { CompiledShaderByteCode::CompileProcessType };
 		intermediateCompilers.AssociateRequest(
-			result._registrationId,
+			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));
 		return result;
 	}

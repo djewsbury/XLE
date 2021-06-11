@@ -239,15 +239,16 @@ namespace UnitTests
 		return std::make_shared<FakeModelCompileOperation>();
 	}
 
-	::Assets::IIntermediateCompilers::CompilerRegistration RegisterFakeModelCompiler(
+	::Assets::CompilerRegistration RegisterFakeModelCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = intermediateCompilers.RegisterCompiler(
+		::Assets::CompilerRegistration result{
+			intermediateCompilers,
 			"fake-model-scaffold-compiler",
 			"fake-model-scaffold-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			BeginFakeModelCompilation);
+			BeginFakeModelCompilation};
 
 		uint64_t outputAssetTypes[] = { 
 			Type_Model,
@@ -256,7 +257,7 @@ namespace UnitTests
 			Type_Skeleton,
 		};
 		intermediateCompilers.AssociateRequest(
-			result._registrationId,
+			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes),
 			"fake-model");
 		return result;

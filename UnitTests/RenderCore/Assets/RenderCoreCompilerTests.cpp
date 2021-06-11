@@ -18,7 +18,6 @@
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
-#include "../../../Assets/CompilerLibrary.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Math/Vector.h"
 #include "../../../Math/MathSerialization.h"
@@ -108,8 +107,6 @@ namespace UnitTests
 			REQUIRE(material1->_constants.GetParameter<float>("OnEverything") == 75_a);
 		}
 
-		compilers.DeregisterCompiler(modelRegistration._registrationId);
-		compilers.DeregisterCompiler(matRegistration._registrationId);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);
 	}
 
@@ -161,8 +158,6 @@ namespace UnitTests
 			REQUIRE(material1._constants.GetParameter<float>("Brightness") == 33_a);
 			REQUIRE(Equivalent(material1._constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}
-
-		compilers.DeregisterCompiler(modelRegistration._registrationId);
 	}
 
 
@@ -173,7 +168,7 @@ namespace UnitTests
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 
 		{
-			auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "../ColladaConversion/*.dll");
+			auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");
 			REQUIRE(!discoveredCompilations.empty());
 
 			const char* testModelFile = "xleres/DefaultResources/materialsphere.dae";
@@ -185,9 +180,6 @@ namespace UnitTests
 			auto scaffold = scaffoldFuture->Actualize();
 			auto& cmdStream = scaffold->CommandStream();
 			REQUIRE(cmdStream.GetGeoCallCount() != 0);
-
-			for (const auto&compiler:discoveredCompilations)
-				compilers.DeregisterCompiler(compiler);
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);

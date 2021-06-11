@@ -13,7 +13,7 @@
 #include <memory>
 #include <map>
 
-namespace RenderCore { class IDevice; class IThreadContext; class DescriptorSetSignature; class FrameBufferDesc; class StreamOutputInitializers; }
+namespace RenderCore { class IDevice; class IThreadContext; class DescriptorSetSignature; class FrameBufferDesc; class StreamOutputInitializers; class ViewportDesc; }
 namespace UnitTests
 {
     class MetalTestHelper
@@ -82,6 +82,7 @@ namespace UnitTests
         std::map<unsigned, unsigned> GetFullColorBreakdown(RenderCore::IThreadContext& threadContext);
         const std::shared_ptr<RenderCore::IResource> GetMainTarget() const;
         const RenderCore::FrameBufferDesc& GetDesc() const;
+        RenderCore::ViewportDesc GetDefaultViewport() const;
         void SaveImage(RenderCore::IThreadContext& threadContext, StringSection<> filename) const;
 
     private:

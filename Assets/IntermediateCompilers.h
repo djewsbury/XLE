@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "AssetUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringUtils.h"
 #include <memory>
@@ -33,11 +34,7 @@ namespace Assets
 		using ArchiveNameDelegate = std::function<SplitArchiveName(TargetCode, const InitializerPack&)>;
 
 		using RegisteredCompilerId = uint64_t;
-		struct  CompilerRegistration
-		{
-			RegisteredCompilerId _registrationId = ~0ull;
-		};
-		virtual CompilerRegistration RegisterCompiler(
+		virtual RegisteredCompilerId RegisterCompiler(
 			const std::string& name,										///< string name for the compiler, usually something user-presentable
 			const std::string& shortName,									///< shortened name, for the intermediate assets store
 			ConsoleRig::LibVersionDesc srcVersion,							///< version information for the module (propagated onto any assets written to disk)
@@ -72,6 +69,36 @@ namespace Assets
 	};
 
 	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(const std::shared_ptr<IntermediatesStore>& store);
+
+	class CompilerRegistration
+	{
+	public:
+		IIntermediateCompilers::RegisteredCompilerId RegistrationId() const { return _registration; }
+
+		CompilerRegistration(
+			IIntermediateCompilers& compilers,
+			const std::string& name,
+			const std::string& shortName,
+			ConsoleRig::LibVersionDesc srcVersion,
+			const DependencyValidation& compilerDepVal,
+			IIntermediateCompilers::CompileOperationDelegate&& delegate,
+			IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
+		CompilerRegistration();
+		~CompilerRegistration();
+		CompilerRegistration(CompilerRegistration&&);
+		CompilerRegistration& operator=(CompilerRegistration&&);
+	private:
+		IIntermediateCompilers* _compilers = nullptr;
+		IIntermediateCompilers::RegisteredCompilerId _registration = ~0u;
+	};
+
+	class DirectorySearchRules;
+	DirectorySearchRules DefaultLibrarySearchDirectories();
+
+	std::vector<CompilerRegistration> DiscoverCompileOperations(
+		IIntermediateCompilers& compilerManager,
+		StringSection<> librarySearch,
+		const DirectorySearchRules& searchRules = DefaultLibrarySearchDirectories());
 
 	class IArtifactCollection;
 	class ArtifactCollectionFuture;

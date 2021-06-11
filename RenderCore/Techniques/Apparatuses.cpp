@@ -30,7 +30,6 @@
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/CompileAndAsyncManager.h"
-#include "../../Assets/CompilerLibrary.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
@@ -92,10 +91,6 @@ namespace RenderCore { namespace Techniques
 
 	DrawingApparatus::~DrawingApparatus()
 	{
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		compilers.DeregisterCompiler(_graphShaderCompiler2Registration._registrationId);
-		compilers.DeregisterCompiler(_shaderCompilerRegistration._registrationId);
-		compilers.DeregisterCompiler(_shaderFilteringRegistration._registrationId);
 	}
 
 	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding)
@@ -202,10 +197,6 @@ namespace RenderCore { namespace Techniques
 
 	PrimaryResourcesApparatus::~PrimaryResourcesApparatus()
 	{
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		compilers.DeregisterCompiler(_materialCompilerRegistration._registrationId);
-		for (const auto&m:_modelCompilers)
-			compilers.DeregisterCompiler(m);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	

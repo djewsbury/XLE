@@ -204,21 +204,22 @@ namespace RenderCore { namespace Assets
 		std::exception_ptr _compilationException;
 	};
 
-	::Assets::IIntermediateCompilers::CompilerRegistration RegisterMaterialCompiler(
+	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = intermediateCompilers.RegisterCompiler(
+		::Assets::CompilerRegistration result{
+			intermediateCompilers,
 			"material-scaffold-compiler",
 			"material-scaffold-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
 			[](auto initializers) {
 				return std::make_shared<MaterialCompileOperation>(initializers);
-			});
+			}};
 
 		uint64_t outputAssetTypes[] = { MaterialScaffold::CompileProcessType };
 		intermediateCompilers.AssociateRequest(
-			result._registrationId,
+			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));
 		return result;
 	}

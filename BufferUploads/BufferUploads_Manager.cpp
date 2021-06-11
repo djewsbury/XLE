@@ -696,6 +696,10 @@ namespace BufferUploads
 
     AssemblyLine::~AssemblyLine()
     {
+        // Ensure we destroy all transactions before we destroy the resource source
+        // (otherwise the resource source will consider allocations left in transactions as leaks)
+        _transactions.clear();
+        _transactions_LongTerm.clear();
     }
 
     TransactionID AssemblyLine::AllocateTransaction(TransactionOptions::BitField flags)
@@ -1900,6 +1904,7 @@ namespace BufferUploads
 
     void                    Manager::StallUntilCompletion(RenderCore::IThreadContext& immediateContext, CommandListID id)
     {
+        if (!id || id == CommandListID_Invalid) return;
         while (!IsComplete(id)) {
             Update(immediateContext);
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
