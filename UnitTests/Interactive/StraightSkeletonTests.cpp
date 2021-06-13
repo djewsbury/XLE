@@ -16,6 +16,7 @@
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
+#include "../../Math/StraightSkeleton.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <random>
@@ -252,6 +253,83 @@ namespace UnitTests
 		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), boundaryLines.size(), color);
 	}
 
+	template<typename Primitive>
+		class StraightSkeletonPreview
+	{
+	public:
+		StraightSkeleton<Primitive> _straightSkeleton;
+		std::vector<Vector2T<Primitive>> _orderedBoundaryPts;
+
+		void Draw(RenderOverlays::IOverlayContext& overlayContext, RenderOverlays::ColorB color)
+		{
+			std::vector<Float3> wavefrontLines;
+			wavefrontLines.reserve(_straightSkeleton._faces.size() * 2);
+
+			for (const auto& f:_straightSkeleton._faces) {
+				for (const auto& e:f._edges) {
+					if (e._type != StraightSkeleton<Primitive>::EdgeType::Wavefront) continue;
+					wavefrontLines.push_back(_straightSkeleton._steinerVertices[e._head]);
+					wavefrontLines.push_back(_straightSkeleton._steinerVertices[e._tail]);
+				}
+			}
+
+			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, wavefrontLines.data(), wavefrontLines.size(), color);
+		}
+
+		StraightSkeletonPreview(const HexCellField& cellField)
+		{
+			std::vector<Vector2T<Primitive>> boundaryLines;
+			const auto& group = cellField._exteriorGroup;
+			boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
+
+			auto twiceCos30 = std::sqrt(Primitive(3));
+
+			for (auto cell:group._boundaryCells) {
+				Int2 adjacent[6];
+				GetAdjacentCells(adjacent, cell);
+				for (unsigned a=0; a<dimof(adjacent); ++a) {
+					if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
+					Vector2T<Primitive> cellCenter { twiceCos30 * (Primitive)cell[0], Primitive(1.5) * (Primitive)cell[1] };
+					if (cell[1] & 1) {
+						// odd
+						boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
+						boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
+					} else {
+						// even
+						boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
+						boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
+					}
+				}
+			}
+
+			assert(!boundaryLines.empty());
+			
+			_orderedBoundaryPts.reserve(1+boundaryLines.size()/2);
+			_orderedBoundaryPts.push_back(*(boundaryLines.end()-2));
+			_orderedBoundaryPts.push_back(*(boundaryLines.end()-1));
+			boundaryLines.erase(boundaryLines.end()-2, boundaryLines.end());
+			while (boundaryLines.size() > 2) {
+				auto i = boundaryLines.begin();
+				for (;i!=boundaryLines.end(); i+=2)
+					if (Equivalent(*i, *(_orderedBoundaryPts.end()-1), 1e-3f))
+						break;
+				assert(i != boundaryLines.end());
+				_orderedBoundaryPts.push_back(*(i+1));
+				boundaryLines.erase(i, i+2);
+			}
+
+			// last line should wrap around back to the first
+			assert(Equivalent(*(boundaryLines.end()-1), _orderedBoundaryPts[0], 1e-3f));
+
+			// reverse to get the ordering that the straight skeleton algorithm is expecting
+			std::reverse(_orderedBoundaryPts.begin(), _orderedBoundaryPts.end());
+
+			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), Primitive(0.4));
+		}
+
+		StraightSkeletonPreview() {}
+	};
+
 	TEST_CASE( "StraightSkeletonTests", "[math]" )
 	{
 		using namespace RenderCore;
@@ -282,6 +360,7 @@ namespace UnitTests
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, RenderOverlays::ColorB{64, 140, 210});
+					_preview.Draw(*overlayContext, RenderOverlays::ColorB{230, 230, 230});
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
@@ -295,17 +374,20 @@ namespace UnitTests
 			{
 				if (evnt._pressedChar == 'r') {
 					_cellField = CreateRandomHexCellField(256, _rng);
+					_preview = StraightSkeletonPreview<float>(_cellField);
 				}
 				return false;
 			}
 
 			HexCellField _cellField;
+			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
 			
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
 				_cellField = CreateRandomHexCellField(256, _rng);
+				_preview = StraightSkeletonPreview<float>(_cellField);
 			}
 		};
 
