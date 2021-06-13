@@ -144,7 +144,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     add_executable(
         UnitTests-Interactive-${metal_name}
         Interactive/InteractiveTestHelper.cpp
-        Interactive/VolumeClipTesting.cpp
+        Interactive/VolumeClipTests.cpp
+        Interactive/StraightSkeletonTests.cpp
         EmbeddedRes.cpp
         ../Tools/ToolsRig/VisualisationGeo.cpp
         )
