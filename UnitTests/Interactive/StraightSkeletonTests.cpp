@@ -17,6 +17,8 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
 #include "../../Math/StraightSkeleton.h"
+#include "../../OSServices/Log.h"
+#include "../../Utility/ArithmeticUtils.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <random>
@@ -459,6 +461,33 @@ namespace UnitTests
 		std::vector<StraightSkeletonPreview<float>> _previews;
 	};
 
+	static unsigned int AsUnsignedBits(float input)
+	{
+			// (or just use a reinterpret cast)
+		union Converter { float f; unsigned int i; };
+		Converter c; c.f = input; 
+		return c.i;
+	}
+
+	static float AsFloatBits(unsigned input)
+	{
+			// (or just use a reinterpret cast)
+		union Converter { float f; unsigned int i; };
+		Converter c; c.i = input; 
+		return c.f;
+	}
+
+	static unsigned ReverseBits(unsigned input)
+	{
+		// from https://graphics.stanford.edu/~seander/bithacks.html
+		input = ((input >> 1u) & 0x55555555u) | ((input & 0x55555555u) << 1u);
+		input = ((input >> 2u) & 0x33333333u) | ((input & 0x33333333u) << 2u);
+		input = ((input >> 4u) & 0x0F0F0F0Fu) | ((input & 0x0F0F0F0Fu) << 4u);
+		input = ((input >> 8u) & 0x00FF00FFu) | ((input & 0x00FF00FFu) << 8u);
+		input = ( input >> 16u              ) | ( input               << 16u);
+		return input;
+	}
+
 	TEST_CASE( "SimpleStraightSkeletonShapes", "[math]" )
 	{
 		using namespace RenderCore;
@@ -504,9 +533,42 @@ namespace UnitTests
 		};
 		std::reverse(colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
 
+#if 1
 		// While the above shapes can be calculated correctly in their default orientations, sometimes
 		// if we rotate them we hit numeric precision issues
-		float theta = 2.1267482f;
+		// We want to rotate through every rotation between 0 -> pi, so we'll do this by increasing the
+		// integer representation.
+		// However -- to go through the numbers a little faster we'll walk through the integer bits in
+		// reverse order. This will actually go a little beyond thetaEnd; but that shouldn't matter here 
+		unsigned thetaStart = AsUnsignedBits(0.1f), thetaEnd = AsUnsignedBits(gPI);
+		unsigned highestDifferentBit = 32 - xl_clz4(thetaEnd-thetaStart);
+		unsigned workingBitMask = (1u<<highestDifferentBit) - 1u;
+		unsigned i = 0;
+		for (unsigned c=0; c<(thetaEnd-thetaStart); ++c) {
+			auto reversed = ReverseBits(i) >> (32-highestDifferentBit);
+			++reversed;
+			i = ReverseBits(reversed << (32-highestDifferentBit));
+			auto theta = AsFloatBits(thetaStart + i);
+
+			float sinTheta = std::sin(theta), cosTheta = std::cos(theta);
+			std::vector<Float2> rotatedRectangle; rotatedRectangle.insert(rotatedRectangle.end(), rectangleCollapse, &rectangleCollapse[dimof(rectangleCollapse)]);
+			std::vector<Float2> rotatedSingleMotorcycle; rotatedSingleMotorcycle.insert(rotatedSingleMotorcycle.end(), singleMotorcycle, &singleMotorcycle[dimof(singleMotorcycle)]);
+			std::vector<Float2> rotatedDoubleMotorcycle; rotatedDoubleMotorcycle.insert(rotatedDoubleMotorcycle.end(), doubleMotorcycle, &doubleMotorcycle[dimof(doubleMotorcycle)]);
+			std::vector<Float2> rotatedColinearCollapse; rotatedColinearCollapse.insert(rotatedColinearCollapse.end(), colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
+			for (auto& c:rotatedRectangle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+			for (auto& c:rotatedSingleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+			for (auto& c:rotatedDoubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+			for (auto& c:rotatedColinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+
+			auto s0 = CalculateStraightSkeleton<float>(rotatedRectangle);
+			auto s1 = CalculateStraightSkeleton<float>(rotatedSingleMotorcycle);
+			auto s2 = CalculateStraightSkeleton<float>(rotatedDoubleMotorcycle);
+			auto s3 = CalculateStraightSkeleton<float>(rotatedColinearCollapse);
+			(void)s0; (void)s1; (void)s2; (void)s3;
+		}
+#endif
+
+		float theta = 0.971875012f; // 2.1267482f;
 		float sinTheta = std::sin(theta), cosTheta = std::cos(theta);
 		for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 		for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };

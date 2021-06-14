@@ -61,7 +61,6 @@ namespace XLEMath
 	struct MotorcycleSegment
 	{
 		VertexId _head;
-		VertexId _tail;		// (this is the fixed vertex)
 	};
 
 	T1(Primitive) struct CollapseEvent
@@ -610,12 +609,8 @@ namespace XLEMath
 			// Since we're expecting counter-clockwise inputs, if "v1" is a convex vertex, we should
 			// wind around to the left when going v0->v1->v2
 			// If we wind to the right then it's a reflex vertex, and we must add a motorcycle edge
-			if (CalculateWindingType(vertices[v0], vertices[v1], vertices[v2], threshold) == WindingType::Right) {
-				// auto fixedVertex = (unsigned)(result._vertices.size());
-				// result._vertices.emplace_back(Vertex<Primitive>{vertices[v], Zero<Vector2T<Primitive>>(), Primitive(0), BoundaryVertexFlag|unsigned(v)});
-				// result._vertices.emplace_back(vertices[v], 0);
-				loop._motorcycleSegments.emplace_back(MotorcycleSegment{unsigned(v), unsigned(v)});
-			}
+			if (CalculateWindingType(vertices[v0], vertices[v1], vertices[v2], threshold) == WindingType::Right)
+				loop._motorcycleSegments.emplace_back(MotorcycleSegment{unsigned(v)});
 		}
 
 		result._loops.emplace_back(std::move(loop));
@@ -694,6 +689,13 @@ namespace XLEMath
 		}
 	}
 
+	static bool ContainsVertex(IteratorRange<const WavefrontEdge*> edges, unsigned v)
+	{
+		auto headSideI = std::find_if(edges.begin(), edges.end(),
+			[v](const auto& e) { return e._head == v || e._tail == v; });
+		return headSideI != edges.end();
+	}
+
 	T1(Primitive) void Graph<Primitive>::ProcessEvents(
 		WavefrontLoop& initialLoop,
 		IteratorRange<const CrashEvent<Primitive>*> crashesInit)
@@ -759,70 +761,73 @@ namespace XLEMath
 			WavefrontLoop tailSide, headSide;
 			tailSide._lastEventTime = crashEvent._eventTime;
 			headSide._lastEventTime = crashEvent._eventTime;
-			{
-				// Start at motor._head, and work around in order until we hit the crash segment.
-				auto tout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
-					[motorHead=crashEvent._motor](const WavefrontEdge& test) { return test._tail == motorHead; });
-				assert(tout != loop->_edges.end());
 
-				if (tout->_head != crashEvent._collisionEdgeTail) {
-					auto starti = tout+1;
-					if (starti == loop->_edges.end()) starti = loop->_edges.begin();
-					auto i=starti;
-					while (i->_head!=crashEvent._collisionEdgeTail) {
-						tailSide._edges.push_back(*i);
-						++i;
-						if (i == loop->_edges.end()) i = loop->_edges.begin();
-					}
-					tailSide._edges.push_back(*i);
-				}
+			//////////////////////////////////////////////////////////////////////
+					//   T A I L   S I D E
+			// Start at motor._head, and work around in order until we hit the crash segment.
+			auto tout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
+				[motorHead=crashEvent._motor](const WavefrontEdge& test) { return test._tail == motorHead; });
+			assert(tout != loop->_edges.end());
 
-				// Note that we can end up with colinear vertices here in two cases. When there are
-				// colinear vertices, we can't calculate the vertex velocity values accurately 
-				//   1) we might produce a fully collapsed 2-edge loop
-				//   2) when there are simultaneous motorcycle crashes
-				// In the second case, the loop is not fully collapsed yet; but after the remaining
-				// crashes have been processed, it will be.
-				auto newVertex = (unsigned)_vertices.size();
-				_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
-                tailSide._edges.push_back({newVertex, crashEvent._collisionEdgeTail});			// (tin)
-				tailSide._edges.push_back({tout->_head, newVertex});							// (tout)
-			}
-
-			{
-				// Start at crashSegment._head, and work around in order until we hit the motor vertex
-				auto hout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
-					[crashEvent](const WavefrontEdge& test) { return test._tail == crashEvent._collisionEdgeHead; });
-				assert(hout != loop->_edges.end());
-
-				auto starti = hout;
+			if (tout->_head != crashEvent._collisionEdgeTail) {
+				auto starti = tout+1;
+				if (starti == loop->_edges.end()) starti = loop->_edges.begin();
 				auto i=starti;
-				while (i->_head!=crashEvent._motor) {
-					headSide._edges.push_back(*i);
+				while (i->_head!=crashEvent._collisionEdgeTail) {
+					tailSide._edges.push_back(*i);
 					++i;
 					if (i == loop->_edges.end()) i = loop->_edges.begin();
 				}
-
-				auto newVertex = (unsigned)_vertices.size();
-				_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
-				headSide._edges.push_back({newVertex, i->_tail});								// (hin)
-                headSide._edges.push_back({crashEvent._collisionEdgeHead, newVertex});			// (hout)
+				tailSide._edges.push_back(*i);
 			}
 
+			// Note that we can end up with colinear vertices here in two cases. When there are
+			// colinear vertices, we can't calculate the vertex velocity values accurately 
+			//   1) we might produce a fully collapsed 2-edge loop
+			//   2) when there are simultaneous motorcycle crashes
+			// In the second case, the loop is not fully collapsed yet; but after the remaining
+			// crashes have been processed, it will be.
+			auto newVertex = (unsigned)_vertices.size();
+			_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
+			tailSide._edges.push_back({newVertex, crashEvent._collisionEdgeTail});			// (tin)
+			tailSide._edges.push_back({tout->_head, newVertex});							// (tout)
+			
+			//////////////////////////////////////////////////////////////////////
+					//   H E A D   S I D E
+			// Start at crashSegment._head, and work around in order until we hit the motor vertex
+			auto hout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
+				[crashEvent](const WavefrontEdge& test) { return test._tail == crashEvent._collisionEdgeHead; });
+			assert(hout != loop->_edges.end());
+
+			auto starti = hout;
+			auto i=starti;
+			while (i->_head!=crashEvent._motor) {
+				headSide._edges.push_back(*i);
+				++i;
+				if (i == loop->_edges.end()) i = loop->_edges.begin();
+			}
+
+			auto hin = i;
+			newVertex = (unsigned)_vertices.size();
+			_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
+			headSide._edges.push_back({newVertex, hin->_tail});								// (hin)
+			headSide._edges.push_back({crashEvent._collisionEdgeHead, newVertex});			// (hout)
+
+			//////////////////////////////////////////////////////////////////////
 			// Move the motorcycles from "loop" to "inSide" or "outSide" depending on which loop 
 			// they are now a part of.
 			for (const auto&m:loop->_motorcycleSegments) {
 				if (&m == motor) continue;		// (skip this one, it's just been processed)
 
 				auto inSideI = std::find_if(headSide._edges.begin(), headSide._edges.end(),
-					[&m](const WavefrontEdge&e) { return e._head == m._head || e._tail == m._head; });
+					[motorHead=m._head](const WavefrontEdge&e) { return e._head == motorHead || e._tail == motorHead; });
 				if (inSideI != headSide._edges.end()) {
 					headSide._motorcycleSegments.push_back(m);
 					continue;
 				}
 
 				auto outSideI = std::find_if(tailSide._edges.begin(), tailSide._edges.end(),
-					[&m](const WavefrontEdge&e) { return e._head == m._head || e._tail == m._head; });
+					[motorHead=m._head](const WavefrontEdge&e) { return e._head == motorHead || e._tail == motorHead; });
 				if (outSideI != tailSide._edges.end()) {
 					tailSide._motorcycleSegments.push_back(m);
 					continue;
@@ -838,26 +843,69 @@ namespace XLEMath
 			// inSide, or on the tailSide
             unsigned crashSegmentTail = crashEvent._collisionEdgeTail, crashSegmentHead = crashEvent._collisionEdgeHead;
 			for (auto i=crashI+1; i!=crashes.end(); ++i) {
-				auto inSideI = std::find_if(headSide._motorcycleSegments.begin(), headSide._motorcycleSegments.end(),
-					[i](const MotorcycleSegment& s){ return s._head == i->_motor;});
-				bool isInSide = inSideI != headSide._motorcycleSegments.end();
-				#if defined(_DEBUG)
-					auto outSideI = std::find_if(tailSide._motorcycleSegments.begin(), tailSide._motorcycleSegments.end(),
-						[i](const MotorcycleSegment& s){ return s._head == i->_motor;});
-					assert(isInSide || (outSideI != tailSide._motorcycleSegments.end())); (void)outSideI;
-				#endif
-				
-				auto replacementIdx = unsigned(isInSide?(_vertices.size()-1):(_vertices.size()-2));
-				if (i->_collisionEdgeHead == crashEvent._motor) i->_collisionEdgeHead = replacementIdx;
-				else if (i->_collisionEdgeTail == crashEvent._motor) i->_collisionEdgeTail = replacementIdx;
 
-				if (isInSide) {
-					if (i->_collisionEdgeHead == crashSegmentTail) i->_collisionEdgeHead = replacementIdx;
-					else if (i->_collisionEdgeTail == crashSegmentTail) i->_collisionEdgeTail = replacementIdx;
+				assert(i->_motor != crashEvent._motor);
+				bool motorIsHeadSide = ContainsVertex(headSide._edges, i->_motor);
+
+				#if defined(_DEBUG)
+					bool motorIsTailSide = ContainsVertex(tailSide._edges, i->_motor);
+					assert(motorIsHeadSide || motorIsTailSide); (void)motorIsTailSide;
+				#endif
+
+				auto replacementIdx = unsigned(motorIsHeadSide?(_vertices.size()-1):(_vertices.size()-2));
+				// if (i->_collisionEdgeHead == crashEvent._motor) i->_collisionEdgeHead = replacementIdx;
+				// if (i->_collisionEdgeTail == crashEvent._motor) i->_collisionEdgeTail = replacementIdx;
+				
+				if (motorIsHeadSide) {
+					// We might have collided with the crashEvent._motor <---- hin edge
+					if (i->_collisionEdgeHead == crashEvent._motor) i->_collisionEdgeHead = replacementIdx;
+
+					if (i->_collisionEdgeTail == crashEvent._motor) {
+						// if the motor is on the head side, but we're colliding with an edge that should be on the tail
+						// side, then we're potentially in trouble. However, this is fine if the collision point is
+						// directly on crashEvent._motor -- because in this case, crashEvent._motor <---- hin is interchangable
+						// with tout <--- crashEvent._motor
+						if (AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>())) {
+							i->_collisionEdgeHead = replacementIdx;
+							i->_collisionEdgeTail = hin->_tail;
+						} else {
+							assert(0);
+						}
+					}
+
+					// When the motor is headside, if there's another crash on the same segment it should be
+					// in the i->_collisionEdgeHead <--- replacementIdx part.
+					if (i->_collisionEdgeTail == crashSegmentTail) {
+						assert(i->_collisionEdgeHead == crashSegmentHead);
+						i->_collisionEdgeTail = replacementIdx;
+					}
 				} else {
-					if (i->_collisionEdgeHead == crashSegmentHead) i->_collisionEdgeHead = replacementIdx;
-					else if (i->_collisionEdgeTail == crashSegmentHead) i->_collisionEdgeTail = replacementIdx;
+					// We might have collided with the tout <--- crashEvent._motor edge
+					if (i->_collisionEdgeTail == crashEvent._motor) i->_collisionEdgeTail = replacementIdx;
+					
+					if (i->_collisionEdgeHead == crashEvent._motor) {
+						if (AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>())) {
+							i->_collisionEdgeHead = tout->_head;
+							i->_collisionEdgeTail = replacementIdx;
+						} else {
+							assert(0);
+						}
+					}
+
+					// When the motor is tailside, if there's another crash on the same segment it should be
+					// in the replacementIdx <--- i->_collisionEdgeTail part.
+					if (i->_collisionEdgeHead == crashSegmentHead) {
+						assert(i->_collisionEdgeTail == crashSegmentTail);
+						i->_collisionEdgeHead = replacementIdx;
+					}
 				}
+
+				bool collisionEdgeHeadIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeHead);
+				bool collisionEdgeTailIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeTail);
+				assert(collisionEdgeHeadIsHeadSide == motorIsHeadSide);
+				assert(collisionEdgeTailIsHeadSide == motorIsHeadSide);
+
+				assert(i->_collisionEdgeHead != crashEvent._motor && i->_collisionEdgeTail != crashEvent._motor);
 			}
 
 			// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
