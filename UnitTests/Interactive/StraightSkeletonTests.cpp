@@ -264,12 +264,11 @@ namespace UnitTests
 
 		Float3 GetPt(unsigned ptIdx) const
 		{
-			if (ptIdx & BoundaryVertexFlag) {
-				REQUIRE((ptIdx & ~BoundaryVertexFlag) < _orderedBoundaryPts.size());
-				return Float3 { _orderedBoundaryPts[ptIdx & ~BoundaryVertexFlag], 0 };
+			if (ptIdx < _orderedBoundaryPts.size()) {
+				return Float3 { _orderedBoundaryPts[ptIdx], 0 };
 			} else {
-				REQUIRE(ptIdx < _straightSkeleton._steinerVertices.size());
-				return _straightSkeleton._steinerVertices[ptIdx];
+				REQUIRE((ptIdx -_orderedBoundaryPts.size()) < _straightSkeleton._steinerVertices.size());
+				return _straightSkeleton._steinerVertices[ptIdx-_orderedBoundaryPts.size()];
 			}
 		}
 
@@ -280,21 +279,17 @@ namespace UnitTests
 			const RenderOverlays::ColorB originalShapeColor { 128, 128, 128 };
 
 			std::vector<Float3> wavefrontLines, pathLines;
-			wavefrontLines.reserve(_straightSkeleton._faces.size() * 2);
-			pathLines.reserve(_straightSkeleton._faces.size() * 2 * 2);
-
-			for (const auto& f:_straightSkeleton._faces) {
-				for (const auto& e:f._edges) {
-					if (e._type == StraightSkeleton<Primitive>::EdgeType::Wavefront) {
-						REQUIRE(!(e._head & BoundaryVertexFlag));
-						REQUIRE(!(e._tail & BoundaryVertexFlag));
-						wavefrontLines.push_back(GetPt(e._head));
-						wavefrontLines.push_back(GetPt(e._tail));
-					} else {
-						assert(e._type == StraightSkeleton<Primitive>::EdgeType::VertexPath);
-						pathLines.push_back(GetPt(e._head));
-						pathLines.push_back(GetPt(e._tail));
-					}
+			wavefrontLines.reserve(_straightSkeleton._edges.size() * 2);
+			for (const auto& e:_straightSkeleton._edges) {
+				if (e._type == StraightSkeleton<Primitive>::EdgeType::Wavefront) {
+					REQUIRE(e._head >= _straightSkeleton._boundaryPointCount);
+					REQUIRE(e._tail >= _straightSkeleton._boundaryPointCount);
+					wavefrontLines.push_back(GetPt(e._head));
+					wavefrontLines.push_back(GetPt(e._tail));
+				} else {
+					assert(e._type == StraightSkeleton<Primitive>::EdgeType::VertexPath);
+					pathLines.push_back(GetPt(e._head));
+					pathLines.push_back(GetPt(e._tail));
 				}
 			}
 

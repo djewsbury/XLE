@@ -17,11 +17,10 @@ namespace XLEMath
 		using VertexId = unsigned;
 		enum class EdgeType { VertexPath, Wavefront };
 		struct Edge { VertexId _head; VertexId _tail; EdgeType _type; };
-		struct Face { std::vector<Edge> _edges; };
 
+		size_t _boundaryPointCount = 0;
 		std::vector<Vector3T<Primitive>> _steinerVertices;
-		std::vector<Face> _faces;
-		std::vector<Edge> _unplacedEdges;
+		std::vector<Edge> _edges;
 
 		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops();
 	};

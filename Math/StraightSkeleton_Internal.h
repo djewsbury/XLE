@@ -4,6 +4,7 @@
 
 #include "Vector.h"
 #include "Matrix.h"
+#include <optional>
 
 // We can define the handiness of 2D space as such:
 // If we wanted to rotate the X axis so that it lies on the Y axis, 
@@ -466,7 +467,7 @@ namespace XLEMath
 		return true;
 	}
 
-	T1(Primitive) static Vector3T<Primitive> CalculateEdgeCollapse_Offset(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateEdgeCollapse_Offset(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
 	{
 		// If the points are already too close together, the math will not be accurate enough
 		// We must just use the current time as a close-enough approximation of the collapse time
@@ -486,7 +487,7 @@ namespace XLEMath
 			// happen if there's an earlier collapse event on the left or right of this edge. In these cases,
 			// we should process those collapse events first.
 			if (AdaptiveEquivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
-				return Vector3T<Primitive>(std::numeric_limits<Primitive>::max(), std::numeric_limits<Primitive>::max(), Primitive(-1));
+				return {};
 
 			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
 			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
@@ -496,7 +497,7 @@ namespace XLEMath
 			res[c]  = As[c][0] * Nx + As[c][1] * Ny;
 		}
 		if (!InvertInplaceSafe(M, GetEpsilon<Primitive>()))
-			return Vector3T<Primitive>(std::numeric_limits<Primitive>::max(), std::numeric_limits<Primitive>::max(), Primitive(-1));
+			return {};
 
 		auto result = M * res;
 		assert(IsFiniteNumber(result[0]) && IsFiniteNumber(result[1]) && IsFiniteNumber(result[2]));
