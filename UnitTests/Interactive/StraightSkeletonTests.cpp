@@ -260,20 +260,55 @@ namespace UnitTests
 		StraightSkeleton<Primitive> _straightSkeleton;
 		std::vector<Vector2T<Primitive>> _orderedBoundaryPts;
 
-		void Draw(RenderOverlays::IOverlayContext& overlayContext, RenderOverlays::ColorB color)
+		static constexpr unsigned BoundaryVertexFlag = 1u<<31u;
+
+		Float3 GetPt(unsigned ptIdx) const
 		{
-			std::vector<Float3> wavefrontLines;
+			if (ptIdx & BoundaryVertexFlag) {
+				REQUIRE((ptIdx & ~BoundaryVertexFlag) < _orderedBoundaryPts.size());
+				return Float3 { _orderedBoundaryPts[ptIdx & ~BoundaryVertexFlag], 0 };
+			} else {
+				REQUIRE(ptIdx < _straightSkeleton._steinerVertices.size());
+				return _straightSkeleton._steinerVertices[ptIdx];
+			}
+		}
+
+		void Draw(RenderOverlays::IOverlayContext& overlayContext) const
+		{
+			const RenderOverlays::ColorB waveFrontColor { 64, 230, 64 };
+			const RenderOverlays::ColorB pathColor { 64, 64, 230 };
+			const RenderOverlays::ColorB originalShapeColor { 128, 128, 128 };
+
+			std::vector<Float3> wavefrontLines, pathLines;
 			wavefrontLines.reserve(_straightSkeleton._faces.size() * 2);
+			pathLines.reserve(_straightSkeleton._faces.size() * 2 * 2);
 
 			for (const auto& f:_straightSkeleton._faces) {
 				for (const auto& e:f._edges) {
-					if (e._type != StraightSkeleton<Primitive>::EdgeType::Wavefront) continue;
-					wavefrontLines.push_back(_straightSkeleton._steinerVertices[e._head]);
-					wavefrontLines.push_back(_straightSkeleton._steinerVertices[e._tail]);
+					if (e._type == StraightSkeleton<Primitive>::EdgeType::Wavefront) {
+						REQUIRE(!(e._head & BoundaryVertexFlag));
+						REQUIRE(!(e._tail & BoundaryVertexFlag));
+						wavefrontLines.push_back(GetPt(e._head));
+						wavefrontLines.push_back(GetPt(e._tail));
+					} else {
+						assert(e._type == StraightSkeleton<Primitive>::EdgeType::VertexPath);
+						pathLines.push_back(GetPt(e._head));
+						pathLines.push_back(GetPt(e._tail));
+					}
 				}
 			}
 
-			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, wavefrontLines.data(), wavefrontLines.size(), color);
+			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, wavefrontLines.data(), wavefrontLines.size(), waveFrontColor);
+			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, pathLines.data(), pathLines.size(), pathColor);
+
+			std::vector<Float3> originalShapeLines;
+			originalShapeLines.reserve(_orderedBoundaryPts.size()*2);
+
+			for (size_t c=0; c<_orderedBoundaryPts.size(); ++c) {
+				originalShapeLines.push_back(Float3(_orderedBoundaryPts[c], 0));
+				originalShapeLines.push_back(Float3(_orderedBoundaryPts[(c+1)%_orderedBoundaryPts.size()], 0));
+			}
+			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 		}
 
 		StraightSkeletonPreview(const HexCellField& cellField)
@@ -327,25 +362,32 @@ namespace UnitTests
 			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), Primitive(0.4));
 		}
 
+		StraightSkeletonPreview(IteratorRange<const Float2*> inputPts, float maxInset = std::numeric_limits<float>::max())
+		: _straightSkeleton(CalculateStraightSkeleton(inputPts, maxInset))
+		{
+			_orderedBoundaryPts = std::vector<Float2>(inputPts.begin(), inputPts.end());
+		}
+
 		StraightSkeletonPreview() {}
 	};
 
-	TEST_CASE( "StraightSkeletonTests", "[math]" )
+	static RenderCore::Techniques::CameraDesc StartingCamera()
 	{
-		using namespace RenderCore;
-
-		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
-
 		RenderCore::Techniques::CameraDesc visCamera;
 		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, 0.0f, -1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{0.0f, 0.0f, 200.0f});
-		visCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		visCamera._projection = RenderCore::Techniques::CameraDesc::Projection::Orthogonal;
 		visCamera._nearClip = 0.f;
 		visCamera._farClip = 400.f;
 		visCamera._left = -50.f;
 		visCamera._right = 50.f;
 		visCamera._top = 50.f;
 		visCamera._bottom = -50.f;
+		return visCamera;
+	}
 
+	TEST_CASE( "StraightSkeletonTests", "[math]" )
+	{
+		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
 		{
 		public:
@@ -360,7 +402,7 @@ namespace UnitTests
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, RenderOverlays::ColorB{64, 140, 210});
-					_preview.Draw(*overlayContext, RenderOverlays::ColorB{230, 230, 230});
+					_preview.Draw(*overlayContext);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
@@ -391,10 +433,220 @@ namespace UnitTests
 			}
 		};
 
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
 		{
 			std::mt19937_64 rng(619047819);
 			auto tester = std::make_shared<HexGridStraightSkeleton>(std::move(rng));
-			testHelper->Run(visCamera, tester);
+			testHelper->Run(StartingCamera(), tester);
+		}
+	}
+
+	class BasicDrawStraightSkeleton : public IInteractiveTestOverlay
+	{
+	public:
+		virtual void Render(
+			RenderCore::IThreadContext& threadContext,
+			RenderCore::Techniques::ParsingContext& parserContext,
+			IInteractiveTestHelper& testHelper) override
+		{
+			{
+				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+				for (const auto& preview:_previews)
+					preview.Draw(*overlayContext);
+			}
+
+			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, RenderCore::LoadStore::Clear);
+			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		}
+
+		std::vector<StraightSkeletonPreview<float>> _previews;
+	};
+
+	TEST_CASE( "SimpleStraightSkeletonShapes", "[math]" )
+	{
+		using namespace RenderCore;
+		
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
+		Float2 rectangleCollapse[] = {
+			Float2 {  10.f,  15.f } + Float2 { 25, 25 },
+			Float2 {  10.f, -15.f } + Float2 { 25, 25 },
+			Float2 { -10.f, -15.f } + Float2 { 25, 25 },
+			Float2 { -10.f,  15.f } + Float2 { 25, 25 }
+		};
+		std::reverse(rectangleCollapse, &rectangleCollapse[dimof(rectangleCollapse)]);
+
+		Float2 singleMotorcycle[] = {
+			Float2 {  10.f,  15.f } + Float2 { 25, -25 },
+			Float2 {  10.f, -15.f } + Float2 { 25, -25 },
+			Float2 { -10.f, -7.5f } + Float2 { 25, -25 },
+			Float2 {   0.f,   0.f } + Float2 { 25, -25 },
+			Float2 { -10.f,  7.5f } + Float2 { 25, -25 }
+		};
+		std::reverse(singleMotorcycle, &singleMotorcycle[dimof(singleMotorcycle)]);
+
+		Float2 doubleMotorcycle[] = {
+			Float2 {   0.f,  15.f } + Float2 { -25, -25 },
+			Float2 {  10.f,  7.5f } + Float2 { -25, -25 },
+			Float2 {  2.5f,   0.f } + Float2 { -25, -25 },
+			Float2 {  10.f, -7.5f } + Float2 { -25, -25 },
+			Float2 {   0.f, -15.f } + Float2 { -25, -25 },
+			Float2 { -10.f, -7.5f } + Float2 { -25, -25 },
+			Float2 { -2.5f,   0.f } + Float2 { -25, -25 },
+			Float2 { -10.f,  7.5f } + Float2 { -25, -25 }
+		};
+		std::reverse(doubleMotorcycle, &doubleMotorcycle[dimof(doubleMotorcycle)]);
+
+		Float2 colinearCollapse[] = {
+			Float2 {   0.f,  15.f } + Float2 { -25,  25 },
+			Float2 {  10.f,  2.5f } + Float2 { -25,  25 },
+			Float2 {  10.f, -2.5f } + Float2 { -25,  25 },
+			Float2 {   0.f, -15.f } + Float2 { -25,  25 },
+			Float2 { -10.f, -2.5f } + Float2 { -25,  25 },
+			Float2 { -10.f,  2.5f } + Float2 { -25,  25 }
+		};
+		std::reverse(colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
+
+		// While the above shapes can be calculated correctly in their default orientations, sometimes
+		// if we rotate them we hit numeric precision issues
+		float theta = 2.1267482f;
+		float sinTheta = std::sin(theta), cosTheta = std::cos(theta);
+		for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:doubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:colinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+
+		{
+			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
+			tester->_previews.emplace_back(MakeIteratorRange(rectangleCollapse));
+			tester->_previews.emplace_back(MakeIteratorRange(singleMotorcycle));
+			tester->_previews.emplace_back(MakeIteratorRange(doubleMotorcycle));
+			tester->_previews.emplace_back(MakeIteratorRange(colinearCollapse));
+			testHelper->Run(StartingCamera(), tester);
 		}
 	}
 }
+
+#if 0
+	T1(Primitive) std::pair<Vector2T<Primitive>, Vector2T<Primitive>> AdvanceEdge(
+		std::pair<Vector2T<Primitive>, Vector2T<Primitive>> input, Primitive time )
+	{
+		auto t0 = Vector2T<Primitive>(input.second-input.first);
+		auto movement = SetMagnitude(EdgeTangentToMovementDir(t0), time);
+		return { input.first + movement, input.second + movement };
+	}
+
+	T1(Primitive) Primitive TestTriangle(Vector2T<Primitive> p[3])
+	{
+		using VelocityType = decltype(CalculateVertexVelocity(p[0], p[1], p[2]));
+		VelocityType velocities[] = 
+		{
+			CalculateVertexVelocity(p[2], p[0], p[1]),
+			CalculateVertexVelocity(p[0], p[1], p[2]),
+			CalculateVertexVelocity(p[1], p[2], p[0])
+		};
+
+		Primitive collapses[] = 
+		{
+			CalculateCollapseTime<Primitive>({p[0], velocities[0]}, {p[1], velocities[1]}),
+			CalculateCollapseTime<Primitive>({p[1], velocities[1]}, {p[2], velocities[2]}),
+			CalculateCollapseTime<Primitive>({p[2], velocities[2]}, {p[0], velocities[0]})
+		};
+
+		// Find the earliest collapse, and calculate the accuracy
+		unsigned edgeToCollapse = 0; 
+		if (collapses[0] < collapses[1]) {
+			if (collapses[0] < collapses[2]) {
+				edgeToCollapse = 0;
+			} else {
+				edgeToCollapse = 2;
+			}
+		} else if (collapses[1] < collapses[2]) {
+			edgeToCollapse = 1;
+		} else {
+			edgeToCollapse = 2;
+		}
+
+		auto triCollapse = CalculateTriangleCollapse(p[0], p[1], p[2]);
+		auto collapseTest = collapses[edgeToCollapse];
+		auto collapseTest1 = triCollapse[2];
+		auto collapseTest2 = CalculateTriangleCollapse_Area(p[0], p[1], p[2], velocities[0], velocities[1], velocities[2]);
+		auto collapseTest3 = CalculateTriangleCollapse_Offset(p[0], p[1], p[2]);
+		auto collapseTest4 = CalculateEdgeCollapse_Offset(p[2], p[0], p[1], p[2]);
+		(void)collapseTest, collapseTest1, collapseTest2, collapseTest3, collapseTest4;
+
+		// Advance forward to time "collapses[edgeToCollapse]" and look
+		// at the difference in position of pts edgeToCollapse & (edgeToCollapse+1)%3
+		auto zero = edgeToCollapse, one = (edgeToCollapse+1)%3, m1 = (edgeToCollapse+2)%3;
+		auto zeroA = PositionAtTime<Primitive>({p[zero], velocities[zero]}, collapses[edgeToCollapse]);
+		auto oneA = PositionAtTime<Primitive>({p[one], velocities[one]}, collapses[edgeToCollapse]);
+
+		// Accurately move forward edges m1 -> zero & one -> m1
+		// The intersection point of these 2 edges should be the intersection point
+		auto e0 = AdvanceEdge({p[m1], p[zero]}, collapses[edgeToCollapse]);
+		auto e1 = AdvanceEdge({p[one], p[m1]}, collapses[edgeToCollapse]);
+		auto intr = LineIntersection(e0, e1);
+
+		auto intr2 = Truncate(triCollapse);
+
+		auto d0 = zeroA - intr;
+		auto d1 = oneA - intr;
+		return std::max(MagnitudeSquared(d0), MagnitudeSquared(d1));
+	}
+
+	void TestSSAccuracy()
+	{
+		std::stringstream str;
+		// generate random triangles, and 
+		std::mt19937 rng;
+		const unsigned tests = 10000;
+		const Vector2T<double> mins{-10, -10};
+		const Vector2T<double> maxs{ 10,  10};
+		double iScale = (INT64_MAX >> 8) / (maxs[0] - mins[0]) / 2.0;
+		for (unsigned c=0; c<tests; ++c) {
+			Vector2T<double> d[3];
+			Vector2T<float> f[3];
+			Vector2T<int64_t> i[3];
+			for (unsigned q=0; q<3; ++q) {
+				d[q][0] = std::uniform_real_distribution<double>(mins[0], maxs[0])(rng);
+				d[q][1] = std::uniform_real_distribution<double>(mins[1], maxs[1])(rng);
+				f[q][0] = (float)d[q][0];
+				f[q][1] = (float)d[q][1];
+				i[q][0] = int64_t(d[q][0] * iScale);
+				i[q][1] = int64_t(d[q][1] * iScale);
+			}
+
+			auto windingType = CalculateWindingType(d[0], d[1], d[2], GetEpsilon<double>());
+			if (windingType == WindingType::Straight) continue;
+			if (windingType == WindingType::Right) {
+				std::swap(d[0], d[2]);
+				std::swap(f[0], f[2]);
+				std::swap(i[0], i[2]);
+			}
+
+			auto dq = TestTriangle(d);
+			auto fq = TestTriangle(f);
+			// auto iq = TestTriangle(i);
+
+			// The difference between the double and float results can give us a sense of
+			// the accuracy of the method
+			auto triCollapseDouble = CalculateTriangleCollapse_Offset(d[0], d[1], d[2]);
+			auto triCollapseFloat = CalculateTriangleCollapse_Offset(f[0], f[1], f[2]);
+			auto jitter = triCollapseDouble[2] - double(triCollapseFloat[2]);
+
+			str << "dq: " << dq
+				<< ", fq: " << fq
+				// << ", iq: " << double(iq) / iScale
+				<< ", jitter:" << jitter
+				<< std::endl
+				;
+		}
+
+		auto result = str.str();
+		printf("%s", result.c_str());
+		(void)result;
+	}
+#endif
+
