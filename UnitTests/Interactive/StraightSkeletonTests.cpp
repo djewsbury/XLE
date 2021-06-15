@@ -227,6 +227,46 @@ namespace UnitTests
 		return result;
 	}
 
+	static HexCellField CreateRegularHexField(unsigned radius)
+	{
+		assert(radius > 0);
+		HexCellField result;
+
+		// Each time, select a cell from the boundary, and make it an enabled cell
+		// update the boundary as we go along
+		// could be done much faster with just a little sorting
+
+		result._enabledCells.push_back(Int2(0, 0));
+		Int2 adjacent[6];
+		GetAdjacentCells(adjacent, Int2(0, 0));
+
+		std::vector<Int2> workingBoundaryCells;
+		for (auto c:adjacent) workingBoundaryCells.push_back(c);
+
+		for (unsigned r=1; r<radius; ++r) {
+			auto nextBoundaryCells = std::move(workingBoundaryCells);
+
+			for (auto cell:nextBoundaryCells) {
+				assert(std::find(result._enabledCells.begin(), result._enabledCells.end(), cell) == result._enabledCells.end());
+				result._enabledCells.push_back(cell);
+
+				GetAdjacentCells(adjacent, cell);
+				for (auto a:adjacent) {
+					auto i = std::find(workingBoundaryCells.begin(), workingBoundaryCells.end(), a);
+					if (i != workingBoundaryCells.end()) continue;
+					i = std::find(result._enabledCells.begin(), result._enabledCells.end(), a);
+					if (i != result._enabledCells.end()) continue;
+					i = std::find(nextBoundaryCells.begin(), nextBoundaryCells.end(), a);
+					if (i != nextBoundaryCells.end()) continue;
+					workingBoundaryCells.push_back(a);
+				}
+			}
+		}
+		result._exteriorGroup._boundaryCells = std::move(workingBoundaryCells);
+
+		return result;
+	}
+
 	static void DrawBoundary(RenderOverlays::IOverlayContext& overlayContext, const HexCellField& cellField, const HexCellField::BoundaryGroup& group, RenderOverlays::ColorB color)
 	{
 		std::vector<Float3> boundaryLines;
@@ -308,7 +348,7 @@ namespace UnitTests
 			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 		}
 
-		StraightSkeletonPreview(const HexCellField& cellField)
+		StraightSkeletonPreview(const HexCellField& cellField, float maxInset = std::numeric_limits<float>::max())
 		{
 			std::vector<Vector2T<Primitive>> boundaryLines;
 			const auto& group = cellField._exteriorGroup;
@@ -356,7 +396,7 @@ namespace UnitTests
 			// reverse to get the ordering that the straight skeleton algorithm is expecting
 			std::reverse(_orderedBoundaryPts.begin(), _orderedBoundaryPts.end());
 
-			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), Primitive(0.4));
+			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), maxInset);
 		}
 
 		StraightSkeletonPreview(IteratorRange<const Float2*> inputPts, float maxInset = std::numeric_limits<float>::max())
@@ -382,7 +422,7 @@ namespace UnitTests
 		return visCamera;
 	}
 
-	TEST_CASE( "StraightSkeletonTests", "[math]" )
+	TEST_CASE( "StraightSkeletonHexGrid", "[math]" )
 	{
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
@@ -425,7 +465,8 @@ namespace UnitTests
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
-				_cellField = CreateRandomHexCellField(256, _rng);
+				// _cellField = CreateRandomHexCellField(256, _rng);
+				_cellField = CreateRegularHexField(2);
 				_preview = StraightSkeletonPreview<float>(_cellField);
 			}
 		};

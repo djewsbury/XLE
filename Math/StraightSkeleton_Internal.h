@@ -196,6 +196,7 @@ namespace XLEMath
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
+		if (mag == 1) return input;
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
 		using Promoted = decltype(scale);
 		Vector2T<Primitive> result;
@@ -207,6 +208,7 @@ namespace XLEMath
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
+		if (mag == 1) return input;
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
 		using Promoted = decltype(scale);
 		Vector2T<Primitive> result;
@@ -277,7 +279,7 @@ namespace XLEMath
 		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
 		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
 		if (AdaptiveEquivalent(N0, N1, GetEpsilon<Primitive>()) || AdaptiveEquivalent(N0, Vector2T<Primitive>(-N1), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-
+    
 		auto A = vex0 - vex1 + N0;
 		auto B = N0;
 		auto C = N1;

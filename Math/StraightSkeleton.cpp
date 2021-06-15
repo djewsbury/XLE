@@ -40,6 +40,7 @@ namespace XLEMath
 
 		Vector2T<Primitive> PositionAtTime(Primitive time) const
 		{
+			if (_anchor1[2] == _anchor0[2]) return Truncate(_anchor0);		// bitwise comparison intended
 			float w1 = (time - _anchor0[2]) / (_anchor1[2] - _anchor0[2]);
 			float w0 = 1.0f - w1;
 			return w0 * Truncate(_anchor0) + w1 * Truncate(_anchor1);
@@ -47,6 +48,7 @@ namespace XLEMath
 
 		Vector2T<Primitive> Velocity() const
 		{
+			if (_anchor1[2] == _anchor0[2]) return Zero<Vector2T<Primitive>>();		// bitwise comparison intended
 			return (Truncate(_anchor1) - Truncate(_anchor0)) / (_anchor1[2] - _anchor0[2]);
 		}
 	};
@@ -285,7 +287,7 @@ namespace XLEMath
 		auto edgeTail = GetVertex(vertices, edgeTailId);
 		auto motorcycle = GetVertex(vertices, motorcycleId);
 
-		const auto calcTime = std::max(std::max(edgeHead._initialTime, edgeTail._initialTime), motorcycle._initialTime);
+		const auto calcTime = std::max(std::max(edgeHead.InitialTime(), edgeTail.InitialTime()), motorcycle.InitialTime());
 		auto p0 = edgeHead.PositionAtTime(calcTime);
 		auto p1 = edgeTail.PositionAtTime(calcTime);
 		auto p2 = motorcycle.PositionAtTime(calcTime);
@@ -427,8 +429,9 @@ namespace XLEMath
 		} else if (collapse1.has_value()) {
 			return OffsetTime(collapse1.value(), calcTime);
 		} else {
-			assert(0);
-			return v0._anchor0;
+			// Some edges won't collapse (due to parallel edges, etc)
+			auto velocity = CalculateVertexVelocity_LineIntersection(vm1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime), v1.PositionAtTime(calcTime), Primitive(1));
+			return v0._anchor0 + PointAndTime<Primitive>{velocity, Primitive(1)};
 		}
 	}
 
@@ -522,7 +525,6 @@ namespace XLEMath
 		const WavefrontLoop& loop, 
 		Primitive bestCollapseTime)
 	{
-		auto timeEpsilon = GetTimeEpsilon<Primitive>();
 		auto bestMotorcycleCrashTime = std::numeric_limits<Primitive>::max();
 		for (const auto& m:loop._motorcycleSegments) {
 			#if defined(_DEBUG)
@@ -593,8 +595,12 @@ namespace XLEMath
 			} else if (collapse1.has_value()) {
 				result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, collapse1.value()});
 			} else {
-				assert(0);
-				result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}});
+				// Some edges won't collapse (due to parallel edges, etc)
+				auto velocity = CalculateVertexVelocity_LineIntersection(vertices[vm1], vertices[v0], vertices[v1], Primitive(1));
+				result._vertices.push_back(Vertex<Primitive>{
+					PointAndTime<Primitive>{vertices[v], Primitive(0)}, 
+					PointAndTime<Primitive>{vertices[v] + velocity, Primitive(1)}
+					});
 			}
 		}
 
@@ -674,7 +680,7 @@ namespace XLEMath
 		for (auto edge=loop._edges.begin(); edge!=loop._edges.end(); ++edge) {
 			assert(prevEdge->_head == edge->_tail);
 			auto& v0 = _vertices[edge->_tail];
-			if (AdaptiveEquivalent(v0._anchor1, Zero<Vector3T<Primitive>>(), GetEpsilon<Primitive>())) {
+			if (v0._anchor0 == v0._anchor1) {
 				auto next = edge+1;
 				if (next == loop._edges.end()) next = loop._edges.begin();
 				// we must calculate the velocity at the max initial time -- (this should always be the crash time)
@@ -788,7 +794,7 @@ namespace XLEMath
 			// In the second case, the loop is not fully collapsed yet; but after the remaining
 			// crashes have been processed, it will be.
 			auto newVertex = (unsigned)_vertices.size();
-			_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
+			_vertices.push_back({crashPtAndTime, crashPtAndTime});
 			tailSide._edges.push_back({newVertex, crashEvent._collisionEdgeTail});			// (tin)
 			tailSide._edges.push_back({tout->_head, newVertex});							// (tout)
 			
@@ -809,7 +815,7 @@ namespace XLEMath
 
 			auto hin = i;
 			newVertex = (unsigned)_vertices.size();
-			_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
+			_vertices.push_back({crashPtAndTime, crashPtAndTime});
 			headSide._edges.push_back({newVertex, hin->_tail});								// (hin)
 			headSide._edges.push_back({crashEvent._collisionEdgeHead, newVertex});			// (hout)
 
@@ -846,31 +852,28 @@ namespace XLEMath
 
 				assert(i->_motor != crashEvent._motor);
 				bool motorIsHeadSide = ContainsVertex(headSide._edges, i->_motor);
-
-				#if defined(_DEBUG)
-					bool motorIsTailSide = ContainsVertex(tailSide._edges, i->_motor);
-					assert(motorIsHeadSide || motorIsTailSide); (void)motorIsTailSide;
-				#endif
+				bool motorIsTailSide = ContainsVertex(tailSide._edges, i->_motor);
+				if (!motorIsHeadSide && !motorIsTailSide)
+					continue;		// motors on loops other than "loop" will be neither on the head or tail side
 
 				auto replacementIdx = unsigned(motorIsHeadSide?(_vertices.size()-1):(_vertices.size()-2));
-				// if (i->_collisionEdgeHead == crashEvent._motor) i->_collisionEdgeHead = replacementIdx;
-				// if (i->_collisionEdgeTail == crashEvent._motor) i->_collisionEdgeTail = replacementIdx;
-				
+				bool collisionEdgeHeadIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeHead);
+				bool collisionEdgeTailIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeTail);
+
 				if (motorIsHeadSide) {
 					// We might have collided with the crashEvent._motor <---- hin edge
 					if (i->_collisionEdgeHead == crashEvent._motor) i->_collisionEdgeHead = replacementIdx;
 
-					if (i->_collisionEdgeTail == crashEvent._motor) {
+					if (i->_collisionEdgeTail == crashEvent._motor || !collisionEdgeHeadIsHeadSide || !collisionEdgeTailIsHeadSide) {
 						// if the motor is on the head side, but we're colliding with an edge that should be on the tail
 						// side, then we're potentially in trouble. However, this is fine if the collision point is
 						// directly on crashEvent._motor -- because in this case, crashEvent._motor <---- hin is interchangable
 						// with tout <--- crashEvent._motor
-						if (AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>())) {
-							i->_collisionEdgeHead = replacementIdx;
-							i->_collisionEdgeTail = hin->_tail;
-						} else {
-							assert(0);
-						}
+						// if (!AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>()))
+							// assert(0);
+							
+						i->_collisionEdgeHead = replacementIdx;
+						i->_collisionEdgeTail = hin->_tail;
 					}
 
 					// When the motor is headside, if there's another crash on the same segment it should be
@@ -883,13 +886,12 @@ namespace XLEMath
 					// We might have collided with the tout <--- crashEvent._motor edge
 					if (i->_collisionEdgeTail == crashEvent._motor) i->_collisionEdgeTail = replacementIdx;
 					
-					if (i->_collisionEdgeHead == crashEvent._motor) {
-						if (AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>())) {
-							i->_collisionEdgeHead = tout->_head;
-							i->_collisionEdgeTail = replacementIdx;
-						} else {
-							assert(0);
-						}
+					if (i->_collisionEdgeHead == crashEvent._motor || collisionEdgeHeadIsHeadSide || collisionEdgeTailIsHeadSide) {
+						// if (!AdaptiveEquivalent(PointAndTime<Primitive>{i->_eventPt, i->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>()))
+							// assert(0);
+
+						i->_collisionEdgeHead = tout->_head;
+						i->_collisionEdgeTail = replacementIdx;
 					}
 
 					// When the motor is tailside, if there's another crash on the same segment it should be
@@ -899,11 +901,6 @@ namespace XLEMath
 						i->_collisionEdgeHead = replacementIdx;
 					}
 				}
-
-				bool collisionEdgeHeadIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeHead);
-				bool collisionEdgeTailIsHeadSide = ContainsVertex(headSide._edges, i->_collisionEdgeTail);
-				assert(collisionEdgeHeadIsHeadSide == motorIsHeadSide);
-				assert(collisionEdgeTailIsHeadSide == motorIsHeadSide);
 
 				assert(i->_collisionEdgeHead != crashEvent._motor && i->_collisionEdgeTail != crashEvent._motor);
 			}
@@ -1037,7 +1034,7 @@ namespace XLEMath
 			// create a new vertex in the graph to connect the edges to either side of the collapse
 			// todo -- should this new vertex ever have a motorcycle?
 			collapseGroupInfos[collapseGroup]._newVertex = (unsigned)_vertices.size();
-			_vertices.push_back({crashPtAndTime, Zero<PointAndTime<Primitive>>()});
+			_vertices.push_back({crashPtAndTime, crashPtAndTime});
 		}
 
 		// Remove all of the collapsed edges
