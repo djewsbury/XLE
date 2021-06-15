@@ -721,11 +721,13 @@ namespace XLEMath
 			auto crashEvent = *loop->_pendingEvents.begin();
 			loop->_pendingEvents.erase(loop->_pendingEvents.begin());
 
-			assert (crashEvent._edgeHead != crashEvent._edgeTail);
-			auto crashSegment = std::find_if(loop->_edges.begin(), loop->_edges.end(), [crashEvent](const WavefrontEdge& e) { return e._head == crashEvent._edgeHead && e._tail == crashEvent._edgeTail; });
 			auto motorIn = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge& e) { return e._head == motorHead; });
 			auto motorOut = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge& e) { return e._tail == motorHead; });
-			assert(crashSegment != loop->_edges.end() && motorIn != loop->_edges.end() && motorOut != loop->_edges.end());
+
+			// The motor can collapse to become a vertex of the collision edge during earlier steps.
+			if (crashEvent._motor == crashEvent._edgeHead || crashEvent._motor == crashEvent._edgeTail) continue;
+			if (crashEvent._edgeHead == crashEvent._edgeTail && motorIn->_tail == crashEvent._edgeHead) continue;
+			if (crashEvent._edgeHead == crashEvent._edgeTail && motorOut->_head == crashEvent._edgeHead) continue;
 
 			// Since we're removing "motor.head" from the simulation, we have to add a skeleton edge 
 			// for vertex path along the motor cycle path
@@ -843,11 +845,9 @@ namespace XLEMath
 								
 							pendingEvent._edgeHead = replacementIdx;
 							pendingEvent._edgeTail = hin->_tail;
-						}
-
-						// When the motor is headside, if there's another crash on the same segment it should be
-						// in the pendingEvent._edgeHead <--- replacementIdx part.
-						if (pendingEvent._edgeTail == crashSegmentTail) {
+						} else if (pendingEvent._edgeTail == crashSegmentTail) {
+							// When the motor is headside, if there's another crash on the same segment it should be
+							// in the pendingEvent._edgeHead <--- replacementIdx part.
 							assert(pendingEvent._edgeHead == crashSegmentHead);
 							pendingEvent._edgeTail = replacementIdx;
 						}
@@ -863,11 +863,9 @@ namespace XLEMath
 
 							pendingEvent._edgeHead = tout->_head;
 							pendingEvent._edgeTail = replacementIdx;
-						}
-
-						// When the motor is tailside, if there's another crash on the same segment it should be
-						// in the replacementIdx <--- pendingEvent._edgeTail part.
-						if (pendingEvent._edgeHead == crashSegmentHead) {
+						} else if (pendingEvent._edgeHead == crashSegmentHead) {
+							// When the motor is tailside, if there's another crash on the same segment it should be
+							// in the replacementIdx <--- pendingEvent._edgeTail part.
 							assert(pendingEvent._edgeTail == crashSegmentTail);
 							pendingEvent._edgeHead = replacementIdx;
 						}
@@ -887,12 +885,12 @@ namespace XLEMath
 			// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
 			// crashSegment, motorIn & motorOut should not make it into either tailSide or headSide
 			for (const auto& e:tailSide._edges) {
-				assert(e._head != crashSegment->_head || e._tail != crashSegment->_tail);
+				// assert(e._head != crashSegment->_head || e._tail != crashSegment->_tail);
 				assert(e._head != motorIn->_head || e._tail != motorIn->_tail);
 				assert(e._head != motorOut->_head || e._tail != motorOut->_tail);
 			}
 			for (const auto& e:headSide._edges) {
-				assert(e._head != crashSegment->_head || e._tail != crashSegment->_tail);
+				// assert(e._head != crashSegment->_head || e._tail != crashSegment->_tail);
 				assert(e._head != motorIn->_head || e._tail != motorIn->_tail);
 				assert(e._head != motorOut->_head || e._tail != motorOut->_tail);
 			}
@@ -923,6 +921,8 @@ namespace XLEMath
 		unsigned nextCollapseGroup = 0;
 		for (size_t c=0; c<collapses.size(); ++c) {
 			if (collapseGroups[c] != ~0u) continue;
+
+			assert(collapses[c]._edgeHead != collapses[c]._edgeTail);
 
 			collapseGroups[c] = nextCollapseGroup;
 
@@ -1031,7 +1031,27 @@ namespace XLEMath
 			head->_tail = group._newVertex;
 		}
 
-		loop._pendingEvents.erase(collapses.begin(), collapses.end());
+		// rename collapsed vertices in pending events
+		for (auto pendingEvent=collapses.end(); pendingEvent!=loop._pendingEvents.end(); ++pendingEvent) {
+			auto headCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_edgeHead](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
+			auto tailCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_edgeTail](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
+
+			if (tailCollapse != collapses.end())
+				pendingEvent->_edgeTail = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), tailCollapse)]]._newVertex;
+			if (headCollapse != collapses.end())
+				pendingEvent->_edgeHead = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), headCollapse)]]._newVertex;
+
+			if (pendingEvent->_type == Event<Primitive>::Type::MotorcycleCrash) {
+				auto motorCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_motor](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
+				if (motorCollapse != collapses.end())
+					pendingEvent->_motor = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), motorCollapse)]]._newVertex;
+			} else {
+				assert(pendingEvent->_type == Event<Primitive>::Type::Collapse);
+				// we will sometimes need to rename collapse events if there is a motorcycle in the middle
+			}
+		}
+
+		loop._pendingEvents.erase(collapses.begin(), collapses.end());	
 		loop._lastEventTime = latestCollapseTime;
 	}
 
