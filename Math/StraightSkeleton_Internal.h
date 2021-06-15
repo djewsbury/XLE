@@ -157,8 +157,8 @@ namespace XLEMath
 		auto t0 = Vector2T<Primitive>(vex1-vex0);
 		auto t1 = Vector2T<Primitive>(vex2-vex1);
 
-		if (AdaptiveEquivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-		if (AdaptiveEquivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
 
 		// create normal pointing in direction of movement
 		auto N0 = Normalize(EdgeTangentToMovementDir(t0));
@@ -273,8 +273,8 @@ namespace XLEMath
 		auto t0 = Vector2T<Primitive>(vex1-vex0);
 		auto t1 = Vector2T<Primitive>(vex2-vex1);
 
-		if (AdaptiveEquivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-		if (AdaptiveEquivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
 
 		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
 		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
@@ -458,7 +458,7 @@ namespace XLEMath
 
         /* Compute determinant from the minors: */
         auto Ddenom = (M(0,0)*m_00 + M(0,1)*m_01 + M(0,2)*m_02);
-		if (AdaptiveEquivalent(Ddenom, Primitive(0), threshold))
+		if (Equivalent(Ddenom, Primitive(0), threshold))
 			return false;
 
 		assert(IsFiniteNumber(Ddenom));
@@ -488,7 +488,7 @@ namespace XLEMath
 			// If pm1->p0 or p1->p2 are too small, we can't accurately calculate the collapse time. This can 
 			// happen if there's an earlier collapse event on the left or right of this edge. In these cases,
 			// we should process those collapse events first.
-			if (AdaptiveEquivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
+			if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
 				return {};
 
 			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
@@ -513,7 +513,7 @@ namespace XLEMath
 		Vector2T<Primitive> v0, Vector2T<Primitive> v1, Vector2T<Primitive> v2)
 	{
 		auto a = (v1[0]-v0[0])*(v2[1]-v0[1]) - (v2[0]-v0[0])*(v1[1]-v0[1]);
-		if (AdaptiveEquivalent(a, Primitive(0), GetEpsilon<Primitive>())) return std::numeric_limits<Primitive>::max();
+		if (Equivalent(a, Primitive(0), GetEpsilon<Primitive>())) return std::numeric_limits<Primitive>::max();
 			
 		auto c = (p1[0]-p0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(p1[1]-p0[1]);
 		auto b = (p1[0]-p0[0])*(v2[1]-v0[1]) + (v1[0]-v0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(v1[1]-v0[1]) - (v2[0]-v0[0])*(p1[1]-p0[1]);
