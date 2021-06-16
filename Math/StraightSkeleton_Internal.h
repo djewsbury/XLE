@@ -108,9 +108,13 @@ namespace XLEMath
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	enum WindingType { Left, Right, Straight };
+	T1(Primitive) float WindingDeterminant(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two)
+	{
+		return (one[0] - zero[0]) * (two[1] - zero[1]) - (two[0] - zero[0]) * (one[1] - zero[1]);;
+	}
 	T1(Primitive) WindingType CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
 	{
-		auto sign = (one[0] - zero[0]) * (two[1] - zero[1]) - (two[0] - zero[0]) * (one[1] - zero[1]);
+		auto sign = WindingDeterminant(zero, one, two);
 		#if SPACE_HANDINESS == SPACE_HANDINESS_CLOCKWISE
 			if (sign > threshold) return Right;
 			if (sign < -threshold) return Left;
@@ -196,7 +200,6 @@ namespace XLEMath
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
-		if (mag == 1) return input;
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
 		using Promoted = decltype(scale);
 		Vector2T<Primitive> result;
@@ -208,7 +211,6 @@ namespace XLEMath
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
-		if (mag == 1) return input;
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
 		using Promoted = decltype(scale);
 		Vector2T<Primitive> result;
@@ -268,17 +270,17 @@ namespace XLEMath
 		// points at both times (actually vex1 is already an intersection point). Since the intersection always moves in a straight path, we
 		// can just use the difference between those intersections to calculate the velocity
 
-		if (AdaptiveEquivalent(vex0, vex2, GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		// if (AdaptiveEquivalent(vex0, vex2, GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
 
 		auto t0 = Vector2T<Primitive>(vex1-vex0);
 		auto t1 = Vector2T<Primitive>(vex2-vex1);
 
-		if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-		if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		// if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		// if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
 
 		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
 		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
-		if (AdaptiveEquivalent(N0, N1, GetEpsilon<Primitive>()) || AdaptiveEquivalent(N0, Vector2T<Primitive>(-N1), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
+		// if (AdaptiveEquivalent(N0, N1, GetEpsilon<Primitive>()) || AdaptiveEquivalent(N0, Vector2T<Primitive>(-N1), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
     
 		auto A = vex0 - vex1 + N0;
 		auto B = N0;
@@ -473,7 +475,7 @@ namespace XLEMath
 	{
 		// If the points are already too close together, the math will not be accurate enough
 		// We must just use the current time as a close-enough approximation of the collapse time
-		if (AdaptiveEquivalent(p0, p1, GetEpsilon<Primitive>())) {
+		if (Equivalent(p0, p1, GetEpsilon<Primitive>())) {
 			Vector2T<Primitive> pt = (p0 + p1) / Primitive(2);
 			return Expand(pt, Primitive(0));
 		}
@@ -506,6 +508,137 @@ namespace XLEMath
 		result[0] += p0[0];
 		result[1] += p0[1];
 		return result;
+	}
+
+	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateEdgeCollapse_Offset_ColinearTest(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	{
+		auto result = CalculateEdgeCollapse_Offset(pm1, p0, p1, p2);
+		if (result) return result;
+
+		auto wd0 = std::abs(WindingDeterminant(pm1, p0, p1));
+		auto wd1 = std::abs(WindingDeterminant(p0, p1, p2));
+		if (wd0 < GetEpsilon<Primitive>() && wd1 < GetEpsilon<Primitive>()) return {};		// everything colinear
+		if (wd0 < wd1 && wd0 < GetEpsilon<Primitive>()) {
+			// See comments below for working
+
+			auto movement0 = EdgeTangentToMovementDir<Primitive>(p1 - pm1);
+			movement0 /= std::hypot(movement0[0], movement0[1]);
+			auto movement1 = CalculateVertexVelocity_LineIntersection<Primitive>(p0, p1, p2, 1);
+
+			auto A = movement0[1] - movement1[1], B = p0[1] - p1[1];
+			auto C = movement0[0] - movement1[0], D = p0[0] - p1[0];
+			auto a = A*A+C*C, b = 2*A*B + 2*C*D, c = B*B+D*D;
+
+			auto q = b*b-4*a*c;
+			if (q > 0 && a != 0) {
+				auto root0 = (-b + std::sqrt(q)) / (2 * a);
+				auto root1 = (-b - std::sqrt(q)) / (2 * a);
+				if (root0 >= 0 && root1 >= 0) {
+					if (root0 < root1) {
+						return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+					} else {
+						return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+					}
+				} else if (root0 >= 0) {
+					return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+				} else if (root1 >= 0) {
+					return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+				}
+			} else if (a > 0) {
+				auto minimum = -b / (2*a);
+				auto W = (minimum*A+B), U = (minimum*C+D);
+				auto minDistSq = W*W+U*U;
+				if (minDistSq < GetEpsilon<Primitive>()*GetEpsilon<Primitive>())
+					return Vector3T<Primitive>(p0 + movement0 * minimum, minimum);
+			}
+
+			return {};
+
+		} else if (wd1 < GetEpsilon<Primitive>()) {
+
+			// p0 -> p1 -> p2 may be colinear
+			// assume pm1 -> p1 > p2 is not colinear and try to find a collision point
+			//
+			// Because 2 edges are colinear, there are an infinite number of valid movement directions for p1
+			// (ie, it needn't actually move normal to the edge). But the speed it moves relative to the
+			// edge is contrained.
+			//
+			// So, we could find a collapse solution in almost every case... However this can cause problems
+			// in the algorithm because we can end up assuming that a vertex is moving in multiple ways at
+			// once. To simplify, we'll constrain p1 to moving only in direction movement1. This will reduce
+			// the number of collapses we make, but it's more consistent
+
+			auto movement0 = CalculateVertexVelocity_LineIntersection<Primitive>(pm1, p0, p1, 1);
+			auto movement1 = EdgeTangentToMovementDir<Primitive>(p2-p0);
+			movement1 /= std::hypot(movement1[0], movement1[1]);
+
+			// path 0 = p0 + t * movement0
+			// path 1 = p1 + t * movement1
+			//
+			// x0 = p0x + t * movement0x
+			// x1 = p1x + t * movement1x
+			// (x0 - x1) = t * (movement0x-movement1x) + p0x - p1x
+			//
+			// y0 = p0y + t * movement0y
+			// y1 = p1y + t * movement1y
+			// (y0 - y1) = t * (movement0y-movement1y) + p0y - p1y
+			//
+			// (y0 - y1)^2 + (x0 - x1)^2 = (t * (movement0y-movement1y) + p0y - p1y)^2 + (t * (movement0x-movement1x) + p0x - p1x)^2
+			// A = movement0y-movement1y, B = p0y-p1y
+			// C = movement0x-movement1x, D = p0x-p1x
+			// = (tA + B)^2 + (tC+D)^2
+			// = (A^2+C^2)t^2 + (2AB+2CD)t + B^2+D^2
+			// a = A+C, b = 2AB+2CD, c = B^2+D^2
+			//
+			// either find the intersections with zero at 
+			// t = (-b +/- sqrt(b^2 - 4ac)) / 2a
+			// or minimum with -b/2a
+
+			auto A = movement0[1] - movement1[1], B = p0[1] - p1[1];
+			auto C = movement0[0] - movement1[0], D = p0[0] - p1[0];
+			auto a = A*A+C*C, b = 2*A*B + 2*C*D, c = B*B+D*D;
+
+			auto q = b*b-4*a*c;
+			if (q > 0 && a != 0) {
+				auto root0 = (-b + std::sqrt(q)) / (2 * a);
+				auto root1 = (-b - std::sqrt(q)) / (2 * a);
+				if (root0 >= 0 && root1 >= 0) {
+					if (root0 < root1) {
+						return Vector3T<Primitive>(p1 + movement1 * root0, root0);
+					} else {
+						return Vector3T<Primitive>(p1 + movement1 * root1, root1);
+					}
+				} else if (root0 >= 0) {
+					return Vector3T<Primitive>(p1 + movement1 * root0, root0);
+				} else if (root1 >= 0) {
+					return Vector3T<Primitive>(p1 + movement1 * root1, root1);
+				}
+			} else if (a > 0) {
+				auto minimum = -b / (2*a);
+				auto W = (minimum*A+B), U = (minimum*C+D);
+				auto minDistSq = W*W+U*U;
+				if (minDistSq < GetEpsilon<Primitive>()*GetEpsilon<Primitive>())
+					return Vector3T<Primitive>(p1 + movement1 * minimum, minimum);
+			}
+
+			return {};
+
+			#if 0
+				// this will find a collapse using arbitrary movement of p1
+				//
+				// p0 + t * (movement0 + movement1) = p1 + t * movement1 + q * arbitraryMovementAxis
+				// p0 - p1 - q * arbitraryMovementAxis = t * movement1 - t * (movement0 + movement1)
+				//										= t * -movement0
+				// p0 - p1 = t * movement0 + q * arbitraryMovementAxis
+				//
+				// this means we can ignore differences orthogonal to the movement0 direction
+
+				auto t = -Dot(p0-p1, movement0);
+				return Vector3T<Primitive>(p0 + movement0 * t + movement1 * t, t);
+			#endif
+
+		} else
+			return {};
 	}
 
 	T1(Primitive) static Primitive CalculateTriangleCollapse_Area_Internal(

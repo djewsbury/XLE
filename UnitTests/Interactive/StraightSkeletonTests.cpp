@@ -466,7 +466,7 @@ namespace UnitTests
 			: _rng(std::move(rng))
 			{
 				// _cellField = CreateRandomHexCellField(256, _rng);
-				_cellField = CreateRegularHexField(2);
+				_cellField = CreateRegularHexField(3);
 				_preview = StraightSkeletonPreview<float>(_cellField);
 			}
 		};
@@ -574,7 +574,19 @@ namespace UnitTests
 		};
 		std::reverse(colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
 
-#if 1
+		Float2 colinearEdges[] = {
+			Float2 {  15.f,  10.f },
+			Float2 {  15.f,   0.f },
+			Float2 {  15.f, -10.f },
+			Float2 {   0.f, -10.f },
+			Float2 { -15.f, -10.f },
+			Float2 { -15.f,   0.f },
+			Float2 { -15.f,  10.f },
+			Float2 {   0.f,  10.f },
+		};
+		std::reverse(colinearEdges, &colinearEdges[dimof(colinearEdges)]);
+
+#if 0
 		// While the above shapes can be calculated correctly in their default orientations, sometimes
 		// if we rotate them we hit numeric precision issues
 		// We want to rotate through every rotation between 0 -> pi, so we'll do this by increasing the
@@ -596,25 +608,31 @@ namespace UnitTests
 			std::vector<Float2> rotatedSingleMotorcycle; rotatedSingleMotorcycle.insert(rotatedSingleMotorcycle.end(), singleMotorcycle, &singleMotorcycle[dimof(singleMotorcycle)]);
 			std::vector<Float2> rotatedDoubleMotorcycle; rotatedDoubleMotorcycle.insert(rotatedDoubleMotorcycle.end(), doubleMotorcycle, &doubleMotorcycle[dimof(doubleMotorcycle)]);
 			std::vector<Float2> rotatedColinearCollapse; rotatedColinearCollapse.insert(rotatedColinearCollapse.end(), colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
+			std::vector<Float2> rotatedColinearEdges; rotatedColinearEdges.insert(rotatedColinearEdges.end(), colinearEdges, &colinearEdges[dimof(colinearEdges)]);
 			for (auto& c:rotatedRectangle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 			for (auto& c:rotatedSingleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 			for (auto& c:rotatedDoubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 			for (auto& c:rotatedColinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+			for (auto& c:rotatedColinearEdges) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 
 			auto s0 = CalculateStraightSkeleton<float>(rotatedRectangle);
 			auto s1 = CalculateStraightSkeleton<float>(rotatedSingleMotorcycle);
 			auto s2 = CalculateStraightSkeleton<float>(rotatedDoubleMotorcycle);
 			auto s3 = CalculateStraightSkeleton<float>(rotatedColinearCollapse);
-			(void)s0; (void)s1; (void)s2; (void)s3;
+			auto s4 = CalculateStraightSkeleton<float>(rotatedColinearEdges);
+			(void)s0; (void)s1; (void)s2; (void)s3; (void)s4;
 		}
 #endif
 
-		float theta = 0.971875012f; // 2.1267482f;
+#if 1
+		float theta = 2.1267482f;
 		float sinTheta = std::sin(theta), cosTheta = std::cos(theta);
-		for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		for (auto& c:doubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		for (auto& c:colinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		// for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		// for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		// for (auto& c:doubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		// for (auto& c:colinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:colinearEdges) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+#endif
 
 		{
 			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
@@ -622,6 +640,7 @@ namespace UnitTests
 			tester->_previews.emplace_back(MakeIteratorRange(singleMotorcycle));
 			tester->_previews.emplace_back(MakeIteratorRange(doubleMotorcycle));
 			tester->_previews.emplace_back(MakeIteratorRange(colinearCollapse));
+			tester->_previews.emplace_back(MakeIteratorRange(colinearEdges));
 			testHelper->Run(StartingCamera(), tester);
 		}
 	}
