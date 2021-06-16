@@ -19,7 +19,7 @@ namespace XLEMath
 {
 
 	T1(Primitive) static constexpr Primitive GetEpsilon();
-	template<> constexpr float GetEpsilon<float>() { return 1e-3f; }
+	template<> constexpr float GetEpsilon<float>() { return 1e-4f; }
 	template<> constexpr double GetEpsilon<double>() { return 1e-8; }
 
 	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>()
@@ -134,6 +134,7 @@ namespace XLEMath
 		#endif
 	}
 
+#if 0
 	T1(Primitive) Vector2T<Primitive> CalculateVertexVelocity_FirstMethod(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
 	{
 		// Calculate the velocity of vertex v1, assuming segments vex0->vex1 && vex1->vex2
@@ -196,6 +197,7 @@ namespace XLEMath
 		assert(IsFiniteNumber(x) && IsFiniteNumber(y));
 		return Vector2T<Primitive>(x, y);
 	}
+#endif
 
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
@@ -223,7 +225,7 @@ namespace XLEMath
 	template<> struct PromoteIntegral<int> { using Value = int64_t; };
 	template<> struct PromoteIntegral<int64_t> { using Value = double; };
 
-	T1(Primitive) Vector2T<Primitive> LineIntersection(
+	T1(Primitive) std::optional<Vector2T<Primitive>> LineIntersection(
 		std::pair<Vector2T<Primitive>, Vector2T<Primitive>> zero,
 		std::pair<Vector2T<Primitive>, Vector2T<Primitive>> one)
 	{
@@ -258,12 +260,12 @@ namespace XLEMath
 		auto s = Dy-Cy, t = Cx-Dx, j = Cy*Dx-Cx*Dy;
 
 		auto d = s*v - t*u;
-		if (!d) return Vector2T<Primitive>(std::numeric_limits<Primitive>::max(), std::numeric_limits<Primitive>::max());
-		return { Primitive((i*t - j*v) / d), Primitive((j*u - i*s) / d) };
+		if (!d) return {};
+		return Vector2T<Primitive>{ Primitive((i*t - j*v) / d), Primitive((j*u - i*s) / d) };
 		// return { Primitive(i*t/d - j*v/d), Primitive(j*u/d - i*s/d) };
 	}
 
-	T1(Primitive) Vector2T<Primitive> CalculateVertexVelocity_LineIntersection(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2, Primitive movementTime)
+	T1(Primitive) std::optional<Vector2T<Primitive>> CalculateVertexVelocity_LineIntersection(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2, Primitive movementTime)
 	{
 		// For integers, let's simplify the math to try to get the high precision result.
 		// We'll simply calculate the two edges at 2 points in time, and find the intersection
@@ -288,14 +290,17 @@ namespace XLEMath
 		auto D = vex2 - vex1 + N1;
 
 		// where do A->B and C->D intersect?
-		auto intersection = LineIntersection<Primitive>({A, B}, {C, D});
-		if (intersection == Vector2T<Primitive>(std::numeric_limits<Primitive>::max(), std::numeric_limits<Primitive>::max()))
-			return Zero<Vector2T<Primitive>>();
-
-		// Now, vex1->intersection is the distance travelled in "calcTime"
-		return intersection;
+		// result is is the distance travelled in "movementTime"
+		return LineIntersection<Primitive>({A, B}, {C, D});
 	}
 
+	static const int static_velocityVectorScale = INT32_MAX; // 0x7fff;
+	T1(Primitive) struct VelocityVectorScale { static const Primitive Value; };
+	template<> struct VelocityVectorScale<int> { static const int Value = static_velocityVectorScale; };
+	template<> struct VelocityVectorScale<int64_t> { static const int64_t Value = static_velocityVectorScale; };
+	T1(Primitive) const Primitive VelocityVectorScale<Primitive>::Value = Primitive(1);
+
+#if 0
 	T1(Primitive) auto CalculateVertexVelocity(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
@@ -306,8 +311,6 @@ namespace XLEMath
 		// assert(!AdaptiveEquivalent(lineIntersection, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>()));
 		return lineIntersection;
 	}
-
-	static const int static_velocityVectorScale = INT32_MAX; // 0x7fff;
 
 	T1(Primitive) auto CalculateVertexVelocity(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
 		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
@@ -344,11 +347,6 @@ namespace XLEMath
 
 		return std::numeric_limits<Primitive>::max();
 	}
-
-	T1(Primitive) struct VelocityVectorScale { static const Primitive Value; };
-	template<> struct VelocityVectorScale<int> { static const int Value = static_velocityVectorScale; };
-	template<> struct VelocityVectorScale<int64_t> { static const int64_t Value = static_velocityVectorScale; };
-	T1(Primitive) const Primitive VelocityVectorScale<Primitive>::Value = Primitive(1);
 
 	T1(Primitive) static Primitive CalculateCollapseTime_LineIntersection(Vector2T<Primitive> p0, Vector2T<Primitive> v0, Vector2T<Primitive> p1, Vector2T<Primitive> v1)
 	{
@@ -438,6 +436,7 @@ namespace XLEMath
 		result[1] += p0[1];
 		return result;
 	}
+#endif
 
 	T1(Primitive) static bool InvertInplaceSafe(Matrix3x3T<Primitive>& M, Primitive threshold)
 	{
@@ -460,10 +459,11 @@ namespace XLEMath
 
         /* Compute determinant from the minors: */
         auto Ddenom = (M(0,0)*m_00 + M(0,1)*m_01 + M(0,2)*m_02);
-		if (Equivalent(Ddenom, Primitive(0), threshold))
+
+		auto type = std::fpclassify(Ddenom);
+        if ((type != FP_NORMAL) && (type != FP_SUBNORMAL))		// zeroes, infinites and nans rejected
 			return false;
 
-		assert(IsFiniteNumber(Ddenom));
         /* Assign the inverse as (1/D) * (cofactor matrix)^T: */
         M(0,0) = m_00/Ddenom;  M(0,1) = m_10/Ddenom;  M(0,2) = m_20/Ddenom;
         M(1,0) = m_01/Ddenom;  M(1,1) = m_11/Ddenom;  M(1,2) = m_21/Ddenom;
@@ -475,9 +475,11 @@ namespace XLEMath
 	{
 		// If the points are already too close together, the math will not be accurate enough
 		// We must just use the current time as a close-enough approximation of the collapse time
-		if (Equivalent(p0, p1, GetEpsilon<Primitive>())) {
-			Vector2T<Primitive> pt = (p0 + p1) / Primitive(2);
-			return Expand(pt, Primitive(0));
+		//if (Equivalent(p0, p1, GetEpsilon<Primitive>())) {
+		if (p0 == p1) {		// bitwise comparison intended
+			// Vector2T<Primitive> pt = (p0 + p1) / Primitive(2);
+			// return Expand(pt, Primitive(0));
+			return Expand(p0, Primitive(0));
 		}
 
 		Matrix3x3T<Primitive> M;
@@ -490,8 +492,8 @@ namespace XLEMath
 			// If pm1->p0 or p1->p2 are too small, we can't accurately calculate the collapse time. This can 
 			// happen if there's an earlier collapse event on the left or right of this edge. In these cases,
 			// we should process those collapse events first.
-			if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
-				return {};
+			// if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
+				// return {};
 
 			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
 			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
@@ -523,7 +525,9 @@ namespace XLEMath
 
 			auto movement0 = EdgeTangentToMovementDir<Primitive>(p1 - pm1);
 			movement0 /= std::hypot(movement0[0], movement0[1]);
-			auto movement1 = CalculateVertexVelocity_LineIntersection<Primitive>(p0, p1, p2, 1);
+			auto movement1Opt = CalculateVertexVelocity_LineIntersection<Primitive>(p0, p1, p2, 1);
+			if (!movement1Opt) return {};
+			auto movement1 = movement1Opt.value();
 
 			auto A = movement0[1] - movement1[1], B = p0[1] - p1[1];
 			auto C = movement0[0] - movement1[0], D = p0[0] - p1[0];
@@ -568,7 +572,9 @@ namespace XLEMath
 			// once. To simplify, we'll constrain p1 to moving only in direction movement1. This will reduce
 			// the number of collapses we make, but it's more consistent
 
-			auto movement0 = CalculateVertexVelocity_LineIntersection<Primitive>(pm1, p0, p1, 1);
+			auto movement0Opt = CalculateVertexVelocity_LineIntersection<Primitive>(pm1, p0, p1, 1);
+			if (!movement0Opt) return {};
+			auto movement0 = movement0Opt.value();
 			auto movement1 = EdgeTangentToMovementDir<Primitive>(p2-p0);
 			movement1 /= std::hypot(movement1[0], movement1[1]);
 
@@ -641,6 +647,7 @@ namespace XLEMath
 			return {};
 	}
 
+#if 0
 	T1(Primitive) static Primitive CalculateTriangleCollapse_Area_Internal(
 		Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2,
 		Vector2T<Primitive> v0, Vector2T<Primitive> v1, Vector2T<Primitive> v2)
@@ -682,5 +689,6 @@ namespace XLEMath
 
 		return std::numeric_limits<Primitive>::max();
 	}
+#endif
 
 }
