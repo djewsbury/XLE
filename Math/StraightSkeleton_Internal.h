@@ -19,7 +19,7 @@ namespace XLEMath
 {
 
 	T1(Primitive) static constexpr Primitive GetEpsilon();
-	template<> constexpr float GetEpsilon<float>() { return 1e-4f; }
+	template<> constexpr float GetEpsilon<float>() { return 1e-3f; }
 	template<> constexpr double GetEpsilon<double>() { return 1e-8; }
 
 	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>()

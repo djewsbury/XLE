@@ -354,14 +354,15 @@ namespace UnitTests
 			const auto& group = cellField._exteriorGroup;
 			boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
 
-			auto twiceCos30 = std::sqrt(Primitive(3));
-
 			for (auto cell:group._boundaryCells) {
 				Int2 adjacent[6];
 				GetAdjacentCells(adjacent, cell);
 				for (unsigned a=0; a<dimof(adjacent); ++a) {
 					if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
-					Vector2T<Primitive> cellCenter { twiceCos30 * (Primitive)cell[0], Primitive(1.5) * (Primitive)cell[1] };
+					// cellCenter[0] = std::sqrt(Primitive(3)) * (Primitive)cell[0]
+					// However, to retain more digits of precision, we will do the sqrt last
+					Vector2T<Primitive> cellCenter { std::sqrt(Primitive(3) * (Primitive)cell[0] * (Primitive)cell[0]), Primitive(1.5) * (Primitive)cell[1] };
+					if (cell[0] < 0) cellCenter[0] = -cellCenter[0];
 					if (cell[1] & 1) {
 						// odd
 						boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
@@ -465,8 +466,8 @@ namespace UnitTests
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
-				// _cellField = CreateRandomHexCellField(256, _rng);
-				_cellField = CreateRegularHexField(3);
+				_cellField = CreateRandomHexCellField(256, _rng);
+				// _cellField = CreateRegularHexField(5);
 				_preview = StraightSkeletonPreview<float>(_cellField);
 			}
 		};
@@ -529,7 +530,7 @@ namespace UnitTests
 		return input;
 	}
 
-	TEST_CASE( "SimpleStraightSkeletonShapes", "[math]" )
+	TEST_CASE( "StraightSkeletonSimpleShapes", "[math]" )
 	{
 		using namespace RenderCore;
 		
