@@ -416,15 +416,17 @@ namespace UnitTests
 		visCamera._projection = RenderCore::Techniques::CameraDesc::Projection::Orthogonal;
 		visCamera._nearClip = 0.f;
 		visCamera._farClip = 400.f;
-		visCamera._left = -50.f;
-		visCamera._right = 50.f;
-		visCamera._top = 50.f;
-		visCamera._bottom = -50.f;
+		visCamera._left = -50.f * 0.1f;
+		visCamera._right = 50.f * 0.1f;
+		visCamera._top = 50.f * 0.1f;
+		visCamera._bottom = -50.f * 0.1f;
 		return visCamera;
 	}
 
 	TEST_CASE( "StraightSkeletonHexGrid", "[math]" )
 	{
+		static constexpr unsigned randomCellCount = 3u;
+
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
 		{
@@ -453,8 +455,16 @@ namespace UnitTests
 				IInteractiveTestHelper& testHelper) override
 			{
 				if (evnt._pressedChar == 'r') {
-					_cellField = CreateRandomHexCellField(256, _rng);
-					_preview = StraightSkeletonPreview<float>(_cellField);
+					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
+					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+				} else if (evnt._pressedChar == 'q') {
+					maxInset += 0.01f;
+					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+				} else if (evnt._pressedChar == 'a') {
+					maxInset -= 0.01f;
+					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+				} else if (evnt._pressedChar == ' ') {
+					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
 				}
 				return false;
 			}
@@ -462,13 +472,14 @@ namespace UnitTests
 			HexCellField _cellField;
 			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
+			float maxInset = 0.5f;
 			
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
-				_cellField = CreateRandomHexCellField(256, _rng);
+				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
 				// _cellField = CreateRegularHexField(5);
-				_preview = StraightSkeletonPreview<float>(_cellField);
+				_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
 			}
 		};
 

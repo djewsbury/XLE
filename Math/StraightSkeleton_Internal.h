@@ -108,7 +108,7 @@ namespace XLEMath
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	enum WindingType { Left, Right, Straight };
-	T1(Primitive) float WindingDeterminant(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two)
+	T1(Primitive) Primitive WindingDeterminant(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two)
 	{
 		return (one[0] - zero[0]) * (two[1] - zero[1]) - (two[0] - zero[0]) * (one[1] - zero[1]);;
 	}
@@ -645,6 +645,23 @@ namespace XLEMath
 
 		} else
 			return {};
+	}
+
+	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2, Vector2T<Primitive> anchor)
+	{
+		auto resultOpt = CalculateEdgeCollapse_Offset_ColinearTest<Primitive>(pm1-anchor, p0-anchor, p1-anchor, p2-anchor);
+		if (resultOpt) {
+			auto result = resultOpt.value();
+			const Primitive largeTimeOffsetProtection = 512;
+			if (result[2] > largeTimeOffsetProtection) {
+				return Vector3T<Primitive>(anchor[0] + result[0]/result[2], anchor[1] + result[1]/result[2], 1);
+			} else if (result[2] < -largeTimeOffsetProtection) {
+				return Vector3T<Primitive>(anchor[0] - result[0]/result[2], anchor[1] - result[1]/result[2], -1);
+			} else {
+				return Vector3T<Primitive>(anchor[0] + result[0], anchor[1] + result[1], result[2]);
+			}
+		}
+		return {};
 	}
 
 #if 0

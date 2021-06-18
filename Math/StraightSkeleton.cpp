@@ -104,6 +104,7 @@ namespace XLEMath
 		}
 	};
 
+#if 0
 	T1(Primitive) static Primitive CalculateCollapseTime(const Vertex<Primitive>& v0, const Vertex<Primitive>& v1)
 	{		
 		// At some point the trajectories of v0 & v1 may intersect
@@ -114,6 +115,7 @@ namespace XLEMath
 		auto p1 = v1.PositionAtTime(calcTime);
 		return calcTime + CalculateCollapseTime(p0, v0._velocity, p1, v1._velocity);
 	}
+#endif
 
 	template<typename Iterator>
 		static auto FindInAndOut(IteratorRange<Iterator> edges, unsigned pivotVertex) -> std::pair<Iterator, Iterator>
@@ -294,7 +296,14 @@ namespace XLEMath
 		return crash;
 	}
 
-	T1(Primitive) static std::optional<PointAndTime<Primitive>> BuildCrashEvent_SimultaneousV(
+	T1(Primitive) struct ProtoCrashEvent
+	{
+		enum class Type { Middle, Head, Tail };
+		Type _type;
+		PointAndTime<Primitive> _pointAndTime;
+	};
+
+	T1(Primitive) static std::optional<ProtoCrashEvent<Primitive>> BuildCrashEvent_SimultaneousV(
 		VertexSet<Primitive> vertices,
 		VertexId edgeHeadId, VertexId edgeTailId,
 		VertexId motorcycleId)
@@ -318,13 +327,23 @@ namespace XLEMath
 		p0 = edgeHead.PositionAtTime(pointAndTime[2]);
 		p1 = edgeTail.PositionAtTime(pointAndTime[2]);
 		p2 = Truncate(pointAndTime);
-		if (((Dot(p1-p0, p2-p0) > Primitive(0)) && (Dot(p0-p1, p2-p1) > Primitive(0)))
-			|| (AdaptiveEquivalent(p0, p2, GetEpsilon<Primitive>()) || AdaptiveEquivalent(p1, p2, GetEpsilon<Primitive>())))
-			return pointAndTime;
-		return {};
+
+		auto d0 = Dot(p1-p0, p2-p0);			// distance from p0 (projected onto edge) = d0 / Magnitude(p1-p0)
+		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
+		float e = GetEpsilon<Primitive>() / Magnitude(p1-p0);
+		if (d0 < -e || d1 < -e)
+			return {};
+
+		if (d0 < e) {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
+		} else if (d1 < e) {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
+		} else {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
+		}
 	}
 
-	T1(Primitive) static std::optional<PointAndTime<Primitive>> BuildCrashEvent_Simultaneous(
+	T1(Primitive) static std::optional<ProtoCrashEvent<Primitive>> BuildCrashEvent_Simultaneous(
 		VertexSet<Primitive> vertices,
 		VertexId edgeHeadId, VertexId edgeTailId,
 		VertexId motorcyclePrevId, VertexId motorcycleId, VertexId motorcycleNextId)
@@ -354,10 +373,20 @@ namespace XLEMath
 		p0 = edgeHead.PositionAtTime(pointAndTime[2]);
 		p1 = edgeTail.PositionAtTime(pointAndTime[2]);
 		auto p2 = Truncate(pointAndTime);
-		if (((Dot(p1-p0, p2-p0) > Primitive(0)) && (Dot(p0-p1, p2-p1) > Primitive(0)))
-			|| (AdaptiveEquivalent(p0, p2, GetEpsilon<Primitive>()) || AdaptiveEquivalent(p1, p2, GetEpsilon<Primitive>())))
-			return pointAndTime;
-		return {};
+
+		auto d0 = Dot(p1-p0, p2-p0);			// distance from p0 (projected onto edge) = d0 / Magnitude(p1-p0)
+		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
+		float e = GetEpsilon<Primitive>() * Magnitude(p1-p0);
+		if (d0 < -e || d1 < -e)			// we need a little bit of tolerance here; because we can miss collisions if we test against zero (even though missing requires us to actually miss twice -- once on either edge to connecting to the vertex we're hitting)
+			return {};
+
+		if (d0 < e) {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
+		} else if (d1 < e) {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
+		} else {
+			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
+		}
 	}
     
 	T1(Primitive) static std::optional<Event<Primitive>> CalculateCrashEvent(
@@ -387,9 +416,16 @@ namespace XLEMath
 			auto resA = BuildCrashEvent_OldMethod(compare, head, tail, v);
 			(void)resA, compare;*/
 
-			if (res.has_value() && res.value()[2] < bestEventTime) {
-				bestCollisionEvent = Event<Primitive>::MotorcycleCrash(Truncate(res.value()), res.value()[2], motor, e._head, e._tail);
-				bestEventTime = res.value()[2];
+			if (res.has_value() && res.value()._pointAndTime[2] < bestEventTime) {
+				auto protoCrash = res.value();
+				if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Head) {
+					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(Truncate(protoCrash._pointAndTime), protoCrash._pointAndTime[2], motor, e._head, e._head);
+				} else if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Tail) {
+					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(Truncate(protoCrash._pointAndTime), protoCrash._pointAndTime[2], motor, e._tail, e._tail);
+				} else {
+					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(Truncate(protoCrash._pointAndTime), protoCrash._pointAndTime[2], motor, e._head, e._tail);
+				}
+				bestEventTime = protoCrash._pointAndTime[2];
 			}
 		}
 
@@ -428,8 +464,8 @@ namespace XLEMath
 		auto& v1 = vSet[v1i];
 		auto& v2 = vSet[v2i];
 
-		auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest(vm2.PositionAtTime(calcTime), vm1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime), v1.PositionAtTime(calcTime));
-		auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest(vm1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime), v1.PositionAtTime(calcTime), v2.PositionAtTime(calcTime));
+		auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vm2.PositionAtTime(calcTime), vm1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime), v1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime));
+		auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vm1.PositionAtTime(calcTime), v0.PositionAtTime(calcTime), v1.PositionAtTime(calcTime), v2.PositionAtTime(calcTime), v0.PositionAtTime(calcTime));
 		if (collapse0.has_value() && collapse1.has_value()) {
 			// the collapses should both be in the same direction, but let's choose the sooner one
 			if (collapse0.value()[2] > 0 && collapse0.value()[2] < collapse1.value()[2]) {
@@ -580,8 +616,8 @@ namespace XLEMath
 			loop._edges.emplace_back(WavefrontEdge{unsigned(v1), unsigned(v0)});
 
 			// We must calculate the velocity for each vertex, based on which segments it belongs to...
-			auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest(vertices[vm2], vertices[vm1], vertices[v0], vertices[v1]);
-			auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest(vertices[vm1], vertices[v0], vertices[v1], vertices[v2]);
+			auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vertices[vm2], vertices[vm1], vertices[v0], vertices[v1], vertices[v0]);
+			auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vertices[vm1], vertices[v0], vertices[v1], vertices[v2], vertices[v0]);
 			if (collapse0.has_value() && collapse1.has_value()) {
 				// the collapses should both be in the same direction, but let's choose the sooner one
 				if (collapse0.value()[2] > 0 && collapse0.value()[2] < collapse1.value()[2]) {
@@ -615,7 +651,8 @@ namespace XLEMath
 			// Since we're expecting counter-clockwise inputs, if "v1" is a convex vertex, we should
 			// wind around to the left when going v0->v1->v2
 			// If we wind to the right then it's a reflex vertex, and we must add a motorcycle edge
-			if (CalculateWindingType(vertices[v0], vertices[v1], vertices[v2], GetEpsilon<Primitive>()) != WindingType::Left)
+			if (CalculateWindingType(vertices[v0], vertices[v1], vertices[v2], GetEpsilon<Primitive>()) != WindingType::Left
+				&& result._vertices[v]._anchor0 != result._vertices[v]._anchor1)
 				loop._motorcycleSegments.emplace_back(MotorcycleSegment{VertexId(v)});
 		}
 
@@ -693,7 +730,7 @@ namespace XLEMath
 
 				bool hasMotorCycle = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
 					[v=edge->_tail](const auto&c) { return c._head == v; }) != loop._motorcycleSegments.end();
-				if (!hasMotorCycle && !Equivalent(v0.Velocity(), Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) {
+				if (!hasMotorCycle && v0._anchor0 != v0._anchor1) {
 					auto v0 = GetVertex<Primitive>(_vertices, prevEdge->_tail).PositionAtTime(calcTime);
 					auto v1 = GetVertex<Primitive>(_vertices, edge->_tail).PositionAtTime(calcTime);
 					auto v2 = GetVertex<Primitive>(_vertices, edge->_head).PositionAtTime(calcTime);
@@ -716,11 +753,38 @@ namespace XLEMath
 
 	T1(Primitive) static void AddEvent(typename Graph<Primitive>::WavefrontLoop& loop, const Event<Primitive>& evnt)
 	{
+		if (evnt._type != Event<Primitive>::Type::MotorcycleCrash)
+			assert(evnt._edgeHead != evnt._edgeTail);
 		if (evnt._edgeHead != evnt._edgeTail) {
 			auto q = std::find_if(loop._edges.begin(), loop._edges.end(), 
 				[evnt](const auto& e){ return e._head == evnt._edgeHead && e._tail == evnt._edgeTail; });
 			assert(q != loop._edges.end());
 		}
+
+		if (evnt._type == Event<Primitive>::Type::MotorcycleCrash) {
+			auto q0 = std::find_if(loop._edges.begin(), loop._edges.end(), 
+				[evnt](const auto& e) { return e._head == evnt._edgeTail && e._tail == evnt._motor; });
+			if (q0 != loop._edges.end()) {
+				auto adjustedEvnt = evnt;
+				adjustedEvnt._type = Event<Primitive>::Type::Collapse;
+				adjustedEvnt._edgeHead = evnt._edgeTail;
+				adjustedEvnt._edgeTail = evnt._motor;
+				loop._pendingEvents.push_back(adjustedEvnt);
+				return;
+			}
+
+			auto q1 = std::find_if(loop._edges.begin(), loop._edges.end(), 
+				[evnt](const auto& e) { return e._head == evnt._motor && e._tail == evnt._edgeHead; });
+			if (q1 != loop._edges.end()) {
+				auto adjustedEvnt = evnt;
+				adjustedEvnt._type = Event<Primitive>::Type::Collapse;
+				adjustedEvnt._edgeHead = evnt._motor;
+				adjustedEvnt._edgeTail = evnt._edgeHead;
+				loop._pendingEvents.push_back(adjustedEvnt);
+				return;
+			}
+		}
+
 		loop._pendingEvents.push_back(evnt);
 	}
 
@@ -755,7 +819,8 @@ namespace XLEMath
 			auto motorOut = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge& e) { return e._tail == motorHead; });
 
 			// The motor can collapse to become a vertex of the collision edge during earlier steps.
-			if (crashEvent._motor == crashEvent._edgeHead || crashEvent._motor == crashEvent._edgeTail) continue;
+			if (crashEvent._motor == crashEvent._edgeHead && crashEvent._motor == crashEvent._edgeTail) continue;
+			assert(crashEvent._motor != crashEvent._edgeHead && crashEvent._motor != crashEvent._edgeTail);
 			// if (motorIn->_tail == crashEvent._edgeHead) continue;
 			// if (motorOut->_head == crashEvent._edgeTail) continue;
 
@@ -809,8 +874,9 @@ namespace XLEMath
 			assert(hout != loop->_edges.end());
 
 			if (crashEvent._edgeHead == crashEvent._edgeTail) {
-				assert(hout->_head != crashEvent._motor);		// this causes all manner of chaos
+				assert(hout->_head != crashEvent._motor);		// this causes all manner of chaos, but should only happen if this event should really be a collapse
 				++hout;
+				if (hout == loop->_edges.end()) hout = loop->_edges.begin();
 			}
 			auto hin = hout;
 			while (hin->_head!=crashEvent._motor) {
@@ -838,6 +904,11 @@ namespace XLEMath
 				}
 			}
 
+			if (crashEvent._edgeTail == crashEvent._edgeHead) {
+				// This vertex got removed from the simulation, and we have to explicitly add a final vertex path edge for it
+				AddVertexPathEdge(crashEvent._edgeHead, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._anchor0, crashPtAndTime);
+			}
+
 			// We may have to rename the crash segments for any future crashes. We remove 1 vertex
 			// from the system every time we process a motorcycle crash. So, if one of the upcoming
 			// crash events involves this vertex, we have rename it to either the new vertex on the
@@ -851,46 +922,81 @@ namespace XLEMath
 				if (pendingEvent._type == Event<Primitive>::Type::MotorcycleCrash) {
 					if (crashEvent._edgeHead == crashEvent._edgeTail && pendingEvent._motor == crashEvent._edgeHead) continue;	// (this vertex removed)
 
+					// If the crashEvent._motor is on the pending event edge, and the pending event motor is on crashEvent edge, then this was
+					// probably 2 vertices colliding head on; and we don't need to process the pending event any further...?
+					/*if (	(pendingEvent._motor == crashEvent._edgeHead || pendingEvent._motor == crashEvent._edgeTail)
+						&& 	(crashEvent._motor == pendingEvent._edgeHead || crashEvent._motor == pendingEvent._edgeTail)) {
+						assert(Equivalent(PointAndTime<Primitive>{pendingEvent._eventPt, pendingEvent._eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
+						continue;
+					}*/
+
 					bool motorIsHeadSide = ContainsVertex(headSide._edges, pendingEvent._motor);
 					assert(motorIsHeadSide || ContainsVertex(tailSide._edges, pendingEvent._motor));
 
-					auto replacementIdx = unsigned(motorIsHeadSide?headSideReplacement:tailSideReplacement);
 					if (motorIsHeadSide) {
 						// We might have collided with the crashEvent._motor <---- hin edge
 						if (pendingEvent._edgeHead == crashEvent._motor) {
-							pendingEvent._edgeHead = replacementIdx;
-							assert(collisionEdgeTailIsHeadSide);
-						} else if (pendingEvent._edgeHead == crashSegmentHead && pendingEvent._edgeTail == crashSegmentTail) {
-							// When the motor is headside, if there's another crash on the same segment it should be
-							// in the pendingEvent._edgeHead <--- replacementIdx part.
-							assert(pendingEvent._edgeHead == crashSegmentHead);
-							pendingEvent._edgeTail = replacementIdx;
-						} else if (pendingEvent._edgeTail == crashEvent._motor || !collisionEdgeHeadIsHeadSide || !collisionEdgeTailIsHeadSide) {
+							if (pendingEvent._edgeHead == pendingEvent._edgeTail) {
+								pendingEvent._edgeHead = pendingEvent._edgeTail = headSideReplacement;
+							} else {
+								pendingEvent._edgeHead = headSideReplacement;
+								assert(collisionEdgeTailIsHeadSide);
+							}
+						} else if (pendingEvent._edgeTail == crashEvent._motor) {
 							// if the motor is on the head side, but we're colliding with an edge that should be on the tail
 							// side, then we're potentially in trouble. However, this is fine if the collision point is
 							// directly on crashEvent._motor -- because in this case, crashEvent._motor <---- hin is interchangable
 							// with tout <--- crashEvent._motor
 							assert(Equivalent(PointAndTime<Primitive>{pendingEvent._eventPt, pendingEvent._eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
-							pendingEvent._edgeHead = replacementIdx;
+							assert(pendingEvent._edgeHead != pendingEvent._edgeTail);		// this case gets caught by the condition above
+							assert(crashEvent._edgeHead != crashEvent._edgeTail);
+							pendingEvent._edgeHead = headSideReplacement;
 							pendingEvent._edgeTail = hin->_tail;
-						} 
-
+						} else if (pendingEvent._edgeTail == crashSegmentTail) {
+							// When the motor is headside, if there's another crash on the same segment it should be
+							// in the pendingEvent._edgeHead <--- headSideReplacement part.
+							// We have to consider the cases where either crashEvent or pendingEvent are single vertex collisions, as well
+							if (pendingEvent._edgeHead == pendingEvent._edgeTail) {
+								pendingEvent._edgeHead = pendingEvent._edgeTail = headSideReplacement;
+							} else {
+								assert((crashSegmentHead == crashSegmentTail) || pendingEvent._edgeHead == crashSegmentHead);
+								pendingEvent._edgeTail = headSideReplacement;
+							}
+						} else if (!collisionEdgeHeadIsHeadSide || !collisionEdgeTailIsHeadSide) {
+							// the motor is on headside, but the edge is on tail side, and the edge is unrelated to crashEvent
+							// this can happen in extreme cases of many vertices colliding in the on the same point
+							// We would have to change the edge into some completely different edge in order to process it; but 
+							// it's probably actually redundant
+							assert(Equivalent(PointAndTime<Primitive>{pendingEvent._eventPt, pendingEvent._eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
+							continue;
+						}
 						AddEvent(headSide, pendingEvent);
 					} else {
 						// We might have collided with the tout <--- crashEvent._motor edge
 						if (pendingEvent._edgeTail == crashEvent._motor) {
-							pendingEvent._edgeTail = replacementIdx;
-							assert(!collisionEdgeHeadIsHeadSide);
-						} else if (pendingEvent._edgeHead == crashSegmentHead && pendingEvent._edgeTail == crashSegmentTail) {
-							// When the motor is tailside, if there's another crash on the same segment it should be
-							// in the replacementIdx <--- pendingEvent._edgeTail part.
-							assert(pendingEvent._edgeTail == crashSegmentTail);
-							pendingEvent._edgeHead = replacementIdx;
-						} else if (pendingEvent._edgeHead == crashEvent._motor || collisionEdgeHeadIsHeadSide || collisionEdgeTailIsHeadSide) {
+							if (pendingEvent._edgeHead == pendingEvent._edgeTail) {
+								pendingEvent._edgeHead = pendingEvent._edgeTail = tailSideReplacement;
+							} else {
+								pendingEvent._edgeTail = tailSideReplacement;
+								assert(!collisionEdgeHeadIsHeadSide);
+							}
+						} else if (pendingEvent._edgeHead == crashEvent._motor) {
 							assert(Equivalent(PointAndTime<Primitive>{pendingEvent._eventPt, pendingEvent._eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
+							assert(pendingEvent._edgeHead != pendingEvent._edgeTail);
+							assert(crashEvent._edgeHead != crashEvent._edgeTail);
 							pendingEvent._edgeHead = tout->_head;
-							pendingEvent._edgeTail = replacementIdx;
-						} 
+							pendingEvent._edgeTail = tailSideReplacement;
+						} else if (pendingEvent._edgeHead == crashSegmentHead) {
+							if (pendingEvent._edgeHead == pendingEvent._edgeTail) {
+								pendingEvent._edgeHead = pendingEvent._edgeTail = tailSideReplacement;
+							} else {
+								assert((crashSegmentHead == crashSegmentTail) || pendingEvent._edgeTail == crashSegmentTail);
+								pendingEvent._edgeHead = tailSideReplacement;							
+							}
+						} else if (collisionEdgeHeadIsHeadSide || collisionEdgeTailIsHeadSide) {
+							assert(Equivalent(PointAndTime<Primitive>{pendingEvent._eventPt, pendingEvent._eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
+							continue;
+						}
 						AddEvent(tailSide, pendingEvent);
 					}
 				} else {
@@ -900,21 +1006,13 @@ namespace XLEMath
 						pendingEvent._edgeTail = headSideReplacement;
 						AddEvent(headSide, pendingEvent);
 					} else if (pendingEvent._edgeHead == crashEvent._motor) {
-						if (collisionEdgeTailIsHeadSide) {
-							pendingEvent._edgeHead = headSideReplacement;
-							AddEvent(headSide, pendingEvent);
-						} else {
-							pendingEvent._edgeHead = tailSideReplacement;
-							AddEvent(tailSide, pendingEvent);
-						}
+						assert(collisionEdgeTailIsHeadSide);
+						pendingEvent._edgeHead = headSideReplacement;
+						AddEvent(headSide, pendingEvent);
 					} else if (pendingEvent._edgeTail == crashEvent._motor) {
-						if (collisionEdgeHeadIsHeadSide) {
-							pendingEvent._edgeTail = headSideReplacement;
-							AddEvent(headSide, pendingEvent);
-						} else {
-							pendingEvent._edgeTail = tailSideReplacement;
-							AddEvent(tailSide, pendingEvent);
-						}
+						assert(!collisionEdgeHeadIsHeadSide);
+						pendingEvent._edgeTail = tailSideReplacement;
+						AddEvent(tailSide, pendingEvent);
 					} else if (pendingEvent._edgeHead == crashEvent._edgeHead && pendingEvent._edgeTail == crashEvent._edgeTail) {
 						// we crashed into an edge that was pending a collapse, anyway
 						auto headSideEvent = pendingEvent;
@@ -957,7 +1055,7 @@ namespace XLEMath
 				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
 				assert(e->_head != e->_tail);
 				auto next = e+1; if (next == headSide._edges.end()) next = headSide._edges.begin();
-				assert(e->_head == next ->_tail);
+				assert(e->_head == next->_tail);
 			}
 
 			size_t loopIdx = std::distance(workingLoops.begin(), loop);
@@ -1049,8 +1147,8 @@ namespace XLEMath
 					if (collapseGroups[c] != collapseGroup) continue;
 					auto one = GetVertex<Primitive>(_vertices, collapses[c]._edgeHead).PositionAtTime(groupCollapseTime);
 					auto two = GetVertex<Primitive>(_vertices, collapses[c]._edgeTail).PositionAtTime(groupCollapseTime);
-					assert(Equivalent(one, collisionPt, GetEpsilon<Primitive>()));
-					assert(Equivalent(two, collisionPt, GetEpsilon<Primitive>()));
+					// assert(Equivalent(one, collisionPt, GetEpsilon<Primitive>()));
+					// assert(Equivalent(two, collisionPt, GetEpsilon<Primitive>()));
 				}
 			#endif
 
