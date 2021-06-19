@@ -19,8 +19,11 @@ namespace XLEMath
 {
 
 	T1(Primitive) static constexpr Primitive GetEpsilon();
+	T1(Primitive) static constexpr Primitive GetTimeEpsilon();
 	template<> constexpr float GetEpsilon<float>() { return 1e-4f; }
 	template<> constexpr double GetEpsilon<double>() { return 1e-8; }
+	template<> constexpr float GetTimeEpsilon<float>() { return 1e-4f; }
+	template<> constexpr double GetTimeEpsilon<double>() { return 1e-8; }
 
 	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>()
     {
@@ -438,7 +441,7 @@ namespace XLEMath
 	}
 #endif
 
-	T1(Primitive) static bool InvertInplaceSafe(Matrix3x3T<Primitive>& M, Primitive threshold)
+	T1(Primitive) static bool InvertInplaceSafe(Matrix3x3T<Primitive>& M)
 	{
 		// note -- derived from "inverse.h" in CML.
 		// This version will return false if the determinant of the matrix is zero (which means
@@ -497,12 +500,13 @@ namespace XLEMath
 
 			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
 			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
+			assert(Nx != 0 || Ny != 0);
 			M(c, 0) = Nx;
 			M(c, 1) = Ny;
 			M(c, 2) = -Nx*Nx-Ny*Ny;
 			res[c]  = As[c][0] * Nx + As[c][1] * Ny;
 		}
-		if (!InvertInplaceSafe(M, GetEpsilon<Primitive>()))
+		if (!InvertInplaceSafe(M))
 			return {};
 
 		auto result = M * res;
