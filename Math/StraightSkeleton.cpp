@@ -325,7 +325,7 @@ namespace XLEMath
 		p1 = edgeTail.PositionAtTime(pointAndTime[2]);
 		p2 = Truncate(pointAndTime);
 
-		auto edgeMagSq = Magnitude(p1-p0);
+		auto edgeMagSq = MagnitudeSquared(p1-p0);
 		if (edgeMagSq < epsilon * epsilon)		// edge is collapsed at this point
 			return {};
 
@@ -334,13 +334,15 @@ namespace XLEMath
 
 		auto d0 = Dot(p1-p0, p2-p0);			// distance from p0 (projected onto edge) = d0 / Magnitude(p1-p0)
 		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
-		float e = epsilon * std::sqrt(edgeMagSq);
-		if (d0 < -e || d1 < -e)
+		auto d0Sq = std::copysign(d0*d0, d0);
+		auto d1Sq = std::copysign(d1*d1, d1);
+		float eSq = epsilon * epsilon * edgeMagSq;
+		if (d0Sq < -eSq || d1Sq < -eSq)
 			return {};
 
-		if (d0 < e) {
+		if (d0Sq < eSq) {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
-		} else if (d1 < e) {
+		} else if (d1Sq < eSq) {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
 		} else {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
@@ -389,13 +391,15 @@ namespace XLEMath
 
 		auto d0 = Dot(p1-p0, p2-p0);			// distance from p0 (projected onto edge) = d0 / Magnitude(p1-p0)
 		auto d1 = Dot(p0-p1, p2-p1);			// distance from p1 (projected onto edge) = d1 / Magnitude(p1-p0)
-		float e = epsilon * std::sqrt(edgeMagSq);
-		if (d0 < -e || d1 < -e)			// we need a little bit of tolerance here; because we can miss collisions if we test against zero (even though missing requires us to actually miss twice -- once on either edge to connecting to the vertex we're hitting)
+		auto d0Sq = std::copysign(d0*d0, d0);
+		auto d1Sq = std::copysign(d1*d1, d1);
+		float eSq = epsilon * epsilon * edgeMagSq;
+		if (d0Sq < -eSq || d1Sq < -eSq)			// we need a little bit of tolerance here; because we can miss collisions if we test against zero (even though missing requires us to actually miss twice -- once on either edge to connecting to the vertex we're hitting)
 			return {};
 
-		if (d0 < e) {
+		if (d0Sq < eSq) {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
-		} else if (d1 < e) {
+		} else if (d1Sq < eSq) {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
 		} else {
 			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
