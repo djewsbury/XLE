@@ -346,6 +346,12 @@ namespace UnitTests
 				originalShapeLines.push_back(Float3(_orderedBoundaryPts[(c+1)%_orderedBoundaryPts.size()], 0));
 			}
 			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
+
+			const float vertexSize = 0.1f;
+			for (unsigned c=0; c<_orderedBoundaryPts.size(); ++c)
+				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{_orderedBoundaryPts[c] - Float2{vertexSize, vertexSize}, 0.f}, Float3{_orderedBoundaryPts[c] + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, c>>8, c&0xff));
+			for (unsigned c=0; c<_straightSkeleton._steinerVertices.size(); ++c)
+				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));
 		}
 
 		StraightSkeletonPreview(const HexCellField& cellField, float maxInset = std::numeric_limits<float>::max())
@@ -409,23 +415,26 @@ namespace UnitTests
 		StraightSkeletonPreview() {}
 	};
 
-	static RenderCore::Techniques::CameraDesc StartingCamera()
+	static RenderCore::Techniques::CameraDesc StartingCamera(float scale = 1.f)
 	{
 		RenderCore::Techniques::CameraDesc visCamera;
 		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, 0.0f, -1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{0.0f, 0.0f, 200.0f});
 		visCamera._projection = RenderCore::Techniques::CameraDesc::Projection::Orthogonal;
 		visCamera._nearClip = 0.f;
 		visCamera._farClip = 400.f;
-		visCamera._left = -50.f * 0.1f;
-		visCamera._right = 50.f * 0.1f;
-		visCamera._top = 50.f * 0.1f;
-		visCamera._bottom = -50.f * 0.1f;
+		visCamera._left = -50.f * scale;
+		visCamera._right = 50.f * scale;
+		visCamera._top = -50.f * scale;
+		visCamera._bottom = 50.f * scale;
 		return visCamera;
 	}
 
 	TEST_CASE( "StraightSkeletonHexGrid", "[math]" )
 	{
-		static constexpr unsigned randomCellCount = 3u;
+		// static constexpr unsigned randomCellCount = 9u;
+		// static constexpr unsigned randomCellCount = 32u;
+		static constexpr unsigned randomCellCount = 256u;
+		// static constexpr unsigned randomCellCount = 2048u;
 
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
@@ -457,11 +466,11 @@ namespace UnitTests
 				if (evnt._pressedChar == 'r') {
 					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
 					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
-				} else if (evnt._pressedChar == 'q') {
-					maxInset += 0.01f;
+				} else if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
+					maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.01f) : 0.01f;
 					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
-				} else if (evnt._pressedChar == 'a') {
-					maxInset -= 0.01f;
+				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
+					maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.01f) : 0.01f;
 					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
 				} else if (evnt._pressedChar == ' ') {
 					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
@@ -472,7 +481,7 @@ namespace UnitTests
 			HexCellField _cellField;
 			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
-			float maxInset = 0.5f;
+			float maxInset = 10.f;
 			
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
@@ -488,7 +497,7 @@ namespace UnitTests
 		{
 			std::mt19937_64 rng(619047819);
 			auto tester = std::make_shared<HexGridStraightSkeleton>(std::move(rng));
-			testHelper->Run(StartingCamera(), tester);
+			testHelper->Run(StartingCamera(0.5f), tester);
 		}
 	}
 
@@ -639,10 +648,10 @@ namespace UnitTests
 #if 1
 		float theta = 2.1267482f;
 		float sinTheta = std::sin(theta), cosTheta = std::cos(theta);
-		// for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		// for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		// for (auto& c:doubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
-		// for (auto& c:colinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:rectangleCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:singleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:doubleMotorcycle) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
+		for (auto& c:colinearCollapse) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 		for (auto& c:colinearEdges) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 #endif
 

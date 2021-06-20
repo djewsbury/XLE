@@ -50,14 +50,18 @@ namespace XLEMath
 
 	T1(Primitive) using VertexSet = IteratorRange<const Vertex<Primitive>*>;
 
-	struct WavefrontEdge
+	T1(Primitive) struct WavefrontEdge
 	{
 		VertexId _head, _tail;
+		PointAndTime<Primitive>	_collapsePt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
+		bool _pendingCalculate = true;
 	};
 
-	struct MotorcycleSegment
+	T1(Primitive) struct MotorcycleSegment
 	{
 		VertexId _head;
+		PointAndTime<Primitive> _crashPt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
+		VertexId _edgeHead = ~0u, _edgeTail = ~0u;
 	};
 
 	enum class EventType { Collapse, MotorcycleCrash, None };
@@ -410,7 +414,7 @@ namespace XLEMath
     
 	T1(Primitive) static std::optional<Event<Primitive>> CalculateCrashEvent(
 		VertexId motor, 
-		IteratorRange<const WavefrontEdge*> segments,
+		IteratorRange<const WavefrontEdge<Primitive>*> segments,
 		VertexSet<Primitive> vertices)
 	{
 		std::optional<Event<Primitive>> bestCollisionEvent;
@@ -423,7 +427,6 @@ namespace XLEMath
 		// Look for an intersection with segments
 		for (const auto&e:segments) {
 			if (e._head == motor || e._tail == motor) continue;	// (can't crash if part of the same segment)
-			// if (e._head == motorPrev || e._tail == motorNext) continue; // don't crash into neighbours, either -- this should be handled as a collapse
 
 			// "BuildCrashEvent_SimultaneousV" seems to do better here in the presence of near-colinear edges
 			// since we use the vertex velocity we've already calculated, it takes into account all of the colinear protections
@@ -522,8 +525,8 @@ namespace XLEMath
 
 		struct WavefrontLoop
 		{
-			std::vector<WavefrontEdge> _edges;
-			std::vector<MotorcycleSegment> _motorcycleSegments;
+			std::vector<WavefrontEdge<Primitive>> _edges;
+			std::vector<MotorcycleSegment<Primitive>> _motorcycleSegments;
 			Primitive _lastEventBatchEarliest = std::numeric_limits<Primitive>::max();
 			Primitive _lastEventBatchLatest = -std::numeric_limits<Primitive>::max();
 			std::vector<Event<Primitive>> _pendingEvents;
@@ -539,15 +542,9 @@ namespace XLEMath
 		std::vector<VertexPathEdge> _vertexPathEdges;
 
 		StraightSkeleton<Primitive> CalculateSkeleton(Primitive maxTime);
-
-        #if defined(_DEBUG)
-            std::vector<Vector2T<Primitive>> _sourceLoop;
-        #endif
-
 	private:
 		void WriteWavefront(StraightSkeleton<Primitive>& dest, const WavefrontLoop& loop, Primitive time);
 		void WriteVertexPaths(StraightSkeleton<Primitive>& result, const WavefrontLoop& loop, Primitive time);
-		void ValidateState();
 
 		void ProcessEvents(typename std::vector<WavefrontLoop>::iterator loop);
 
@@ -573,6 +570,8 @@ namespace XLEMath
 			auto collapse = CalculateCollapseEvent<Primitive>(seg0._tail, seg1._tail, seg1._head, seg2._head, _vertices);
 			if (!collapse) continue;
 
+			assert(Equivalent(collapse.value(), seg1._collapsePt, GetEpsilon<Primitive>()));
+
 			auto collapseTime = collapse.value()[2];
 			// if (collapseTime < loop._lastEventBatchEarliest && loop._lastEventBatchEarliest <= loop._lastEventBatchLatest) continue;
 			assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
@@ -597,6 +596,10 @@ namespace XLEMath
 			auto crashEvent = crashEventOpt.value();
 			// if (crashEvent._eventTime < loop._lastEventBatchEarliest && loop._lastEventBatchEarliest <= loop._lastEventBatchLatest) continue;
 			assert(crashEvent._eventTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
+			
+			assert(Equivalent(PointAndTime<Primitive>{crashEvent._eventPt, crashEvent._eventTime}, m._crashPt, GetEpsilon<Primitive>()));
+			assert(crashEvent._edgeHead == m._edgeHead);
+			assert(crashEvent._edgeTail == m._edgeTail);
 
 			if (crashEvent._eventTime < (earliestTime + maxEventChain * GetTimeEpsilon<Primitive>())) {
 				events.push_back(crashEvent);
@@ -608,7 +611,6 @@ namespace XLEMath
 	T1(Primitive) Graph<Primitive> BuildGraphFromVertexLoop(IteratorRange<const Vector2T<Primitive>*> vertices)
 	{
 		assert(vertices.size() >= 2);
-
 		// Construct the starting point for the straight skeleton calculations
 		// We're expecting the input vertices to be a closed loop, in counter-clockwise order
 		// The first and last vertices should *not* be the same vertex; there is an implied
@@ -618,62 +620,11 @@ namespace XLEMath
 		loop._edges.reserve(vertices.size());
 		result._vertices.reserve(vertices.size());
 		for (size_t v=0; v<vertices.size(); ++v) {
-			// Each segment of the polygon becomes an "edge segment" in the graph
-			auto vm2 = (v+vertices.size()-2)%vertices.size();
-			auto vm1 = (v+vertices.size()-1)%vertices.size();
-			auto v0 = v;
-			auto v1 = (v+1)%vertices.size();
-			auto v2 = (v+2)%vertices.size();
-			loop._edges.emplace_back(WavefrontEdge{unsigned(v1), unsigned(v0)});
-
-			// We must calculate the velocity for each vertex, based on which segments it belongs to...
-			auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vertices[vm2], vertices[vm1], vertices[v0], vertices[v1], vertices[v0]);
-			auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest_LargeTimeProtection(vertices[vm1], vertices[v0], vertices[v1], vertices[v2], vertices[v0]);
-			if (collapse0.has_value() && collapse1.has_value()) {
-				// the collapses should both be in the same direction, but let's choose the sooner one
-				if (collapse0.value()[2] > 0 && collapse0.value()[2] < collapse1.value()[2]) {
-					result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, collapse0.value()});
-				} else {
-					result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, collapse1.value()});
-				}
-			} else if (collapse0.has_value()) {
-				result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, collapse0.value()});
-			} else if (collapse1.has_value()) {
-				result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, collapse1.value()});
-			} else {
-				// Some edges won't collapse (due to parallel edges, etc)
-				auto anchor0 = PointAndTime<Primitive>{vertices[v], Primitive(0)};
-				auto anchor1 = anchor0;
-				auto velocity = CalculateVertexVelocity_LineIntersection(vertices[vm1], vertices[v0], vertices[v1], Primitive(1));
-				if (velocity)
-					anchor1 = PointAndTime<Primitive>{vertices[v] + velocity.value(), Primitive(1)};
-				result._vertices.push_back(Vertex<Primitive>{anchor0, anchor1});
-			}
+			loop._edges.emplace_back(WavefrontEdge<Primitive>{unsigned((v+1)%vertices.size()), unsigned(v)});
+			result._vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}});
 		}
-
-		// Each reflex vertex in the graph must result in a "motocycle segment".
-		// We already know the velocity of the head of the motorcycle; and it has a fixed tail that
-		// stays at the original position
-		for (size_t v=0; v<vertices.size(); ++v) {
-			auto v0 = (v+vertices.size()-1)%vertices.size();
-			auto v1 = v;
-			auto v2 = (v+1)%vertices.size();
-
-			// Since we're expecting counter-clockwise inputs, if "v1" is a convex vertex, we should
-			// wind around to the left when going v0->v1->v2
-			// If we wind to the right then it's a reflex vertex, and we must add a motorcycle edge
-			auto windingType = CalculateWindingType(vertices[v0], vertices[v1], vertices[v2], GetEpsilon<Primitive>()).first;
-			if ((windingType == WindingType::Right || windingType == WindingType::Straight)
-				&& result._vertices[v]._anchor0 != result._vertices[v]._anchor1)
-				loop._motorcycleSegments.emplace_back(MotorcycleSegment{VertexId(v)});
-		}
-
 		result._loops.emplace_back(std::move(loop));
 		result._boundaryPointCount = vertices.size();
-
-        #if defined(_DEBUG)
-            result._sourceLoop.insert(result._sourceLoop.begin(), vertices.begin(), vertices.end());
-        #endif
 		return result;
 	}
 
@@ -681,48 +632,14 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	T1(Primitive) void Graph<Primitive>::ValidateState()
-	{
-		#if defined(EXTRA_VALIDATION)
-			for (auto&loop:_loops) {
-				// validate vertex velocities
-				for (unsigned v=0; v<_vertices.size(); ++v) {
-					WavefrontEdge* in, *out;
-					std::tie(in, out) = FindInAndOut(MakeIteratorRange(loop._edges), v);
-					if (in && out) {
-						if (in->_tail != out->_head) {
-							auto calcTime = (_vertices[in->_tail]._initialTime + _vertices[v]._initialTime + _vertices[out->_head]._initialTime) / Primitive(3);
-							auto v0 = PositionAtTime(_vertices[in->_tail], calcTime);
-							auto v1 = PositionAtTime(_vertices[v], calcTime);
-							auto v2 = PositionAtTime(_vertices[out->_head], calcTime);
-							auto expectedVelocity = CalculateVertexVelocity(v0, v1, v2);
-							assert(AdaptiveEquivalent(_vertices[v]._velocity, expectedVelocity, GetEpsilon<Primitive>()));
-							assert(!AdaptiveEquivalent(expectedVelocity, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>()));
-						} else {
-							assert(AdaptiveEquivalent(_vertices[v]._velocity, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>()));
-						}
-					}
-				}
-				// Vertices in active loops should not be frozen
-				/*if (loop._edges.size() > 2)
-					for (const auto&e:loop._edges)
-						assert(!IsFrozen(_vertices[e._head]) && !IsFrozen(_vertices[e._tail]));*/
-				// every wavefront edge must have a collapse time (assuming it's vertices are not frozen)
-				/*for (const auto&e:loop._edges) {
-					if (IsFrozen(_vertices[e._head]) || IsFrozen(_vertices[e._tail])) continue;
-					auto collapseTime = CalculateCollapseTime(_vertices[e._head], _vertices[e._tail]);
-					assert(collapseTime != std::numeric_limits<Primitive>::max());		//it can be negative; because some edges are expanding
-				}*/
-			}
-		#endif
-	}
-
 	T1(Primitive) void Graph<Primitive>::UpdateLoop(WavefrontLoop& loop)
 	{
 		// The "velocity" value for newly created vertices will not have been updated yet; we needed
 		// to wait until all crash events were processed before we did. But 
 		if (loop._edges.size() <= 2)
 			return;
+
+		auto newMotorcycleStart = loop._motorcycleSegments.size();
 
 		auto prevPrevEdge = loop._edges.end()-2;
 		auto prevEdge = loop._edges.end()-1;
@@ -740,6 +657,9 @@ namespace XLEMath
 					prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head, 
 					_vertices, calcTime);
 
+				// Each reflex vertex in the graph must result in a "motocycle segment".
+				// We already know the velocity of the head of the motorcycle; and it has a fixed tail that
+				// stays at the original position
 				bool hasMotorCycle = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
 					[v=edge->_tail](const auto&c) { return c._head == v; }) != loop._motorcycleSegments.end();
 				if (!hasMotorCycle && v0._anchor0 != v0._anchor1) {
@@ -748,16 +668,55 @@ namespace XLEMath
 					auto v2 = GetVertex<Primitive>(_vertices, edge->_head).PositionAtTime(calcTime);
 					auto windingType = CalculateWindingType(v0, v1, v2, GetEpsilon<Primitive>()).first;
 					if (windingType == WindingType::Right || windingType == WindingType::Straight)
-						loop._motorcycleSegments.emplace_back(MotorcycleSegment{edge->_tail});
+						loop._motorcycleSegments.emplace_back(MotorcycleSegment<Primitive>{edge->_tail});
 				}
 			}
 
 			prevPrevEdge = prevEdge;
 			prevEdge = edge;
 		}
+
+		for (auto m=loop._motorcycleSegments.begin()+newMotorcycleStart; m!=loop._motorcycleSegments.end(); ++m) {
+			auto crashEventOpt = CalculateCrashEvent<Primitive>(m->_head, MakeIteratorRange(loop._edges), MakeIteratorRange(_vertices));
+			if (crashEventOpt) {
+				auto crashEvent = crashEventOpt.value();
+				m->_crashPt = {crashEvent._eventPt, crashEvent._eventTime};
+				m->_edgeTail = crashEvent._edgeTail;
+				m->_edgeHead = crashEvent._edgeHead;
+			}
+		}
+
+		// Calculate collapses for all of the new edges
+		if (loop._edges.size() >= 2) {
+			auto prevPrevE = loop._edges.end()-2;
+			auto prevE = loop._edges.end()-1;
+			for (auto e=loop._edges.begin(); e!=loop._edges.end(); prevPrevE=prevE, prevE=e, ++e) {
+				if (!prevE->_pendingCalculate) continue;
+
+				auto& seg0 = *prevPrevE, &seg1 = *prevE, &seg2 = *e;
+				auto collapse = CalculateCollapseEvent<Primitive>(seg0._tail, seg1._tail, seg1._head, seg2._head, _vertices);
+				if (collapse)
+					seg1._collapsePt = collapse.value();
+
+				// We have to compare each motorcycle against this edge; and from there see if there's any better crash points
+				for (auto m=loop._motorcycleSegments.begin(); m!=loop._motorcycleSegments.begin()+newMotorcycleStart; ++m) {
+					auto crashOpt = BuildCrashEvent_SimultaneousV<Primitive>(MakeIteratorRange(_vertices), seg1._head, seg1._tail, m->_head);
+					if (crashOpt) {
+						auto crash = crashOpt.value();
+						if (crash._pointAndTime[2] < m->_crashPt[2]) {
+							m->_crashPt = crash._pointAndTime;
+							m->_edgeHead = seg1._head;
+							m->_edgeTail = seg1._tail;
+						}
+					}
+				}
+
+				prevE->_pendingCalculate = false;
+			}
+		}
 	}
 
-	static bool ContainsVertex(IteratorRange<const WavefrontEdge*> edges, unsigned v)
+	T1(Primitive) static bool ContainsVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, unsigned v)
 	{
 		auto headSideI = std::find_if(edges.begin(), edges.end(),
 			[v](const auto& e) { return e._head == v || e._tail == v; });
@@ -773,31 +732,6 @@ namespace XLEMath
 				[evnt](const auto& e){ return e._head == evnt._edgeHead && e._tail == evnt._edgeTail; });
 			assert(q != loop._edges.end());
 		}
-
-		/*if (evnt._type == EventType::MotorcycleCrash) {
-			auto q0 = std::find_if(loop._edges.begin(), loop._edges.end(), 
-				[evnt](const auto& e) { return e._head == evnt._edgeTail && e._tail == evnt._motor; });
-			if (q0 != loop._edges.end()) {
-				auto adjustedEvnt = evnt;
-				adjustedEvnt._type = EventType::Collapse;
-				adjustedEvnt._edgeHead = evnt._edgeTail;
-				adjustedEvnt._edgeTail = evnt._motor;
-				loop._pendingEvents.push_back(adjustedEvnt);
-				return;
-			}
-
-			auto q1 = std::find_if(loop._edges.begin(), loop._edges.end(), 
-				[evnt](const auto& e) { return e._head == evnt._motor && e._tail == evnt._edgeHead; });
-			if (q1 != loop._edges.end()) {
-				auto adjustedEvnt = evnt;
-				adjustedEvnt._type = EventType::Collapse;
-				adjustedEvnt._edgeHead = evnt._motor;
-				adjustedEvnt._edgeTail = evnt._edgeHead;
-				loop._pendingEvents.push_back(adjustedEvnt);
-				return;
-			}
-		}*/
-
 		loop._pendingEvents.push_back(evnt);
 	}
 
@@ -834,8 +768,8 @@ namespace XLEMath
 			assert(loop->_edges.size() > 2);
 			if (loop->_edges.size() <= 2) continue;
 
-			auto motorIn = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge& e) { return e._head == motorHead; });
-			auto motorOut = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge& e) { return e._tail == motorHead; });
+			auto motorIn = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._head == motorHead; });
+			auto motorOut = std::find_if(loop->_edges.begin(), loop->_edges.end(), [motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& e) { return e._tail == motorHead; });
 
 			if (crashEvent._edgeHead == crashEvent._edgeTail) {
 				// Sometimes crash events are converted into what should really be a collapse event. In these cases,
@@ -867,7 +801,7 @@ namespace XLEMath
 					//   T A I L   S I D E
 			// Start at motor._head, and work around in order until we hit the crash segment.
 			auto tout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
-				[motorHead=crashEvent._motor](const WavefrontEdge& test) { return test._tail == motorHead; });
+				[motorHead=crashEvent._motor](const WavefrontEdge<Primitive>& test) { return test._tail == motorHead; });
 			assert(tout != loop->_edges.end());
 			auto tin = tout;
 
@@ -897,7 +831,7 @@ namespace XLEMath
 					//   H E A D   S I D E
 			// Start at crashSegment._head, and work around in order until we hit the motor vertex
 			auto hout = std::find_if(loop->_edges.begin(), loop->_edges.end(),
-				[crashEvent](const WavefrontEdge& test) { return test._tail == crashEvent._edgeHead; });
+				[crashEvent](const WavefrontEdge<Primitive>& test) { return test._tail == crashEvent._edgeHead; });
 			assert(hout != loop->_edges.end());
 
 			if (crashEvent._edgeHead == crashEvent._edgeTail) {
@@ -917,16 +851,19 @@ namespace XLEMath
 			headSide._edges.push_back({headSideReplacement, hin->_tail});
 			headSide._edges.push_back({hout->_tail, headSideReplacement});
 
+			tin->_pendingCalculate = tout->_pendingCalculate = true;
+			hin->_pendingCalculate = hout->_pendingCalculate = true;
+
 			//////////////////////////////////////////////////////////////////////
 			// Move the motorcycles from "loop" to "inSide" or "outSide" depending on which loop 
 			// they are now a part of.
 			for (const auto&m:loop->_motorcycleSegments) {
 				if (m._head == crashEvent._motor) continue;		// (skip this one, it's just been processed)
 				if (crashEvent._edgeHead == crashEvent._edgeTail && m._head == crashEvent._edgeHead) continue;
-				if (ContainsVertex(headSide._edges, m._head)) {
+				if (ContainsVertex<Primitive>(headSide._edges, m._head)) {
 					headSide._motorcycleSegments.push_back(m);
 				} else {
-					assert(ContainsVertex(tailSide._edges, m._head));
+					assert(ContainsVertex<Primitive>(tailSide._edges, m._head));
 					tailSide._motorcycleSegments.push_back(m);
 				}
 			}
@@ -943,8 +880,8 @@ namespace XLEMath
 			unsigned crashSegmentTail = crashEvent._edgeTail, crashSegmentHead = crashEvent._edgeHead;
 			for (auto pendingEvent:loop->_pendingEvents) {
 
-				bool collisionEdgeHeadIsHeadSide = ContainsVertex(headSide._edges, pendingEvent._edgeHead);
-				bool collisionEdgeTailIsHeadSide = ContainsVertex(headSide._edges, pendingEvent._edgeTail);
+				bool collisionEdgeHeadIsHeadSide = ContainsVertex<Primitive>(headSide._edges, pendingEvent._edgeHead);
+				bool collisionEdgeTailIsHeadSide = ContainsVertex<Primitive>(headSide._edges, pendingEvent._edgeTail);
 
 				if (pendingEvent._type == EventType::MotorcycleCrash) {
 					if (crashEvent._edgeHead == crashEvent._edgeTail && pendingEvent._motor == crashEvent._edgeHead) continue;	// (this vertex removed)
@@ -957,8 +894,8 @@ namespace XLEMath
 						continue;
 					}*/
 
-					bool motorIsHeadSide = ContainsVertex(headSide._edges, pendingEvent._motor);
-					assert(motorIsHeadSide || ContainsVertex(tailSide._edges, pendingEvent._motor));
+					bool motorIsHeadSide = ContainsVertex<Primitive>(headSide._edges, pendingEvent._motor);
+					assert(motorIsHeadSide || ContainsVertex<Primitive>(tailSide._edges, pendingEvent._motor));
 
 					if (motorIsHeadSide) {
 						// We might have collided with the crashEvent._motor <---- hin edge
@@ -995,8 +932,8 @@ namespace XLEMath
 							// We would have to change the edge into some completely different edge in order to process it; but 
 							// it's probably actually redundant
 
-							assert(collisionEdgeHeadIsHeadSide || ContainsVertex(tailSide._edges, pendingEvent._edgeHead));
-							assert(collisionEdgeTailIsHeadSide || ContainsVertex(tailSide._edges, pendingEvent._edgeTail));
+							assert(collisionEdgeHeadIsHeadSide || ContainsVertex<Primitive>(tailSide._edges, pendingEvent._edgeHead));
+							assert(collisionEdgeTailIsHeadSide || ContainsVertex<Primitive>(tailSide._edges, pendingEvent._edgeTail));
 
 							auto pt0 = _vertices[pendingEvent._edgeHead].PositionAtTime(pendingEvent._eventTime);
 							auto pt1 = _vertices[pendingEvent._edgeTail].PositionAtTime(pendingEvent._eventTime);
@@ -1080,24 +1017,66 @@ namespace XLEMath
 				}
 			}
 
+			// We have to perform the exact same transformation on the MotorcycleSegment objects
+			for (auto& m:headSide._motorcycleSegments) {
+				if (m._edgeHead == ~0u && m._edgeTail == ~0u) continue;
+				if (m._edgeHead == crashEvent._motor) {
+					if (m._edgeHead == m._edgeTail) {
+						m._edgeHead = m._edgeTail = headSideReplacement;
+					} else {
+						m._edgeHead = headSideReplacement;
+					}
+				} else if (m._edgeTail == crashEvent._motor) {
+					m._edgeHead = headSideReplacement;
+					m._edgeTail = hin->_tail;
+				} else if (m._edgeTail == crashSegmentTail) {
+					if (m._edgeHead == m._edgeTail) {
+						m._edgeHead = m._edgeTail = headSideReplacement;
+					} else {
+						m._edgeTail = headSideReplacement;
+					}
+				}
+			}
+			for (auto& m:tailSide._motorcycleSegments) {
+				if (m._edgeHead == ~0u && m._edgeTail == ~0u) continue;
+				if (m._edgeTail == crashEvent._motor) {
+					if (m._edgeHead == m._edgeTail) {
+						m._edgeHead = m._edgeTail = tailSideReplacement;
+					} else {
+						m._edgeTail = tailSideReplacement;
+					}
+				} else if (m._edgeHead == crashEvent._motor) {
+					m._edgeHead = tout->_head;
+					m._edgeTail = tailSideReplacement;
+				} else if (m._edgeHead == crashSegmentHead) {
+					if (m._edgeHead == m._edgeTail) {
+						m._edgeHead = m._edgeTail = tailSideReplacement;
+					} else {
+						m._edgeHead = tailSideReplacement;							
+					}
+				}
+			}
+
 			// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
 			// crashSegment, motorIn & motorOut should not make it into either tailSide or headSide
-			for (auto e=tailSide._edges.begin(); e!=tailSide._edges.end(); ++e) {
-				assert(e->_head != crashSegmentHead || e->_tail != crashSegmentTail);
-				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
-				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
-				assert(e->_head != e->_tail);
-				auto next = e+1; if (next == tailSide._edges.end()) next = tailSide._edges.begin();
-				assert(e->_head == next->_tail);
-			}
-			for (auto e=headSide._edges.begin(); e!=headSide._edges.end(); ++e) {
-				assert(e->_head != crashSegmentHead || e->_tail != crashSegmentTail);
-				assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
-				assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
-				assert(e->_head != e->_tail);
-				auto next = e+1; if (next == headSide._edges.end()) next = headSide._edges.begin();
-				assert(e->_head == next->_tail);
-			}
+			#if defined(_DEBUG)
+				for (auto e=tailSide._edges.begin(); e!=tailSide._edges.end(); ++e) {
+					assert(e->_head != crashSegmentHead || e->_tail != crashSegmentTail);
+					assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
+					assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
+					assert(e->_head != e->_tail);
+					auto next = e+1; if (next == tailSide._edges.end()) next = tailSide._edges.begin();
+					assert(e->_head == next->_tail);
+				}
+				for (auto e=headSide._edges.begin(); e!=headSide._edges.end(); ++e) {
+					assert(e->_head != crashSegmentHead || e->_tail != crashSegmentTail);
+					assert(e->_head != motorIn->_head || e->_tail != motorIn->_tail);
+					assert(e->_head != motorOut->_head || e->_tail != motorOut->_tail);
+					assert(e->_head != e->_tail);
+					auto next = e+1; if (next == headSide._edges.end()) next = headSide._edges.begin();
+					assert(e->_head == next->_tail);
+				}
+			#endif
 
 			size_t loopIdx = std::distance(workingLoops.begin(), loop);
 			*loop = std::move(tailSide);
@@ -1135,7 +1114,7 @@ namespace XLEMath
 				[searchingTail](const auto& t) { return t._type == EventType::Collapse && t._edgeHead == searchingTail; });
 			if (i == loop._pendingEvents.end()) break;
 
-			assert(ContainsVertex(loop._edges, i->_edgeHead) && ContainsVertex(loop._edges, i->_edgeTail));
+			assert(ContainsVertex<Primitive>(loop._edges, i->_edgeHead) && ContainsVertex<Primitive>(loop._edges, i->_edgeTail));
 			searchingTail = i->_edgeTail;
 			collapses.push_back(*i);
 			loop._pendingEvents.erase(i);
@@ -1148,7 +1127,7 @@ namespace XLEMath
 				[searchingHead](const auto& t) { return t._type == EventType::Collapse && t._edgeTail == searchingHead; });
 			if (i == loop._pendingEvents.end()) break;
 
-			assert(ContainsVertex(loop._edges, i->_edgeHead) && ContainsVertex(loop._edges, i->_edgeTail));
+			assert(ContainsVertex<Primitive>(loop._edges, i->_edgeHead) && ContainsVertex<Primitive>(loop._edges, i->_edgeTail));
 			searchingHead = i->_edgeHead;
 			collapses.push_back(*i);
 			loop._pendingEvents.erase(i);
@@ -1174,8 +1153,8 @@ namespace XLEMath
 				for (size_t c=0; c<collapses.size(); ++c) {
 					auto one = GetVertex<Primitive>(_vertices, collapses[c]._edgeHead).PositionAtTime(earliestCollapseTime);
 					auto two = GetVertex<Primitive>(_vertices, collapses[c]._edgeTail).PositionAtTime(earliestCollapseTime);
-					// assert(Equivalent(one, collisionPt, GetEpsilon<Primitive>()));
-					// assert(Equivalent(two, collisionPt, GetEpsilon<Primitive>()));
+					assert(Equivalent(one, collisionPt, GetEpsilon<Primitive>()));
+					assert(Equivalent(two, collisionPt, GetEpsilon<Primitive>()));
 				}
 			#endif
 
@@ -1199,7 +1178,7 @@ namespace XLEMath
 			// Also remove any motorcycles associated with these vertices (since they will be removed
 			// from active loops, the motorcycle is no longer valid)
 			auto m = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
-				[q=*v](const MotorcycleSegment& seg) { return seg._head == q; });
+				[q=*v](const MotorcycleSegment<Primitive>& seg) { return seg._head == q; });
 			if (m != loop._motorcycleSegments.end())
 				loop._motorcycleSegments.erase(m);
 		}
@@ -1219,6 +1198,9 @@ namespace XLEMath
 			auto head = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._head).second;
 			assert(tail != loop._edges.end() && head != loop._edges.end());
 			assert(tail != head);
+			
+			tail->_pendingCalculate = true;
+			head->_pendingCalculate = true;
 
 			auto preTailPt = GetVertex<Primitive>(_vertices, tail->_tail).PositionAtTime(collapseGroupInfo._crashPtAndTime[2]);
 			auto postHeadPt = GetVertex<Primitive>(_vertices, head->_head).PositionAtTime(collapseGroupInfo._crashPtAndTime[2]);
@@ -1319,12 +1301,28 @@ namespace XLEMath
 			for (auto pendingEvent=loop._pendingEvents.begin(); pendingEvent!=loop._pendingEvents.end();) {
 				assert (pendingEvent->_edgeTail != ~0u && pendingEvent->_edgeHead != ~0u);
 				assert(!(pendingEvent->_type == EventType::Collapse && pendingEvent->_edgeTail == pendingEvent->_edgeHead));
-				assert(ContainsVertex(loop._edges, pendingEvent->_edgeHead) && ContainsVertex(loop._edges, pendingEvent->_edgeTail));
+				assert(ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeHead) && ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeTail));
 				if (pendingEvent->_type == EventType::MotorcycleCrash && pendingEvent->_motor == ~0u) {
 					pendingEvent = loop._pendingEvents.erase(pendingEvent);
 					continue;
 				}
 				++pendingEvent;
+			}
+
+			for (auto&m:loop._motorcycleSegments) {
+				if (m._edgeHead == ~0u && m._edgeTail == ~0u) continue;
+				if (collapseGroupInfo._tailSideReplacement != collapseGroupInfo._headSideReplacement) {
+					if (	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeTail) != collapsedVerticesEnd
+						|| 	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeHead) != collapsedVerticesEnd) {
+						m._edgeTail = collapseGroupInfo._tailSideReplacement;
+						m._edgeHead = collapseGroupInfo._headSideReplacement;
+					}
+				} else {
+					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeTail) != collapsedVerticesEnd)
+						m._edgeTail = collapseGroupInfo._headSideReplacement;
+					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeHead) != collapsedVerticesEnd)
+						m._edgeHead = collapseGroupInfo._headSideReplacement;
+				}
 			}
 		} else {
 			loop._pendingEvents.clear();
@@ -1445,8 +1443,6 @@ namespace XLEMath
 	{
 		std::vector<WavefrontLoop> completedLoops;
 		while (!_loops.empty()) {
-			ValidateState();
-
 			auto& loop = _loops.front();
 			if (loop._edges.size() <= 2) {
 				if (loop._lastEventBatchEarliest > loop._lastEventBatchLatest)
@@ -1525,8 +1521,8 @@ namespace XLEMath
 		// The best way to remove overlapping edges is just to go through the list of segments, 
 		// and for each one look for other segments that intersect
 
-		std::vector<WavefrontEdge> filteredSegments;
-		std::stack<WavefrontEdge> segmentsToTest;
+		std::vector<WavefrontEdge<Primitive>> filteredSegments;
+		std::stack<WavefrontEdge<Primitive>> segmentsToTest;
 
 		// We need to combine overlapping points at this stage, also
 		// (2 different vertices could end up at the same location at time 'time')
@@ -1537,7 +1533,7 @@ namespace XLEMath
 			auto v0 = AddSteinerVertex(result, A);
 			auto v1 = AddSteinerVertex(result, B);
 			if (v0 != v1)
-				segmentsToTest.push(WavefrontEdge{v0, v1});
+				segmentsToTest.push(WavefrontEdge<Primitive>{v0, v1});
 		}
 
 #if 0
