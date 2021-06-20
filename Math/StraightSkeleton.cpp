@@ -828,6 +828,9 @@ namespace XLEMath
 			auto crashEvent = *loop->_pendingEvents.begin();
 			loop->_pendingEvents.erase(loop->_pendingEvents.begin());
 
+			// The motor can collapse to become a vertex of the collision edge during earlier steps.
+			if (crashEvent._motor == crashEvent._edgeHead && crashEvent._motor == crashEvent._edgeTail) continue;
+
 			assert(loop->_edges.size() > 2);
 			if (loop->_edges.size() <= 2) continue;
 
@@ -841,8 +844,6 @@ namespace XLEMath
 					continue;
 			}
 
-			// The motor can collapse to become a vertex of the collision edge during earlier steps.
-			if (crashEvent._motor == crashEvent._edgeHead && crashEvent._motor == crashEvent._edgeTail) continue;
 			// if (crashEvent._motor == crashEvent._edgeHead || crashEvent._motor == crashEvent._edgeTail) continue;
 			assert(crashEvent._motor != crashEvent._edgeHead && crashEvent._motor != crashEvent._edgeTail);
 			// if (motorIn->_tail == crashEvent._edgeHead) continue;
@@ -1246,23 +1247,56 @@ namespace XLEMath
 			}
 
 			// rename collapsed vertices in pending events
-			for (auto pendingEvent=loop._pendingEvents.begin(); pendingEvent!=loop._pendingEvents.end(); ++pendingEvent) {
-				if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd)
-					pendingEvent->_edgeTail = collapseGroupInfo._headSideReplacement;
-				if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd)
-					pendingEvent->_edgeHead = collapseGroupInfo._tailSideReplacement;
-				assert(pendingEvent->_edgeTail != ~0u);
-				assert(pendingEvent->_edgeHead != ~0u);
+			for (auto pendingEvent=loop._pendingEvents.begin(); pendingEvent!=loop._pendingEvents.end();) {
 
 				if (pendingEvent->_type == EventType::MotorcycleCrash) {
 					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_motor) != collapsedVerticesEnd) {
-						if (collapseGroupInfo._headSideReplacement == collapseGroupInfo._tailSideReplacement) pendingEvent->_motor = collapseGroupInfo._headSideReplacement;
-						else pendingEvent->_motor = ~0u;
+						if (collapseGroupInfo._headSideReplacement == collapseGroupInfo._tailSideReplacement) {
+							// It's possible that we already have a motorcycle event from another collapse, which will be
+							// replaced to the same thing
+							auto existing = std::find_if(loop._pendingEvents.begin(), pendingEvent, 
+								[v=collapseGroupInfo._headSideReplacement](const auto& c) { return c._motor == v; });
+							if (existing != pendingEvent) {
+								assert(Equivalent(existing->_eventPt, pendingEvent->_eventPt, GetEpsilon<Primitive>()));
+								assert(Equivalent(existing->_eventTime, pendingEvent->_eventTime, GetEpsilon<Primitive>()));
+								pendingEvent = loop._pendingEvents.erase(pendingEvent);
+								continue;
+							} else
+								pendingEvent->_motor = collapseGroupInfo._headSideReplacement;
+						} else
+							pendingEvent->_motor = ~0u;
+					}
+
+					if (collapseGroupInfo._tailSideReplacement != collapseGroupInfo._headSideReplacement) {
+						if (	std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd
+							|| 	std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd) {
+							// The there is an motorcycle crash on an edge that was at least partially collapsed. This is the cases where
+							// the collapse event does not generate a vertex -- we just get one larger edge that covers the entire collapsed
+							// area.
+							// Either the edge for pendingEvent was entirely collapsed, or one vertex must be the pre-tail
+							// (collapseGroupInfo._tailSideReplacement) or one vertex must the post-head (collapseGroupInfo._headSideReplacement).
+							// In other words, whereever the collapse is, it must be within the new super edge from collapseGroupInfo._tailSideReplacement
+							// to collapseGroupInfo._headSideReplacement
+							pendingEvent->_edgeTail = collapseGroupInfo._tailSideReplacement;
+							pendingEvent->_edgeHead = collapseGroupInfo._headSideReplacement;
+						}
+					} else {
+						if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd)
+							pendingEvent->_edgeTail = collapseGroupInfo._headSideReplacement;
+						if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd)
+							pendingEvent->_edgeHead = collapseGroupInfo._headSideReplacement;
 					}
 				} else {
 					assert(pendingEvent->_type == EventType::Collapse);
-					// we will sometimes need to rename collapse events if there is a motorcycle in the middle
+					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd)
+						pendingEvent->_edgeTail = collapseGroupInfo._headSideReplacement;
+					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd)
+						pendingEvent->_edgeHead = collapseGroupInfo._tailSideReplacement;
 				}
+
+				assert(pendingEvent->_edgeTail != ~0u);
+				assert(pendingEvent->_edgeHead != ~0u);
+				++pendingEvent;
 			}
 
 			if (collapseGroupInfo._headSideReplacement != collapseGroupInfo._tailSideReplacement) {
