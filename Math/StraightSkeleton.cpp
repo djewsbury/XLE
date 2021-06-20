@@ -1108,115 +1108,99 @@ namespace XLEMath
 	}
 
 	T1(Primitive) struct CollapseGroupInfo { unsigned _head, _tail, _headSideReplacement = ~0u, _tailSideReplacement = ~0u; PointAndTime<Primitive> _crashPtAndTime = Zero<PointAndTime<Primitive>>(); };
-
 	T1(Primitive) void Graph<Primitive>::ProcessCollapseEvents(WavefrontLoop& loop)
 	{
-		auto i = loop._pendingEvents.begin();
-		while (i != loop._pendingEvents.end() && i->_type == EventType::Collapse) ++i;
+		// Process the first collapse group on the pending events list, but include in any
+		// collapses on the pending event list that are directly connected
+		assert(!loop._pendingEvents.empty());
+		if (loop._pendingEvents.begin()->_type != EventType::Collapse) return;
 
-		auto collapses = MakeIteratorRange(loop._pendingEvents.begin(), i);
-		if (collapses.empty()) return;
+		CollapseGroupInfo<Primitive> collapseGroupInfo;
+		std::vector<Event<Primitive>> collapses;
+		collapses.push_back(*loop._pendingEvents.begin());
+		loop._pendingEvents.erase(loop._pendingEvents.begin());
 
-		// Process the "edge" events... first separate the edges into collapse groups
-		// Each collapse group collapses onto a single vertex. We will search through all
-		// of the collapse events we're processing, and separate them into discrete groups.
-		std::vector<unsigned> collapseGroups(collapses.size(), ~0u);
-		std::vector<CollapseGroupInfo<Primitive>> collapseGroupInfos;
-		unsigned nextCollapseGroup = 0;
-		for (size_t c=0; c<collapses.size(); ++c) {
-			if (collapseGroups[c] != ~0u) continue;
+		#if defined(_DEBUG)
+			assert(collapses[0]._edgeHead != collapses[0]._edgeTail);
+			auto q = std::find_if(loop._edges.begin(), loop._edges.end(), 
+				[c=collapses[0]](const auto& e){ return e._head == c._edgeHead && e._tail == c._edgeTail; });
+			assert(q != loop._edges.end());
+		#endif
 
-			#if defined(_DEBUG)
-				assert(collapses[c]._edgeHead != collapses[c]._edgeTail);
-				auto q = std::find_if(loop._edges.begin(), loop._edges.end(), 
-					[c=collapses[c]](const auto& e){ return e._head == c._edgeHead && e._tail == c._edgeTail; });
-				assert(q != loop._edges.end());
-			#endif
+		// go back as far as possible, from tail to tail
+		auto searchingTail = collapses[0]._edgeTail;
+		for (;;) {
+			auto i = std::find_if(loop._pendingEvents.begin(), loop._pendingEvents.end(),
+				[searchingTail](const auto& t) { return t._type == EventType::Collapse && t._edgeHead == searchingTail; });
+			if (i == loop._pendingEvents.end()) break;
 
-			collapseGroups[c] = nextCollapseGroup;
-
-			// got back as far as possible, from tail to tail
-			auto searchingTail = collapses[c]._edgeTail;
-			for (;;) {
-				auto i = std::find_if(collapses.begin(), collapses.end(),
-					[searchingTail, &loop](const auto& t)
-					{ return t._edgeHead == searchingTail; });
-				if (i == collapses.end()) break;
-				if (collapseGroups[std::distance(collapses.begin(), i)] == nextCollapseGroup) break;
-				assert(collapseGroups[std::distance(collapses.begin(), i)] == ~0u);
-				collapseGroups[std::distance(collapses.begin(), i)] = nextCollapseGroup;
-				searchingTail = i->_edgeTail;
-			}
-
-			// also go forward head to head
-			auto searchingHead = collapses[c]._edgeHead;
-			for (;;) {
-				auto i = std::find_if(collapses.begin(), collapses.end(),
-					[searchingHead, &loop](const auto& t)
-					{ return t._edgeTail == searchingHead; });
-				if (i == collapses.end()) break;
-				if (collapseGroups[std::distance(collapses.begin(), i)] == nextCollapseGroup) break;
-				assert(collapseGroups[std::distance(collapses.begin(), i)] == ~0u);
-				collapseGroups[std::distance(collapses.begin(), i)] = nextCollapseGroup;
-				searchingHead = i->_edgeHead;
-			}
-
-			++nextCollapseGroup;
-			collapseGroupInfos.push_back({searchingHead, searchingTail});
+			assert(ContainsVertex(loop._edges, i->_edgeHead) && ContainsVertex(loop._edges, i->_edgeTail));
+			searchingTail = i->_edgeTail;
+			collapses.push_back(*i);
+			loop._pendingEvents.erase(i);
 		}
 
-		// Each collapse group becomes a single new vertex. We can collate them together
-		// now, and write out some segments to the output skeleton
+		// also go forward head to head
+		auto searchingHead = collapses[0]._edgeHead;
+		for (;;) {
+			auto i = std::find_if(loop._pendingEvents.begin(), loop._pendingEvents.end(),
+				[searchingHead](const auto& t) { return t._type == EventType::Collapse && t._edgeTail == searchingHead; });
+			if (i == loop._pendingEvents.end()) break;
+
+			assert(ContainsVertex(loop._edges, i->_edgeHead) && ContainsVertex(loop._edges, i->_edgeTail));
+			searchingHead = i->_edgeHead;
+			collapses.push_back(*i);
+			loop._pendingEvents.erase(i);
+		}
+		collapseGroupInfo._head = searchingHead;
+		collapseGroupInfo._tail = searchingTail;
+
+		// find the final collapse point for this group of collapses
 		Primitive earliestCollapseTime = std::numeric_limits<Primitive>::max(), latestCollapseTime = -std::numeric_limits<Primitive>::max();
-		for (auto collapseGroup=0u; collapseGroup<nextCollapseGroup; ++collapseGroup) {
+		{
 			Vector2T<Primitive> collisionPt(Primitive(0), Primitive(0));
 			unsigned contributors = 0;
-			Primitive groupCollapseTime = std::numeric_limits<Primitive>::max();
 			for (size_t c=0; c<collapses.size(); ++c) {
-				if (collapseGroups[c] != collapseGroup) continue;
 				collisionPt += collapses[c]._eventPt;
 				contributors += 1;
-				groupCollapseTime = std::min(collapses[c]._eventTime, groupCollapseTime);
+				earliestCollapseTime = std::min(earliestCollapseTime, collapses[c]._eventTime);
+				latestCollapseTime = std::max(latestCollapseTime, collapses[c]._eventTime);
 			}
 			collisionPt /= Primitive(contributors);
-			earliestCollapseTime = std::min(earliestCollapseTime, groupCollapseTime);
-			latestCollapseTime = std::max(latestCollapseTime, groupCollapseTime);
 
 			// Validate that our "collisionPt" is close to all of the collapsing points
 			#if defined(_DEBUG)
 				for (size_t c=0; c<collapses.size(); ++c) {
-					if (collapseGroups[c] != collapseGroup) continue;
-					auto one = GetVertex<Primitive>(_vertices, collapses[c]._edgeHead).PositionAtTime(groupCollapseTime);
-					auto two = GetVertex<Primitive>(_vertices, collapses[c]._edgeTail).PositionAtTime(groupCollapseTime);
+					auto one = GetVertex<Primitive>(_vertices, collapses[c]._edgeHead).PositionAtTime(earliestCollapseTime);
+					auto two = GetVertex<Primitive>(_vertices, collapses[c]._edgeTail).PositionAtTime(earliestCollapseTime);
 					// assert(Equivalent(one, collisionPt, GetEpsilon<Primitive>()));
 					// assert(Equivalent(two, collisionPt, GetEpsilon<Primitive>()));
 				}
 			#endif
 
-			collapseGroupInfos[collapseGroup]._crashPtAndTime = PointAndTime<Primitive>{collisionPt, groupCollapseTime};
+			collapseGroupInfo._crashPtAndTime = PointAndTime<Primitive>{collisionPt, earliestCollapseTime};
+		}
 
-			// We're removing vertices from active loops -- so, we must add their vertex path to the
-			// output skeleton.
-			// Note that since we're connecting both head and tail, we'll end up doubling up each edge
-			std::vector<VertexId> vertices;
-			vertices.reserve(collapses.size()*2);
-			for (size_t c=0; c<collapses.size(); ++c) {
-				if (collapseGroups[c] != collapseGroup) continue;
-				vertices.push_back(collapses[c]._edgeTail);
-				vertices.push_back(collapses[c]._edgeHead);
-			}
-			std::sort(vertices.begin(), vertices.end());
-			auto end = std::unique(vertices.begin(), vertices.end());
-			for (auto v=vertices.begin(); v!=end; ++v) {
-				AddVertexPathEdge(*v, GetVertex<Primitive>(_vertices, *v)._anchor0, collapseGroupInfos[collapseGroup]._crashPtAndTime);
+		// We're removing vertices from active loops -- so, we must add their vertex path to the
+		// output skeleton.
+		// Note that since we're connecting both head and tail, we'll end up doubling up each edge
+		std::vector<VertexId> collapsedVertices;
+		collapsedVertices.reserve(collapses.size()*2);
+		for (size_t c=0; c<collapses.size(); ++c) {
+			collapsedVertices.push_back(collapses[c]._edgeTail);
+			collapsedVertices.push_back(collapses[c]._edgeHead);
+		}
+		std::sort(collapsedVertices.begin(), collapsedVertices.end());
+		auto collapsedVerticesEnd = std::unique(collapsedVertices.begin(), collapsedVertices.end());
+		for (auto v=collapsedVertices.begin(); v!=collapsedVerticesEnd; ++v) {
+			AddVertexPathEdge(*v, GetVertex<Primitive>(_vertices, *v)._anchor0, collapseGroupInfo._crashPtAndTime);
 
-				// Also remove any motorcycles associated with these vertices (since they will be removed
-				// from active loops, the motorcycle is no longer valid)
-				auto m = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
-					[q=*v](const MotorcycleSegment& seg) { return seg._head == q; });
-				if (m != loop._motorcycleSegments.end())
-					loop._motorcycleSegments.erase(m);
-			}
+			// Also remove any motorcycles associated with these vertices (since they will be removed
+			// from active loops, the motorcycle is no longer valid)
+			auto m = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
+				[q=*v](const MotorcycleSegment& seg) { return seg._head == q; });
+			if (m != loop._motorcycleSegments.end())
+				loop._motorcycleSegments.erase(m);
 		}
 
 		// Remove all of the collapsed edges
@@ -1229,84 +1213,50 @@ namespace XLEMath
 				i = loop._edges.erase(i);
 		}
 
-		for (auto& group:collapseGroupInfos) {
-			if (loop._edges.size() == 1)
-				break;
-				
-			if (group._head == group._tail) continue;	// if we remove an entire loop, let's assume that there are no external links to it
-
-			auto tail = FindInAndOut(MakeIteratorRange(loop._edges), group._tail).first;
-			auto head = FindInAndOut(MakeIteratorRange(loop._edges), group._head).second;
+		if (loop._edges.size() > 1 && collapseGroupInfo._head != collapseGroupInfo._tail) {				
+			auto tail = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._tail).first;
+			auto head = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._head).second;
 			assert(tail != loop._edges.end() && head != loop._edges.end());
 			assert(tail != head);
 
-			auto preTailPt = GetVertex<Primitive>(_vertices, tail->_tail).PositionAtTime(group._crashPtAndTime[2]);
-			auto postHeadPt = GetVertex<Primitive>(_vertices, head->_head).PositionAtTime(group._crashPtAndTime[2]);
-			if (CalculateWindingType<Primitive>(preTailPt, Truncate(group._crashPtAndTime), postHeadPt, GetEpsilon<Primitive>()).first == WindingType::Straight
-				|| (Equivalent(preTailPt, Truncate(group._crashPtAndTime), GetEpsilon<Primitive>()) && Equivalent(postHeadPt, Truncate(group._crashPtAndTime), GetEpsilon<Primitive>()))) {
+			auto preTailPt = GetVertex<Primitive>(_vertices, tail->_tail).PositionAtTime(collapseGroupInfo._crashPtAndTime[2]);
+			auto postHeadPt = GetVertex<Primitive>(_vertices, head->_head).PositionAtTime(collapseGroupInfo._crashPtAndTime[2]);
+			if (CalculateWindingType<Primitive>(preTailPt, Truncate(collapseGroupInfo._crashPtAndTime), postHeadPt, GetEpsilon<Primitive>()).first == WindingType::Straight
+				|| (Equivalent(preTailPt, Truncate(collapseGroupInfo._crashPtAndTime), GetEpsilon<Primitive>()) && Equivalent(postHeadPt, Truncate(collapseGroupInfo._crashPtAndTime), GetEpsilon<Primitive>()))) {
 				// avoid creating 2 colinear edges. Instead we'll just create a single new edge spanning the gap created
 				// Alternatively; we could create a vertex but mark it with a flag highlighting that it is colinear
-				group._tailSideReplacement = tail->_tail;
-				group._headSideReplacement = head->_head;
+				collapseGroupInfo._tailSideReplacement = tail->_tail;
+				collapseGroupInfo._headSideReplacement = head->_head;
 				tail->_head = head->_head;
 				loop._edges.erase(head);
-				continue;
+			} else {
+				// create a new vertex in the graph to connect the edges to either side of the collapse
+				auto newVertex = (unsigned)_vertices.size();
+				_vertices.push_back({collapseGroupInfo._crashPtAndTime, collapseGroupInfo._crashPtAndTime});
+
+				// reassign the edges on either side of the collapse group to
+				// point to the new vertex
+				tail->_head = newVertex;
+				head->_tail = newVertex;
+				collapseGroupInfo._headSideReplacement = newVertex;
+				collapseGroupInfo._tailSideReplacement = newVertex;
+
+				assert(tail->_head != tail->_tail);
+				assert(head->_head != head->_tail);
 			}
 
-			// create a new vertex in the graph to connect the edges to either side of the collapse
-			auto newVertex = (unsigned)_vertices.size();
-			_vertices.push_back({group._crashPtAndTime, group._crashPtAndTime});
-
-			// reassign the edges on either side of the collapse group to
-			// point to the new vertex
-			tail->_head = newVertex;
-			head->_tail = newVertex;
-			group._headSideReplacement = newVertex;
-			group._tailSideReplacement = newVertex;
-
-			assert(tail->_head != tail->_tail);
-			assert(head->_head != head->_tail);
-		}
-
-		// awkwardly, we need to rename the replacement vertices, also. In the case where we don't add a new vertex, the 2 vertices
-		// we end up connecting can be involved in a separate collapse operation themselves 
-		for (auto& group:collapseGroupInfos) {
-			if (group._headSideReplacement == group._tailSideReplacement) continue;
-			for (;;) {
-				bool gotReplacement = false;
-				auto headCollapse = std::find_if(collapses.begin(), collapses.end(), [v=group._headSideReplacement](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
-				auto tailCollapse = std::find_if(collapses.begin(), collapses.end(), [v=group._tailSideReplacement](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
-
-				if (tailCollapse != collapses.end()) {
-					group._tailSideReplacement = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), tailCollapse)]]._tailSideReplacement;
-					gotReplacement = true;
-				}
-				if (headCollapse != collapses.end()) {
-					group._headSideReplacement = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), headCollapse)]]._headSideReplacement;
-					gotReplacement = true;
-				}
-				if (!gotReplacement) break;
-			}
-		}
-
-		if (loop._edges.size() > 1) {
 			// rename collapsed vertices in pending events
-			for (auto pendingEvent=collapses.end(); pendingEvent!=loop._pendingEvents.end(); ++pendingEvent) {
-				auto headCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_edgeHead](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
-				auto tailCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_edgeTail](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
-
-				if (tailCollapse != collapses.end())
-					pendingEvent->_edgeTail = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), tailCollapse)]]._tailSideReplacement;
-				if (headCollapse != collapses.end())
-					pendingEvent->_edgeHead = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), headCollapse)]]._headSideReplacement;
+			for (auto pendingEvent=loop._pendingEvents.begin(); pendingEvent!=loop._pendingEvents.end(); ++pendingEvent) {
+				if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd)
+					pendingEvent->_edgeTail = collapseGroupInfo._tailSideReplacement;
+				if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd)
+					pendingEvent->_edgeHead = collapseGroupInfo._headSideReplacement;
 				assert(pendingEvent->_edgeTail != ~0u);
 				assert(pendingEvent->_edgeHead != ~0u);
 
 				if (pendingEvent->_type == EventType::MotorcycleCrash) {
-					auto motorCollapse = std::find_if(collapses.begin(), collapses.end(), [v=pendingEvent->_motor](const auto& c) { return c._edgeHead == v || c._edgeTail == v; });
-					if (motorCollapse != collapses.end()) {
-						auto& group = collapseGroupInfos[collapseGroups[std::distance(collapses.begin(), motorCollapse)]];
-						if (group._headSideReplacement == group._tailSideReplacement) pendingEvent->_motor = group._headSideReplacement;
+					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_motor) != collapsedVerticesEnd) {
+						if (collapseGroupInfo._headSideReplacement == collapseGroupInfo._tailSideReplacement) pendingEvent->_motor = collapseGroupInfo._headSideReplacement;
 						else pendingEvent->_motor = ~0u;
 					}
 				} else {
@@ -1314,17 +1264,15 @@ namespace XLEMath
 					// we will sometimes need to rename collapse events if there is a motorcycle in the middle
 				}
 			}
-			loop._pendingEvents.erase(collapses.begin(), collapses.end());
 
-			for (const auto& group:collapseGroupInfos) {
-				if (group._headSideReplacement == group._tailSideReplacement) continue;
+			if (collapseGroupInfo._headSideReplacement != collapseGroupInfo._tailSideReplacement) {
 				// We can have either 0, 1 or 2 collapses between group._headSideReplacement <--- group._tailSideReplacement
 				// If is because collapses to either side of the collapse group will be renamed to this
 				// If we have 1, we remove it; if we a have 2, we remove the earlier and keep the later
 				auto collapseEvent = loop._pendingEvents.end();
 				unsigned matchCount = 0;
 				for (auto c=loop._pendingEvents.begin(); c!=loop._pendingEvents.end(); ++c) {
-					if (c->_type == EventType::Collapse && c->_edgeHead == group._headSideReplacement && c->_edgeTail == group._tailSideReplacement) {
+					if (c->_type == EventType::Collapse && c->_edgeHead == collapseGroupInfo._headSideReplacement && c->_edgeTail == collapseGroupInfo._tailSideReplacement) {
 						++matchCount;
 						if (collapseEvent == loop._pendingEvents.end()) collapseEvent = c;
 					}
