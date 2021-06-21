@@ -295,6 +295,13 @@ namespace UnitTests
 		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), boundaryLines.size(), color);
 	}
 
+	template<typename T> StraightSkeleton<T> CalculateStraightSkeleton(IteratorRange<const Vector2T<T>*> vertices, T maxInset = std::numeric_limits<T>::max())
+	{
+		StraightSkeletonCalculator<T> calculator;
+		calculator.AddLoop(vertices);
+		return calculator.Calculate(maxInset);
+	}
+
 	template<typename Primitive>
 		class StraightSkeletonPreview
 	{
@@ -406,10 +413,17 @@ namespace UnitTests
 			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), maxInset);
 		}
 
-		StraightSkeletonPreview(IteratorRange<const Float2*> inputPts, float maxInset = std::numeric_limits<float>::max())
+		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, float maxInset = std::numeric_limits<float>::max())
 		: _straightSkeleton(CalculateStraightSkeleton(inputPts, maxInset))
 		{
-			_orderedBoundaryPts = std::vector<Float2>(inputPts.begin(), inputPts.end());
+			_orderedBoundaryPts = std::vector<Vector2T<Primitive>>(inputPts.begin(), inputPts.end());
+		}
+
+		StraightSkeletonPreview(StraightSkeleton<Primitive>&& input, IteratorRange<const Vector2T<Primitive>*> inputPts)
+		: _straightSkeleton(std::move(input))
+		{
+			_orderedBoundaryPts = std::vector<Vector2T<Primitive>>(inputPts.begin(), inputPts.end());
+			REQUIRE(_orderedBoundaryPts.size() == _straightSkeleton._boundaryPointCount);
 		}
 
 		StraightSkeletonPreview() {}
@@ -558,54 +572,49 @@ namespace UnitTests
 
 		Float2 rectangleCollapse[] = {
 			Float2 {  10.f,  15.f } + Float2 { 25, 25 },
-			Float2 {  10.f, -15.f } + Float2 { 25, 25 },
+			Float2 { -10.f,  15.f } + Float2 { 25, 25 },
 			Float2 { -10.f, -15.f } + Float2 { 25, 25 },
-			Float2 { -10.f,  15.f } + Float2 { 25, 25 }
+			Float2 {  10.f, -15.f } + Float2 { 25, 25 }
 		};
-		std::reverse(rectangleCollapse, &rectangleCollapse[dimof(rectangleCollapse)]);
 
 		Float2 singleMotorcycle[] = {
-			Float2 {  10.f,  15.f } + Float2 { 25, -25 },
-			Float2 {  10.f, -15.f } + Float2 { 25, -25 },
-			Float2 { -10.f, -7.5f } + Float2 { 25, -25 },
+			Float2 { -10.f,  7.5f } + Float2 { 25, -25 },
 			Float2 {   0.f,   0.f } + Float2 { 25, -25 },
-			Float2 { -10.f,  7.5f } + Float2 { 25, -25 }
+			Float2 { -10.f, -7.5f } + Float2 { 25, -25 },
+			Float2 {  10.f, -15.f } + Float2 { 25, -25 },
+			Float2 {  10.f,  15.f } + Float2 { 25, -25 }
 		};
-		std::reverse(singleMotorcycle, &singleMotorcycle[dimof(singleMotorcycle)]);
 
 		Float2 doubleMotorcycle[] = {
-			Float2 {   0.f,  15.f } + Float2 { -25, -25 },
-			Float2 {  10.f,  7.5f } + Float2 { -25, -25 },
-			Float2 {  2.5f,   0.f } + Float2 { -25, -25 },
-			Float2 {  10.f, -7.5f } + Float2 { -25, -25 },
-			Float2 {   0.f, -15.f } + Float2 { -25, -25 },
-			Float2 { -10.f, -7.5f } + Float2 { -25, -25 },
+			Float2 { -10.f,  7.5f } + Float2 { -25, -25 },
 			Float2 { -2.5f,   0.f } + Float2 { -25, -25 },
-			Float2 { -10.f,  7.5f } + Float2 { -25, -25 }
+			Float2 { -10.f, -7.5f } + Float2 { -25, -25 },
+			Float2 {   0.f, -15.f } + Float2 { -25, -25 },
+			Float2 {  10.f, -7.5f } + Float2 { -25, -25 },
+			Float2 {  2.5f,   0.f } + Float2 { -25, -25 },
+			Float2 {  10.f,  7.5f } + Float2 { -25, -25 },
+			Float2 {   0.f,  15.f } + Float2 { -25, -25 }
 		};
-		std::reverse(doubleMotorcycle, &doubleMotorcycle[dimof(doubleMotorcycle)]);
 
 		Float2 colinearCollapse[] = {
-			Float2 {   0.f,  15.f } + Float2 { -25,  25 },
-			Float2 {  10.f,  2.5f } + Float2 { -25,  25 },
-			Float2 {  10.f, -2.5f } + Float2 { -25,  25 },
-			Float2 {   0.f, -15.f } + Float2 { -25,  25 },
+			Float2 { -10.f,  2.5f } + Float2 { -25,  25 },
 			Float2 { -10.f, -2.5f } + Float2 { -25,  25 },
-			Float2 { -10.f,  2.5f } + Float2 { -25,  25 }
+			Float2 {   0.f, -15.f } + Float2 { -25,  25 },
+			Float2 {  10.f, -2.5f } + Float2 { -25,  25 },
+			Float2 {  10.f,  2.5f } + Float2 { -25,  25 },
+			Float2 {   0.f,  15.f } + Float2 { -25,  25 }
 		};
-		std::reverse(colinearCollapse, &colinearCollapse[dimof(colinearCollapse)]);
 
 		Float2 colinearEdges[] = {
-			Float2 {  15.f,  10.f },
-			Float2 {  15.f,   0.f },
-			Float2 {  15.f, -10.f },
-			Float2 {   0.f, -10.f },
-			Float2 { -15.f, -10.f },
-			Float2 { -15.f,   0.f },
-			Float2 { -15.f,  10.f },
 			Float2 {   0.f,  10.f },
+			Float2 { -15.f,  10.f },
+			Float2 { -15.f,   0.f },
+			Float2 { -15.f, -10.f },
+			Float2 {   0.f, -10.f },
+			Float2 {  15.f, -10.f },
+			Float2 {  15.f,   0.f },
+			Float2 {  15.f,  10.f }
 		};
-		std::reverse(colinearEdges, &colinearEdges[dimof(colinearEdges)]);
 
 #if 0
 		// While the above shapes can be calculated correctly in their default orientations, sometimes
@@ -662,6 +671,39 @@ namespace UnitTests
 			tester->_previews.emplace_back(MakeIteratorRange(doubleMotorcycle));
 			tester->_previews.emplace_back(MakeIteratorRange(colinearCollapse));
 			tester->_previews.emplace_back(MakeIteratorRange(colinearEdges));
+			testHelper->Run(StartingCamera(), tester);
+		}
+	}
+
+	TEST_CASE( "StraightSkeletonShapesAndHoles", "[math]" )
+	{
+		using namespace RenderCore;
+		
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
+		Float2 rectangleExterior[] = {
+			Float2 {  10.f,  15.f } + Float2 { 25, 25 },
+			Float2 { -10.f,  15.f } + Float2 { 25, 25 },
+			Float2 { -10.f, -15.f } + Float2 { 25, 25 },
+			Float2 {  10.f, -15.f } + Float2 { 25, 25 }
+		};
+
+		Float2 rectangleInterior[] = {
+			Float2 {   5.f,  12.f } + Float2 { 25, 25 },
+			Float2 {   5.f,  10.f } + Float2 { 25, 25 },
+			Float2 {  -5.f,  10.f } + Float2 { 25, 25 },
+			Float2 {  -5.f,  12.f } + Float2 { 25, 25 }
+		};
+
+		{
+			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
+			StraightSkeletonCalculator<float> calculator;
+			auto outsideLoop = calculator.AddLoop(MakeIteratorRange(rectangleExterior));
+			calculator.AddLoop(MakeIteratorRange(rectangleInterior), outsideLoop);
+			std::vector<Float2> pts;
+			pts.insert(pts.end(), rectangleExterior, &rectangleExterior[dimof(rectangleExterior)]);
+			pts.insert(pts.end(), rectangleInterior, &rectangleInterior[dimof(rectangleInterior)]);
+			tester->_previews.emplace_back(calculator.Calculate(), MakeIteratorRange(pts));
 			testHelper->Run(StartingCamera(), tester);
 		}
 	}

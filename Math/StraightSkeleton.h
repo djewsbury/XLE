@@ -8,15 +8,15 @@
 #include "../Utility/IteratorUtils.h"
 #include <vector>
 #include <limits>
+#include <memory>
 
 namespace XLEMath
 {
 	T1(Primitive) class StraightSkeleton
 	{
 	public:
-		using VertexId = unsigned;
 		enum class EdgeType { VertexPath, Wavefront };
-		struct Edge { VertexId _head; VertexId _tail; EdgeType _type; };
+		struct Edge { unsigned _head; unsigned _tail; EdgeType _type; };
 
 		size_t _boundaryPointCount = 0;
 		std::vector<Vector3T<Primitive>> _steinerVertices;
@@ -25,7 +25,17 @@ namespace XLEMath
 		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops();
 	};
 
-	T1(Primitive) StraightSkeleton<Primitive> CalculateStraightSkeleton(
-		IteratorRange<const Vector2T<Primitive>*> vertices, 
-		Primitive maxInset = std::numeric_limits<Primitive>::max());
+	T1(Primitive) class StraightSkeletonGraph;
+
+	T1(Primitive) class StraightSkeletonCalculator
+	{
+	public:
+		unsigned AddLoop(IteratorRange<const Vector2T<Primitive>*> vertices, unsigned containingLoop = ~unsigned(0));
+		StraightSkeleton<Primitive> Calculate(Primitive maxInset = std::numeric_limits<Primitive>::max());
+
+		StraightSkeletonCalculator();
+		~StraightSkeletonCalculator();
+	private:
+		std::unique_ptr<StraightSkeletonGraph<Primitive>> _graph;
+	};
 }
