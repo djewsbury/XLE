@@ -564,7 +564,9 @@ namespace XLEMath
 				auto& loopToCheck = GetLoop(lid);
 				for (auto m=loopToCheck._motorcycleSegments.begin(); m!=loopToCheck._motorcycleSegments.end(); ++m) {
 					if (m->_pendingCalculate) continue;
-					if (seg1._head == m->_motor || seg1._tail == m->_motor) continue;
+					if (seg1._head == m->_motor || seg1._tail == m->_motor) { m->_pendingCalculate = true; continue; }
+					if (m->_edgeHead == seg1._head || m->_edgeHead == seg1._tail || m->_edgeTail == seg1._head || m->_edgeTail == seg1._tail) { m->_pendingCalculate = true; continue; }
+					
 					auto crashOpt = BuildCrashEvent_SimultaneousV<Primitive>(MakeIteratorRange(_vertices), seg1._head, seg1._tail, m->_motor);
 					if (crashOpt && crashOpt.value()._pointAndTime[2] < m->_crashPt[2]) {
 						auto protoCrash = crashOpt.value();
@@ -591,7 +593,7 @@ namespace XLEMath
 		}
 
 		for (auto m=loop._motorcycleSegments.begin(); m!=loop._motorcycleSegments.end(); ++m) {
-			// if (!m->_pendingCalculate) continue;
+			if (!m->_pendingCalculate) continue;
 			auto crashEventOpt = CalculateCrashEvent<Primitive>(m->_motor, MakeIteratorRange(loop._edges), MakeIteratorRange(_vertices));
 			if (crashEventOpt) {
 				auto crashEvent = crashEventOpt.value();
@@ -799,39 +801,59 @@ namespace XLEMath
 			if (m._motor == crashInfo._motor) continue;		// (skip this one, it's just been processed)
 			if (crashSegmentHead == crashSegmentTail && m._motor == crashSegmentHead) continue;
 			if (ContainsVertex<Primitive>(crashInfo._headSide._edges, m._motor)) {
-				if (m._edgeHead == crashInfo._motor) {
-					if (m._edgeHead == m._edgeTail) {
-						m._edgeHead = m._edgeTail = crashInfo._headSideReplacement;
-					} else {
+				if (!m._pendingCalculate) {
+					if (m._edgeHead == crashInfo._motor) {
+						if (m._edgeHead == m._edgeTail) {
+							m._edgeHead = m._edgeTail = crashInfo._headSideReplacement;
+						} else {
+							m._edgeHead = crashInfo._headSideReplacement;
+						}
+					} else if (m._edgeTail == crashInfo._motor) {
 						m._edgeHead = crashInfo._headSideReplacement;
-					}
-				} else if (m._edgeTail == crashInfo._motor) {
-					m._edgeHead = crashInfo._headSideReplacement;
-					m._edgeTail = crashInfo._hin->_tail;
-				} else if (m._edgeTail == crashSegmentTail) {
-					if (m._edgeHead == m._edgeTail) {
-						m._edgeHead = m._edgeTail = crashInfo._headSideReplacement;
+						m._edgeTail = crashInfo._hin->_tail;
+					} else if (m._edgeTail == crashSegmentTail) {
+						if (m._edgeHead == m._edgeTail) {
+							m._edgeHead = m._edgeTail = crashInfo._headSideReplacement;
+						} else {
+							m._edgeTail = crashInfo._headSideReplacement;
+						}
 					} else {
-						m._edgeTail = crashInfo._headSideReplacement;
+						// If the edge vertices are no longer here, we should recalculate the motor
+						auto headI = std::find_if(crashInfo._headSide._edges.begin(), crashInfo._headSide._edges.end(),
+							[v=m._edgeHead](const auto& c) { return c._head == v; });
+						auto tailI = std::find_if(crashInfo._headSide._edges.begin(), crashInfo._headSide._edges.end(),
+							[v=m._edgeTail](const auto& c) { return c._head == v; });
+						if (headI == crashInfo._headSide._edges.end() || tailI == crashInfo._headSide._edges.end())
+							m._pendingCalculate = true;
 					}
 				}
 				crashInfo._headSide._motorcycleSegments.push_back(m);
 			} else {
 				assert(ContainsVertex<Primitive>(crashInfo._tailSide._edges, m._motor));
-				if (m._edgeTail == crashInfo._motor) {
-					if (m._edgeHead == m._edgeTail) {
-						m._edgeHead = m._edgeTail = crashInfo._tailSideReplacement;
-					} else {
+				if (!m._pendingCalculate) {
+					if (m._edgeTail == crashInfo._motor) {
+						if (m._edgeHead == m._edgeTail) {
+							m._edgeHead = m._edgeTail = crashInfo._tailSideReplacement;
+						} else {
+							m._edgeTail = crashInfo._tailSideReplacement;
+						}
+					} else if (m._edgeHead == crashInfo._motor) {
+						m._edgeHead = crashInfo._tout->_head;
 						m._edgeTail = crashInfo._tailSideReplacement;
-					}
-				} else if (m._edgeHead == crashInfo._motor) {
-					m._edgeHead = crashInfo._tout->_head;
-					m._edgeTail = crashInfo._tailSideReplacement;
-				} else if (m._edgeHead == crashSegmentHead) {
-					if (m._edgeHead == m._edgeTail) {
-						m._edgeHead = m._edgeTail = crashInfo._tailSideReplacement;
+					} else if (m._edgeHead == crashSegmentHead) {
+						if (m._edgeHead == m._edgeTail) {
+							m._edgeHead = m._edgeTail = crashInfo._tailSideReplacement;
+						} else {
+							m._edgeHead = crashInfo._tailSideReplacement;							
+						}
 					} else {
-						m._edgeHead = crashInfo._tailSideReplacement;							
+						// If the edge vertices are no longer here, we should recalculate the motor
+						auto headI = std::find_if(crashInfo._tailSide._edges.begin(), crashInfo._tailSide._edges.end(),
+							[v=m._edgeHead](const auto& c) { return c._head == v; });
+						auto tailI = std::find_if(crashInfo._tailSide._edges.begin(), crashInfo._tailSide._edges.end(),
+							[v=m._edgeTail](const auto& c) { return c._head == v; });
+						if (headI == crashInfo._tailSide._edges.end() || tailI == crashInfo._tailSide._edges.end())
+							m._pendingCalculate = true;
 					}
 				}
 				crashInfo._tailSide._motorcycleSegments.push_back(m);
