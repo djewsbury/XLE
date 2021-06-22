@@ -579,7 +579,7 @@ namespace XLEMath
 						}
 
 						m->_crashPt = protoCrash._pointAndTime;
-						m->_edgeLoop = (loopToCheck._loopId != loop._loopId) ? loopToCheck._loopId : ~LoopId(0);
+						m->_edgeLoop = loopToCheck._loopId;
 					}
 				}
 			}
@@ -588,7 +588,7 @@ namespace XLEMath
 		}
 
 		for (auto m=loop._motorcycleSegments.begin(); m!=loop._motorcycleSegments.end(); ++m) {
-			// if (!m->_pendingCalculate) continue;
+			if (!m->_pendingCalculate) continue;
 			auto crashEventOpt = CalculateCrashEvent<Primitive>(m->_motor, loop, MakeIteratorRange(_loops), MakeIteratorRange(_vertices));
 			if (crashEventOpt) {
 				auto crashEvent = crashEventOpt.value();
@@ -638,7 +638,16 @@ namespace XLEMath
 		evnt._edgeLoop = loop._loopId;
 	}
 
-	T1(Primitive) static void SetMotorLoop(WavefrontLoop<Primitive>& loop, Event<Primitive>& evnt);
+	T1(Primitive) static void SetMotorLoop(const WavefrontLoop<Primitive>& loop, Event<Primitive>& evnt)
+	{
+		assert(evnt._type == EventType::MotorcycleCrash || evnt._type != EventType::MultiLoopMotorcycleCrash);
+		if (evnt._type == EventType::MultiLoopMotorcycleCrash) assert(evnt._edgeLoop != loop._loopId);
+		auto q = std::find_if(loop._edges.begin(), loop._edges.end(), 
+			[evnt](const auto& e){ return e._head == evnt._motor || e._tail == evnt._motor; });
+		assert(q != loop._edges.end());
+		assert(loop._loopId != ~0u);
+		evnt._motorLoop = loop._loopId;
+	}
 
 	T1(Primitive) struct CrashEventInfo
 	{
@@ -782,6 +791,35 @@ namespace XLEMath
 			HandleRemovedVertex(evnts, crashSegmentTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, originalLoop._loopId);
 		}
 		
+		HandleRemovedVertex(evnts, crashInfo._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, originalLoop._loopId);
+		
+		for (auto e=evnts.begin(); e!=evnts.end();) {
+			if (e->_edgeLoop == originalLoop._loopId) {
+				if (ContainsVertex<Primitive>(crashInfo._headSide._edges, e->_edgeHead)) {
+					SetEdgeLoop(crashInfo._headSide, *e);
+				} else {
+					SetEdgeLoop(crashInfo._tailSide, *e);
+				}
+			}
+			if (IsCrash(*e) && e->_motorLoop == originalLoop._loopId) {
+				if (ContainsVertex<Primitive>(crashInfo._headSide._edges, e->_motor)) {
+					SetMotorLoop(crashInfo._headSide, *e);
+				} else {
+					SetMotorLoop(crashInfo._tailSide, *e);
+				}
+
+				// Don't create a loop merge operation like this. If the edge and motor loop diverge, it's
+				// hopefully just an artefact of precision errors cause by splitting the loop earlier. We'll 
+				// just end up making things worse if we try to merge the loops together again
+				if (e->_edgeLoop != e->_motorLoop && e->_type == EventType::MotorcycleCrash) {
+					e = evnts.erase(e);
+					continue;
+				}
+			}
+			++e;
+		}
+
+#if 0
 		std::vector<Event<Primitive>> additionalEventsToAdd;
 		for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();) {
 			bool collisionEdgeHeadIsHeadSide = ContainsVertex<Primitive>(crashInfo._headSide._edges, pendingEvent->_edgeHead);
@@ -807,17 +845,7 @@ namespace XLEMath
 						assert(crashSegmentHead != crashSegmentTail);
 						pendingEvent->_edgeHead = crashInfo._headSideReplacement;
 						pendingEvent->_edgeTail = crashInfo._hin->_tail;
-					} /*else if (pendingEvent->_edgeTail == crashSegmentTail) {
-						// When the motor is headside, if there's another crash on the same segment it should be
-						// in the pendingEvent->_edgeHead <--- headSideReplacement part.
-						// We have to consider the cases where either crashEvent or pendingEvent are single vertex collisions, as well
-						if (pendingEvent->_edgeHead == pendingEvent->_edgeTail) {
-							pendingEvent->_edgeHead = pendingEvent->_edgeTail = crashInfo._headSideReplacement;
-						} else {
-							assert((crashSegmentHead == crashSegmentTail) || pendingEvent->_edgeHead == crashSegmentHead);
-							pendingEvent->_edgeTail = crashInfo._headSideReplacement;
-						}
-					} */else if (!collisionEdgeHeadIsHeadSide || !collisionEdgeTailIsHeadSide) {
+					} else if (!collisionEdgeHeadIsHeadSide || !collisionEdgeTailIsHeadSide) {
 						// the motor is on headside, but the edge is on tail side, and the edge is unrelated to crashEvent
 						// this can happen in extreme cases of many vertices colliding in the on the same point
 						// We would have to change the edge into some completely different edge in order to process it; but 
@@ -856,14 +884,7 @@ namespace XLEMath
 						assert(crashSegmentHead != crashSegmentTail);
 						pendingEvent->_edgeHead = crashInfo._tout->_head;
 						pendingEvent->_edgeTail = crashInfo._tailSideReplacement;
-					} /*else if (pendingEvent->_edgeHead == crashSegmentHead) {
-						if (pendingEvent->_edgeHead == pendingEvent->_edgeTail) {
-							pendingEvent->_edgeHead = pendingEvent->_edgeTail = crashInfo._tailSideReplacement;
-						} else {
-							assert((crashSegmentHead == crashSegmentTail) || pendingEvent->_edgeTail == crashSegmentTail);
-							pendingEvent->_edgeHead = crashInfo._tailSideReplacement;							
-						}
-					} */else if (collisionEdgeHeadIsHeadSide || collisionEdgeTailIsHeadSide) {
+					} else if (collisionEdgeHeadIsHeadSide || collisionEdgeTailIsHeadSide) {
 						assert(Equivalent(PointAndTime<Primitive>{pendingEvent->_eventPt, pendingEvent->_eventTime}, crashPtAndTime, GetEpsilon<Primitive>()));
 						pendingEvent = evnts.erase(pendingEvent);
 						continue;
@@ -877,23 +898,7 @@ namespace XLEMath
 					} else if (pendingEvent->_edgeTail == crashInfo._motor) {
 						pendingEvent->_edgeHead = crashInfo._tailSideReplacement;
 						SetEdgeLoop(crashInfo._tailSide, *pendingEvent);
-					} /*else if (pendingEvent->_edgeHead == crashSegmentHead || pendingEvent->_edgeTail == crashSegmentTail) {
-						// This case is particular difficult, because we don't know if the event
-						// should be on the headSideReplacement -> crashSegmentHead side or crashSegmentTail -> tailSideReplacement
-						// it's easier when colliding with an individual point
-						if (crashSegmentHead == crashSegmentTail && pendingEvent->_edgeHead == crashSegmentHead) {
-							pendingEvent->_edgeHead = crashInfo._tailSideReplacement;
-							SetEdgeLoop(crashInfo._tailSide, *pendingEvent);
-						} else if (crashSegmentHead == crashSegmentTail && pendingEvent->_edgeTail == crashSegmentTail) {
-							pendingEvent->_edgeTail = crashInfo._headSideReplacement;
-							SetEdgeLoop(crashInfo._headSide, *pendingEvent);
-						} else {
-							assert(pendingEvent->_edgeTail == crashSegmentTail);
-							assert(0);		// bail on this for now!
-							pendingEvent = evnts.erase(pendingEvent);
-							continue;
-						}
-					} */else if (pendingEvent->_edgeLoop == originalLoop._loopId) {
+					} else if (pendingEvent->_edgeLoop == originalLoop._loopId) {
 						if (collisionEdgeHeadIsHeadSide) {
 							SetEdgeLoop(crashInfo._headSide, *pendingEvent);
 						} else {
@@ -916,23 +921,7 @@ namespace XLEMath
 						assert(!collisionEdgeHeadIsHeadSide);
 						pendingEvent->_edgeTail = crashInfo._tailSideReplacement;
 						SetEdgeLoop(crashInfo._tailSide, *pendingEvent);
-					} /*else if (pendingEvent->_edgeHead == crashSegmentHead && pendingEvent->_edgeTail == crashSegmentTail) {
-						// we crashed into an edge that was pending a collapse, anyway
-						auto headSideEvent = *pendingEvent;
-						headSideEvent._edgeTail = crashInfo._headSideReplacement;
-						SetEdgeLoop(crashInfo._headSide, headSideEvent);
-						additionalEventsToAdd.push_back(headSideEvent);
-						pendingEvent->_edgeHead = crashInfo._tailSideReplacement;
-						SetEdgeLoop(crashInfo._tailSide, *pendingEvent);
-					} else if (crashSegmentHead == crashSegmentTail && pendingEvent->_edgeHead == crashSegmentHead) {
-						assert(!collisionEdgeTailIsHeadSide);
-						pendingEvent->_edgeHead = crashInfo._tailSideReplacement;
-						SetEdgeLoop(crashInfo._tailSide, *pendingEvent);
-					} else if (crashSegmentHead == crashSegmentTail && pendingEvent->_edgeTail == crashSegmentHead) {
-						assert(collisionEdgeHeadIsHeadSide);
-						pendingEvent->_edgeTail = crashInfo._headSideReplacement;
-						SetEdgeLoop(crashInfo._headSide, *pendingEvent);
-					} */else {
+					} else {
 						assert(collisionEdgeHeadIsHeadSide == collisionEdgeTailIsHeadSide);
 						if (collisionEdgeHeadIsHeadSide) {
 							SetEdgeLoop(crashInfo._headSide, *pendingEvent);
@@ -946,6 +935,7 @@ namespace XLEMath
 			++pendingEvent;
 		}
 		evnts.insert(evnts.end(), additionalEventsToAdd.begin(), additionalEventsToAdd.end());
+#endif
 
 		// Move the motorcycles from "loop" to "headSide" or "tailSide" depending on which loop 
 		// they are now a part of.
@@ -980,6 +970,7 @@ namespace XLEMath
 							m._pendingCalculate = true;
 					}
 				}
+				m._edgeLoop = crashInfo._headSide._loopId;
 				crashInfo._headSide._motorcycleSegments.push_back(m);
 			} else {
 				assert(ContainsVertex<Primitive>(crashInfo._tailSide._edges, m._motor));
@@ -1009,11 +1000,10 @@ namespace XLEMath
 							m._pendingCalculate = true;
 					}
 				}
+				m._edgeLoop = crashInfo._tailSide._loopId;
 				crashInfo._tailSide._motorcycleSegments.push_back(m);
 			}
 		}
-
-		// todo -- we also have to update motorcycles on contained and containing loops
 	}
 
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts)
@@ -1443,6 +1433,7 @@ namespace XLEMath
 
 			for (auto&m:loop._motorcycleSegments) {
 				if (m._edgeHead == ~0u && m._edgeTail == ~0u) continue;
+				if (m._pendingCalculate) continue;
 				if (collapseGroupInfo._tailSideReplacement != collapseGroupInfo._headSideReplacement) {
 					if (	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeTail) != collapsedVerticesEnd
 						|| 	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeHead) != collapsedVerticesEnd) {
@@ -1455,6 +1446,22 @@ namespace XLEMath
 					if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeHead) != collapsedVerticesEnd)
 						m._edgeHead = collapseGroupInfo._headSideReplacement;
 				}
+			}
+		} else {
+			// this loop got entirely collapsed. Remove all events and motorcycle references
+			for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();) {
+				if (pendingEvent->_edgeLoop == loop._loopId) {
+					pendingEvent=evnts.erase(pendingEvent);
+				} else {
+					++pendingEvent;
+				}
+			}
+			for (auto&m:loop._motorcycleSegments) {
+				if (m._edgeHead == ~0u && m._edgeTail == ~0u) continue;
+				if (m._pendingCalculate) continue;
+				if (	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeTail) != collapsedVerticesEnd
+					|| 	std::find(collapsedVertices.begin(), collapsedVerticesEnd, m._edgeHead) != collapsedVerticesEnd)
+					m._pendingCalculate = true;
 			}
 		}
 
