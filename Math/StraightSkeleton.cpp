@@ -59,7 +59,7 @@ namespace XLEMath
 		VertexId _motor;
 		PointAndTime<Primitive> _crashPt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
 		VertexId _edgeHead = ~VertexId(0), _edgeTail = ~VertexId(0);
-		LoopId _otherLoopId = ~LoopId(0);
+		LoopId _edgeLoop = ~LoopId(0);
 		bool _pendingCalculate = true;
 	};
 
@@ -69,7 +69,7 @@ namespace XLEMath
 		Vector2T<Primitive> _eventPt = Zero<Vector2T<Primitive>>();
 		Primitive _eventTime = std::numeric_limits<Primitive>::max();
 		EventType _type = EventType::None;
-		LoopId _mainLoop = ~LoopId(0);
+		LoopId _edgeLoop = ~LoopId(0);
 
 		// Collapse edge or collision edge
 		VertexId _edgeHead = ~VertexId(0);
@@ -77,14 +77,14 @@ namespace XLEMath
 
 		// Motorcycle crash
 		VertexId _motor = ~VertexId(0);
-		LoopId _otherLoop = ~LoopId(0);
+		LoopId _motorLoop = ~LoopId(0);
 
 		static Event Collapse(LoopId loop, PointAndTime<Primitive> eventPt, VertexId head, VertexId tail)
 		{
 			Event result;
 			result._eventPt = Truncate(eventPt);
 			result._eventTime = eventPt[2];
-			result._mainLoop = loop;
+			result._edgeLoop = loop;
 			result._type = EventType::Collapse;
 			result._edgeHead = head;
 			result._edgeTail = tail;
@@ -92,32 +92,33 @@ namespace XLEMath
 			return result;
 		}
 
-		static Event MotorcycleCrash(LoopId loop, PointAndTime<Primitive> eventPt, VertexId motor, VertexId collisionHead, VertexId collisionTail)
+		static Event MotorcycleCrash(LoopId edgeLoop, PointAndTime<Primitive> eventPt, VertexId motor, VertexId collisionHead, VertexId collisionTail, LoopId motorLoop)
 		{
 			Event result;
 			result._eventPt = Truncate(eventPt);
 			result._eventTime = eventPt[2];
-			result._mainLoop = loop;
+			result._edgeLoop = edgeLoop;
 			result._type = EventType::MotorcycleCrash;
 			result._edgeHead = collisionHead;
 			result._edgeTail = collisionTail;
 			result._motor = motor;
+			result._motorLoop = ~LoopId(0);
+			if (motorLoop != ~LoopId(0) && motorLoop != edgeLoop) {
+				result._type = EventType::MultiLoopMotorcycleCrash;
+				result._motorLoop = motorLoop;
+			}
 			return result;
 		}
+	};
 
-		static Event MultiLoopMotorcycleCrash(LoopId loop, PointAndTime<Primitive> eventPt, VertexId motor, VertexId collisionHead, VertexId collisionTail, LoopId otherLoop)
-		{
-			Event result;
-			result._eventPt = Truncate(eventPt);
-			result._eventTime = eventPt[2];
-			result._mainLoop = loop;
-			result._type = EventType::MultiLoopMotorcycleCrash;
-			result._edgeHead = collisionHead;
-			result._edgeTail = collisionTail;
-			result._motor = motor;
-			result._otherLoop = otherLoop;
-			return result;
-		}
+	T1(Primitive) struct WavefrontLoop
+	{
+		std::vector<WavefrontEdge<Primitive>> _edges;
+		std::vector<MotorcycleSegment<Primitive>> _motorcycleSegments;
+		Primitive _lastEventBatchEarliest = std::numeric_limits<Primitive>::max();
+		Primitive _lastEventBatchLatest = -std::numeric_limits<Primitive>::max();
+		unsigned _lastBatchIndex = 0;
+		LoopId _loopId = ~LoopId(0);
 	};
 
 	template<typename Iterator>
@@ -258,40 +259,42 @@ namespace XLEMath
     
 	T1(Primitive) static std::optional<Event<Primitive>> CalculateCrashEvent(
 		VertexId motor, 
-		IteratorRange<const WavefrontEdge<Primitive>*> segments,
+		const WavefrontLoop<Primitive>& motorLoop,
+		IteratorRange<const WavefrontLoop<Primitive>*> loops,
 		VertexSet<Primitive> vertices)
 	{
 		std::optional<Event<Primitive>> bestCollisionEvent;
 		auto bestEventTime = std::numeric_limits<Primitive>::max();
 
-		auto inAndOut = FindInAndOut(segments, motor);
+		auto inAndOut = FindInAndOut(MakeIteratorRange(motorLoop._edges), motor);
 		auto motorPrev = inAndOut.first->_tail;
 		auto motorNext = inAndOut.second->_head;
 
 		// Look for an intersection with segments
-		for (const auto&e:segments) {
-			if (e._head == motor || e._tail == motor) continue;	// (can't crash if part of the same segment)
+		for (const auto&l:loops)
+			for (const auto&e:l._edges) {
+				if (e._head == motor || e._tail == motor) continue;	// (can't crash if part of the same segment)
 
-			// "BuildCrashEvent_SimultaneousV" seems to do better here in the presence of near-colinear edges
-			// since we use the vertex velocity we've already calculated, it takes into account all of the colinear protections
-			// The downside is any floating point precision we picked up from there will impact the crash location calculation
-			// auto res = BuildCrashEvent_Simultaneous(vertices, e._head, e._tail, motorPrev, motor, motorNext);
-			auto res = BuildCrashEvent_SimultaneousV(vertices, e._head, e._tail, motor);
+				// "BuildCrashEvent_SimultaneousV" seems to do better here in the presence of near-colinear edges
+				// since we use the vertex velocity we've already calculated, it takes into account all of the colinear protections
+				// The downside is any floating point precision we picked up from there will impact the crash location calculation
+				// auto res = BuildCrashEvent_Simultaneous(vertices, e._head, e._tail, motorPrev, motor, motorNext);
+				auto res = BuildCrashEvent_SimultaneousV(vertices, e._head, e._tail, motor);
 
-			if (res.has_value() && res.value()._pointAndTime[2] < bestEventTime) {
-				auto protoCrash = res.value();
-				if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Head) {
-					if (e._head == motorPrev) continue;		// reject crashes when there is a direct edge between the motor and the point
-					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(~0, protoCrash._pointAndTime, motor, e._head, e._head);
-				} else if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Tail) {
-					if (e._tail == motorNext) continue;		// reject crashes when there is a direct edge between the motor and the point
-					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(~0, protoCrash._pointAndTime, motor, e._tail, e._tail);
-				} else {
-					bestCollisionEvent = Event<Primitive>::MotorcycleCrash(~0, protoCrash._pointAndTime, motor, e._head, e._tail);
+				if (res.has_value() && res.value()._pointAndTime[2] < bestEventTime) {
+					auto protoCrash = res.value();
+					if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Head) {
+						if (e._head == motorPrev) continue;		// reject crashes when there is a direct edge between the motor and the point
+						bestCollisionEvent = Event<Primitive>::MotorcycleCrash(l._loopId, protoCrash._pointAndTime, motor, e._head, e._head, motorLoop._loopId);
+					} else if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Tail) {
+						if (e._tail == motorNext) continue;		// reject crashes when there is a direct edge between the motor and the point
+						bestCollisionEvent = Event<Primitive>::MotorcycleCrash(l._loopId, protoCrash._pointAndTime, motor, e._tail, e._tail, motorLoop._loopId);
+					} else {
+						bestCollisionEvent = Event<Primitive>::MotorcycleCrash(l._loopId, protoCrash._pointAndTime, motor, e._head, e._tail, motorLoop._loopId);
+					}
+					bestEventTime = protoCrash._pointAndTime[2];
 				}
-				bestEventTime = protoCrash._pointAndTime[2];
 			}
-		}
 
 		return bestCollisionEvent;
 	}
@@ -369,20 +372,7 @@ namespace XLEMath
 	public:
 		std::vector<Vertex<Primitive>> _vertices;
 
-		struct WavefrontLoop
-		{
-			std::vector<WavefrontEdge<Primitive>> _edges;
-			std::vector<MotorcycleSegment<Primitive>> _motorcycleSegments;
-			Primitive _lastEventBatchEarliest = std::numeric_limits<Primitive>::max();
-			Primitive _lastEventBatchLatest = -std::numeric_limits<Primitive>::max();
-			unsigned _lastBatchIndex = 0;
-
-			// Hierarchy of containing loops
-			LoopId _loopId = ~LoopId(0);
-			std::vector<LoopId> _containedLoops;
-			LoopId _containingLoop = ~LoopId(0);
-		};
-		std::vector<WavefrontLoop> _loops;
+		std::vector<WavefrontLoop<Primitive>> _loops;
 		size_t _boundaryPointCount = 0;
 		LoopId _nextLoopId = 1; 
 		unsigned _currentBatchIndex = 0;
@@ -395,23 +385,24 @@ namespace XLEMath
 		std::vector<VertexPathEdge> _vertexPathEdges;
 
 		StraightSkeleton<Primitive> CalculateSkeleton(Primitive maxTime);
-		WavefrontLoop& GetLoop(LoopId id);
+		typename std::vector<WavefrontLoop<Primitive>>::iterator GetLoop(LoopId id);
 	private:
-		void WriteFinalEdges(StraightSkeleton<Primitive>& dest, const WavefrontLoop& loop, Primitive time);
+		void WriteFinalEdges(StraightSkeleton<Primitive>& dest, const WavefrontLoop<Primitive>& loop, Primitive time);
 
 		void ProcessEvents(std::vector<Event<Primitive>>& evnts);
 		void ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts);
 		void ProcessCollapseEvents(std::vector<Event<Primitive>>& evnts);
 
-		void FindCollapses(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop& loop);
-		void FindMotorcycleCrashes(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop& loop);
+		void FindCollapses(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop);
+		void FindMotorcycleCrashes(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop);
+		void ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts);
 
 		void AddVertexPathEdge(unsigned vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end);
-		void UpdateLoopStage1(WavefrontLoop& loop);
-		void UpdateLoopStage2(WavefrontLoop& loop);
+		void UpdateLoopStage1(WavefrontLoop<Primitive>& loop);
+		void UpdateLoopStage2(WavefrontLoop<Primitive>& loop);
 	};
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::FindCollapses(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop& loop)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::FindCollapses(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop)
 	{
 		if (loop._edges.size() <= 2) return;
 
@@ -448,7 +439,7 @@ namespace XLEMath
 		#endif
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::FindMotorcycleCrashes(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop& loop)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::FindMotorcycleCrashes(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop)
 	{
 		if (loop._edges.size() <= 2) return;
 
@@ -460,7 +451,7 @@ namespace XLEMath
 					assert(!Equivalent(head.Velocity(), Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>()));
 				#endif
 
-				auto crashEventOpt = CalculateCrashEvent<Primitive>(m._motor, MakeIteratorRange(loop._edges), MakeIteratorRange(_vertices));
+				auto crashEventOpt = CalculateCrashEvent<Primitive>(m._motor, MakeIteratorRange(loop._edges), MakeIteratorRange(_loops), MakeIteratorRange(_vertices));
 				if (!crashEventOpt) continue;
 				auto crashEvent = crashEventOpt.value();
 				// if (crashEvent._eventTime < loop._lastEventBatchEarliest && loop._lastEventBatchEarliest <= loop._lastEventBatchLatest) continue;
@@ -480,10 +471,7 @@ namespace XLEMath
 				auto crashTime = m._crashPt[2];
 				if (crashTime < loop._lastEventBatchEarliest && loop._lastEventBatchEarliest <= loop._lastEventBatchLatest) continue;
 				if (crashTime < (earliestTime + maxEventChain * GetTimeEpsilon<Primitive>())) {
-					if (m._otherLoopId != ~LoopId(0)) {
-						events.push_back(Event<Primitive>::MultiLoopMotorcycleCrash(loop._loopId, m._crashPt, m._motor, m._edgeHead, m._edgeTail, m._otherLoopId));
-					} else 
-						events.push_back(Event<Primitive>::MotorcycleCrash(loop._loopId, m._crashPt, m._motor, m._edgeHead, m._edgeTail));
+					events.push_back(Event<Primitive>::MotorcycleCrash(m._edgeLoop, m._crashPt, m._motor, m._edgeHead, m._edgeTail, loop._loopId));
 					earliestTime = std::min(crashTime, earliestTime);
 				}
 			}
@@ -494,7 +482,7 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage1(WavefrontLoop& loop)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage1(WavefrontLoop<Primitive>& loop)
 	{
 		// The "velocity" value for newly created vertices will not have been updated yet; we needed
 		// to wait until all crash events were processed before we did. But 
@@ -539,7 +527,7 @@ namespace XLEMath
 		}
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage2(WavefrontLoop& loop)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage2(WavefrontLoop<Primitive>& loop)
 	{
 		if (loop._edges.size() <= 2) {
 			loop._motorcycleSegments.clear();
@@ -566,14 +554,9 @@ namespace XLEMath
 
 			// We have to compare each motorcycle against this edge; and from there see if there's any better crash points
 			// Ie; we're comparing all new edges vs all motorcycles (except for those which we'll do a full recalculate)
-			// We do this for 
-			std::vector<LoopId> loopsWithMotorcycles;
-			loopsWithMotorcycles.push_back(loop._loopId);
-			if (loop._containingLoop != ~0u)
-				loopsWithMotorcycles.push_back(loop._containingLoop);
-			loopsWithMotorcycles.insert(loopsWithMotorcycles.end(), loop._containedLoops.begin(), loop._containedLoops.end());
-			for (auto lid:loopsWithMotorcycles) {
-				auto& loopToCheck = GetLoop(lid);
+			// We can narrow down the list of loops we need to check by only looking at the containing loop, any contained loops
+			// and siblings. But that's still a lot to check... so might as well just check them all 
+			for (auto& loopToCheck:_loops) {
 				for (auto m=loopToCheck._motorcycleSegments.begin(); m!=loopToCheck._motorcycleSegments.end(); ++m) {
 					if (m->_pendingCalculate) continue;
 					if (seg1._head == m->_motor || seg1._tail == m->_motor) { m->_pendingCalculate = true; continue; }
@@ -596,7 +579,7 @@ namespace XLEMath
 						}
 
 						m->_crashPt = protoCrash._pointAndTime;
-						m->_otherLoopId = (loopToCheck._loopId != loop._loopId) ? loopToCheck._loopId : ~LoopId(0);
+						m->_edgeLoop = (loopToCheck._loopId != loop._loopId) ? loopToCheck._loopId : ~LoopId(0);
 					}
 				}
 			}
@@ -605,30 +588,30 @@ namespace XLEMath
 		}
 
 		for (auto m=loop._motorcycleSegments.begin(); m!=loop._motorcycleSegments.end(); ++m) {
-			if (!m->_pendingCalculate) continue;
-			auto crashEventOpt = CalculateCrashEvent<Primitive>(m->_motor, MakeIteratorRange(loop._edges), MakeIteratorRange(_vertices));
+			// if (!m->_pendingCalculate) continue;
+			auto crashEventOpt = CalculateCrashEvent<Primitive>(m->_motor, loop, MakeIteratorRange(_loops), MakeIteratorRange(_vertices));
 			if (crashEventOpt) {
 				auto crashEvent = crashEventOpt.value();
 				m->_crashPt = {crashEvent._eventPt, crashEvent._eventTime};
 				m->_edgeTail = crashEvent._edgeTail;
 				m->_edgeHead = crashEvent._edgeHead;
+				m->_edgeLoop = crashEvent._edgeLoop;
 			} else {
 				m->_crashPt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
-				m->_edgeTail = ~0u;
-				m->_edgeHead = ~0u;
+				m->_edgeTail = ~VertexId(0);
+				m->_edgeHead = ~VertexId(0);
+				m->_edgeLoop = ~LoopId(0);
 			}
 			m->_pendingCalculate = false;
 		}
 	}
 
-	T1(Primitive) auto StraightSkeletonGraph<Primitive>::GetLoop(LoopId id) -> WavefrontLoop&
+	T1(Primitive) auto StraightSkeletonGraph<Primitive>::GetLoop(LoopId id) -> typename std::vector<WavefrontLoop<Primitive>>::iterator
 	{
-		for (auto& l:_loops)
-			if (l._loopId == id)
+		for (auto l=_loops.begin(); l!=_loops.end(); ++l)
+			if (l->_loopId == id)
 				return l;
-		assert(0);
-		static WavefrontLoop dummy;
-		return dummy;
+		return _loops.end();
 	}
 
 	T1(Primitive) static bool ContainsVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, unsigned v)
@@ -638,7 +621,7 @@ namespace XLEMath
 		return headSideI != edges.end();
 	}
 
-	T1(Primitive) static void SetLoop(typename StraightSkeletonGraph<Primitive>::WavefrontLoop& loop, Event<Primitive>& evnt)
+	T1(Primitive) static void SetLoop(WavefrontLoop<Primitive>& loop, Event<Primitive>& evnt)
 	{
 		if (evnt._type != EventType::MotorcycleCrash)
 			assert(evnt._edgeHead != evnt._edgeTail);
@@ -652,7 +635,7 @@ namespace XLEMath
 			assert(q != loop._edges.end());
 		}
 		assert(loop._loopId != ~0u);
-		evnt._mainLoop = loop._loopId;
+		evnt._edgeLoop = loop._loopId;
 	}
 
 	T1(Primitive) struct CrashEventInfo
@@ -660,7 +643,7 @@ namespace XLEMath
 		PointAndTime<Primitive> _crashPtAndTime;
 		VertexId _crashSegmentTail, _crashSegmentHead, _motor;
 		VertexId _tailSideReplacement, _headSideReplacement;
-		typename StraightSkeletonGraph<Primitive>::WavefrontLoop _tailSide, _headSide;
+		WavefrontLoop<Primitive> _tailSide, _headSide;
 		typename std::vector<WavefrontEdge<Primitive>>::iterator _tin;
 		typename std::vector<WavefrontEdge<Primitive>>::iterator _tout;
 		typename std::vector<WavefrontEdge<Primitive>>::iterator _hin;
@@ -669,7 +652,7 @@ namespace XLEMath
 
 	T1(Primitive) static void PostProcessEventsForMotorcycleCrash(
 		CrashEventInfo<Primitive>& crashInfo,
-		const typename StraightSkeletonGraph<Primitive>::WavefrontLoop& originalLoop,
+		const WavefrontLoop<Primitive>& originalLoop,
 		std::vector<Event<Primitive>>& evnts,
 		VertexSet<Primitive> vertices)
 	{
@@ -795,7 +778,7 @@ namespace XLEMath
 				}
 			} else {
 				assert(pendingEvent->_type == EventType::Collapse);
-				if (pendingEvent->_mainLoop == originalLoop._loopId) {
+				if (pendingEvent->_edgeLoop == originalLoop._loopId) {
 					if (pendingEvent->_edgeHead == crashInfo._motor && pendingEvent->_edgeTail == crashInfo._motor) {
 						pendingEvent->_edgeHead = crashInfo._headSideReplacement;
 						pendingEvent->_edgeTail = crashInfo._headSideReplacement;
@@ -930,7 +913,7 @@ namespace XLEMath
 		auto crashEvent = *evnts.begin();
 		evnts.erase(evnts.begin());
 
-		auto& initialLoop = GetLoop(crashEvent._mainLoop);
+		auto& initialLoop = *GetLoop(crashEvent._edgeLoop);
 
 		// The motor can collapse to become a vertex of the collision edge during earlier steps.
 		if (crashEvent._motor == crashEvent._edgeHead || crashEvent._motor == crashEvent._edgeTail) {
@@ -1118,7 +1101,7 @@ namespace XLEMath
 		collapses.push_back(*evnts.begin());
 		evnts.erase(evnts.begin());
 
-		auto& loop = GetLoop(collapses.begin()->_mainLoop);
+		auto& loop = *GetLoop(collapses.begin()->_edgeLoop);
 
 		#if defined(_DEBUG)
 			assert(collapses[0]._edgeHead != collapses[0]._edgeTail);
@@ -1292,7 +1275,7 @@ namespace XLEMath
 					}
 				} else {
 					assert(pendingEvent->_type == EventType::Collapse);
-					if (pendingEvent->_mainLoop == loop._loopId) {
+					if (pendingEvent->_edgeLoop == loop._loopId) {
 						if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeTail) != collapsedVerticesEnd)
 							pendingEvent->_edgeTail = collapseGroupInfo._headSideReplacement;
 						if (std::find(collapsedVertices.begin(), collapsedVerticesEnd, pendingEvent->_edgeHead) != collapsedVerticesEnd)
@@ -1325,7 +1308,7 @@ namespace XLEMath
 			for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();) {
 				assert (pendingEvent->_edgeTail != ~0u && pendingEvent->_edgeHead != ~0u);
 				assert(!(pendingEvent->_type == EventType::Collapse && pendingEvent->_edgeTail == pendingEvent->_edgeHead));
-				assert(pendingEvent->_mainLoop != loop._loopId || ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeHead) && ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeTail));
+				assert(pendingEvent->_edgeLoop != loop._loopId || ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeHead) && ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeTail));
 				if (pendingEvent->_type == EventType::MotorcycleCrash && pendingEvent->_motor == ~0u) {
 					pendingEvent = evnts.erase(pendingEvent);
 					continue;
@@ -1359,6 +1342,119 @@ namespace XLEMath
 		loop._lastEventBatchLatest = latestCollapseTime;
 	}
 
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts)
+	{
+		assert(!evnts.empty() && evnts.begin()->_type == EventType::MultiLoopMotorcycleCrash);
+		auto crashEvent = *evnts.begin();
+		evnts.erase(evnts.begin());
+
+		assert(crashEvent._motorLoop != crashEvent._edgeLoop);
+		auto motorLoop = GetLoop(crashEvent._motorLoop);
+		auto edgeLoop = GetLoop(crashEvent._edgeLoop);
+
+		// This is like a normal motorcycle crash event, except that we take 2 loops as input and end up with one as output
+		// headSideReplacement -> hout around to tin -> tailSideReplacement, then onto tout around to hin
+		// the motor is removed from all loops
+		CrashEventInfo<Primitive> crashInfo;
+		crashInfo._crashPtAndTime = PointAndTime<Primitive>{crashEvent._eventPt, crashEvent._eventTime};
+
+		crashInfo._tailSideReplacement = (unsigned)_vertices.size();
+		_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime});
+		crashInfo._headSideReplacement = (unsigned)_vertices.size();
+		_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime});
+
+		std::vector<WavefrontEdge<Primitive>> newEdges;
+		{
+			auto edgeLoopOut = std::find_if(edgeLoop->_edges.begin(), edgeLoop->_edges.end(),
+				[v=crashEvent._edgeTail](const WavefrontEdge<Primitive>& test) { return test._tail == v; });
+			newEdges.push_back({edgeLoopOut->_head, crashInfo._headSideReplacement});
+			auto edgeLoopIn = edgeLoopOut+1;
+			if (edgeLoopIn == edgeLoop->_edges.end()) edgeLoopIn = edgeLoop->_edges.begin();
+			while (edgeLoopIn->_head != crashEvent._edgeHead) {
+				newEdges.push_back(*edgeLoopIn);
+				++edgeLoopIn;
+				if (edgeLoopIn == edgeLoop->_edges.end()) edgeLoopIn = edgeLoop->_edges.begin();
+			}
+			newEdges.push_back({crashInfo._tailSideReplacement, edgeLoopIn->_tail});
+		}
+		{
+			auto motorLoopOut = std::find_if(motorLoop->_edges.begin(), motorLoop->_edges.end(),
+				[v=crashEvent._motor](const WavefrontEdge<Primitive>& test) { return test._tail == v; });
+			newEdges.push_back({motorLoopOut->_head, crashInfo._tailSideReplacement});
+			auto motorLoopIn = motorLoopOut+1;
+			if (motorLoopIn == motorLoop->_edges.end()) motorLoopIn = motorLoop->_edges.begin();
+			while (motorLoopIn->_head != crashEvent._motor) {
+				newEdges.push_back(*motorLoopIn);
+				++motorLoopIn;
+				if (motorLoopIn == motorLoop->_edges.end()) motorLoopIn = motorLoop->_edges.begin();
+			}
+			newEdges.push_back({crashInfo._headSideReplacement, motorLoopIn->_tail});
+		}
+
+		motorLoop->_edges = std::move(newEdges);
+
+		AddVertexPathEdge(crashEvent._motor, GetVertex<Primitive>(_vertices, crashEvent._motor)._anchor0, crashInfo._crashPtAndTime);
+
+		// final bookkeeping
+		for (auto m=motorLoop->_motorcycleSegments.begin(); m!=motorLoop->_motorcycleSegments.end(); ++m)
+			if (m->_motor == crashEvent._motor) { motorLoop->_motorcycleSegments.erase(m); break; }
+		motorLoop->_motorcycleSegments.insert(motorLoop->_motorcycleSegments.end(), edgeLoop->_motorcycleSegments.begin(), edgeLoop->_motorcycleSegments.end());
+		if (motorLoop->_lastBatchIndex == edgeLoop->_lastBatchIndex) {
+			motorLoop->_lastEventBatchEarliest = std::min(motorLoop->_lastEventBatchEarliest, edgeLoop->_lastEventBatchEarliest);
+			motorLoop->_lastEventBatchLatest = std::min(motorLoop->_lastEventBatchLatest, edgeLoop->_lastEventBatchLatest);
+		} else if (motorLoop->_lastBatchIndex < edgeLoop->_lastBatchIndex) {
+			motorLoop->_lastEventBatchEarliest = edgeLoop->_lastEventBatchEarliest;
+			motorLoop->_lastEventBatchLatest =  edgeLoop->_lastEventBatchLatest;
+			motorLoop->_lastBatchIndex = edgeLoop->_lastBatchIndex;
+		}
+
+		// Update loop ids in all evnts and motorcycles
+		for (auto& evnt:evnts) {
+			if (evnt._edgeLoop == edgeLoop->_loopId) evnt._edgeLoop = motorLoop->_loopId;
+			if (evnt._edgeLoop == edgeLoop->_loopId) evnt._edgeLoop = motorLoop->_loopId;
+			if (evnt._type == EventType::MultiLoopMotorcycleCrash && evnt._edgeLoop == evnt._edgeLoop) {
+				evnt._type = EventType::MotorcycleCrash;
+				evnt._motorLoop = ~LoopId(0);
+			}
+		}			
+		for (auto& l:_loops)
+			for (auto& m:l._motorcycleSegments)
+				if (m._edgeLoop == edgeLoop->_loopId)
+					m._edgeLoop = (l._loopId == motorLoop->_loopId) ? ~LoopId(0) : motorLoop->_loopId;
+
+		if (crashEvent._edgeHead == crashEvent._edgeTail) {
+			// single vertex collision case
+			assert(0);
+		} else {
+			for (auto& evnt:evnts) {
+				if (evnt._edgeHead == crashEvent._edgeHead) {
+					assert(evnt._edgeTail == crashEvent._edgeTail);
+					// We need to replace this with either crashEvent._edgeHead <-- headSideReplacement
+					// or tailSideReplacement <-- crashEvent._edgeTail. The clearest way to determine 
+					// this is by looking at the crash location and seeing where it fits
+					auto v0 = GetVertex<Primitive>(_vertices, crashEvent._edgeHead).PositionAtTime(evnt._eventTime);
+					auto v2 = GetVertex<Primitive>(_vertices, crashEvent._edgeTail).PositionAtTime(evnt._eventTime);
+					auto& splitPt = crashEvent._eventPt;
+					auto d0 = evnt._eventPt - splitPt;
+					if (Dot(d0, v0 - splitPt) > 0) {
+						evnt._edgeTail = crashInfo._headSideReplacement;
+					} else {
+						evnt._edgeHead = crashInfo._tailSideReplacement;
+					}
+				}
+
+				if (evnt._edgeHead == crashEvent._motor && evnt._edgeTail == crashEvent._motor) {
+					// less clear if it should be tail side or head side here
+					assert(0);
+					evnt._edgeHead = evnt._edgeTail = crashInfo._headSideReplacement;	
+				} else if (evnt._edgeHead == crashEvent._motor) evnt._edgeHead = crashInfo._headSideReplacement;
+				else if (evnt._edgeTail == crashEvent._motor) evnt._edgeHead = crashInfo._tailSideReplacement;
+			}
+		}
+
+		_loops.erase(edgeLoop);
+	}
+
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessEvents(std::vector<Event<Primitive>>& evnts)
 	{
 		// Keep processing events until there are no more to do
@@ -1367,6 +1463,11 @@ namespace XLEMath
 				ProcessCollapseEvents(evnts);
 			} else if (evnts.begin()->_type == EventType::MotorcycleCrash) {
 				ProcessMotorcycleEvents(evnts);
+			} else {
+				assert(evnts.begin()->_type == EventType::MultiLoopMotorcycleCrash);
+				// For a multicycle between 2 loops; we start off by merging the 2 loops
+				// After the merge, we can handle this has a standard motorcycle crash
+				ProcessLoopMergeEvents(evnts);
 			}
 		}
 	}
@@ -1460,11 +1561,11 @@ namespace XLEMath
 				AddSteinerVertex(result, e._endPt), 
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
-			WriteFinalEdges(result, l, maxTime);
+			WriteFinalEdges(result, l, (l._edges.size()<=2) ? l._lastEventBatchLatest : maxTime);
 		return result;
 	}
 	
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::WriteFinalEdges(StraightSkeleton<Primitive>& result, const WavefrontLoop& loop, Primitive time)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::WriteFinalEdges(StraightSkeleton<Primitive>& result, const WavefrontLoop<Primitive>& loop, Primitive time)
 	{
 		for (auto i=loop._edges.begin(); i!=loop._edges.end(); ++i) {
 			auto A = PointAndTime<Primitive>{_vertices[i->_head].PositionAtTime(time), time};
@@ -1488,7 +1589,7 @@ namespace XLEMath
 		// We're expecting the input vertices to be a closed loop, in counter-clockwise order
 		// The first and last vertices should *not* be the same vertex; there is an implied
 		// segment between the first and last.
-		typename StraightSkeletonGraph<Primitive>::WavefrontLoop loop;
+		WavefrontLoop<Primitive> loop;
 		loop._edges.reserve(vertices.size());
 		_graph->_vertices.reserve(_graph->_vertices.size() + vertices.size());
 		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
@@ -1497,9 +1598,9 @@ namespace XLEMath
 			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}});
 		}
 		auto resultId = loop._loopId = _graph->_nextLoopId++;
-		loop._containingLoop = containingLoop;
+		/*loop._containingLoop = containingLoop;
 		if (containingLoop != ~0u)
-			_graph->GetLoop(containingLoop)._containedLoops.push_back(resultId);
+			_graph->GetLoop(containingLoop)->_containedLoops.push_back(resultId);*/
 		_graph->_loops.emplace_back(std::move(loop));
 		_graph->_boundaryPointCount += vertices.size();
 		return resultId;

@@ -307,17 +307,23 @@ namespace UnitTests
 	{
 	public:
 		StraightSkeleton<Primitive> _straightSkeleton;
-		std::vector<Vector2T<Primitive>> _orderedBoundaryPts;
+		using BoundaryLoop = std::vector<Vector2T<Primitive>>;
+		std::vector<BoundaryLoop> _orderedBoundaryPts;
 
 		static constexpr unsigned BoundaryVertexFlag = 1u<<31u;
 
 		Float3 GetPt(unsigned ptIdx) const
 		{
-			if (ptIdx < _orderedBoundaryPts.size()) {
-				return Float3 { _orderedBoundaryPts[ptIdx], 0 };
+			auto i = _orderedBoundaryPts.begin();
+			while (i!=_orderedBoundaryPts.end() && ptIdx >= i->size()) {
+				ptIdx -= i->size();
+				++i;
+			}
+			if (i!=_orderedBoundaryPts.end()) {
+				return Float3 { (*i)[ptIdx], 0 };
 			} else {
-				REQUIRE((ptIdx -_orderedBoundaryPts.size()) < _straightSkeleton._steinerVertices.size());
-				return _straightSkeleton._steinerVertices[ptIdx-_orderedBoundaryPts.size()];
+				REQUIRE(ptIdx < _straightSkeleton._steinerVertices.size());
+				return _straightSkeleton._steinerVertices[ptIdx];
 			}
 		}
 
@@ -345,18 +351,21 @@ namespace UnitTests
 			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, wavefrontLines.data(), wavefrontLines.size(), waveFrontColor);
 			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, pathLines.data(), pathLines.size(), pathColor);
 
-			std::vector<Float3> originalShapeLines;
-			originalShapeLines.reserve(_orderedBoundaryPts.size()*2);
+			for (auto& b:_orderedBoundaryPts) {
+				std::vector<Float3> originalShapeLines;
+				originalShapeLines.reserve(b.size()*2);
 
-			for (size_t c=0; c<_orderedBoundaryPts.size(); ++c) {
-				originalShapeLines.push_back(Float3(_orderedBoundaryPts[c], 0));
-				originalShapeLines.push_back(Float3(_orderedBoundaryPts[(c+1)%_orderedBoundaryPts.size()], 0));
+				for (size_t c=0; c<b.size(); ++c) {
+					originalShapeLines.push_back(Float3(b[c], 0));
+					originalShapeLines.push_back(Float3(b[(c+1)%b.size()], 0));
+				}
+				overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 			}
-			overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 
 			const float vertexSize = 0.1f;
-			for (unsigned c=0; c<_orderedBoundaryPts.size(); ++c)
-				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{_orderedBoundaryPts[c] - Float2{vertexSize, vertexSize}, 0.f}, Float3{_orderedBoundaryPts[c] + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, c>>8, c&0xff));
+			for (auto& b:_orderedBoundaryPts)
+				for (unsigned c=0; c<b.size(); ++c)
+					overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{b[c] - Float2{vertexSize, vertexSize}, 0.f}, Float3{b[c] + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, c>>8, c&0xff));
 			for (unsigned c=0; c<_straightSkeleton._steinerVertices.size(); ++c)
 				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));
 		}
@@ -390,40 +399,43 @@ namespace UnitTests
 
 			assert(!boundaryLines.empty());
 			
-			_orderedBoundaryPts.reserve(1+boundaryLines.size()/2);
-			_orderedBoundaryPts.push_back(*(boundaryLines.end()-2));
-			_orderedBoundaryPts.push_back(*(boundaryLines.end()-1));
+			BoundaryLoop boundary; 
+			boundary.reserve(1+boundaryLines.size()/2);
+			boundary.push_back(*(boundaryLines.end()-2));
+			boundary.push_back(*(boundaryLines.end()-1));
 			boundaryLines.erase(boundaryLines.end()-2, boundaryLines.end());
 			while (boundaryLines.size() > 2) {
 				auto i = boundaryLines.begin();
 				for (;i!=boundaryLines.end(); i+=2)
-					if (Equivalent(*i, *(_orderedBoundaryPts.end()-1), 1e-3f))
+					if (Equivalent(*i, *(boundary.end()-1), 1e-3f))
 						break;
 				assert(i != boundaryLines.end());
-				_orderedBoundaryPts.push_back(*(i+1));
+				boundary.push_back(*(i+1));
 				boundaryLines.erase(i, i+2);
 			}
 
 			// last line should wrap around back to the first
-			assert(Equivalent(*(boundaryLines.end()-1), _orderedBoundaryPts[0], 1e-3f));
+			assert(Equivalent(*(boundaryLines.end()-1), boundary[0], 1e-3f));
 
 			// reverse to get the ordering that the straight skeleton algorithm is expecting
-			std::reverse(_orderedBoundaryPts.begin(), _orderedBoundaryPts.end());
+			std::reverse(boundary.begin(), boundary.end());
 
-			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(_orderedBoundaryPts), maxInset);
+			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(boundary), maxInset);
+			_orderedBoundaryPts.push_back(std::move(boundary));
 		}
 
 		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, float maxInset = std::numeric_limits<float>::max())
 		: _straightSkeleton(CalculateStraightSkeleton(inputPts, maxInset))
 		{
-			_orderedBoundaryPts = std::vector<Vector2T<Primitive>>(inputPts.begin(), inputPts.end());
+			std::vector<Vector2T<Primitive>> boundary(inputPts.begin(), inputPts.end());
+			_orderedBoundaryPts.push_back(std::move(boundary));
 		}
 
-		StraightSkeletonPreview(StraightSkeleton<Primitive>&& input, IteratorRange<const Vector2T<Primitive>*> inputPts)
+		void AddBoundaryLoop(BoundaryLoop&& boundary) { _orderedBoundaryPts.push_back(std::move(boundary)); }
+
+		StraightSkeletonPreview(StraightSkeleton<Primitive>&& input)
 		: _straightSkeleton(std::move(input))
 		{
-			_orderedBoundaryPts = std::vector<Vector2T<Primitive>>(inputPts.begin(), inputPts.end());
-			REQUIRE(_orderedBoundaryPts.size() == _straightSkeleton._boundaryPointCount);
 		}
 
 		StraightSkeletonPreview() {}
@@ -700,10 +712,16 @@ namespace UnitTests
 			StraightSkeletonCalculator<float> calculator;
 			auto outsideLoop = calculator.AddLoop(MakeIteratorRange(rectangleExterior));
 			calculator.AddLoop(MakeIteratorRange(rectangleInterior), outsideLoop);
+
+			StraightSkeletonPreview<float> preview = calculator.Calculate();
 			std::vector<Float2> pts;
 			pts.insert(pts.end(), rectangleExterior, &rectangleExterior[dimof(rectangleExterior)]);
+			preview.AddBoundaryLoop(std::move(pts));
+			pts.clear();
 			pts.insert(pts.end(), rectangleInterior, &rectangleInterior[dimof(rectangleInterior)]);
-			tester->_previews.emplace_back(calculator.Calculate(), MakeIteratorRange(pts));
+			preview.AddBoundaryLoop(std::move(pts));
+			
+			tester->_previews.emplace_back(preview);
 			testHelper->Run(StartingCamera(), tester);
 		}
 	}
