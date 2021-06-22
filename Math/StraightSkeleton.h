@@ -30,7 +30,7 @@ namespace XLEMath
 	T1(Primitive) class StraightSkeletonCalculator
 	{
 	public:
-		unsigned AddLoop(IteratorRange<const Vector2T<Primitive>*> vertices, unsigned containingLoop = ~unsigned(0));
+		void AddLoop(IteratorRange<const Vector2T<Primitive>*> vertices);
 		StraightSkeleton<Primitive> Calculate(Primitive maxInset = std::numeric_limits<Primitive>::max());
 
 		StraightSkeletonCalculator();

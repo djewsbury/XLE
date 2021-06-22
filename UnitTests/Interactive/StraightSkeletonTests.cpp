@@ -302,6 +302,57 @@ namespace UnitTests
 		return calculator.Calculate(maxInset);
 	}
 
+	template<typename Primitive> static std::vector<Vector2T<Primitive>> MakeBoundaryLoop(StraightSkeletonCalculator<Primitive>& calculator, const HexCellField& cellField, const HexCellField::BoundaryGroup& group)
+	{
+		std::vector<Vector2T<Primitive>> boundaryLines;
+		boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
+
+		for (auto cell:group._boundaryCells) {
+			Int2 adjacent[6];
+			GetAdjacentCells(adjacent, cell);
+			for (unsigned a=0; a<dimof(adjacent); ++a) {
+				if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
+				// cellCenter[0] = std::sqrt(Primitive(3)) * (Primitive)cell[0]
+				// However, to retain more digits of precision, we will do the sqrt last
+				Vector2T<Primitive> cellCenter { std::sqrt(Primitive(3) * (Primitive)cell[0] * (Primitive)cell[0]), Primitive(1.5) * (Primitive)cell[1] };
+				if (cell[0] < 0) cellCenter[0] = -cellCenter[0];
+				if (cell[1] & 1) {
+					// odd
+					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
+					boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
+				} else {
+					// even
+					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
+					boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
+				}
+			}
+		}
+
+		assert(!boundaryLines.empty());
+		
+		std::vector<Vector2T<Primitive>> boundary; 
+		boundary.reserve(1+boundaryLines.size()/2);
+		boundary.push_back(*(boundaryLines.end()-2));
+		boundary.push_back(*(boundaryLines.end()-1));
+		boundaryLines.erase(boundaryLines.end()-2, boundaryLines.end());
+		while (boundaryLines.size() > 2) {
+			auto i = boundaryLines.begin();
+			for (;i!=boundaryLines.end(); i+=2)
+				if (Equivalent(*i, *(boundary.end()-1), 1e-3f))
+					break;
+			assert(i != boundaryLines.end());
+			boundary.push_back(*(i+1));
+			boundaryLines.erase(i, i+2);
+		}
+
+		// last line should wrap around back to the first
+		assert(Equivalent(*(boundaryLines.end()-1), boundary[0], 1e-3f));
+
+		// reverse to get the ordering that the straight skeleton algorithm is expecting
+		std::reverse(boundary.begin(), boundary.end());
+		return boundary;
+	}
+
 	template<typename Primitive>
 		class StraightSkeletonPreview
 	{
@@ -370,61 +421,25 @@ namespace UnitTests
 				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));
 		}
 
-		StraightSkeletonPreview(const HexCellField& cellField, float maxInset = std::numeric_limits<float>::max())
+		StraightSkeletonPreview(const HexCellField& cellField, Primitive maxInset = std::numeric_limits<Primitive>::max())
 		{
-			std::vector<Vector2T<Primitive>> boundaryLines;
-			const auto& group = cellField._exteriorGroup;
-			boundaryLines.reserve(group._boundaryCells.size() * 2 * 6);
-
-			for (auto cell:group._boundaryCells) {
-				Int2 adjacent[6];
-				GetAdjacentCells(adjacent, cell);
-				for (unsigned a=0; a<dimof(adjacent); ++a) {
-					if (std::find(cellField._enabledCells.begin(), cellField._enabledCells.end(), adjacent[a]) == cellField._enabledCells.end()) continue;
-					// cellCenter[0] = std::sqrt(Primitive(3)) * (Primitive)cell[0]
-					// However, to retain more digits of precision, we will do the sqrt last
-					Vector2T<Primitive> cellCenter { std::sqrt(Primitive(3) * (Primitive)cell[0] * (Primitive)cell[0]), Primitive(1.5) * (Primitive)cell[1] };
-					if (cell[0] < 0) cellCenter[0] = -cellCenter[0];
-					if (cell[1] & 1) {
-						// odd
-						boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].first] + cellCenter);
-						boundaryLines.push_back(s_hexCornersOdds[s_hexEdges[a].second] + cellCenter);
-					} else {
-						// even
-						boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].first] + cellCenter);
-						boundaryLines.push_back(s_hexCornersEvens[s_hexEdges[a].second] + cellCenter);
-					}
-				}
-			}
-
-			assert(!boundaryLines.empty());
+			StraightSkeletonCalculator<Primitive> calculator;
 			
-			BoundaryLoop boundary; 
-			boundary.reserve(1+boundaryLines.size()/2);
-			boundary.push_back(*(boundaryLines.end()-2));
-			boundary.push_back(*(boundaryLines.end()-1));
-			boundaryLines.erase(boundaryLines.end()-2, boundaryLines.end());
-			while (boundaryLines.size() > 2) {
-				auto i = boundaryLines.begin();
-				for (;i!=boundaryLines.end(); i+=2)
-					if (Equivalent(*i, *(boundary.end()-1), 1e-3f))
-						break;
-				assert(i != boundaryLines.end());
-				boundary.push_back(*(i+1));
-				boundaryLines.erase(i, i+2);
+			{
+				auto boundary = MakeBoundaryLoop<Primitive>(calculator, cellField, cellField._exteriorGroup);
+				calculator.AddLoop(MakeIteratorRange(boundary));
+				_orderedBoundaryPts.push_back(std::move(boundary));
+			}
+			for (auto& group:cellField._interiorGroups) {
+				auto boundary = MakeBoundaryLoop<Primitive>(calculator, cellField, group);
+				calculator.AddLoop(MakeIteratorRange(boundary));
+				_orderedBoundaryPts.push_back(std::move(boundary));
 			}
 
-			// last line should wrap around back to the first
-			assert(Equivalent(*(boundaryLines.end()-1), boundary[0], 1e-3f));
-
-			// reverse to get the ordering that the straight skeleton algorithm is expecting
-			std::reverse(boundary.begin(), boundary.end());
-
-			_straightSkeleton = CalculateStraightSkeleton<Primitive>(MakeIteratorRange(boundary), maxInset);
-			_orderedBoundaryPts.push_back(std::move(boundary));
+			_straightSkeleton = calculator.Calculate(maxInset);
 		}
 
-		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, float maxInset = std::numeric_limits<float>::max())
+		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, Primitive maxInset = std::numeric_limits<Primitive>::max())
 		: _straightSkeleton(CalculateStraightSkeleton(inputPts, maxInset))
 		{
 			std::vector<Vector2T<Primitive>> boundary(inputPts.begin(), inputPts.end());
@@ -710,8 +725,8 @@ namespace UnitTests
 		{
 			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
 			StraightSkeletonCalculator<float> calculator;
-			auto outsideLoop = calculator.AddLoop(MakeIteratorRange(rectangleExterior));
-			calculator.AddLoop(MakeIteratorRange(rectangleInterior), outsideLoop);
+			calculator.AddLoop(MakeIteratorRange(rectangleExterior));
+			calculator.AddLoop(MakeIteratorRange(rectangleInterior));
 
 			StraightSkeletonPreview<float> preview = calculator.Calculate();
 			std::vector<Float2> pts;
