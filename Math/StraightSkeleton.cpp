@@ -1709,9 +1709,68 @@ namespace XLEMath
 		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
 	}
 
+	T1(Primitive) static bool NonColinearLineLineIntersection(
+		Vector2T<Primitive> firstSegment0, Vector2T<Primitive> firstSegment1,
+		Vector2T<Primitive> secondSegment0, Vector2T<Primitive> secondSegment1)
+	{
+		// Assuming that the line segments are not colinear, there is an intersection between these segments, only if:
+		// (firstSegment0, firstSegment1, secondSegment0) and (firstSegment0, firstSegment1, secondSegment1) have different winding determinants signs
+		// (secondSegment0, secondSegment1, firstSegment0) and (secondSegment0, secondSegment1, firstSegment1) have different winding determinants signs
+
+		auto A = WindingDeterminant(firstSegment0, firstSegment1, secondSegment0);
+		auto B = WindingDeterminant(firstSegment0, firstSegment1, secondSegment1);
+		if ((A < 0) == (B < 0)) return false;
+
+		auto C = WindingDeterminant(secondSegment0, secondSegment1, firstSegment0);
+		auto D = WindingDeterminant(secondSegment0, secondSegment1, firstSegment1);
+		return (C < 0) != (D < 0);
+	}
+
+	T1(Primitive) bool ValidatePolygonLoop(IteratorRange<const Vector2T<Primitive>*> vertices)
+	{
+		if (vertices.size() <= 2) return false;
+
+		{
+			auto prevV = vertices.end()-1;
+			auto prevPrevV = vertices.end()-2;
+			for (auto v=vertices.begin(); v!=vertices.end(); prevPrevV=prevV, prevV=v, ++v) {
+				// check if an edge is colinear with the next connected edge
+				auto windingType = CalculateWindingType(*prevPrevV, *prevV, *v, GetEpsilon<Primitive>());
+				if (windingType.first == WindingType::Straight)
+					return false;
+			}
+		}
+
+		// look for duplicated vertices
+		for (auto v=vertices.begin()+1; v!=vertices.end(); ++v)
+			for (auto v2=vertices.begin(); v2!=v; ++v2)
+				if (Equivalent(*v, *v2, GetEpsilon<Primitive>())) {
+					return false;
+				}
+
+		// look for edges crossing other edges
+		{
+			for (auto v=vertices.begin(); (v+2)!=vertices.end(); ++v) {
+				for (auto v2=v+2; (v2+1)!=vertices.end(); ++v2) {
+					// testing v --> v+1 against prevV2 --> v2
+					if (NonColinearLineLineIntersection(*v, *(v+1), *v2, *(v2+1)))
+						return false;
+				}
+			}
+			for (auto v=vertices.begin()+1; (v+2)!=vertices.end(); ++v)
+				if (NonColinearLineLineIntersection(*(vertices.end()-1), *vertices.begin(), *v, *(v+1)))
+					return false;
+		}
+
+		// survived the guantlet
+		return true;
+	}
+
 	template class StraightSkeleton<float>;
 	template class StraightSkeleton<double>;
 	template class StraightSkeletonCalculator<float>;
 	template class StraightSkeletonCalculator<double>;
+	template bool ValidatePolygonLoop(IteratorRange<const Vector2T<float>*>);
+	template bool ValidatePolygonLoop(IteratorRange<const Vector2T<double>*>);
 
 }

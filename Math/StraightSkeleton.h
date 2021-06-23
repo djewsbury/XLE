@@ -38,4 +38,13 @@ namespace XLEMath
 	private:
 		std::unique_ptr<StraightSkeletonGraph<Primitive>> _graph;
 	};
+
+	/// <summary>Test if a given polygon is valid for generating a straight skeleton</summary>
+	/// Some polygon inputs will not generate a valid straight skeleton. This include cases such as
+	///  * input edges cross over other edges
+	///	 * colinear adjacent edges
+	///  * duplicated vertices
+	/// This will check for cases like this and will return false if the loop is not valid for
+	/// straight skeleton
+	T1(Primitive) bool ValidatePolygonLoop(IteratorRange<const Vector2T<Primitive>*> vertices);
 }
