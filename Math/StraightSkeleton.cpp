@@ -1208,6 +1208,16 @@ namespace XLEMath
 				i = loop._edges.erase(i);
 		}
 
+		// If we have a loop A -> B -> C, sometimes we can get A -> B and B -> C collapsing, but we're not
+		// yet ready to collapse the return edge C -> A. In these cases, A, B & C get combined into a collapse
+		// group and all are considered removed... so we're forced to cleanup the return edge, also.
+		for(auto i=loop._edges.begin(); i!=loop._edges.end(); ++i)
+			if (i->_head == collapseGroupInfo._tail && i->_tail == collapseGroupInfo._head) {
+				loop._edges.erase(i);
+				break;
+			}
+		assert(loop._edges.size() != 1);
+
 		if (loop._edges.size() > 1 && collapseGroupInfo._head != collapseGroupInfo._tail) {				
 			auto tail = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._tail).first;
 			auto head = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._head).second;
@@ -1490,6 +1500,13 @@ namespace XLEMath
 				if (evnt._type != EventType::Collapse && evnt._motorLoop == motorLoop->_loopId)
 					assert(ContainsVertex<Primitive>(motorLoop->_edges, evnt._motor));
 				assert(evnt._edgeLoop != edgeLoop->_loopId && evnt._motorLoop != edgeLoop->_loopId);
+			}
+
+			for (auto e=motorLoop->_edges.begin(); e!=motorLoop->_edges.end(); ++e) {
+				assert(e->_head != crashEvent._edgeHead || e->_tail != crashEvent._edgeTail);
+				assert(e->_head != e->_tail);
+				auto next = e+1; if (next == motorLoop->_edges.end()) next = motorLoop->_edges.begin();
+				assert(e->_head == next->_tail);
 			}
 		#endif
 
