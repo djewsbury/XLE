@@ -15,7 +15,7 @@ namespace XLEMath
 	T1(Primitive) class StraightSkeleton
 	{
 	public:
-		enum class EdgeType { VertexPath, Wavefront };
+		enum class EdgeType { VertexPath, Wavefront, OriginalBoundary };
 		struct Edge { unsigned _head; unsigned _tail; EdgeType _type; };
 
 		size_t _boundaryPointCount = 0;

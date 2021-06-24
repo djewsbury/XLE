@@ -387,6 +387,8 @@ namespace XLEMath
 			PointAndTime<Primitive> _beginPt, _endPt;
 		};
 		std::vector<VertexPathEdge> _vertexPathEdges;
+		std::vector<std::pair<VertexId, VertexId>> _originalBoundaryEdges;
+		std::vector<std::pair<FaceId, FaceId>> _mergedFaces;
 
 		StraightSkeleton<Primitive> CalculateSkeleton(Primitive maxTime);
 		typename std::vector<WavefrontLoop<Primitive>>::iterator GetLoop(LoopId id);
@@ -1253,6 +1255,9 @@ namespace XLEMath
 				collapseGroupInfo._headSideReplacement = head->_head;
 				tail->_head = head->_head;
 				loop._edges.erase(head);
+
+				auto merge0 = GetVertex<Primitive>(_vertices, collapseGroupInfo._tail)._insideFace, merge1 = GetVertex<Primitive>(_vertices, collapseGroupInfo._head)._outsideFace;
+				_mergedFaces.push_back({std::min(merge0, merge1), std::max(merge0, merge1)});
 			} else {
 				// create a new vertex in the graph to connect the edges to either side of the collapse
 				auto newVertex = (unsigned)_vertices.size();
@@ -1638,6 +1643,9 @@ namespace XLEMath
 
 		StraightSkeleton<Primitive> result;
 		result._boundaryPointCount = _boundaryPointCount;
+		result._edgesByFace.resize(_boundaryPointCount);
+		for (const auto& e:_originalBoundaryEdges)
+			result._edgesByFace[e.second].push_back({e.first, e.second, StraightSkeleton<Primitive>::EdgeType::OriginalBoundary});
 		for (const auto& e:_vertexPathEdges)
 			AddEdge(
 				result,
@@ -1647,6 +1655,14 @@ namespace XLEMath
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
 			WriteFinalEdges(result, l, (l._edges.size()<=2) ? l._lastEventBatchLatest : maxTime);
+		for (auto mergedFace:_mergedFaces) {
+			assert(mergedFace.first < mergedFace.second);
+			assert(mergedFace.second < result._edgesByFace.size());
+			result._edgesByFace[mergedFace.first].insert(
+				result._edgesByFace[mergedFace.first].end(),
+				result._edgesByFace[mergedFace.second].begin(), result._edgesByFace[mergedFace.second].end());
+			result._edgesByFace[mergedFace.second].clear();
+		}
 		return result;
 	}
 	
@@ -1658,7 +1674,6 @@ namespace XLEMath
 			auto v0 = AddSteinerVertex(result, A);
 			auto v1 = AddSteinerVertex(result, B);
 			if (v0 != v1) {
-				assert(GetVertex<Primitive>(_vertices, i->_tail)._outsideFace == GetVertex<Primitive>(_vertices, i->_head)._insideFace);
 				AddEdge(
 					result, 
 					v0, v1, 
@@ -1687,6 +1702,7 @@ namespace XLEMath
 		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
 		for (size_t v=0; v<vertices.size(); ++v) {
 			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
+			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
 			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v)});
 		}
 		auto resultId = loop._loopId = _graph->_nextLoopId++;

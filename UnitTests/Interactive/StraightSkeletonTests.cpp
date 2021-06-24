@@ -360,9 +360,13 @@ namespace UnitTests
 		if (!edges.size()) return {};
 		std::vector<unsigned> result;
 
-		unsigned searchingVertex = faceIdx;
-		unsigned endVtx = (faceIdx+1)%faceCount;
-		unsigned prevVtx = endVtx;
+		auto originalBoundaryEdge = std::find_if(edges.begin(), edges.end(), [](const auto& c) { return c._type == StraightSkeleton<Primitive>::EdgeType::OriginalBoundary; });
+		assert(originalBoundaryEdge != edges.end());
+
+		unsigned searchingVertex = originalBoundaryEdge->_head;
+		unsigned endVtx = originalBoundaryEdge->_tail;
+		unsigned prevVtx = originalBoundaryEdge->_tail;
+		result.push_back(prevVtx);
 		while (searchingVertex != endVtx) {
 			result.push_back(searchingVertex);
 			auto out = std::find_if(edges.begin(), edges.end(), [searchingVertex, prevVtx](const auto& c) { return c._tail == searchingVertex && c._head != prevVtx; });
@@ -371,8 +375,6 @@ namespace UnitTests
 			prevVtx = searchingVertex;
 			searchingVertex = (out != edges.end()) ? out->_head : in->_tail;
 		}
-		result.push_back(endVtx);
-		std::reverse(result.begin(), result.end());
 		return result;
 	}
 
@@ -401,12 +403,17 @@ namespace UnitTests
 		}
 	}
 
-	static void SaveStraightSkeletonToFile(IteratorRange<const Float2*> boundaryLoop, const std::string& name)
+	template<typename Primitive> static void SaveStraightSkeletonToFile(const StraightSkeleton<Primitive>& ss, IteratorRange<const Float2*> boundaryLoop, const std::string& name)
 	{
-		auto ss = CalculateStraightSkeleton(boundaryLoop);
 		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (name + ".ply");
 		std::ofstream plyOut(outputName);
 		WriteStraightSkeletonAsPLY(plyOut, ss, boundaryLoop);
+	}
+	
+	static void SaveStraightSkeletonToFile(IteratorRange<const Float2*> boundaryLoop, const std::string& name)
+	{
+		auto ss = CalculateStraightSkeleton(boundaryLoop);
+		SaveStraightSkeletonToFile(ss, boundaryLoop, name);
 	}
 
 	template<typename Primitive>
@@ -493,6 +500,9 @@ namespace UnitTests
 			}
 
 			_straightSkeleton = calculator.Calculate(maxInset);
+			std::vector<Vector2T<Primitive>> flatteningBoundaryLoop;
+			for (const auto&o:_orderedBoundaryPts) flatteningBoundaryLoop.insert(flatteningBoundaryLoop.begin(), o.begin(), o.end());
+			SaveStraightSkeletonToFile<Primitive>(_straightSkeleton, MakeIteratorRange(flatteningBoundaryLoop), "straightskeleton-hexgrid");
 		}
 
 		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, Primitive maxInset = std::numeric_limits<Primitive>::max())
@@ -529,8 +539,8 @@ namespace UnitTests
 	TEST_CASE( "StraightSkeletonHexGrid", "[math]" )
 	{
 		// static constexpr unsigned randomCellCount = 9u;
-		// static constexpr unsigned randomCellCount = 32u;
-		static constexpr unsigned randomCellCount = 256u;
+		static constexpr unsigned randomCellCount = 32u;
+		// static constexpr unsigned randomCellCount = 256u;
 		// static constexpr unsigned randomCellCount = 2048u;
 
 		using namespace RenderCore;
