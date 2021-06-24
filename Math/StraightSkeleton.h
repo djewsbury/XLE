@@ -20,7 +20,9 @@ namespace XLEMath
 
 		size_t _boundaryPointCount = 0;
 		std::vector<Vector3T<Primitive>> _steinerVertices;
-		std::vector<Edge> _edges;
+		using EdgeSet = std::vector<Edge>;
+		EdgeSet _edges;
+		std::vector<EdgeSet> _edgesByFace;
 
 		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops();
 	};

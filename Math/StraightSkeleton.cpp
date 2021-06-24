@@ -22,11 +22,13 @@ namespace XLEMath
 
 	using VertexId = unsigned;
 	using LoopId = unsigned;
+	using FaceId = unsigned;
 
 	T1(Primitive) struct Vertex
 	{
 		PointAndTime<Primitive>	_anchor0;
 		PointAndTime<Primitive>	_anchor1;
+		FaceId _insideFace = ~FaceId(0), _outsideFace = ~FaceId(0);
 
 		Primitive InitialTime() const { return _anchor0[2]; }
 
@@ -401,7 +403,7 @@ namespace XLEMath
 
 		void PostProcessEventsForMotorcycleCrash(CrashEventInfo<Primitive>& crashInfo, const WavefrontLoop<Primitive>& originalLoop, std::vector<Event<Primitive>>& evnts);
 
-		void AddVertexPathEdge(unsigned vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end);
+		void AddVertexPathEdge(VertexId vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end);
 		void UpdateLoopStage1(WavefrontLoop<Primitive>& loop);
 		void UpdateLoopStage2(WavefrontLoop<Primitive>& loop);
 		void UpdateLoopStage3(WavefrontLoop<Primitive>& loop);
@@ -1008,7 +1010,10 @@ namespace XLEMath
 			}
 
 			crashInfo._tailSideReplacement = (unsigned)_vertices.size();
-			_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime});
+			if (crashEvent._edgeTail != crashEvent._edgeHead)
+				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._outsideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
+			else
+				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
 			crashInfo._tailSide._edges.push_back({crashInfo._tailSideReplacement, tin->_head});
 			crashInfo._tailSide._edges.push_back({tout->_head, crashInfo._tailSideReplacement});
 			
@@ -1038,7 +1043,10 @@ namespace XLEMath
 			}
 
 			crashInfo._headSideReplacement = (unsigned)_vertices.size();
-			_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime});
+			if (crashEvent._edgeTail != crashEvent._edgeHead)
+				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._insideFace});
+			else
+				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._outsideFace});
 			crashInfo._headSide._edges.push_back({crashInfo._headSideReplacement, hin->_tail});
 			crashInfo._headSide._edges.push_back({hout->_tail, crashInfo._headSideReplacement});
 
@@ -1248,7 +1256,7 @@ namespace XLEMath
 			} else {
 				// create a new vertex in the graph to connect the edges to either side of the collapse
 				auto newVertex = (unsigned)_vertices.size();
-				_vertices.push_back({collapseGroupInfo._crashPtAndTime, collapseGroupInfo._crashPtAndTime});
+				_vertices.push_back({collapseGroupInfo._crashPtAndTime, collapseGroupInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, collapseGroupInfo._tail)._insideFace, GetVertex<Primitive>(_vertices, collapseGroupInfo._head)._outsideFace});
 
 				// reassign the edges on either side of the collapse group to
 				// point to the new vertex
@@ -1564,13 +1572,24 @@ namespace XLEMath
 		}
 	}
 
-	T1(Primitive) static void AddEdge(StraightSkeleton<Primitive>& dest, unsigned headVertex, unsigned tailVertex, typename StraightSkeleton<Primitive>::EdgeType type)
+	T1(Primitive) static void AddEdge(StraightSkeleton<Primitive>& dest, VertexId headVertex, VertexId tailVertex, FaceId insideFace, FaceId outsideFace, typename StraightSkeleton<Primitive>::EdgeType type)
 	{
 		if (headVertex == tailVertex) return;
 		AddUnique(dest._edges, {headVertex, tailVertex, type});
+
+		if (insideFace != ~FaceId(0)) {
+			if (dest._edgesByFace.size() <= insideFace)
+				dest._edgesByFace.resize(insideFace+1);
+			AddUnique(dest._edgesByFace[insideFace], {headVertex, tailVertex, type});
+		}
+		if (outsideFace != ~FaceId(0)) {
+			if (dest._edgesByFace.size() <= outsideFace)
+				dest._edgesByFace.resize(outsideFace+1);
+			AddUnique(dest._edgesByFace[outsideFace], {headVertex, tailVertex, type});
+		}
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::AddVertexPathEdge(unsigned vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::AddVertexPathEdge(VertexId vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end)
 	{
 		_vertexPathEdges.push_back({vertex, begin, end});
 	}
@@ -1623,7 +1642,8 @@ namespace XLEMath
 			AddEdge(
 				result,
 				(e._vertex <  _boundaryPointCount) ? e._vertex : AddSteinerVertex(result, e._beginPt),
-				AddSteinerVertex(result, e._endPt), 
+				AddSteinerVertex(result, e._endPt),
+				GetVertex<Primitive>(_vertices, e._vertex)._insideFace, GetVertex<Primitive>(_vertices, e._vertex)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
 			WriteFinalEdges(result, l, (l._edges.size()<=2) ? l._lastEventBatchLatest : maxTime);
@@ -1637,12 +1657,19 @@ namespace XLEMath
 			auto B = PointAndTime<Primitive>{_vertices[i->_tail].PositionAtTime(time), time};
 			auto v0 = AddSteinerVertex(result, A);
 			auto v1 = AddSteinerVertex(result, B);
-			if (v0 != v1)
-				AddEdge(result, v0, v1, StraightSkeleton<Primitive>::EdgeType::Wavefront);
+			if (v0 != v1) {
+				assert(GetVertex<Primitive>(_vertices, i->_tail)._outsideFace == GetVertex<Primitive>(_vertices, i->_head)._insideFace);
+				AddEdge(
+					result, 
+					v0, v1, 
+					~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace, 
+					StraightSkeleton<Primitive>::EdgeType::Wavefront);
+			}
 			AddEdge(
 				result, 
 				(i->_tail < _boundaryPointCount) ? i->_tail : AddSteinerVertex(result, _vertices[i->_tail]._anchor0), 
-				v1, 
+				v1,
+				GetVertex<Primitive>(_vertices, i->_tail)._insideFace, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		}
 	}
@@ -1660,7 +1687,7 @@ namespace XLEMath
 		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
 		for (size_t v=0; v<vertices.size(); ++v) {
 			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
-			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}});
+			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v)});
 		}
 		auto resultId = loop._loopId = _graph->_nextLoopId++;
 		_graph->_loops.emplace_back(std::move(loop));

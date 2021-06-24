@@ -22,6 +22,8 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <random>
+#include <fstream>
+#include <filesystem>
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
@@ -351,6 +353,60 @@ namespace UnitTests
 		// reverse to get the ordering that the straight skeleton algorithm is expecting
 		std::reverse(boundary.begin(), boundary.end());
 		return boundary;
+	}
+
+	template<typename Primitive> static std::vector<unsigned> AsFaceOrderedVertexList(IteratorRange<const typename StraightSkeleton<Primitive>::Edge*> edges, unsigned faceIdx, unsigned faceCount)
+	{
+		if (!edges.size()) return {};
+		std::vector<unsigned> result;
+
+		unsigned searchingVertex = faceIdx;
+		unsigned endVtx = (faceIdx+1)%faceCount;
+		unsigned prevVtx = endVtx;
+		while (searchingVertex != endVtx) {
+			result.push_back(searchingVertex);
+			auto out = std::find_if(edges.begin(), edges.end(), [searchingVertex, prevVtx](const auto& c) { return c._tail == searchingVertex && c._head != prevVtx; });
+			auto in = std::find_if(edges.begin(), edges.end(), [searchingVertex, prevVtx](const auto& c) { return c._head == searchingVertex && c._tail != prevVtx; });
+			assert(out!=edges.end()||in!=edges.end());
+			prevVtx = searchingVertex;
+			searchingVertex = (out != edges.end()) ? out->_head : in->_tail;
+		}
+		result.push_back(endVtx);
+		std::reverse(result.begin(), result.end());
+		return result;
+	}
+
+	template<typename Primitive> static void WriteStraightSkeletonAsPLY(std::ostream& str, const StraightSkeleton<Primitive>& skeleton, IteratorRange<const Vector2T<Primitive>*> boundaryLoop)
+	{
+		str << "ply" << std::endl;
+		str << "format ascii 1.0" << std::endl;
+		str << "element vertex " << skeleton._boundaryPointCount + skeleton._steinerVertices.size() << std::endl;
+		str << "property float x" << std::endl;
+		str << "property float y" << std::endl;
+		str << "property float z" << std::endl;
+		str << "element face " << skeleton._edgesByFace.size() << std::endl;
+		str << "property list uchar int vertex_index" << std::endl;
+		str << "end_header" << std::endl;
+
+		for (unsigned c=0; c<skeleton._boundaryPointCount; ++c)
+			str << boundaryLoop[c][0] << " " << boundaryLoop[c][1] << " 0" << std::endl;
+		for (auto v:skeleton._steinerVertices)
+			str << v[0] << " " << v[1] << " " << v[2] << std::endl;
+
+		for (auto f=skeleton._edgesByFace.begin(); f!=skeleton._edgesByFace.end(); ++f) {
+			auto orderedVertices = AsFaceOrderedVertexList<Primitive>(*f, (unsigned)std::distance(skeleton._edgesByFace.begin(), f), (unsigned)skeleton._edgesByFace.size());
+			str << orderedVertices.size();
+			for (auto v:orderedVertices) str << " " << v;
+			str << std::endl;
+		}
+	}
+
+	static void SaveStraightSkeletonToFile(IteratorRange<const Float2*> boundaryLoop, const std::string& name)
+	{
+		auto ss = CalculateStraightSkeleton(boundaryLoop);
+		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (name + ".ply");
+		std::ofstream plyOut(outputName);
+		WriteStraightSkeletonAsPLY(plyOut, ss, boundaryLoop);
 	}
 
 	template<typename Primitive>
@@ -691,6 +747,12 @@ namespace UnitTests
 		for (auto& c:colinearEdges) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 #endif
 
+		SaveStraightSkeletonToFile(MakeIteratorRange(rectangleCollapse), "rectangle-collapse");
+		SaveStraightSkeletonToFile(MakeIteratorRange(singleMotorcycle), "single-motorcycle");
+		SaveStraightSkeletonToFile(MakeIteratorRange(doubleMotorcycle), "double-motorcycle");
+		SaveStraightSkeletonToFile(MakeIteratorRange(colinearCollapse), "colinear-collapse");
+		SaveStraightSkeletonToFile(MakeIteratorRange(colinearEdges), "colinear-edges");
+
 		{
 			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
 			tester->_previews.emplace_back(MakeIteratorRange(rectangleCollapse));
@@ -781,6 +843,14 @@ namespace UnitTests
 		};
 		for (auto& c:eagleFlight) c = c * 0.5f - Float2{50, 50};
 
+		// From https://freesvg.org/female-ninja (marked with Licence: Public Domain)
+		Float2 ninja[] = {
+			Float2{1503.170, 378.850}, Float2{1492.600, 351.390}, Float2{1455.430, 298.530}, Float2{1403.960, 230.000}, Float2{1372.940, 180.070}, Float2{1361.910, 161.780}, Float2{1357.160, 162.750}, Float2{1338.620, 140.340}, Float2{1320.230, 123.780}, Float2{1307.140, 113.920}, Float2{1296.020, 105.420}, Float2{1301.150, 90.560}, Float2{1284.210, 98.220}, Float2{1279.060, 103.200}, Float2{1273.530, 104.570}, Float2{1269.880, 96.130}, Float2{1254.920, 84.810}, Float2{1257.840, 100.360}, Float2{1262.910, 107.100}, Float2{1255.290, 111.670}, Float2{1242.700, 110.360}, Float2{1210.040, 52.950}, Float2{1165.110, 26.720}, Float2{1151.980, 23.720}, Float2{1099.620, 37.630}, Float2{1079.550, 54.530}, Float2{1064.620, 74.710}, Float2{1057.360, 89.160}, Float2{1048.220, 130.960}, Float2{1045.140, 157.960}, Float2{1051.410, 183.500}, Float2{1058.510, 199.360}, Float2{1064.370, 220.930}, Float2{1066.860, 242.980}, Float2{1063.870, 258.860}, Float2{1060.390, 266.090}, Float2{1057.780, 272.790}, Float2{1050.690, 277.690}, Float2{1041.190, 286.290}, Float2{1030.900, 292.780}, Float2{1018.310, 298.220}, Float2{1011.770, 291.110}, Float2{1008.350, 286.800}, Float2{1001.620, 278.370}, Float2{995.590, 270.460}, Float2{988.870, 262.180}, Float2{984.370, 255.630}, Float2{979.050, 250.970}, Float2{975.990, 244.920}, Float2{970.720, 239.500}, Float2{966.740, 234.270}, Float2{961.270, 226.820}, Float2{953.970, 218.030}, Float2{947.970, 210.210}, Float2{941.270, 201.830}, Float2{937.710, 197.150}, Float2{932.970, 192.120}, Float2{928.430, 185.600}, Float2{921.950, 177.280}, Float2{915.670, 169.300}, Float2{906.010, 161.750}, Float2{901.090, 164.180}, Float2{890.610, 174.980}, Float2{897.340, 188.600}, Float2{902.200, 193.620}, Float2{906.030, 198.920}, Float2{912.840, 207.210}, Float2{919.010, 215.040}, Float2{925.510, 223.300}, Float2{931.260, 230.820}, Float2{935.280, 235.690}, Float2{941.570, 243.520}, Float2{948.120, 251.730}, Float2{954.710, 260.140}, Float2{960.650, 266.340}, Float2{964.550, 273.370}, Float2{968.820, 277.080}, Float2{971.150, 281.800}, Float2{976.040, 286.820}, Float2{980.680, 292.370}, Float2{985.150, 298.770}, Float2{989.950, 306.070}, Float2{973.060, 313.130}, Float2{961.360, 319.320}, Float2{957.780, 324.700}, Float2{976.850, 335.230}, Float2{988.310, 341.890}, Float2{978.010, 349.130}, Float2{956.230, 385.130}, Float2{936.970, 453.080}, Float2{930.230, 479.300}, Float2{914.100, 522.190}, Float2{902.510, 545.500}, Float2{896.820, 558.880}, Float2{883.600, 579.590}, Float2{866.440, 597.260}, Float2{822.220, 649.330}, Float2{800.300, 679.310}, Float2{781.470, 704.460}, Float2{754.040, 736.990}, Float2{732.650, 756.720}, Float2{713.980, 765.950}, Float2{700.590, 772.670}, Float2{687.210, 789.360}, Float2{675.580, 784.130}, Float2{669.660, 782.340}, Float2{659.430, 778.080}, Float2{662.490, 761.830}, Float2{655.340, 774.270}, Float2{652.060, 776.670}, Float2{636.100, 768.820}, Float2{542.910, 723.960}, Float2{440.700, 674.290}, Float2{390.370, 650.600}, Float2{342.420, 627.400}, Float2{313.230, 613.010}, Float2{283.220, 598.920}, Float2{248.470, 582.540}, Float2{165.060, 543.990}, Float2{115.760, 521.180}, Float2{41.840, 490.250}, Float2{42.160, 493.740}, Float2{64.710, 507.190}, Float2{94.660, 523.360}, Float2{210.580, 582.450}, Float2{234.280, 594.660}, Float2{285.910, 620.100}, Float2{295.040, 624.950}, Float2{344.830, 649.130}, Float2{363.670, 658.340}, Float2{388.980, 671.030}, Float2{402.370, 677.650}, Float2{435.280, 693.760}, Float2{573.060, 760.880}, Float2{643.250, 794.830}, Float2{643.350, 799.260}, Float2{637.820, 813.350}, Float2{648.270, 799.920}, Float2{653.440, 803.590}, Float2{661.130, 806.840}, Float2{667.020, 809.950}, Float2{676.800, 814.590}, Float2{685.960, 819.620}, Float2{684.910, 837.010}, Float2{692.540, 842.560}, Float2{702.900, 851.230}, Float2{714.960, 852.880}, Float2{725.850, 855.200}, Float2{735.870, 859.860}, Float2{748.920, 848.530}, Float2{757.970, 853.860}, Float2{766.020, 858.140}, Float2{772.010, 860.900}, Float2{781.650, 865.430}, Float2{790.460, 869.530}, Float2{805.040, 876.950}, Float2{815.010, 881.730}, Float2{821.560, 885.490}, Float2{828.220, 887.750}, Float2{834.920, 891.210}, Float2{842.390, 895.490}, Float2{855.780, 898.060}, Float2{864.670, 879.870}, Float2{852.680, 870.380}, Float2{845.040, 867.050}, Float2{837.650, 864.150}, Float2{833.950, 860.950}, Float2{827.070, 858.790}, Float2{822.000, 855.910}, Float2{815.520, 852.490}, Float2{807.840, 849.260}, Float2{801.030, 846.070}, Float2{794.010, 842.070}, Float2{787.150, 838.810}, Float2{778.760, 835.280}, Float2{770.220, 831.790}, Float2{766.610, 828.370}, Float2{760.840, 826.360}, Float2{769.010, 803.970}, Float2{772.980, 791.010}, Float2{779.669, 784.740}, Float2{793.090, 772.090}, Float2{823.860, 740.790}, Float2{865.380, 700.400}, Float2{919.320, 654.360}, Float2{941.970, 622.070}, Float2{961.070, 592.050}, Float2{979.500, 546.350}, Float2{981.520, 546.440}, Float2{1007.870, 574.020}, Float2{1022.730, 603.010}, Float2{1025.930, 624.940}, Float2{1033.410, 634.100}, Float2{1033.640, 640.870}, Float2{1030.650, 646.340}, Float2{1022.230, 672.110}, Float2{1026.680, 682.870}, Float2{1026.910, 697.950}, Float2{1034.140, 724.020}, Float2{1042.090, 726.560}, Float2{1039.500, 740.520}, Float2{1032.770, 757.570}, Float2{1011.750, 795.560}, Float2{997.270, 818.050}, Float2{990.220, 829.240}, Float2{985.150, 834.420}, Float2{991.980, 819.090}, Float2{995.520, 808.600}, Float2{1001.450, 793.380}, Float2{1005.180, 784.440}, Float2{1007.520, 772.390}, Float2{998.330, 765.550}, Float2{981.240, 762.330}, Float2{973.400, 778.380}, Float2{963.110, 805.210}, Float2{961.740, 807.620}, Float2{951.190, 834.490}, Float2{949.470, 842.640}, Float2{952.110, 847.210}, Float2{948.720, 849.610}, Float2{924.410, 855.200}, Float2{906.270, 868.220}, Float2{905.210, 890.040}, Float2{897.750, 917.720}, Float2{893.580, 928.170}, 
+			Float2{906.550, 915.550}, Float2{915.210, 903.050}, Float2{917.150, 896.070}, Float2{917.930, 908.820}, Float2{921.800, 917.150}, Float2{919.580, 923.930}, Float2{921.240, 930.990}, Float2{905.020, 972.630}, Float2{897.560, 969.490}, Float2{882.820, 955.810}, Float2{874.170, 961.130}, Float2{874.780, 972.210}, Float2{887.720, 986.270}, Float2{887.820, 996.030}, Float2{893.450, 1002.850}, Float2{888.970, 1014.090}, Float2{875.930, 999.780}, Float2{867.040, 1005.060}, Float2{870.800, 1018.220}, Float2{879.520, 1029.070}, Float2{875.710, 1037.010}, Float2{877.350, 1044.250}, Float2{847.260, 1123.450}, Float2{829.180, 1177.090}, Float2{823.400, 1199.460}, Float2{818.810, 1211.010}, Float2{813.890, 1227.000}, Float2{808.740, 1257.060}, Float2{797.760, 1309.940}, Float2{791.800, 1343.960}, Float2{789.240, 1360.930}, Float2{785.650, 1376.050}, Float2{775.980, 1395.970}, Float2{769.169, 1412.270}, Float2{758.650, 1422.670}, Float2{739.520, 1441.670}, Float2{728.959, 1453.960}, Float2{711.929, 1473.080}, Float2{697.969, 1483.830}, Float2{679.109, 1493.270}, Float2{669.859, 1500.880}, Float2{661.269, 1508.320}, Float2{660.629, 1515.100}, Float2{656.269, 1528.100}, Float2{659.340, 1541.580}, Float2{664.439, 1546.590}, Float2{667.489, 1548.870}, Float2{689.060, 1550.070}, Float2{703.999, 1548.200}, Float2{713.959, 1546.290}, Float2{736.869, 1538.880}, Float2{745.969, 1532.950}, Float2{761.030, 1523.960}, Float2{775.150, 1515.300}, Float2{786.020, 1509.160}, Float2{804.419, 1500.450}, Float2{827.000, 1492.470}, Float2{840.550, 1482.520}, Float2{839.179, 1474.490}, Float2{838.219, 1473.260}, Float2{840.359, 1466.060}, Float2{838.629, 1448.810}, Float2{833.219, 1429.050}, Float2{831.479, 1408.880}, Float2{833.310, 1398.120}, Float2{841.760, 1378.730}, Float2{852.850, 1361.700}, Float2{860.790, 1352.790}, Float2{870.400, 1338.390}, Float2{874.350, 1322.330}, Float2{880.990, 1309.010}, Float2{895.770, 1284.590}, Float2{906.420, 1263.700}, Float2{913.620, 1237.590}, Float2{917.760, 1223.650}, Float2{922.000, 1212.030}, Float2{924.460, 1194.330}, Float2{940.750, 1165.650}, Float2{953.060, 1148.000}, Float2{962.850, 1132.000}, Float2{981.760, 1097.620}, Float2{991.210, 1085.260}, Float2{1000.690, 1073.570}, Float2{1017.330, 1050.300}, Float2{1031.420, 1035.510}, Float2{1037.910, 1024.070}, Float2{1044.820, 1008.770}, Float2{1059.020, 995.120}, Float2{1065.730, 988.690}, Float2{1078.580, 969.510}, Float2{1108.770, 934.790}, Float2{1126.870, 922.860}, Float2{1151.030, 926.220}, Float2{1160.110, 924.640}, Float2{1170.870, 942.140}, Float2{1183.560, 983.560}, Float2{1189.860, 1005.520}, Float2{1195.860, 1020.180}, Float2{1204.890, 1041.200}, Float2{1209.420, 1058.700}, Float2{1211.670, 1070.930}, Float2{1216.500, 1089.390}, Float2{1221.100, 1102.010}, Float2{1231.620, 1143.140}, Float2{1236.240, 1152.020}, Float2{1249.150, 1201.920}, Float2{1258.600, 1231.380}, Float2{1266.400, 1252.650}, Float2{1274.860, 1270.270}, Float2{1279.900, 1287.010}, Float2{1283.310, 1297.520}, Float2{1284.060, 1310.920}, Float2{1287.180, 1328.590}, Float2{1294.720, 1352.270}, Float2{1304.380, 1385.030}, Float2{1313.370, 1423.600}, Float2{1319.760, 1443.200}, Float2{1328.430, 1487.950}, Float2{1328.770, 1499.980}, Float2{1334.940, 1512.250}, Float2{1338.640, 1516.190}, Float2{1342.550, 1533.380}, Float2{1345.650, 1558.050}, Float2{1341.690, 1593.070}, Float2{1336.750, 1624.800}, Float2{1333.580, 1642.030}, Float2{1332.970, 1655.960}, Float2{1338.110, 1659.170}, Float2{1331.150, 1688.130}, Float2{1327.170, 1697.450}, Float2{1325.710, 1707.950}, Float2{1321.780, 1716.810}, Float2{1318.760, 1723.970}, Float2{1321.120, 1738.560}, Float2{1323.850, 1741.610}, Float2{1324.010, 1744.550}, Float2{1334.255, 1751.141}, Float2{1334.062, 1751.188}, Float2{1349.520, 1753.510}, Float2{1355.880, 1754.250}, Float2{1371.700, 1753.670}, Float2{1395.810, 1750.780}, Float2{1415.260, 1745.250}, Float2{1425.290, 1724.040}, Float2{1426.630, 1699.510}, Float2{1424.340, 1665.030}, Float2{1419.920, 1654.960}, Float2{1419.630, 1639.140}, Float2{1414.200, 1617.050}, Float2{1410.740, 1595.190}, Float2{1407.150, 1578.850}, Float2{1406.320, 1565.060}, Float2{1405.510, 1533.590}, Float2{1405.330, 1513.970}, Float2{1408.100, 1490.910}, Float2{1410.080, 1457.010}, Float2{1410.150, 1419.980}, Float2{1413.700, 1386.480}, Float2{1411.200, 1362.100}, Float2{1407.210, 1336.120}, Float2{1400.820, 1316.460}, Float2{1386.330, 1283.280}, Float2{1375.580, 1257.340}, Float2{1370.570, 1233.080}, Float2{1364.940, 1213.000}, Float2{1363.780, 1197.990}, Float2{1362.160, 1186.970}, Float2{1360.270, 1112.970}, Float2{1360.060, 1095.540}, Float2{1372.020, 1096.250}, Float2{1376.230, 1095.290}, Float2{1380.170, 1082.920}, Float2{1371.630, 1072.260}, Float2{1359.680, 1070.180}, Float2{1359.470, 1049.050}, Float2{1358.870, 1037.230}, Float2{1361.040, 1035.290}, Float2{1372.850, 1035.250}, Float2{1378.730, 1025.140}, Float2{1368.680, 1013.190}, Float2{1358.610, 1012.410}, Float2{1358.220, 1001.230}, Float2{1357.790, 983.050}, Float2{1358.390, 968.770}, Float2{1365.590, 958.110}, Float2{1357.630, 947.510}, Float2{1357.230, 916.010}, Float2{1357.260, 877.310}, Float2{1377.740, 864.630}, Float2{1379.330, 850.720}, Float2{1362.810, 843.460}, Float2{1361.620, 835.220}, Float2{1361.640, 828.270}, Float2{1361.350, 819.730}, Float2{1360.900, 810.910}, Float2{1360.150, 799.830}, Float2{1360.770, 795.100}, Float2{1359.740, 773.060}, Float2{1360.630, 767.320}, Float2{1373.420, 781.570}, Float2{1396.620, 809.470}, Float2{1417.810, 836.220}, Float2{1434.390, 854.520}, Float2{1449.070, 867.000}, Float2{1452.890, 864.070}, Float2{1451.772, 860.950}, Float2{1446.526, 851.453}, Float2{1426.469, 823.478}, Float2{1417.480, 811.460}, Float2{1383.690, 766.310}, Float2{1351.160, 723.670}, Float2{1317.590, 680.540}, Float2{1280.560, 632.110}, Float2{1281.240, 628.190}, Float2{1276.730, 628.090}, Float2{1274.390, 617.550}, Float2{1265.230, 612.780}, Float2{1268.160, 598.091}, Float2{1260.390, 589.390}, Float2{1261.960, 584.020}, Float2{1260.090, 575.050}, Float2{1259.170, 565.050}, Float2{1260.460, 549.010}, Float2{1261.750, 533.140}, Float2{1262.560, 519.180}, Float2{1264.340, 456.910}, Float2{1276.300, 417.260}, Float2{1289.510, 400.530}, Float2{1302.030, 398.000}, Float2{1326.030, 405.960}, Float2{1345.420, 410.560}, Float2{1363.060, 413.680}, Float2{1397.540, 422.430}, Float2{1428.350, 431.610}, Float2{1464.080, 430.990}, Float2{1489.810, 421.700}
+		};
+		for (auto& c:ninja) c = (c - Float2{1000, 1000}) * 0.05;
+		std::reverse(ninja, &ninja[dimof(ninja)]);
+
 		REQUIRE(ValidatePolygonLoop<float>(eagle) == true);
 		REQUIRE(ValidatePolygonLoop<float>(dancingMan) == true);
 		REQUIRE(ValidatePolygonLoop<float>(secretaryBird) == true);
@@ -789,17 +859,72 @@ namespace UnitTests
 		REQUIRE(ValidatePolygonLoop<float>(fiddlers) == true);
 		REQUIRE(ValidatePolygonLoop<float>(perseus) == true);
 		REQUIRE(ValidatePolygonLoop<float>(eagleFlight) == true);
+		REQUIRE(ValidatePolygonLoop<float>(ninja) == true);
 
 		REQUIRE(ValidatePolygonLoop<float>(womanWithSpear) == false);
 		REQUIRE(ValidatePolygonLoop<float>(archer) == false);
 		REQUIRE(ValidatePolygonLoop<float>(figure0) == false);		// this one has intersecting edges
 
+		class SwitchStraightSkeletonOverlay : public IInteractiveTestOverlay
 		{
-			auto tester = std::make_shared<BasicDrawStraightSkeleton>();			
-			tester->_previews.emplace_back(MakeIteratorRange(eagleFlight));
+		public:
+			virtual void Render(
+				RenderCore::IThreadContext& threadContext,
+				RenderCore::Techniques::ParsingContext& parserContext,
+				IInteractiveTestHelper& testHelper) override
+			{
+				{
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+						threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					_preview.Draw(*overlayContext);
+				}
+
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+			}
+
+			virtual bool OnInputEvent(
+				const PlatformRig::InputContext& context,
+				const PlatformRig::InputSnapshot& evnt,
+				IInteractiveTestHelper& testHelper) override
+			{
+				if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
+					_maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.01f) : 0.01f;
+					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
+				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
+					_maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.01f) : 0.01f;
+					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
+				} else if (evnt._pressedChar == ' ') {
+					_currentInputIdx = (_currentInputIdx+1)%_inputs.size();
+					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
+				}
+				return false;
+			}
+
+			StraightSkeletonPreview<float> _preview;
+			std::vector<std::vector<Float2>> _inputs;
+			size_t _currentInputIdx = 0; 
+			float _maxInset = 10.f;
+			
+			SwitchStraightSkeletonOverlay() {}
+		};
+
+		{
+			auto tester = std::make_shared<SwitchStraightSkeletonOverlay>();			
+			tester->_inputs.emplace_back(std::vector<Float2>(eagle, &eagle[dimof(eagle)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(dancingMan, &dancingMan[dimof(dancingMan)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(secretaryBird, &secretaryBird[dimof(secretaryBird)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(swallow, &swallow[dimof(swallow)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(greenTree, &greenTree[dimof(greenTree)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(fiddlers, &fiddlers[dimof(fiddlers)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(perseus, &perseus[dimof(perseus)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(eagleFlight, &eagleFlight[dimof(eagleFlight)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(ninja, &ninja[dimof(ninja)]));
+			tester->_preview = StraightSkeletonPreview<float>(tester->_inputs[tester->_currentInputIdx], tester->_maxInset);
 			testHelper->Run(StartingCamera(), tester);
 		}
 	}
+
 }
 
 #if 0
