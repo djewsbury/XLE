@@ -545,6 +545,12 @@ namespace XLEMath
 			for (auto& e:loop._edges) {
 				e._collapsePt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
 				_vertices[e._tail]._anchor1 = _vertices[e._tail]._anchor0;
+				for (auto& motorLoop:_loops) {
+					for (auto m=motorLoop._motorcycleSegments.begin(); m!=motorLoop._motorcycleSegments.end(); ++m) {
+						if (m->_pendingCalculate) continue;
+						if (m->_edgeHead == e._head || m->_edgeHead == e._tail || m->_edgeTail == e._head || m->_edgeTail == e._tail) { m->_pendingCalculate = true; continue; }
+					}
+				}
 			}
 			return;
 		}
