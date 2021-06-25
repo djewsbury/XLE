@@ -69,7 +69,7 @@ namespace OSServices
 		struct PendingOnceInitiate
 		{
 			std::shared_ptr<IConduitProducer> _producer;
-			std::promise<PollingEventType::BitField> _promise;
+			std::promise<std::any> _promise;
 		};
 		std::vector<PendingOnceInitiate> _pendingOnceInitiates;
 
@@ -179,7 +179,7 @@ namespace OSServices
 			struct ActiveOnceEvent
 			{
 				std::shared_ptr<IConduitProducer> _producer;
-				std::promise<PollingEventType::BitField> _promise;
+				std::promise<std::any> _promise;
 			};
 			struct ActiveEvent
 			{
@@ -196,7 +196,7 @@ namespace OSServices
 				{
 					std::vector<std::promise<void>> pendingPromisesToTrigger;
 					std::vector<std::pair<std::promise<void>, std::exception_ptr>> pendingExceptionsToPropagate1;
-					std::vector<std::pair<std::promise<PollingEventType::BitField>, std::exception_ptr>> pendingExceptionsToPropagate2;
+					std::vector<std::pair<std::promise<std::any>, std::exception_ptr>> pendingExceptionsToPropagate2;
 					std::vector<PendingOnceInitiate> immediateActivates;
 					{
 						ScopedLock(_interfaceLock);
@@ -207,13 +207,13 @@ namespace OSServices
 							if (existing != activeOnceEvents.end()) {
 								// We can't queue multiple poll operations on the same platform handle, because we will be using
 								// the platform handle to lookup events in activeOnceEvents (this would otherwise make it ambigious)
-								pendingExceptionsToPropagate2.push_back({std::move(event._promise), std::make_exception_ptr(std::runtime_error("Multiple asynchronous events queued for the same platform handle"))});
+								pendingExceptionsToPropagate2.emplace_back(std::move(event._promise), std::make_exception_ptr(std::runtime_error("Multiple asynchronous events queued for the same platform handle")));
 								continue;
 							}
 
 							auto* platformHandleProducer = dynamic_cast<RealUserEvent*>(event._producer.get());
 							if (!platformHandleProducer) {
-								pendingExceptionsToPropagate2.push_back({std::move(event._promise), std::make_exception_ptr(std::runtime_error("Expecting user event based conduit to be used with RespondOnce call"))});
+								pendingExceptionsToPropagate2.emplace_back(std::move(event._promise), std::make_exception_ptr(std::runtime_error("Expecting user event based conduit to be used with RespondOnce call")));
 								continue;
 							}
 
@@ -224,7 +224,7 @@ namespace OSServices
 								// an issue -- but it's just the way teh classes are configured here
 								// going back to prevKqueueContext would not be completely safe. Let's just go back to -1
 								// instead
-								pendingExceptionsToPropagate2.push_back({std::move(event._promise), std::make_exception_ptr(std::runtime_error("Attempting to connect a user event with this polling thread, when it is already connected to another polling thread"))});
+								pendingExceptionsToPropagate2.emplace_back(std::move(event._promise), std::make_exception_ptr(std::runtime_error("Attempting to connect a user event with this polling thread, when it is already connected to another polling thread")));
 								continue;
 							}
 
@@ -472,7 +472,7 @@ namespace OSServices
 
 							TRY {
 								if (!isError) {
-									consumer->OnEvent(payload);
+									consumer->OnEvent(std::move(payload));
 								} else {
 									consumer->OnException(nullptr);
 								}
@@ -524,10 +524,10 @@ namespace OSServices
 		}
 	};
 
-	auto PollingThread::RespondOnce(const std::shared_ptr<IConduitProducer>& producer) -> std::future<PollingEventType::BitField>
+	auto PollingThread::RespondOnce(const std::shared_ptr<IConduitProducer>& producer) -> std::future<std::any>
 	{
 		assert(producer);
-		std::future<PollingEventType::BitField> result;
+		std::future<std::any> result;
 		{
 			ScopedLock(_pimpl->_interfaceLock);
 			Pimpl::PendingOnceInitiate pendingInit;

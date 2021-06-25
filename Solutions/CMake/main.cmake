@@ -49,6 +49,8 @@ macro(xle_internal_configure_compiler TargetName)
         # practice it's only really practical to enable it for everything
         if (UNIX OR ANDROID)
             target_compile_options(${TargetName} PRIVATE -fPIC)
+            # We might need to set _LIBCPP_HAS_NONUNIQUE_TYPEINFO for Linux/OSX with libc++. This changes the way typeid() works across module boundaries
+            # target_compile_options(${TargetName} PRIVATE -D_LIBCPP_HAS_NONUNIQUE_TYPEINFO)
         endif()
 
         if (NOT XLE_IMPLICIT_SHARED_LIBRARIES)

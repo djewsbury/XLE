@@ -139,6 +139,13 @@ namespace XLEMath
 		return vSet[v];
 	}
 
+	T1(Primitive) static bool ContainsVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, unsigned v)
+	{
+		auto headSideI = std::find_if(edges.begin(), edges.end(),
+			[v](const auto& e) { return e._head == v || e._tail == v; });
+		return headSideI != edges.end();
+	}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -641,13 +648,6 @@ namespace XLEMath
 			if (l->_loopId == id)
 				return l;
 		return _loops.end();
-	}
-
-	T1(Primitive) static bool ContainsVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, unsigned v)
-	{
-		auto headSideI = std::find_if(edges.begin(), edges.end(),
-			[v](const auto& e) { return e._head == v || e._tail == v; });
-		return headSideI != edges.end();
 	}
 
 	T1(Primitive) static void SetEdgeLoop(const WavefrontLoop<Primitive>& loop, Event<Primitive>& evnt)
