@@ -355,38 +355,49 @@ namespace UnitTests
 		return boundary;
 	}
 
-	template<typename Primitive> static std::vector<unsigned> AsFaceOrderedVertexList(IteratorRange<const typename StraightSkeleton<Primitive>::Edge*> edges, unsigned faceIdx, unsigned faceCount)
+	template<typename Primitive> static void AsFaceOrderedVertexList(
+		std::vector<std::vector<unsigned>>& result,
+		IteratorRange<const typename StraightSkeleton<Primitive>::Edge*> edgesInit)
 	{
-		if (!edges.size()) return {};
-		std::vector<unsigned> result;
+		std::vector<typename StraightSkeleton<Primitive>::Edge> edges { edgesInit.begin(), edgesInit.end() };
+		while (!edges.empty()) { 
+			auto originalBoundaryEdge = std::find_if(edges.begin(), edges.end(), [](const auto& c) { return c._type == StraightSkeleton<Primitive>::EdgeType::OriginalBoundary; });
+			if (originalBoundaryEdge == edges.end())
+				originalBoundaryEdge = edges.begin();
 
-		auto originalBoundaryEdge = std::find_if(edges.begin(), edges.end(), [](const auto& c) { return c._type == StraightSkeleton<Primitive>::EdgeType::OriginalBoundary; });
-		assert(originalBoundaryEdge != edges.end());
+			std::vector<unsigned> workingLoop;
+			unsigned searchingVertex = originalBoundaryEdge->_head;
+			unsigned endVtx = originalBoundaryEdge->_tail;
+			edges.erase(originalBoundaryEdge);
+			workingLoop.push_back(endVtx);
+			while (searchingVertex != endVtx) {
+				workingLoop.push_back(searchingVertex);
+				auto out = std::find_if(edges.begin(), edges.end(), [searchingVertex](const auto& c) { return c._tail == searchingVertex; });
+				auto in = std::find_if(edges.begin(), edges.end(), [searchingVertex](const auto& c) { return c._head == searchingVertex; });
+				// assert(out!=edges.end()||in!=edges.end());
+				if (out == edges.end() && in == edges.end()) break;
+				searchingVertex = (out != edges.end()) ? out->_head : in->_tail;
+				if (out != edges.end()) edges.erase(out);
+				else edges.erase(in);
+			}
 
-		unsigned searchingVertex = originalBoundaryEdge->_head;
-		unsigned endVtx = originalBoundaryEdge->_tail;
-		unsigned prevVtx = originalBoundaryEdge->_tail;
-		result.push_back(prevVtx);
-		while (searchingVertex != endVtx) {
-			result.push_back(searchingVertex);
-			auto out = std::find_if(edges.begin(), edges.end(), [searchingVertex, prevVtx](const auto& c) { return c._tail == searchingVertex && c._head != prevVtx; });
-			auto in = std::find_if(edges.begin(), edges.end(), [searchingVertex, prevVtx](const auto& c) { return c._head == searchingVertex && c._tail != prevVtx; });
-			assert(out!=edges.end()||in!=edges.end());
-			prevVtx = searchingVertex;
-			searchingVertex = (out != edges.end()) ? out->_head : in->_tail;
+			result.push_back(std::move(workingLoop));
 		}
-		return result;
 	}
 
 	template<typename Primitive> static void WriteStraightSkeletonAsPLY(std::ostream& str, const StraightSkeleton<Primitive>& skeleton, IteratorRange<const Vector2T<Primitive>*> boundaryLoop)
 	{
+		std::vector<std::vector<unsigned>> loops;
+		for (const auto& f:skeleton._edgesByFace)
+			AsFaceOrderedVertexList<Primitive>(loops, f);
+
 		str << "ply" << std::endl;
 		str << "format ascii 1.0" << std::endl;
 		str << "element vertex " << skeleton._boundaryPointCount + skeleton._steinerVertices.size() << std::endl;
 		str << "property float x" << std::endl;
 		str << "property float y" << std::endl;
 		str << "property float z" << std::endl;
-		str << "element face " << skeleton._edgesByFace.size() << std::endl;
+		str << "element face " << loops.size() << std::endl;
 		str << "property list uchar int vertex_index" << std::endl;
 		str << "end_header" << std::endl;
 
@@ -395,10 +406,9 @@ namespace UnitTests
 		for (auto v:skeleton._steinerVertices)
 			str << v[0] << " " << v[1] << " " << v[2] << std::endl;
 
-		for (auto f=skeleton._edgesByFace.begin(); f!=skeleton._edgesByFace.end(); ++f) {
-			auto orderedVertices = AsFaceOrderedVertexList<Primitive>(*f, (unsigned)std::distance(skeleton._edgesByFace.begin(), f), (unsigned)skeleton._edgesByFace.size());
-			str << orderedVertices.size();
-			for (auto v:orderedVertices) str << " " << v;
+		for (const auto&f:loops) {
+			str << f.size();
+			for (auto v:f) str << " " << v;
 			str << std::endl;
 		}
 	}
@@ -500,9 +510,9 @@ namespace UnitTests
 			}
 
 			_straightSkeleton = calculator.Calculate(maxInset);
-			std::vector<Vector2T<Primitive>> flatteningBoundaryLoop;
-			for (const auto&o:_orderedBoundaryPts) flatteningBoundaryLoop.insert(flatteningBoundaryLoop.begin(), o.begin(), o.end());
-			SaveStraightSkeletonToFile<Primitive>(_straightSkeleton, MakeIteratorRange(flatteningBoundaryLoop), "straightskeleton-hexgrid");
+			std::vector<Vector2T<Primitive>> flattenedBoundaryLoop;
+			for (const auto&o:_orderedBoundaryPts) flattenedBoundaryLoop.insert(flattenedBoundaryLoop.end(), o.begin(), o.end());
+			SaveStraightSkeletonToFile<Primitive>(_straightSkeleton, MakeIteratorRange(flattenedBoundaryLoop), "straightskeleton-hexgrid");
 		}
 
 		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, Primitive maxInset = std::numeric_limits<Primitive>::max())

@@ -1251,7 +1251,15 @@ namespace XLEMath
 				loop._edges.erase(head);
 
 				auto merge0 = GetVertex<Primitive>(_vertices, collapseGroupInfo._tail)._insideFace, merge1 = GetVertex<Primitive>(_vertices, collapseGroupInfo._head)._outsideFace;
-				_mergedFaces.push_back({std::min(merge0, merge1), std::max(merge0, merge1)});
+				if (merge0 != merge1) {
+					auto dst = std::min(merge0, merge1), src = std::max(merge0, merge1);
+					_mergedFaces.push_back({dst, src});
+
+					for (auto&v:_vertices) {
+						if (v._insideFace == src) v._insideFace = dst;
+						if (v._outsideFace == src) v._outsideFace = dst;
+					}
+				}
 			} else {
 				// create a new vertex in the graph to connect the edges to either side of the collapse
 				auto newVertex = (unsigned)_vertices.size();
@@ -1651,12 +1659,13 @@ namespace XLEMath
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
 			WriteFinalEdges(result, l, (l._edges.size()<=2) ? l._lastEventBatchLatest : maxTime);
+		std::sort(_mergedFaces.begin(), _mergedFaces.end(), [](const auto&lhs, const auto&rhs) { return lhs.second > rhs.second; });
 		for (auto mergedFace:_mergedFaces) {
 			assert(mergedFace.first < mergedFace.second);
 			assert(mergedFace.second < result._edgesByFace.size());
-			result._edgesByFace[mergedFace.first].insert(
-				result._edgesByFace[mergedFace.first].end(),
-				result._edgesByFace[mergedFace.second].begin(), result._edgesByFace[mergedFace.second].end());
+			assert(mergedFace.first != mergedFace.second);
+			for (const auto&e:result._edgesByFace[mergedFace.second])
+				AddUnique(result._edgesByFace[mergedFace.first], e);
 			result._edgesByFace[mergedFace.second].clear();
 		}
 		return result;
