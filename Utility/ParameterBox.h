@@ -345,9 +345,9 @@ namespace Utility
     }
 
     using StringTable = std::vector<std::pair<const utf8*, std::string>>;
-    DEPRECATED_ATTRIBUTE void    BuildStringTable(StringTable& defines, const ParameterBox& box);
-    DEPRECATED_ATTRIBUTE void    OverrideStringTable(StringTable& defines, const ParameterBox& box);
-    DEPRECATED_ATTRIBUTE std::string FlattenStringTable(const StringTable& stringTable);
+    XLE_DEPRECATED_ATTRIBUTE void    BuildStringTable(StringTable& defines, const ParameterBox& box);
+    XLE_DEPRECATED_ATTRIBUTE void    OverrideStringTable(StringTable& defines, const ParameterBox& box);
+    XLE_DEPRECATED_ATTRIBUTE std::string FlattenStringTable(const StringTable& stringTable);
 	std::string BuildFlatStringTable(const ParameterBox& box);
 }
 

@@ -65,7 +65,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
-	DEPRECATED_ATTRIBUTE class Technique
+	XLE_DEPRECATED_ATTRIBUTE class Technique
 	{
 	public:
 		auto GetDependencyValidation() const -> const ::Assets::DependencyValidation& { return _validationCallback; }

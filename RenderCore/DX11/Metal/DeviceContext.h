@@ -130,7 +130,7 @@ namespace RenderCore { namespace Metal_DX11
 		// Input geometry binding
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		void		Bind(const IndexBufferView& IB);
-		DEPRECATED_ATTRIBUTE void        Bind(const Resource& ib, Format indexFormat, unsigned offset=0);
+		XLE_DEPRECATED_ATTRIBUTE void        Bind(const Resource& ib, Format indexFormat, unsigned offset=0);
 		void		UnbindInputLayout();
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,32 +139,32 @@ namespace RenderCore { namespace Metal_DX11
 		void SetViewportAndScissorRects(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
 		ViewportDesc GetBoundViewport();
 
-		DEPRECATED_ATTRIBUTE void		Bind(const ViewportDesc& viewport);
+		XLE_DEPRECATED_ATTRIBUTE void		Bind(const ViewportDesc& viewport);
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		// pre-GraphicsPipelineBuilder binding functions
 		///////////////////////////////////////////////////////////////////////////////////////////////////
-		DEPRECATED_ATTRIBUTE void		Bind(Topology topology);
-        DEPRECATED_ATTRIBUTE void		Bind(const ComputeShader& computeShader);
-        DEPRECATED_ATTRIBUTE void		Bind(const ShaderProgram& shaderProgram);
-        DEPRECATED_ATTRIBUTE void		Bind(const RasterizerState& rasterizer);
-        DEPRECATED_ATTRIBUTE void		Bind(const BlendState& blender);
-        DEPRECATED_ATTRIBUTE void		Bind(const DepthStencilState& depthStencilState, unsigned stencilRef = 0x0);
+		XLE_DEPRECATED_ATTRIBUTE void		Bind(Topology topology);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const ComputeShader& computeShader);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const ShaderProgram& shaderProgram);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const RasterizerState& rasterizer);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const BlendState& blender);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const DepthStencilState& depthStencilState, unsigned stencilRef = 0x0);
 
-        DEPRECATED_ATTRIBUTE void		Bind(const ShaderProgram& shaderProgram, const BoundClassInterfaces& dynLinkage);
+        XLE_DEPRECATED_ATTRIBUTE void		Bind(const ShaderProgram& shaderProgram, const BoundClassInterfaces& dynLinkage);
 
-		DEPRECATED_ATTRIBUTE void		UnbindVS();
-		DEPRECATED_ATTRIBUTE void		UnbindPS();
-		DEPRECATED_ATTRIBUTE void		UnbindGS();
-		DEPRECATED_ATTRIBUTE void		UnbindHS();
-		DEPRECATED_ATTRIBUTE void		UnbindDS();
-		DEPRECATED_ATTRIBUTE void		UnbindCS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindVS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindPS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindGS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindHS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindDS();
+		XLE_DEPRECATED_ATTRIBUTE void		UnbindCS();
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		// Legacy pre-render-pass interface
 		///////////////////////////////////////////////////////////////////////////////////////////////////
-		template<int Count> DEPRECATED_ATTRIBUTE void    Bind(const ResourceList<RenderTargetView, Count>& renderTargets, const DepthStencilView* depthStencil);
-        template<int Count1, int Count2> DEPRECATED_ATTRIBUTE void    Bind(const ResourceList<RenderTargetView, Count1>& renderTargets, const DepthStencilView* depthStencil, const ResourceList<UnorderedAccessView, Count2>& unorderedAccess);
+		template<int Count> XLE_DEPRECATED_ATTRIBUTE void    Bind(const ResourceList<RenderTargetView, Count>& renderTargets, const DepthStencilView* depthStencil);
+        template<int Count1, int Count2> XLE_DEPRECATED_ATTRIBUTE void    Bind(const ResourceList<RenderTargetView, Count1>& renderTargets, const DepthStencilView* depthStencil, const ResourceList<UnorderedAccessView, Count2>& unorderedAccess);
 
 		bool		InRenderPass();
 

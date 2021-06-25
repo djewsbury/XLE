@@ -16,7 +16,7 @@
 namespace RenderCore { namespace Techniques
 {
 	// Should no longer be used, because ITechniqueDelegate now takes over this transformation
-    DEPRECATED_ATTRIBUTE class CompiledRenderStateSet
+    XLE_DEPRECATED_ATTRIBUTE class CompiledRenderStateSet
     {
     public:
         Metal::BlendState _blendState = Metal::BlendState::Null();

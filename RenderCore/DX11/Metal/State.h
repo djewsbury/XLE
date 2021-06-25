@@ -198,7 +198,7 @@ namespace RenderCore { namespace Metal_DX11
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// Deprecated -- for backwards compatibility only
-	class DEPRECATED_ATTRIBUTE StencilMode : public StencilDesc
+	class XLE_DEPRECATED_ATTRIBUTE StencilMode : public StencilDesc
     {
     public:
         StencilMode(

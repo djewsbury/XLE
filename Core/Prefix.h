@@ -175,9 +175,9 @@ template<> struct constant_expression<false>   { static bool result() { return f
 #define T4(A, B, C, D) template<typename A, typename B, typename C, typename D>
 
 #if defined(ERROR_ON_DEPRECATED)
-	#define DEPRECATED_ATTRIBUTE		[[deprecated]]
+	#define XLE_DEPRECATED_ATTRIBUTE		[[deprecated]]
 #else
-	#define DEPRECATED_ATTRIBUTE
+	#define XLE_DEPRECATED_ATTRIBUTE
 #endif
 
 #endif

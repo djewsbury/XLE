@@ -43,7 +43,7 @@ namespace GraphLanguage
 
 		virtual std::string TryFindAttachedFile(StringSection<> name) = 0;
 		
-		DEPRECATED_ATTRIBUTE virtual std::optional<Signature> FindSignature(StringSection<> name) final ;	// legacy interface -- prefer the pural FindSignatures()
+		XLE_DEPRECATED_ATTRIBUTE virtual std::optional<Signature> FindSignature(StringSection<> name) final ;	// legacy interface -- prefer the pural FindSignatures()
 
         virtual ~INodeGraphProvider();
     };

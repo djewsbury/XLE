@@ -41,7 +41,7 @@ namespace RenderCore { namespace Techniques
         virtual ~IShaderResourceDelegate();
     };
 
-    DEPRECATED_ATTRIBUTE class IMaterialDelegate
+    XLE_DEPRECATED_ATTRIBUTE class IMaterialDelegate
     {
     public:
         virtual UniformsStreamInterface GetInterface(const void* objectContext) const = 0;
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Techniques
 
 	class DrawableMaterial;
 
-	DEPRECATED_ATTRIBUTE class ITechniqueDelegate_Old
+	XLE_DEPRECATED_ATTRIBUTE class ITechniqueDelegate_Old
 	{
 	public:
 		virtual Metal::ShaderProgram* GetShader(

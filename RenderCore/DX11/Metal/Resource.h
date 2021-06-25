@@ -162,7 +162,7 @@ namespace RenderCore { namespace Metal_DX11
 	// (deprecated pre-BlitPass version)
 	using CopyPartial_Dest = BlitPass::CopyPartial_Dest;
 	using CopyPartial_Src = BlitPass::CopyPartial_Src;
-	DEPRECATED_ATTRIBUTE void CopyPartial(
+	XLE_DEPRECATED_ATTRIBUTE void CopyPartial(
 		DeviceContext&, const BlitPass::CopyPartial_Dest& dst, const BlitPass::CopyPartial_Src& src,
 		ImageLayout dstLayout = ImageLayout::Undefined, ImageLayout srcLayout = ImageLayout::Undefined);
 	
