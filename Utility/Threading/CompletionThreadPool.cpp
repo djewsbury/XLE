@@ -206,7 +206,10 @@ namespace Utility
                     // lock to prevent more than one thread from attempt to pop
                     // from it at the same time.
                 std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
-                if (_workerQuit) break;
+                if (_workerQuit) {
+                    --_runningWorkerCount;
+                    break;
+                }
 
                 if (_pendingTasks.empty()) {
                     --_runningWorkerCount;
@@ -242,6 +245,7 @@ namespace Utility
     ThreadPool::ThreadPool(unsigned threadCount)
     {
         _workerQuit = false;
+        _runningWorkerCount.store(0);
 
         for (unsigned i = 0; i<threadCount; ++i)
             _workerThreads.emplace_back([this] { this->RunBlocks(false); });
