@@ -1012,10 +1012,7 @@ namespace XLEMath
 			}
 
 			crashInfo._tailSideReplacement = (unsigned)_vertices.size();
-			if (crashEvent._edgeTail != crashEvent._edgeHead)
-				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._outsideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
-			else
-				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
+			_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
 			crashInfo._tailSide._edges.push_back({crashInfo._tailSideReplacement, tin->_head});
 			crashInfo._tailSide._edges.push_back({tout->_head, crashInfo._tailSideReplacement});
 			
@@ -1045,10 +1042,7 @@ namespace XLEMath
 			}
 
 			crashInfo._headSideReplacement = (unsigned)_vertices.size();
-			if (crashEvent._edgeTail != crashEvent._edgeHead)
-				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._insideFace});
-			else
-				_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._outsideFace});
+			_vertices.push_back({crashInfo._crashPtAndTime, crashInfo._crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._outsideFace});
 			crashInfo._headSide._edges.push_back({crashInfo._headSideReplacement, hin->_tail});
 			crashInfo._headSide._edges.push_back({hout->_tail, crashInfo._headSideReplacement});
 
@@ -1420,9 +1414,11 @@ namespace XLEMath
 		auto crashPtAndTime = PointAndTime<Primitive>{crashEvent._eventPt, crashEvent._eventTime};
 
 		auto tailSideReplacement = (unsigned)_vertices.size();
-		_vertices.push_back({crashPtAndTime, crashPtAndTime});
+		// assert(GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._outsideFace == GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._insideFace); -- have to check merged faces for this, also
+		_vertices.push_back({crashPtAndTime, crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._edgeHead)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._motor)._outsideFace});
+			
 		auto headSideReplacement = (unsigned)_vertices.size();
-		_vertices.push_back({crashPtAndTime, crashPtAndTime});
+		_vertices.push_back({crashPtAndTime, crashPtAndTime, GetVertex<Primitive>(_vertices, crashEvent._motor)._insideFace, GetVertex<Primitive>(_vertices, crashEvent._edgeTail)._outsideFace});
 
 		std::vector<WavefrontEdge<Primitive>> newEdges;
 		{
