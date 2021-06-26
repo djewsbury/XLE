@@ -119,6 +119,100 @@ namespace RenderCore { namespace Metal_AppleMetal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    static void ScanForLoads(
+        bool& mainAspectLoad, bool& stencilAspectLoad,
+        const FrameBufferDesc& fbDesc,
+        unsigned subpassStart,
+        AttachmentName attachmentName)
+    {
+        assert(subpassStart<fbDesc.GetSubpasses().size());
+        mainAspectLoad = stencilAspectLoad = false;
+        for (unsigned s=subpassStart; s!=fbDesc.GetSubpasses().size(); ++s) {
+            const auto& subpass = fbDesc.GetSubpasses()[s];
+            
+            for (auto& view:subpass.GetOutputs())
+                mainAspectLoad |= view._resourceName == attachmentName;
+            for (auto& view:subpass.GetInputs())
+                mainAspectLoad |= view._resourceName == attachmentName;
+            for (auto& view:subpass.GetResolveOutputs())
+                mainAspectLoad |= view._resourceName == attachmentName;
+
+            if (subpass.GetDepthStencil()._resourceName == attachmentName) {
+                auto aspect = subpass.GetDepthStencil()._window._format._aspect;
+                mainAspectLoad 
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Depth)
+                    ;
+                stencilAspectLoad
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Stencil)
+                    ;
+            }
+
+            if (subpass.GetResolveDepthStencil()._resourceName == attachmentName) {
+                auto aspect = subpass.GetResolveDepthStencil()._window._format._aspect;
+                mainAspectLoad 
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Depth)
+                    ;
+                stencilAspectLoad
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Stencil)
+                    ;
+            }
+        }
+    }
+
+    static void ScanForStores(
+        bool& mainAspectStore, bool& stencilAspectStore,
+        const FrameBufferDesc& fbDesc,
+        unsigned subpassEnd,
+        AttachmentName attachmentName)
+    {
+        assert(subpassEnd<=fbDesc.GetSubpasses().size());
+        mainAspectStore = stencilAspectStore = false;
+        for (unsigned s=0; s!=subpassEnd; ++s) {
+            const auto& subpass = fbDesc.GetSubpasses()[s];
+            
+            for (auto& view:subpass.GetOutputs())
+                mainAspectStore |= view._resourceName == attachmentName;
+            for (auto& view:subpass.GetResolveOutputs())
+                mainAspectStore |= view._resourceName == attachmentName;
+
+            if (subpass.GetDepthStencil()._resourceName == attachmentName) {
+                auto aspect = subpass.GetDepthStencil()._window._format._aspect;
+                stencilAspectStore 
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Depth)
+                    ;
+                stencilAspectStore
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Stencil)
+                    ;
+            }
+
+            if (subpass.GetResolveDepthStencil()._resourceName == attachmentName) {
+                auto aspect = subpass.GetResolveDepthStencil()._window._format._aspect;
+                stencilAspectStore 
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Depth)
+                    ;
+                stencilAspectStore
+                    = (aspect == TextureViewDesc::Aspect::UndefinedAspect) 
+                    | (aspect == TextureViewDesc::Aspect::DepthStencil)
+                    | (aspect == TextureViewDesc::Aspect::Stencil)
+                    ;
+            }
+        }
+    }
+
     FrameBuffer::FrameBuffer(ObjectFactory& factory, const FrameBufferDesc& fbDesc, const INamedAttachments& namedResources)
     {
         auto subpasses = fbDesc.GetSubpasses();
@@ -135,6 +229,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             assert(spDesc.GetOutputs().size() <= maxColorAttachments); // MTLRenderPassDescriptor supports up to four color attachments
             auto colorAttachmentsCount = (unsigned)std::min((unsigned)spDesc.GetOutputs().size(), maxColorAttachments);
             for (unsigned o=0; o<colorAttachmentsCount; ++o) {
+                
                 const auto& attachmentView = spDesc.GetOutputs()[o];
                 auto& attachmentDesc = fbDesc.GetAttachments()[attachmentView._resourceName];
                 auto resource = namedResources.GetResource(attachmentView._resourceName, attachmentDesc, fbDesc.GetProperties());
@@ -142,18 +237,29 @@ namespace RenderCore { namespace Metal_AppleMetal
                     Throw(::Exceptions::BasicLabel("Could not find attachment texture for color attachment in FrameBuffer::FrameBuffer"));
 
                 // Configure MTLRenderPassColorAttachmentDescriptor
-                desc.colorAttachments[o].texture = checked_cast<Resource*>(resource.get())->GetTexture();
-                desc.colorAttachments[o].loadAction = NonStencilLoadActionFromRenderCore(attachmentView._loadFromPreviousPhase);
-                desc.colorAttachments[o].storeAction = NonStencilStoreActionFromRenderCore(attachmentView._storeToNextPhase);
-                // clearColor is set when binding subpass
+                // Consider stores and loads occuring with the same render pass
+                // prior writes within the render pass are always loaded; and we will
+                // always store for future reads within the render pass
+                bool localLoad = false, stencilAspectLoad = false;
+                bool localStore = false, stencilAspectStore = false;
+                ScanForLoads(localLoad, stencilAspectLoad, fbDesc, p+1, attachmentView._resourceName);
+                ScanForStores(localLoad, stencilAspectLoad, fbDesc, p, attachmentView._resourceName);
 
+                desc.colorAttachments[o].texture = checked_cast<Resource*>(resource.get())->GetTexture();
+                desc.colorAttachments[o].loadAction = localStore ? MTLLoadActionLoad : NonStencilLoadActionFromRenderCore(attachmentDesc._loadFromPreviousPhase);
+                desc.colorAttachments[o].storeAction = localLoad ? MTLStoreActionStore : NonStencilStoreActionFromRenderCore(attachmentDesc._storeToNextPhase);
+            
+                auto resDesc = resource->GetDesc();
                 _subpasses[p]._rasterCount = std::max(
                     _subpasses[p]._rasterCount,
-                    (unsigned)resource->GetDesc()._textureDesc._samples._sampleCount);
+                    (unsigned)resDesc._textureDesc._samples._sampleCount);
+                maxWidth = std::max(maxWidth, (unsigned)resDesc._textureDesc._width);
+                maxHeight = std::max(maxHeight, (unsigned)resDesc._textureDesc._height);
 
                 if (o < spDesc.GetResolveOutputs().size() && spDesc.GetResolveOutputs()[o]._resourceName != ~0u) {
-                    auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveOutputs()[o]._resourceName];
-                    auto resolveResource = namedResources.GetResource(spDesc.GetResolveOutputs()[o]._resourceName, attachmentDesc, fbDesc.GetProperties());
+                    const auto& resolveAttachmentView = spDesc.GetResolveOutputs()[o];
+                    auto& attachmentDesc = fbDesc.GetAttachments()[resolveAttachmentView._resourceName];
+                    auto resolveResource = namedResources.GetResource(resolveAttachmentView._resourceName, attachmentDesc, fbDesc.GetProperties());
                     if (!resolveResource)
                         Throw(::Exceptions::BasicLabel("Could not find resolve texture for color attachment in FrameBuffer::FrameBuffer"));
 
@@ -161,15 +267,12 @@ namespace RenderCore { namespace Metal_AppleMetal
                     assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
 
                     desc.colorAttachments[o].resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
-                    if (HasRetain(attachmentView._storeToNextPhase)) {
+                    if (localLoad || HasRetain(attachmentDesc._storeToNextPhase)) {
                         desc.colorAttachments[o].storeAction = MTLStoreActionStoreAndMultisampleResolve;
                     } else {
                         desc.colorAttachments[o].storeAction = MTLStoreActionMultisampleResolve;
                     }
                 }
-
-                maxWidth = std::max(maxWidth, (unsigned)desc.colorAttachments[o].texture.width);
-                maxHeight = std::max(maxHeight, (unsigned)desc.colorAttachments[o].texture.height);
             }
 
             if (spDesc.GetDepthStencil()._resourceName != ~0u) {
@@ -183,29 +286,29 @@ namespace RenderCore { namespace Metal_AppleMetal
                 auto resolvedFormat = ResolveFormat(format, {}, BindFlag::DepthStencil);
                 auto components = GetComponents(resolvedFormat);
 
+                bool localLoad = false, stencilAspectLoad = false;
+                bool localStore = false, stencilAspectStore = false;
+                ScanForLoads(localLoad, stencilAspectLoad, fbDesc, p+1, spDesc.GetDepthStencil()._resourceName);
+                ScanForStores(localLoad, stencilAspectLoad, fbDesc, p, spDesc.GetDepthStencil()._resourceName);
+
                 if (components == FormatComponents::Depth || components == FormatComponents::DepthStencil) {
                     desc.depthAttachment.texture = res.GetTexture();
-                    desc.depthAttachment.loadAction = NonStencilLoadActionFromRenderCore(spDesc.GetDepthStencil()._loadFromPreviousPhase);
-                    desc.depthAttachment.storeAction = NonStencilStoreActionFromRenderCore(spDesc.GetDepthStencil()._storeToNextPhase);
-                    // clearDepth is set when binding subpass
-
-                    maxWidth = std::max(maxWidth, (unsigned)desc.depthAttachment.texture.width);
-                    maxHeight = std::max(maxHeight, (unsigned)desc.depthAttachment.texture.height);
+                    desc.depthAttachment.loadAction = localStore ? MTLLoadActionLoad : NonStencilLoadActionFromRenderCore(attachmentDesc._loadFromPreviousPhase);
+                    desc.depthAttachment.storeAction = localLoad ? MTLStoreActionStore : NonStencilStoreActionFromRenderCore(attachmentDesc._storeToNextPhase);
                 }
 
                 if (components == FormatComponents::Stencil || components == FormatComponents::DepthStencil) {
                     desc.stencilAttachment.texture = res.GetTexture();
-                    desc.stencilAttachment.loadAction = StencilLoadActionFromRenderCore(spDesc.GetDepthStencil()._loadFromPreviousPhase);
-                    desc.stencilAttachment.storeAction = StencilStoreActionFromRenderCore(spDesc.GetDepthStencil()._storeToNextPhase);
-                    // clearStencil is set when binding subpass
-
-                    maxWidth = std::max(maxWidth, (unsigned)desc.stencilAttachment.texture.width);
-                    maxHeight = std::max(maxHeight, (unsigned)desc.stencilAttachment.texture.height);
+                    desc.stencilAttachment.loadAction = stencilAspectStore ? MTLLoadActionLoad : StencilLoadActionFromRenderCore(attachmentDesc._loadFromPreviousPhase);
+                    desc.stencilAttachment.storeAction = stencilAspectLoad ? MTLStoreActionStore : StencilStoreActionFromRenderCore(attachmentDesc._storeToNextPhase);
                 }
 
+                auto resDesc = resource->GetDesc();
                 _subpasses[p]._rasterCount = std::max(
                     _subpasses[p]._rasterCount,
-                    (unsigned)resource->GetDesc()._textureDesc._samples._sampleCount);
+                    (unsigned)resDesc._textureDesc._samples._sampleCount);
+                maxWidth = std::max(maxWidth, (unsigned)resDesc._textureDesc._width);
+                maxHeight = std::max(maxHeight, (unsigned)resDesc._textureDesc._height);
 
                 if (spDesc.GetResolveDepthStencil()._resourceName != ~0u) {
                     auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveDepthStencil()._resourceName];
@@ -217,7 +320,7 @@ namespace RenderCore { namespace Metal_AppleMetal
                     assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
 
                     desc.depthAttachment.resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
-                    if (HasRetain(spDesc.GetResolveDepthStencil()._storeToNextPhase)) {
+                    if (localLoad || HasRetain(attachmentDesc._storeToNextPhase)) {
                         desc.depthAttachment.storeAction = MTLStoreActionStoreAndMultisampleResolve;
                     } else {
                         desc.depthAttachment.storeAction = MTLStoreActionMultisampleResolve;
