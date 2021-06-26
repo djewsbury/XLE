@@ -9,21 +9,13 @@
 #include "../../IThreadContext.h"
 #include "../../ResourceUtils.h"
 #include "../../../OSServices/Log.h"
+#include <stdexcept>
+#include <typeinfo>
 
 #include "IncludeAppleMetal.h"
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
-    static std::shared_ptr<Resource> AsResource(const IResourcePtr& rp)
-    {
-        auto* res = (Resource*)rp->QueryInterface(typeid(Resource).hash_code());
-        if (!res || res != rp.get())
-            Throw(::Exceptions::BasicLabel("Unexpected resource type passed to texture view"));
-        return std::static_pointer_cast<Resource>(rp);
-    }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
     void* Resource::QueryInterface(size_t guid)
     {
         if (guid == typeid(Resource).hash_code())
@@ -31,7 +23,12 @@ namespace RenderCore { namespace Metal_AppleMetal
         return nullptr;
     }
 
-    std::vector<uint8_t> Resource::ReadBack(IThreadContext& context, SubResourceId subRes) const
+    ResourceDesc Resource::GetDesc() const
+    { 
+        return _desc; 
+    }
+
+    std::vector<uint8_t> Resource::ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const
     {
         // We must synchronize with the GPU. Since the GPU is working asychronously, we must ensure
         // that all operations that might effect this resource have been completed. Since we don't
@@ -209,9 +206,11 @@ namespace RenderCore { namespace Metal_AppleMetal
             textureDesc.usage = MTLTextureUsageUnknown;
             if (desc._bindFlags & BindFlag::ShaderResource) {
                 textureDesc.usage |= MTLTextureUsageShaderRead;
-                if (desc._gpuAccess & GPUAccess::Write) {
+            } else if (desc._bindFlags & BindFlag::UnorderedAccess) {
+                if (desc._gpuAccess & GPUAccess::Read)
+                    textureDesc.usage |= MTLTextureUsageShaderRead;
+                if (desc._gpuAccess & GPUAccess::Write)
                     textureDesc.usage |= MTLTextureUsageShaderWrite;
-                }
             }
             if (desc._bindFlags & BindFlag::RenderTarget ||
                 desc._bindFlags & BindFlag::DepthStencil) {
@@ -336,20 +335,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
-    Resource::Resource(const IResourcePtr& res, const ResourceDesc& desc)
-    : _desc(desc)
-    , _guid(s_nextResourceGUID++)
-    {
-        std::shared_ptr<Resource> resource = AsResource(res);
-        if (resource->GetBuffer()) {
-            _underlyingBuffer = resource->GetBuffer();
-        } else if (resource->GetTexture()) {
-            _underlyingTexture = resource->GetTexture();
-        } else {
-            assert(0);
-        }
-    }
-
     Resource::Resource() : _guid(s_nextResourceGUID++) {}
     Resource::~Resource() {}
 
@@ -358,26 +343,26 @@ namespace RenderCore { namespace Metal_AppleMetal
         return s_nextResourceGUID++;
     }
 
-    ResourceDesc ExtractDesc(const IResource& input)
+    namespace Internal
     {
-        auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(typeid(Resource).hash_code());
-        if (res)
-            return res->GetDesc();
-        return ResourceDesc{};
-    }
+        ResourceDesc ExtractDesc(const IResource& input)
+        {
+            auto* res = (Resource*)const_cast<IResource&>(input).QueryInterface(typeid(Resource).hash_code());
+            if (res)
+                return res->GetDesc();
+            return ResourceDesc{};
+        }
 
-    IResourcePtr CreateResource(
-                                ObjectFactory& factory, const ResourceDesc& desc,
-                                const IDevice::ResourceInitializer& initData)
-    {
-        return std::make_shared<Resource>(factory, desc, initData);
-    }
+        ResourceDesc ExtractRenderBufferDesc(const id<MTLTexture>& texture)
+        {
+            return CreateDesc(BindFlag::RenderTarget, 0, GPUAccess::Write, TextureDesc::Plain2D((uint32)texture.width, (uint32)texture.height, AsRenderCoreFormat(texture.pixelFormat)), "");
+        }
 
-    ResourceDesc ExtractRenderBufferDesc(const id<MTLTexture>& texture)
-    {
-        return CreateDesc(BindFlag::RenderTarget, 0, GPUAccess::Write, TextureDesc::Plain2D((uint32)texture.width, (uint32)texture.height, AsRenderCoreFormat(texture.pixelFormat)), "");
+        inline RawMTLHandle GetBufferRawMTLHandle(const IResource& resource)
+        {
+            return (RawMTLHandle)static_cast<const Resource&>(resource).GetBuffer().get();
+        }
     }
-
 
     void BlitPass::Write(
         const CopyPartial_Dest& dst,

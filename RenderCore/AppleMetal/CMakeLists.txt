@@ -2,7 +2,6 @@
 set(Src
     Device.mm
     Metal/BasicLabelWithNSError.mm
-    Metal/Buffer.cpp
     Metal/DeviceContext.cpp
     Metal/Format.cpp
     Metal/FrameBuffer.cpp

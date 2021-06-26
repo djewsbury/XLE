@@ -18,8 +18,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         bool                                HasMipMaps() const { return _hasMipMaps; }
         const std::shared_ptr<Resource>& GetResource() const { return _resource; }
 
-        ShaderResourceView(const ObjectFactory& factory, const IResourcePtr& resource, const TextureViewDesc& window = TextureViewDesc());
-        explicit ShaderResourceView(const IResourcePtr& resource, const TextureViewDesc& window = TextureViewDesc());
+        ShaderResourceView(const ObjectFactory& factory, const std::shared_ptr<IResource>& resource, const TextureViewDesc& window = TextureViewDesc());
+        explicit ShaderResourceView(const std::shared_ptr<IResource>& resource, const TextureViewDesc& window = TextureViewDesc());
         ShaderResourceView();
 
         TextureViewDesc _window;

@@ -6,7 +6,9 @@
 #include "../IAnnotator.h"
 #include "../Init.h"
 #include "../../Utility/FunctionUtils.h"
+#include "../../Core/Exceptions.h"
 #include <assert.h>
+#include <memory>
 
 #include "Metal/IncludeAppleMetal.h"
 #include "Metal/Format.h"
@@ -26,7 +28,7 @@
 namespace RenderCore { namespace ImplAppleMetal
 {
 
-    IResourcePtr    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
+    std::shared_ptr<IResource>    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
     {
         assert(_immediateCommandQueue);
         assert(_commandBuffer);
@@ -66,7 +68,7 @@ namespace RenderCore { namespace ImplAppleMetal
         }
 
         // KenD -- This is constructing a RenderBuffer, but we don't really differentiate between RenderBuffer and Texture really.  The binding is specified as RenderTarget.
-        return std::make_shared<Metal_AppleMetal::Resource>(texture, Metal_AppleMetal::ExtractRenderBufferDesc(texture), renderTargetGuid);
+        return std::make_shared<Metal_AppleMetal::Resource>(texture, Metal_AppleMetal::Internal::ExtractRenderBufferDesc(texture), renderTargetGuid);
     }
 
     void        ThreadContext::Present(IPresentationChain& presentationChain)
@@ -204,9 +206,9 @@ namespace RenderCore { namespace ImplAppleMetal
         return nullptr;
     }
 
-    IResourcePtr Device::CreateResource(const ResourceDesc& desc, const ResourceInitializer& init)
+    std::shared_ptr<IResource> Device::CreateResource(const ResourceDesc& desc, const ResourceInitializer& init)
     {
-        return Metal_AppleMetal::CreateResource(*_objectFactory, desc, init);
+        return std::make_shared<Resource>(*_objectFactory, desc, init);
     }
 
     std::shared_ptr<ILowLevelCompiler>        Device::CreateShaderCompiler()

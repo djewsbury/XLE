@@ -8,6 +8,8 @@
 #include "../../ResourceDesc.h"
 #include "../../IDevice.h"
 #include "../../../Utility/IteratorUtils.h"
+#include <vector>
+#include <memory>
 
 namespace RenderCore
 {
@@ -21,21 +23,16 @@ namespace RenderCore { namespace Metal_AppleMetal
     class Resource : public IResource
     {
     public:
+        // --------------- Cross-GFX-API interface ---------------
         using Desc = ResourceDesc;
-
-        Desc GetDesc() const override        { return _desc; }
-
-        const OCPtr<AplMtlTexture>& GetTexture() const { return _underlyingTexture; }; // <MTLTexture>
-        const OCPtr<AplMtlBuffer>& GetBuffer() const { return _underlyingBuffer; }; // <MTLBuffer>
-
-        /* KenD -- GetRenderBuffer() is not necessary for Metal implementation at this point */
-        //IdPtr GetRenderBuffer() const { return _underlyingRenderBuffer; }; // <MTLTexture>
-
-        const bool IsBackBuffer() { return false; }
-
         virtual void*       QueryInterface(size_t guid) override;
         virtual uint64_t    GetGUID() const override;
-        virtual std::vector<uint8_t>    ReadBack(IThreadContext& context, SubResourceId subRes) const override;
+        virtual std::vector<uint8_t>    ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const override;
+        virtual Desc        GetDesc() const override;
+
+        // --------------- Apple Metal specific interface ---------------
+        const OCPtr<AplMtlTexture>& GetTexture() const { return _underlyingTexture; }; // <MTLTexture>
+        const OCPtr<AplMtlBuffer>& GetBuffer() const { return _underlyingBuffer; }; // <MTLBuffer>
 
         Resource(
             ObjectFactory& factory, const Desc& desc,
@@ -46,7 +43,6 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         Resource(const id<MTLTexture>&, const ResourceDesc& = {});
         Resource(const id<MTLTexture>&, const ResourceDesc&, uint64_t guidOverride);
-        Resource(const IResourcePtr&, const ResourceDesc& = {});
 
         Resource();
         ~Resource();
@@ -56,25 +52,9 @@ namespace RenderCore { namespace Metal_AppleMetal
     protected:
         OCPtr<AplMtlBuffer> _underlyingBuffer; // id<MTLBuffer>
         OCPtr<AplMtlTexture> _underlyingTexture; // id<MTLTexture>
-        //IdPtr _underlyingRenderBuffer; // id<MTLTexture>
         Desc _desc;
         uint64_t _guid;
     };
-
-    inline RawMTLHandle GetBufferRawMTLHandle(const IResource& resource)
-    {
-        return (RawMTLHandle)static_cast<const Resource&>(resource).GetBuffer().get();
-    }
-
-    ResourceDesc ExtractDesc(const IResource& input);
-    IResourcePtr CreateResource(
-                                ObjectFactory& factory, const ResourceDesc& desc,
-                                const IDevice::ResourceInitializer& initData = nullptr);
-
-    ResourceDesc ExtractRenderBufferDesc(const id<MTLTexture>& texture);
-    //ResourceDesc ExtractTextureDesc(const id<MTLTexture>& texture);
-    //ResourceDesc ExtractBufferDesc(const id<MTLBuffer>& buffer);
-
 
     class BlitPass
     {
@@ -113,4 +93,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         DeviceContext* _devContext;
         bool _openedEncoder;
     };
+
+    namespace Internal
+	{
+        ResourceDesc ExtractDesc(const IResource& input);
+        ResourceDesc ExtractRenderBufferDesc(const id<MTLTexture>& texture);
+        RawMTLHandle GetBufferRawMTLHandle(const IResource& resource);
+    }
 }}

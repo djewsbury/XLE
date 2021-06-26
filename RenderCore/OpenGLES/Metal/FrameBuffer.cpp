@@ -176,7 +176,7 @@ namespace RenderCore { namespace Metal_OpenGLES
                 sp._dsv = *dsvPool.GetView(resource, spDesc.GetDepthStencil()._window);
 				sp._dsvLoad = spDesc.GetDepthStencil()._loadFromPreviousPhase;
 				sp._dsvClearValue = HasClear(sp._dsvLoad) ? (clearValueIterator++) : ~0u;
-                auto resolvedFormat = ResolveFormat(sp._dsv.GetResource()->GetDesc()._textureDesc._format, sp._dsv._window._format, FormatUsage::DSV);
+                auto resolvedFormat = ResolveFormat(sp._dsv.GetResource()->GetDesc()._textureDesc._format, sp._dsv._window._format, BindFlag::DepthStencil);
                 auto components = GetComponents(resolvedFormat);
                 sp._dsvHasDepth = (components == FormatComponents::Depth) || (components == FormatComponents::DepthStencil);
                 sp._dsvHasStencil = (components == FormatComponents::Stencil) || (components == FormatComponents::DepthStencil);

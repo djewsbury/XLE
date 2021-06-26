@@ -10,6 +10,7 @@
 #include "../Core/Prefix.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"   // for VectorPattern
+#include <iosfwd>
 
 namespace RenderCore
 {

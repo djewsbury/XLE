@@ -282,7 +282,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             OutputBlob& output = *(OutputBlob*)payload->data();
             StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
             identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "-" << std::hex << hashCode;
-            output._hdr = ShaderService::ShaderHeader { identifier.AsStringSection(), shaderPath._shaderModel, false };
+            output._hdr = ShaderService::ShaderHeader { identifier.AsStringSection(), shaderPath._shaderModel, shaderPath._entryPoint, false };
             output._hashCode = hashCode;
             return true;
 
@@ -314,7 +314,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 
             StringMeld<dimof(ShaderService::ShaderHeader::_identifier)> identifier;
             identifier << shaderPath._filename << "-" << shaderPath._entryPoint << "-" << std::hex << hashCode;
-            ShaderService::ShaderHeader shaderHeader { identifier.AsStringSection(), shaderPath._shaderModel, false };
+            ShaderService::ShaderHeader shaderHeader { identifier.AsStringSection(), shaderPath._shaderModel, shaderPath._entryPoint, false };
 
             [_device.get() newLibraryWithSource:[NSString stringWithUTF8String:finalShaderCode.c_str()]
                                         options:options
@@ -457,9 +457,9 @@ namespace RenderCore { namespace Metal_AppleMetal
             assert(vs && fs);
         }
 
-        _depVal = std::make_shared<Assets::DependencyValidation>();
-        Assets::RegisterAssetDependency(_depVal, vertexShader.GetDependencyValidation());
-        Assets::RegisterAssetDependency(_depVal, fragmentShader.GetDependencyValidation());
+        _depVal = ::Assets::GetDepValSys().Make();
+        _depVal.RegisterDependency(vertexShader.GetDependencyValidation());
+        _depVal.RegisterDependency(fragmentShader.GetDependencyValidation());
 
         id<MTLLibrary> vertexLibrary = vs.get();
         id<MTLLibrary> fragmentLibrary = fs.get();
@@ -522,8 +522,6 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         assert(_vf);
         assert(_ff);
-
-        _depVal = std::make_shared<Assets::DependencyValidation>();
 
         _guid = g_nextShaderProgramGUID++;
     }

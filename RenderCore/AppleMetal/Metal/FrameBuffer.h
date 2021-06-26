@@ -6,7 +6,9 @@
 
 #include "TextureView.h"
 #include "../../FrameBufferDesc.h"
+#include "../../StateDesc.h"
 #include "../../../Utility/OCUtils.h"
+#include "../../../Utility/IteratorUtils.h"
 
 @class MTLRenderPassDescriptor;
 
@@ -23,8 +25,9 @@ namespace RenderCore { namespace Metal_AppleMetal
     public:
         void BindSubpass(DeviceContext& context, unsigned subpassIndex, IteratorRange<const ClearValue*> clearValues) const;
 
-        /* TODO -- Metal equivalent */ //OpenGL::FrameBuffer* GetSubpassUnderlyingFramebuffer(unsigned subpassIndex);
         unsigned GetSubpassCount() const { return (unsigned)_subpasses.size(); }
+
+        ViewportDesc GetDefaultViewport() const { return _defaultViewport; }
 
         FrameBuffer(
             ObjectFactory& factory,
@@ -52,6 +55,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             unsigned _rasterCount;
         };
         std::vector<Subpass> _subpasses;
+        ViewportDesc _defaultViewport;
     };
 
     void BeginRenderPass(

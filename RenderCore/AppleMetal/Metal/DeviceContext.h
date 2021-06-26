@@ -12,7 +12,12 @@
 #include "../../Format.h"
 #include "../../BufferView.h"
 #include "../../../Utility/Threading/ThreadingUtils.h"
+#include "../../../Utility/IteratorUtils.h"
 #include <assert.h>
+#include <memory>
+#include <vector>
+#include <utility>
+#include <string>
 #include <Foundation/NSObject.h>
 
 @class MTLRenderPassDescriptor;
@@ -40,6 +45,77 @@ namespace RenderCore { namespace Metal_AppleMetal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    class GraphicsPipeline
+    {
+    public:
+        // --------------- Cross-GFX-API interface ---------------
+        uint64_t GetInterfaceBindingGUID() const { return _interfaceBindingGUID; }
+        const ::Assets::DependencyValidation& GetDependencyValidation() const;
+
+    private:
+        OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
+        OCPtr<MTLRenderPipelineReflection> _reflection;
+        OCPtr<NSObject<MTLDepthStencilState>> _depthStencilState;
+        unsigned _primitiveType = 0;                // MTLPrimitiveType
+        unsigned _cullMode = 0;
+        unsigned _faceWinding = 0;
+        uint64_t _interfaceBindingGUID = 0;
+
+        GraphicsPipeline(
+            OCPtr<NSObject<MTLRenderPipelineState>> underlying,
+            OCPtr<MTLRenderPipelineReflection> reflection,
+            OCPtr<NSObject<MTLDepthStencilState>> depthStencilState,
+            unsigned primitiveType,
+            unsigned cullMode,
+            unsigned faceWinding,
+            uint64_t interfaceBindingGUID);
+
+        #if defined(_DEBUG)
+            std::string _shaderSourceIdentifiers;
+        #endif
+
+        friend class DeviceContext;
+        friend class GraphicsPipelineBuilder;
+    };
+
+    class GraphicsPipelineBuilder
+    {
+    public:
+        // --------------- Cross-GFX-API interface ---------------
+        void Bind(const ShaderProgram& shaderProgram);
+
+        void Bind(IteratorRange<const AttachmentBlendDesc*> blendStates);
+        void Bind(const DepthStencilDesc& depthStencil);
+        void Bind(const RasterizationDesc& rasterizer);
+
+        void Bind(const BoundInputLayout& inputLayout, Topology topology);
+		void UnbindInputLayout();
+
+        void SetRenderPassConfiguration(const FrameBufferDesc& fbDesc, unsigned subPass);
+        void SetRenderPassConfiguration(MTLRenderPassDescriptor* desc, unsigned sampleCount);
+        uint64_t GetRenderPassConfigurationHash() const;
+
+        static uint64_t CalculateFrameBufferRelevance(const FrameBufferDesc& fbDesc, unsigned subPass = 0);
+
+        const std::shared_ptr<GraphicsPipeline>& CreatePipeline(ObjectFactory&);
+
+        // --------------- Apple Metal specific interface ---------------
+        bool IsPipelineStale() const { return _dirty; }
+
+        GraphicsPipelineBuilder();
+        ~GraphicsPipelineBuilder();
+    protected:
+        class Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
+        bool _dirty = false;
+        unsigned _cullMode = 0;
+        unsigned _faceWinding = 0;
+
+        OCPtr<NSObject<MTLDepthStencilState>> CreateDepthStencilState(ObjectFactory& factory);
+    };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
     class CommandList
     {
     public:
@@ -56,57 +132,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         std::vector<std::pair<uint64_t, uint64_t>> _customBindings;
     };
 
-    class GraphicsPipeline
-    {
-    public:
-        OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
-        OCPtr<MTLRenderPipelineReflection> _reflection;
-        OCPtr<NSObject<MTLDepthStencilState>> _depthStencilState;
-        unsigned _primitiveType;              // MTLPrimitiveType
-        unsigned _stencilReferenceValue;        // todo -- separate stencil reference value from DepthStencilDesc
-        unsigned _cullMode;
-        unsigned _faceWinding;
-        uint64_t _hash;
-
-        uint64_t GetGUID() const { return _hash; }
-
-        #if defined(_DEBUG)
-            std::string _shaderSourceIdentifiers;
-        #endif
-    };
-
-    class GraphicsPipelineBuilder
-    {
-    public:
-        void Bind(const ShaderProgram& shaderProgram);
-
-        void Bind(const AttachmentBlendDesc& desc);
-        void Bind(const DepthStencilDesc& depthStencil);
-        void Bind(Topology topology);
-        void Bind(const RasterizationDesc& rasterizer);
-
-        // DepthStencilDesc ActiveDepthStencilDesc();
-
-        void SetInputLayout(const BoundInputLayout& inputLayout);
-        void SetRenderPassConfiguration(const FrameBufferDesc& fbDesc, unsigned subPass);
-        void SetRenderPassConfiguration(MTLRenderPassDescriptor* desc, unsigned sampleCount);
-        uint64_t GetRenderPassConfigurationHash() const;
-
-        const std::shared_ptr<GraphicsPipeline>& CreatePipeline(ObjectFactory&);
-        bool IsPipelineStale() const { return _dirty; }
-
-        GraphicsPipelineBuilder();
-        ~GraphicsPipelineBuilder();
-    protected:
-        class Pimpl;
-        std::unique_ptr<Pimpl> _pimpl;
-        bool _dirty;
-        unsigned _cullMode;
-        unsigned _faceWinding;
-
-        OCPtr<NSObject<MTLDepthStencilState>> CreateDepthStencilState(ObjectFactory& factory);
-    };
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     class DeviceContext : public GraphicsPipelineBuilder
@@ -118,9 +143,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         void    BindVS(id<MTLBuffer> buffer, unsigned offset, unsigned bufferIndex);
         void    Bind(const IndexBufferView& IB);
 
-        void UnbindInputLayout();
-
-        void SetViewportAndScissorRects(IteratorRange<const Viewport*> viewports, IteratorRange<const ScissorRect*> scissorRects);
+        void    Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
 
         using GraphicsPipelineBuilder::Bind;
 
@@ -148,7 +171,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         void    BeginRenderPass();
         void    EndRenderPass();
         bool    InRenderPass();
-        void    OnEndRenderPass(std::function<void(void)> fn);
+        // void    OnEndRenderPass(std::function<void(void)> fn);
 
         bool    HasEncoder();
         bool    HasRenderCommandEncoder();
@@ -159,9 +182,9 @@ namespace RenderCore { namespace Metal_AppleMetal
         void    CreateRenderCommandEncoder(MTLRenderPassDescriptor* renderPassDescriptor);
         void    CreateBlitCommandEncoder();
         void    EndEncoding();
-        void    OnEndEncoding(std::function<void(void)> fn);
+        // void    OnEndEncoding(std::function<void(void)> fn);
         // METAL_TODO: This function shouldn't be needed; it's here only as a temporary substitute for OnEndRenderPass (which is a safe time when we know we will not have a current encoder).
-        void    OnDestroyEncoder(std::function<void(void)> fn);
+        // void    OnDestroyEncoder(std::function<void(void)> fn);
         void    DestroyRenderCommandEncoder();
         void    DestroyBlitCommandEncoder();
 

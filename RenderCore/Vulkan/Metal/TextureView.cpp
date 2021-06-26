@@ -181,7 +181,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _bufferView = factory.CreateBufferView(createInfo);
     }
 
-    ResourceView::ResourceView(ObjectFactory& factory, const IResourcePtr& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize)
+    ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize)
     : _type(Type::BufferView)
     {
         // This variation is for "texel buffers"
@@ -201,7 +201,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _resource = std::static_pointer_cast<Resource>(buffer);
     }
 
-    ResourceView::ResourceView(ObjectFactory& factory, const IResourcePtr& buffer, unsigned rangeOffset, unsigned rangeSize)
+    ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, unsigned rangeOffset, unsigned rangeSize)
     : _bufferRange(rangeOffset, rangeSize)
     , _type(Type::BufferAndRange)
     {
@@ -212,7 +212,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _resource = std::static_pointer_cast<Resource>(buffer);
     }
 
-    ResourceView::ResourceView(ObjectFactory& factory, const IResourcePtr& resource)
+    ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& resource)
     {
         const auto& desc = resource->GetDesc();
         if (desc._type == ResourceDesc::Type::Texture) {

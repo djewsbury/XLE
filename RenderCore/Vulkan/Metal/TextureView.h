@@ -30,10 +30,10 @@ namespace RenderCore { namespace Metal_Vulkan
         ResourceView(ObjectFactory& factory, VkImage image, const TextureViewDesc& window = TextureViewDesc());
         ResourceView(ObjectFactory& factory, const VkBuffer buffer, Format texelBufferFormat, unsigned rangeOffset = 0, unsigned rangeSize = 0);
 
-        ResourceView(ObjectFactory& factory, const IResourcePtr& image, BindFlag::Enum usage, const TextureViewDesc& window);
-        ResourceView(ObjectFactory& factory, const IResourcePtr& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize);
-        ResourceView(ObjectFactory& factory, const IResourcePtr& buffer, unsigned rangeOffset, unsigned rangeSize);
-        ResourceView(ObjectFactory& factory, const IResourcePtr& resource);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& image, BindFlag::Enum usage, const TextureViewDesc& window);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, unsigned rangeOffset, unsigned rangeSize);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& resource);
         ResourceView();
         ~ResourceView();
 

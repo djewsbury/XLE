@@ -19,6 +19,9 @@
 #include "../../../Utility/MemoryUtils.h"
 #include <assert.h>
 #include <map>
+#include <utility>
+#include <memory>
+#include <typeinfo>
 #include "IncludeAppleMetal.h"
 
 namespace RenderCore { namespace Metal_AppleMetal
@@ -130,31 +133,31 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
-    static MTLViewport AsMTLViewport(const Viewport& viewport, const float renderTargetWidth, const float renderTargetHeight)
+    static MTLViewport AsMTLViewport(const ViewportDesc& viewport, float renderTargetWidth, float renderTargetHeight)
     {
         MTLViewport vp;
-        vp.originX = viewport.X;
-        vp.originY = viewport.Y;
-        if (!viewport.OriginIsUpperLeft) {
+        vp.originX = viewport._x;
+        vp.originY = viewport._y;
+        if (!viewport._originIsUpperLeft) {
             // Metal window coordinate space has origin in upper-left, so we must account for that in the viewport
-            vp.originY = renderTargetHeight - viewport.Y - viewport.Height;
+            vp.originY = renderTargetHeight - viewport._y - viewport._height;
         }
-        vp.width = viewport.Width;
-        vp.height = viewport.Height;
-        vp.znear = viewport.MinDepth;
-        vp.zfar = viewport.MaxDepth;
+        vp.width = viewport._width;
+        vp.height = viewport._height;
+        vp.znear = viewport._minDepth;
+        vp.zfar = viewport._maxDepth;
         return vp;
     }
 
-    static MTLScissorRect AsMTLScissorRect(const ScissorRect& scissorRect, const float renderTargetWidth, const float renderTargetHeight)
+    static MTLScissorRect AsMTLScissorRect(const ScissorRect& scissorRect, float renderTargetWidth, float renderTargetHeight)
     {
-        int x = scissorRect.X;
-        int y = scissorRect.Y;
-        int width = scissorRect.Width;
-        int height = scissorRect.Height;
+        int x = scissorRect._x;
+        int y = scissorRect._y;
+        int width = scissorRect._width;
+        int height = scissorRect._height;
 
         // Metal window coordinate space has origin in upper-left, so we must account for that in the scissor rect
-        if (!scissorRect.OriginIsUpperLeft) {
+        if (!scissorRect._originIsUpperLeft) {
             y = renderTargetHeight - y - height;
         }
 
@@ -226,14 +229,15 @@ namespace RenderCore { namespace Metal_AppleMetal
         #endif
     }
 
-    void GraphicsPipelineBuilder::Bind(const AttachmentBlendDesc& desc)
+    void GraphicsPipelineBuilder::Bind(IteratorRange<const AttachmentBlendDesc*> blendStates)
     {
-        _pimpl->_attachmentBlendDesc = desc;
+        assert(blendStates.size() == 1);
+        _pimpl->_attachmentBlendDesc = blendStates[0];
         _pimpl->_absHash = _pimpl->_attachmentBlendDesc.Hash();
         _dirty = true;
     }
 
-    void GraphicsPipelineBuilder::SetRenderPassConfiguration(const FrameBufferProperties& fbProps, const FrameBufferDesc& fbDesc, unsigned subPass)
+    void GraphicsPipelineBuilder::SetRenderPassConfiguration(const FrameBufferDesc& fbDesc, unsigned subPass)
     {
         assert(subPass < fbDesc.GetSubpasses().size());
         assert(_pimpl->_pipelineDescriptor);
@@ -248,7 +252,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             if (a._window._flags & TextureViewDesc::Flags::ForceSingleSample) {
                 ++singleSampleAttachments;
             } else {
-                auto& attach = fbDesc.GetAttachments()[a._resourceName]._desc;
+                auto& attach = fbDesc.GetAttachments()[a._resourceName];
                 if (attach._flags & AttachmentDesc::Flags::Multisampled) {
                     ++msaaAttachments;
                 } else {
@@ -260,11 +264,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned sampleCount = 1;
         if (msaaAttachments == 0) {
             // no msaa attachments,
-        } else if (fbProps._samples._sampleCount > 1) {
+        } else if (fbDesc.GetProperties()._samples._sampleCount > 1) {
             if (singleSampleAttachments > 0) {
                 Log(Warning) << "Subpass has a mixture of MSAA and non-MSAA attachments. MSAA can't be enabled, so falling back to single sample mode" << std::endl;
             } else {
-                sampleCount = fbProps._samples._sampleCount;
+                sampleCount = fbDesc.GetProperties()._samples._sampleCount;
             }
         }
 
@@ -291,8 +295,8 @@ namespace RenderCore { namespace Metal_AppleMetal
             if (i < subpass.GetOutputs().size()) {
                 assert(subpass.GetOutputs()[i]._resourceName <= fbDesc.GetAttachments().size());
                 const auto& window = subpass.GetOutputs()[i]._window;
-                const auto& attachment = fbDesc.GetAttachments()[subpass.GetOutputs()[i]._resourceName]._desc;
-                auto finalFormat = ResolveFormat(attachment._format, window._format, FormatUsage::RTV);
+                const auto& attachment = fbDesc.GetAttachments()[subpass.GetOutputs()[i]._resourceName];
+                auto finalFormat = ResolveFormat(attachment._format, window._format, BindFlag::RenderTarget);
                 auto mtlFormat = AsMTLPixelFormat(finalFormat);
                 _pimpl->_pipelineDescriptor.get().colorAttachments[i].pixelFormat = mtlFormat;
                 rpHash = HashCombine(mtlFormat, rpHash);
@@ -307,8 +311,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         if (subpass.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
             assert(subpass.GetDepthStencil()._resourceName <= fbDesc.GetAttachments().size());
             const auto& window = subpass.GetDepthStencil()._window;
-            const auto& attachment = fbDesc.GetAttachments()[subpass.GetDepthStencil()._resourceName]._desc;
-            auto finalFormat = ResolveFormat(attachment._format, window._format, FormatUsage::DSV);
+            const auto& attachment = fbDesc.GetAttachments()[subpass.GetDepthStencil()._resourceName];
+            auto finalFormat = ResolveFormat(attachment._format, window._format, BindFlag::DepthStencil);
 
             auto components = GetComponents(finalFormat);
             auto mtlFormat = AsMTLPixelFormat(finalFormat);
@@ -395,7 +399,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         _pimpl->_rpHash = rpHash;
     }
 
-    void GraphicsPipelineBuilder::SetInputLayout(const BoundInputLayout& inputLayout)
+    void GraphicsPipelineBuilder::Bind(const BoundInputLayout& inputLayout, Topology topology)
     {
         // KenD -- the vertex descriptor isn't necessary if the vertex function does not have an input argument declared [[stage_in]] */
         assert(_pimpl->_pipelineDescriptor);
@@ -405,6 +409,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             _pimpl->_inputLayoutGuid = inputLayout.GetGUID();
             _dirty = true;
         }
+        _pimpl->_activePrimitiveType = AsMTLenum(topology);
     }
 
     void GraphicsPipelineBuilder::Bind(const DepthStencilDesc& desc)
@@ -461,16 +466,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         return factory.CreateDepthStencilState(mtlDesc.get());
     }
 
-    DepthStencilDesc GraphicsPipelineBuilder::ActiveDepthStencilDesc()
-    {
-        return _pimpl->_activeDepthStencilDesc;
-    }
-
-    void GraphicsPipelineBuilder::Bind(Topology topology)
-    {
-        _pimpl->_activePrimitiveType = AsMTLenum(topology);
-    }
-    
     void GraphicsPipelineBuilder::Bind(const RasterizationDesc& desc)
     {
         _cullMode = (unsigned)AsMTLenum(desc._cullMode);
@@ -549,20 +544,17 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
 
         auto dss = CreateDepthStencilState(factory);
-        auto result  = std::make_shared<GraphicsPipeline>(GraphicsPipeline{
+        auto result  = std::make_shared<GraphicsPipeline>(
             std::move(renderPipelineState._renderPipelineState),
             std::move(renderPipelineState._reflection),
             std::move(dss),
             (unsigned)_pimpl->_activePrimitiveType,
-            _pimpl->_activeDepthStencilDesc._stencilReference,
             cullMode,
             faceWinding,
-            hash
-
-            #if defined(_DEBUG)
-                , _pimpl->_shaderSourceIdentifiers
-            #endif
-        });
+            hash);
+        #if defined(_DEBUG)
+            result->_shaderSourceIdentifiers = _pimpl->_shaderSourceIdentifiers;
+        #endif
 
         i = _pimpl->_prebuiltPipelines.insert(std::make_pair(hash, result)).first;
         return i->second;
@@ -662,12 +654,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         [_pimpl->_commandEncoder setVertexBuffer:buffer offset:offset atIndex:bufferIndex];
     }
 
-    void DeviceContext::UnbindInputLayout()
-    {
-        assert(_pimpl->_boundThread == [NSThread currentThread]);
-    }
-
-    void DeviceContext::SetViewportAndScissorRects(IteratorRange<const Viewport*> viewports, IteratorRange<const ScissorRect*> scissorRects)
+    void DeviceContext::Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects)
     {
         assert(_pimpl->_boundThread == [NSThread currentThread]);
         assert(_pimpl->_commandEncoder);
@@ -681,8 +668,8 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_pimpl->_commandEncoder setViewport:AsMTLViewport(viewport, _pimpl->_renderTargetWidth, _pimpl->_renderTargetHeight)];
             if (scissorRects.size()) {
                 const auto& scissorRect = scissorRects[0];
-                if (scissorRect.Width == 0 || scissorRect.Height == 0) {
-                    Throw(::Exceptions::BasicLabel("Scissor rect width (%d) and height (%d) must be non-zero", scissorRect.Width, scissorRect.Height));
+                if (scissorRect._width == 0 || scissorRect._height == 0) {
+                    Throw(::Exceptions::BasicLabel("Scissor rect width (%d) and height (%d) must be non-zero", scissorRect._width, scissorRect._height));
                 }
                 MTLScissorRect s = AsMTLScissorRect(scissorRect, _pimpl->_renderTargetWidth, _pimpl->_renderTargetHeight);
 

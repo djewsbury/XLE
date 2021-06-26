@@ -10,6 +10,7 @@
 #include "IDevice_Forward.h"
 #include "../Utility/IteratorUtils.h"
 #include <memory>
+#include <string>
 
 namespace RenderCore
 {

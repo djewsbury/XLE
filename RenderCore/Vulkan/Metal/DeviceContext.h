@@ -39,10 +39,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	class GraphicsPipeline : public VulkanUniquePtr<VkPipeline>
 	{
 	public:
+		// --------------- Cross-GFX-API interface ---------------
 		uint64_t GetInterfaceBindingGUID() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _shader.GetDependencyValidation(); }
 
-		// --------------- Vulkan specific interface --------------- 
+		// --------------- Vulkan specific interface ---------------
 		ShaderProgram _shader;
 
 		GraphicsPipeline(VulkanUniquePtr<VkPipeline>&&);
@@ -52,10 +53,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	class ComputePipeline : public VulkanUniquePtr<VkPipeline>
 	{
 	public:
+		// --------------- Cross-GFX-API interface ---------------
 		uint64_t GetInterfaceBindingGUID() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _shader.GetDependencyValidation(); }
 
-		// --------------- Vulkan specific interface --------------- 
+		// --------------- Vulkan specific interface ---------------
 		ComputeShader _shader;
 
 		ComputePipeline(VulkanUniquePtr<VkPipeline>&&);
@@ -65,7 +67,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class GraphicsPipelineBuilder
 	{
 	public:
-		// --------------- Cross-GFX-API interface --------------- 
+		// --------------- Cross-GFX-API interface ---------------
 		void        Bind(const ShaderProgram& shaderProgram);
 		
 		void        Bind(IteratorRange<const AttachmentBlendDesc*> blendStates);
@@ -85,7 +87,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		GraphicsPipelineBuilder();
 		~GraphicsPipelineBuilder();
 
-		// --------------- Vulkan specific interface --------------- 
+		// --------------- Vulkan specific interface ---------------
 
 		std::shared_ptr<GraphicsPipeline> CreatePipeline(
 			ObjectFactory& factory, VkPipelineCache pipelineCache,

@@ -4,6 +4,8 @@
 
 #include "FrameBuffer.h"
 #include "DeviceContext.h"
+#include "../../../Utility/IteratorUtils.h"
+#include "../../../Core/Exceptions.h"
 
 #include "IncludeAppleMetal.h"
 
@@ -42,32 +44,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         /* Each subpass of the frame will have a RenderCommandEncoder with a different render pass descriptor. */
         context.CreateRenderCommandEncoder(desc);
-
         context.SetRenderPassConfiguration(desc, _subpasses[subpassIndex]._rasterCount);
-
-        // At the start of a subpass, we set the viewport and scissor rect to full-size (based on color or depth attachment)
-        {
-            float width = 0.f;
-            float height = 0.f;
-            if (desc.colorAttachments[0].texture) {
-                width = desc.colorAttachments[0].texture.width;
-                height = desc.colorAttachments[0].texture.height;
-            } else if (desc.depthAttachment.texture) {
-                width = desc.depthAttachment.texture.width;
-                height = desc.depthAttachment.texture.height;
-            } else if (desc.stencilAttachment.texture) {
-                width = desc.stencilAttachment.texture.width;
-                height = desc.stencilAttachment.texture.height;
-            }
-
-            Viewport viewports[1];
-            viewports[0] = Viewport{0.f, 0.f, width, height};
-            // origin of viewport doesn't matter because it is full-size
-            ScissorRect scissorRects[1];
-            scissorRects[0] = ScissorRect{0, 0, (unsigned)width, (unsigned)height};
-            // origin of scissor rect doesn't matter because it is full-size
-            context.SetViewportAndScissorRects(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
-        }
     }
 
     MTLLoadAction NonStencilLoadActionFromRenderCore(RenderCore::LoadStore load)
@@ -130,15 +107,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
-    static const Resource& AsResource(const IResourcePtr rp)
-    {
-        static Resource dummy;
-        auto* res = (Resource*)rp->QueryInterface(typeid(Resource).hash_code());
-        if (res)
-            return *res;
-        return dummy;
-    }
-
     static bool HasRetain(LoadStore loadStore)
     {
         return  loadStore == LoadStore::Retain
@@ -154,6 +122,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     FrameBuffer::FrameBuffer(ObjectFactory& factory, const FrameBufferDesc& fbDesc, const INamedAttachments& namedResources)
     {
         auto subpasses = fbDesc.GetSubpasses();
+        unsigned maxWidth = 0, maxHeight = 0;
 
         _subpasses.resize(subpasses.size());
         for (unsigned p=0; p<(unsigned)subpasses.size(); ++p) {
@@ -167,13 +136,13 @@ namespace RenderCore { namespace Metal_AppleMetal
             auto colorAttachmentsCount = (unsigned)std::min((unsigned)spDesc.GetOutputs().size(), maxColorAttachments);
             for (unsigned o=0; o<colorAttachmentsCount; ++o) {
                 const auto& attachmentView = spDesc.GetOutputs()[o];
-                auto& attachmentDesc = fbDesc.GetAttachments()[attachmentView._resourceName]._desc;
-                auto resource = namedResources.GetResource(attachmentView._resourceName, attachmentDesc);
+                auto& attachmentDesc = fbDesc.GetAttachments()[attachmentView._resourceName];
+                auto resource = namedResources.GetResource(attachmentView._resourceName, attachmentDesc, fbDesc.GetProperties());
                 if (!resource)
                     Throw(::Exceptions::BasicLabel("Could not find attachment texture for color attachment in FrameBuffer::FrameBuffer"));
 
                 // Configure MTLRenderPassColorAttachmentDescriptor
-                desc.colorAttachments[o].texture = AsResource(resource).GetTexture();
+                desc.colorAttachments[o].texture = checked_cast<Resource*>(resource.get())->GetTexture();
                 desc.colorAttachments[o].loadAction = NonStencilLoadActionFromRenderCore(attachmentView._loadFromPreviousPhase);
                 desc.colorAttachments[o].storeAction = NonStencilStoreActionFromRenderCore(attachmentView._storeToNextPhase);
                 // clearColor is set when binding subpass
@@ -183,32 +152,35 @@ namespace RenderCore { namespace Metal_AppleMetal
                     (unsigned)resource->GetDesc()._textureDesc._samples._sampleCount);
 
                 if (o < spDesc.GetResolveOutputs().size() && spDesc.GetResolveOutputs()[o]._resourceName != ~0u) {
-                    auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveOutputs()[o]._resourceName]._desc;
-                    auto resolveResource = namedResources.GetResource(spDesc.GetResolveOutputs()[o]._resourceName, attachmentDesc);
+                    auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveOutputs()[o]._resourceName];
+                    auto resolveResource = namedResources.GetResource(spDesc.GetResolveOutputs()[o]._resourceName, attachmentDesc, fbDesc.GetProperties());
                     if (!resolveResource)
                         Throw(::Exceptions::BasicLabel("Could not find resolve texture for color attachment in FrameBuffer::FrameBuffer"));
 
-                    assert(AsResource(resolveResource).GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
-                    assert(AsResource(resolveResource).GetTexture().get().pixelFormat == AsResource(resource).GetTexture().get().pixelFormat);
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
 
-                    desc.colorAttachments[o].resolveTexture = AsResource(resolveResource).GetTexture();
+                    desc.colorAttachments[o].resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
                     if (HasRetain(attachmentView._storeToNextPhase)) {
                         desc.colorAttachments[o].storeAction = MTLStoreActionStoreAndMultisampleResolve;
                     } else {
                         desc.colorAttachments[o].storeAction = MTLStoreActionMultisampleResolve;
                     }
                 }
+
+                maxWidth = std::max(maxWidth, (unsigned)desc.colorAttachments[o].texture.width);
+                maxHeight = std::max(maxHeight, (unsigned)desc.colorAttachments[o].texture.height);
             }
 
             if (spDesc.GetDepthStencil()._resourceName != ~0u) {
-                auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetDepthStencil()._resourceName]._desc;
-                auto resource = namedResources.GetResource(spDesc.GetDepthStencil()._resourceName, attachmentDesc);
+                auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetDepthStencil()._resourceName];
+                auto resource = namedResources.GetResource(spDesc.GetDepthStencil()._resourceName, attachmentDesc, fbDesc.GetProperties());
                 if (!resource)
                     Throw(::Exceptions::BasicLabel("Could not find attachment texture for depth/stencil attachment in FrameBuffer::FrameBuffer"));
 
-                auto& res = AsResource(resource);
+                auto& res = *checked_cast<Resource*>(resource.get());
                 auto format = res.GetDesc()._textureDesc._format;
-                auto resolvedFormat = ResolveFormat(format, {}, FormatUsage::DSV);
+                auto resolvedFormat = ResolveFormat(format, {}, BindFlag::DepthStencil);
                 auto components = GetComponents(resolvedFormat);
 
                 if (components == FormatComponents::Depth || components == FormatComponents::DepthStencil) {
@@ -216,6 +188,9 @@ namespace RenderCore { namespace Metal_AppleMetal
                     desc.depthAttachment.loadAction = NonStencilLoadActionFromRenderCore(spDesc.GetDepthStencil()._loadFromPreviousPhase);
                     desc.depthAttachment.storeAction = NonStencilStoreActionFromRenderCore(spDesc.GetDepthStencil()._storeToNextPhase);
                     // clearDepth is set when binding subpass
+
+                    maxWidth = std::max(maxWidth, (unsigned)desc.depthAttachment.texture.width);
+                    maxHeight = std::max(maxHeight, (unsigned)desc.depthAttachment.texture.height);
                 }
 
                 if (components == FormatComponents::Stencil || components == FormatComponents::DepthStencil) {
@@ -223,6 +198,9 @@ namespace RenderCore { namespace Metal_AppleMetal
                     desc.stencilAttachment.loadAction = StencilLoadActionFromRenderCore(spDesc.GetDepthStencil()._loadFromPreviousPhase);
                     desc.stencilAttachment.storeAction = StencilStoreActionFromRenderCore(spDesc.GetDepthStencil()._storeToNextPhase);
                     // clearStencil is set when binding subpass
+
+                    maxWidth = std::max(maxWidth, (unsigned)desc.stencilAttachment.texture.width);
+                    maxHeight = std::max(maxHeight, (unsigned)desc.stencilAttachment.texture.height);
                 }
 
                 _subpasses[p]._rasterCount = std::max(
@@ -230,15 +208,15 @@ namespace RenderCore { namespace Metal_AppleMetal
                     (unsigned)resource->GetDesc()._textureDesc._samples._sampleCount);
 
                 if (spDesc.GetResolveDepthStencil()._resourceName != ~0u) {
-                    auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveDepthStencil()._resourceName]._desc;
-                    auto resolveResource = namedResources.GetResource(spDesc.GetResolveDepthStencil()._resourceName, attachmentDesc);
+                    auto& attachmentDesc = fbDesc.GetAttachments()[spDesc.GetResolveDepthStencil()._resourceName];
+                    auto resolveResource = namedResources.GetResource(spDesc.GetResolveDepthStencil()._resourceName, attachmentDesc, fbDesc.GetProperties());
                     if (!resolveResource)
                         Throw(::Exceptions::BasicLabel("Could not find attachment texture for depth/stencil resolve attachment in FrameBuffer::FrameBuffer"));
 
-                    assert(AsResource(resolveResource).GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
-                    assert(AsResource(resolveResource).GetTexture().get().pixelFormat == AsResource(resource).GetTexture().get().pixelFormat);
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
 
-                    desc.depthAttachment.resolveTexture = AsResource(resolveResource).GetTexture();
+                    desc.depthAttachment.resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
                     if (HasRetain(spDesc.GetResolveDepthStencil()._storeToNextPhase)) {
                         desc.depthAttachment.storeAction = MTLStoreActionStoreAndMultisampleResolve;
                     } else {
@@ -246,6 +224,15 @@ namespace RenderCore { namespace Metal_AppleMetal
                     }
                 }
             }
+        }
+
+        // At the start of a render pass, we set the viewport and scissor rect to full-size (based on color or depth attachment)
+        {
+            ViewportDesc viewports[1];
+            viewports[0] = ViewportDesc{0.f, 0.f, (float)maxWidth, (float)maxHeight};
+            // origin of viewport doesn't matter because it is full-size
+            ScissorRect scissorRects[1];
+            scissorRects[0] = ScissorRect{0, 0, maxWidth, maxHeight};
         }
     }
 
@@ -265,6 +252,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         s_clearValues.insert(s_clearValues.end(), clearValues.begin(), clearValues.end());
         context.BeginRenderPass();
         BeginNextSubpass(context, frameBuffer);
+
+        ViewportDesc viewports[1] = { frameBuffer.GetDefaultViewport() };
+        ScissorRect scissorRects[1];
+        scissorRects[0] = ScissorRect{0, 0, (unsigned)viewports[0]._width, (unsigned)viewports[0]._height};
+        context.Bind(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
     }
 
     /* KenD -- I'd prefer not to have this check, but it keeps balance of
