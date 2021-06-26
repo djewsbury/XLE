@@ -23,10 +23,11 @@ namespace RenderCore { namespace Metal_AppleMetal
     class FrameBuffer
     {
     public:
-        void BindSubpass(DeviceContext& context, unsigned subpassIndex, IteratorRange<const ClearValue*> clearValues) const;
-
         unsigned GetSubpassCount() const { return (unsigned)_subpasses.size(); }
         ViewportDesc GetDefaultViewport() const { return _defaultViewport; }
+
+        MTLRenderPassDescriptor* GetDescriptor(unsigned subpassIdx) const;
+        unsigned GetSampleCount(unsigned subpassIdx) const;
 
         FrameBuffer(
             ObjectFactory& factory,

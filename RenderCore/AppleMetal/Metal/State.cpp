@@ -122,7 +122,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         _pimpl->_underlyingSamplerNoMipmaps = GetObjectFactory().StandInSamplerState();
     }
 
-    void SamplerState::Apply(DeviceContext& context, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws
+    void SamplerState::Apply(GraphicsEncoder& encoder, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws
     {
         assert(_pimpl);
 
@@ -134,11 +134,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
         assert(mtlSamplerState);
 
-        id<MTLRenderCommandEncoder> cmdEncoder = context.GetCommandEncoder();
+        id<MTLRenderCommandEncoder> underlyingEncoder = encoder.GetUnderlying();
         if (stage == ShaderStage::Vertex) {
-            [cmdEncoder setVertexSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
+            [underlyingEncoder setVertexSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
         } else if (stage == ShaderStage::Pixel) {
-            [cmdEncoder setFragmentSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
+            [underlyingEncoder setFragmentSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
         }
     }
 

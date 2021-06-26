@@ -55,6 +55,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         uint64_t GetInterfaceBindingGUID() const { return _interfaceBindingGUID; }
         const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
+        // --------------- Apple Metal specific interface ---------------
+        MTLRenderPipelineReflection* GetReflection() const { return _reflection; }
     private:
         OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
         OCPtr<MTLRenderPipelineReflection> _reflection;
@@ -152,7 +154,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         // --------------- Apple Metal specific interface ---------------
         void    PushDebugGroup(const char annotationName[]);
         void    PopDebugGroup();
-        id<MTLRenderCommandEncoder> GetRenderCommandEncoder();
+        id<MTLRenderCommandEncoder> GetUnderlying();
+        void QueueUniformSet(
+            const std::shared_ptr<UnboundInterface>& unboundInterf,
+            unsigned groupIdx,
+            const UniformsStream& stream);
 	protected:
 		enum class Type { Normal, StreamOutput };
 		GraphicsEncoder(
@@ -220,11 +226,13 @@ namespace RenderCore { namespace Metal_AppleMetal
 	protected:
 		GraphicsEncoder_ProgressivePipeline(
             MTLRenderPassDescriptor* renderPassDescriptor,
+            unsigned renderPassSampleCount,
             std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
 			Type type = Type::Normal);
 		friend class DeviceContext;
         OCPtr<MTLRenderPipelineReflection> _graphicsPipelineReflection;
         void FinalizePipeline();
+        uint64_t _boundVSArgs = 0ull, _boundPSArgs = 0ull;
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,11 +286,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         // void    OnEndRenderPass(std::function<void(void)> fn);
         void    DestroyRenderCommandEncoder();
         void    DestroyBlitCommandEncoder();
-
-        void QueueUniformSet(
-            const std::shared_ptr<UnboundInterface>& unboundInterf,
-            unsigned streamIdx,
-            const UniformsStream& stream);
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      C A P T U R E D S T A T E S

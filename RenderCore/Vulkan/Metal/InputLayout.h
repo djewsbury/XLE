@@ -127,8 +127,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		~BoundUniforms();
 		BoundUniforms(const BoundUniforms&);
 		BoundUniforms& operator=(const BoundUniforms&);
-		BoundUniforms(BoundUniforms&&);
-		BoundUniforms& operator=(BoundUniforms&&);
+		BoundUniforms(BoundUniforms&&) never_throws;
+		BoundUniforms& operator=(BoundUniforms&&) never_throws;
 
 	private:
 		struct LooseUniformBind { uint32_t _descSetSlot; uint32_t _inputUniformStreamIdx; };

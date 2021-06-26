@@ -10,7 +10,7 @@
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
-    class DeviceContext;
+    class GraphicsEncoder;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +25,7 @@ namespace RenderCore { namespace Metal_AppleMetal
                         bool enableMipmaps = true);
         SamplerState(); // inexpensive default constructor
 
-        void Apply(DeviceContext& context, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws;
+        void Apply(GraphicsEncoder& encoder, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws;
 
         typedef SamplerState UnderlyingType;
         UnderlyingType GetUnderlying() const never_throws { return *this; }

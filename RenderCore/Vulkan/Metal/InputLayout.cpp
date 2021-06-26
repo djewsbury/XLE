@@ -868,8 +868,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	BoundUniforms::BoundUniforms(const BoundUniforms&) = default;
 	BoundUniforms& BoundUniforms::operator=(const BoundUniforms&) = default;
-	BoundUniforms::BoundUniforms(BoundUniforms&&) = default;
-	BoundUniforms& BoundUniforms::operator=(BoundUniforms&&) = default;
+	BoundUniforms::BoundUniforms(BoundUniforms&&) never_throws = default;
+	BoundUniforms& BoundUniforms::operator=(BoundUniforms&&) never_throws = default;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

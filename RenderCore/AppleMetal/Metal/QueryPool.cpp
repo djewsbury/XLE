@@ -100,12 +100,12 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         void GPUAnnotation::Begin(DeviceContext& context, const char annotationName[])
         {
-            context.PushDebugGroup(annotationName);
+            // context.PushDebugGroup(annotationName);
         }
 
         void GPUAnnotation::End(DeviceContext& context)
         {
-            context.PopDebugGroup();
+            // context.PopDebugGroup();
         }
 
         GPUAnnotation::GPUAnnotation(DeviceContext& context, const char annotationName[])

@@ -21,18 +21,18 @@ namespace RenderCore { namespace Metal_AppleMetal
     class PipelineLayoutConfig;
     class DeviceContext;
 
-    class BoundVertexBuffers
+    /*class BoundVertexBuffers
     {
     public:
         void Apply(DeviceContext& context, IteratorRange<const VertexBufferView*> vertexBuffers) const never_throws;
-    };
+    };*/
 
     class BoundInputLayout
     {
     public:
-        void Apply(DeviceContext& context, IteratorRange<const VertexBufferView*> vertexBuffers) const never_throws;
+        // void Apply(DeviceContext& context, IteratorRange<const VertexBufferView*> vertexBuffers) const never_throws;
 
-        const BoundVertexBuffers& GetBoundVertexBuffers() const { return _boundVertexBuffers; };
+        // const BoundVertexBuffers& GetBoundVertexBuffers() const { return _boundVertexBuffers; };
 
         uint64_t GetGUID() const { return _hash; }
 
@@ -56,7 +56,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         bool _allAttributesBound = true; // Metal HACK - Metal validation can help determine that bindings are correct
         uint64_t _hash = 0;
 
-        BoundVertexBuffers _boundVertexBuffers;
+        // BoundVertexBuffers _boundVertexBuffers;
     };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,21 +66,26 @@ namespace RenderCore { namespace Metal_AppleMetal
     class ConstantBuffer;
     class ShaderResourceView;
     class GraphicsPipeline;
+    class GraphicsEncoder;
+    class IDescriptorSet;
 
     class StreamMapping
     {
     public:
-        struct CB { unsigned _uniformStreamSlot; unsigned _shaderSlot; unsigned _cbSize; DEBUG_ONLY(std::string _name;) };
-        std::vector<CB> _cbs;
+        struct BufferBinding { unsigned _uniformStreamSlot; unsigned _shaderSlot; unsigned _cbSize; DEBUG_ONLY(std::string _name;) };
+        std::vector<BufferBinding> _immediateDataToBuffers;
+        std::vector<BufferBinding> _resourceViewToBuffers;
 
-        struct SRV { unsigned _uniformStreamSlot; unsigned _shaderSlot; unsigned _textureType; bool _isDepth; DEBUG_ONLY(std::string _name;) };
-        std::vector<SRV> _srvs;
+        struct TextureBinding { unsigned _uniformStreamSlot; unsigned _shaderSlot; unsigned _textureType; bool _isDepth; DEBUG_ONLY(std::string _name;) };
+        std::vector<TextureBinding> _resourceViewToTextures;
 
         struct Sampler { unsigned _uniformStreamSlot; unsigned _shaderSlot; DEBUG_ONLY(std::string _name;) };
         std::vector<Sampler> _samplers;
 
-        uint64_t _boundCBSlots = 0ull;
-        uint64_t _boundSRVSlots = 0ull;
+        uint64_t _boundImmediateDataSlots = 0ull;
+        uint64_t _boundResourceViewSlots = 0ull;
+        uint64_t _boundSamplerSlots = 0ull;
+
         uint64_t _boundArgs = 0ull;
     };
 
@@ -92,45 +97,52 @@ namespace RenderCore { namespace Metal_AppleMetal
     class BoundUniforms
     {
     public:
-        void Apply(DeviceContext& context, unsigned streamIdx, const UniformsStream& stream) const;
+        void ApplyLooseUniforms(
+            DeviceContext& context, 
+            GraphicsEncoder& encoder,
+            const UniformsStream& stream,
+            unsigned groupIdx = 0) const;
+        void UnbindLooseUniforms(DeviceContext& context, GraphicsEncoder& encoder, unsigned groupIdx=0) const;
 
-        // DavidJ -- note -- we can't calculate these correctly in the "unbound" interface case. So we just regard everything as biund
-        uint64_t _boundUniformBufferSlots[4];
-        uint64_t _boundResourceSlots[4];
+        void ApplyDescriptorSets(
+			DeviceContext& context,
+			GraphicsEncoder& encoder,
+			IteratorRange<const IDescriptorSet* const*> descriptorSets,
+			unsigned groupIdx = 0) const;
+
+        uint64_t GetBoundLooseImmediateDatas(unsigned groupIdx = 0) const;
+		uint64_t GetBoundLooseResources(unsigned groupIdx = 0) const;
+		uint64_t GetBoundLooseSamplers(unsigned groupIdx = 0) const;
 
         BoundUniforms(
             const ShaderProgram& shader,
-            const PipelineLayoutConfig& pipelineLayout,
             const UniformsStreamInterface& interface0 = {},
             const UniformsStreamInterface& interface1 = {},
             const UniformsStreamInterface& interface2 = {},
             const UniformsStreamInterface& interface3 = {});
         BoundUniforms(
             const GraphicsPipeline& pipeline,
-            const PipelineLayoutConfig& pipelineLayout,
             const UniformsStreamInterface& interface0 = {},
             const UniformsStreamInterface& interface1 = {},
             const UniformsStreamInterface& interface2 = {},
             const UniformsStreamInterface& interface3 = {});
         BoundUniforms();
         ~BoundUniforms();
-
-        BoundUniforms(const BoundUniforms&) = delete;
-        BoundUniforms& operator=(const BoundUniforms&) = delete;
-
+        BoundUniforms(const BoundUniforms&);
+        BoundUniforms& operator=(const BoundUniforms&);
         BoundUniforms(BoundUniforms&& moveFrom) never_throws;
         BoundUniforms& operator=(BoundUniforms&& moveFrom) never_throws;
 
         struct BoundArguments { uint64_t _vsArguments = 0ull; uint64_t _psArguments = 0ull; };
         static BoundArguments Apply_UnboundInterfacePath(
-            DeviceContext& context,
+            GraphicsEncoder& encoder,
             MTLRenderPipelineReflection* pipelineReflection,
             const UnboundInterface& unboundInterface,
             unsigned streamIdx,
             const UniformsStream& stream);
 
         static void Apply_Standins(
-            DeviceContext& context,
+            GraphicsEncoder& encoder,
             MTLRenderPipelineReflection* pipelineReflection,
             uint64_t vsArguments, uint64_t psArguments);
 
@@ -143,5 +155,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         std::vector<std::pair<ShaderStage, unsigned>> _unboundSamplers;
 
         std::shared_ptr<UnboundInterface> _unboundInterface;
+        uint64_t _boundImmediateDataSlots[4];
+        uint64_t _boundResourceViewSlots[4];
+        uint64_t _boundSamplerSlots[4];
     };
 }}

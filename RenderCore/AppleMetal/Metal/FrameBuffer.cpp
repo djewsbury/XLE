@@ -11,40 +11,16 @@
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
-    void FrameBuffer::BindSubpass(DeviceContext& context, unsigned subpassIndex, IteratorRange<const ClearValue*> clearValues) const
+    MTLRenderPassDescriptor* FrameBuffer::GetDescriptor(unsigned subpassIdx) const
     {
-        MTLRenderPassDescriptor* desc = _subpasses[subpassIndex]._renderPassDescriptor.get();
+        assert(subpassIdx < _subpasses.size());
+        return _subpasses[subpassIdx]._renderPassDescriptor;
+    }
 
-        /* Metal TODO -- this is a partial implementation of clear colors; it works for a single color attachment
-         * and assumes that depth/stencil clear values are after color attachment clear values, if any */
-        unsigned clearValueIterator = 0;
-
-        if (desc.colorAttachments[0].texture && desc.colorAttachments[0].loadAction == MTLLoadActionClear) {
-            if (clearValueIterator < clearValues.size()) {
-                auto* clear = clearValues[clearValueIterator]._float;
-                desc.colorAttachments[0].clearColor = MTLClearColorMake(clear[0], clear[1], clear[2], clear[3]);
-            } else {
-                desc.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
-            }
-        }
-        if (desc.depthAttachment.texture && desc.depthAttachment.loadAction == MTLLoadActionClear) {
-            if (clearValueIterator < clearValues.size()) {
-                desc.depthAttachment.clearDepth = clearValues[clearValueIterator]._depthStencil._depth;
-            } else {
-                desc.depthAttachment.clearDepth = 1.0f;
-            }
-        }
-        if (desc.stencilAttachment.texture && desc.stencilAttachment.loadAction == MTLLoadActionClear) {
-            if (clearValueIterator < clearValues.size()) {
-                desc.stencilAttachment.clearStencil = clearValues[clearValueIterator]._depthStencil._stencil;
-            } else {
-                desc.stencilAttachment.clearStencil = 0;
-            }
-        }
-
-        /* Each subpass of the frame will have a RenderCommandEncoder with a different render pass descriptor. */
-        context.CreateRenderCommandEncoder(desc);
-        context.SetRenderPassConfiguration(desc, _subpasses[subpassIndex]._rasterCount);
+    unsigned FrameBuffer::GetSampleCount(unsigned subpassIdx) const
+    {
+        assert(subpassIdx < _subpasses.size());
+        return _subpasses[subpassIdx]._rasterCount;
     }
 
     MTLLoadAction NonStencilLoadActionFromRenderCore(RenderCore::LoadStore load)
