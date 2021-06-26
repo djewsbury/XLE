@@ -72,6 +72,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         virtual std::string MakeShaderMetricsString(
             const void* byteCode, size_t byteCodeSize) const;
 
+        virtual ShaderLanguage GetShaderLanguage() const;
+
         ShaderCompiler() = delete;
         ShaderCompiler(id<MTLDevice> device);
         ~ShaderCompiler();
@@ -87,6 +89,11 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         if (destination != inputShaderModel.begin())
             XlCopyString(destination, destinationCount, inputShaderModel);
+    }
+
+    ShaderLanguage ShaderCompiler::GetShaderLanguage() const
+    {
+        return ShaderLanguage::MetalShaderLanguage;
     }
 
     static std::pair<std::string, unsigned> FindTranslatedSourceLine(

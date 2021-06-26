@@ -57,13 +57,14 @@ namespace RenderCore { namespace Metal_AppleMetal
                 if (result > *lastCompletedEvent)
                     *lastCompletedEvent = result;
             }];
-            deviceContext->OnEndEncoding([deviceContext, event]{
+            assert(0);
+            /*deviceContext->OnEndEncoding([deviceContext, event]{
                 if (@available(iOS 12, macOS 10.14, *)) {
                     [deviceContext->RetrieveCommandBuffer() encodeSignalEvent:event.get() value:1];
                 } else {
                     assert(false);
                 }
-            });
+            });*/
         } else {
             [buffer addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull) {
                 if (result > *lastCompletedEvent)
@@ -121,20 +122,25 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     #endif
 
-    void    Annotator::Frame_Begin(IThreadContext& primaryContext, unsigned frameID) {}
-    void    Annotator::Frame_End(IThreadContext& primaryContext) {}
+    void    Annotator::Frame_Begin(unsigned frameID) {}
+    void    Annotator::Frame_End() {}
 
-    void    Annotator::Event(IThreadContext& context, const char name[], EventTypes::BitField types)
+    void    Annotator::Event(const char name[], EventTypes::BitField types)
     {
-        if (types & EventTypes::Flags::MarkerBegin) {
+        assert(0);
+        /*if (types & EventTypes::Flags::MarkerBegin) {
             GPUAnnotation::Begin(*DeviceContext::Get(context), name);
         } else if (types & EventTypes::Flags::MarkerEnd) {
             GPUAnnotation::End(*DeviceContext::Get(context));
-        }
+        }*/
     }
 
     unsigned    Annotator::AddEventListener(const EventListener& callback) { return 0; }
     void        Annotator::RemoveEventListener(unsigned listenerId) {}
+
+    bool		Annotator::IsCaptureToolAttached() { return false; }
+    void		Annotator::BeginFrameCapture() {}
+    void		Annotator::EndFrameCapture() {}
 
     Annotator::Annotator() {}
     Annotator::~Annotator() {}

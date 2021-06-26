@@ -106,13 +106,17 @@ namespace RenderCore { namespace Metal_AppleMetal
     class Annotator : public IAnnotator
     {
     public:
-        virtual void    Frame_Begin(IThreadContext& primaryContext, unsigned frameID);
-        virtual void    Frame_End(IThreadContext& primaryContext);
+        virtual void    Frame_Begin(unsigned frameID) override;
+        virtual void    Frame_End() override;
 
-        virtual void    Event(IThreadContext& context, const char name[], EventTypes::BitField types);
+        virtual void    Event(const char name[], EventTypes::BitField types) override;
 
-        virtual unsigned    AddEventListener(const EventListener& callback);
-        virtual void        RemoveEventListener(unsigned listenerId);
+        virtual unsigned    AddEventListener(const EventListener& callback) override;
+        virtual void        RemoveEventListener(unsigned listenerId) override;
+
+        virtual bool		IsCaptureToolAttached() override;
+		virtual void		BeginFrameCapture() override;
+		virtual void		EndFrameCapture() override;
 
         Annotator();
         virtual ~Annotator();

@@ -208,7 +208,7 @@ namespace RenderCore { namespace ImplAppleMetal
 
     std::shared_ptr<IResource> Device::CreateResource(const ResourceDesc& desc, const ResourceInitializer& init)
     {
-        return std::make_shared<Resource>(*_objectFactory, desc, init);
+        return std::make_shared<Metal_AppleMetal::Resource>(*_objectFactory, desc, init);
     }
 
     std::shared_ptr<ILowLevelCompiler>        Device::CreateShaderCompiler()

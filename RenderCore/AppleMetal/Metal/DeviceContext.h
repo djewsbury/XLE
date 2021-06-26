@@ -11,6 +11,7 @@
 #include "../../ResourceList.h"
 #include "../../Format.h"
 #include "../../BufferView.h"
+#include "../../FrameBufferDesc.h"
 #include "../../../Utility/Threading/ThreadingUtils.h"
 #include "../../../Utility/IteratorUtils.h"
 #include <assert.h>
@@ -30,6 +31,7 @@
 @protocol MTLDepthStencilState;
 @protocol MTLRenderPipelineState;
 @protocol MTLDepthStencilState;
+@class NSThread;
 
 namespace RenderCore { class FrameBufferDesc; class AttachmentBlendDesc; }
 
@@ -40,8 +42,9 @@ namespace RenderCore { namespace Metal_AppleMetal
     class ConstantBuffer;
     class BoundInputLayout;
     class ShaderProgram;
-
     class UnboundInterface;
+    class ICompiledPipelineLayout;
+    class FrameBuffer;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,6 +79,8 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         friend class DeviceContext;
         friend class GraphicsPipelineBuilder;
+        friend class GraphicsEncoder_Optimized;
+        friend class GraphicsEncoder_ProgressivePipeline;
     };
 
     class GraphicsPipelineBuilder
@@ -127,64 +132,150 @@ namespace RenderCore { namespace Metal_AppleMetal
     class CapturedStates
     {
     public:
-        unsigned        _captureGUID = ~0u;
-
+        unsigned _captureGUID = ~0u;
         std::vector<std::pair<uint64_t, uint64_t>> _customBindings;
     };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class AppleMetalEncoderSharedState;
+
+    class GraphicsEncoder
+	{
+	public:
+		//	------ Non-pipeline states (that can be changed mid-render pass) -------
+		void        Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView);
+		void		SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef);
+		void		SetDepthBounds(float minDepthValue, float maxDepthValue);		// the 0-1 value stored in the depth buffer is compared directly to these bounds
+		void 		Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
+
+        // --------------- Apple Metal specific interface ---------------
+        void    PushDebugGroup(const char annotationName[]);
+        void    PopDebugGroup();
+        id<MTLRenderCommandEncoder> GetRenderCommandEncoder();
+	protected:
+		enum class Type { Normal, StreamOutput };
+		GraphicsEncoder(
+            MTLRenderPassDescriptor* renderPassDescriptor,
+            std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
+            Type type = Type::Normal);
+		~GraphicsEncoder();
+		GraphicsEncoder(GraphicsEncoder&&);		// (hide these to avoid slicing in derived types)
+		GraphicsEncoder& operator=(GraphicsEncoder&&);
+
+        IdPtr _commandEncoder; 
+        unsigned _indexType;        // MTLIndexType
+        unsigned _indexFormatBytes;
+        unsigned _indexBufferOffsetBytes;
+        IdPtr _activeIndexBuffer; // MTLBuffer
+
+        Type _type;
+        std::shared_ptr<AppleMetalEncoderSharedState> _sharedState;
+
+		friend class DeviceContext;
+	};
+
+    class GraphicsEncoder_Optimized : public GraphicsEncoder
+	{
+	public:
+		//	------ Draw & Clear -------
+		void        Draw(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned startVertexLocation=0);
+		void        DrawIndexed(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned startIndexLocation=0);
+		void    	DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0);
+		void    	DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0);
+		void        DrawAuto(const GraphicsPipeline& pipeline);
+
+		GraphicsEncoder_Optimized(GraphicsEncoder_Optimized&&);
+		GraphicsEncoder_Optimized& operator=(GraphicsEncoder_Optimized&&);
+		GraphicsEncoder_Optimized();
+		~GraphicsEncoder_Optimized();
+	protected:
+		GraphicsEncoder_Optimized(
+            MTLRenderPassDescriptor* renderPassDescriptor,
+            std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
+            Type type = Type::Normal);
+
+        const GraphicsPipeline* _boundGraphicsPipeline = nullptr;
+		friend class DeviceContext;
+	};
+
+    class GraphicsEncoder_ProgressivePipeline : public GraphicsEncoder, public GraphicsPipelineBuilder
+	{
+	public:
+		//	------ Draw & Clear -------
+		void        Draw(unsigned vertexCount, unsigned startVertexLocation=0);
+		void        DrawIndexed(unsigned indexCount, unsigned startIndexLocation=0);
+		void    	DrawInstances(unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0);
+		void    	DrawIndexedInstances(unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0);
+		void        DrawAuto();
+
+		using GraphicsEncoder::Bind;
+		using GraphicsPipelineBuilder::Bind;
+		void        Bind(const ShaderProgram& shaderProgram);
+
+		GraphicsEncoder_ProgressivePipeline(GraphicsEncoder_ProgressivePipeline&&);
+		GraphicsEncoder_ProgressivePipeline& operator=(GraphicsEncoder_ProgressivePipeline&&);
+		GraphicsEncoder_ProgressivePipeline();
+		~GraphicsEncoder_ProgressivePipeline();
+	protected:
+		GraphicsEncoder_ProgressivePipeline(
+            MTLRenderPassDescriptor* renderPassDescriptor,
+            std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
+			Type type = Type::Normal);
+		friend class DeviceContext;
+        OCPtr<MTLRenderPipelineReflection> _graphicsPipelineReflection;
+        void FinalizePipeline();
+	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     class DeviceContext : public GraphicsPipelineBuilder
     {
     public:
+        // --------------- Cross-GFX-API interface --------------- 
+        void BeginRenderPass(
+			FrameBuffer& frameBuffer,
+			IteratorRange<const ClearValue*> clearValues = {});
+		void BeginNextSubpass(FrameBuffer& frameBuffer);
+		void EndRenderPass();
+		unsigned GetCurrentSubpassIndex() const;
+
+        GraphicsEncoder_Optimized BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
+		GraphicsEncoder_ProgressivePipeline BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
+		// ComputeEncoder BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
+		GraphicsEncoder_Optimized BeginStreamOutputEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout, IteratorRange<const VertexBufferView*> outputBuffers);
+		// BlitEncoder BeginBlitEncoder();
+
+		void Clear(const IResourceView& renderTarget, const VectorPattern<float,4>& clearColour);
+		void Clear(const IResourceView& depthStencil, ClearFilter::BitField clearFilter, float depth, unsigned stencil);
+		void ClearUInt(const IResourceView& unorderedAccess, const VectorPattern<unsigned,4>& clearColour);
+		void ClearFloat(const IResourceView& unorderedAccess, const VectorPattern<float,4>& clearColour);
+		void ClearStencil(const IResourceView& depthStencil, unsigned stencil);
+
+		// TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
+
+        static const std::shared_ptr<DeviceContext>& Get(IThreadContext& threadContext);
+
+        // --------------- Apple Metal specific interface ---------------
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        //      C M D L I S T
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        void            BeginCommandList();
+        std::shared_ptr<CommandList>  ResolveCommandList();
+        void            CommitCommandList(CommandList& commandList);
+
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      E N C O D E R
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        void    BindVS(id<MTLBuffer> buffer, unsigned offset, unsigned bufferIndex);
-        void    Bind(const IndexBufferView& IB);
-
-        void    Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
-
-        using GraphicsPipelineBuilder::Bind;
-
-        void    Draw(unsigned vertexCount, unsigned startVertexLocation=0);
-        void    DrawIndexed(unsigned indexCount, unsigned startIndexLocation=0, unsigned baseVertexLocation=0);
-        void    DrawInstances(unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0);
-        void    DrawIndexedInstances(unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0, unsigned baseVertexLocation=0);
-
-        void    Draw(
-            const GraphicsPipeline& pipeline,
-            unsigned vertexCount, unsigned startVertexLocation=0);
-        void    DrawIndexed(
-            const GraphicsPipeline& pipeline,
-            unsigned indexCount, unsigned startIndexLocation=0);
-        void    DrawInstances(
-            const GraphicsPipeline& pipeline,
-            unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation=0);
-        void    DrawIndexedInstances(
-            const GraphicsPipeline& pipeline,
-            unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation=0);
-
-        void    PushDebugGroup(const char annotationName[]);
-        void    PopDebugGroup();
-
-        void    BeginRenderPass();
-        void    EndRenderPass();
-        bool    InRenderPass();
-        // void    OnEndRenderPass(std::function<void(void)> fn);
-
         bool    HasEncoder();
         bool    HasRenderCommandEncoder();
         bool    HasBlitCommandEncoder();
-        id<MTLRenderCommandEncoder> GetCommandEncoder();
-        id<MTLRenderCommandEncoder> GetRenderCommandEncoder();
         id<MTLBlitCommandEncoder> GetBlitCommandEncoder();
-        void    CreateRenderCommandEncoder(MTLRenderPassDescriptor* renderPassDescriptor);
-        void    CreateBlitCommandEncoder();
         void    EndEncoding();
         // void    OnEndEncoding(std::function<void(void)> fn);
         // METAL_TODO: This function shouldn't be needed; it's here only as a temporary substitute for OnEndRenderPass (which is a safe time when we know we will not have a current encoder).
         // void    OnDestroyEncoder(std::function<void(void)> fn);
+        // void    OnEndRenderPass(std::function<void(void)> fn);
         void    DestroyRenderCommandEncoder();
         void    DestroyBlitCommandEncoder();
 
@@ -196,32 +287,21 @@ namespace RenderCore { namespace Metal_AppleMetal
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      C A P T U R E D S T A T E S
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        CapturedStates* GetCapturedStates();
-        void        BeginStateCapture(CapturedStates& capturedStates);
-        void        EndStateCapture();
+        CapturedStates*     GetCapturedStates();
+        void                BeginStateCapture(CapturedStates& capturedStates);
+        void                EndStateCapture();
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      U T I L I T Y
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        void            HoldCommandBuffer(id<MTLCommandBuffer>);
-        void            ReleaseCommandBuffer();
-        id<MTLCommandBuffer>            RetrieveCommandBuffer();
-
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        //      C M D L I S T
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        void            BeginCommandList();
-        std::shared_ptr<CommandList>  ResolveCommandList();
-        void            CommitCommandList(CommandList& commandList);
+        void                    HoldCommandBuffer(id<MTLCommandBuffer>);
+        void                    ReleaseCommandBuffer();
+        id<MTLCommandBuffer>    RetrieveCommandBuffer();
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      D E V I C E
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        std::shared_ptr<IDevice> GetDevice();
-
         static void PrepareForDestruction(IDevice* device);
-
-        static const std::shared_ptr<DeviceContext>& Get(IThreadContext& threadContext);
 
         DeviceContext(std::shared_ptr<IDevice> device);
         DeviceContext(const DeviceContext&) = delete;
@@ -231,8 +311,6 @@ namespace RenderCore { namespace Metal_AppleMetal
     private:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
-
-        void FinalizePipeline();
     };
 
 }}

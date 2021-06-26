@@ -18,6 +18,7 @@
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 #include <sstream>
+#include <vector>
 
 namespace RenderCore { class VertexBufferView; class IndexBufferView; class ICompiledPipelineLayout; }
 

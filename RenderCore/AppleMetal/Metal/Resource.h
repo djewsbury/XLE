@@ -25,10 +25,12 @@ namespace RenderCore { namespace Metal_AppleMetal
     public:
         // --------------- Cross-GFX-API interface ---------------
         using Desc = ResourceDesc;
+        virtual Desc        GetDesc() const override;
         virtual void*       QueryInterface(size_t guid) override;
         virtual uint64_t    GetGUID() const override;
         virtual std::vector<uint8_t>    ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const override;
-        virtual Desc        GetDesc() const override;
+        virtual std::shared_ptr<IResourceView>  CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window) override;
+        virtual std::shared_ptr<IResourceView>  CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize) override;
 
         // --------------- Apple Metal specific interface ---------------
         const OCPtr<AplMtlTexture>& GetTexture() const { return _underlyingTexture; }; // <MTLTexture>

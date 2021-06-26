@@ -14,7 +14,7 @@
 
 namespace RenderCore
 {
-    using AttachmentName = uint32;
+    using AttachmentName = uint32_t;
 
 	enum class LoadStore
 	{

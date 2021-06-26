@@ -26,7 +26,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         void BindSubpass(DeviceContext& context, unsigned subpassIndex, IteratorRange<const ClearValue*> clearValues) const;
 
         unsigned GetSubpassCount() const { return (unsigned)_subpasses.size(); }
-
         ViewportDesc GetDefaultViewport() const { return _defaultViewport; }
 
         FrameBuffer(

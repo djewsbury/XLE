@@ -21,7 +21,6 @@ namespace RenderCore
     class ISampler;
     class IDescriptorSet;
 
-    using Resource = IResource;
     using IResourcePtr = std::shared_ptr<IResource>;
     class ResourceDesc;
     class PresentationChainDesc;
