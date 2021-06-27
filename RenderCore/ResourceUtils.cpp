@@ -203,7 +203,7 @@ namespace RenderCore
         // subresource?
         // For a single arrayLayer, we will just have the biggest mipmap, followed by the full mipchain.
         // If there are more array layers, they will follow on afterwards.
-        // So, each array layer is stored contiguously with its full array chain.
+        // So, each array layer is stored contiguously with its full mip chain.
         //
         // Could also perhaps align the start of each array layer to some convenient boundary
         // (eg, 16 bytes?)

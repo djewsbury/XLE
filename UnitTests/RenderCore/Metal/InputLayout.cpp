@@ -917,11 +917,12 @@ namespace UnitTests
 			// Shader takes a CB called "Values", we will promise to bind it, but then not
 			// actually include it into the UniformsStream
 			encoder.Bind(shaderProgramCB);
+			encoder.Bind(inputLayout, Topology::TriangleList);
 
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Hash64("Values"), MakeIteratorRange(ConstantBufferElementDesc_Values));
 			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-				auto pipeline = metalContext.CreatePipeline(Metal::GetObjectFactory());
+				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
 				Metal::BoundUniforms uniforms { *pipeline, usi };
 			#else
 				Metal::BoundUniforms uniforms { shaderProgramCB, usi };
@@ -937,11 +938,12 @@ namespace UnitTests
 			// Shader takes a SRV called "Texture", we will promise to bind it, but then not
 			// actually include it into the UniformsStream
 			encoder.Bind(shaderProgramSRV);
+			encoder.Bind(inputLayout, Topology::TriangleList);
 
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, Hash64("Texture"));
 			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-				auto pipeline = metalContext.CreatePipeline(Metal::GetObjectFactory());
+				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
 				Metal::BoundUniforms uniforms { *pipeline, usi };
 			#else
 				Metal::BoundUniforms uniforms { shaderProgramSRV, usi };

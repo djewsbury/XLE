@@ -62,7 +62,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 		DeviceContext& context,
 		IteratorRange<IResource* const*> resources) {}
 
-    class BlitPass
+    class BlitEncoder
     {
     public:
         class CopyPartial_Dest
@@ -92,12 +92,19 @@ namespace RenderCore { namespace Metal_AppleMetal
             const CopyPartial_Dest& dst,
             const CopyPartial_Src& src);
 
-        BlitPass(IThreadContext& threadContext);
-        ~BlitPass();
+        void    Copy(
+			IResource& dst,
+			IResource& src);
 
+        ~BlitEncoder();
+
+        BlitEncoder(const BlitEncoder&) = delete;
+		BlitEncoder& operator=(const BlitEncoder&) = delete;
     private:
-        DeviceContext* _devContext;
-        bool _openedEncoder;
+        BlitEncoder(DeviceContext& devContext);
+        DeviceContext* _devContext = nullptr;
+        bool _openedEncoder = false;
+        friend class DeviceContext;
     };
 
     namespace Internal

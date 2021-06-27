@@ -474,7 +474,7 @@ namespace RenderCore { namespace Metal_AppleMetal
                     }
                 } else {
                     q = std::find(immDataBindings.begin(), immDataBindings.end(), argHash);
-                    if (!HasBinding(MakeIteratorRange(&interfaces[streamIndex+1], &interfaces[4]), argHash)) {
+                    if (q != immDataBindings.end() && !HasBinding(MakeIteratorRange(&interfaces[streamIndex+1], &interfaces[4]), argHash)) {
                         auto matchingSlot = (unsigned)std::distance(immDataBindings.begin(), q);
                         result._immediateDataToBuffers.push_back({
                             matchingSlot, (unsigned)arg.index,

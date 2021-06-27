@@ -674,27 +674,27 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
 
         for (unsigned vb=0; vb<vbViews.size(); ++vb)
-            [_sharedState->_commandEncoder.get() setVertexBuffer:checked_cast<const Resource*>(vbViews[vb]._resource)->GetBuffer() offset:vbViews[vb]._offset atIndex:vb];
+            [_sharedState->_commandEncoder setVertexBuffer:checked_cast<const Resource*>(vbViews[vb]._resource)->GetBuffer() offset:vbViews[vb]._offset atIndex:vb];
     }
 
     void GraphicsEncoder::SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef)
     {
         [_sharedState->_commandEncoder setStencilFrontReferenceValue:frontFaceStencilRef
-                                                  backReferenceValue:backFaceStencilRef];
+                                                        backReferenceValue:backFaceStencilRef];
     }
 
     void GraphicsEncoder::PushDebugGroup(const char annotationName[])
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
         assert(_sharedState->_commandEncoder);
-        [_sharedState->_commandEncoder.get() pushDebugGroup:[NSString stringWithCString:annotationName encoding:NSUTF8StringEncoding]];
+        [_sharedState->_commandEncoder pushDebugGroup:[NSString stringWithCString:annotationName encoding:NSUTF8StringEncoding]];
     }
 
     void GraphicsEncoder::PopDebugGroup()
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
         assert(_sharedState->_commandEncoder);
-        [_sharedState->_commandEncoder.get() popDebugGroup];
+        [_sharedState->_commandEncoder popDebugGroup];
     }
 
     id<MTLRenderCommandEncoder> GraphicsEncoder::GetUnderlying()
@@ -759,8 +759,29 @@ namespace RenderCore { namespace Metal_AppleMetal
         _indexType = _indexFormatBytes = _indexBufferOffsetBytes = 0;
         _type = Type::Normal;
     }
+
     GraphicsEncoder::GraphicsEncoder(GraphicsEncoder&& moveFrom) = default;
-	GraphicsEncoder& GraphicsEncoder::operator=(GraphicsEncoder&&) = default;
+	GraphicsEncoder& GraphicsEncoder::operator=(GraphicsEncoder&& moveFrom)
+    {
+        if (this == &moveFrom) return *this;
+
+        if (_sharedState) {
+            assert(_sharedState->_commandEncoder);
+            [_sharedState->_commandEncoder endEncoding];
+            _sharedState->_commandEncoder = nil;
+        }
+
+        _indexType = moveFrom._indexType;
+        _indexFormatBytes = moveFrom._indexFormatBytes;
+        _indexBufferOffsetBytes = moveFrom._indexBufferOffsetBytes;
+        _activeIndexBuffer = std::move(moveFrom._activeIndexBuffer);
+        _sharedState = std::move(moveFrom._sharedState);
+        moveFrom._indexType = MTLIndexTypeUInt16;
+        moveFrom._indexFormatBytes = 2;
+        moveFrom._indexBufferOffsetBytes = 0;
+        moveFrom._type = Type::Normal;
+        return *this;
+    }
 
     void    GraphicsEncoder_Optimized::DrawIndexed(
         const GraphicsPipeline& pipeline,
@@ -1118,6 +1139,10 @@ namespace RenderCore { namespace Metal_AppleMetal
         CheckCommandBufferError(_pimpl->_commandBuffer);
         assert(_pimpl->_inRenderPass);
         assert(_pimpl->_renderPassDescriptor);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        if (_pimpl->_sharedEncoderState->_blitCommandEncoder)
+			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
+
         _pimpl->_sharedEncoderState->_queuedUniformSets.clear();
 
         GraphicsEncoder_Optimized result {
@@ -1145,6 +1170,9 @@ namespace RenderCore { namespace Metal_AppleMetal
         CheckCommandBufferError(_pimpl->_commandBuffer);
         assert(_pimpl->_inRenderPass);
         assert(_pimpl->_renderPassDescriptor);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        if (_pimpl->_sharedEncoderState->_blitCommandEncoder)
+			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
 
         GraphicsEncoder_ProgressivePipeline result {
             (id<MTLCommandBuffer>)_pimpl->_commandBuffer.get(),
@@ -1166,17 +1194,18 @@ namespace RenderCore { namespace Metal_AppleMetal
         return result;
     }
 
+    BlitEncoder DeviceContext::BeginBlitEncoder()
+	{
+		if (_pimpl->_inRenderPass)
+			Throw(::Exceptions::BasicLabel("Attempting to begin a blt pass while a render pass is in progress"));
+		if (_pimpl->_sharedEncoderState->_blitCommandEncoder)
+			Throw(::Exceptions::BasicLabel("Attempting to begin a blt pass while another blt pass is already in progress"));
+		if (_pimpl->_sharedEncoderState->_commandEncoder)
+			Throw(::Exceptions::BasicLabel("Attempting to begin a blt pass while an encoder is in progress"));
+		return BlitEncoder(*this);
+	}
 
 #if 0
-    void DeviceContext::CreateBlitCommandEncoder()
-    {
-        CheckCommandBufferError(_pimpl->_commandBuffer);
-        assert(!_pimpl->_commandEncoder);
-        assert(!_pimpl->_blitCommandEncoder);
-        _pimpl->_blitCommandEncoder = [_pimpl->_commandBuffer blitCommandEncoder];
-        assert(_pimpl->_blitCommandEncoder);
-    }
-
     void DeviceContext::EndEncoding()
     {
         assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
@@ -1232,17 +1261,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         _pimpl->_onDestroyEncoderFunctions.clear();
     }
 
-    void DeviceContext::DestroyBlitCommandEncoder()
-    {
-        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
-        assert(_pimpl->_blitCommandEncoder);
-        _pimpl->_blitCommandEncoder = nullptr;
-
-        for (auto fn: _pimpl->_onDestroyEncoderFunctions) { fn(); }
-        _pimpl->_onDestroyEncoderFunctions.clear();
-    }
-#endif
-
     bool DeviceContext::HasEncoder()
     {
         return HasRenderCommandEncoder() || HasBlitCommandEncoder();
@@ -1258,7 +1276,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         return _pimpl->_sharedEncoderState->_blitCommandEncoder;
     }
 
-#if 0
     id<MTLRenderCommandEncoder> DeviceContext::GetCommandEncoder()
     {
         return GetRenderCommandEncoder();
@@ -1270,14 +1287,38 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(_pimpl->_commandEncoder);
         return _pimpl->_commandEncoder;
     }
+#endif
 
     id<MTLBlitCommandEncoder> DeviceContext::GetBlitCommandEncoder()
     {
-        assert(_pimpl->_boundThread == [NSThread currentThread]);
-        assert(_pimpl->_blitCommandEncoder);
-        return _pimpl->_blitCommandEncoder;
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_blitCommandEncoder);
+        return _pimpl->_sharedEncoderState->_blitCommandEncoder;
     }
-#endif
+
+    void DeviceContext::BeginBlitCommandEncoder()
+    {
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        CheckCommandBufferError(_pimpl->_commandBuffer);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_blitCommandEncoder);
+        _pimpl->_sharedEncoderState->_blitCommandEncoder = [_pimpl->_commandBuffer blitCommandEncoder];
+        assert(_pimpl->_sharedEncoderState->_blitCommandEncoder);
+    }
+
+    void DeviceContext::EndBlitCommandEncoder()
+    {
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_blitCommandEncoder);
+
+        [_pimpl->_sharedEncoderState->_blitCommandEncoder endEncoding];
+        _pimpl->_sharedEncoderState->_blitCommandEncoder = nullptr;
+
+        // for (auto fn: _pimpl->_onEndEncodingFunctions) { fn(); }
+        // _pimpl->_onEndEncodingFunctions.clear();
+        // for (auto fn: _pimpl->_onDestroyEncoderFunctions) { fn(); }
+        // _pimpl->_onDestroyEncoderFunctions.clear();
+    }
 
     void DeviceContext::HoldCommandBuffer(id<MTLCommandBuffer> commandBuffer)
     {

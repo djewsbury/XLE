@@ -240,7 +240,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class DeviceContext : public GraphicsPipelineBuilder
+    class DeviceContext
     {
     public:
         // --------------- Cross-GFX-API interface --------------- 
@@ -255,7 +255,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 		GraphicsEncoder_ProgressivePipeline BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
 		// ComputeEncoder BeginComputeEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
 		GraphicsEncoder_Optimized BeginStreamOutputEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout, IteratorRange<const VertexBufferView*> outputBuffers);
-		// BlitEncoder BeginBlitEncoder();
+		BlitEncoder BeginBlitEncoder();
 
 		void Clear(const IResourceView& renderTarget, const VectorPattern<float,4>& clearColour);
 		void Clear(const IResourceView& depthStencil, ClearFilter::BitField clearFilter, float depth, unsigned stencil);
@@ -278,17 +278,19 @@ namespace RenderCore { namespace Metal_AppleMetal
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      E N C O D E R
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        bool    HasEncoder();
-        bool    HasRenderCommandEncoder();
-        bool    HasBlitCommandEncoder();
-        id<MTLBlitCommandEncoder> GetBlitCommandEncoder();
+        // bool    HasEncoder();
+        // bool    HasRenderCommandEncoder();
+        // bool    HasBlitCommandEncoder();
         // void    EndEncoding();
         // void    OnEndEncoding(std::function<void(void)> fn);
         // METAL_TODO: This function shouldn't be needed; it's here only as a temporary substitute for OnEndRenderPass (which is a safe time when we know we will not have a current encoder).
         // void    OnDestroyEncoder(std::function<void(void)> fn);
         // void    OnEndRenderPass(std::function<void(void)> fn);
         // void    DestroyRenderCommandEncoder();
-        // void    DestroyBlitCommandEncoder();
+        
+        id<MTLBlitCommandEncoder> GetBlitCommandEncoder();
+        void    BeginBlitCommandEncoder();
+        void    EndBlitCommandEncoder();
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      C A P T U R E D S T A T E S

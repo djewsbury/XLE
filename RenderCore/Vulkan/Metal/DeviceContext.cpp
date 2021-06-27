@@ -737,14 +737,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	GraphicsEncoder_Optimized DeviceContext::BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
 	{
 		if (_sharedState->_inBltPass)
-			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a blt pass is in progress"));
+			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
 		return GraphicsEncoder_Optimized { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState };
 	}
 
 	GraphicsEncoder_ProgressivePipeline DeviceContext::BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
 	{
 		if (_sharedState->_inBltPass)
-			Throw(::Exceptions::BasicLabel("Attempting to begin a compute encoder while a blt pass is in progress"));
+			Throw(::Exceptions::BasicLabel("Attempting to begin a graphics encoder while a blt encoder is in progress"));
 		return GraphicsEncoder_ProgressivePipeline { checked_pointer_cast<CompiledPipelineLayout>(std::move(pipelineLayout)), _sharedState, *_factory, *_globalPools };
 	}
 

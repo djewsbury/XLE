@@ -409,14 +409,12 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
-    void BlitPass::Write(
+    void BlitEncoder::Write(
         const CopyPartial_Dest& dst,
         const RenderCore::SubResourceInitData& srcData,
         RenderCore::Format srcDataFormat,
         VectorPattern<unsigned, 3> srcDataDimensions)
     {
-        assert(0);
-#if 0
         auto* metalContentRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
         assert(metalContentRes);
 
@@ -424,24 +422,22 @@ namespace RenderCore { namespace Metal_AppleMetal
         if (!srcPixelCount)
             Throw(std::runtime_error("No source pixels in WriteTexels operation. The depth of the srcDataDimensions field might need to be at least 1."));
 
-        auto transferSrc = _devContext->GetDevice()->CreateResource(
+        Resource transferSrc(
+            GetObjectFactory(),
             RenderCore::CreateDesc(
                 RenderCore::BindFlag::TransferSrc,
                 0, RenderCore::GPUAccess::Read,
                 RenderCore::TextureDesc::Plain3D(srcDataDimensions[0], srcDataDimensions[1], srcDataDimensions[2], srcDataFormat),
                 "BlitPassInstanceSrc"),
-            [srcData](RenderCore::SubResourceId) { return srcData; });
-
-        auto* metalSrcRes = (RenderCore::Metal_AppleMetal::Resource*)transferSrc->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
-        assert(metalSrcRes);
+            srcData);
 
         if (!_openedEncoder) {
-            _devContext->CreateBlitCommandEncoder();
+            _devContext->BeginBlitCommandEncoder();
             _openedEncoder = true;
         }
 
         id<MTLBlitCommandEncoder> encoder = _devContext->GetBlitCommandEncoder();
-        [encoder copyFromTexture:metalSrcRes->GetTexture()
+        [encoder copyFromTexture:transferSrc.GetTexture()
                      sourceSlice:0
                      sourceLevel:0
                     sourceOrigin:MTLOriginMake(0,0,0)
@@ -450,18 +446,12 @@ namespace RenderCore { namespace Metal_AppleMetal
                 destinationSlice:dst._subResource._arrayLayer
                 destinationLevel:dst._subResource._mip
                destinationOrigin:MTLOriginMake(dst._leftTopFront[0], dst._leftTopFront[1], dst._leftTopFront[2])];
-
-        id<MTLCommandBuffer> commandBuffer = _devContext->RetrieveCommandBuffer();
-        [commandBuffer addCompletedHandler:^(id){ (void)transferSrc; }];
-#endif
     }
 
-    void BlitPass::Copy(
+    void BlitEncoder::Copy(
         const CopyPartial_Dest& dst,
         const CopyPartial_Src& src)
     {
-        assert(0);
-#if 0
         auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
         assert(dstMetalRes);
 
@@ -469,7 +459,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(srcMetalRes);
 
         if (!_openedEncoder) {
-            _devContext->CreateBlitCommandEncoder();
+            _devContext->BeginBlitCommandEncoder();
             _openedEncoder = true;
         }
         id<MTLBlitCommandEncoder> encoder = _devContext->GetBlitCommandEncoder();
@@ -540,28 +530,113 @@ namespace RenderCore { namespace Metal_AppleMetal
             Throw(std::runtime_error("Expecting either destination or source or both to be a true texture type in BlitPassInstance::Copy operation. Both input resources where either buffers or invalid"));
 
         }
-#endif
     }
 
-    BlitPass::BlitPass(IThreadContext& threadContext)
+    void BlitEncoder::Copy(IResource& dst, IResource& src)
     {
-        _devContext = RenderCore::Metal_AppleMetal::DeviceContext::Get(threadContext).get();
-        if (!_devContext)
-            Throw(std::runtime_error("Unexpected thread context type passed to BltPassInstance constructor (expecting Apple Metal thread context)"));
+        auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst.QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        assert(dstMetalRes);
+
+        auto* srcMetalRes = (RenderCore::Metal_AppleMetal::Resource*)src.QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
+        assert(srcMetalRes);
+
+        if (!_openedEncoder) {
+            _devContext->BeginBlitCommandEncoder();
+            _openedEncoder = true;
+        }
+        id<MTLBlitCommandEncoder> encoder = _devContext->GetBlitCommandEncoder();
+
+        if (dstMetalRes->GetTexture() && srcMetalRes->GetTexture()) {
+            [encoder copyFromTexture:srcMetalRes->GetTexture() toTexture:dstMetalRes->GetTexture()];
+        } else if (dstMetalRes->GetTexture() && srcMetalRes->GetBuffer()) {
+
+            // buffer-to-texture copy
+            auto srcDesc = srcMetalRes->GetDesc();
+            if (srcDesc._type != RenderCore::ResourceDesc::Type::Texture)
+                Throw(std::runtime_error("Source resource does not have a texture desc in BlitPassInstance::Copy operation. Both input and output must have a texture type desc"));
+
+            auto dstDesc = dstMetalRes->GetDesc();
+            if (dstDesc._type != RenderCore::ResourceDesc::Type::Texture)
+                Throw(std::runtime_error("Source resource does not have a texture desc in BlitPassInstance::Copy operation. Both input and output must have a texture type desc"));
+
+            auto arrayCount0 = std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount);
+            auto arrayCount1 = std::max(1u, (unsigned)dstDesc._textureDesc._arrayCount);
+            for (unsigned a=0; a<std::min(arrayCount0, arrayCount1); ++a) {
+                for (unsigned m=0; m<std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount); ++m) {
+                    auto srcOffset = RenderCore::GetSubResourceOffset(srcDesc._textureDesc, m, a);
+                    auto mipDesc = CalculateMipMapDesc(srcDesc._textureDesc, m);
+                    assert(srcOffset._offset % 4 == 0);     // required on OSX
+                    [encoder copyFromBuffer:srcMetalRes->GetBuffer()
+                               sourceOffset:srcOffset._offset
+                          sourceBytesPerRow:srcOffset._pitches._rowPitch
+                        sourceBytesPerImage:srcOffset._pitches._slicePitch
+                                 sourceSize:MTLSizeMake(mipDesc._width, mipDesc._height, mipDesc._depth)
+                                  toTexture:dstMetalRes->GetTexture()
+                           destinationSlice:a
+                           destinationLevel:m
+                          destinationOrigin:MTLOriginMake(0, 0, 0)];
+                }
+            }
+
+        } else if (dstMetalRes->GetBuffer() && srcMetalRes->GetTexture()) {
+
+            // texture-to-buffer copy
+            auto srcDesc = srcMetalRes->GetDesc();
+            if (srcDesc._type != RenderCore::ResourceDesc::Type::Texture)
+                Throw(std::runtime_error("Source resource does not have a texture desc in BlitPassInstance::Copy operation. Both input and output must have a texture type desc"));
+
+            auto dstDesc = dstMetalRes->GetDesc();
+            if (dstDesc._type != RenderCore::ResourceDesc::Type::Texture)
+                Throw(std::runtime_error("Source resource does not have a texture desc in BlitPassInstance::Copy operation. Both input and output must have a texture type desc"));
+
+            auto arrayCount0 = std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount);
+            auto arrayCount1 = std::max(1u, (unsigned)dstDesc._textureDesc._arrayCount);
+            for (unsigned a=0; a<std::min(arrayCount0, arrayCount1); ++a) {
+                for (unsigned m=0; m<std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount); ++m) {
+                    auto dstOffset = GetSubResourceOffset(srcDesc._textureDesc, m, a);
+                    auto mipDesc = CalculateMipMapDesc(srcDesc._textureDesc, m);
+                    assert(dstOffset._offset % 4 == 0);     // required on OSX
+                    [encoder copyFromTexture:srcMetalRes->GetTexture()
+                                 sourceSlice:a
+                                 sourceLevel:m
+                                sourceOrigin:MTLOriginMake(0, 0, 0)
+                                  sourceSize:MTLSizeMake(mipDesc._width, mipDesc._height, mipDesc._depth)
+                                    toBuffer:dstMetalRes->GetBuffer()
+                           destinationOffset:dstOffset._offset
+                      destinationBytesPerRow:dstOffset._pitches._rowPitch
+                    destinationBytesPerImage:dstOffset._pitches._slicePitch];
+                }
+            }
+
+        } else {
+            assert(dstMetalRes->GetBuffer());
+            assert(srcMetalRes->GetBuffer());
+            auto srcSize = srcMetalRes->GetBuffer().length;
+            auto dstSize = srcMetalRes->GetBuffer().length;
+            if (srcSize != dstSize)
+                Throw(std::runtime_error("Attempting to copy 2 buffers with different sizes via a blt encoder. You must use an partial copy operation to copy differently sized buffers."));
+
+            [encoder copyFromBuffer:srcMetalRes->GetBuffer()
+                       sourceOffset:0
+                           toBuffer:dstMetalRes->GetBuffer()
+                  destinationOffset:0
+                               size:dstSize];
+        }
+    }
+
+    BlitEncoder::BlitEncoder(DeviceContext& devContext)
+    : _devContext(&devContext)
+    {
         if (_devContext->IsInRenderPass())
             Throw(::Exceptions::BasicLabel("BlitPassInstance begun while inside of a render pass. This can only be called outside of render passes."));
         _openedEncoder = false;
     }
 
-    BlitPass::~BlitPass()
+    BlitEncoder::~BlitEncoder()
     {
-        assert(0);
-        #if 0
         if (_openedEncoder) {
-            _devContext->EndEncoding();
-            _devContext->DestroyBlitCommandEncoder();
+            _devContext->EndBlitCommandEncoder();
         }
-        #endif
     }
 
 }}
