@@ -31,12 +31,33 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     std::vector<uint8_t> Resource::ReadBackSynchronized(IThreadContext& context, SubResourceId subRes) const
     {
-        // We must synchronize with the GPU. Since the GPU is working asychronously, we must ensure
-        // that all operations that might effect this resource have been completed. Since we don't
-        // know exactly what operations effect the resource, we must wait for all!
         auto* metalContext = (ImplAppleMetal::ThreadContext*)context.QueryInterface(typeid(ImplAppleMetal::ThreadContext).hash_code());
         if (!metalContext)
             Throw(std::runtime_error("Incorrect thread context passed to Apple Metal Resource::ReadBack implementation"));
+
+        bool requiresDestaging = !_desc._cpuAccess;
+		if (requiresDestaging && GetTexture()) {
+			auto stagingCopyDesc = _desc;
+			stagingCopyDesc._gpuAccess = 0;
+			stagingCopyDesc._cpuAccess = CPUAccess::Read;
+			stagingCopyDesc._bindFlags = BindFlag::TransferDst;
+            if (_desc._type == ResourceDesc::Type::Texture) {
+                stagingCopyDesc._textureDesc = CalculateMipMapDesc(_desc._textureDesc, subRes._mip);
+                stagingCopyDesc._textureDesc._arrayCount = 0;
+            }
+			Resource destaging { GetObjectFactory(), stagingCopyDesc };
+
+            @autoreleasepool {
+                id<MTLBlitCommandEncoder> blitEncoder = [metalContext->GetCurrentCommandBuffer() blitCommandEncoder];
+                [blitEncoder copyFromTexture:GetTexture()
+                    sourceSlice:subRes._arrayLayer sourceLevel:subRes._mip toTexture:destaging.GetTexture()
+                    destinationSlice:0 destinationLevel:0
+                    sliceCount:1 levelCount:1];
+                [blitEncoder endEncoding];
+            }
+
+			return destaging.ReadBackSynchronized(context, subRes);
+		}
 
         #if PLATFORMOS_TARGET == PLATFORMOS_OSX
             // With "shared mode" textures, we can go straight to the main texture and
@@ -58,6 +79,9 @@ namespace RenderCore { namespace Metal_AppleMetal
             }
         #endif
 
+        // We must synchronize with the GPU. Since the GPU is working asychronously, we must ensure
+        // that all operations that might effect this resource have been completed. Since we don't
+        // know exactly what operations effect the resource, we must wait for all!
         context.CommitCommands();
         metalContext->GetDevice()->Stall();
 
@@ -131,13 +155,19 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     static uint64_t s_nextResourceGUID = 1;
 
+    static std::function<SubResourceInitData(SubResourceId)> AsResInitializer(const SubResourceInitData& initData)
+	{
+		if (initData._data.size()) {
+			return [&initData](SubResourceId sr) { return (sr._mip==0&&sr._arrayLayer==0) ? initData : SubResourceInitData{}; };
+		 } else {
+			 return {};
+		 }
+	}
+
     Resource::Resource(
         ObjectFactory& factory, const Desc& desc,
         const SubResourceInitData& initData)
-    : Resource(factory, desc, [&initData](SubResourceId subRes) {
-            assert(subRes._mip == 0 && subRes._arrayLayer == 0);
-            return initData;
-        })
+    : Resource(factory, desc, AsResInitializer(initData))
     {}
 
     Resource::Resource(

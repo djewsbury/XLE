@@ -222,10 +222,19 @@ namespace RenderCore { namespace ImplAppleMetal
         return std::make_shared<Metal_AppleMetal::SamplerState>(*_objectFactory, desc);
     }
 
+    class DummyCompiledPipelineLayout : public ICompiledPipelineLayout
+    {
+    public:
+        virtual uint64_t GetGUID() const { return 0; }
+        virtual PipelineLayoutInitializer GetInitializer() const { return _initializer; }
+        DummyCompiledPipelineLayout(const PipelineLayoutInitializer& init) : _initializer(init) {}
+    protected:
+        PipelineLayoutInitializer _initializer;
+    };
+
     std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
     {
-        assert(0);
-        return nullptr;
+        return std::make_shared<DummyCompiledPipelineLayout>(desc);
     }
 
     std::shared_ptr<ILowLevelCompiler>        Device::CreateShaderCompiler()

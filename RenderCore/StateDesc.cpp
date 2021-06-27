@@ -9,9 +9,18 @@
 
 namespace RenderCore
 {
-	uint64_t DepthStencilDesc::Hash() const
+	uint64_t DepthStencilDesc::HashDepthAspect() const
     {
         assert((unsigned(_depthTest) & ~0xfu) == 0);
+        assert((unsigned(_depthTest) & ~0x1u) == 0);
+        return  ((uint64_t(_depthTest) & 0xf) << 0ull)
+            |   ((uint64_t(_depthWrite) & 0x1) << 52ull)
+            ;
+    }
+
+    uint64_t DepthStencilDesc::HashStencilAspect() const
+    {
+        assert((unsigned(_stencilEnable) & ~0x1u) == 0);
         assert((unsigned(_stencilReadMask) & ~0xffu) == 0);
         assert((unsigned(_stencilWriteMask) & ~0xffu) == 0);
         assert((unsigned(_frontFaceStencil._passOp) & ~0xfu) == 0);
@@ -23,9 +32,7 @@ namespace RenderCore
         assert((unsigned(_backFaceStencil._depthFailOp) & ~0xfu) == 0);
         assert((unsigned(_backFaceStencil._comparisonOp) & ~0xfu) == 0);
 
-        return  ((uint64_t(_depthTest) & 0xf) << 0ull)
-
-            |   ((uint64_t(_frontFaceStencil._passOp) & 0xf) << 4ull)
+        return  ((uint64_t(_frontFaceStencil._passOp) & 0xf) << 4ull)
             |   ((uint64_t(_frontFaceStencil._failOp) & 0xf) << 8ull)
             |   ((uint64_t(_frontFaceStencil._depthFailOp) & 0xf) << 12ull)
             |   ((uint64_t(_frontFaceStencil._comparisonOp) & 0xf) << 16ull)
@@ -37,11 +44,8 @@ namespace RenderCore
 
             |   ((uint64_t(_stencilReadMask) & 0xf) << 36ull)
             |   ((uint64_t(_stencilWriteMask) & 0xf) << 44ull)
-
-            |   ((uint64_t(_depthWrite) & 0x1) << 52ull)
             |   ((uint64_t(_stencilEnable) & 0x1) << 53ull)
             ;
-
     }
 
     uint64_t AttachmentBlendDesc::Hash() const

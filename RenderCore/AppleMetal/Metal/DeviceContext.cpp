@@ -227,7 +227,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         uint32_t _shaderGuid = 0;
         uint64_t _rpHash = 0;
         uint64_t _inputLayoutGuid = 0;
-        uint64_t _absHash = 0, _dssHash = 0;
+        uint64_t _absHash = 0;
 
         std::map<uint64_t, std::shared_ptr<GraphicsPipeline>> _prebuiltPipelines;
 
@@ -440,49 +440,40 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(desc._depthTest != CompareOp::Always || !desc._depthWrite);
 
         _pimpl->_activeDepthStencilDesc = desc;
-        _pimpl->_dssHash = _pimpl->_activeDepthStencilDesc.Hash();
     }
 
     OCPtr<NSObject<MTLDepthStencilState>> GraphicsPipelineBuilder::CreateDepthStencilState(ObjectFactory& factory)
     {
-        auto depthAttachmentPixelFormat = [_pimpl->_pipelineDescriptor depthAttachmentPixelFormat];
-        // METAL_TODO: Should this account for things like MTLPixelFormatStencil8 (which have stencil but no depth) or MTLPixelFormatX24_Stencil8 (that have 24 bits set aside for, but not used for, depth)? I've never seen us use those formats with a depth buffer (unlike Invalid), but that's no guarantee that we can't ever do so.
-        bool hasDepthAttachment = depthAttachmentPixelFormat != MTLPixelFormatInvalid;
-
-        auto& desc = _pimpl->_activeDepthStencilDesc;
-        // METAL_TODO: Is this the right place to check this, or should we have discovered this earlier, while creating _activeDepthStencilDesc?
-        if (!hasDepthAttachment) {
-            if (desc._depthWrite) {
-                NSLog(@"CreateDepthStencilState: _depthWrite true when depthAttachmentPixelFormat is %d", (int)depthAttachmentPixelFormat);
-                desc._depthWrite = false;
-            }
-            if (desc._depthTest > CompareOp::Never && desc._depthTest < CompareOp::Always) {
-                NSLog(@"CreateDepthStencilState: _depthTest %d when depthAttachmentPixelFormat is %d", (int)desc._depthTest, (int)depthAttachmentPixelFormat);
-                desc._depthTest = CompareOp::Always;
-            }
+        OCPtr<MTLDepthStencilDescriptor> mtlDesc = moveptr([[MTLDepthStencilDescriptor alloc] init]);
+        auto& dsDesc = _pimpl->_activeDepthStencilDesc;
+        if ([_pimpl->_pipelineDescriptor depthAttachmentPixelFormat] != MTLPixelFormatInvalid) {
+            mtlDesc.get().depthCompareFunction = AsMTLCompareFunction(dsDesc._depthTest);
+            mtlDesc.get().depthWriteEnabled = dsDesc._depthWrite;
+        } else {
+            mtlDesc.get().depthCompareFunction = AsMTLCompareFunction(CompareOp::Always);
+            mtlDesc.get().depthWriteEnabled = false;
         }
 
-        OCPtr<MTLDepthStencilDescriptor> mtlDesc = moveptr([[MTLDepthStencilDescriptor alloc] init]);
-        mtlDesc.get().depthCompareFunction = AsMTLCompareFunction(desc._depthTest);
-        mtlDesc.get().depthWriteEnabled = desc._depthWrite;
+        if ([_pimpl->_pipelineDescriptor stencilAttachmentPixelFormat] != MTLPixelFormatInvalid
+            && dsDesc._stencilEnable) {
+            OCPtr<MTLStencilDescriptor> frontStencilDesc = moveptr([[MTLStencilDescriptor alloc] init]);
+            frontStencilDesc.get().stencilCompareFunction = AsMTLCompareFunction(dsDesc._frontFaceStencil._comparisonOp);
+            frontStencilDesc.get().stencilFailureOperation = AsMTLStencilOperation(dsDesc._frontFaceStencil._failOp);
+            frontStencilDesc.get().depthFailureOperation = AsMTLStencilOperation(dsDesc._frontFaceStencil._depthFailOp);
+            frontStencilDesc.get().depthStencilPassOperation = AsMTLStencilOperation(dsDesc._frontFaceStencil._passOp);
+            frontStencilDesc.get().readMask = dsDesc._stencilReadMask;
+            frontStencilDesc.get().writeMask = dsDesc._stencilWriteMask;
+            mtlDesc.get().frontFaceStencil = frontStencilDesc;
 
-        OCPtr<MTLStencilDescriptor> frontStencilDesc = moveptr([[MTLStencilDescriptor alloc] init]);
-        frontStencilDesc.get().stencilCompareFunction = AsMTLCompareFunction(desc._frontFaceStencil._comparisonOp);
-        frontStencilDesc.get().stencilFailureOperation = AsMTLStencilOperation(desc._frontFaceStencil._failOp);
-        frontStencilDesc.get().depthFailureOperation = AsMTLStencilOperation(desc._frontFaceStencil._depthFailOp);
-        frontStencilDesc.get().depthStencilPassOperation = AsMTLStencilOperation(desc._frontFaceStencil._passOp);
-        frontStencilDesc.get().readMask = desc._stencilReadMask;
-        frontStencilDesc.get().writeMask = desc._stencilWriteMask;
-        mtlDesc.get().frontFaceStencil = frontStencilDesc;
-
-        OCPtr<MTLStencilDescriptor> backStencilDesc = moveptr([[MTLStencilDescriptor alloc] init]);
-        backStencilDesc.get().stencilCompareFunction = AsMTLCompareFunction(desc._backFaceStencil._comparisonOp);
-        backStencilDesc.get().stencilFailureOperation = AsMTLStencilOperation(desc._backFaceStencil._failOp);
-        backStencilDesc.get().depthFailureOperation = AsMTLStencilOperation(desc._backFaceStencil._depthFailOp);
-        backStencilDesc.get().depthStencilPassOperation = AsMTLStencilOperation(desc._backFaceStencil._passOp);
-        backStencilDesc.get().readMask = desc._stencilReadMask;
-        backStencilDesc.get().writeMask = desc._stencilWriteMask;
-        mtlDesc.get().backFaceStencil = backStencilDesc;
+            OCPtr<MTLStencilDescriptor> backStencilDesc = moveptr([[MTLStencilDescriptor alloc] init]);
+            backStencilDesc.get().stencilCompareFunction = AsMTLCompareFunction(dsDesc._backFaceStencil._comparisonOp);
+            backStencilDesc.get().stencilFailureOperation = AsMTLStencilOperation(dsDesc._backFaceStencil._failOp);
+            backStencilDesc.get().depthFailureOperation = AsMTLStencilOperation(dsDesc._backFaceStencil._depthFailOp);
+            backStencilDesc.get().depthStencilPassOperation = AsMTLStencilOperation(dsDesc._backFaceStencil._passOp);
+            backStencilDesc.get().readMask = dsDesc._stencilReadMask;
+            backStencilDesc.get().writeMask = dsDesc._stencilWriteMask;
+            mtlDesc.get().backFaceStencil = backStencilDesc;
+        }
 
         return factory.CreateDepthStencilState(mtlDesc.get());
     }
@@ -497,10 +488,16 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         unsigned cullMode = _pimpl->_cullMode;
         unsigned faceWinding = _pimpl->_faceWinding;
-        
+
+        auto dssHash = 0;
+        if ([_pimpl->_pipelineDescriptor depthAttachmentPixelFormat] != MTLPixelFormatInvalid)
+            dssHash |= _pimpl->_activeDepthStencilDesc.HashDepthAspect();
+        if ([_pimpl->_pipelineDescriptor stencilAttachmentPixelFormat] != MTLPixelFormatInvalid)
+            dssHash |= _pimpl->_activeDepthStencilDesc.HashStencilAspect();
+
         auto hash = HashCombine(_pimpl->_shaderGuid, _pimpl->_rpHash);
         hash = HashCombine(_pimpl->_absHash, hash);
-        hash = HashCombine(_pimpl->_dssHash, hash);
+        hash = dssHash ? HashCombine(dssHash, hash) : hash;
         hash = HashCombine(_pimpl->_inputLayoutGuid, hash);
         hash = HashCombine(cullMode |
                             (faceWinding << 2) |
@@ -564,11 +561,10 @@ namespace RenderCore { namespace Metal_AppleMetal
             }
         }
 
-        auto dss = CreateDepthStencilState(factory);
         auto result  = std::make_shared<GraphicsPipeline>(
             std::move(renderPipelineState._renderPipelineState),
             std::move(renderPipelineState._reflection),
-            std::move(dss),
+            CreateDepthStencilState(factory),
             (unsigned)_activePrimitiveType,
             cullMode,
             faceWinding,
@@ -630,70 +626,80 @@ namespace RenderCore { namespace Metal_AppleMetal
     void GraphicsEncoder::Bind(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
         assert(viewports.size() == scissorRects.size() || scissorRects.size() == 0);
         // For now, we only support one viewport and scissor rect; in the future, we could support more
         assert(viewports.size() == 1);
 
-        if (_commandEncoder) {
-            const auto& viewport = viewports[0];
-            [_commandEncoder setViewport:AsMTLViewport(viewport, _sharedState->_renderTargetWidth, _sharedState->_renderTargetHeight)];
-            if (scissorRects.size()) {
-                const auto& scissorRect = scissorRects[0];
-                if (scissorRect._width == 0 || scissorRect._height == 0) {
-                    Throw(::Exceptions::BasicLabel("Scissor rect width (%d) and height (%d) must be non-zero", scissorRect._width, scissorRect._height));
-                }
-                MTLScissorRect s = AsMTLScissorRect(scissorRect, _sharedState->_renderTargetWidth, _sharedState->_renderTargetHeight);
-
-                // The size of s will be zero if the input ScissorRect contained no valid on-screen area.
-                if (s.width == 0 || s.height == 0) {
-                    return;
-                }
-                [_commandEncoder setScissorRect:s];
-            } else {
-                // If a scissor rect is not specified, use the full size of the render target
-                [_commandEncoder setScissorRect:MTLScissorRect{0, 0, (NSUInteger)_sharedState->_renderTargetWidth, (NSUInteger)_sharedState->_renderTargetHeight}];
+        const auto& viewport = viewports[0];
+        [_sharedState->_commandEncoder setViewport:AsMTLViewport(viewport, _sharedState->_renderTargetWidth, _sharedState->_renderTargetHeight)];
+        if (scissorRects.size()) {
+            const auto& scissorRect = scissorRects[0];
+            if (scissorRect._width == 0 || scissorRect._height == 0) {
+                Throw(::Exceptions::BasicLabel("Scissor rect width (%d) and height (%d) must be non-zero", scissorRect._width, scissorRect._height));
             }
+            MTLScissorRect s = AsMTLScissorRect(scissorRect, _sharedState->_renderTargetWidth, _sharedState->_renderTargetHeight);
+
+            // The size of s will be zero if the input ScissorRect contained no valid on-screen area.
+            if (s.width == 0 || s.height == 0) {
+                return;
+            }
+            [_sharedState->_commandEncoder setScissorRect:s];
+        } else {
+            // If a scissor rect is not specified, use the full size of the render target
+            [_sharedState->_commandEncoder setScissorRect:MTLScissorRect{0, 0, (NSUInteger)_sharedState->_renderTargetWidth, (NSUInteger)_sharedState->_renderTargetHeight}];
         }
     }
 
     void GraphicsEncoder::Bind(IteratorRange<const VertexBufferView*> vbViews, const IndexBufferView& ibView)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
-        auto resource = AsResource(ibView._resource);
-        id<MTLBuffer> buffer = resource.GetBuffer();
-        if (!buffer)
-            Throw(::Exceptions::BasicLabel("Attempting to bind index buffer view with invalid resource"));
-        _activeIndexBuffer = buffer;
-        _indexType = AsMTLIndexType(ibView._indexFormat);
-        _indexFormatBytes = BitsPerPixel(ibView._indexFormat) / 8;
-        _indexBufferOffsetBytes = ibView._offset;
+        if (ibView._resource) {
+            auto resource = AsResource(ibView._resource);
+            id<MTLBuffer> buffer = resource.GetBuffer();
+            if (!buffer)
+                Throw(::Exceptions::BasicLabel("Attempting to bind index buffer view with invalid resource"));
+            _activeIndexBuffer = buffer;
+            _indexType = AsMTLIndexType(ibView._indexFormat);
+            _indexFormatBytes = BitsPerPixel(ibView._indexFormat) / 8;
+            _indexBufferOffsetBytes = ibView._offset;
+        } else {
+            _activeIndexBuffer = nullptr;
+            _indexType = MTLIndexTypeUInt16;
+            _indexFormatBytes = 2;
+            _indexBufferOffsetBytes = 0;
+        }
 
         for (unsigned vb=0; vb<vbViews.size(); ++vb)
-            [_commandEncoder.get() setVertexBuffer:checked_cast<const Resource*>(vbViews[vb]._resource)->GetBuffer() offset:vbViews[vb]._offset atIndex:vb];
+            [_sharedState->_commandEncoder.get() setVertexBuffer:checked_cast<const Resource*>(vbViews[vb]._resource)->GetBuffer() offset:vbViews[vb]._offset atIndex:vb];
     }
 
     void GraphicsEncoder::SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef)
     {
-        [_commandEncoder setStencilFrontReferenceValue:frontFaceStencilRef
-                                    backReferenceValue:backFaceStencilRef];
+        [_sharedState->_commandEncoder setStencilFrontReferenceValue:frontFaceStencilRef
+                                                  backReferenceValue:backFaceStencilRef];
     }
 
     void GraphicsEncoder::PushDebugGroup(const char annotationName[])
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
-        [_commandEncoder.get() pushDebugGroup:[NSString stringWithCString:annotationName encoding:NSUTF8StringEncoding]];
+        assert(_sharedState->_commandEncoder);
+        [_sharedState->_commandEncoder.get() pushDebugGroup:[NSString stringWithCString:annotationName encoding:NSUTF8StringEncoding]];
     }
 
     void GraphicsEncoder::PopDebugGroup()
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
-        [_commandEncoder.get() popDebugGroup];
+        assert(_sharedState->_commandEncoder);
+        [_sharedState->_commandEncoder.get() popDebugGroup];
+    }
+
+    id<MTLRenderCommandEncoder> GraphicsEncoder::GetUnderlying()
+    { 
+        return (id<MTLRenderCommandEncoder>)_sharedState->_commandEncoder.get();
     }
 
     void GraphicsEncoder::QueueUniformSet(
@@ -743,6 +749,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         if (_sharedState) {
             assert(_sharedState->_commandEncoder);
+            [_sharedState->_commandEncoder endEncoding];
             _sharedState->_commandEncoder = nil;
         }
     }
@@ -760,21 +767,21 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned indexCount, unsigned startIndexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
         assert(_sharedState->_queuedUniformSets.empty());
         if (_boundGraphicsPipeline != &pipeline) {
-            [_commandEncoder setRenderPipelineState:pipeline._underlying];
-            [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
-            [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
-            [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
+            [_sharedState->_commandEncoder setRenderPipelineState:pipeline._underlying];
+            [_sharedState->_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
+            [_sharedState->_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
+            [_sharedState->_commandEncoder setDepthStencilState:pipeline._depthStencilState];
             _boundGraphicsPipeline = &pipeline;
         }
 
-        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)pipeline._primitiveType
-                                    indexCount:indexCount
-                                     indexType:(MTLIndexType)_indexType
-                                   indexBuffer:_activeIndexBuffer
-                             indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)];
+        [_sharedState->_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)pipeline._primitiveType
+                                                  indexCount:indexCount
+                                                   indexType:(MTLIndexType)_indexType
+                                                 indexBuffer:_activeIndexBuffer
+                                           indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)];
     }
 
     void    GraphicsEncoder_Optimized::DrawInstances(
@@ -782,20 +789,20 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
         assert(_sharedState->_queuedUniformSets.empty());
         if (_boundGraphicsPipeline != &pipeline) {
-            [_commandEncoder setRenderPipelineState:pipeline._underlying];
-            [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
-            [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
-            [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
+            [_sharedState->_commandEncoder setRenderPipelineState:pipeline._underlying];
+            [_sharedState->_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
+            [_sharedState->_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
+            [_sharedState->_commandEncoder setDepthStencilState:pipeline._depthStencilState];
             _boundGraphicsPipeline = &pipeline;
         }
 
-        [_commandEncoder drawPrimitives:(MTLPrimitiveType)pipeline._primitiveType
-                            vertexStart:startVertexLocation
-                            vertexCount:vertexCount
-                          instanceCount:instanceCount];
+        [_sharedState->_commandEncoder drawPrimitives:(MTLPrimitiveType)pipeline._primitiveType
+                                          vertexStart:startVertexLocation
+                                          vertexCount:vertexCount
+                                        instanceCount:instanceCount];
     }
 
     void    GraphicsEncoder_Optimized::DrawIndexedInstances(
@@ -803,22 +810,22 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
         assert(_sharedState->_queuedUniformSets.empty());
         if (_boundGraphicsPipeline != &pipeline) {
-            [_commandEncoder setRenderPipelineState:pipeline._underlying];
-            [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
-            [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
-            [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
+            [_sharedState->_commandEncoder setRenderPipelineState:pipeline._underlying];
+            [_sharedState->_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
+            [_sharedState->_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
+            [_sharedState->_commandEncoder setDepthStencilState:pipeline._depthStencilState];
             _boundGraphicsPipeline = &pipeline;
         }
 
-        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)pipeline._primitiveType
-                                    indexCount:indexCount
-                                     indexType:(MTLIndexType)_indexType
-                                   indexBuffer:_activeIndexBuffer
-                             indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)
-                                 instanceCount:instanceCount];
+        [_sharedState->_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)pipeline._primitiveType
+                                                  indexCount:indexCount
+                                                   indexType:(MTLIndexType)_indexType
+                                                 indexBuffer:_activeIndexBuffer
+                                           indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)
+                                               instanceCount:instanceCount];
     }
 
     void    GraphicsEncoder_Optimized::Draw(
@@ -826,18 +833,18 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned vertexCount, unsigned startVertexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
         if (_boundGraphicsPipeline != &pipeline) {
-            [_commandEncoder setRenderPipelineState:pipeline._underlying];
-            [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
-            [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
-            [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
+            [_sharedState->_commandEncoder setRenderPipelineState:pipeline._underlying];
+            [_sharedState->_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
+            [_sharedState->_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
+            [_sharedState->_commandEncoder setDepthStencilState:pipeline._depthStencilState];
             _boundGraphicsPipeline = &pipeline;
         }
 
-        [_commandEncoder drawPrimitives:(MTLPrimitiveType)pipeline._primitiveType
-                            vertexStart:startVertexLocation
-                            vertexCount:vertexCount];
+        [_sharedState->_commandEncoder drawPrimitives:(MTLPrimitiveType)pipeline._primitiveType
+                                          vertexStart:startVertexLocation
+                                          vertexCount:vertexCount];
     }
 
     GraphicsEncoder_Optimized::GraphicsEncoder_Optimized(
@@ -858,14 +865,15 @@ namespace RenderCore { namespace Metal_AppleMetal
     void GraphicsEncoder_ProgressivePipeline::FinalizePipeline()
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
+        assert(_sharedState->_commandEncoder);
 
         if (GraphicsPipelineBuilder::IsPipelineStale() || !_graphicsPipelineReflection) {
             auto& pipelineState = *GraphicsPipelineBuilder::CreatePipeline(GetObjectFactory());
 
-            [_commandEncoder setRenderPipelineState:pipelineState._underlying];
-            [_commandEncoder setCullMode:(MTLCullMode)pipelineState._cullMode];
-            [_commandEncoder setFrontFacingWinding:(MTLWinding)pipelineState._faceWinding];
-            [_commandEncoder setDepthStencilState:pipelineState._depthStencilState];
+            [_sharedState->_commandEncoder setRenderPipelineState:pipelineState._underlying];
+            [_sharedState->_commandEncoder setCullMode:(MTLCullMode)pipelineState._cullMode];
+            [_sharedState->_commandEncoder setFrontFacingWinding:(MTLWinding)pipelineState._faceWinding];
+            [_sharedState->_commandEncoder setDepthStencilState:pipelineState._depthStencilState];
 
             _graphicsPipelineReflection = pipelineState._reflection;
             _boundVSArgs = 0;
@@ -899,51 +907,51 @@ namespace RenderCore { namespace Metal_AppleMetal
     void GraphicsEncoder_ProgressivePipeline::Draw(unsigned vertexCount, unsigned startVertexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
-                            vertexStart:startVertexLocation
-                            vertexCount:vertexCount];
+        [_sharedState->_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
+                                          vertexStart:startVertexLocation
+                                          vertexCount:vertexCount];
     }
 
     void GraphicsEncoder_ProgressivePipeline::DrawIndexed(unsigned indexCount, unsigned startIndexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
-                                    indexCount:indexCount
-                                     indexType:(MTLIndexType)_indexType
-                                   indexBuffer:_activeIndexBuffer
-                             indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)];
+        [_sharedState->_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
+                                                  indexCount:indexCount
+                                                   indexType:(MTLIndexType)_indexType
+                                                 indexBuffer:_activeIndexBuffer
+                                           indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)];
     }
 
     void GraphicsEncoder_ProgressivePipeline::DrawInstances(unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
-                            vertexStart:startVertexLocation
-                            vertexCount:vertexCount
-                          instanceCount:instanceCount];
+        [_sharedState->_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
+                                          vertexStart:startVertexLocation
+                                          vertexCount:vertexCount
+                                        instanceCount:instanceCount];
     }
 
     void GraphicsEncoder_ProgressivePipeline::DrawIndexedInstances(unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
     {
         assert(_sharedState->_boundThread == [NSThread currentThread]);
-        assert(_commandEncoder);
+        assert(_sharedState->_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
-                                    indexCount:indexCount
-                                     indexType:(MTLIndexType)_indexType
-                                   indexBuffer:_activeIndexBuffer
-                             indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)
-                                 instanceCount:instanceCount];
+        [_sharedState->_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
+                                                  indexCount:indexCount
+                                                   indexType:(MTLIndexType)_indexType
+                                                 indexBuffer:_activeIndexBuffer
+                                           indexBufferOffset:OffsetToStartIndex(startIndexLocation, _indexFormatBytes, _indexBufferOffsetBytes)
+                                               instanceCount:instanceCount];
     }
 
     GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline(

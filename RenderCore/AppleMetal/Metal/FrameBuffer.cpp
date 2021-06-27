@@ -101,7 +101,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned subpassStart,
         AttachmentName attachmentName)
     {
-        assert(subpassStart<fbDesc.GetSubpasses().size());
+        if (subpassStart >= fbDesc.GetSubpasses().size()) return;
+
         mainAspectLoad = stencilAspectLoad = false;
         for (unsigned s=subpassStart; s!=fbDesc.GetSubpasses().size(); ++s) {
             const auto& subpass = fbDesc.GetSubpasses()[s];
@@ -306,13 +307,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
 
         // At the start of a render pass, we set the viewport and scissor rect to full-size (based on color or depth attachment)
-        {
-            ViewportDesc viewports[1];
-            viewports[0] = ViewportDesc{0.f, 0.f, (float)maxWidth, (float)maxHeight};
-            // origin of viewport doesn't matter because it is full-size
-            ScissorRect scissorRects[1];
-            scissorRects[0] = ScissorRect{0, 0, maxWidth, maxHeight};
-        }
+        _defaultViewport = ViewportDesc{0.f, 0.f, (float)maxWidth, (float)maxHeight};
     }
 
     FrameBuffer::FrameBuffer() {}

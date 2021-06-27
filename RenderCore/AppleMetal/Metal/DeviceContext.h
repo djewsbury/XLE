@@ -155,7 +155,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         // --------------- Apple Metal specific interface ---------------
         void    PushDebugGroup(const char annotationName[]);
         void    PopDebugGroup();
-        id<MTLRenderCommandEncoder> GetUnderlying() { return (id<MTLRenderCommandEncoder>)_commandEncoder.get(); }
+        id<MTLRenderCommandEncoder> GetUnderlying();
         void QueueUniformSet(
             const std::shared_ptr<UnboundInterface>& unboundInterf,
             unsigned groupIdx,
@@ -172,7 +172,6 @@ namespace RenderCore { namespace Metal_AppleMetal
 		GraphicsEncoder(GraphicsEncoder&&);		// (hide these to avoid slicing in derived types)
 		GraphicsEncoder& operator=(GraphicsEncoder&&);
 
-        IdPtr _commandEncoder; 
         unsigned _indexType;        // MTLIndexType
         unsigned _indexFormatBytes;
         unsigned _indexBufferOffsetBytes;

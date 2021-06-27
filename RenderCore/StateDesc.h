@@ -169,7 +169,8 @@ namespace RenderCore
         StencilDesc     _backFaceStencil;
         bool            _depthBoundsTestEnable = false;
 
-		uint64_t Hash() const;
+		uint64_t HashDepthAspect() const;
+        uint64_t HashStencilAspect() const;
     };
 
     /// Similar to VkPipelineRasterizationStateCreateInfo or D3D12_RASTERIZER_DESC
