@@ -42,34 +42,22 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
-    class SamplerState::Pimpl
-    {
-    public:
-        OCPtr<AplMtlSamplerState> _underlyingSamplerMipmaps; // <MTLSamplerState>
-        OCPtr<AplMtlSamplerState> _underlyingSamplerNoMipmaps; // <MTLSamplerState>
-        bool _enableMipmaps = true;
-    };
-
     SamplerState::SamplerState(
-        FilterMode filter,
-        AddressMode addressU, AddressMode addressV, AddressMode addressW,
-        CompareOp comparison,
-        bool enableMipmaps)
+        ObjectFactory& factory, const SamplerDesc& desc)
     {
-        _pimpl = std::make_shared<Pimpl>();
-        _pimpl->_enableMipmaps = enableMipmaps;
+        _enableMipmaps = !(desc._flags & SamplerDescFlags::DisableMipmaps);
 
-        OCPtr<MTLSamplerDescriptor> desc = moveptr([[MTLSamplerDescriptor alloc] init]);
+        OCPtr<MTLSamplerDescriptor> underlyingDesc = moveptr([[MTLSamplerDescriptor alloc] init]);
 
-        desc.get().rAddressMode = AsMTLenum(addressW);
-        desc.get().sAddressMode = AsMTLenum(addressU);
-        desc.get().tAddressMode = AsMTLenum(addressV);
+        underlyingDesc.get().rAddressMode = AsMTLenum(AddressMode::Clamp);
+        underlyingDesc.get().sAddressMode = AsMTLenum(desc._addressU);
+        underlyingDesc.get().tAddressMode = AsMTLenum(desc._addressV);
 
         MTLSamplerMinMagFilter minFilter;
         MTLSamplerMinMagFilter magFilter;
         MTLSamplerMipFilter mipFilter;
 
-        switch (filter) {
+        switch (desc._filter) {
             case FilterMode::Bilinear:
             case FilterMode::ComparisonBilinear:
                 minFilter = MTLSamplerMinMagFilterLinear;
@@ -92,45 +80,40 @@ namespace RenderCore { namespace Metal_AppleMetal
                 break;
         }
 
-        desc.get().minFilter = minFilter;
-        desc.get().magFilter = magFilter;
-        desc.get().mipFilter = mipFilter;
+        underlyingDesc.get().minFilter = minFilter;
+        underlyingDesc.get().magFilter = magFilter;
+        underlyingDesc.get().mipFilter = mipFilter;
 
-        desc.get().compareFunction = AsMTLenum(comparison);
-        if (filter != FilterMode::ComparisonBilinear) {
-            desc.get().compareFunction = MTLCompareFunctionNever;
+        underlyingDesc.get().compareFunction = AsMTLenum(desc._comparison);
+        if (desc._filter != FilterMode::ComparisonBilinear) {
+            underlyingDesc.get().compareFunction = MTLCompareFunctionNever;
         }
 
-        auto& factory = GetObjectFactory();
         if (!(factory.GetFeatureSet() & FeatureSet::Flags::SamplerComparisonFn)) {
             // Not all Metal feature sets allow you to define a framework-side sampler comparison function for a MTLSamplerState object.
             // All feature sets support shader-side sampler comparison functions, as described in the Metal Shading Language Guide.
-            desc.get().compareFunction = MTLCompareFunctionNever;
+            underlyingDesc.get().compareFunction = MTLCompareFunctionNever;
         }
 
-        _pimpl->_underlyingSamplerMipmaps = factory.CreateSamplerState(desc);
+        _underlyingSamplerMipmaps = factory.CreateSamplerState(underlyingDesc);
 
-        desc.get().mipFilter = MTLSamplerMipFilterNotMipmapped;
-        _pimpl->_underlyingSamplerNoMipmaps = factory.CreateSamplerState(desc);
+        underlyingDesc.get().mipFilter = MTLSamplerMipFilterNotMipmapped;
+        _underlyingSamplerNoMipmaps = factory.CreateSamplerState(underlyingDesc);
     }
 
     SamplerState::SamplerState()
     {
-        // Default constructor is intentionally inexpensive and incomplete - it's called, for example, when resizing a vector
-        _pimpl = std::make_shared<Pimpl>();
-        _pimpl->_enableMipmaps = false;
-        _pimpl->_underlyingSamplerNoMipmaps = GetObjectFactory().StandInSamplerState();
+        _enableMipmaps = false;
+        _underlyingSamplerNoMipmaps = _underlyingSamplerMipmaps = GetObjectFactory().StandInSamplerState();
     }
 
-    void SamplerState::Apply(GraphicsEncoder& encoder, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws
+    void SamplerState::Apply(GraphicsEncoder& encoder, unsigned samplerIndex, ShaderStage stage) const never_throws
     {
-        assert(_pimpl);
-
         id<MTLSamplerState> mtlSamplerState = nil;
-        if (_pimpl->_enableMipmaps && textureHasMipmaps) {
-            mtlSamplerState = _pimpl->_underlyingSamplerMipmaps.get();
+        if (_enableMipmaps) {
+            mtlSamplerState = _underlyingSamplerMipmaps.get();
         } else {
-            mtlSamplerState = _pimpl->_underlyingSamplerNoMipmaps.get();
+            mtlSamplerState = _underlyingSamplerNoMipmaps.get();
         }
         assert(mtlSamplerState);
 
@@ -140,12 +123,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         } else if (stage == ShaderStage::Pixel) {
             [underlyingEncoder setFragmentSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
         }
-    }
-
-    BlendState::BlendState() {}
-    void BlendState::Apply() const never_throws
-    {
-        assert(0);
     }
 
 }}

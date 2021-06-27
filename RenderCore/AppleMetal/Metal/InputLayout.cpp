@@ -533,15 +533,18 @@ namespace RenderCore { namespace Metal_AppleMetal
                     Throw(::Exceptions::BasicLabel("Uniform stream does not include resource view for bound buffer. Expected resource view bound at index (%u) of stream (%s). Only (%u) resource views were provided in the UniformsStream passed to BoundUniforms::Apply", b._uniformStreamSlot, b._name.c_str(), stream._resourceViews.size()));
             #endif
 
-            auto* resView = stream._resourceViews[b._uniformStreamSlot];
+            auto* resView = checked_cast<const ResourceView*>(stream._resourceViews[b._uniformStreamSlot]);
             #if defined(_DEBUG)
                 assert(resView);
                 auto bufferDesc = resView->GetResource()->GetDesc();
                 assert(bufferDesc._type == ResourceDesc::Type::LinearBuffer);
                 assert(bufferDesc._linearBufferDesc._sizeInBytes >= b._cbSize);
             #endif
-            [underlyingEncoder setVertexBuffer:checked_cast<const ResourceView*>(resView)->GetBuffer().get()
-                                        offset:checked_cast<const ResourceView*>(resView)->GetOffset()
+            auto offsetAndSize = resView->GetBufferRangeOffsetAndSize();
+            if (offsetAndSize.second != 0 && offsetAndSize.second < b._cbSize)
+                Throw(std::runtime_error("Attempting to limit the length of a buffer bound to a shader input, but this is not supported by Apple Metal. Offsets are supported, but limited sizes are not."));
+            [underlyingEncoder setVertexBuffer:resView->GetBuffer().get()
+                                        offset:offsetAndSize.first
                                        atIndex:b._shaderSlot];
         }
 
@@ -562,7 +565,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             #endif
 
             auto* sampler = stream._samplers[b._uniformStreamSlot];
-            checked_cast<const SamplerState*>(sampler)->Apply(encoder, true, b._shaderSlot, ShaderStage::Vertex);
+            checked_cast<const SamplerState*>(sampler)->Apply(encoder, b._shaderSlot, ShaderStage::Vertex);
         }
     }
 
@@ -594,15 +597,18 @@ namespace RenderCore { namespace Metal_AppleMetal
                     Throw(::Exceptions::BasicLabel("Uniform stream does not include resource view for bound buffer. Expected resource view bound at index (%u) of stream (%s). Only (%u) resource views were provided in the UniformsStream passed to BoundUniforms::Apply", b._uniformStreamSlot, b._name.c_str(), stream._resourceViews.size()));
             #endif
 
-            auto* resView = stream._resourceViews[b._uniformStreamSlot];
+            auto* resView = checked_cast<const ResourceView*>(stream._resourceViews[b._uniformStreamSlot]);
             #if defined(_DEBUG)
                 assert(resView);
                 auto bufferDesc = resView->GetResource()->GetDesc();
                 assert(bufferDesc._type == ResourceDesc::Type::LinearBuffer);
                 assert(bufferDesc._linearBufferDesc._sizeInBytes >= b._cbSize);
             #endif
-            [underlyingEncoder setFragmentBuffer:checked_cast<const ResourceView*>(resView)->GetBuffer().get()
-                                          offset:checked_cast<const ResourceView*>(resView)->GetOffset()
+            auto offsetAndSize = resView->GetBufferRangeOffsetAndSize();
+            if (offsetAndSize.second != 0 && offsetAndSize.second < b._cbSize)
+                Throw(std::runtime_error("Attempting to limit the length of a buffer bound to a shader input, but this is not supported by Apple Metal. Offsets are supported, but limited sizes are not."));
+            [underlyingEncoder setFragmentBuffer:resView->GetBuffer().get()
+                                          offset:offsetAndSize.first
                                          atIndex:b._shaderSlot];
         }
 
@@ -623,7 +629,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             #endif
 
             auto* sampler = stream._samplers[b._uniformStreamSlot];
-            checked_cast<SamplerState*>(sampler)->Apply(encoder, true, b._shaderSlot, ShaderStage::Vertex);
+            checked_cast<const SamplerState*>(sampler)->Apply(encoder, b._shaderSlot, ShaderStage::Vertex);
         }
     }
 
@@ -639,27 +645,27 @@ namespace RenderCore { namespace Metal_AppleMetal
         ApplyUniformStreamPS(encoder, stream, _preboundInterfacePS[groupIdx]);
 
         if (groupIdx == 0) {
-            auto* encoder = encoder.GetUnderlying();
+            auto* underlyingEncoder = encoder.GetUnderlying();
             for (const auto& b:_unbound2DSRVs) {
                 const AplMtlTexture* texture = GetObjectFactory().GetStandInTexture((unsigned)MTLTextureType2D, std::get<2>(b)).get();
                 if (std::get<0>(b) == ShaderStage::Vertex) {
-                    [encoder setVertexTexture:texture atIndex: std::get<1>(b)];
+                    [underlyingEncoder setVertexTexture:texture atIndex: std::get<1>(b)];
                 } else
-                    [encoder setFragmentTexture:texture atIndex: std::get<1>(b)];
+                    [underlyingEncoder setFragmentTexture:texture atIndex: std::get<1>(b)];
             }
             for (const auto& b:_unboundCubeSRVs) {
                 const AplMtlTexture* cubeTexture = GetObjectFactory().StandInCubeTexture().get();
                 if (b.first == ShaderStage::Vertex) {
-                    [encoder setVertexTexture:cubeTexture atIndex:b.second];
+                    [underlyingEncoder setVertexTexture:cubeTexture atIndex:b.second];
                 } else
-                    [encoder setFragmentTexture:cubeTexture atIndex:b.second];
+                    [underlyingEncoder setFragmentTexture:cubeTexture atIndex:b.second];
             }
             for (const auto& b:_unboundSamplers) {
                 const AplMtlSamplerState* samplerState = GetObjectFactory().StandInSamplerState();
                 if (std::get<0>(b) == ShaderStage::Vertex) {
-                    [encoder setVertexSamplerState:samplerState atIndex:std::get<1>(b)];
+                    [underlyingEncoder setVertexSamplerState:samplerState atIndex:std::get<1>(b)];
                 } else
-                    [encoder setFragmentSamplerState:samplerState atIndex:std::get<1>(b)];
+                    [underlyingEncoder setFragmentSamplerState:samplerState atIndex:std::get<1>(b)];
             }
         }
     }

@@ -6,26 +6,33 @@
 
 #include "Resource.h"
 #include "ObjectFactory.h"
+#include "../../IDevice.h"
+#include "../../Types.h"
+#include "../../ResourceDesc.h"
 #include "../../../Utility/OCUtils.h"
+#include <memory>
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
-    class ShaderResourceView
+    class ResourceView : public IResourceView
     {
     public:
-        const OCPtr<AplMtlTexture>&    GetUnderlying() const { return _resource->GetTexture(); }
-        bool                                IsGood() const { return _resource != nullptr && _resource->GetTexture().get() != nullptr; }
-        bool                                HasMipMaps() const { return _hasMipMaps; }
-        const std::shared_ptr<Resource>& GetResource() const { return _resource; }
+        // --------------- Apple Metal specific interface ---------------
+        const std::shared_ptr<IResource>& GetResource() const override;
+        const OCPtr<AplMtlTexture>& GetTexture() const;
+        const OCPtr<AplMtlBuffer>& GetBuffer() const;
+        const TextureViewDesc& GetTextureViewDesc() const { return _window; }
+        std::pair<unsigned, unsigned> GetBufferRangeOffsetAndSize() const { return _bufferRange; }
 
-        ShaderResourceView(const ObjectFactory& factory, const std::shared_ptr<IResource>& resource, const TextureViewDesc& window = TextureViewDesc());
-        explicit ShaderResourceView(const std::shared_ptr<IResource>& resource, const TextureViewDesc& window = TextureViewDesc());
-        ShaderResourceView();
-
-        TextureViewDesc _window;
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& image, BindFlag::Enum usage, const TextureViewDesc& window);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize);
+        ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, unsigned rangeOffset, unsigned rangeSize);
+        ResourceView();
+        ~ResourceView();
 
     private:
-        bool _hasMipMaps;
+        TextureViewDesc _window;
         std::shared_ptr<Resource> _resource;
+        std::pair<unsigned, unsigned> _bufferRange;
     };
 }}

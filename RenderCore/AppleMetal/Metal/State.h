@@ -4,45 +4,30 @@
 
 #pragma once
 
-#include "../../Types.h"
+#include "ObjectFactory.h"
 #include "../../StateDesc.h"
-#include "../../../Core/Exceptions.h"
+#include "../../Types.h"
+#include "../../IDevice.h"
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
     class GraphicsEncoder;
+    class ObjectFactory;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    class SamplerState
+    class SamplerState : public ISampler
     {
     public:
-        SamplerState(   FilterMode filter,
-                        AddressMode addressU = AddressMode::Wrap,
-                        AddressMode addressV = AddressMode::Wrap,
-                        AddressMode addressW = AddressMode::Wrap,
-                        CompareOp comparison = CompareOp::Never,
-                        bool enableMipmaps = true);
-        SamplerState(); // inexpensive default constructor
+        // --------------- Apple Metal specific interface ---------------
+        void Apply(GraphicsEncoder& encoder, unsigned samplerIndex, ShaderStage stage) const never_throws;
 
-        void Apply(GraphicsEncoder& encoder, bool textureHasMipmaps, unsigned samplerIndex, ShaderStage stage) const never_throws;
-
-        typedef SamplerState UnderlyingType;
-        UnderlyingType GetUnderlying() const never_throws { return *this; }
-
+        SamplerState(ObjectFactory&, const SamplerDesc&);
+        SamplerState();
+        ~SamplerState();
     private:
-        class Pimpl;
-        std::shared_ptr<Pimpl> _pimpl;
+        OCPtr<AplMtlSamplerState> _underlyingSamplerMipmaps; // <MTLSamplerState>
+        OCPtr<AplMtlSamplerState> _underlyingSamplerNoMipmaps; // <MTLSamplerState>
+        bool _enableMipmaps = true;
     };
-
-    class BlendState
-    {
-    public:
-        BlendState();
-        void Apply() const never_throws;
-    };
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 }}
 
