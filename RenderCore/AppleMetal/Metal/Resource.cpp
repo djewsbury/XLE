@@ -360,7 +360,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         inline RawMTLHandle GetBufferRawMTLHandle(const IResource& resource)
         {
-            return (RawMTLHandle)static_cast<const Resource&>(resource).GetBuffer().get();
+            return (RawMTLHandle)static_cast<const Resource&>(resource).GetBuffer();
         }
     }
 
@@ -370,6 +370,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         RenderCore::Format srcDataFormat,
         VectorPattern<unsigned, 3> srcDataDimensions)
     {
+        assert(0);
+#if 0
         auto* metalContentRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
         assert(metalContentRes);
 
@@ -406,12 +408,15 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         id<MTLCommandBuffer> commandBuffer = _devContext->RetrieveCommandBuffer();
         [commandBuffer addCompletedHandler:^(id){ (void)transferSrc; }];
+#endif
     }
 
     void BlitPass::Copy(
         const CopyPartial_Dest& dst,
         const CopyPartial_Src& src)
     {
+        assert(0);
+#if 0
         auto* dstMetalRes = (RenderCore::Metal_AppleMetal::Resource*)dst._resource->QueryInterface(typeid(RenderCore::Metal_AppleMetal::Resource).hash_code());
         assert(dstMetalRes);
 
@@ -490,7 +495,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             Throw(std::runtime_error("Expecting either destination or source or both to be a true texture type in BlitPassInstance::Copy operation. Both input resources where either buffers or invalid"));
 
         }
-
+#endif
     }
 
     BlitPass::BlitPass(IThreadContext& threadContext)
@@ -498,17 +503,20 @@ namespace RenderCore { namespace Metal_AppleMetal
         _devContext = RenderCore::Metal_AppleMetal::DeviceContext::Get(threadContext).get();
         if (!_devContext)
             Throw(std::runtime_error("Unexpected thread context type passed to BltPassInstance constructor (expecting Apple Metal thread context)"));
-        if (_devContext->InRenderPass())
+        if (_devContext->IsInRenderPass())
             Throw(::Exceptions::BasicLabel("BlitPassInstance begun while inside of a render pass. This can only be called outside of render passes."));
         _openedEncoder = false;
     }
 
     BlitPass::~BlitPass()
     {
+        assert(0);
+        #if 0
         if (_openedEncoder) {
             _devContext->EndEncoding();
             _devContext->DestroyBlitCommandEncoder();
         }
+        #endif
     }
 
 }}

@@ -33,8 +33,8 @@ namespace RenderCore { namespace Metal_AppleMetal
         virtual std::shared_ptr<IResourceView>  CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize) override;
 
         // --------------- Apple Metal specific interface ---------------
-        const OCPtr<AplMtlTexture>& GetTexture() const { return _underlyingTexture; }; // <MTLTexture>
-        const OCPtr<AplMtlBuffer>& GetBuffer() const { return _underlyingBuffer; }; // <MTLBuffer>
+        AplMtlTexture* GetTexture() const { return _underlyingTexture; }; // <MTLTexture>
+        AplMtlBuffer* GetBuffer() const { return _underlyingBuffer; }; // <MTLBuffer>
 
         Resource(
             ObjectFactory& factory, const Desc& desc,

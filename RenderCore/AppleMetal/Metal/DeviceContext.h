@@ -43,7 +43,6 @@ namespace RenderCore { namespace Metal_AppleMetal
     class BoundInputLayout;
     class ShaderProgram;
     class UnboundInterface;
-    class ICompiledPipelineLayout;
     class FrameBuffer;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,14 +56,6 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         // --------------- Apple Metal specific interface ---------------
         MTLRenderPipelineReflection* GetReflection() const { return _reflection; }
-    private:
-        OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
-        OCPtr<MTLRenderPipelineReflection> _reflection;
-        OCPtr<NSObject<MTLDepthStencilState>> _depthStencilState;
-        unsigned _primitiveType = 0;                // MTLPrimitiveType
-        unsigned _cullMode = 0;
-        unsigned _faceWinding = 0;
-        uint64_t _interfaceBindingGUID = 0;
 
         GraphicsPipeline(
             OCPtr<NSObject<MTLRenderPipelineState>> underlying,
@@ -74,6 +65,15 @@ namespace RenderCore { namespace Metal_AppleMetal
             unsigned cullMode,
             unsigned faceWinding,
             uint64_t interfaceBindingGUID);
+    private:
+        OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
+        OCPtr<MTLRenderPipelineReflection> _reflection;
+        OCPtr<NSObject<MTLDepthStencilState>> _depthStencilState;
+        unsigned _primitiveType = 0;                // MTLPrimitiveType
+        unsigned _cullMode = 0;
+        unsigned _faceWinding = 0;
+        uint64_t _interfaceBindingGUID = 0;
+
 
         #if defined(_DEBUG)
             std::string _shaderSourceIdentifiers;
@@ -115,8 +115,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
         bool _dirty = false;
-        unsigned _cullMode = 0;
-        unsigned _faceWinding = 0;
+        unsigned _activePrimitiveType = 0;  // MTLPrimitiveType
 
         OCPtr<NSObject<MTLDepthStencilState>> CreateDepthStencilState(ObjectFactory& factory);
     };
@@ -162,6 +161,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 	protected:
 		enum class Type { Normal, StreamOutput };
 		GraphicsEncoder(
+            id<MTLCommandBuffer> cmdBuffer,
             MTLRenderPassDescriptor* renderPassDescriptor,
             std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
             Type type = Type::Normal);
@@ -197,6 +197,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 		~GraphicsEncoder_Optimized();
 	protected:
 		GraphicsEncoder_Optimized(
+            id<MTLCommandBuffer> cmdBuffer,
             MTLRenderPassDescriptor* renderPassDescriptor,
             std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
             Type type = Type::Normal);
@@ -225,6 +226,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 		~GraphicsEncoder_ProgressivePipeline();
 	protected:
 		GraphicsEncoder_ProgressivePipeline(
+            id<MTLCommandBuffer> cmdBuffer,
             MTLRenderPassDescriptor* renderPassDescriptor,
             unsigned renderPassSampleCount,
             std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
@@ -279,13 +281,13 @@ namespace RenderCore { namespace Metal_AppleMetal
         bool    HasRenderCommandEncoder();
         bool    HasBlitCommandEncoder();
         id<MTLBlitCommandEncoder> GetBlitCommandEncoder();
-        void    EndEncoding();
+        // void    EndEncoding();
         // void    OnEndEncoding(std::function<void(void)> fn);
         // METAL_TODO: This function shouldn't be needed; it's here only as a temporary substitute for OnEndRenderPass (which is a safe time when we know we will not have a current encoder).
         // void    OnDestroyEncoder(std::function<void(void)> fn);
         // void    OnEndRenderPass(std::function<void(void)> fn);
-        void    DestroyRenderCommandEncoder();
-        void    DestroyBlitCommandEncoder();
+        // void    DestroyRenderCommandEncoder();
+        // void    DestroyBlitCommandEncoder();
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      C A P T U R E D S T A T E S
@@ -300,6 +302,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         void                    HoldCommandBuffer(id<MTLCommandBuffer>);
         void                    ReleaseCommandBuffer();
         id<MTLCommandBuffer>    RetrieveCommandBuffer();
+        bool                    IsInRenderPass() const;
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         //      D E V I C E

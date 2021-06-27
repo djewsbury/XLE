@@ -18,9 +18,9 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
     public:
         // --------------- Apple Metal specific interface ---------------
-        const std::shared_ptr<IResource>& GetResource() const override;
-        const OCPtr<AplMtlTexture>& GetTexture() const;
-        const OCPtr<AplMtlBuffer>& GetBuffer() const;
+        std::shared_ptr<IResource> GetResource() const override;
+        AplMtlTexture* GetTexture() const;
+        AplMtlBuffer* GetBuffer() const;
         const TextureViewDesc& GetTextureViewDesc() const { return _window; }
         std::pair<unsigned, unsigned> GetBufferRangeOffsetAndSize() const { return _bufferRange; }
 

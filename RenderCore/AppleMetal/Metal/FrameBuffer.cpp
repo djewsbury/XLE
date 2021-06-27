@@ -239,8 +239,8 @@ namespace RenderCore { namespace Metal_AppleMetal
                     if (!resolveResource)
                         Throw(::Exceptions::BasicLabel("Could not find resolve texture for color attachment in FrameBuffer::FrameBuffer"));
 
-                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
-                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().pixelFormat);
 
                     desc.colorAttachments[o].resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
                     if (localLoad || HasRetain(attachmentDesc._storeToNextPhase)) {
@@ -292,8 +292,8 @@ namespace RenderCore { namespace Metal_AppleMetal
                     if (!resolveResource)
                         Throw(::Exceptions::BasicLabel("Could not find attachment texture for depth/stencil resolve attachment in FrameBuffer::FrameBuffer"));
 
-                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
-                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().get().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().get().pixelFormat);
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().textureType != MTLTextureType2DMultisample);     // don't resolve into a multisample destination
+                    assert(checked_cast<Resource*>(resolveResource.get())->GetTexture().pixelFormat == checked_cast<Resource*>(resource.get())->GetTexture().pixelFormat);
 
                     desc.depthAttachment.resolveTexture = checked_cast<Resource*>(resolveResource.get())->GetTexture();
                     if (localLoad || HasRetain(attachmentDesc._storeToNextPhase)) {

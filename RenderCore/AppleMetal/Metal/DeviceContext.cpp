@@ -6,6 +6,7 @@
 #include "State.h"
 #include "Shader.h"
 #include "InputLayout.h"
+#include "FrameBuffer.h"
 #include "Format.h"
 #include "BasicLabelWithNSError.h"
 #include "../IDeviceAppleMetal.h"
@@ -198,9 +199,10 @@ namespace RenderCore { namespace Metal_AppleMetal
     public:
         OCPtr<MTLRenderPipelineDescriptor> _pipelineDescriptor; // For the current draw
         AttachmentBlendDesc _attachmentBlendDesc;
-        MTLPrimitiveType _activePrimitiveType;
         DepthStencilDesc _activeDepthStencilDesc;
         OCPtr<MTLVertexDescriptor> _vertexDescriptor;
+        unsigned _cullMode = 0;
+        unsigned _faceWinding = 0;
 
         uint32_t _shaderGuid = 0;
         uint64_t _rpHash = 0;
@@ -408,7 +410,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             _pimpl->_inputLayoutGuid = inputLayout.GetGUID();
             _dirty = true;
         }
-        _pimpl->_activePrimitiveType = AsMTLenum(topology);
+        _activePrimitiveType = AsMTLenum(topology);
     }
 
     void GraphicsPipelineBuilder::Bind(const DepthStencilDesc& desc)
@@ -467,14 +469,14 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void GraphicsPipelineBuilder::Bind(const RasterizationDesc& desc)
     {
-        _cullMode = (unsigned)AsMTLenum(desc._cullMode);
-        _faceWinding = (unsigned)AsMTLenum(desc._frontFaceWinding);
+        _pimpl->_cullMode = (unsigned)AsMTLenum(desc._cullMode);
+        _pimpl->_faceWinding = (unsigned)AsMTLenum(desc._frontFaceWinding);
     }
 
     const std::shared_ptr<GraphicsPipeline>& GraphicsPipelineBuilder::CreatePipeline(ObjectFactory& factory)
     {
-        unsigned cullMode = _cullMode;
-        unsigned faceWinding = _faceWinding;
+        unsigned cullMode = _pimpl->_cullMode;
+        unsigned faceWinding = _pimpl->_faceWinding;
         
         auto hash = HashCombine(_pimpl->_shaderGuid, _pimpl->_rpHash);
         hash = HashCombine(_pimpl->_absHash, hash);
@@ -482,7 +484,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         hash = HashCombine(_pimpl->_inputLayoutGuid, hash);
         hash = HashCombine(cullMode |
                             (faceWinding << 2) |
-                            (_pimpl->_activePrimitiveType << 3), hash);
+                            (_activePrimitiveType << 3), hash);
 
         auto i = _pimpl->_prebuiltPipelines.find(hash);
         if (i!=_pimpl->_prebuiltPipelines.end())
@@ -547,7 +549,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             std::move(renderPipelineState._renderPipelineState),
             std::move(renderPipelineState._reflection),
             std::move(dss),
-            (unsigned)_pimpl->_activePrimitiveType,
+            (unsigned)_activePrimitiveType,
             cullMode,
             faceWinding,
             hash);
@@ -563,7 +565,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_pipelineDescriptor = moveptr([[MTLRenderPipelineDescriptor alloc] init]);
-        _pimpl->_activePrimitiveType = MTLPrimitiveTypeTriangle;
+        _activePrimitiveType = MTLPrimitiveTypeTriangle;
         _dirty = true;
     }
 
@@ -576,13 +578,6 @@ namespace RenderCore { namespace Metal_AppleMetal
     class AppleMetalEncoderSharedState
     {
     public:
-        // This should always exist. In a device context for an immediate
-        // thread context, we'll be given a command buffer at startup, and
-        // each time we release one (in Present or CommitCommands) we get
-        // a new one instantly. And the only other way to create a device
-        // context is with a command buffer that you had lying around.
-        IdPtr _commandBuffer; // For the duration of the frame
-
         // Only one encoder (of either type) can exist, not both. Within a
         // render pass, each subpass corresponds with one render encoder.
         // Outside of render passes, encoders should only be created, used,
@@ -658,7 +653,13 @@ namespace RenderCore { namespace Metal_AppleMetal
         _indexBufferOffsetBytes = ibView._offset;
 
         for (unsigned vb=0; vb<vbViews.size(); ++vb)
-            [_commandEncoder.get() setVertexBuffer:checked_cast<Resource*>(vbViews[vb]._resource)->GetBuffer().get() offset:vbViews[vb]._offset atIndex:vb];
+            [_commandEncoder.get() setVertexBuffer:checked_cast<const Resource*>(vbViews[vb]._resource)->GetBuffer() offset:vbViews[vb]._offset atIndex:vb];
+    }
+
+    void GraphicsEncoder::SetStencilRef(unsigned frontFaceStencilRef, unsigned backFaceStencilRef)
+    {
+        [_commandEncoder setStencilFrontReferenceValue:frontFaceStencilRef
+                                    backReferenceValue:backFaceStencilRef];
     }
 
     void GraphicsEncoder::PushDebugGroup(const char annotationName[])
@@ -700,6 +701,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     }
 
     GraphicsEncoder::GraphicsEncoder(
+        id<MTLCommandBuffer> cmdBuffer,
         MTLRenderPassDescriptor* renderPassDescriptor,
         std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
         Type type)
@@ -709,8 +711,12 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(!_sharedState->_commandEncoder);
         assert(!_sharedState->_blitCommandEncoder);
         
-        _sharedState->_commandEncoder = [_sharedState->_commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+        _sharedState->_commandEncoder = [cmdBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
         assert(_sharedState->_commandEncoder);
+
+        _indexType = MTLIndexTypeUInt16;
+        _indexFormatBytes = 2; // two bytes for MTLIndexTypeUInt16
+        _indexBufferOffsetBytes = 0;
     }
 
     void    GraphicsEncoder_Optimized::DrawIndexed(
@@ -725,7 +731,6 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
             [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
             [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
-            [_commandEncoder setStencilReferenceValue:pipeline._stencilReferenceValue];
             _boundGraphicsPipeline = &pipeline;
         }
 
@@ -748,7 +753,6 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
             [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
             [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
-            [_commandEncoder setStencilReferenceValue:pipeline._stencilReferenceValue];
             _boundGraphicsPipeline = &pipeline;
         }
 
@@ -770,7 +774,6 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
             [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
             [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
-            [_commandEncoder setStencilReferenceValue:pipeline._stencilReferenceValue];
             _boundGraphicsPipeline = &pipeline;
         }
 
@@ -793,13 +796,22 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_commandEncoder setCullMode:(MTLCullMode)pipeline._cullMode];
             [_commandEncoder setFrontFacingWinding:(MTLWinding)pipeline._faceWinding];
             [_commandEncoder setDepthStencilState:pipeline._depthStencilState];
-            [_commandEncoder setStencilReferenceValue:pipeline._stencilReferenceValue];
             _boundGraphicsPipeline = &pipeline;
         }
 
         [_commandEncoder drawPrimitives:(MTLPrimitiveType)pipeline._primitiveType
                             vertexStart:startVertexLocation
                             vertexCount:vertexCount];
+    }
+
+    GraphicsEncoder_Optimized::GraphicsEncoder_Optimized(
+        id<MTLCommandBuffer> cmdBuffer,
+        MTLRenderPassDescriptor* renderPassDescriptor,
+        std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
+        Type type)
+    : GraphicsEncoder(cmdBuffer, renderPassDescriptor, sharedState, type)
+    , _boundGraphicsPipeline(nullptr)
+    {
     }
 
     void GraphicsEncoder_ProgressivePipeline::FinalizePipeline()
@@ -813,7 +825,6 @@ namespace RenderCore { namespace Metal_AppleMetal
             [_commandEncoder setCullMode:(MTLCullMode)pipelineState._cullMode];
             [_commandEncoder setFrontFacingWinding:(MTLWinding)pipelineState._faceWinding];
             [_commandEncoder setDepthStencilState:pipelineState._depthStencilState];
-            [_commandEncoder setStencilReferenceValue:pipelineState._stencilReferenceValue];
 
             _graphicsPipelineReflection = pipelineState._reflection;
             _boundVSArgs = 0;
@@ -850,7 +861,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawPrimitives:GraphicsPipelineBuilder::_activePrimitiveType
+        [_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
                             vertexStart:startVertexLocation
                             vertexCount:vertexCount];
     }
@@ -861,7 +872,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawIndexedPrimitives:GraphicsPipelineBuilder::_activePrimitiveType
+        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
                                     indexCount:indexCount
                                      indexType:(MTLIndexType)_indexType
                                    indexBuffer:_activeIndexBuffer
@@ -874,7 +885,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawPrimitives:GraphicsPipelineBuilder::_activePrimitiveType
+        [_commandEncoder drawPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
                             vertexStart:startVertexLocation
                             vertexCount:vertexCount
                           instanceCount:instanceCount];
@@ -886,7 +897,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         assert(_commandEncoder);
 
         FinalizePipeline();
-        [_commandEncoder drawIndexedPrimitives:GraphicsPipelineBuilder::_activePrimitiveType
+        [_commandEncoder drawIndexedPrimitives:(MTLPrimitiveType)GraphicsPipelineBuilder::_activePrimitiveType
                                     indexCount:indexCount
                                      indexType:(MTLIndexType)_indexType
                                    indexBuffer:_activeIndexBuffer
@@ -895,11 +906,12 @@ namespace RenderCore { namespace Metal_AppleMetal
     }
 
     GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline(
+        id<MTLCommandBuffer> cmdBuffer,
         MTLRenderPassDescriptor* renderPassDescriptor,
         unsigned renderPassSampleCount,
         std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
         Type type)
-    : GraphicsEncoder(renderPassDescriptor, std::move(sharedState), type)
+    : GraphicsEncoder(cmdBuffer, renderPassDescriptor, std::move(sharedState), type)
     {
         _graphicsPipelineReflection = nullptr;
         GraphicsPipelineBuilder::SetRenderPassConfiguration(renderPassDescriptor, renderPassSampleCount);
@@ -911,14 +923,25 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
     public:
         std::shared_ptr<AppleMetalEncoderSharedState> _sharedEncoderState;
+
+        // This should always exist. In a device context for an immediate
+        // thread context, we'll be given a command buffer at startup, and
+        // each time we release one (in Present or CommitCommands) we get
+        // a new one instantly. And the only other way to create a device
+        // context is with a command buffer that you had lying around.
+        IdPtr _commandBuffer; // For the duration of the frame
+
         OCPtr<MTLRenderPassDescriptor> _renderPassDescriptor;
         unsigned _renderPassSampleCount = 0;
-
         bool _inRenderPass = false;
         unsigned _nextSubpass = 0;
         std::vector<ClearValue> _renderPassClearValues;
 
         CapturedStates _capturedStates;
+
+        // We reset some states on the first graphics encoder after beginning a render pass 
+        bool _hasPendingResetStates = false;
+        ViewportDesc _pendingDefaultViewport;
 
         // std::vector<std::function<void(void)>> _onEndRenderPassFunctions;
         // std::vector<std::function<void(void)>> _onEndEncodingFunctions;
@@ -929,35 +952,33 @@ namespace RenderCore { namespace Metal_AppleMetal
         FrameBuffer& frameBuffer,
         IteratorRange<const ClearValue*> clearValues)
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(!_pimpl->_inRenderPass);
-        assert(!_pimpl->_commandEncoder);
-        assert(!_pimpl->_blitCommandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_blitCommandEncoder);
         _pimpl->_inRenderPass = true;
         _pimpl->_nextSubpass = 0;
         _pimpl->_renderPassClearValues.clear();
         _pimpl->_renderPassClearValues.insert(_pimpl->_renderPassClearValues.end(), clearValues.begin(), clearValues.end());
         BeginNextSubpass(frameBuffer);
 
-        ViewportDesc viewports[1] = { frameBuffer.GetDefaultViewport() };
-        ScissorRect scissorRects[1];
-        scissorRects[0] = ScissorRect{0, 0, (unsigned)viewports[0]._width, (unsigned)viewports[0]._height};
-        context.Bind(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
+        _pimpl->_pendingDefaultViewport = frameBuffer.GetDefaultViewport();
+        _pimpl->_hasPendingResetStates = true;
     }
 
     void DeviceContext::BeginNextSubpass(FrameBuffer& frameBuffer)
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(_pimpl->_inRenderPass);
-        assert(!_pimpl->_commandEncoder);
-        assert(!_pimpl->_blitCommandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_blitCommandEncoder);
 
         // Queue up the next render targets
         auto subpassIndex = _pimpl->_nextSubpass;
         if (subpassIndex < frameBuffer.GetSubpassCount()) {
             auto* descriptor = frameBuffer.GetDescriptor(subpassIndex);
             _pimpl->_renderPassDescriptor = descriptor;
-            _pimpl->_renderPassSamplerCount = frameBuffer.GetSampleCount(subpassIndex);
+            _pimpl->_renderPassSampleCount = frameBuffer.GetSampleCount(subpassIndex);
 
             #if 0
                 /* Metal TODO -- this is a partial implementation of clear colors; it works for a single color attachment
@@ -1011,16 +1032,16 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void DeviceContext::EndRenderPass()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(_pimpl->_inRenderPass);
-        assert(!_pimpl->_commandEncoder);
-        assert(!_pimpl->_blitCommandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_blitCommandEncoder);
         _pimpl->_inRenderPass = false;
         // for (auto fn: _pimpl->_onEndRenderPassFunctions) { fn(); }
         // _pimpl->_onEndRenderPassFunctions.clear();
     }
 
-    bool DeviceContext::InRenderPass()
+    bool DeviceContext::IsInRenderPass() const
     {
         return _pimpl->_inRenderPass;
     }
@@ -1039,16 +1060,32 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     GraphicsEncoder_Optimized DeviceContext::BeginGraphicsEncoder(std::shared_ptr<ICompiledPipelineLayout>)
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         CheckCommandBufferError(_pimpl->_commandBuffer);
         assert(_pimpl->_inRenderPass);
         assert(_pimpl->_renderPassDescriptor);
         _pimpl->_sharedEncoderState->_queuedUniformSets.clear();
-        return GraphicsEncoder_Optimized {
+
+        GraphicsEncoder_Optimized result {
+            (id<MTLCommandBuffer>)_pimpl->_commandBuffer.get(),
             _pimpl->_renderPassDescriptor,
-            _pimpl->_sharedEncoderType };
+            _pimpl->_sharedEncoderState,
+            GraphicsEncoder::Type::Normal };
+
+        // We reset some states on the first encoder after beginning a render pass
+        if (_pimpl->_hasPendingResetStates) {
+            ViewportDesc viewports[1] = { _pimpl->_pendingDefaultViewport };
+            ScissorRect scissorRects[1];
+            scissorRects[0] = ScissorRect{0, 0, (unsigned)viewports[0]._width, (unsigned)viewports[0]._height};
+            result.Bind(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
+            result.SetStencilRef(0,0);
+            _pimpl->_hasPendingResetStates = false;
+        }
+
+        return result;
     }
 
+#if 0
     void DeviceContext::CreateBlitCommandEncoder()
     {
         CheckCommandBufferError(_pimpl->_commandBuffer);
@@ -1060,8 +1097,8 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void DeviceContext::EndEncoding()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
-        assert(_pimpl->_commandEncoder || _pimpl->_blitCommandEncoder);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_commandEncoder || _pimpl->_sharedEncoderState->_blitCommandEncoder);
 
         if (_pimpl->_commandEncoder) {
             [_pimpl->_commandEncoder endEncoding];
@@ -1078,6 +1115,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         for (auto fn: _pimpl->_onEndEncodingFunctions) { fn(); }
         _pimpl->_onEndEncodingFunctions.clear();
     }
+#endif
 
 #if 0
     void            DeviceContext::OnEndEncoding(std::function<void(void)> fn)
@@ -1099,11 +1137,10 @@ namespace RenderCore { namespace Metal_AppleMetal
             fn();
         }
     }
-#endif
 
     void DeviceContext::DestroyRenderCommandEncoder()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(_pimpl->_commandEncoder);
         _pimpl->_commandEncoder = nullptr;
         _pimpl->_renderTargetWidth = 0.f;
@@ -1115,13 +1152,14 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void DeviceContext::DestroyBlitCommandEncoder()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(_pimpl->_blitCommandEncoder);
         _pimpl->_blitCommandEncoder = nullptr;
 
         for (auto fn: _pimpl->_onDestroyEncoderFunctions) { fn(); }
         _pimpl->_onDestroyEncoderFunctions.clear();
     }
+#endif
 
     bool DeviceContext::HasEncoder()
     {
@@ -1130,12 +1168,12 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     bool DeviceContext::HasRenderCommandEncoder()
     {
-        return _pimpl->_commandEncoder;
+        return _pimpl->_sharedEncoderState->_commandEncoder;
     }
 
     bool DeviceContext::HasBlitCommandEncoder()
     {
-        return _pimpl->_blitCommandEncoder;
+        return _pimpl->_sharedEncoderState->_blitCommandEncoder;
     }
 
 #if 0
@@ -1162,7 +1200,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     void DeviceContext::HoldCommandBuffer(id<MTLCommandBuffer> commandBuffer)
     {
         /* Hold for the duration of the frame */
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         assert(!_pimpl->_commandBuffer);
         _pimpl->_commandBuffer = commandBuffer;
 
@@ -1171,19 +1209,19 @@ namespace RenderCore { namespace Metal_AppleMetal
 
     void DeviceContext::ReleaseCommandBuffer()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         CheckCommandBufferError(_pimpl->_commandBuffer);
 
         /* The command encoder should have been released when the subpass was finished,
          * now we release the command buffer */
-        assert(!_pimpl->_commandEncoder && !_pimpl->_blitCommandEncoder);
+        assert(!_pimpl->_sharedEncoderState->_commandEncoder && !_pimpl->_sharedEncoderState->_blitCommandEncoder);
         assert(_pimpl->_commandBuffer);
         _pimpl->_commandBuffer = nullptr;
     }
 
     id<MTLCommandBuffer> DeviceContext::RetrieveCommandBuffer()
     {
-        assert(_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
         return _pimpl->_commandBuffer;
     }
 
@@ -1195,9 +1233,6 @@ namespace RenderCore { namespace Metal_AppleMetal
     {
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_sharedEncoderState = std::make_shared<AppleMetalEncoderSharedState>();
-        _pimpl->_indexType = MTLIndexTypeUInt16;
-        _pimpl->_indexFormatBytes = 2; // two bytes for MTLIndexTypeUInt16
-        _pimpl->_indexBufferOffsetBytes = 0;
         _pimpl->_inRenderPass = false;
         _pimpl->_sharedEncoderState->_renderTargetWidth = 0.f;
         _pimpl->_sharedEncoderState->_renderTargetHeight = 0.f;

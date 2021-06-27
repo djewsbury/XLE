@@ -543,7 +543,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             auto offsetAndSize = resView->GetBufferRangeOffsetAndSize();
             if (offsetAndSize.second != 0 && offsetAndSize.second < b._cbSize)
                 Throw(std::runtime_error("Attempting to limit the length of a buffer bound to a shader input, but this is not supported by Apple Metal. Offsets are supported, but limited sizes are not."));
-            [underlyingEncoder setVertexBuffer:resView->GetBuffer().get()
+            [underlyingEncoder setVertexBuffer:resView->GetBuffer()
                                         offset:offsetAndSize.first
                                        atIndex:b._shaderSlot];
         }
@@ -555,7 +555,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             #endif
 
             auto* resView = stream._resourceViews[b._uniformStreamSlot];
-            [underlyingEncoder setVertexTexture:checked_cast<const ResourceView*>(resView)->GetTexture().get() atIndex:b._shaderSlot];
+            [underlyingEncoder setVertexTexture:checked_cast<const ResourceView*>(resView)->GetTexture() atIndex:b._shaderSlot];
         }
 
         for (const auto& b:streamMapping._samplers) {
@@ -607,7 +607,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             auto offsetAndSize = resView->GetBufferRangeOffsetAndSize();
             if (offsetAndSize.second != 0 && offsetAndSize.second < b._cbSize)
                 Throw(std::runtime_error("Attempting to limit the length of a buffer bound to a shader input, but this is not supported by Apple Metal. Offsets are supported, but limited sizes are not."));
-            [underlyingEncoder setFragmentBuffer:resView->GetBuffer().get()
+            [underlyingEncoder setFragmentBuffer:resView->GetBuffer()
                                           offset:offsetAndSize.first
                                          atIndex:b._shaderSlot];
         }
@@ -619,7 +619,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             #endif
 
             auto* resView = stream._resourceViews[b._uniformStreamSlot];
-            [underlyingEncoder setFragmentTexture:checked_cast<const ResourceView*>(resView)->GetTexture().get() atIndex:b._shaderSlot];
+            [underlyingEncoder setFragmentTexture:checked_cast<const ResourceView*>(resView)->GetTexture() atIndex:b._shaderSlot];
         }
 
         for (const auto& b:streamMapping._samplers) {
@@ -647,14 +647,14 @@ namespace RenderCore { namespace Metal_AppleMetal
         if (groupIdx == 0) {
             auto* underlyingEncoder = encoder.GetUnderlying();
             for (const auto& b:_unbound2DSRVs) {
-                const AplMtlTexture* texture = GetObjectFactory().GetStandInTexture((unsigned)MTLTextureType2D, std::get<2>(b)).get();
+                const AplMtlTexture* texture = GetObjectFactory().GetStandInTexture((unsigned)MTLTextureType2D, std::get<2>(b));
                 if (std::get<0>(b) == ShaderStage::Vertex) {
                     [underlyingEncoder setVertexTexture:texture atIndex: std::get<1>(b)];
                 } else
                     [underlyingEncoder setFragmentTexture:texture atIndex: std::get<1>(b)];
             }
             for (const auto& b:_unboundCubeSRVs) {
-                const AplMtlTexture* cubeTexture = GetObjectFactory().StandInCubeTexture().get();
+                const AplMtlTexture* cubeTexture = GetObjectFactory().StandInCubeTexture();
                 if (b.first == ShaderStage::Vertex) {
                     [underlyingEncoder setVertexTexture:cubeTexture atIndex:b.second];
                 } else
@@ -701,10 +701,10 @@ namespace RenderCore { namespace Metal_AppleMetal
                 continue;
 
             if (arg.type == MTLArgumentTypeTexture) {
-                [encoder setVertexTexture:GetObjectFactory().GetStandInTexture((unsigned)arg.textureType, (bool)arg.isDepthTexture).get()
+                [encoder setVertexTexture:GetObjectFactory().GetStandInTexture((unsigned)arg.textureType, (bool)arg.isDepthTexture)
                                   atIndex:arg.index];
             } else if (arg.type == MTLArgumentTypeSampler) {
-                [encoder setVertexSamplerState:GetObjectFactory().StandInSamplerState().get() atIndex:arg.index];
+                [encoder setVertexSamplerState:GetObjectFactory().StandInSamplerState() atIndex:arg.index];
             }
         }
 
@@ -717,10 +717,10 @@ namespace RenderCore { namespace Metal_AppleMetal
                 continue;
 
             if (arg.type == MTLArgumentTypeTexture) {
-                [encoder setFragmentTexture:GetObjectFactory().GetStandInTexture((unsigned)arg.textureType, (bool)arg.isDepthTexture).get()
+                [encoder setFragmentTexture:GetObjectFactory().GetStandInTexture((unsigned)arg.textureType, (bool)arg.isDepthTexture)
                                     atIndex:arg.index];
             } else if (arg.type == MTLArgumentTypeSampler) {
-                [encoder setFragmentSamplerState:GetObjectFactory().StandInSamplerState().get() atIndex:arg.index];
+                [encoder setFragmentSamplerState:GetObjectFactory().StandInSamplerState() atIndex:arg.index];
             }
         }
     }

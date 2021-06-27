@@ -31,12 +31,12 @@
  * off because `id` is already a pointer.  `OCPtr<NSObject<MTLTexture>>` is fine because ObjType will be `NSObject<MTLTexture> *`, which is fine.
  * `IdPtr` is also fine.
  */
-typedef NSObject<MTLTexture> AplMtlTexture;
-typedef NSObject<MTLBuffer> AplMtlBuffer;
-typedef NSObject<MTLSamplerState> AplMtlSamplerState;
-typedef NSObject<MTLDepthStencilState> AplMtlDepthStencilState;
-typedef NSObject<MTLDevice> AplMtlDevice;
-typedef NSObject<MTLRenderPipelineState> AplMtlRenderPipelineState;
+using AplMtlTexture = NSObject<MTLTexture>;
+using AplMtlBuffer = NSObject<MTLBuffer>;
+using AplMtlSamplerState = NSObject<MTLSamplerState>;
+using AplMtlDepthStencilState = NSObject<MTLDepthStencilState>;
+using AplMtlDevice = NSObject<MTLDevice>;
+using AplMtlRenderPipelineState = NSObject<MTLRenderPipelineState>;
 
 namespace RenderCore { class IDevice; }
 
@@ -64,11 +64,11 @@ namespace RenderCore { namespace Metal_AppleMetal
             MTLRenderPipelineDescriptor* desc,
             bool makeReflection = false);
 
-        const OCPtr<AplMtlTexture>& StandIn2DTexture()     { return _standIn2DTexture; }
-        const OCPtr<AplMtlTexture>& StandIn2DDepthTexture() { return _standIn2DDepthTexture; }
-        const OCPtr<AplMtlTexture>& StandInCubeTexture()   { return _standInCubeTexture; }
-        const OCPtr<AplMtlSamplerState>& StandInSamplerState() { return _standInSamplerState; }
-        const OCPtr<AplMtlTexture>& GetStandInTexture(unsigned type, bool isDepth);
+        AplMtlTexture* StandIn2DTexture()     { return _standIn2DTexture; }
+        AplMtlTexture* StandIn2DDepthTexture() { return _standIn2DDepthTexture; }
+        AplMtlTexture* StandInCubeTexture()   { return _standInCubeTexture; }
+        AplMtlSamplerState* StandInSamplerState() { return _standInSamplerState; }
+        AplMtlTexture* GetStandInTexture(unsigned type, bool isDepth);
 
         Threading::Mutex _compiledShadersLock;
         std::unordered_map<uint64_t, IdPtr> _compiledShaders;

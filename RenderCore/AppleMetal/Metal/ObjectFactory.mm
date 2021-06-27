@@ -197,7 +197,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         s_objectFactory_instance = nullptr;
     }
     
-    const OCPtr<AplMtlTexture>& ObjectFactory::GetStandInTexture(unsigned typeInt, bool isDepth) {
+    AplMtlTexture* ObjectFactory::GetStandInTexture(unsigned typeInt, bool isDepth) {
         MTLTextureType type = (MTLTextureType)typeInt;
         assert(type == MTLTextureType2D || (type == MTLTextureTypeCube && !isDepth));
         if (type == MTLTextureTypeCube) {
