@@ -194,6 +194,26 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
+    GraphicsPipeline::GraphicsPipeline(
+        OCPtr<NSObject<MTLRenderPipelineState>> underlying,
+        OCPtr<MTLRenderPipelineReflection> reflection,
+        OCPtr<NSObject<MTLDepthStencilState>> depthStencilState,
+        unsigned primitiveType,
+        unsigned cullMode,
+        unsigned faceWinding,
+        uint64_t interfaceBindingGUID)
+    : _underlying(std::move(underlying))
+    , _reflection(std::move(reflection))
+    , _depthStencilState(std::move(depthStencilState))
+    , _primitiveType(std::move(primitiveType))
+    , _cullMode(std::move(cullMode))
+    , _faceWinding(std::move(faceWinding))
+    , _interfaceBindingGUID(std::move(interfaceBindingGUID))
+    {
+    }
+
+    GraphicsPipeline::~GraphicsPipeline() = default;
+
     class GraphicsPipelineBuilder::Pimpl
     {
     public:
@@ -569,9 +589,9 @@ namespace RenderCore { namespace Metal_AppleMetal
         _dirty = true;
     }
 
-    GraphicsPipelineBuilder::~GraphicsPipelineBuilder()
-    {
-    }
+    GraphicsPipelineBuilder::~GraphicsPipelineBuilder() = default;
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::operator=(GraphicsPipelineBuilder&&) = default;
+    GraphicsPipelineBuilder::GraphicsPipelineBuilder(GraphicsPipelineBuilder&&) = default;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -719,6 +739,22 @@ namespace RenderCore { namespace Metal_AppleMetal
         _indexBufferOffsetBytes = 0;
     }
 
+    GraphicsEncoder::~GraphicsEncoder()
+    {
+        if (_sharedState) {
+            assert(_sharedState->_commandEncoder);
+            _sharedState->_commandEncoder = nil;
+        }
+    }
+
+    GraphicsEncoder::GraphicsEncoder()
+    {
+        _indexType = _indexFormatBytes = _indexBufferOffsetBytes = 0;
+        _type = Type::Normal;
+    }
+    GraphicsEncoder::GraphicsEncoder(GraphicsEncoder&& moveFrom) = default;
+	GraphicsEncoder& GraphicsEncoder::operator=(GraphicsEncoder&&) = default;
+
     void    GraphicsEncoder_Optimized::DrawIndexed(
         const GraphicsPipeline& pipeline,
         unsigned indexCount, unsigned startIndexLocation)
@@ -813,6 +849,11 @@ namespace RenderCore { namespace Metal_AppleMetal
     , _boundGraphicsPipeline(nullptr)
     {
     }
+
+    GraphicsEncoder_Optimized::GraphicsEncoder_Optimized(GraphicsEncoder_Optimized&&) = default;
+    GraphicsEncoder_Optimized& GraphicsEncoder_Optimized::operator=(GraphicsEncoder_Optimized&&) = default;
+    GraphicsEncoder_Optimized::GraphicsEncoder_Optimized() = default;
+    GraphicsEncoder_Optimized::~GraphicsEncoder_Optimized() = default;
 
     void GraphicsEncoder_ProgressivePipeline::FinalizePipeline()
     {
@@ -916,6 +957,11 @@ namespace RenderCore { namespace Metal_AppleMetal
         _graphicsPipelineReflection = nullptr;
         GraphicsPipelineBuilder::SetRenderPassConfiguration(renderPassDescriptor, renderPassSampleCount);
     }
+
+    GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline(GraphicsEncoder_ProgressivePipeline&&) = default;
+    GraphicsEncoder_ProgressivePipeline& GraphicsEncoder_ProgressivePipeline::operator=(GraphicsEncoder_ProgressivePipeline&&) = default;
+    GraphicsEncoder_ProgressivePipeline::GraphicsEncoder_ProgressivePipeline() = default;
+    GraphicsEncoder_ProgressivePipeline::~GraphicsEncoder_ProgressivePipeline() = default;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1084,6 +1130,34 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         return result;
     }
+
+    GraphicsEncoder_ProgressivePipeline DeviceContext::BeginGraphicsEncoder_ProgressivePipeline(std::shared_ptr<ICompiledPipelineLayout>)
+    {
+        assert(_pimpl->_sharedEncoderState->_boundThread == [NSThread currentThread]);
+        CheckCommandBufferError(_pimpl->_commandBuffer);
+        assert(_pimpl->_inRenderPass);
+        assert(_pimpl->_renderPassDescriptor);
+
+        GraphicsEncoder_ProgressivePipeline result {
+            (id<MTLCommandBuffer>)_pimpl->_commandBuffer.get(),
+            _pimpl->_renderPassDescriptor,
+            _pimpl->_renderPassSampleCount,
+            _pimpl->_sharedEncoderState,
+            GraphicsEncoder::Type::Normal };
+
+        // We reset some states on the first encoder after beginning a render pass
+        if (_pimpl->_hasPendingResetStates) {
+            ViewportDesc viewports[1] = { _pimpl->_pendingDefaultViewport };
+            ScissorRect scissorRects[1];
+            scissorRects[0] = ScissorRect{0, 0, (unsigned)viewports[0]._width, (unsigned)viewports[0]._height};
+            result.Bind(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
+            result.SetStencilRef(0,0);
+            _pimpl->_hasPendingResetStates = false;
+        }
+
+        return result;
+    }
+
 
 #if 0
     void DeviceContext::CreateBlitCommandEncoder()

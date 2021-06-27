@@ -4,6 +4,7 @@
 
 #include "Resource.h"
 #include "Format.h"
+#include "TextureView.h"
 #include "DeviceContext.h"
 #include "../Device.h"
 #include "../../IThreadContext.h"
@@ -107,6 +108,20 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
 
         return {};
+    }
+
+    std::shared_ptr<IResourceView> Resource::CreateTextureView(BindFlag::Enum usage, const TextureViewDesc& window)
+    {
+        if (!_underlyingTexture)
+            Throw(std::runtime_error("Attempting to a create a texture view for a resource that is not a texture"));
+        return std::make_shared<ResourceView>(GetObjectFactory(), shared_from_this(), usage, window);
+    }
+
+    std::shared_ptr<IResourceView> Resource::CreateBufferView(BindFlag::Enum usage, unsigned rangeOffset, unsigned rangeSize)
+    {
+        if (!_underlyingBuffer)
+            Throw(std::runtime_error("Attempting to a create a buffer view for a resource that is not a buffer"));
+        return std::make_shared<ResourceView>(GetObjectFactory(), shared_from_this(), rangeOffset, rangeSize);
     }
 
     uint64_t Resource::GetGUID() const

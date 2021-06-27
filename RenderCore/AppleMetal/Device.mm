@@ -211,6 +211,23 @@ namespace RenderCore { namespace ImplAppleMetal
         return std::make_shared<Metal_AppleMetal::Resource>(*_objectFactory, desc, init);
     }
 
+    std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(const DescriptorSetInitializer& desc)
+    {
+        assert(0);
+        return nullptr;
+    }
+
+    std::shared_ptr<ISampler> Device::CreateSampler(const SamplerDesc& desc)
+    {
+        return std::make_shared<Metal_AppleMetal::SamplerState>(*_objectFactory, desc);
+    }
+
+    std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
+    {
+        assert(0);
+        return nullptr;
+    }
+
     std::shared_ptr<ILowLevelCompiler>        Device::CreateShaderCompiler()
     {
         return Metal_AppleMetal::CreateLowLevelShaderCompiler(*this);

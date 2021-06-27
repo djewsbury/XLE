@@ -20,7 +20,7 @@ namespace RenderCore { namespace Metal_AppleMetal
 {
     class ObjectFactory;
 
-    class Resource : public IResource
+    class Resource : public IResource, public std::enable_shared_from_this<Resource>
     {
     public:
         // --------------- Cross-GFX-API interface ---------------
@@ -57,6 +57,10 @@ namespace RenderCore { namespace Metal_AppleMetal
         Desc _desc;
         uint64_t _guid;
     };
+
+    inline void CompleteInitialization(
+		DeviceContext& context,
+		IteratorRange<IResource* const*> resources) {}
 
     class BlitPass
     {

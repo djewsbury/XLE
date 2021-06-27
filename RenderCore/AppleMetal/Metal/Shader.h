@@ -8,7 +8,7 @@
 #include "../../ShaderService.h"
 #include "../../../Utility/OCUtils.h"
 
-namespace RenderCore { class CompiledShaderByteCode; class IDevice; }
+namespace RenderCore { class CompiledShaderByteCode; class IDevice; class ICompiledPipelineLayout; }
 
 namespace RenderCore { namespace Metal_AppleMetal
 {
@@ -23,7 +23,10 @@ namespace RenderCore { namespace Metal_AppleMetal
             std::string SourceIdentifiers() const { return _sourceIdentifiers; };
         #endif
 
-        ShaderProgram(ObjectFactory& factory, const CompiledShaderByteCode& vs, const CompiledShaderByteCode& fs);
+        ShaderProgram(
+            ObjectFactory& factory, 
+            std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			const CompiledShaderByteCode& vs, const CompiledShaderByteCode& fs);
         ~ShaderProgram();
 
         /* KenD -- Metal TODO -- shader construction will need to account for shader variants and conditional compilation, possibly with function constants */

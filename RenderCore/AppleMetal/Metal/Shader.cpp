@@ -445,6 +445,7 @@ namespace RenderCore { namespace Metal_AppleMetal
     static uint32_t g_nextShaderProgramGUID = 0;
 
     ShaderProgram::ShaderProgram(   ObjectFactory&,
+                                    std::shared_ptr<ICompiledPipelineLayout>,
                                     const CompiledShaderByteCode& vertexShader,
                                     const CompiledShaderByteCode& fragmentShader)
     {

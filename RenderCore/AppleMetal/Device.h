@@ -102,7 +102,7 @@ namespace RenderCore { namespace ImplAppleMetal
 
 ////////////////////////////////////////////////////////////////////////////////
 
-    class Device :  public IDevice, public std::enable_shared_from_this<Device>
+    class Device : public IDevice, public std::enable_shared_from_this<Device>
     {
     public:
         std::unique_ptr<IPresentationChain> CreatePresentationChain(
@@ -117,9 +117,13 @@ namespace RenderCore { namespace ImplAppleMetal
         DeviceDesc GetDesc() override;
         FormatCapability QueryFormatCapability(Format format, BindFlag::BitField bindingType) override;
 
+        std::shared_ptr<IDescriptorSet> CreateDescriptorSet(const DescriptorSetInitializer& desc) override;
+        std::shared_ptr<ISampler> CreateSampler(const SamplerDesc& desc) override;
+        std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(const PipelineLayoutInitializer& desc) override;
+
         std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler() override;
 
-        virtual void Stall() override;
+        void Stall() override;
 
         Metal_AppleMetal::FeatureSet::BitField GetFeatureSet();
 

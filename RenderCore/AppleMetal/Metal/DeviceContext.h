@@ -65,6 +65,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             unsigned cullMode,
             unsigned faceWinding,
             uint64_t interfaceBindingGUID);
+        ~GraphicsPipeline();
     private:
         OCPtr<NSObject<MTLRenderPipelineState>> _underlying;
         OCPtr<MTLRenderPipelineReflection> _reflection;
@@ -73,7 +74,6 @@ namespace RenderCore { namespace Metal_AppleMetal
         unsigned _cullMode = 0;
         unsigned _faceWinding = 0;
         uint64_t _interfaceBindingGUID = 0;
-
 
         #if defined(_DEBUG)
             std::string _shaderSourceIdentifiers;
@@ -111,6 +111,8 @@ namespace RenderCore { namespace Metal_AppleMetal
 
         GraphicsPipelineBuilder();
         ~GraphicsPipelineBuilder();
+        GraphicsPipelineBuilder& operator=(GraphicsPipelineBuilder&&);
+        GraphicsPipelineBuilder(GraphicsPipelineBuilder&&);
     protected:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
@@ -153,7 +155,7 @@ namespace RenderCore { namespace Metal_AppleMetal
         // --------------- Apple Metal specific interface ---------------
         void    PushDebugGroup(const char annotationName[]);
         void    PopDebugGroup();
-        id<MTLRenderCommandEncoder> GetUnderlying();
+        id<MTLRenderCommandEncoder> GetUnderlying() { return (id<MTLRenderCommandEncoder>)_commandEncoder.get(); }
         void QueueUniformSet(
             const std::shared_ptr<UnboundInterface>& unboundInterf,
             unsigned groupIdx,
@@ -166,6 +168,7 @@ namespace RenderCore { namespace Metal_AppleMetal
             std::shared_ptr<AppleMetalEncoderSharedState> sharedState,
             Type type = Type::Normal);
 		~GraphicsEncoder();
+        GraphicsEncoder();
 		GraphicsEncoder(GraphicsEncoder&&);		// (hide these to avoid slicing in derived types)
 		GraphicsEncoder& operator=(GraphicsEncoder&&);
 
@@ -218,7 +221,6 @@ namespace RenderCore { namespace Metal_AppleMetal
 
 		using GraphicsEncoder::Bind;
 		using GraphicsPipelineBuilder::Bind;
-		void        Bind(const ShaderProgram& shaderProgram);
 
 		GraphicsEncoder_ProgressivePipeline(GraphicsEncoder_ProgressivePipeline&&);
 		GraphicsEncoder_ProgressivePipeline& operator=(GraphicsEncoder_ProgressivePipeline&&);

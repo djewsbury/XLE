@@ -18,9 +18,9 @@ namespace RenderCore { namespace Metal_AppleMetal
             case AddressMode::Wrap: return MTLSamplerAddressModeRepeat;
             case AddressMode::Mirror: return MTLSamplerAddressModeMirrorRepeat;
             case AddressMode::Clamp: return MTLSamplerAddressModeClampToEdge;
-#if TARGET_OS_OSX
-            case AddressMode::Border: return MTLSamplerAddressModeClampToBorderColor;
-#endif
+            #if TARGET_OS_OSX
+                case AddressMode::Border: return MTLSamplerAddressModeClampToBorderColor;
+            #endif
             default:
                 assert(0);
                 return MTLSamplerAddressModeRepeat;
@@ -42,11 +42,25 @@ namespace RenderCore { namespace Metal_AppleMetal
         }
     }
 
+    void SamplerState::Apply(GraphicsEncoder& encoder, unsigned samplerIndex, ShaderStage stage) const never_throws
+    {
+        id<MTLRenderCommandEncoder> underlyingEncoder = encoder.GetUnderlying();
+        if (stage == ShaderStage::Vertex) {
+            [underlyingEncoder setVertexSamplerState:_underlying.get() atIndex:(NSUInteger)samplerIndex];
+        } else if (stage == ShaderStage::Pixel) {
+            [underlyingEncoder setFragmentSamplerState:_underlying.get() atIndex:(NSUInteger)samplerIndex];
+        }
+    }
+
+    SamplerDesc SamplerState::GetDesc() const
+    {
+        return _desc;
+    }
+
     SamplerState::SamplerState(
         ObjectFactory& factory, const SamplerDesc& desc)
+    : _desc(desc)
     {
-        _enableMipmaps = !(desc._flags & SamplerDescFlags::DisableMipmaps);
-
         OCPtr<MTLSamplerDescriptor> underlyingDesc = moveptr([[MTLSamplerDescriptor alloc] init]);
 
         underlyingDesc.get().rAddressMode = AsMTLenum(AddressMode::Clamp);
@@ -84,6 +98,9 @@ namespace RenderCore { namespace Metal_AppleMetal
         underlyingDesc.get().magFilter = magFilter;
         underlyingDesc.get().mipFilter = mipFilter;
 
+        if (desc._flags & SamplerDescFlags::DisableMipmaps)
+            underlyingDesc.get().mipFilter = MTLSamplerMipFilterNotMipmapped;
+
         underlyingDesc.get().compareFunction = AsMTLenum(desc._comparison);
         if (desc._filter != FilterMode::ComparisonBilinear) {
             underlyingDesc.get().compareFunction = MTLCompareFunctionNever;
@@ -95,34 +112,16 @@ namespace RenderCore { namespace Metal_AppleMetal
             underlyingDesc.get().compareFunction = MTLCompareFunctionNever;
         }
 
-        _underlyingSamplerMipmaps = factory.CreateSamplerState(underlyingDesc);
-
-        underlyingDesc.get().mipFilter = MTLSamplerMipFilterNotMipmapped;
-        _underlyingSamplerNoMipmaps = factory.CreateSamplerState(underlyingDesc);
+        _underlying = factory.CreateSamplerState(underlyingDesc);
     }
 
     SamplerState::SamplerState()
     {
-        _enableMipmaps = false;
-        _underlyingSamplerNoMipmaps = _underlyingSamplerMipmaps = GetObjectFactory().StandInSamplerState();
+        _underlying = GetObjectFactory().StandInSamplerState();
     }
 
-    void SamplerState::Apply(GraphicsEncoder& encoder, unsigned samplerIndex, ShaderStage stage) const never_throws
+    SamplerState::~SamplerState()
     {
-        id<MTLSamplerState> mtlSamplerState = nil;
-        if (_enableMipmaps) {
-            mtlSamplerState = _underlyingSamplerMipmaps.get();
-        } else {
-            mtlSamplerState = _underlyingSamplerNoMipmaps.get();
-        }
-        assert(mtlSamplerState);
 
-        id<MTLRenderCommandEncoder> underlyingEncoder = encoder.GetUnderlying();
-        if (stage == ShaderStage::Vertex) {
-            [underlyingEncoder setVertexSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
-        } else if (stage == ShaderStage::Pixel) {
-            [underlyingEncoder setFragmentSamplerState:mtlSamplerState atIndex:(NSUInteger)samplerIndex];
-        }
     }
-
 }}

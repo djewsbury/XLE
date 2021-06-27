@@ -19,14 +19,14 @@ namespace RenderCore { namespace Metal_AppleMetal
     public:
         // --------------- Apple Metal specific interface ---------------
         void Apply(GraphicsEncoder& encoder, unsigned samplerIndex, ShaderStage stage) const never_throws;
+        SamplerDesc GetDesc() const;
 
         SamplerState(ObjectFactory&, const SamplerDesc&);
         SamplerState();
         ~SamplerState();
     private:
-        OCPtr<AplMtlSamplerState> _underlyingSamplerMipmaps; // <MTLSamplerState>
-        OCPtr<AplMtlSamplerState> _underlyingSamplerNoMipmaps; // <MTLSamplerState>
-        bool _enableMipmaps = true;
+        OCPtr<AplMtlSamplerState> _underlying; // <MTLSamplerState>
+        SamplerDesc _desc;
     };
 
 }}

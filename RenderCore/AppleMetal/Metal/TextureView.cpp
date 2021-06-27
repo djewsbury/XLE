@@ -8,6 +8,21 @@ namespace RenderCore { namespace Metal_AppleMetal
 {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    std::shared_ptr<IResource> ResourceView::GetResource() const
+    {
+        return _resource;
+    }
+
+    AplMtlTexture* ResourceView::GetTexture() const
+    {
+        return _resource->GetTexture();
+    }
+
+    AplMtlBuffer* ResourceView::GetBuffer() const
+    {
+        return _resource->GetBuffer();
+    }
+
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& image, BindFlag::Enum usage, const TextureViewDesc& window)
     : _resource(std::static_pointer_cast<Resource>(image)), _window(window)
     {
