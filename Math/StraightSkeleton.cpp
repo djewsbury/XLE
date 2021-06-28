@@ -284,6 +284,12 @@ namespace XLEMath
 			for (const auto&e:l._edges) {
 				if (e._head == motor || e._tail == motor) continue;	// (can't crash if part of the same segment)
 
+				// Special case for vertex pairs generated from motorcycle crashes. In these cases, we will get 2 vertices
+				// that are on top of each other, but on different loops. They can be interpreted as a crash at time zero
+				// without this check 
+				if (motorLoop._loopId != l._loopId && (vertices[e._head]._anchor0 == vertices[motor]._anchor0 || vertices[e._tail]._anchor0 == vertices[motor]._anchor0))		// bitwise comparison intended
+					continue;
+
 				// "BuildCrashEvent_SimultaneousV" seems to do better here in the presence of near-colinear edges
 				// since we use the vertex velocity we've already calculated, it takes into account all of the colinear protections
 				// The downside is any floating point precision we picked up from there will impact the crash location calculation
