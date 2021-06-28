@@ -545,7 +545,7 @@ namespace XLEMath
 					auto v1 = GetVertex<Primitive>(_vertices, edge->_tail).PositionAtTime(calcTime);
 					auto v2 = GetVertex<Primitive>(_vertices, edge->_head).PositionAtTime(calcTime);
 					auto windingType = CalculateWindingType(v0, v1, v2, GetEpsilon<Primitive>()).first;
-					if (windingType == WindingType::Right || windingType == WindingType::Straight)
+					if (windingType == WindingType::Right)
 						loop._motorcycleSegments.emplace_back(MotorcycleSegment<Primitive>{edge->_tail});
 				}
 			}
