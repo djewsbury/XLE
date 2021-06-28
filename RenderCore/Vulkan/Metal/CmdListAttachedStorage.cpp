@@ -191,8 +191,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				page._markedDestroys.pop_front();
 			}
 
-			if (newFront == ~0u) return;
-			page._heap.ResetFront(newFront);
+			if (newFront != ~0u)
+				page._heap.ResetFront(newFront);
 		}
 	}
 

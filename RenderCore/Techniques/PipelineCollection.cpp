@@ -25,7 +25,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(_attachmentBlend.size() == _fbTarget._fbDesc->GetSubpasses()[_fbTarget._subpassIdx].GetOutputs().size());
 		uint64_t renderPassRelevance = _fbTarget.GetHash();
-		auto result = HashCombine(_depthStencil.Hash(), renderPassRelevance);
+		auto result = HashCombine(_depthStencil.HashDepthAspect() ^ _depthStencil.HashStencilAspect(), renderPassRelevance);
 		result = HashCombine(_rasterization.Hash(), result);
 		for (const auto& a:_attachmentBlend)
 			result = HashCombine(a.Hash(), result);

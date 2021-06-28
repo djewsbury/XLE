@@ -868,6 +868,7 @@ namespace XLEMath
     {
         const float n = nearClipPlane;
         const float f = farClipPlane;
+        assert(n > 0.f);
 
             // Note --  there's a slight awkward thing here... l, t, r and b
             //          are defined to mean values between -nearClipPlane and +nearClipPlane
