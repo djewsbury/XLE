@@ -178,10 +178,10 @@ namespace UnitTests
 		}
 	};
 
-	auto UnitTestFBHelper::BeginRenderPass(RenderCore::IThreadContext& threadContext) -> std::shared_ptr<IRenderPassToken>
+	auto UnitTestFBHelper::BeginRenderPass(RenderCore::IThreadContext& threadContext, IteratorRange<const RenderCore::ClearValue*> clearValues) -> std::shared_ptr<IRenderPassToken>
 	{
 		auto devContext = RenderCore::Metal::DeviceContext::Get(threadContext);
-		devContext->BeginRenderPass(*_pimpl->_fb);
+		devContext->BeginRenderPass(*_pimpl->_fb, clearValues);
 		return std::make_shared<RenderPassToken>(devContext, _pimpl->_fb);
 	}
 

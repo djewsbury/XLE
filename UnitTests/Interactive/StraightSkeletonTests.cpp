@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "InteractiveTestHelper.h"
+#include "../RenderCore/Metal/MetalTestHelper.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../PlatformRig/InputListener.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
@@ -10,9 +11,13 @@
 #include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/Techniques.h"
+#include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
+#include "../../Assets/IAsyncMarker.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
@@ -460,9 +465,9 @@ namespace UnitTests
 
 		void Draw(RenderOverlays::IOverlayContext& overlayContext) const
 		{
-			const RenderOverlays::ColorB waveFrontColor { 64, 230, 64 };
-			const RenderOverlays::ColorB pathColor { 64, 64, 230 };
-			const RenderOverlays::ColorB originalShapeColor { 128, 128, 128 };
+			const RenderOverlays::ColorB waveFrontColor { 96, 200, 159 };
+			const RenderOverlays::ColorB pathColor { 65, 151, 204 };
+			const RenderOverlays::ColorB originalShapeColor { 158, 158, 158 };
 
 			std::vector<Float3> wavefrontLines, pathLines;
 			wavefrontLines.reserve(_straightSkeleton._edges.size() * 2);
@@ -493,12 +498,12 @@ namespace UnitTests
 				overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
 			}
 
-			const float vertexSize = 0.1f;
+			/*const float vertexSize = 0.1f;
 			for (auto& b:_orderedBoundaryPts)
 				for (unsigned c=0; c<b.size(); ++c)
 					overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{b[c] - Float2{vertexSize, vertexSize}, 0.f}, Float3{b[c] + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, c>>8, c&0xff));
 			for (unsigned c=0; c<_straightSkeleton._steinerVertices.size(); ++c)
-				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));
+				overlayContext.DrawQuad(RenderOverlays::ProjectionMode::P2D, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));*/
 		}
 
 		StraightSkeletonPreview(const HexCellField& cellField, Primitive maxInset = std::numeric_limits<Primitive>::max())
@@ -539,10 +544,10 @@ namespace UnitTests
 		StraightSkeletonPreview() {}
 	};
 
-	static RenderCore::Techniques::CameraDesc StartingCamera(float scale = 1.f)
+	static RenderCore::Techniques::CameraDesc StartingCamera(float scale = 1.f, Float2 cameraOffset = Zero<Float2>())
 	{
 		RenderCore::Techniques::CameraDesc visCamera;
-		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, 0.0f, -1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{0.0f, 0.0f, 200.0f});
+		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, 0.0f, -1.0f}), Normalize(Float3{0.0f, 1.0f, 0.0f}), Float3{cameraOffset[0], cameraOffset[1], 200.0f});
 		visCamera._projection = RenderCore::Techniques::CameraDesc::Projection::Orthogonal;
 		visCamera._nearClip = 0.f;
 		visCamera._farClip = 400.f;
@@ -954,6 +959,92 @@ namespace UnitTests
 		}
 	}
 
+	T1(Primitive) static void DrawPrimitive(
+		IInteractiveTestHelper& testHelper,
+		UnitTestFBHelper& fbHelper,
+		const StraightSkeletonPreview<float>& preview,
+		float zoom, Float2 cameraOffset,
+		StringSection<> output)
+	{
+		auto threadContext = testHelper.GetDevice()->GetImmediateContext();
+		{
+			{
+				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+					*threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+				preview.Draw(*overlayContext);
+			}
+
+			RenderCore::ClearValue clearValues[] = { RenderCore::MakeClearValue(1.0f, 1.0f, 1.f) };
+			auto rpi = fbHelper.BeginRenderPass(*threadContext, MakeIteratorRange(clearValues));
+			auto techContext = testHelper.CreateTechniqueContext();
+			RenderCore::Techniques::ParsingContext parserContext(techContext);
+			auto defaultViewport = fbHelper.GetDefaultViewport();
+			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(zoom, cameraOffset), {defaultViewport._width, defaultViewport._height});
+			auto prepare = testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->PrepareResources(fbHelper.GetDesc(), 0);
+			if (prepare) {
+				auto state = prepare->StallWhilePending();
+				REQUIRE(state == ::Assets::AssetState::Ready);
+			}
+			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(*threadContext, parserContext, fbHelper.GetDesc(), 0);
+		}
+		fbHelper.SaveImage(*threadContext, output);
+	}
+
+	TEST_CASE( "StraightSkeletonDrawImages", "[math]" )
+	{
+		Float2 rectangleCollapse[] = {
+			Float2 {  10.f,  15.f },
+			Float2 { -10.f,  15.f },
+			Float2 { -10.f, -15.f },
+			Float2 {  10.f, -15.f }
+		};
+
+		Float2 LShapeCollapse[] = {
+			Float2 {   0.f,   0.f },
+			Float2 {  15.f,   0.f },
+			Float2 {  15.f,  15.f },
+			Float2 { -15.f,  15.f },
+			Float2 { -15.f, -15.f },
+			Float2 {   0.f, -15.f }
+		};
+
+		Float2 singleMotorcycle[] = {
+			Float2 { -10.f,  7.5f },
+			Float2 {   0.f,   0.f },
+			Float2 { -10.f, -7.5f },
+			Float2 {  10.f, -15.f },
+			Float2 {  10.f,  15.f }
+		};
+
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
+		using namespace RenderCore;
+		UInt2 outputDims(1024, 1024);
+		auto targetDesc = CreateDesc(
+			BindFlag::RenderTarget | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			TextureDesc::Plain2D(outputDims[0], outputDims[1], Format::R8G8B8A8_UNORM),
+			"temporary-out");
+		auto threadContext = testHelper->GetDevice()->GetImmediateContext();
+		UnitTestFBHelper fbHelper(*testHelper->GetDevice(), *threadContext, targetDesc);
+
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(rectangleCollapse), 2.0f}, 0.5f, Zero<Float2>(), "ss-rectangle-0");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(rectangleCollapse), 7.0f}, 0.5f, Zero<Float2>(), "ss-rectangle-1");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(rectangleCollapse), 20.0f}, 0.5f, Zero<Float2>(), "ss-rectangle-2");
+
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(LShapeCollapse), 3.5f}, 0.5f, Zero<Float2>(), "ss-lshape-0");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(LShapeCollapse), 5.0f}, 0.5f, Zero<Float2>(), "ss-lshape-1");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(LShapeCollapse), 20.0f}, 0.5f, Zero<Float2>(), "ss-lshape-2");
+
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(singleMotorcycle), 3.5f}, 0.5f, Zero<Float2>(), "ss-singlemotor-0");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(singleMotorcycle), 5.0f}, 0.5f, Zero<Float2>(), "ss-singlemotor-1");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{MakeIteratorRange(singleMotorcycle), 20.0f}, 0.5f, Zero<Float2>(), "ss-singlemotor-2");
+
+		std::mt19937_64 rng(815283149);
+		auto cellField = CreateRandomHexCellField(32, rng);
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{cellField, 0.5f}, 0.25f, Float2{0, 3}, "ss-hex-0");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{cellField, 1.0f}, 0.25f, Float2{0, 3}, "ss-hex-1");
+		DrawPrimitive<float>(*testHelper, fbHelper, StraightSkeletonPreview<float>{cellField, 10.0f}, 0.25f, Float2{0, 3}, "ss-hex-2");
+	}
 }
 
 #if 0

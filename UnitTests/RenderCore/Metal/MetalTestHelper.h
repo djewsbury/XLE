@@ -78,7 +78,9 @@ namespace UnitTests
             virtual ~IRenderPassToken() = default;
         };
 
-        std::shared_ptr<IRenderPassToken> BeginRenderPass(RenderCore::IThreadContext& threadContext);
+        std::shared_ptr<IRenderPassToken> BeginRenderPass(
+            RenderCore::IThreadContext& threadContext,
+            IteratorRange<const RenderCore::ClearValue*> clearValues = {});
         std::map<unsigned, unsigned> GetFullColorBreakdown(RenderCore::IThreadContext& threadContext);
         const std::shared_ptr<RenderCore::IResource> GetMainTarget() const;
         const RenderCore::FrameBufferDesc& GetDesc() const;

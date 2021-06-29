@@ -7,9 +7,9 @@
 #include <utility>
 
 namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; }
-namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class ParsingContext; class CameraDesc; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
-namespace RenderCore { class IThreadContext; }
+namespace RenderCore { class IDevice; class IThreadContext; }
 
 namespace UnitTests
 {
@@ -38,6 +38,8 @@ namespace UnitTests
 		virtual std::shared_ptr<RenderCore::Techniques::DrawingApparatus> GetDrawingApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const = 0;
+		virtual std::shared_ptr<RenderCore::IDevice> GetDevice() const = 0;
+		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() = 0;
 
 		virtual void Run(
 			const RenderCore::Techniques::CameraDesc& camera,

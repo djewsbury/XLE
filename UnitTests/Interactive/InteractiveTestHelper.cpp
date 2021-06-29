@@ -49,6 +49,7 @@ namespace UnitTests
 		virtual std::shared_ptr<RenderCore::Techniques::DrawingApparatus> GetDrawingApparatus() const override { return _drawingApparatus; }
 		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const override { return _immediateDrawingApparatus; }
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const override { return _lightingEngineApparatus; }
+		virtual std::shared_ptr<RenderCore::IDevice> GetDevice() const override { return _device; }
 
 		void Run(
 			const RenderCore::Techniques::CameraDesc& camera,
@@ -80,6 +81,16 @@ namespace UnitTests
 			return RenderCore::Techniques::BuildRayUnderCursor(
 				screenPt, *_activeCamera, 
 				std::make_pair(Float2{0,0}, viewportDims));
+		}
+
+		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() override
+		{
+			RenderCore::Techniques::TechniqueContext techniqueContext;
+			techniqueContext._systemUniformsDelegate = _drawingApparatus->_systemUniformsDelegate;
+			techniqueContext._drawablesSharedResources = _drawingApparatus->_drawablesSharedResources;
+			techniqueContext._attachmentPool = _frameRenderingApparatus->_attachmentPool;
+			techniqueContext._frameBufferPool = _frameRenderingApparatus->_frameBufferPool;
+			return techniqueContext;
 		}
 
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
