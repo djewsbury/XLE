@@ -1,19 +1,9 @@
-![XLE](https://github.com/xlgames-inc/XLE/wiki/images/xlelogo3.png)
+![XLE](https://djewsbury.github.io/media/xlelogo3.png)
 
 ### XLE prototype 3D game engine
 
-XLE is flexible and modular and powerful. It's intended to be combined with other solutions and extended for projects that have special case requirements.
+I've been making a lot of changes here lately; so any documentation is a little out of date. However I might occasionally post some updates at the development blog: https://djewsbury.github.io.
 
-Starting points: <BR>
-* Development blog: https://xlgames-inc.github.io
-* Technical documentation: https://github.com/xlgames-inc/XLE/wiki
-* Download and getting started docs: http://xlgames-inc.github.io/posts/release0040/
+There's also some older technical documentation (though it's quite a bit out of date): https://github.com/xlgames-inc/XLE/wiki
 
-See *"experimental"* branch for **Vulkan** support.
-
-### Build Status
-[Appveyor CI page](https://ci.appveyor.com/project/djewsbury/xle)
-![BuildStatusBadge](https://ci.appveyor.com/api/projects/status/github/xlgames-inc/xle?svg=true)
-
-<BR>
-![Screenshot](https://xlgames-inc.github.io/assets/media/CaptainSplitBrightLogo.png)
+![Screenshot](https://djewsbury.github.io/media/CaptainSplitBrightLogo.png)
