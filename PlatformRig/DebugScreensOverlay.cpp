@@ -37,14 +37,19 @@ namespace PlatformRig
             RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
-            auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, _fontRenderer.get());
+            TRY {
+                auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, _fontRenderer.get());
             
-            Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
-            assert(viewportDims[0] * viewportDims[1]);
-            _debugScreensSystem->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });
+                Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
+                assert(viewportDims[0] * viewportDims[1]);
+                _debugScreensSystem->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });
 
-            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
-            _immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
+                auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
+                _immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
+            } CATCH (...) {
+                _immediateDrawables->AbandonDraws();
+                throw;
+            } CATCH_END
         }
 
     private:

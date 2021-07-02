@@ -179,25 +179,29 @@ namespace PlatformRig
 
 			////////////////////////////////
 
+            bool mainOverlaySucceeded = false;
 			TRY {
 				if (_mainOverlaySys) {
                     #if defined(_DEBUG)
                         assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
                     #endif
                     _mainOverlaySys->Render(*context, parserContext);
-                } else {
-                    // We must at least clear, because the _debugScreenOverlaySystem might have something to render
-                    // (also redefine AttachmentSemantics::ColorLDR as initialized here)
-                    RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
-                    using namespace RenderCore::Techniques;
-                    stitchingContext.DefineAttachment(PreregisteredAttachment {AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized});
-                }
+                    mainOverlaySucceeded = true;
+                } 
 			}
 			CATCH_ASSETS(parserContext)
 			CATCH(const std::exception& e) {
 				StringMeldAppend(parserContext._stringHelpers->_errorString) << "Exception in main overlay system render: " << e.what() << "\n";
 			}
 			CATCH_END
+
+            if (!mainOverlaySucceeded) {
+                // We must at least clear, because the _debugScreenOverlaySystem might have something to render
+                // (also redefine AttachmentSemantics::ColorLDR as initialized here)
+                RenderCore::Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(RenderCore::BindFlag::RenderTarget), Float4(0,0,0,1));
+                using namespace RenderCore::Techniques;
+                stitchingContext.DefineAttachment(PreregisteredAttachment {AttachmentSemantics::ColorLDR, targetDesc, PreregisteredAttachment::State::Initialized});
+            }
 
 			TRY {
 				if (_debugScreenOverlaySystem)
