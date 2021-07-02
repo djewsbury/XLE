@@ -23,9 +23,7 @@ namespace RenderCore { namespace Techniques
 		SubpassDesc subpass;
 		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR, loadOperation));
 		frag.AddSubpass(std::move(subpass));
-        auto rpi =  RenderPassInstance{context, parserContext, frag};
-		parserContext.GetViewport() = rpi.GetDefaultViewport();
-		return rpi;
+        return RenderPassInstance{context, parserContext, frag};
 	}
 
 	RenderPassInstance RenderPassToPresentationTarget(
@@ -53,9 +51,7 @@ namespace RenderCore { namespace Techniques
 		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth, loadOperation));
 		frag.AddSubpass(std::move(subpass));
 
-        auto rpi = RenderPassInstance{ context, parserContext, frag };
-		parserContext.GetViewport() = rpi.GetDefaultViewport();
-		return rpi;
+        return RenderPassInstance{ context, parserContext, frag };
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(

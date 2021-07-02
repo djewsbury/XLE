@@ -26,6 +26,13 @@ namespace RenderCore { namespace Techniques
 		virtual ~IShaderOperator();
 	};
 
+	class IComputeShaderOperator
+	{
+	public:
+		virtual void Dispatch(IThreadContext&, ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual ~IComputeShaderOperator();
+	};
+
 	class RenderPassInstance;
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
@@ -42,7 +49,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> definesTable,
 		const UniformsStreamInterface& usi);
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateComputeOperator(
+	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
 		StringSection<> definesTable,

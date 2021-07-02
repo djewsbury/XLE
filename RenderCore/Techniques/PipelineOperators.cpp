@@ -102,22 +102,21 @@ namespace RenderCore { namespace Techniques
 		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 	}
 
-	class ComputeOperator : public Techniques::IShaderOperator
+	class ComputeOperator : public Techniques::IComputeShaderOperator
 	{
 	public:
 		std::shared_ptr<Metal::ComputePipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
 
-		virtual void Draw(IThreadContext& threadContext, ParsingContext& parsingContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+		virtual void Dispatch(IThreadContext& threadContext, ParsingContext& parsingContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 			if (!descSets.empty())
 				_boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets);
 			_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
-			// encoder.Dispatch(*_pipeline, 640/16, 360/8, 1);
-			encoder.Dispatch(*_pipeline, 640/2, 360/2, 1);
+			encoder.Dispatch(*_pipeline, countX, countY, countZ);
 		}
 
 		static void ConstructToFuture(
@@ -143,7 +142,7 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateComputeOperator(
+	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
 		StringSection<> definesTable,
@@ -152,8 +151,9 @@ namespace RenderCore { namespace Techniques
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
 		auto op = ::Assets::MakeAsset<ComputeOperator>(pipelineLayout, computeShader, definesTable, usi);
-		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
 	}
 
 	IShaderOperator::~IShaderOperator() {}
+	IComputeShaderOperator::~IComputeShaderOperator() {}
 }}

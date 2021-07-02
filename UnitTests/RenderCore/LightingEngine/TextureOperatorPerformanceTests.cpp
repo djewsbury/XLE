@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/IThreadContext.h"
+#include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
@@ -232,7 +233,7 @@ namespace UnitTests
 		LightingEngineTestApparatus& testApparatus, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::RenderPassInstance& rpi,
-		IDrawablesWriter& drawableWriter)
+		ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
 		auto sequencerConfig = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
@@ -367,9 +368,11 @@ namespace UnitTests
 			{}, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-		op->Actualize()->Draw(
+		op->Actualize()->Dispatch(
 			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
 			parsingContext, 
+			// 640/16, 360/8, 1,
+			640/2, 360/2, 1,
 			us);
 	}
 
@@ -404,7 +407,7 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		const auto downsampledResult = Hash64("Downsampled");
-		auto drawableWriter = CreateShapeStackDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = ToolsRig::CreateShapeStackDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 		Techniques::CommonResourceBox commonResourceBox(*testHelper->_device);
 
 		{

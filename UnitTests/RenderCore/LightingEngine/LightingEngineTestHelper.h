@@ -26,6 +26,7 @@ namespace RenderCore { namespace LightingEngine
 }}
 
 namespace Assets { class CompilerRegistration; }
+namespace ToolsRig { class IDrawablesWriter; }
 
 namespace UnitTests
 {
@@ -52,23 +53,7 @@ namespace UnitTests
 		~LightingEngineTestApparatus();
 	};
 
-	class IDrawablesWriter
-	{
-	public:
-		virtual void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt) = 0;
-		virtual ~IDrawablesWriter() = default;
-	};
-
-	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateShapeStackDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateStonehengeDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateSharpContactDrawableWriter(MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);
-	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(
-		MetalTestHelper& testHelper, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
-		const Float2& worldMins, const Float2& worldMaxs);
-
-	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, IDrawablesWriter& drawableWriter);
+	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter);
 
 	RenderCore::Techniques::ParsingContext InitializeParsingContext(
 		RenderCore::Techniques::TechniqueContext& techniqueContext,

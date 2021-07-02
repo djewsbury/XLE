@@ -535,6 +535,8 @@ namespace RenderCore { namespace Techniques
                 break;
             }
         }
+
+        parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
     }
 
     RenderPassInstance::RenderPassInstance(

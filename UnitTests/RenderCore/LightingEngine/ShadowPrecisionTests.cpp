@@ -28,6 +28,7 @@
 #include "../../../RenderOverlays/OverlayContext.h"
 #include "../../../RenderOverlays/DebuggingDisplay.h"
 #include "../../../RenderOverlays/FontRendering.h"
+#include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
 #include "../../../Math/Geometry.h"
@@ -132,7 +133,7 @@ namespace UnitTests
 		}
 	};
 
-	static void PrepareResources(IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	static void PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, lightingTechnique);
@@ -222,7 +223,7 @@ namespace UnitTests
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+				auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -269,7 +270,7 @@ namespace UnitTests
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				auto drawableWriter = CreateSharpContactDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+				auto drawableWriter = ToolsRig::CreateSharpContactDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
@@ -520,7 +521,7 @@ namespace UnitTests
 				PumpBufferUploads(testApparatus);
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f}; 
-				auto drawableWriter = CreateShapeWorldDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool, worldMins, worldMaxs);
+				auto drawableWriter = ToolsRig::CreateShapeWorldDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool, worldMins, worldMaxs);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);

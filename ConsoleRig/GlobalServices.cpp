@@ -230,6 +230,7 @@ namespace ConsoleRig
 
 	void GlobalServices::UnloadDefaultPlugins()
 	{
+        _pimpl->_pluginSet->DeinitializePlugins();
 	}
 
     void GlobalServices::AttachCurrentModule()

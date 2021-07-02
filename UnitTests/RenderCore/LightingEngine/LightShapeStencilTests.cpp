@@ -23,6 +23,7 @@
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/IThreadContext.h"
+#include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
@@ -85,7 +86,7 @@ namespace UnitTests
 		}
 	};
 
-	static void PrepareResources(IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	static void PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, lightingTechnique);
@@ -110,7 +111,7 @@ namespace UnitTests
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique,
 		LightingEngineTestApparatus& testApparatus,
-		IDrawablesWriter& drawableWriter)
+		ToolsRig::IDrawablesWriter& drawableWriter)
 	{ 
 		using namespace RenderCore;
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -179,7 +180,7 @@ namespace UnitTests
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 			PumpBufferUploads(testApparatus);
 
-			auto drawableWriter = CreateFlatPlaneDrawableWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+			auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

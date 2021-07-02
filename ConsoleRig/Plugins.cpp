@@ -85,6 +85,12 @@ namespace ConsoleRig
 		}
 	}
 
+	void PluginSet::DeinitializePlugins()
+	{
+		for (auto& p:_pimpl->_plugins)
+			p->Deinitialize();
+	}
+
 	PluginSet::PluginSet()
 	{
 		_pimpl = std::make_unique<Pimpl>();

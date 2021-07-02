@@ -94,7 +94,9 @@ namespace Sample
             //      * The order in which we add handlers determines their priority in intercepting messages
         Log(Verbose) << "Setup input" << std::endl;        
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("xleres/hotkey.txt"));
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleOverlay->GetInputListener());
+        auto sampleListener = sampleOverlay->GetInputListener();
+        if (sampleListener)
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
 
         Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;

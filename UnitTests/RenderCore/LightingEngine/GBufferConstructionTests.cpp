@@ -24,6 +24,7 @@
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
 #include "../../../Math/Geometry.h"
+#include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/MountingTree.h"
@@ -336,7 +337,7 @@ namespace UnitTests
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
-		auto drawableWriter = CreateSphereDrawablesWriter(*testHelper, *testApparatus._pipelineAcceleratorPool);
+		auto drawableWriter = ToolsRig::CreateSphereDrawablesWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 
 		RenderCore::Techniques::CameraDesc cameras[3];
 		cameras[0]._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});

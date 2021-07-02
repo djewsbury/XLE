@@ -25,6 +25,7 @@ namespace ConsoleRig
 	public:
 		std::shared_ptr<AttachableLibrary> LoadLibrary(std::string name);
 		void LoadDefaultPlugins();
+		void DeinitializePlugins();
 
 		PluginSet();
 		~PluginSet();

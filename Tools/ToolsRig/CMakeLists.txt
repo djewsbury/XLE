@@ -20,6 +20,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		#TerrainShadowOp.cpp
 		VisualisationGeo.cpp
 		VisualisationUtils.cpp
+		DrawablesWriter.cpp
 		../EntityInterface/EntityInterface.cpp
 		../EntityInterface/GameObjects.cpp
 		../EntityInterface/RetainedEntities.cpp
