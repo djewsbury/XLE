@@ -221,6 +221,7 @@ namespace RenderOverlays
 		}
 		float opacity = (colorARGB >> 24) / float(0xff);
 		unsigned colorOverride = 0x0;
+		unsigned prev_rsb_delta = 0;
 
 		for (auto i=text.begin(); i!=text.end(); ++i) {
 			auto ch = *i;
@@ -246,6 +247,16 @@ namespace RenderOverlays
 			prevGlyph = curGlyph;
 
 			auto bitmap = textureMan.GetBitmap(threadContext, font, ch);
+
+			/*
+			The freetype library suggests 2 different ways to use the lsb & rsb delta values. This method is
+			sounds like it is intended when for maintaining pixel alignment is needed
+			if (prev_rsb_delta - bitmap._lsbDelta > 32)
+				x -= 1.0f;
+			else if (prev_rsb_delta - bitmap._lsbDelta < -31)
+				x += 1.0f;
+			prev_rsb_delta = bitmap._rsbDelta;
+			*/
 
 			float baseX = x + bitmap._bitmapOffsetX * xScale;
 			float baseY = y + (bitmap._bitmapOffsetY - descent) * yScale;
@@ -326,6 +337,7 @@ namespace RenderOverlays
 			workingVertices.PushQuad(pos, RenderCore::ARGBtoABGR(colorOverride?colorOverride:colorARGB), tc, depth);
 
 			x += bitmap._xAdvance * xScale;
+			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
 			if (style._options.outline) {
 				x += 2 * xScale;
 			}
@@ -462,6 +474,11 @@ namespace RenderOverlays
 		if (rect.second[0] <= rect.first[0] || rect.second[1] <= rect.first[1])
 			return {};
 
+		assert((rect.second[0]-rect.first[0]) >= newData._width);
+		assert((rect.second[1]-rect.first[1]) >= newData._height);
+		assert(rect.second[0] > rect.first[0]);
+		assert(rect.second[1] > rect.first[1]);
+
 		if (_pimpl->_texture) {
 			auto pkt = GlyphAsDataPacket(newData._width, newData._height, newData._data, rect.first[0], rect.first[1], rect.second[0]-rect.first[0], rect.second[1]-rect.first[1]);
 			_pimpl->_texture->UpdateToTexture(
@@ -472,19 +489,18 @@ namespace RenderOverlays
 					(int)rect.second[0], (int)rect.second[1]});
 		}
 
-		assert(rect.second[0] > rect.first[0]);
-		assert(rect.second[1] > rect.first[1]);
-
 		Bitmap result;
 		result._xAdvance = newData._xAdvance;
 		result._bitmapOffsetX = newData._bitmapOffsetX;
 		result._bitmapOffsetY = newData._bitmapOffsetY;
-		result._width = rect.second[0] - rect.first[0];
-		result._height = rect.second[1] - rect.first[1];
+		result._width = newData._width;
+		result._height = newData._height;
 		result._tcTopLeft[0] = rect.first[0] / float(_pimpl->_texWidth);
 		result._tcTopLeft[1] = rect.first[1] / float(_pimpl->_texHeight);
-		result._tcBottomRight[0] = rect.second[0] / float(_pimpl->_texWidth);
-		result._tcBottomRight[1] = rect.second[1] / float(_pimpl->_texHeight);
+		result._tcBottomRight[0] = (rect.first[0] + newData._width) / float(_pimpl->_texWidth);
+		result._tcBottomRight[1] = (rect.first[1] + newData._height) / float(_pimpl->_texHeight);
+		result._lsbDelta = newData._lsbDelta;
+		result._rsbDelta = newData._rsbDelta;
 
 		_glyphs.insert(insertPoint, std::make_pair(code, result));
 		return result;

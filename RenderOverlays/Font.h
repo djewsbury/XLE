@@ -36,6 +36,7 @@ namespace RenderOverlays
 
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
+			unsigned _lsbDelta = 0, _rsbDelta = 0;
 		};
 
 		struct GlyphProperties
@@ -100,7 +101,7 @@ namespace RenderOverlays
         DrawTextOptions() 
         {
             shadow = 1;
-            snap = 1;
+            snap = 0;
             outline = 0;
             colorSetIndex = 0;
         }

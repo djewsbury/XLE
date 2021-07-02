@@ -392,12 +392,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     Coord DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
     {
-		return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::Left, text);
+		return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
     }
 
     Coord DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, StringSection<> text)
     {
-        return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::Left, text);
+        return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
     }
 
     Coord DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
@@ -416,7 +416,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         va_list args;
         va_start(args, text);
-        auto result = DrawFormatText(context, rect, 0.f, textStyle, colour, TextAlignment::Left, text, args);
+        auto result = DrawFormatText(context, rect, 0.f, textStyle, colour, TextAlignment::TopLeft, text, args);
         va_end(args);
         return result;
     }
@@ -425,7 +425,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         va_list args;
         va_start(args, text);
-        auto result = DrawFormatText(context, rect, depth, textStyle, colour, TextAlignment::Left, text, args);
+        auto result = DrawFormatText(context, rect, depth, textStyle, colour, TextAlignment::TopLeft, text, args);
         va_end(args);
         return result;
     }
@@ -620,7 +620,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 r._topLeft[0] += 8;
 
                 const ColorB colour = HeaderTextColor;
-                context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._headerFont, style, colour, TextAlignment::Left, MakeStringSection(i->first));
+                context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
 
                 if (interactables)
                     interactables->Register(Interactables::Widget(r, InteractableId_Make(MakeStringSection(i->first))));
@@ -665,7 +665,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
                     const ColorB colour = TextColor;
                     // DrawRectangle(context, r, s->second._bkColour);
-                    context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._valuesFont, style, colour, TextAlignment::Left, MakeStringSection(s->second._label));
+                    context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
                 }
             }
         }

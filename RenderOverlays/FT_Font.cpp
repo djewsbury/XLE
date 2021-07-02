@@ -176,7 +176,7 @@ namespace RenderOverlays
 		auto i = LowerBound(_cachedGlyphProperties, ch);
 		if (i == _cachedGlyphProperties.end() || i->first != ch) {
 			GlyphProperties props;
-			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_NO_AUTOHINT);
+			FT_Error error = FT_Load_Char(_face.get(), ch, 0/*FT_LOAD_NO_AUTOHINT*/);
 			if (!error) {
 				FT_GlyphSlot glyph = _face->glyph;
 				props._xAdvance = (float)glyph->advance.x / 64.0f;
@@ -188,7 +188,7 @@ namespace RenderOverlays
 
 	auto FTFont::GetBitmap(ucs4 ch) const -> Bitmap
 	{
-		FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER | FT_LOAD_NO_AUTOHINT);
+		FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER /*| FT_LOAD_NO_AUTOHINT*/);
 		if (error)
 			return Bitmap {};
 
@@ -201,6 +201,8 @@ namespace RenderOverlays
 		result._width = glyph->bitmap.width;
 		result._height = glyph->bitmap.rows;
 		result._data = MakeIteratorRange(glyph->bitmap.buffer, PtrAdd(glyph->bitmap.buffer, glyph->bitmap.width*glyph->bitmap.rows));
+		result._lsbDelta = glyph->lsb_delta;
+		result._rsbDelta = glyph->rsb_delta;
 		return result;
 	}
 

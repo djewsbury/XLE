@@ -42,6 +42,7 @@ namespace RenderOverlays
 			unsigned _width, _height;
 			Float2 _tcTopLeft = Float2{0.f, 0.f};
 			Float2 _tcBottomRight = Float2{0.f, 0.f};
+			unsigned _lsbDelta = 0, _rsbDelta = 0;
 		};
 
 		Bitmap GetBitmap(
