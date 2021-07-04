@@ -83,6 +83,10 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthNormalVelocity(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const std::shared_ptr<TechniqueSharedResources>& sharedResources);
+
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.
 	A default technique file is selected and the type of shader is picked via the technique

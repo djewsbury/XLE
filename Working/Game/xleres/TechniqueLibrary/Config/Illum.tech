@@ -117,3 +117,23 @@ RayTest_NoPatches=~
 RayTest_EarlyRejection=~
 	Inherit=~; RayTest
 	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+DepthNormalVelocity_NoPatches=~
+	Inherit=~; Deferred
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthNormalVelocity
+
+DepthNormalVelocity_PerPixel=~
+	Inherit=~; Deferred
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnly
+
+DepthNormalVelocity_PerPixelAndEarlyRejection=~
+	Inherit=~; Deferred
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection

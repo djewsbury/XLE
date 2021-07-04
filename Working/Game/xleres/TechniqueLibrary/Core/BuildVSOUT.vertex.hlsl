@@ -26,6 +26,10 @@ VSOUT BuildVSOUT(
 	VSOUT output;
 	output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
+	#if VSOUT_HAS_PREV_POSITION
+		output.prevPosition = mul(SysUniform_GetPrevWorldToClip(), float4(worldPosition,1));
+	#endif
+
 	#if VSOUT_HAS_COLOR>=1
 		output.color = VSIN_GetColor0(input);
 	#endif

@@ -58,6 +58,10 @@ struct VSOUT /////////////////////////////////////////////////////
 		float3 worldPosition : WORLDPOSITION;
 	#endif
 
+	#if (VSOUT_HAS_PREV_POSITION==1)
+		float4 prevPosition : PREVPOSITION;
+	#endif
+
 	#if (VSOUT_HAS_BLEND_TEXCOORD==1)
 		float3 blendTexCoord : TEXCOORD1;
 	#endif

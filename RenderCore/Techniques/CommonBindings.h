@@ -50,6 +50,7 @@ namespace RenderCore { namespace Techniques
         constexpr uint64_t GBufferDiffuse   = ConstHash64<'GBuf', 'ferD', 'iffu', 'se'>::Value;
         constexpr uint64_t GBufferNormal    = ConstHash64<'GBuf', 'ferN', 'orma', 'ls'>::Value;
         constexpr uint64_t GBufferParameter = ConstHash64<'GBuf', 'ferP', 'aram', 'eter'>::Value;
+        constexpr uint64_t GBufferVelocity  = ConstHash64<'GBuf', 'ferV', 'eloc', 'ity'>::Value;
 
         constexpr uint64_t ColorLDR         = ConstHash64<'post', 'resc', 'olor'>::Value;
         constexpr uint64_t ColorHDR         = ConstHash64<'prer', 'esco', 'lor'>::Value;
