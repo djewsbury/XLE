@@ -863,8 +863,7 @@ namespace RenderCore { namespace Techniques
     void AttachmentPool::ResetActualized()
     {
         // Reset all actualized attachments. They will get recreated on demand
-        for (auto&attach:_pimpl->_attachments)
-            attach._resource.reset();
+        _pimpl->_attachments.clear();
         _pimpl->_srvPool.Reset();
     }
 

@@ -22,6 +22,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
 
+		::Assets::DependencyValidation GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
+
 		virtual void Draw(IThreadContext& threadContext, ParsingContext& parsingContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -108,6 +110,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Metal::ComputePipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
+
+		::Assets::DependencyValidation GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
 
 		virtual void Dispatch(IThreadContext& threadContext, ParsingContext& parsingContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{

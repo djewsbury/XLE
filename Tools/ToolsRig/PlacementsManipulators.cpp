@@ -226,7 +226,7 @@ namespace ToolsRig
             if (evnt.IsPress(keyM))         { newSubOp = SubOperation::MoveAcrossTerrainSurface; _activeSubop._typeInBuffer[0] = '\0'; updateState = true; consume = true; }
             if (evnt.IsPress(keyEscape))    { newSubOp = SubOperation::None; _activeSubop._typeInBuffer[0] = '\0'; consume = true; }
 
-            if (newSubOp != _activeSubop._type && newSubOp != ~unsigned(0x0)) {
+            if (newSubOp != _activeSubop._type && unsigned(newSubOp) != ~unsigned(0x0)) {
                     //  we have to "restart" the transaction. This returns everything
                     //  to it's original place
                 _transaction->UndoAndRestart();

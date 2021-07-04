@@ -65,6 +65,7 @@ namespace RenderCore { namespace Techniques
 			ParsingContext& parserContext,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
+		virtual void AbandonDraws() = 0;
 		void ExecuteDraws(IThreadContext&, ParsingContext&, const RenderPassInstance&);
 		virtual std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 			const FrameBufferDesc& fbDesc,

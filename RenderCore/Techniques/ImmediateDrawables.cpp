@@ -297,6 +297,15 @@ namespace RenderCore { namespace Techniques
 				const_cast<void*>(PtrAdd(fullStorage.begin(), _lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + offsetPlusNewCount * _lastQueuedDrawable->_vertexStride)));
 		}
 
+		void AbandonDraws() override
+		{
+			_workingPkt.Reset();
+			_reservedDrawableGeos.insert(_reservedDrawableGeos.end(), _drawableGeosInWorkingPkt.begin(), _drawableGeosInWorkingPkt.end());
+			_drawableGeosInWorkingPkt.clear();
+			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawVertexCountOffset = 0;
+		}
+
 		void ExecuteDraws(
 			IThreadContext& context,
 			ParsingContext& parserContext,
@@ -319,11 +328,7 @@ namespace RenderCore { namespace Techniques
 				*_pipelineAcceleratorPool,
 				sequencerContext, _workingPkt);
 
-			_workingPkt.Reset();
-			_reservedDrawableGeos.insert(_reservedDrawableGeos.end(), _drawableGeosInWorkingPkt.begin(), _drawableGeosInWorkingPkt.end());
-			_drawableGeosInWorkingPkt.clear();
-			_lastQueuedDrawable = nullptr;
-			_lastQueuedDrawVertexCountOffset = 0;
+			AbandonDraws();	// (this just clears out everything prepared)
 		}
 
 		std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(

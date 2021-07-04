@@ -88,26 +88,24 @@ namespace Sample
         frameRig.SetDebugScreensOverlaySystem(debugOverlaysApparatus->_debugScreensOverlaySystem);
         frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
 
-            //  Setup input:
-            //      * We create a main input handler, and tie that to the window to receive inputs
-            //      * We can add secondary input handles to the main input handler as required
-            //      * The order in which we add handlers determines their priority in intercepting messages
-        Log(Verbose) << "Setup input" << std::endl;        
+
+        Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
+        sampleOverlay->OnStartup(sampleGlobals);
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("xleres/hotkey.txt"));
         auto sampleListener = sampleOverlay->GetInputListener();
         if (sampleListener)
             sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
 
-        Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
-        sampleOverlay->OnStartup(sampleGlobals);
         frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
         sampleGlobals._windowApparatus->_windowHandler->_onResize.Bind(
             [fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{sampleGlobals._frameRenderingApparatus},
              ps = std::weak_ptr<RenderCore::IPresentationChain>(sampleGlobals._windowApparatus->_presentationChain), &frameRig](unsigned, unsigned) {
                 auto apparatus = fra.lock();
-                if (apparatus)
+                if (apparatus) {
                     RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
+                    apparatus->_attachmentPool->ResetActualized();
+                }
                 auto presChain = ps.lock();
                 if (presChain)
                     frameRig.UpdatePresentationChain(*presChain);
