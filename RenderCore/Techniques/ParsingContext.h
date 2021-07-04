@@ -39,10 +39,14 @@ namespace RenderCore { namespace Techniques
     {
     public:
             //  ----------------- Active projection context -----------------
-        ProjectionDesc&         GetProjectionDesc()         { return *_projectionDesc; }
-        const ProjectionDesc&   GetProjectionDesc() const   { return *_projectionDesc; }
-        ViewportDesc&           GetViewport()               { return _viewportDesc; }
-        const ViewportDesc&     GetViewport() const         { return _viewportDesc; }
+        ProjectionDesc&         GetProjectionDesc()                 { return _internal->_projectionDesc; }
+        const ProjectionDesc&   GetProjectionDesc() const           { return _internal->_projectionDesc; }
+        ProjectionDesc&         GetPrevProjectionDesc()             { return _internal->_prevProjectionDesc; }
+        const ProjectionDesc&   GetPrevProjectionDesc() const       { return _internal->_prevProjectionDesc; }
+        bool&                   GetEnablePrevProjectionDesc()       { return _internal->_enablePrevProjectionDesc; }
+        bool                    GetEnablePrevProjectionDesc() const { return _internal->_enablePrevProjectionDesc; }
+        ViewportDesc&           GetViewport()                       { return _viewportDesc; }
+        const ViewportDesc&     GetViewport() const                 { return _viewportDesc; }
 
             //  ----------------- Working technique context -----------------
         TechniqueContext&		GetTechniqueContext()               { return *_techniqueContext; }
@@ -96,7 +100,13 @@ namespace RenderCore { namespace Techniques
 
     protected:
         TechniqueContext*                   _techniqueContext;
-        std::unique_ptr<ProjectionDesc>     _projectionDesc;
+        struct Internal 
+        {
+            ProjectionDesc _projectionDesc;
+            ProjectionDesc _prevProjectionDesc;
+            bool _enablePrevProjectionDesc = false;
+        };
+        std::unique_ptr<Internal>           _internal;
         ViewportDesc                        _viewportDesc;
 
 		ParameterBox                        _subframeShaderSelectors;

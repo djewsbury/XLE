@@ -12,13 +12,12 @@ DescriptorSet Sequencer
 		float4x4 CameraBasis;
 	};
 
-	UniformBuffer cb;									// 1
-	
-	UniformBuffer ReciprocalViewportDimensionsCB		// 2
+	UniformBuffer ReciprocalViewportDimensionsCB		// 1
 	{
 		float2 ReciprocalViewportDimensions;
 	};
 
+	UniformBuffer cb;							// 2	
 	UniformBuffer cb0;							// 3
 	UniformBuffer cb1;							// 4
 	UniformBuffer cb2;							// 5

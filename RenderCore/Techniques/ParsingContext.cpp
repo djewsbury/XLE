@@ -110,8 +110,8 @@ namespace RenderCore { namespace Techniques
 		assert(_techniqueContext);
         _stringHelpers = std::make_unique<StringHelpers>();
 
-        _projectionDesc = std::make_unique<ProjectionDesc>();
-        assert(size_t(_projectionDesc.get()) % 16 == 0);
+        _internal = std::make_unique<Internal>();
+        assert(size_t(_internal.get()) % 16 == 0);
 
 		if (_techniqueContext->_systemUniformsDelegate)
 			_shaderResourceDelegates.push_back(_techniqueContext->_systemUniformsDelegate);

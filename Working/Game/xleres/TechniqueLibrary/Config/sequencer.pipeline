@@ -10,7 +10,7 @@ DescriptorSet Sequencer
 		float4x4 CameraBasis;
 	};
 
-	UniformBuffer cb0;							// 1
+	UniformBuffer ReciprocalViewportDimensionsCB;		// 1
 	
 	UniformBuffer GlobalState					// 2
 	{

@@ -39,7 +39,7 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererResourceDelegate : public IShaderResourceDelegate
 	{
 	public:
-		ReciprocalViewportDimensions _rvd;
+		ViewportConstants _rvd;
 
 		virtual void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
 		{
@@ -56,14 +56,14 @@ namespace RenderCore { namespace Techniques
 		virtual size_t GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx)
 		{
 			switch (idx) {
-			case 0: return sizeof(ReciprocalViewportDimensions);
+			case 0: return sizeof(ViewportConstants);
 			default: assert(0); return 0;
 			}
 		}
 
 		void Configure(IThreadContext& context, Float2 viewportDimensions)
 		{
-			_rvd = ReciprocalViewportDimensions { 1.f / viewportDimensions[0], 1.f / viewportDimensions[1], 0.f, 0.f };
+			_rvd._reciprocalViewportDimensions = Float2 { 1.f / viewportDimensions[0], 1.f / viewportDimensions[1] };
 		}
 
 		UniformsStreamInterface _usi;
@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 		ImmediateRendererResourceDelegate()
 		{
 			_usi.BindImmediateData(0, Hash64("ReciprocalViewportDimensionsCB"), MakeIteratorRange(ReciprocalViewportDimensions_Elements));
-			_rvd = ReciprocalViewportDimensions { 1.f / 256.f, 1.f / 256.f };
+			_rvd._reciprocalViewportDimensions = Float2 { 1.f / 256.f, 1.f / 256.f };
 		}
 	};
 

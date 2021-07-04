@@ -15,6 +15,7 @@ cbuffer GlobalTransform BIND_SEQ_B0
     float FarClip;
 	float4 MinimalProjection;
     row_major float4x4 CameraBasis;
+	row_major float4x4 PrevWorldToClip;
 }
 
 float4x4 	SysUniform_GetWorldToClip() { return WorldToClip; }
@@ -24,6 +25,7 @@ float 		SysUniform_GetFarClip() { return abs(FarClip); }
 float4 		SysUniform_GetMinimalProjection() { return MinimalProjection; }
 float4x4 	SysUniform_GetCameraBasis() { return CameraBasis; }
 bool 		SysUniform_IsOrthogonalProjection() { return FarClip < 0; }
+float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 
 cbuffer LocalTransform BIND_DRAW_B0
 {
@@ -45,7 +47,7 @@ float 		SysUniform_GetGlobalTime() { return GlobalTime; }
 uint 		SysUniform_GetGlobalSamplingPassIndex() { return GlobalSamplingPassIndex; }
 uint 		SysUniform_GetGlobalSamplingPassCount() { return GlobalSamplingPassCount; }
 
-cbuffer ReciprocalViewportDimensionsCB BIND_SEQ_B2
+cbuffer ReciprocalViewportDimensionsCB BIND_SEQ_B1
 {
 	float2 ReciprocalViewportDimensions;
 }

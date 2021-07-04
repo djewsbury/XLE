@@ -13,10 +13,16 @@ namespace RenderCore { namespace Techniques
 	{
 		switch (idx) {
 		case 0:
-			*(GlobalTransformConstants*)dst.begin() = BuildGlobalTransformConstants(context.GetProjectionDesc());
+			if (context.GetEnablePrevProjectionDesc())
+				*(GlobalTransformConstants*)dst.begin() = BuildGlobalTransformConstants(context.GetProjectionDesc(), context.GetPrevProjectionDesc());
+			else
+				*(GlobalTransformConstants*)dst.begin() = BuildGlobalTransformConstants(context.GetProjectionDesc());
 			break;
 		case 1:
 			*(LocalTransformConstants*)dst.begin() = _localTransformFallback;
+			break;
+		case 2:
+			*(ViewportConstants*)dst.begin() = BuildViewportConstants(context.GetViewport());
 			break;
 		}
 	}
@@ -28,6 +34,8 @@ namespace RenderCore { namespace Techniques
 			return sizeof(GlobalTransformConstants);
 		case 1:
 			return sizeof(LocalTransformConstants);
+		case 2:
+			return sizeof(ViewportConstants);
 		default:
 			return 0;
 		}
@@ -46,6 +54,7 @@ namespace RenderCore { namespace Techniques
 	{
 		_interface.BindImmediateData(0, Hash64("GlobalTransform"));
 		_interface.BindImmediateData(1, Hash64("LocalTransform"));
+		_interface.BindImmediateData(2, Hash64("ReciprocalViewportDimensionsCB"));
 
 		XlZeroMemory(_localTransformFallback);
 		_localTransformFallback._localToWorld = Identity<Float3x4>();

@@ -16,6 +16,7 @@
 namespace Utility { class ParameterBox; }
 
 namespace RenderCore { class InputElementDesc; class MiniInputElementDesc; }
+namespace RenderCore { class ViewportDesc; }
 namespace RenderCore { namespace Techniques
 {
 
@@ -67,6 +68,7 @@ namespace RenderCore { namespace Techniques
         float       _farClip;
         Float4      _minimalProjection;
         Float4x4    _viewToWorld;
+        Float4x4    _prevWorldToClip;
     };
 
     struct LocalTransformConstants
@@ -75,6 +77,13 @@ namespace RenderCore { namespace Techniques
         Float3x4    _localToWorld;
         Float3      _localSpaceView;
         unsigned    _dummy0;
+    };
+
+    struct ViewportConstants
+    {
+    public:
+        Float2 _reciprocalViewportDimensions;
+        unsigned _dummy[2];
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,10 +98,13 @@ namespace RenderCore { namespace Techniques
         const std::pair<Float2, Float2>& viewport);
     
     GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc);
+    GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc, const ProjectionDesc& prevProjDesc);
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera);
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition);
     LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition);
+
+    ViewportConstants BuildViewportConstants(const ViewportDesc&);
 
     bool HasHandinessFlip(const ProjectionDesc& projDesc);
 

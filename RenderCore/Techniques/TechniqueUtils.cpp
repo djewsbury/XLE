@@ -125,6 +125,7 @@ namespace RenderCore { namespace Techniques
         } else {
             globalTransform._farClip = CalculateNearAndFarPlane(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
         }
+        globalTransform._prevWorldToClip = globalTransform._worldToClip;
 
             //  We can calculate the projection corners either from the camera to world,
             //  transform or from the final world-to-clip transform. Let's try to pick 
@@ -174,6 +175,18 @@ namespace RenderCore { namespace Techniques
         }
 
         return globalTransform;
+    }
+
+    GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc, const ProjectionDesc& prevProjDesc)
+    {
+        auto result = BuildGlobalTransformConstants(projDesc);
+        result._prevWorldToClip = prevProjDesc._worldToProjection;
+        return result;
+    }
+
+    ViewportConstants BuildViewportConstants(const ViewportDesc& viewport)
+    {
+        return ViewportConstants { Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 0, 0 };
     }
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera)
