@@ -58,6 +58,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         bool hasTangents = !!(mesh.HasElement("TEXTANGENT") & 0x1);
         bool hasBitangents = !!(mesh.HasElement("TEXBITANGENT") & 0x1);
         if ((hasNormals && hasTangents) || (hasTangents && hasBitangents)) return;
+        if (hasNormals && tcElement == ~0u) return;
 
         auto posElement = mesh.FindElement("POSITION");
 
