@@ -266,9 +266,10 @@ namespace UnitTests
 				rpi, usi);
 
 			REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
+			RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 			op->Actualize()->Draw(
 				*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-				parsingContext, 
+				parsingContext, uniformsHelper,
 				us);
 		}
 	}
@@ -297,9 +298,10 @@ namespace UnitTests
 			rpi, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
+		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 		op->Actualize()->Draw(
 			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-			parsingContext, 
+			parsingContext, uniformsHelper,
 			us);
 	}
 
@@ -366,9 +368,10 @@ namespace UnitTests
 			{}, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
+		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 		op->Actualize()->Dispatch(
 			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-			parsingContext, 
+			parsingContext, uniformsHelper,
 			// 640/16, 360/8, 1,
 			640/2, 360/2, 1,
 			us);

@@ -20,11 +20,12 @@ namespace RenderCore
 namespace RenderCore { namespace Techniques
 {
 	class ParsingContext;
+	class SequencerUniformsHelper;
 
 	class IShaderOperator
 	{
 	public:
-		virtual void Draw(IThreadContext&, ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Draw(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IShaderOperator();
 	};
@@ -32,7 +33,7 @@ namespace RenderCore { namespace Techniques
 	class IComputeShaderOperator
 	{
 	public:
-		virtual void Dispatch(IThreadContext&, ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Dispatch(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IComputeShaderOperator();
 	};

@@ -255,7 +255,8 @@ namespace UnitTests
 		// Very simple stand-in tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
 		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, pixelShader, {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
-		op->Actualize()->Draw(threadContext, parsingContext, us);
+		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
+		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);
 	}
 
 	static void CalculateSimularity(IteratorRange<const Float4*> A, IteratorRange<const Float4*> B)

@@ -6,6 +6,8 @@
 #include "CommonResources.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"
+#include "Drawables.h"
+#include "DrawablesInternal.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
@@ -80,21 +82,31 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
-		Metal::BoundUniforms _boundUniforms;
+		std::vector<std::pair<uint64_t, Metal::BoundUniforms>> _boundUniforms;
+		UniformsStreamInterface _usi;
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _pipeline->GetDependencyValidation(); }
 
-		virtual void Draw(IThreadContext& threadContext, ParsingContext& parsingContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+		virtual void Draw(
+			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
+			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
+			auto sysUsiHash = sysUsi.GetHash();
+			auto i = LowerBound(_boundUniforms, sysUsiHash);
+			if (i == _boundUniforms.end() || i->first != sysUsiHash) {
+				Metal::BoundUniforms boundUniforms(*_pipeline, sysUsi, _usi);
+				i = _boundUniforms.insert(i, std::pair(sysUsiHash, std::move(boundUniforms)));
+			}
+
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
-			if (_boundUniforms.GetBoundLooseImmediateDatas(1)) {
-				ImmediateDataStream immData { BuildGlobalTransformConstants(parsingContext.GetProjectionDesc()) };
-				_boundUniforms.ApplyLooseUniforms(metalContext, encoder, immData, 1);
-			}
+			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, i->second, 0);
+
 			if (!descSets.empty())
-				_boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets);
-			_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+				i->second.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
+			i->second.ApplyLooseUniforms(metalContext, encoder, us, 1);
+			
 			encoder.Draw(*_pipeline, 4);
 		}
 
@@ -122,10 +134,7 @@ namespace RenderCore { namespace Techniques
 					auto op = std::make_shared<FullViewportOperator>();
 					op->_pipelineLayout = pipelineLayout;
 					op->_pipeline = std::move(pipeline);
-
-					UniformsStreamInterface sysUSI;
-					sysUSI.BindImmediateData(0, Utility::Hash64("GlobalTransform"));
-					op->_boundUniforms = Metal::BoundUniforms{*op->_pipeline, usi, sysUSI};
+					op->_usi = std::move(usi);
 					return op;
 				});
 		}
@@ -177,17 +186,30 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<Metal::ComputePipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
-		Metal::BoundUniforms _boundUniforms;
+		std::vector<std::pair<uint64_t, Metal::BoundUniforms>> _boundUniforms;
+		UniformsStreamInterface _usi;
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _pipeline->GetDependencyValidation(); }
 
-		virtual void Dispatch(IThreadContext& threadContext, ParsingContext& parsingContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+		virtual void Dispatch(
+			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			unsigned countX, unsigned countY, unsigned countZ, 
+			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
+			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
+			auto sysUsiHash = sysUsi.GetHash();
+			auto i = LowerBound(_boundUniforms, sysUsiHash);
+			if (i == _boundUniforms.end() || i->first != sysUsiHash) {
+				Metal::BoundUniforms boundUniforms(*_pipeline, sysUsi, _usi);
+				i = _boundUniforms.insert(i, std::pair(sysUsiHash, std::move(boundUniforms)));
+			}
+
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+
 			if (!descSets.empty())
-				_boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets);
-			_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+				i->second.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
+			i->second.ApplyLooseUniforms(metalContext, encoder, us, 1);
 			encoder.Dispatch(*_pipeline, countX, countY, countZ);
 		}
 
@@ -204,11 +226,11 @@ namespace RenderCore { namespace Techniques
 				[usi=usi, pipelineLayout](std::shared_ptr<Metal::ComputeShader> shader) {
 					auto op = std::make_shared<ComputeOperator>();
 					op->_pipelineLayout = pipelineLayout;
+					op->_usi = std::move(usi);
 					
 					Metal::ComputePipelineBuilder pipelineBuilder;
 					pipelineBuilder.Bind(*shader);
 					op->_pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
-					op->_boundUniforms = Metal::BoundUniforms{*op->_pipeline, usi};
 					return op;
 				});
 		}

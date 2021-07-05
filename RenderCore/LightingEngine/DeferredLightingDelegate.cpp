@@ -18,6 +18,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/PipelineOperators.h"
+#include "../Techniques/Drawables.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
@@ -477,7 +478,8 @@ namespace RenderCore { namespace LightingEngine
 		auto op = Techniques::CreateFullViewportOperator(pool, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
-		op->Actualize()->Draw(threadContext, parsingContext, us, MakeIteratorRange(shadowDescSets));
+		Techniques::SequencerUniformsHelper uniformsHelper{ parsingContext };
+		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us, MakeIteratorRange(shadowDescSets));
 	}
 
 	void DeferredLightingCaptures::GenerateDebuggingOutputs(LightingTechniqueIterator& iterator)

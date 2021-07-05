@@ -400,7 +400,8 @@ namespace UnitTests
 		auto op = CreateFullViewportOperator(
 			pipelinePool, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
-		op->Actualize()->Draw(threadContext, parsingContext, us);
+		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
+		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);
 	}
 
 	static void WriteFrustumListToPLY(std::ostream& str, IteratorRange<const Float4x4*> worldToProjs)
