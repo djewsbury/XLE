@@ -257,10 +257,11 @@ namespace UnitTests
 		}
 
 		if (0) {
+			auto pool = std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device, testApparatus._metalTestHelper->_pipelineLayout); 
 			UniformsStreamInterface usi;
 			UniformsStream us;
 			auto op = Techniques::CreateFullViewportOperator(
-				testApparatus._metalTestHelper->_pipelineLayout,
+				pool,
 				rpi,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, usi);
@@ -290,8 +291,9 @@ namespace UnitTests
 		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
 
+		auto pool = std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device, testApparatus._metalTestHelper->_pipelineLayout); 
 		auto op = Techniques::CreateFullViewportOperator(
-			testApparatus._metalTestHelper->_pipelineLayout,
+			pool,
 			rpi,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, usi);
@@ -433,7 +435,7 @@ namespace UnitTests
 			}
 
 			std::shared_ptr<IResource> downsampledResource = nullptr;
-			if (0) {
+			if (1) {
 				// downsample
 				// input 0: attachment to downsample
 				// output 0: downsampled result
@@ -451,7 +453,7 @@ namespace UnitTests
 				downsampledResource = rpi.GetOutputAttachmentResource(0);
 			}
 
-			if (1) {
+			if (0) {
 				auto downsampledDesc = CreateDesc(
 					BindFlag::UnorderedAccess, 0, GPUAccess::Write,
 					TextureDesc::Plain2D(workingRes[0] / 4, workingRes[1] / 4, Format::R8_UNORM),

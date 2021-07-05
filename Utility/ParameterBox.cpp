@@ -715,6 +715,10 @@ namespace Utility
 		return {ValueTableOffset(_box->_values, offsets._valueBegin), ValueTableOffset(_box->_values, offsets._valueBegin + offsets._valueSize)};
     }
 
+    void SerializationOperator(std::ostream& serializer, const ParameterBox& box)
+    {
+        serializer << BuildFlatStringTable(box) << std::endl;
+    }
 }
 
 

@@ -46,6 +46,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<StandardLightScene> _lightScene;
+		std::shared_ptr<Techniques::GraphicsPipelinePool> _pipelineCollection;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
 		void DoLightResolve(LightingTechniqueIterator& iterator);
@@ -296,7 +297,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::GraphicsPipelineCollection>& pipelineCollection,
+		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pipelineCollection,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -400,8 +401,9 @@ namespace RenderCore { namespace LightingEngine
 
 				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture(
 					thatFuture,
-					[lightingTechnique, captures, lightScene](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
+					[lightingTechnique, captures, lightScene, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;
+						captures->_pipelineCollection = pipelineCollection;
 						lightScene->_lightSourceFactory = resolveOperators;
 						lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
 						return lightingTechnique;
@@ -437,7 +439,7 @@ namespace RenderCore { namespace LightingEngine
 	static void GenerateShadowingDebugTextures(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pool,
 		const ShadowOperatorDesc& shadowOpDesc,
 		const IPreparedShadowResult& preparedShadowResult,
 		unsigned idx)
@@ -464,9 +466,10 @@ namespace RenderCore { namespace LightingEngine
 		us._resourceViews = MakeIteratorRange(srvs);
 		IDescriptorSet* shadowDescSets[] = { preparedShadowResult.GetDescriptorSet().get() };
 
-		auto selectors = Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors();
+		ParameterBox selectors;
+		Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors(selectors);
 
-		auto op = Techniques::CreateFullViewportOperator(pipelineLayout, rpi, CASCADE_VIS_HLSL ":detailed_visualisation", MakeStringSection(selectors), usi);
+		auto op = Techniques::CreateFullViewportOperator(pool, rpi, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(threadContext, parsingContext, us, MakeIteratorRange(shadowDescSets));
@@ -479,7 +482,7 @@ namespace RenderCore { namespace LightingEngine
 			auto opId = preparedShadow.second->GetShadowOperatorId();
 			GenerateShadowingDebugTextures( 
 				*iterator._threadContext, *iterator._parsingContext, 
-				_lightResolveOperators->_pipelineLayout, 
+				_pipelineCollection, 
 				_shadowPreparationOperators->_operators[opId]._desc,
 				*preparedShadow.second, c);
 			++c;

@@ -115,7 +115,7 @@ namespace UnitTests
 	{
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineCollection> _pipelineCollection;
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool> _pipelineCollection;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
@@ -129,7 +129,7 @@ namespace UnitTests
 			auto pipelineInit = i->second->MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::GraphicsPipelineCollection>(testHelper._device, _pipelineLayout);
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::GraphicsPipelinePool>(testHelper._device, _pipelineLayout);
 		}
 	};
 
@@ -385,7 +385,7 @@ namespace UnitTests
 	static void DrawCascadeColors(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout)
+		const std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool>& pipelinePool)
 	{
 		using namespace RenderCore;
 		auto rpi = Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
@@ -397,7 +397,7 @@ namespace UnitTests
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
 		auto op = CreateFullViewportOperator(
-			pipelineLayout, rpi, CASCADE_VIS_HLSL ":col_vis_pass", {}, usi);
+			pipelinePool, rpi, CASCADE_VIS_HLSL ":col_vis_pass", {}, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(threadContext, parsingContext, us);
 	}
@@ -480,6 +480,8 @@ namespace UnitTests
 //		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
 //		const Float3 negativeLightDirection = Normalize(Float3{-2.69884f, 0.696449f, -2.16482f});
 
+		auto pipelinePool = std::make_shared<Techniques::GraphicsPipelinePool>(testHelper->_device, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+
 		testHelper->BeginFrameCapture();
 
 		{
@@ -537,7 +539,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+					DrawCascadeColors(*threadContext, parsingContext, pipelinePool);
 
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -568,7 +570,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+					DrawCascadeColors(*threadContext, parsingContext, pipelinePool);
 
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, shadowProjectionId, sceneCamera);

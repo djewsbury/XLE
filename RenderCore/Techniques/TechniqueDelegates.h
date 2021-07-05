@@ -16,28 +16,30 @@ namespace ShaderSourceParser { class SelectorFilteringRules; }
 
 namespace RenderCore { namespace Techniques
 {
+	struct GraphicsPipelineDesc
+	{
+		std::string				_shaders[3];		// indexed by RenderCore::ShaderStage
+		ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
+		std::string				_selectorPreconfigurationFile;
+
+		std::vector<uint64_t>	_patchExpansions;
+
+		std::vector<AttachmentBlendDesc> 	_blend;
+		DepthStencilDesc					_depthStencil;
+		RasterizationDesc					_rasterization;
+
+		std::vector<RenderCore::InputElementDesc> _soElements;
+		std::vector<unsigned> _soBufferStrides;
+
+		::Assets::DependencyValidation _depVal;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		uint64_t GetHash() const;
+	};
+
 	class ITechniqueDelegate
 	{
 	public:
-		struct GraphicsPipelineDesc
-		{
-			std::string				_shaders[3];		// indexed by RenderCore::ShaderStage
-			ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
-			std::string				_selectorPreconfigurationFile;
-
-			std::vector<uint64_t>	_patchExpansions;
-
-			std::vector<AttachmentBlendDesc> 	_blend;
-			DepthStencilDesc					_depthStencil;
-			RasterizationDesc					_rasterization;
-
-			std::vector<RenderCore::InputElementDesc> _soElements;
-			std::vector<unsigned> _soBufferStrides;
-
-			::Assets::DependencyValidation _depVal;
-			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		};
-
+		using GraphicsPipelineDesc = Techniques::GraphicsPipelineDesc;
 		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;

@@ -68,7 +68,7 @@ namespace UnitTests
 	{
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineCollection> _pipelineCollection;
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool> _pipelineCollection;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
@@ -82,7 +82,7 @@ namespace UnitTests
 			auto pipelineInit = i->second->MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::GraphicsPipelineCollection>(testHelper._device, _pipelineLayout);
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::GraphicsPipelinePool>(testHelper._device, _pipelineLayout);
 		}
 	};
 

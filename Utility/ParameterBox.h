@@ -189,6 +189,7 @@ namespace Utility
 
 		template<typename Stream>
 			friend void SerializationOperator(Stream& serializer, const ParameterBox& box);
+        friend void SerializationOperator(std::ostream& serializer, const ParameterBox& box);
     };
 
     #pragma pack(pop)
@@ -255,6 +256,8 @@ namespace Utility
         }
 		return {};
     }
+
+    void SerializationOperator(std::ostream& serializer, const ParameterBox& box);
 
     template<typename Stream>
         void SerializationOperator(Stream& serializer, const ParameterBox& box)

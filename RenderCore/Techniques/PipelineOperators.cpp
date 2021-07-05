@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
 
-		::Assets::DependencyValidation GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _pipeline->GetDependencyValidation(); }
 
 		virtual void Draw(IThreadContext& threadContext, ParsingContext& parsingContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
@@ -40,32 +40,30 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<FullViewportOperator>& future,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+			const std::shared_ptr<GraphicsPipelinePool>& pool,
 			const FrameBufferTarget& fbTarget,
 			StringSection<> pixelShader,
-			StringSection<> definesTable,
+			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
-			auto shaderProgram = ::Assets::MakeAsset<Metal::ShaderProgram>(
-				pipelineLayout,
-				BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector",
-				pixelShader,
-				definesTable);
+			GraphicsPipelineDesc pipelineDesc;
+			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = pixelShader.AsString();
+			pipelineDesc._depthStencil = CommonResourceBox::s_dsDisable;
+			pipelineDesc._blend.push_back(CommonResourceBox::s_abStraightAlpha);
+			pipelineDesc._blend.push_back(CommonResourceBox::s_abStraightAlpha);
 
-			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
+			VertexInputStates vInputStates { {}, Topology::TriangleStrip };
+			PixelOutputStates pOutputStates;
+			pOutputStates._fbTarget = fbTarget;
+
+			auto pipelineFuture = pool->CreatePipeline(pipelineDesc, selectors, vInputStates, pOutputStates);
+			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
-				[usi=usi, pipelineLayout, fbDesc=*fbTarget._fbDesc, subpassIdx=fbTarget._subpassIdx](std::shared_ptr<Metal::ShaderProgram> shader) {
+				[pipelineLayout=pool->GetPipelineLayout(), usi=usi](std::shared_ptr<Metal::GraphicsPipeline> pipeline) {
 					auto op = std::make_shared<FullViewportOperator>();
 					op->_pipelineLayout = pipelineLayout;
-					
-					Metal::GraphicsPipelineBuilder pipelineBuilder;
-					pipelineBuilder.Bind(*shader);
-					pipelineBuilder.Bind(CommonResourceBox::s_dsDisable);
-					AttachmentBlendDesc blends[] = { CommonResourceBox::s_abStraightAlpha, CommonResourceBox::s_abStraightAlpha };
-					pipelineBuilder.Bind(MakeIteratorRange(blends));
-					pipelineBuilder.Bind({}, Topology::TriangleStrip);
-					pipelineBuilder.SetRenderPassConfiguration(fbDesc, subpassIdx);
-					op->_pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
+					op->_pipeline = std::move(pipeline);
 
 					UniformsStreamInterface sysUSI;
 					sysUSI.BindImmediateData(0, Hash64("GlobalTransform"));
@@ -76,31 +74,29 @@ namespace RenderCore { namespace Techniques
 	};
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const std::shared_ptr<GraphicsPipelinePool>& pool,
 		const RenderPassInstance& rpi,
 		StringSection<> pixelShader,
-		StringSection<> definesTable,
+		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)
 	{
-		assert(pipelineLayout);
 		assert(!pixelShader.IsEmpty());
 		auto op = ::Assets::MakeAsset<FullViewportOperator>(
-			pipelineLayout, 
+			pool, 
 			FrameBufferTarget{&rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex()},
-			pixelShader, definesTable, usi);
+			pixelShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 	}
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const std::shared_ptr<GraphicsPipelinePool>& pool,
 		const FrameBufferTarget& fbTarget,
 		StringSection<> pixelShader,
-		StringSection<> definesTable,
+		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)
 	{
-		assert(pipelineLayout);
 		assert(!pixelShader.IsEmpty());
-		auto op = ::Assets::MakeAsset<FullViewportOperator>(pipelineLayout, fbTarget, pixelShader, definesTable, usi);
+		auto op = ::Assets::MakeAsset<FullViewportOperator>(pool, fbTarget, pixelShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 	}
 
@@ -111,7 +107,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
 
-		::Assets::DependencyValidation GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _pipeline->GetDependencyValidation(); }
 
 		virtual void Dispatch(IThreadContext& threadContext, ParsingContext& parsingContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{

@@ -3,6 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineCollection.h"
+#include "PipelineAcceleratorInternal.h"
+#include "ShaderVariationSet.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"
@@ -14,22 +16,23 @@
 
 namespace RenderCore { namespace Techniques
 {
-    uint64_t FrameBufferTarget::GetHash() const 
-    {
+	uint64_t FrameBufferTarget::GetHash() const 
+	{
 		assert(_fbDesc);
 		assert(_subpassIdx < _fbDesc->GetSubpasses().size());
-        return RenderCore::Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(*_fbDesc, _subpassIdx); 
-    }
+		return RenderCore::Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(*_fbDesc, _subpassIdx); 
+	}
 
-    uint64_t PixelOutputStates::GetHash() const
+	uint64_t PixelOutputStates::GetHash() const
 	{
-		assert(_attachmentBlend.size() == _fbTarget._fbDesc->GetSubpasses()[_fbTarget._subpassIdx].GetOutputs().size());
+		/*assert(_attachmentBlend.size() == _fbTarget._fbDesc->GetSubpasses()[_fbTarget._subpassIdx].GetOutputs().size());
 		uint64_t renderPassRelevance = _fbTarget.GetHash();
 		auto result = HashCombine(_depthStencil.HashDepthAspect() ^ _depthStencil.HashStencilAspect(), renderPassRelevance);
 		result = HashCombine(_rasterization.Hash(), result);
 		for (const auto& a:_attachmentBlend)
 			result = HashCombine(a.Hash(), result);
-		return result;
+		return result;*/
+		return _fbTarget.GetHash();
 	}
 
 	uint64_t VertexInputStates::GetHash() const
@@ -39,176 +42,171 @@ namespace RenderCore { namespace Techniques
 		return HashInputAssembly(_inputLayout, seed);
 	}
 
+	class GraphicsPipelinePool::SharedPools
+	{
+	public:
+		Threading::Mutex _lock;
+		UniqueShaderVariationSet _selectorVariationsSet;
+	};
+
 	template<typename Type>
 		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
-    ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
-        StringSection<> vsName, StringSection<> vsDefines,
-        StringSection<> psName, StringSection<> psDefines,
-        const VertexInputStates& inputStates,
-        const PixelOutputStates& outputStates)
-    {
-        auto hash = HashCombine(inputStates.GetHash(), outputStates.GetHash());
-        hash = Hash64(vsName, hash);
-        hash = Hash64(vsDefines, hash);
-        hash = Hash64(psName, hash);
-        hash = Hash64(psDefines, hash);
+	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelinePool::CreatePipeline(
+		const GraphicsPipelineDesc& pipelineDesc,
+		const ParameterBox& selectors,
+		const VertexInputStates& inputStates,
+		const PixelOutputStates& outputStates)
+	{
+		auto hash = HashCombine(inputStates.GetHash(), outputStates.GetHash());
+		hash = HashCombine(pipelineDesc.GetHash(), hash);
+		hash = HashCombine(selectors.GetParameterNamesHash(), hash);
+		hash = HashCombine(selectors.GetHash(), hash);
 
-        std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
-        bool replaceExisting = false;
-        auto i = LowerBound(_pipelines, hash);
-        if (i != _pipelines.end() && i->first == hash) {
-            if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
-                return i->second;
-            replaceExisting = true;
-        }
+		std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
+		bool replaceExisting = false;
+		auto i = LowerBound(_pipelines, hash);
+		if (i != _pipelines.end() && i->first == hash) {
+			if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
+				return i->second;
+			replaceExisting = true;
+		}
 
-        auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>();
-        if (replaceExisting) {
-            i->second = result;
-        } else
-            _pipelines.insert(i, std::make_pair(hash, result));
-        lk = {};
-        ConstructToFuture(result, vsName, vsDefines, psName, psDefines, inputStates, outputStates);
-        return result;
-    }
+		auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>();
+		if (replaceExisting) {
+			i->second = result;
+		} else
+			_pipelines.insert(i, std::make_pair(hash, result));
+		lk = {};
+		ConstructToFuture(result, pipelineDesc, selectors, inputStates, outputStates);
+		return result;
+	}
 
-    ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelineCollection::CreatePipeline(
-        StringSection<> vsName, StringSection<> vsDefines,
-        StringSection<> gsName, StringSection<> gsDefines,
-        StringSection<> psName, StringSection<> psDefines,
-        const VertexInputStates& inputStates,
-        const PixelOutputStates& outputStates)
-    {
-        auto hash = HashCombine(inputStates.GetHash(), outputStates.GetHash());
-        hash = Hash64(vsName, hash);
-        hash = Hash64(vsDefines, hash);
-        hash = Hash64(gsName, hash);
-        hash = Hash64(gsDefines, hash);
-        hash = Hash64(psName, hash);
-        hash = Hash64(psDefines, hash);
+	static ::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
+		ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	{
+		char temp[MaxPath];
+		auto meld = StringMeldInPlace(temp);
+		meld << initializer;
 
-        std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
-        bool replaceExisting = false;
-        auto i = LowerBound(_pipelines, hash);
-        if (i != _pipelines.end() && i->first == hash) {
-            if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
-                return i->second;
-            replaceExisting = true;
-        }
+		// shader profile
+		{
+			char profileStr[] = "?s_";
+			switch (stage) {
+			case ShaderStage::Vertex: profileStr[0] = 'v'; break;
+			case ShaderStage::Geometry: profileStr[0] = 'g'; break;
+			case ShaderStage::Pixel: profileStr[0] = 'p'; break;
+			case ShaderStage::Domain: profileStr[0] = 'd'; break;
+			case ShaderStage::Hull: profileStr[0] = 'h'; break;
+			case ShaderStage::Compute: profileStr[0] = 'c'; break;
+			default: assert(0); break;
+			}
+			if (!XlFindStringI(initializer, profileStr))
+				meld << ":" << profileStr << "*";
+		}
 
-        auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>();
-        if (replaceExisting) {
-            i->second = result;
-        } else
-            _pipelines.insert(i, std::make_pair(hash, result));
-        lk = {};
-        ConstructToFuture(result, vsName, vsDefines, gsName, gsDefines, psName, psDefines, inputStates, outputStates);
-        return result;
-    }
+		return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), definesTable);
+	}
 
-    static ::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
-        ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
-    {
-        char temp[MaxPath];
-        auto meld = StringMeldInPlace(temp);
-        meld << initializer;
+	void GraphicsPipelinePool::ConstructToFuture(
+		std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
+		const GraphicsPipelineDesc& pipelineDescInit,
+		const ParameterBox& selectors,
+		const VertexInputStates& inputStates,
+		const PixelOutputStates& outputStates)
+	{
+		auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescInit);
+		::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
+			*future,
+			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_sharedPools, 
+			 pipelineLayout=_pipelineLayout, pipelineLayoutDepVal=_pipelineLayoutDepVal,
+			 inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
+			 fbDesc=*outputStates._fbTarget._fbDesc, spIdx=outputStates._fbTarget._subpassIdx]( 
+				::Assets::FuturePtr<Metal::GraphicsPipeline>& resultFuture,
+				std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering) {
 
-        // shader profile
-        {
-            char profileStr[] = "?s_";
-            switch (stage) {
-            case ShaderStage::Vertex: profileStr[0] = 'v'; break;
-            case ShaderStage::Geometry: profileStr[0] = 'g'; break;
-            case ShaderStage::Pixel: profileStr[0] = 'p'; break;
-            case ShaderStage::Domain: profileStr[0] = 'd'; break;
-            case ShaderStage::Hull: profileStr[0] = 'h'; break;
-            case ShaderStage::Compute: profileStr[0] = 'c'; break;
-            default: assert(0); break;
-            }
-            if (!XlFindStringI(initializer, profileStr))
-                meld << ":" << profileStr << "*";
-        }
+				UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
 
-        return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), definesTable);
-    }
+				const ParameterBox* paramBoxes[] = {
+					&selectorsCopy
+				};
 
-    void GraphicsPipelineCollection::ConstructToFuture(
-        std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
-        StringSection<> vsName, StringSection<> vsDefines,
-        StringSection<> psName, StringSection<> psDefines,
-        const VertexInputStates& inputStates,
-        const PixelOutputStates& outputStates)
-    {
-        auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, vsDefines);
-        auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, psDefines);
-        ::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture(
-            *future,
-            [pipelineLayout=_pipelineLayout,
-            attachmentBlends=AsVector(outputStates._attachmentBlend),
-            depthStencil=outputStates._depthStencil,
-            rasterization=outputStates._rasterization,
-            inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
-            fbDesc=*outputStates._fbTarget._fbDesc, subpassIdx=outputStates._fbTarget._subpassIdx
-            ](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
-                Metal::ShaderProgram shader(Metal::GetObjectFactory(), pipelineLayout, *vsActual, *psActual);
-                Metal::GraphicsPipelineBuilder builder;
-                builder.Bind(shader);
-                builder.Bind(attachmentBlends);
-                builder.Bind(depthStencil);
-                builder.Bind(rasterization);
+				ScopedLock(sharedPools->_lock);
+				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
+					if (!pipelineDesc._shaders[c].empty()) {
+						const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = {
+							pipelineDescWithFiltering->_automaticFiltering[c].get()
+						};
+						filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
+							MakeIteratorRange(paramBoxes),
+							pipelineDesc._manualSelectorFiltering,
+							MakeIteratorRange(autoFiltering),
+							pipelineDescWithFiltering->_preconfiguration.get());
+					}
 
-                Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(inputAssembly), 0 };
-                Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-                builder.Bind(ia, topology);
+				auto configurationDepVal = ::Assets::GetDepValSys().Make();
+				if (pipelineDesc.GetDependencyValidation())
+					configurationDepVal.RegisterDependency(pipelineDesc.GetDependencyValidation());
+				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
+					if (!pipelineDesc._shaders[c].empty() && pipelineDescWithFiltering->_automaticFiltering[c])
+						configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_automaticFiltering[c]->GetDependencyValidation());
+				if (pipelineDescWithFiltering->_preconfiguration)
+					configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
+				if (pipelineLayoutDepVal)
+					configurationDepVal.RegisterDependency(pipelineLayoutDepVal);
 
-                builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
+				// todo -- now that we have the filtered selectors, we could attempt to reuse an existing pipeline (if one exists with
+				// the same filtered selectors)
 
-                return builder.CreatePipeline(Metal::GetObjectFactory());
-            });
-    }
+				auto shaderProgram = Internal::MakeShaderProgram(pipelineDesc, pipelineLayout, nullptr, MakeIteratorRange(filteredSelectors));
+				std::string vsd, psd, gsd;
+				#if defined(_DEBUG)
+					vsd = Internal::MakeShaderDescription(ShaderStage::Vertex, pipelineDesc, pipelineLayout, nullptr, filteredSelectors[(unsigned)ShaderStage::Vertex]);
+					psd = Internal::MakeShaderDescription(ShaderStage::Pixel, pipelineDesc, pipelineLayout, nullptr, filteredSelectors[(unsigned)ShaderStage::Pixel]);
+					gsd = Internal::MakeShaderDescription(ShaderStage::Geometry, pipelineDesc, pipelineLayout, nullptr, filteredSelectors[(unsigned)ShaderStage::Geometry]);
+				#endif
 
-    void GraphicsPipelineCollection::ConstructToFuture(
-        std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
-        StringSection<> vsName, StringSection<> vsDefines,
-        StringSection<> gsName, StringSection<> gsDefines,
-        StringSection<> psName, StringSection<> psDefines,
-        const VertexInputStates& inputStates,
-        const PixelOutputStates& outputStates)
-    {
-        auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, vsDefines);
-        auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, gsDefines);
-        auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, psDefines);
-        ::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture(
-            *future,
-            [pipelineLayout=_pipelineLayout,
-            attachmentBlends=AsVector(outputStates._attachmentBlend),
-            depthStencil=outputStates._depthStencil,
-            rasterization=outputStates._rasterization,
-            inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
-            fbDesc=*outputStates._fbTarget._fbDesc, subpassIdx=outputStates._fbTarget._subpassIdx
-            ](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
-                Metal::ShaderProgram shader(Metal::GetObjectFactory(), pipelineLayout, *vsActual, *gsActual, *psActual);
-                Metal::GraphicsPipelineBuilder builder;
-                builder.Bind(shader);
-                builder.Bind(attachmentBlends);
-                builder.Bind(depthStencil);
-                builder.Bind(rasterization);
+				::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
+					resultFuture,
+					[pipelineLayout,
+					inputAssembly, topology, fbDesc, spIdx,
+					pipelineDesc=std::move(pipelineDesc),
+					configurationDepVal
+					](std::shared_ptr<Metal::ShaderProgram> shaderActual) {
+						Metal::GraphicsPipelineBuilder builder;
+						builder.Bind(*shaderActual);
+						builder.Bind(pipelineDesc._blend);
+						builder.Bind(pipelineDesc._depthStencil);
+						builder.Bind(pipelineDesc._rasterization);
 
-                Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(inputAssembly), 0 };
-                Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-                builder.Bind(ia, topology);
+						Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(inputAssembly), 0 };
+						Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), *shaderActual);
+						builder.Bind(ia, topology);
 
-                builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
+						builder.SetRenderPassConfiguration(fbDesc, spIdx);
 
-                return builder.CreatePipeline(Metal::GetObjectFactory());
-            });
-    }
+						// todo -- we have to use configurationDepVal for something!
+						return builder.CreatePipeline(Metal::GetObjectFactory());
+					});
+			});		
+	}
+	
+	uint64_t GraphicsPipelinePool::GetGUID() const
+	{
+		return _pipelineLayout->GetGUID();
+	}
 
-    GraphicsPipelineCollection::GraphicsPipelineCollection(
-        std::shared_ptr<IDevice> device,
-        std::shared_ptr<ICompiledPipelineLayout> pipelineLayout)
-    : _device(std::move(device)), _pipelineLayout(std::move(pipelineLayout)) {}
+	GraphicsPipelinePool::GraphicsPipelinePool(
+		std::shared_ptr<IDevice> device,
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		const ::Assets::DependencyValidation& pipelineLayoutDepVal)
+	: _device(std::move(device)), _pipelineLayout(std::move(pipelineLayout)), _pipelineLayoutDepVal(pipelineLayoutDepVal) 
+	{
+		_sharedPools = std::make_shared<SharedPools>();
+	}
+
+	GraphicsPipelinePool::~GraphicsPipelinePool()
+	{}
 
 }}
 

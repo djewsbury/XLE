@@ -78,7 +78,7 @@ namespace Assets
 			typename T, 
 			decltype(HashParam_Chain(*std::declval<const T&>(), 0ull))* = nullptr, 
 			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashParam_Chain(*p, seed); }
+			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p ? HashParam_Chain(*p, seed) : seed; }
 
 
 
@@ -112,7 +112,7 @@ namespace Assets
 			typename T, 
 			decltype(HashParam_Single(*std::declval<const T&>()))* = nullptr, 
 			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
-			uint64_t HashParam_Single(const T& p) { return HashParam_Single(*p); }
+			uint64_t HashParam_Single(const T& p) { return p ? HashParam_Single(*p) : DefaultSeed64; }
 
 		
 
@@ -144,7 +144,7 @@ namespace Assets
 					// classes to do this, but that seems like it's unlikely to reach the 
 					// standard library
 					StringMeld<256> temp;
-					temp << value;
+					temp.AsOStream() << value;
 					for (auto& chr:temp.AsIteratorRange())
 						if (chr == '/' || chr == '\\') chr = '-';
 					return str << temp.AsStringSection();

@@ -9,6 +9,7 @@
 #include "../Format.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/ParameterBox.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques
@@ -142,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 				return lhs._shadowing == rhs._shadowing && lhs._filterModel == rhs._filterModel && lhs._normalProjCount == rhs._normalProjCount && lhs._enableContactHardening == rhs._enableContactHardening;
 			}
 
-			std::string WriteShaderSelectors() const;
+			void WriteShaderSelectors(ParameterBox& selectors) const;
 		};
 
 		ShadowResolveParam MakeShadowResolveParam(const ShadowOperatorDesc& shadowOp);

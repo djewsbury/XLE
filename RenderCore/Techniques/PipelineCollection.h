@@ -4,19 +4,20 @@
 
 #pragma once
 
+#include "TechniqueDelegates.h"
 #include "../FrameBufferDesc.h"
 #include "../StateDesc.h"
 #include "../Types.h"
 #include "../Metal/Forward.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Assets/DepVal.h"
 #include "../../Utility/Threading/Mutex.h"
 #include <vector>
 
 namespace RenderCore { namespace Techniques
 {
-	class FrameBufferTarget
+	struct FrameBufferTarget
 	{
-	public:
 		const RenderCore::FrameBufferDesc* _fbDesc;
 		unsigned _subpassIdx = ~0u;
 		uint64_t GetHash() const;
@@ -25,9 +26,9 @@ namespace RenderCore { namespace Techniques
     struct PixelOutputStates
 	{
 		FrameBufferTarget _fbTarget;
-		DepthStencilDesc _depthStencil;
-		RasterizationDesc _rasterization;
-		IteratorRange<const AttachmentBlendDesc*> _attachmentBlend;
+		// DepthStencilDesc _depthStencil;
+		// RasterizationDesc _rasterization;
+		// IteratorRange<const AttachmentBlendDesc*> _attachmentBlend;
 
 		uint64_t GetHash() const;
 	};
@@ -40,47 +41,38 @@ namespace RenderCore { namespace Techniques
 		uint64_t GetHash() const;
 	};
 
-    class GraphicsPipelineCollection
+    class GraphicsPipelinePool
 	{
 	public:
 		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
-			StringSection<> vsName, StringSection<> vsDefines,
-			StringSection<> psName, StringSection<> psDefines,
-			const VertexInputStates& inputStates,
-			const PixelOutputStates& outputStates);
-
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
-			StringSection<> vsName, StringSection<> vsDefines,
-			StringSection<> gsName, StringSection<> gsDefines,
-			StringSection<> psName, StringSection<> psDefines,
+			const GraphicsPipelineDesc& pipelineDesc,
+			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);
 
         const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
+		uint64_t GetGUID() const;
 
-		GraphicsPipelineCollection(
+		GraphicsPipelinePool(
 			std::shared_ptr<IDevice> device,
-			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout);
-
+			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			const ::Assets::DependencyValidation& pipelineLayoutDepVal = {});
+		~GraphicsPipelinePool();
 	private:
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
+		::Assets::DependencyValidation _pipelineLayoutDepVal;
 		Threading::Mutex _pipelinesLock;
 		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pipelines;
 
-		void ConstructToFuture(
-			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
-			StringSection<> vsName, StringSection<> vsDefines,
-			StringSection<> psName, StringSection<> psDefines,
-			const VertexInputStates& inputStates,
-			const PixelOutputStates& outputStates);
+		class SharedPools;
+		std::shared_ptr<SharedPools> _sharedPools;
 
 		void ConstructToFuture(
 			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
-			StringSection<> vsName, StringSection<> vsDefines,
-			StringSection<> gsName, StringSection<> gsDefines,
-			StringSection<> psName, StringSection<> psDefines,
+			const GraphicsPipelineDesc& pipelineDesc,
+			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const PixelOutputStates& outputStates);
 	};

@@ -60,7 +60,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
-		const std::shared_ptr<ITechniqueDelegate::GraphicsPipelineDesc>& nascentDesc,
+		const std::shared_ptr<GraphicsPipelineDesc>& nascentDesc,
 		const TechniqueEntry& entry)
 	{
 		nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = entry._vertexShaderName;
@@ -754,6 +754,27 @@ namespace RenderCore { namespace Techniques
 		const StreamOutputInitializers& soInit)
 	{
 		return std::make_shared<TechniqueDelegate_RayTest>(techniqueSet, sharedResources, testTypeParameter, soInit);
+	}
+
+	uint64_t GraphicsPipelineDesc::GetHash() const
+	{
+		uint64_t result = _manualSelectorFiltering.GetHash();
+		for (unsigned c=0; c<dimof(_shaders); ++c)
+			if (!_shaders[c].empty()) result = Hash64(_shaders[c], result);
+		if (!_selectorPreconfigurationFile.empty())
+			result = Hash64(_selectorPreconfigurationFile, result);
+		if (!_patchExpansions.empty())
+			result = Hash64(AsPointer(_patchExpansions.begin()), AsPointer(_patchExpansions.end()), result);
+		for (const auto&b:_blend)
+			result = HashCombine(b.Hash(), result);
+		result = HashCombine(_depthStencil.HashDepthAspect(), result);
+		result = HashCombine(_depthStencil.HashStencilAspect(), result);
+		result = HashCombine(_rasterization.Hash(), result);
+		if (!_soElements.empty()) {
+			result = HashInputAssembly(MakeIteratorRange(_soElements), result);
+			result = Hash64(AsPointer(_soBufferStrides.begin()), AsPointer(_soBufferStrides.end()), result);
+		}
+		return result;
 	}
 
 	ITechniqueDelegate::~ITechniqueDelegate() {}

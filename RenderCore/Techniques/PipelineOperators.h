@@ -5,7 +5,9 @@
 #pragma once
 
 #include "PipelineCollection.h"
+#include "TechniqueDelegates.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Utility/ParameterBox.h"
 
 namespace RenderCore 
 {
@@ -18,35 +20,37 @@ namespace RenderCore
 namespace RenderCore { namespace Techniques
 {
 	class ParsingContext;
-	
+
 	class IShaderOperator
 	{
 	public:
 		virtual void Draw(IThreadContext&, ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IShaderOperator();
 	};
-
+	
 	class IComputeShaderOperator
 	{
 	public:
 		virtual void Dispatch(IThreadContext&, ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IComputeShaderOperator();
 	};
 
 	class RenderPassInstance;
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
+		const std::shared_ptr<GraphicsPipelinePool>& pool,
 		const RenderPassInstance& rpi,
 		StringSection<> pixelShader,
-		StringSection<> definesTable,
+		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
+		const std::shared_ptr<GraphicsPipelinePool>& pool,
 		const FrameBufferTarget& fbTarget,
 		StringSection<> pixelShader,
-		StringSection<> definesTable,
+		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(

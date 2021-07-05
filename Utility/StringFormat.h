@@ -113,6 +113,8 @@ namespace Utility
         IteratorRange<CharType*> AsIteratorRange() { return MakeIteratorRange((CharType*)_buffer.begin(), (CharType*)_buffer.end()); }
         operator StringSection<CharType>() const { return AsStringSection(); }
 
+        std::ostream& AsOStream() { return _stream; }
+
     protected:
         Internal::FixedMemoryBuffer<Count*sizeof(CharType), DemotedType> _buffer;
 
@@ -213,6 +215,8 @@ namespace Utility
             StringSection<CharType> AsStringSection() const { return MakeStringSection(get()); }
             std::basic_string<CharType> AsString() const { return AsStringSection().AsString(); }
             IteratorRange<CharType*> AsIteratorRange() { return MakeIteratorRange(get(), XlStringEnd(get())); }
+
+            std::ostream& AsOStream() { return _stream; }
 
             StringMeldInPlace(CharType* bufferStart, CharType* bufferEnd)
             : _stream(&_buffer)

@@ -441,23 +441,21 @@ namespace RenderCore { namespace LightingEngine
 
 	namespace Internal
 	{
-		std::string ShadowResolveParam::WriteShaderSelectors() const
+		void ShadowResolveParam::WriteShaderSelectors(ParameterBox& selectors) const
 		{
-			StringMeld<256, ::Assets::ResChar> str;
 			if (_shadowing != ShadowResolveParam::Shadowing::NoShadows) {
 				if (_shadowing == ShadowResolveParam::Shadowing::OrthShadows || _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade || _shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows) {
-					str << "SHADOW_CASCADE_MODE=" << 2u;
+					selectors.SetParameter("SHADOW_CASCADE_MODE", 2u);
 				} else if (_shadowing == ShadowResolveParam::Shadowing::CubeMapShadows) {
-					str << "SHADOW_CASCADE_MODE=" << 3u;
+					selectors.SetParameter("SHADOW_CASCADE_MODE", 3u);
 				} else
-					str << "SHADOW_CASCADE_MODE=" << 1u;
-				str << ";SHADOW_SUB_PROJECTION_COUNT=" << _normalProjCount;
-				str << ";SHADOW_ENABLE_NEAR_CASCADE=" << (_shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
-				str << ";SHADOW_FILTER_MODEL=" << unsigned(_filterModel);
-				str << ";SHADOW_FILTER_CONTACT_HARDENING=" << unsigned(_enableContactHardening);
-				str << ";SHADOW_RT_HYBRID=" << unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows);
+					selectors.SetParameter("SHADOW_CASCADE_MODE", 1u);
+				selectors.SetParameter("SHADOW_SUB_PROJECTION_COUNT", _normalProjCount);
+				selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
+				selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
+				selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING=", _enableContactHardening);
+				selectors.SetParameter("SHADOW_RT_HYBRID=", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
 			}
-			return str.AsString();
 		}
 
 		ShadowResolveParam MakeShadowResolveParam(const ShadowOperatorDesc& shadowOp)

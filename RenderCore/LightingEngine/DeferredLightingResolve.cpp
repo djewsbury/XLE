@@ -81,9 +81,9 @@ namespace RenderCore { namespace LightingEngine
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
 	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
-		Techniques::GraphicsPipelineCollection& pipelineCollection,
+		Techniques::GraphicsPipelinePool& pipelineCollection,
 		const LightSourceOperatorDesc& desc,
-		const Internal::ShadowResolveParam shadowResolveParam,
+		const Internal::ShadowResolveParam& shadowResolveParam,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
@@ -94,66 +94,52 @@ namespace RenderCore { namespace LightingEngine
 		if (fbDesc.GetAttachments()[mainOutputAttachment]._flags & AttachmentDesc::Flags::Multisampled)
 			sampleCount = fbDesc.GetProperties()._samples;
 		
-		StringMeld<256, ::Assets::ResChar> definesTable;
-		definesTable << "GBUFFER_TYPE=" << (unsigned)gbufferType;
-		definesTable << ";MSAA_SAMPLES=" << ((sampleCount._sampleCount<=1)?0:sampleCount._sampleCount);
-		// if (desc._msaaSamplers) definesTable << ";MSAA_SAMPLERS=1";
-		definesTable << ";LIGHT_SHAPE=" << unsigned(desc._shape);
-		definesTable << ";DIFFUSE_METHOD=" << unsigned(desc._diffuseModel);
-		definesTable << ";HAS_SCREENSPACE_AO=" << unsigned(hasScreenSpaceAO);
-		auto shadowSelectors = shadowResolveParam.WriteShaderSelectors();
-		if (!shadowSelectors.empty())
-			definesTable << ";" << shadowSelectors;
-
-		StringMeld<256, ::Assets::ResChar> vsDefinesTable;
-		vsDefinesTable << "LIGHT_SHAPE=" << unsigned(desc._shape);
-
-		const char* vertexShader = nullptr;
-		const char* geometryShader = nullptr;
-		auto stencilRefValue = 0;
-
 		Techniques::VertexInputStates inputStates;
 		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
 
 		Techniques::PixelOutputStates outputStates;
+		outputStates._fbTarget = {&fbDesc, subpassIdx};
+
+		Techniques::GraphicsPipelineDesc pipelineDesc;
+
+		ParameterBox selectors;
+		selectors.SetParameter("GBUFFER_TYPE", unsigned(gbufferType));
+		selectors.SetParameter("MSAA_SAMPLES", (sampleCount._sampleCount<=1)?0:sampleCount._sampleCount);
+		selectors.SetParameter("LIGHT_SHAPE", unsigned(desc._shape));
+		selectors.SetParameter("DIFFUSE_METHOD", unsigned(desc._diffuseModel));
+		selectors.SetParameter("HAS_SCREENSPACE_AO", unsigned(hasScreenSpaceAO));
+		shadowResolveParam.WriteShaderSelectors(selectors);
+
+		auto stencilRefValue = 0;
+
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
 		if (doSampleFrequencyOptimisation && sampleCount._sampleCount > 1) {
-			outputStates._depthStencil = s_dsWritePixelFrequencyPixel;
+			pipelineDesc._depthStencil = s_dsWritePixelFrequencyPixel;
 			stencilRefValue = StencilSampleCount;
 		} else {
-			outputStates._depthStencil = s_dsWriteNonSky;
+			pipelineDesc._depthStencil = s_dsWriteNonSky;
 			stencilRefValue = 0x0;
 		}
 
 		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
 			inputStates._inputLayout = {};
-			vertexShader = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
 			inputStates._topology = Topology::TriangleStrip;
 		} else {
 			inputStates._inputLayout = MakeIteratorRange(inputElements);
-			vertexShader = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":main";
-			geometryShader = BASIC_GEO_HLSL ":PT_viewfrustumVector_clipToNear";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":main";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":PT_viewfrustumVector_clipToNear";
 			inputStates._topology = Topology::TriangleList;
-			outputStates._depthStencil._depthBoundsTestEnable = true;
+			pipelineDesc._depthStencil._depthBoundsTestEnable = true;
 		}
 
-		outputStates._rasterization = Techniques::CommonResourceBox::s_rsDefault;
+		pipelineDesc._rasterization = Techniques::CommonResourceBox::s_rsDefault;
+		pipelineDesc._blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
+		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main";
 
-		AttachmentBlendDesc blends[] { Techniques::CommonResourceBox::s_abAdditive };
-		outputStates._attachmentBlend = MakeIteratorRange(blends);
-		outputStates._fbTarget = {&fbDesc, subpassIdx};
-
-		if (geometryShader) {
-			return pipelineCollection.CreatePipeline(
-				vertexShader, vsDefinesTable.AsStringSection(),
-				geometryShader, {},
-				DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main", definesTable.AsStringSection(),
-				inputStates, outputStates);
-		} else
-			return pipelineCollection.CreatePipeline(
-				vertexShader, vsDefinesTable.AsStringSection(),
-				DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main", definesTable.AsStringSection(),
-				inputStates, outputStates);
+		return pipelineCollection.CreatePipeline(
+			pipelineDesc, selectors,
+			inputStates, outputStates);
 	}
 
 	::Assets::PtrToFuturePtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
@@ -203,7 +189,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
-		Techniques::GraphicsPipelineCollection& pipelineCollection,
+		Techniques::GraphicsPipelinePool& pipelineCollection,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,
