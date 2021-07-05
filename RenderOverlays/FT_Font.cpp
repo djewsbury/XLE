@@ -236,7 +236,7 @@ namespace RenderOverlays
 
 	std::shared_ptr<Font> GetDefaultFont(unsigned size)
 	{
-		return GetX2Font("Raleway", size);
+		return GetX2Font("Petra", size);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////

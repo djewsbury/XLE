@@ -408,7 +408,7 @@ namespace RenderOverlays
 		std::shared_ptr<Font> _font;
 		DefaultFontBox(const Desc&)
 		{
-			_font = GetX2Font("Raleway", 16);
+			_font = GetX2Font("Petra", 16);
 		}
 	};
 

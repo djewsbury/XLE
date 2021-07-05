@@ -41,7 +41,7 @@ namespace PlatformRig
 		overlaySwitch->AddSystem(PlatformRig::KeyId_Make("~"), PlatformRig::CreateConsoleOverlaySystem(*immediateDrawingApparatus));
 		_debugScreensOverlaySystem->AddSystem(overlaySwitch);
 
-		_debugFont0 = RenderOverlays::GetX2Font("Raleway", 16);
+		_debugFont0 = RenderOverlays::GetX2Font("Petra", 16);
 		_debugFont1 = RenderOverlays::GetX2Font("Vera", 16);
 	}
 

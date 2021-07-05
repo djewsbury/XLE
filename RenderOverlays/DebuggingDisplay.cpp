@@ -585,7 +585,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 		std::shared_ptr<RenderOverlays::Font> _valuesFont;
         TableFontBox(const Desc&) 
             : _headerFont(RenderOverlays::GetX2Font("DosisExtraBold", 20))
-            , _valuesFont(RenderOverlays::GetX2Font("Raleway", 20)) {}
+            , _valuesFont(RenderOverlays::GetX2Font("Petra", 20)) {}
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
