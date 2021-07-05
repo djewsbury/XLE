@@ -11,7 +11,7 @@
 #include <utility>
 
 namespace RenderCore { class IThreadContext; class IResourceView; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class SequencerContext; class IPipelineAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class SequencerConfig; }}
 namespace SceneEngine 
 { 
     class PlacementCellSet;
@@ -45,7 +45,7 @@ namespace ToolsRig
         RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-        const RenderCore::Techniques::SequencerContext& sequencerTechnique,
+        const RenderCore::Techniques::SequencerConfig& sequencerTechnique,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,

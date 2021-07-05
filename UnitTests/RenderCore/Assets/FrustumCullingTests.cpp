@@ -296,14 +296,12 @@ namespace UnitTests
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};
 				parsingContext.AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device, commonResBox));
-				Techniques::SequencerContext sequencerContext;
-				sequencerContext._sequencerConfig = cfgId.get();
 				
 				Techniques::Draw(
 					*threadContext,
 					parsingContext, 
 					*pipelineAcceleratorPool,
-					sequencerContext,
+					*cfgId,
 					pkt);
 			}
 			fbHelper.SaveImage(*threadContext, "frustum-cull-check");

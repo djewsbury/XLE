@@ -5,7 +5,6 @@
 #include "Drawables.h"
 #include "DrawableDelegates.h"
 #include "DrawablesInternal.h"
-#include "SequencerDescriptorSet.h"
 #include "Techniques.h"
 #include "ParsingContext.h"
 #include "PipelineAccelerator.h"
@@ -18,19 +17,11 @@
 #include "../IThreadContext.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
+#include "../Metal/Resource.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 
 namespace RenderCore { namespace Techniques
 {
-
-	static void ApplyLooseUniforms(
-		Metal::DeviceContext& metalContext,
-		Metal::GraphicsEncoder_Optimized& encoder,
-		ParsingContext& parsingContext,
-		Metal::BoundUniforms& boundUniforms,
-		unsigned groupIdx,
-		SequencerUniformsHelper& uniformHelper);
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class DrawablesSharedResources
@@ -91,25 +82,22 @@ namespace RenderCore { namespace Techniques
         RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
 		ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerContext& sequencerTechnique,
+		const SequencerConfig& sequencerConfig,
+		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt,
 		const TemporaryStorageLocator& temporaryVB, 
 		const TemporaryStorageLocator& temporaryIB)
 	{
-		// Modern style drawing using GraphicsEncoder_Optimized
-		//		-- descriptor sets & graphics pipelines
-
 		const auto sequencerDescriptorSetSlot = 0;
 		const auto materialDescriptorSetSlot = 1;
 		static const auto sequencerDescSetName = Hash64("Sequencer");
 		static const auto materialDescSetName = Hash64("Material");
 		
-		SequencerUniformsHelper uniformHelper(parserContext, sequencerTechnique);
-		auto sequencerDescriptorSet = CreateSequencerDescriptorSet(
+		auto sequencerDescriptorSet = uniformsHelper.CreateDescriptorSet(
 			*pipelineAccelerators.GetDevice(), parserContext,
-			uniformHelper, *pipelineAccelerators.GetSequencerDescriptorSetLayout().GetLayout());
+			*pipelineAccelerators.GetSequencerDescriptorSetLayout().GetLayout());
 
-		UniformsStreamInterface sequencerUSI = std::move(uniformHelper._finalUSI);
+		UniformsStreamInterface sequencerUSI = uniformsHelper.GetLooseUniformsStreamInterface();
 		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature();
 		sequencerUSI.BindFixedDescriptorSet(0, sequencerDescSetName, &sequencerDescriptorSet.second);
 		sequencerUSI.BindFixedDescriptorSet(1, materialDescSetName, &matDescSetLayout);
@@ -117,7 +105,7 @@ namespace RenderCore { namespace Techniques
 		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
 			const auto& drawable = *(Drawable*)d.get();
 			assert(drawable._pipeline);
-			auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, *sequencerTechnique._sequencerConfig);
+			auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
 			if (!pipeline)
 				continue;
 
@@ -171,7 +159,7 @@ namespace RenderCore { namespace Techniques
 				metalContext, encoder,
 				MakeIteratorRange(descriptorSets), 0);
 			if (__builtin_expect(boundUniforms->GetBoundLooseImmediateDatas(0) | boundUniforms->GetBoundLooseResources(0) | boundUniforms->GetBoundLooseResources(0), 0ull)) {
-				ApplyLooseUniforms(metalContext, encoder, parserContext, *boundUniforms, 0, uniformHelper);
+				ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, *boundUniforms, 0);
 			}
 
 			//////////////////////////////////////////////////////////////////////////////
@@ -186,11 +174,10 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerContext& sequencerTechnique,
+		const SequencerConfig& sequencerConfig,
+		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt)
 	{
-		assert(sequencerTechnique._sequencerConfig);
-
 		TemporaryStorageLocator temporaryVB, temporaryIB;
 		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::VB).empty()) {
 			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::VB);
@@ -207,19 +194,33 @@ namespace RenderCore { namespace Techniques
 			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerTechnique, drawablePkt, temporaryVB, temporaryIB);
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt, temporaryVB, temporaryIB);
 	}
 
 	void Draw(
 		IThreadContext& context,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerContext& sequencerTechnique,
+		const SequencerConfig& sequencerConfig,
+		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt)
 	{
 		auto& metalContext = *Metal::DeviceContext::Get(context);
 		auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerTechnique, drawablePkt);
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+	}
+
+	void Draw(
+		IThreadContext& context,
+        ParsingContext& parserContext,
+		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const SequencerConfig& sequencerConfig,
+		const DrawablesPacket& drawablePkt)
+	{
+		auto& metalContext = *Metal::DeviceContext::Get(context);
+		auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
+		SequencerUniformsHelper uniformsHelper { parserContext };
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
 	}
 
 	static const std::string s_graphicsPipeline { "graphics-pipeline" };
@@ -227,7 +228,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		SequencerConfig& sequencerConfig,
+		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt)
 	{
 		std::shared_ptr<::Assets::AsyncMarkerGroup> result;
@@ -337,6 +338,8 @@ namespace RenderCore { namespace Techniques
 			if (preAlignmentBuffer == alignment) preAlignmentBuffer = 0;
 		}
 
+		assert(vector.size() + preAlignmentBuffer + size < 10 * 1024 * 1024);
+
 		size_t startOffset = vector.size() + preAlignmentBuffer;
 		vector.resize(vector.size() + preAlignmentBuffer + size);
 		return {
@@ -365,22 +368,5 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void ApplyLooseUniforms(
-		Metal::DeviceContext& metalContext,
-		Metal::GraphicsEncoder_Optimized& encoder,
-		ParsingContext& parsingContext,
-		Metal::BoundUniforms& boundUniforms,
-		unsigned groupIdx,
-		SequencerUniformsHelper& uniformHelper)
-	{
-		uniformHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
-		uniformHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
-		uniformHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
-		UniformsStream us {
-			uniformHelper._queriedResources,
-			uniformHelper._queriedImmediateDatas,
-			uniformHelper._queriedSamplers };
-		boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
-	}
 
 }}

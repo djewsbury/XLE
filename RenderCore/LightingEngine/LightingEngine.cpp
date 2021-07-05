@@ -264,16 +264,17 @@ namespace RenderCore { namespace LightingEngine
 
 			case CompiledLightingTechnique::Step::Type::ExecuteDrawables:
 				{
-					Techniques::SequencerContext context;
-					context._sequencerConfig = next->_sequencerConfig.get();
-					if (next->_shaderResourceDelegate)
-						context._sequencerResources.push_back(next->_shaderResourceDelegate);
-
+					std::shared_ptr<Techniques::IShaderResourceDelegate> resourceDelegates[] = { next->_shaderResourceDelegate };
+					Techniques::SequencerUniformsHelper uniformsHelper {
+						*_iterator->_parsingContext,
+						(next->_shaderResourceDelegate) ? MakeIteratorRange(resourceDelegates) : IteratorRange<const std::shared_ptr<Techniques::IShaderResourceDelegate>*>{}
+					};
 					Techniques::Draw(
 						*_iterator->_threadContext,
 						*_iterator->_parsingContext,
 						*_iterator->_pipelineAcceleratorPool,
-						context,
+						*next->_sequencerConfig,
+						uniformsHelper,
 						_iterator->_drawablePkt);
 					_iterator->_drawablePkt.Reset();
 				}

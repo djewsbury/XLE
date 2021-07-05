@@ -2,14 +2,83 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "SequencerDescriptorSet.h"
+#include "Drawables.h"
 #include "PipelineAccelerator.h"
+#include "DrawableDelegates.h"
+#include "ParsingContext.h"
+#include "DrawablesInternal.h"
+#include "../BufferView.h"
+#include "../Metal/InputLayout.h"
+#include "../Metal/DeviceContext.h"
 #include "../../OSServices/Log.h"
+#include "../../Utility/ArithmeticUtils.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
+	class SequencerUniformsHelper::Pimpl
+	{
+	public:
+		UniformsStreamInterface _finalUSI;
+		uint64_t _slotsQueried_ResourceViews = 0ull;
+		uint64_t _slotsQueried_Samplers = 0ull;
+		uint64_t _slotsQueried_ImmediateDatas = 0ull;
 
-	void SequencerUniformsHelper::Prepare(IShaderResourceDelegate& del, ParsingContext& parsingContext)
+		std::vector<IResourceView*> _queriedResources;
+		std::vector<ISampler*> _queriedSamplers;
+		std::vector<UniformsStream::ImmediateData> _queriedImmediateDatas;
+
+		std::vector<uint8_t> _tempDataBuffer;
+
+		size_t _workingTempBufferSize = 0;
+		static constexpr unsigned s_immediateDataAlignment = 8;
+
+		////////////////////////////////////////////////////////////////////////////////////
+		struct ShaderResourceDelegateBinding
+		{
+			IShaderResourceDelegate* _delegate = nullptr;
+			std::vector<std::pair<size_t, size_t>> _immediateDataBeginAndEnd;
+
+			uint64_t _usiSlotsFilled_ResourceViews = 0ull;
+			uint64_t _usiSlotsFilled_Samplers = 0ull;
+			uint64_t _usiSlotsFilled_ImmediateDatas = 0ull;
+
+			std::vector<unsigned> _resourceInterfaceToUSI;
+			std::vector<unsigned> _immediateDataInterfaceToUSI;
+			std::vector<unsigned> _samplerInterfaceToUSI;
+		};
+		std::vector<ShaderResourceDelegateBinding> _srBindings;
+		void Prepare(IShaderResourceDelegate& del, ParsingContext& parsingContext);
+		void QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery, ShaderResourceDelegateBinding& del);
+		void QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery, ShaderResourceDelegateBinding& del);
+		void QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, ShaderResourceDelegateBinding& del);
+
+		////////////////////////////////////////////////////////////////////////////////////
+		struct UniformBufferDelegateBinding
+		{
+			IUniformBufferDelegate* _delegate = nullptr;
+			size_t _size = 0;
+
+			unsigned _usiSlotFilled = 0;
+			size_t _tempBufferOffset = 0;
+		};
+		std::vector<UniformBufferDelegateBinding> _uBindings;
+		void Prepare(IUniformBufferDelegate& del, uint64_t delBinding);
+		void QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, UniformBufferDelegateBinding& del);
+
+		////////////////////////////////////////////////////////////////////////////////////
+		void QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery);
+		void QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery);
+		void QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery);
+
+		////////////////////////////////////////////////////////////////////////////////////
+		Pimpl(
+			ParsingContext& parsingContext, 
+			IteratorRange<const std::shared_ptr<IShaderResourceDelegate>*> resourceDelegates,
+			IteratorRange<const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>*> uniformBufferDelegates);
+	};
+
+	void SequencerUniformsHelper::Pimpl::Prepare(IShaderResourceDelegate& del, ParsingContext& parsingContext)
 	{
 		ShaderResourceDelegateBinding newBinding;
 		newBinding._delegate = &del;
@@ -70,7 +139,7 @@ namespace RenderCore { namespace Techniques
 		_srBindings.push_back(newBinding);
 	}
 
-	void SequencerUniformsHelper::QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery, ShaderResourceDelegateBinding& del)
+	void SequencerUniformsHelper::Pimpl::QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery, ShaderResourceDelegateBinding& del)
 	{
 		auto toLoad = resourcesToQuery & del._usiSlotsFilled_ResourceViews;
 		if (!toLoad) return;
@@ -96,7 +165,7 @@ namespace RenderCore { namespace Techniques
 		_slotsQueried_ResourceViews |= toLoad;
 	}
 
-	void SequencerUniformsHelper::QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery, ShaderResourceDelegateBinding& del)
+	void SequencerUniformsHelper::Pimpl::QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery, ShaderResourceDelegateBinding& del)
 	{
 		auto toLoad = samplersToQuery & del._usiSlotsFilled_Samplers;
 		if (!toLoad) return;
@@ -122,7 +191,7 @@ namespace RenderCore { namespace Techniques
 		_slotsQueried_Samplers |= toLoad;
 	}
 
-	void SequencerUniformsHelper::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, ShaderResourceDelegateBinding& del)
+	void SequencerUniformsHelper::Pimpl::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, ShaderResourceDelegateBinding& del)
 	{
 		auto toLoad = immediateDatasToQuery & del._usiSlotsFilled_ImmediateDatas;
 		if (!toLoad) return;
@@ -147,7 +216,7 @@ namespace RenderCore { namespace Techniques
 		_slotsQueried_ImmediateDatas |= toLoad;
 	}
 
-	void SequencerUniformsHelper::Prepare(IUniformBufferDelegate& del, uint64_t delBinding)
+	void SequencerUniformsHelper::Pimpl::Prepare(IUniformBufferDelegate& del, uint64_t delBinding)
 	{
 		auto existing = std::find(_finalUSI._immediateDataBindings.begin(), _finalUSI._immediateDataBindings.end(), delBinding);
 		if (existing != _finalUSI._immediateDataBindings.end())
@@ -164,7 +233,7 @@ namespace RenderCore { namespace Techniques
 		_uBindings.push_back(newBinding);
 	}
 
-	void SequencerUniformsHelper::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, UniformBufferDelegateBinding& del)
+	void SequencerUniformsHelper::Pimpl::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery, UniformBufferDelegateBinding& del)
 	{
 		auto mask = 1ull << uint64_t(del._usiSlotFilled);
 		if (!(immediateDatasToQuery & mask)) return;
@@ -178,60 +247,31 @@ namespace RenderCore { namespace Techniques
 		_slotsQueried_ImmediateDatas |= mask;
 	}
 
-	void SequencerUniformsHelper::QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery)
+	void SequencerUniformsHelper::Pimpl::QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery)
 	{
 		resourcesToQuery &= ~_slotsQueried_ResourceViews;
 		if (!resourcesToQuery) return;
 		for (auto& del:_srBindings) QueryResources(parsingContext, resourcesToQuery, del);
 	}
 
-	void SequencerUniformsHelper::QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery)
+	void SequencerUniformsHelper::Pimpl::QuerySamplers(ParsingContext& parsingContext, uint64_t samplersToQuery)
 	{
 		samplersToQuery &= ~_slotsQueried_Samplers;
 		if (!samplersToQuery) return;
 		for (auto& del:_srBindings) QuerySamplers(parsingContext, samplersToQuery, del);
 	}
 
-	void SequencerUniformsHelper::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery)
+	void SequencerUniformsHelper::Pimpl::QueryImmediateDatas(ParsingContext& parsingContext, uint64_t immediateDatasToQuery)
 	{
 		immediateDatasToQuery &= ~_slotsQueried_ImmediateDatas;
 		if (!immediateDatasToQuery) return;
 		for (auto& del:_srBindings) QueryImmediateDatas(parsingContext, immediateDatasToQuery, del);
 		for (auto& del:_uBindings) QueryImmediateDatas(parsingContext, immediateDatasToQuery, del);
 	}
-
-	SequencerUniformsHelper::SequencerUniformsHelper(ParsingContext& parsingContext, const SequencerContext& sequencerTechnique)
-	{
-		_finalUSI._resourceViewBindings.reserve(64);
-		_finalUSI._immediateDataBindings.reserve(64);
-		_finalUSI._samplerBindings.reserve(64);
-
-		// Delegates we visit first will be preferred over subsequent delegates (if they bind the same thing)
-		// So, we should go through in reverse order
-		for (signed c=sequencerTechnique._sequencerResources.size()-1; c>=0; c--)
-			Prepare(*sequencerTechnique._sequencerResources[c], parsingContext);
-
-		for (signed c=sequencerTechnique._sequencerUniforms.size()-1; c>=0; c--)
-			Prepare(*sequencerTechnique._sequencerUniforms[c].second, sequencerTechnique._sequencerUniforms[c].first);
-
-		auto parserDelegates = parsingContext.GetShaderResourceDelegates();
-		for (signed c=parserDelegates.size()-1; c>=0; c--)
-			Prepare(*parserDelegates[c], parsingContext);
-
-		auto parserUDelegates = parsingContext.GetUniformDelegates();
-		for (signed c=parserUDelegates.size()-1; c>=0; c--)
-			Prepare(*parserUDelegates[c].second, parserUDelegates[c].first);
-
-		_queriedResources.resize(_finalUSI._resourceViewBindings.size(), nullptr);
-		_queriedSamplers.resize(_finalUSI._samplerBindings.size(), nullptr);
-		_queriedImmediateDatas.resize(_finalUSI._immediateDataBindings.size(), {});
-		_tempDataBuffer.resize(_workingTempBufferSize, 0);
-	}
 	
-	std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> CreateSequencerDescriptorSet(
+	std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> SequencerUniformsHelper::CreateDescriptorSet(
 		IDevice& device,
 		ParsingContext& parsingContext,
-		SequencerUniformsHelper& uniformHelper,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& descSetLayout)
 	{
 		// Create a temporary descriptor set, with per-sequencer bindings
@@ -254,41 +294,41 @@ namespace RenderCore { namespace Techniques
 			auto hashName = Hash64(descSetLayout._slots[slotIdx]._name);
 
 			if (descSetLayout._slots[slotIdx]._type == DescriptorType::Sampler) {
-				auto samplerBinding = std::find(uniformHelper._finalUSI._samplerBindings.begin(), uniformHelper._finalUSI._samplerBindings.end(), hashName);
-				if (samplerBinding != uniformHelper._finalUSI._samplerBindings.end()) {
-					auto samplerIdx = (unsigned)std::distance(uniformHelper._finalUSI._samplerBindings.begin(), samplerBinding);
+				auto samplerBinding = std::find(_pimpl->_finalUSI._samplerBindings.begin(), _pimpl->_finalUSI._samplerBindings.end(), hashName);
+				if (samplerBinding != _pimpl->_finalUSI._samplerBindings.end()) {
+					auto samplerIdx = (unsigned)std::distance(_pimpl->_finalUSI._samplerBindings.begin(), samplerBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::Sampler, samplerIdx});
 					samplersWeNeed |= 1ull << uint64_t(samplerIdx);
 					continue;
 				}
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
-					auto resourceBinding = std::find(uniformHelper._finalUSI._resourceViewBindings.begin(), uniformHelper._finalUSI._resourceViewBindings.end(), hashName);
-					if (resourceBinding != uniformHelper._finalUSI._resourceViewBindings.end())
+					auto resourceBinding = std::find(_pimpl->_finalUSI._resourceViewBindings.begin(), _pimpl->_finalUSI._resourceViewBindings.end(), hashName);
+					if (resourceBinding != _pimpl->_finalUSI._resourceViewBindings.end())
 						Log(Warning) << "Resource view provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
-					auto immediateDataBinding = std::find(uniformHelper._finalUSI._immediateDataBindings.begin(), uniformHelper._finalUSI._immediateDataBindings.end(), hashName);
-					if (immediateDataBinding != uniformHelper._finalUSI._immediateDataBindings.end())
+					auto immediateDataBinding = std::find(_pimpl->_finalUSI._immediateDataBindings.begin(), _pimpl->_finalUSI._immediateDataBindings.end(), hashName);
+					if (immediateDataBinding != _pimpl->_finalUSI._immediateDataBindings.end())
 						Log(Warning) << "Immediate data provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
 				#endif
 			} else {
-				auto resourceBinding = std::find(uniformHelper._finalUSI._resourceViewBindings.begin(), uniformHelper._finalUSI._resourceViewBindings.end(), hashName);
-				if (resourceBinding != uniformHelper._finalUSI._resourceViewBindings.end()) {
-					auto resourceIdx = (unsigned)std::distance(uniformHelper._finalUSI._resourceViewBindings.begin(), resourceBinding);
+				auto resourceBinding = std::find(_pimpl->_finalUSI._resourceViewBindings.begin(), _pimpl->_finalUSI._resourceViewBindings.end(), hashName);
+				if (resourceBinding != _pimpl->_finalUSI._resourceViewBindings.end()) {
+					auto resourceIdx = (unsigned)std::distance(_pimpl->_finalUSI._resourceViewBindings.begin(), resourceBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ResourceView, resourceIdx});
 					resourcesWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
 
-                auto immediateDataBinding = std::find(uniformHelper._finalUSI._immediateDataBindings.begin(), uniformHelper._finalUSI._immediateDataBindings.end(), hashName);
-                if (immediateDataBinding != uniformHelper._finalUSI._immediateDataBindings.end()) {
-					auto resourceIdx = (unsigned)std::distance(uniformHelper._finalUSI._immediateDataBindings.begin(), immediateDataBinding);
+                auto immediateDataBinding = std::find(_pimpl->_finalUSI._immediateDataBindings.begin(), _pimpl->_finalUSI._immediateDataBindings.end(), hashName);
+                if (immediateDataBinding != _pimpl->_finalUSI._immediateDataBindings.end()) {
+					auto resourceIdx = (unsigned)std::distance(_pimpl->_finalUSI._immediateDataBindings.begin(), immediateDataBinding);
 					bindTypesAndIdx.push_back({DescriptorSetInitializer::BindType::ImmediateData, resourceIdx});
 					immediateDatasWeNeed |= 1ull << uint64_t(resourceIdx);
 					continue;
 				}
 
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
-					auto samplerBinding = std::find(uniformHelper._finalUSI._samplerBindings.begin(), uniformHelper._finalUSI._samplerBindings.end(), hashName);
-					if (samplerBinding != uniformHelper._finalUSI._samplerBindings.end())
+					auto samplerBinding = std::find(_pimpl->_finalUSI._samplerBindings.begin(), _pimpl->_finalUSI._samplerBindings.end(), hashName);
+					if (samplerBinding != _pimpl->_finalUSI._samplerBindings.end())
 						Log(Warning) << "Sampler provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is not a sampler type in the descriptor set layout." << std::endl;
 				#endif
 			}
@@ -297,19 +337,86 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// Now that we know what we need, we should query the delegates to get the associated data
-		uniformHelper.QueryResources(parsingContext, resourcesWeNeed);
-		uniformHelper.QuerySamplers(parsingContext, samplersWeNeed);
-        uniformHelper.QueryImmediateDatas(parsingContext, immediateDatasWeNeed);
+		_pimpl->QueryResources(parsingContext, resourcesWeNeed);
+		_pimpl->QuerySamplers(parsingContext, samplersWeNeed);
+        _pimpl->QueryImmediateDatas(parsingContext, immediateDatasWeNeed);
 
 		DescriptorSetInitializer initializer;
 		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx);
-		initializer._bindItems._resourceViews = MakeIteratorRange(uniformHelper._queriedResources);
-		initializer._bindItems._samplers = MakeIteratorRange(uniformHelper._queriedSamplers);
-		initializer._bindItems._immediateData = MakeIteratorRange(uniformHelper._queriedImmediateDatas);
+		initializer._bindItems._resourceViews = MakeIteratorRange(_pimpl->_queriedResources);
+		initializer._bindItems._samplers = MakeIteratorRange(_pimpl->_queriedSamplers);
+		initializer._bindItems._immediateData = MakeIteratorRange(_pimpl->_queriedImmediateDatas);
 		auto sig = descSetLayout.MakeDescriptorSetSignature();		// todo -- we probably have this stored somewhere else, it might not be a great idea to keep rebuilding it
 		initializer._signature = &sig;
 		auto set = device.CreateDescriptorSet(initializer);
 		return std::make_pair(std::move(set), std::move(sig));
 	}
+
+	void ApplyLooseUniforms(
+		SequencerUniformsHelper& uniformsHelper,
+		Metal::DeviceContext& metalContext,
+		Metal::GraphicsEncoder_Optimized& encoder,
+		ParsingContext& parsingContext,
+		Metal::BoundUniforms& boundUniforms,
+		unsigned groupIdx)
+	{
+		uniformsHelper._pimpl->QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
+		uniformsHelper._pimpl->QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
+		uniformsHelper._pimpl->QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
+		UniformsStream us {
+			uniformsHelper._pimpl->_queriedResources,
+			uniformsHelper._pimpl->_queriedImmediateDatas,
+			uniformsHelper._pimpl->_queriedSamplers };
+		boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, groupIdx);
+	}
+
+	const UniformsStreamInterface& SequencerUniformsHelper::GetLooseUniformsStreamInterface() const
+	{
+		return _pimpl->_finalUSI;
+	}
+
+	SequencerUniformsHelper::Pimpl::Pimpl(
+		ParsingContext& parsingContext, 
+		IteratorRange<const std::shared_ptr<IShaderResourceDelegate>*> resourceDelegates,
+		IteratorRange<const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>*> uniformBufferDelegates)
+	{
+		_finalUSI._resourceViewBindings.reserve(64);
+		_finalUSI._immediateDataBindings.reserve(64);
+		_finalUSI._samplerBindings.reserve(64);
+
+		// Delegates we visit first will be preferred over subsequent delegates (if they bind the same thing)
+		// So, we should go through in reverse order
+		if (!resourceDelegates.empty())
+			for (signed c=resourceDelegates.size()-1; c>=0; c--)
+				Prepare(*resourceDelegates[c], parsingContext);
+
+		if (!uniformBufferDelegates.empty())
+			for (signed c=uniformBufferDelegates.size()-1; c>=0; c--)
+				Prepare(*uniformBufferDelegates[c].second, uniformBufferDelegates[c].first);
+
+		auto parserDelegates = parsingContext.GetShaderResourceDelegates();
+		for (signed c=parserDelegates.size()-1; c>=0; c--)
+			Prepare(*parserDelegates[c], parsingContext);
+
+		auto parserUDelegates = parsingContext.GetUniformDelegates();
+		for (signed c=parserUDelegates.size()-1; c>=0; c--)
+			Prepare(*parserUDelegates[c].second, parserUDelegates[c].first);
+
+		_queriedResources.resize(_finalUSI._resourceViewBindings.size(), nullptr);
+		_queriedSamplers.resize(_finalUSI._samplerBindings.size(), nullptr);
+		_queriedImmediateDatas.resize(_finalUSI._immediateDataBindings.size(), {});
+		_tempDataBuffer.resize(_workingTempBufferSize, 0);
+	}
+
+	SequencerUniformsHelper::SequencerUniformsHelper(
+		ParsingContext& parsingContext,
+		IteratorRange<const std::shared_ptr<IShaderResourceDelegate>*> resourceDelegates,
+		IteratorRange<const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>*> uniformBufferDelegates)
+	{
+		_pimpl = std::make_unique<Pimpl>(parsingContext, resourceDelegates, uniformBufferDelegates);
+	}
+
+	SequencerUniformsHelper::~SequencerUniformsHelper() {}
+
 }}
 

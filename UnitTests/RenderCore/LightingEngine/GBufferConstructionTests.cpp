@@ -412,13 +412,11 @@ namespace UnitTests
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
 
-						Techniques::SequencerContext sequencerContext;
-						sequencerContext._sequencerConfig = gbufferWriteCfg.get();
 						Techniques::Draw(
 							*threadContext,
 							parsingContext, 
 							*testApparatus._pipelineAcceleratorPool,
-							sequencerContext,
+							*gbufferWriteCfg,
 							pkt);
 					}
 				}
@@ -485,13 +483,11 @@ namespace UnitTests
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
 
-						Techniques::SequencerContext sequencerContext;
-						sequencerContext._sequencerConfig = writeDirectCfg.get();
 						Techniques::Draw(
 							*threadContext,
 							parsingContext, 
 							*testApparatus._pipelineAcceleratorPool,
-							sequencerContext,
+							*writeDirectCfg,
 							pkt);
 					}
 				}

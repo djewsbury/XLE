@@ -13,8 +13,8 @@
 #include <string>
 
 namespace Utility { class ParameterBox; }
-namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class UniformsStreamInterface; class UniformsStream; }
-namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; class ShaderPatchCollection; } }
+namespace RenderCore { class IThreadContext; class MiniInputElementDesc; class UniformsStreamInterface; class UniformsStream; class DescriptorSetSignature; }
+namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace Assets { class IAsyncMarker; }
 
 namespace RenderCore { namespace Techniques
@@ -98,30 +98,56 @@ namespace RenderCore { namespace Techniques
 	};
 
 	class IPipelineAcceleratorPool;
-	class IUniformBufferDelegate;
-	class IShaderResourceDelegate;
 	class SequencerConfig;
-	
-	class SequencerContext
-	{
-	public:
-		std::vector<std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>> _sequencerUniforms;
-		std::vector<std::shared_ptr<IShaderResourceDelegate>> _sequencerResources;
-
-		SequencerConfig*	_sequencerConfig = nullptr;
-	};
-	
+	class SequencerUniformsHelper;
+		
 	void Draw(
 		IThreadContext& context,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerContext& sequencerTechnique,
+		const SequencerConfig& sequencerConfig,
+		SequencerUniformsHelper& uniformsHelper,
+		const DrawablesPacket& drawablePkt);
+
+	void Draw(
+		IThreadContext& context,
+        ParsingContext& parserContext,
+		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt);
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		SequencerConfig& sequencerConfig,
+		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt);
+
+	class IShaderResourceDelegate;
+	class IUniformBufferDelegate;
+
+	/** <summary>Utility class to manage sequencer uniforms</summary>
+	During the lifetime of this class, the values for sequencer uniforms are not expected
+	to change. This class can cache uniform buffers and descriptor sets, thereby freezing
+	the values.
+	In other words, this is a short lifetime class, created and used within a single frame
+	*/
+	class SequencerUniformsHelper
+	{
+	public:
+		const UniformsStreamInterface& GetLooseUniformsStreamInterface() const;
+		std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> CreateDescriptorSet(
+			IDevice& device,
+			ParsingContext& parsingContext,
+			const RenderCore::Assets::PredefinedDescriptorSetLayout& descSetLayout);
+
+		SequencerUniformsHelper(
+			ParsingContext& parsingContext,
+			IteratorRange<const std::shared_ptr<IShaderResourceDelegate>*> resourceDelegates = {},
+			IteratorRange<const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>*> uniformBufferDelegates = {});
+		~SequencerUniformsHelper();
+
+		class Pimpl;
+		std::unique_ptr<Pimpl> _pimpl;
+	};
 
 	enum class BatchFilter
     {

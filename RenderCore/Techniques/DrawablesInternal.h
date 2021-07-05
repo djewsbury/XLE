@@ -14,6 +14,16 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerContext& sequencerTechnique,
+		const SequencerConfig& sequencerConfig,
+		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt);
+
+	class sequencerUniformsHelper;
+	void ApplyLooseUniforms(
+		SequencerUniformsHelper& sequencerUniformsHelper,
+		Metal::DeviceContext& metalContext,
+		Metal::GraphicsEncoder_Optimized& encoder,
+		ParsingContext& parsingContext,
+		Metal::BoundUniforms&,
+		unsigned groupIndex);
 }}

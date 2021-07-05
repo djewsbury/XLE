@@ -15,7 +15,6 @@
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
-#include "../../../RenderCore/Techniques/SequencerDescriptorSet.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -308,8 +307,6 @@ namespace UnitTests
 				techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
 				Techniques::ParsingContext parsingContext{*techniqueContext};
 				parsingContext.AddShaderResourceDelegate(globalDelegate);
-				Techniques::SequencerContext sequencerContext;
-				sequencerContext._sequencerConfig = cfgId.get();
 				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
 				if (prepare) {
 					prepare->StallWhilePending();
@@ -319,7 +316,7 @@ namespace UnitTests
 					*threadContext,
 					parsingContext, 
 					*pipelineAcceleratorPool,
-					sequencerContext,
+					*cfgId,
 					pkt);
 			}
 			fbHelper.SaveImage(*threadContext, "drawables-render-sphere");
@@ -373,8 +370,6 @@ namespace UnitTests
 					techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
 					Techniques::ParsingContext parsingContext{*techniqueContext};
 					parsingContext.AddShaderResourceDelegate(globalDelegate);
-					Techniques::SequencerContext sequencerContext;
-					sequencerContext._sequencerConfig = cfgId.get();
 					
 					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
 					auto future = pipelineAcceleratorPool->GetPipeline(*d->_pipeline, *cfgId);
@@ -387,7 +382,7 @@ namespace UnitTests
 							*threadContext,
 							parsingContext, 
 							*pipelineAcceleratorPool,
-							sequencerContext,
+							*cfgId,
 							pkt);
 
 					if (parsingContext._requiredBufferUploadsCommandList)
@@ -518,10 +513,7 @@ namespace UnitTests
 		parsingContext.AddUniformDelegate(Hash64("GlobalTransform"), udel0);
 		parsingContext.AddUniformDelegate(Hash64("LocalTransform"), udel0);
 		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
-		SequencerContext seqContext;
-		seqContext._sequencerResources.push_back(del2);
-		seqContext._sequencerUniforms.push_back(std::make_pair(Hash64("LocalTransform"), udel1));
-
+		
 		auto matDescSet = MakeMaterialDescriptorSetLayout();
 		auto seqDescSet = MakeSequencerDescriptorSetLayout();
 		auto pipelineAccelerators = CreatePipelineAcceleratorPool(
@@ -535,11 +527,12 @@ namespace UnitTests
 		// with the highest priority. Delegates in the SequencerContext override the
 		// ParsingContext, and delegates later in each array take precidence over earlier
 		// ones
-		SequencerUniformsHelper helper0{parsingContext, seqContext};
-		auto descSet0 = CreateSequencerDescriptorSet(
+		std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResDelegates[] = { del2 };
+		std::pair<uint64_t, std::shared_ptr<Techniques::IUniformBufferDelegate>> uniformBufferDelegates[] = { std::make_pair(Hash64("LocalTransform"), udel1) };
+		SequencerUniformsHelper helper0{parsingContext, MakeIteratorRange(shaderResDelegates), MakeIteratorRange(uniformBufferDelegates)};
+		auto descSet0 = helper0.CreateDescriptorSet(
 			*testHelper->_device,
 			parsingContext,
-			helper0,
 			*seqDescSet.GetLayout());
 		REQUIRE(del2->_resViewQueryCount == 1);
 		REQUIRE(del1->_resViewQueryCount == 0);
@@ -553,13 +546,10 @@ namespace UnitTests
 		REQUIRE(udel0->_queryCount == 1);		// once for GlobalTransform
 		REQUIRE(udel1->_queryCount == 1);		// once for LocalTransform
 
-		seqContext._sequencerResources.clear();
-		seqContext._sequencerUniforms.clear();
-		SequencerUniformsHelper helper1{parsingContext, seqContext};
-		auto descSet1 = CreateSequencerDescriptorSet(
+		SequencerUniformsHelper helper1{parsingContext};
+		auto descSet1 = helper1.CreateDescriptorSet(
 			*testHelper->_device,
 			parsingContext,
-			helper1,
 			*seqDescSet.GetLayout());
 		REQUIRE(del2->_resViewQueryCount == 1);
 		REQUIRE(del1->_resViewQueryCount == 1);

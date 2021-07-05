@@ -4,18 +4,9 @@
 
 #include "ManipulatorsRender.h"
 #include "../../SceneEngine/PlacementsManager.h"
-// #include "../../SceneEngine/SceneEngineUtils.h"
-// #include "../../SceneEngine/MetalStubs.h"
-// #include "../../SceneEngine/RenderStep.h"
 #include "../../SceneEngine/IScene.h"
-// #include "../../FixedFunctionModel/ModelRunTime.h"
-// #include "../../FixedFunctionModel/PreboundShaders.h"
 #include "../../RenderCore/Metal/DeviceContext.h"
 #include "../../RenderCore/Metal/InputLayout.h"
-// #include "../../RenderCore/Metal/State.h"
-// #include "../../RenderCore/Metal/Shader.h"
-// #include "../../RenderCore/Metal/TextureView.h"
-// #include "../../RenderCore/Metal/ObjectFactory.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -44,7 +35,7 @@ namespace ToolsRig
         RenderCore::IThreadContext& threadContext,
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-        const RenderCore::Techniques::SequencerContext& sequencerTechnique,
+        const RenderCore::Techniques::SequencerConfig& sequencerConfig,
         SceneEngine::PlacementsRenderer& renderer,
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin,
@@ -84,7 +75,7 @@ namespace ToolsRig
 		Techniques::Draw(
 			threadContext, parserContext,
             pipelineAccelerators,
-			sequencerTechnique, 
+			sequencerConfig, 
 			pkt);
     }
 
@@ -121,14 +112,12 @@ namespace ToolsRig
                 threadContext,
                 pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
-			RenderCore::Techniques::SequencerContext seqContext;
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
-			seqContext._sequencerConfig = sequencerCfg.get();
             Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,
-				seqContext,
+				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
             highlight.FinishWithOutline(threadContext, Float3(.65f, .8f, 1.5f));
         CATCH_ASSETS_END(parserContext)
@@ -149,14 +138,12 @@ namespace ToolsRig
                 threadContext,
                 pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
-			RenderCore::Techniques::SequencerContext seqContext;
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
-			seqContext._sequencerConfig = sequencerCfg.get();
             Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,
-				seqContext,
+				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
 
 			const Float3 highlightCol(.75f, .8f, 0.4f);
@@ -181,14 +168,12 @@ namespace ToolsRig
                 threadContext,
                 pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
-            RenderCore::Techniques::SequencerContext seqContext;
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
-			seqContext._sequencerConfig = sequencerCfg.get();
 			Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,
-				seqContext,
+				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
             highlight.FinishWithShadow(threadContext, Float4(.025f, .025f, .025f, 0.85f));
         CATCH_ASSETS_END(parserContext)

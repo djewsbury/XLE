@@ -320,13 +320,14 @@ namespace RenderCore { namespace Techniques
 			Float2 viewportDimensions { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 			_resourceDelegate->Configure(context, viewportDimensions);
 
-			SequencerContext sequencerContext;
-			sequencerContext._sequencerResources.push_back(_resourceDelegate);
-			sequencerContext._sequencerConfig = sequencerConfig.get();
+			std::shared_ptr<Techniques::IShaderResourceDelegate> delegates[] = { _resourceDelegate };
+			SequencerUniformsHelper uniformsHelper{parserContext, MakeIteratorRange(delegates)};
 			Draw(
 				context, parserContext,
 				*_pipelineAcceleratorPool,
-				sequencerContext, _workingPkt);
+				*sequencerConfig.get(),
+				uniformsHelper,
+				_workingPkt);
 
 			AbandonDraws();	// (this just clears out everything prepared)
 		}
@@ -386,11 +387,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		template<typename InputAssemblyType>
-		std::shared_ptr<PipelineAccelerator> GetPipelineAccelerator(
-			IteratorRange<const InputAssemblyType*> inputAssembly,
-			const RenderCore::Assets::RenderStateSet& stateSet,
-			Topology topology,
-			const ParameterBox& shaderSelectors)
+			std::shared_ptr<PipelineAccelerator> GetPipelineAccelerator(
+				IteratorRange<const InputAssemblyType*> inputAssembly,
+				const RenderCore::Assets::RenderStateSet& stateSet,
+				Topology topology,
+				const ParameterBox& shaderSelectors)
 		{
 			uint64_t hashCode = HashInputAssembly(inputAssembly, stateSet.GetHash());
 			if (topology != Topology::TriangleList)

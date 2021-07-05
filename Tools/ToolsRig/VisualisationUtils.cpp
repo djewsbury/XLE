@@ -643,7 +643,6 @@ namespace ToolsRig
 
 		UInt2 viewportDims(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 		assert(viewportDims[0] && viewportDims[1]);
-		RenderCore::Techniques::SequencerContext sequencerTechnique;
 		auto cam = AsCameraDesc(*_pimpl->_cameraSettings);
 		SceneEngine::SceneView sceneView {
 			SceneEngine::SceneView::Type::Normal,
@@ -682,20 +681,18 @@ namespace ToolsRig
 
 			if (_pimpl->_settings._drawWireframe) {
 				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig(visWireframeDelegate, ParameterBox{}, rpi.GetFrameBufferDesc());
-				sequencerTechnique._sequencerConfig = sequencerConfig.get();
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
-					sequencerTechnique,
+					*sequencerConfig,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					*_pimpl->_scene);
 			}
 
 			if (_pimpl->_settings._drawNormals) {
 				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig(visNormals, ParameterBox{}, rpi.GetFrameBufferDesc());
-				sequencerTechnique._sequencerConfig = sequencerConfig.get();
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
-					sequencerTechnique,
+					*sequencerConfig,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					*_pimpl->_scene);
 			}
@@ -719,10 +716,9 @@ namespace ToolsRig
 					oldDelegate = visContent->SetPreDrawDelegate(_pimpl->_stencilPrimeDelegate);
 				// Prime the stencil buffer with draw call indices
 				auto sequencerCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(primeStencilBuffer, ParameterBox{}, rpi.GetFrameBufferDesc());
-				sequencerTechnique._sequencerConfig = sequencerCfg.get();
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
-					sequencerTechnique,
+					*sequencerCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					*_pimpl->_scene);
 				if (visContent)

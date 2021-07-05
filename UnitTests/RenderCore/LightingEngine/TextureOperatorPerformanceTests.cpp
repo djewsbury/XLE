@@ -248,13 +248,11 @@ namespace UnitTests
 				prepare->StallWhilePending();
 				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 			}
-			Techniques::SequencerContext sequencerContext;
-			sequencerContext._sequencerConfig = sequencerConfig.get();
 			Techniques::Draw(
 				*testApparatus._metalTestHelper->_device->GetImmediateContext(),
 				parsingContext,
 				*testApparatus._pipelineAcceleratorPool,
-				sequencerContext,
+				*sequencerConfig,
 				pkt);
 		}
 

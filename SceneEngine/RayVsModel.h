@@ -16,7 +16,6 @@ namespace RenderCore { namespace Techniques
 {
     class TechniqueContext; class CameraDesc;
 	class ParsingContext;
-	class SequencerContext;
     class IPipelineAcceleratorPool;
     class DrawablesPacket;
 }}
@@ -47,8 +46,6 @@ namespace SceneEngine
             RenderCore::Techniques::ParsingContext& parsingContext, 
             RenderCore::Techniques::DrawablesPacket& drawablePkt,
             const RenderCore::Techniques::CameraDesc* cameraForLOD = nullptr);
-
-		RenderCore::Techniques::SequencerContext MakeRayTestSequencerTechnique();
 
         enum TestType { RayTest = 0, FrustumTest = 1 };
 

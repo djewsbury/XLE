@@ -40,7 +40,7 @@ namespace SceneEngine
 		const std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter);
 
-	class RayDefinitionUniformDelegate : public Techniques::IUniformBufferDelegate
+	class RayDefinitionUniformDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
 		struct Buffer
@@ -53,12 +53,21 @@ namespace SceneEngine
         };
 		Buffer _data = {};
 
-		virtual void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, IteratorRange<void*> dst) override
+		virtual void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 		{ 
+			assert(idx==0);
 			assert(dst.size() == sizeof(_data));
 			std::memcpy(dst.begin(), &_data, sizeof(_data));
 		}
-		virtual size_t GetSize() override { return sizeof(_data); };
+		virtual size_t GetImmediateDataSize(Techniques::ParsingContext&, const void*, unsigned idx) override { assert(idx==0); return sizeof(_data); };
+
+		virtual const UniformsStreamInterface& GetInterface() override { return _usi; }
+
+		RayDefinitionUniformDelegate()
+		{
+			_usi.BindImmediateData(0, s_binding);
+		}
+		UniformsStreamInterface _usi;
 		static const uint64_t s_binding;
 	};
 	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("RayDefinition");
@@ -232,14 +241,6 @@ namespace SceneEngine
 		_pimpl->_res->_rayDefinition->_data._frustum = frustum;
     }
 
-	Techniques::SequencerContext ModelIntersectionStateContext::MakeRayTestSequencerTechnique()
-	{
-		Techniques::SequencerContext sequencer;
-		sequencer._sequencerConfig = _pimpl->_sequencerConfig.get();
-		sequencer._sequencerUniforms.push_back({RayDefinitionUniformDelegate::s_binding, _pimpl->_res->_rayDefinition});
-		return sequencer;
-	}
-
 	class ModelIntersectionTechniqueBox
 	{
 	public:
@@ -358,8 +359,13 @@ namespace SceneEngine
 		parsingContext.GetProjectionDesc() = projDesc;
 
 		auto& metalContext = *Metal::DeviceContext::Get(context);
-		auto sequencerTechnique = MakeRayTestSequencerTechnique();
-		RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, sequencerTechnique, drawablePkt);
+
+		std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegates[] { _pimpl->_res->_rayDefinition };
+	
+		Techniques::SequencerUniformsHelper uniformsHelper {
+			parsingContext, MakeIteratorRange(uniformDelegates)
+		};
+		RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, *_pimpl->_sequencerConfig, uniformsHelper, drawablePkt);
 	}
 
 	static const InputElementDesc s_soEles[] = {
