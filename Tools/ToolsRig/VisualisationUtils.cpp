@@ -46,11 +46,6 @@
 
 #pragma warning(disable:4505) // unreferenced local function has been removed
 
-/*namespace RenderCore { namespace LightingEngine
-{
-	extern std::string g_shadowLog;
-}}*/
-
 namespace ToolsRig
 {
     RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings)
@@ -623,12 +618,6 @@ namespace ToolsRig
                 << ", "  << mouseOver._intersectionPt[1]
                 << ", "  << mouseOver._intersectionPt[2]
                 << ")");
-
-		/*DrawText(
-            &context,
-            Rect(Coord2(viewport._topLeft[0]+3, viewport._topLeft[1]+3), Coord2(viewport._bottomRight[0]-3, viewport._bottomRight[1]-3)),
-            nullptr, RenderOverlays::ColorB(0xffffffff),
-			RenderCore::LightingEngine::g_shadowLog);*/
     }
 
     void VisualisationOverlay::Render(

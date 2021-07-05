@@ -12,7 +12,7 @@ namespace RenderCore
 	uint64_t DepthStencilDesc::HashDepthAspect() const
     {
         assert((unsigned(_depthTest) & ~0xfu) == 0);
-        assert((unsigned(_depthTest) & ~0x1u) == 0);
+        assert((unsigned(_depthWrite) & ~0x1u) == 0);
         return  ((uint64_t(_depthTest) & 0xf) << 0ull)
             |   ((uint64_t(_depthWrite) & 0x1) << 52ull)
             ;
