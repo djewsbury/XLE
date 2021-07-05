@@ -31,7 +31,6 @@ add_library(RenderCore_Vulkan STATIC ${Src} ${Headers})
 xle_configure_library(RenderCore_Vulkan)
 target_link_libraries(RenderCore_Vulkan PRIVATE ForeignMisc)
 target_sources(RenderCore_Vulkan INTERFACE ${CMAKE_CURRENT_LIST_DIR}/RegisterVulkan.cpp)
-target_link_libraries(RenderCore_Vulkan PRIVATE libHLSLcc)
 
 ############################################################################################################################################
 set(XLE_VULKAN_SDK_DIR "" CACHE PATH "Vulkan SDK directory")
@@ -106,35 +105,39 @@ add_custom_command(
 
 ############################################################################################################################################
 
-message("todo -- nicer way to find vulkan files!")
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-	target_link_libraries(
-		RenderCore_Vulkan PUBLIC 
-			${Vulkan_INCLUDE_DIRS}/../Lib/glslangd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/GenericCodeGend.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/MachineIndependentd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/OGLCompilerd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/OSDependentd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRVd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Toolsd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-optd.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-reduced.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-sharedd.lib
-		)
-else ()
-	target_link_libraries(
-		RenderCore_Vulkan PUBLIC 
-			${Vulkan_INCLUDE_DIRS}/../Lib/glslang.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/GenericCodeGen.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/MachineIndependent.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/OGLCompiler.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/OSDependent.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-opt.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-reduce.lib
-			${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-shared.lib
-		)
+option(XLE_VULKAN_ENABLE_GLSLLANG NO)
+if (XLE_VULKAN_ENABLE_GLSLLANG)
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		target_link_libraries(
+			RenderCore_Vulkan PUBLIC 
+				${Vulkan_INCLUDE_DIRS}/../Lib/glslangd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/GenericCodeGend.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/MachineIndependentd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/OGLCompilerd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/OSDependentd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRVd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Toolsd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-optd.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-reduced.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-sharedd.lib
+			)
+	else ()
+		target_link_libraries(
+			RenderCore_Vulkan PUBLIC 
+				${Vulkan_INCLUDE_DIRS}/../Lib/glslang.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/GenericCodeGen.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/MachineIndependent.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/OGLCompiler.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/OSDependent.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-opt.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-reduce.lib
+				${Vulkan_INCLUDE_DIRS}/../Lib/SPIRV-Tools-shared.lib
+			)
+	endif ()
+	target_link_libraries(RenderCore_Vulkan PRIVATE libHLSLcc)
+	target_compile_definitions(RenderCore_Vulkan PRIVATE ENABLE_GLSLLANG=1)
 endif ()
 
 target_link_libraries(RenderCore_Vulkan PUBLIC dxguid.lib)

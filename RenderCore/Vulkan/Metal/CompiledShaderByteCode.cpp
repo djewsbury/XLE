@@ -3,10 +3,19 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Shader.h"
+#include "../IDeviceVulkan.h"
+
+namespace RenderCore { namespace Metal_DX11
+{
+	std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler();
+	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler();
+}}
+
+#if defined(ENABLE_HLSLCC)
+
 #include "DeviceContext.h"
 #include "ShaderReflection.h"		// (for metrics string)
 #include "IncludeVulkan.h"
-#include "../IDeviceVulkan.h"
 #include "../../UniformsStream.h"
 #include "../../ShaderService.h"
 #include "../../ShaderLangUtil.h"
@@ -37,12 +46,6 @@
 #pragma pop_macro("new")
 
 #endif
-
-namespace RenderCore { namespace Metal_DX11
-{
-	std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler();
-	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler();
-}}
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -755,20 +758,26 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	}
 
-		////////////////////////////////////////////////////////////
+#endif
 
+
+namespace RenderCore { namespace Metal_Vulkan
+{
 	std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(
 		IDevice& device, const VulkanCompilerConfiguration& cfg)
 	{
 		auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
 		if (!vulkanDevice) return nullptr;
 
-		if (cfg._shaderMode == VulkanShaderMode::HLSLCrossCompiled) {
-			auto hlslCompiler = Metal_DX11::CreateVulkanPrecompiler();
-			return std::make_shared<HLSLCCToSPIRVCompiler>(hlslCompiler, cfg);
-		} else if (cfg._shaderMode == VulkanShaderMode::GLSLToSPIRV) {
-			return std::make_shared<GLSLToSPIRVCompiler>(cfg);
-		} else if (cfg._shaderMode == VulkanShaderMode::HLSLToSPIRV) {
+		#if defined(ENABLE_GLSLLANG)
+			if (cfg._shaderMode == VulkanShaderMode::HLSLCrossCompiled) {
+				auto hlslCompiler = Metal_DX11::CreateVulkanPrecompiler();
+				return std::make_shared<HLSLCCToSPIRVCompiler>(hlslCompiler, cfg);
+			} else if (cfg._shaderMode == VulkanShaderMode::GLSLToSPIRV) {
+				return std::make_shared<GLSLToSPIRVCompiler>(cfg);
+			} else
+		#endif 
+		if (cfg._shaderMode == VulkanShaderMode::HLSLToSPIRV) {
 			return Metal_DX11::CreateHLSLToSPIRVCompiler();
 		} else {
 			assert(0);
@@ -777,5 +786,4 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 }}
-
 
