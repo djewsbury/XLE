@@ -20,6 +20,7 @@ namespace Assets
         void AddSearchDirectoryFromFilename(StringSection<ResChar> filename);
         std::string AnySearchDirectory() const;
 		void SetBaseFile(StringSection<ResChar> file);
+        StringSection<> GetBaseFile() const { return _baseFile; }
 
         void ResolveFile(
             ResChar destination[], unsigned destinationCount, 

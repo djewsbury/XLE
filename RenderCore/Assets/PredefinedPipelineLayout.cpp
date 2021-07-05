@@ -145,7 +145,8 @@ namespace RenderCore { namespace Assets
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		ConditionalProcessingTokenizer tokenizer(inputData);
+		::Assets::PreprocessorIncludeHandler includeHandler;
+		ConditionalProcessingTokenizer tokenizer(inputData, searchRules.GetBaseFile(), &includeHandler);
 		Parse(tokenizer);
 	}
 

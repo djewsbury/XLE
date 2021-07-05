@@ -7,6 +7,7 @@
 #include "../UniformsStream.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetUtils.h"
+#include "../../Assets/PreprocessorIncludeHandler.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
@@ -214,11 +215,12 @@ namespace RenderCore { namespace Assets
 
 	PredefinedDescriptorSetLayout::PredefinedDescriptorSetLayout(
 		StringSection<> inputData,
-		const ::Assets::DirectorySearchRules&,
+		const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		ConditionalProcessingTokenizer iterator{inputData};
+		::Assets::PreprocessorIncludeHandler includeHandler;
+		ConditionalProcessingTokenizer iterator{inputData, searchRules.GetBaseFile(), &includeHandler};
 		Parse(iterator);
 		if (!iterator.Remaining().IsEmpty())
 			Throw(FormatException("Additional tokens found, expecting end of file", iterator.GetLocation()));

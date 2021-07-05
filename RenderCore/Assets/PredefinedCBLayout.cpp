@@ -9,6 +9,7 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/DepVal.h"
+#include "../../Assets/PreprocessorIncludeHandler.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 #include "../../OSServices/RawFS.h"
@@ -548,7 +549,8 @@ namespace RenderCore { namespace Assets
         //  by whitespace (same as C/CPP)
         //
 
-        ConditionalProcessingTokenizer iterator(inputData);
+        ::Assets::PreprocessorIncludeHandler includeHandler;
+        ConditionalProcessingTokenizer iterator(inputData, searchRules.GetBaseFile(), &includeHandler);
 
         std::string currentLayoutName;
         std::shared_ptr<PredefinedCBLayout> currentLayout;
