@@ -60,6 +60,7 @@ namespace RenderCore { namespace LightingEngine
 
     ::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelinePool& pipelineCollection,
+		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,

@@ -246,13 +246,14 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool>& pipelinePool,
+		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::Techniques::RenderPassInstance& rpi,
 		StringSection<> pixelShader,
 		RenderCore::UniformsStreamInterface& usi,
 		RenderCore::UniformsStream& us)
 	{
 		// Very simple stand-in tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, rpi, pixelShader, {}, usi);
+		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, pixelShader, {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(threadContext, parsingContext, us);
 	}
@@ -363,7 +364,7 @@ namespace UnitTests
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, testApparatus._techniquesSharedResources);
 
-			auto pipelinePool = std::make_shared<Techniques::GraphicsPipelinePool>(testHelper->_device, testHelper->_pipelineLayout);
+			auto pipelinePool = std::make_shared<Techniques::GraphicsPipelinePool>(testHelper->_device);
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				const auto& camera = cameras[c];
@@ -451,7 +452,7 @@ namespace UnitTests
 						rpi.GetInputAttachmentSRV(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
-					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
+					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
 
 					attachmentReservation = rpi.GetAttachmentReservation();
 				}

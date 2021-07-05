@@ -16,6 +16,7 @@
 #include "CommonResources.h"
 #include "SystemUniformsDelegate.h"
 #include "Drawables.h"
+#include "PipelineCollection.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
@@ -83,6 +84,8 @@ namespace RenderCore { namespace Techniques
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
 		_drawablesSharedResources = CreateDrawablesSharedResources();
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device, *_commonResources);
+
+		_graphicsPipelinePool = std::make_shared<GraphicsPipelinePool>(_device);
 
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);

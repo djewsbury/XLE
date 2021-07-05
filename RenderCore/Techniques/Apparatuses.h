@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
 	class CommonResourceBox;
 	class DrawablesSharedResources;
 	class SystemUniformsDelegate;
+	class GraphicsPipelinePool;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -74,6 +75,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<DrawablesSharedResources> _drawablesSharedResources;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
+
+		std::shared_ptr<GraphicsPipelinePool> _graphicsPipelinePool;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

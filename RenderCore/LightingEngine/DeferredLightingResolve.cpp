@@ -82,6 +82,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
 		Techniques::GraphicsPipelinePool& pipelineCollection,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
 		const Internal::ShadowResolveParam& shadowResolveParam,
 		const FrameBufferDesc& fbDesc,
@@ -97,8 +98,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::VertexInputStates inputStates;
 		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
 
-		Techniques::PixelOutputStates outputStates;
-		outputStates._fbTarget = {&fbDesc, subpassIdx};
+		Techniques::FrameBufferTarget fbTarget {&fbDesc, subpassIdx};
 
 		Techniques::GraphicsPipelineDesc pipelineDesc;
 
@@ -138,8 +138,8 @@ namespace RenderCore { namespace LightingEngine
 		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main";
 
 		return pipelineCollection.CreatePipeline(
-			pipelineDesc, selectors,
-			inputStates, outputStates);
+			pipelineLayout, pipelineDesc, selectors,
+			inputStates, fbTarget);
 	}
 
 	::Assets::PtrToFuturePtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
@@ -190,6 +190,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::GraphicsPipelinePool& pipelineCollection,
+		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,
@@ -213,7 +214,7 @@ namespace RenderCore { namespace LightingEngine
 			operatorToPipelineMap.push_back({lightOperatorId, ~0u, (unsigned)pipelineFutures.size()});
 			pipelineFutures.push_back(
 				BuildLightResolveOperator(
-					pipelineCollection, 
+					pipelineCollection, lightingOperatorLayout,
 					resolveOperators[lightOperatorId], Internal::ShadowResolveParam {}, 
 					fbDesc, subpassIdx,
 					hasScreenSpaceAO, 
@@ -252,7 +253,7 @@ namespace RenderCore { namespace LightingEngine
 			for (unsigned c=0; c<shadowParamCount; ++c) {
 				pipelineFutures.push_back(
 					BuildLightResolveOperator(
-						pipelineCollection,
+						pipelineCollection, lightingOperatorLayout,
 						resolveOperators[lightOperatorId], shadowParams[c], 
 						fbDesc, subpassIdx,
 						hasScreenSpaceAO, 
@@ -262,7 +263,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		auto finalResult = std::make_shared<LightResolveOperators>();
-		finalResult->_pipelineLayout = pipelineCollection.GetPipelineLayout();
+		finalResult->_pipelineLayout = lightingOperatorLayout;
 		finalResult->_debuggingOn = false;
 
 		const RenderCore::DescriptorSetSignature* sig = nullptr;

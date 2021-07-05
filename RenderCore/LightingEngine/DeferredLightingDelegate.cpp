@@ -47,6 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<StandardLightScene> _lightScene;
 		std::shared_ptr<Techniques::GraphicsPipelinePool> _pipelineCollection;
+		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
 		void DoLightResolve(LightingTechniqueIterator& iterator);
@@ -298,6 +299,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pipelineCollection,
+		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -319,7 +321,7 @@ namespace RenderCore { namespace LightingEngine
 			*result,
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
-			resolveOperators=std::move(resolveOperators), pipelineCollection, flags](
+			resolveOperators=std::move(resolveOperators), pipelineCollection, lightingOperatorLayout, flags](
 				::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<ShadowPreparationOperators> shadowPreparationOperators) {
@@ -334,6 +336,8 @@ namespace RenderCore { namespace LightingEngine
 				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 				captures->_shadowPreparationOperators = std::move(shadowPreparationOperators);
 				captures->_lightScene = lightScene;
+				captures->_lightingOperatorLayout = lightingOperatorLayout;
+				captures->_pipelineCollection = pipelineCollection;
 
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
@@ -394,7 +398,7 @@ namespace RenderCore { namespace LightingEngine
 				shadowOp.reserve(captures->_shadowPreparationOperators->_operators.size());
 				for (const auto& c:captures->_shadowPreparationOperators->_operators) shadowOp.push_back(c._desc);
 				auto lightResolveOperators = BuildLightResolveOperators(
-					*pipelineCollection, 
+					*pipelineCollection, lightingOperatorLayout,
 					resolveOperators, shadowOp,
 					*resolvedFB.first, resolvedFB.second+1,
 					false, GBufferType::PositionNormalParameters);
@@ -403,7 +407,6 @@ namespace RenderCore { namespace LightingEngine
 					thatFuture,
 					[lightingTechnique, captures, lightScene, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;
-						captures->_pipelineCollection = pipelineCollection;
 						lightScene->_lightSourceFactory = resolveOperators;
 						lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
 						return lightingTechnique;
@@ -426,6 +429,7 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_pipelineAccelerators,
 			apparatus->_sharedDelegates,
 			apparatus->_lightingOperatorCollection,
+			apparatus->_lightingOperatorLayout,
 			apparatus->_lightingOperatorsPipelineLayoutFile,
 			resolveOperators, shadowGenerators, preregisteredAttachments,
 			fbProps, flags);		
@@ -440,6 +444,7 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pool,
+		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const ShadowOperatorDesc& shadowOpDesc,
 		const IPreparedShadowResult& preparedShadowResult,
 		unsigned idx)
@@ -469,7 +474,7 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox selectors;
 		Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors(selectors);
 
-		auto op = Techniques::CreateFullViewportOperator(pool, rpi, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, usi);
+		auto op = Techniques::CreateFullViewportOperator(pool, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(threadContext, parsingContext, us, MakeIteratorRange(shadowDescSets));
@@ -482,7 +487,8 @@ namespace RenderCore { namespace LightingEngine
 			auto opId = preparedShadow.second->GetShadowOperatorId();
 			GenerateShadowingDebugTextures( 
 				*iterator._threadContext, *iterator._parsingContext, 
-				_pipelineCollection, 
+				_pipelineCollection,
+				_lightingOperatorLayout,
 				_shadowPreparationOperators->_operators[opId]._desc,
 				*preparedShadow.second, c);
 			++c;

@@ -5,6 +5,7 @@
 #include "PipelineCollection.h"
 #include "PipelineAcceleratorInternal.h"
 #include "ShaderVariationSet.h"
+#include "RenderPass.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"
@@ -23,17 +24,8 @@ namespace RenderCore { namespace Techniques
 		return RenderCore::Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(*_fbDesc, _subpassIdx); 
 	}
 
-	uint64_t PixelOutputStates::GetHash() const
-	{
-		/*assert(_attachmentBlend.size() == _fbTarget._fbDesc->GetSubpasses()[_fbTarget._subpassIdx].GetOutputs().size());
-		uint64_t renderPassRelevance = _fbTarget.GetHash();
-		auto result = HashCombine(_depthStencil.HashDepthAspect() ^ _depthStencil.HashStencilAspect(), renderPassRelevance);
-		result = HashCombine(_rasterization.Hash(), result);
-		for (const auto& a:_attachmentBlend)
-			result = HashCombine(a.Hash(), result);
-		return result;*/
-		return _fbTarget.GetHash();
-	}
+	FrameBufferTarget::FrameBufferTarget(const FrameBufferDesc* fbDesc, unsigned subpassIdx) : _fbDesc(fbDesc), _subpassIdx(subpassIdx) {}
+	FrameBufferTarget::FrameBufferTarget(const RenderPassInstance& rpi) : _fbDesc(&rpi.GetFrameBufferDesc()), _subpassIdx(rpi.GetCurrentSubpassIndex()) {}
 
 	uint64_t VertexInputStates::GetHash() const
 	{
@@ -53,12 +45,13 @@ namespace RenderCore { namespace Techniques
 		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
 	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelinePool::CreatePipeline(
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDesc,
 		const ParameterBox& selectors,
 		const VertexInputStates& inputStates,
-		const PixelOutputStates& outputStates)
+		const FrameBufferTarget& fbTarget)
 	{
-		auto hash = HashCombine(inputStates.GetHash(), outputStates.GetHash());
+		auto hash = HashCombine(inputStates.GetHash(), fbTarget.GetHash());
 		hash = HashCombine(pipelineDesc.GetHash(), hash);
 		hash = HashCombine(selectors.GetParameterNamesHash(), hash);
 		hash = HashCombine(selectors.GetHash(), hash);
@@ -78,7 +71,7 @@ namespace RenderCore { namespace Techniques
 		} else
 			_pipelines.insert(i, std::make_pair(hash, result));
 		lk = {};
-		ConstructToFuture(result, pipelineDesc, selectors, inputStates, outputStates);
+		ConstructToFuture(result, pipelineLayout, pipelineDesc, selectors, inputStates, fbTarget);
 		return result;
 	}
 
@@ -110,18 +103,19 @@ namespace RenderCore { namespace Techniques
 
 	void GraphicsPipelinePool::ConstructToFuture(
 		std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDescInit,
 		const ParameterBox& selectors,
 		const VertexInputStates& inputStates,
-		const PixelOutputStates& outputStates)
+		const FrameBufferTarget& fbTarget)
 	{
 		auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescInit);
 		::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
 			*future,
 			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_sharedPools, 
-			 pipelineLayout=_pipelineLayout, pipelineLayoutDepVal=_pipelineLayoutDepVal,
+			 pipelineLayout=pipelineLayout,
 			 inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
-			 fbDesc=*outputStates._fbTarget._fbDesc, spIdx=outputStates._fbTarget._subpassIdx]( 
+			 fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx]( 
 				::Assets::FuturePtr<Metal::GraphicsPipeline>& resultFuture,
 				std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering) {
 
@@ -152,8 +146,6 @@ namespace RenderCore { namespace Techniques
 						configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_automaticFiltering[c]->GetDependencyValidation());
 				if (pipelineDescWithFiltering->_preconfiguration)
 					configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
-				if (pipelineLayoutDepVal)
-					configurationDepVal.RegisterDependency(pipelineLayoutDepVal);
 
 				// todo -- now that we have the filtered selectors, we could attempt to reuse an existing pipeline (if one exists with
 				// the same filtered selectors)
@@ -190,17 +182,11 @@ namespace RenderCore { namespace Techniques
 					});
 			});		
 	}
-	
-	uint64_t GraphicsPipelinePool::GetGUID() const
-	{
-		return _pipelineLayout->GetGUID();
-	}
 
-	GraphicsPipelinePool::GraphicsPipelinePool(
-		std::shared_ptr<IDevice> device,
-		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
-		const ::Assets::DependencyValidation& pipelineLayoutDepVal)
-	: _device(std::move(device)), _pipelineLayout(std::move(pipelineLayout)), _pipelineLayoutDepVal(pipelineLayoutDepVal) 
+	static uint64_t s_nextGraphicsPipelinePoolGUID = 1;
+	GraphicsPipelinePool::GraphicsPipelinePool(std::shared_ptr<IDevice> device)
+	: _device(std::move(device))
+	, _guid(s_nextGraphicsPipelinePoolGUID++)
 	{
 		_sharedPools = std::make_shared<SharedPools>();
 	}

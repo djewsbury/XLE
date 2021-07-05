@@ -257,14 +257,13 @@ namespace UnitTests
 		}
 
 		if (0) {
-			auto pool = std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device, testApparatus._metalTestHelper->_pipelineLayout); 
 			UniformsStreamInterface usi;
 			UniformsStream us;
 			auto op = Techniques::CreateFullViewportOperator(
-				pool,
-				rpi,
+				std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device),
 				"ut-data/pattern1.pixel.hlsl:main",
-				{}, usi);
+				{}, testApparatus._metalTestHelper->_pipelineLayout,
+				rpi, usi);
 
 			REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
 			op->Actualize()->Draw(
@@ -291,12 +290,11 @@ namespace UnitTests
 		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
 
-		auto pool = std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device, testApparatus._metalTestHelper->_pipelineLayout); 
 		auto op = Techniques::CreateFullViewportOperator(
-			pool,
-			rpi,
+			std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device),
 			"ut-data/downsample.pixel.hlsl:main",
-			{}, usi);
+			{}, testApparatus._metalTestHelper->_pipelineLayout,
+			rpi, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(

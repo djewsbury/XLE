@@ -16,21 +16,14 @@
 
 namespace RenderCore { namespace Techniques
 {
+	class RenderPassInstance;
 	struct FrameBufferTarget
 	{
-		const RenderCore::FrameBufferDesc* _fbDesc;
-		unsigned _subpassIdx = ~0u;
+		const FrameBufferDesc* _fbDesc;
+		unsigned _subpassIdx;
 		uint64_t GetHash() const;
-	};
-
-    struct PixelOutputStates
-	{
-		FrameBufferTarget _fbTarget;
-		// DepthStencilDesc _depthStencil;
-		// RasterizationDesc _rasterization;
-		// IteratorRange<const AttachmentBlendDesc*> _attachmentBlend;
-
-		uint64_t GetHash() const;
+		FrameBufferTarget(const FrameBufferDesc* fbDesc = nullptr, unsigned subpassIdx = ~0u);
+		FrameBufferTarget(const RenderPassInstance&);
 	};
 
 	struct VertexInputStates
@@ -45,36 +38,33 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
+			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
-			const PixelOutputStates& outputStates);
+			const FrameBufferTarget& fbTarget);
 
-        const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
-		uint64_t GetGUID() const;
+		uint64_t GetGUID() const { return _guid; }
 
-		GraphicsPipelinePool(
-			std::shared_ptr<IDevice> device,
-			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
-			const ::Assets::DependencyValidation& pipelineLayoutDepVal = {});
+		GraphicsPipelinePool(std::shared_ptr<IDevice> device);
 		~GraphicsPipelinePool();
 	private:
 		std::shared_ptr<IDevice> _device;
-		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
-		::Assets::DependencyValidation _pipelineLayoutDepVal;
 		Threading::Mutex _pipelinesLock;
 		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pipelines;
 
 		class SharedPools;
 		std::shared_ptr<SharedPools> _sharedPools;
+		uint64_t _guid = ~0ull;
 
 		void ConstructToFuture(
 			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
+			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
-			const PixelOutputStates& outputStates);
+			const FrameBufferTarget& fbTarget);
 	};
 
 }}
