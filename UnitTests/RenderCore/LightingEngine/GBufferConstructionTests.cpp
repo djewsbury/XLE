@@ -428,13 +428,13 @@ namespace UnitTests
 				// Run per pixel pass to convert gbuffer textures -> world position & normal textures
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
-					SubpassDesc subpass;
+					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition"), LoadStore::Clear));
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal"), LoadStore::Clear));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
+					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
+					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
+					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
 					reconstructedWorldPosition = rpi.GetOutputAttachmentResource(0);
@@ -447,10 +447,10 @@ namespace UnitTests
 					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
 					UniformsStream us;
 					IResourceView* srvs[] = { 
-						rpi.GetInputAttachmentSRV(0).get(),
-						rpi.GetInputAttachmentSRV(1).get(),
-						rpi.GetInputAttachmentSRV(2).get(),
-						rpi.GetInputAttachmentSRV(3).get()
+						rpi.GetView(0).get(),
+						rpi.GetView(1).get(),
+						rpi.GetView(2).get(),
+						rpi.GetView(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
 					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);

@@ -26,7 +26,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void RenderStepFragmentInterface::AddSubpass(
-		RenderCore::SubpassDesc&& subpass,
+		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 		const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& techniqueDelegate,
 		Techniques::BatchFilter batchFilter,
 		ParameterBox&& sequencerSelectors,
@@ -42,7 +42,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void RenderStepFragmentInterface::AddSubpass(
-		RenderCore::SubpassDesc&& subpass,
+		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 		std::function<void(LightingTechniqueIterator&)>&& fn)
 	{
 		_frameBufferDescFragment.AddSubpass(std::move(subpass));
@@ -53,12 +53,12 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void RenderStepFragmentInterface::AddSubpasses(
-		IteratorRange<const RenderCore::SubpassDesc*> subpasses,
+		IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
 		std::function<void(LightingTechniqueIterator&)>&& fn)
 	{
 		if (subpasses.empty()) return;
 		for (const auto& s:subpasses)
-			_frameBufferDescFragment.AddSubpass(SubpassDesc{s});
+			_frameBufferDescFragment.AddSubpass(Techniques::FrameBufferDescFragment::SubpassDesc{s});
 
 		SubpassExtension ext;
 		ext._type = SubpassExtension::Type::CallLightingIteratorFunction;
@@ -69,7 +69,7 @@ namespace RenderCore { namespace LightingEngine
 			_subpassExtensions.emplace_back(SubpassExtension { SubpassExtension::Type::HandledByPrevious });
 	}
 
-	void RenderStepFragmentInterface::AddSkySubpass(RenderCore::SubpassDesc&& subpass)
+	void RenderStepFragmentInterface::AddSkySubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass)
 	{
 		_frameBufferDescFragment.AddSubpass(std::move(subpass));
 		SubpassExtension ext;

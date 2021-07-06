@@ -273,7 +273,7 @@ namespace UnitTests
 
 			// stall until all resources are ready
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
 				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
 				if (prepareMarker) {
@@ -284,7 +284,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+					*threadContext, parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
@@ -353,7 +353,7 @@ namespace UnitTests
 
 			// stall until all resources are ready
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
 				auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
 				if (prepareMarker) {
@@ -364,7 +364,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *lightingTechnique);
+					*threadContext, parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 

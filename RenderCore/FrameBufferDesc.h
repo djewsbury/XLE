@@ -60,11 +60,11 @@ namespace RenderCore
 
         #if defined(_DEBUG)
             mutable std::string _name = std::string();
-            inline AttachmentDesc&& SetName(const std::string& name) const { this->_name = name; return std::move(const_cast<AttachmentDesc&>(*this)); }
-            inline AttachmentDesc&& SetName(const std::string& name) { this->_name = name; return std::move(*this); }
+            inline void SetName(const std::string& name) const { this->_name = name; }
+            inline void SetName(const std::string& name) { this->_name = name; }
         #else
-            inline AttachmentDesc&& SetName(const std::string& name) const { return std::move(const_cast<AttachmentDesc&>(*this)); }
-            inline AttachmentDesc&& SetName(const std::string& name) { return std::move(*this); }
+            inline void SetName(const std::string& name) const {}
+            inline void SetName(const std::string& name) {}
         #endif
     };
 

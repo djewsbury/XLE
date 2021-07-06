@@ -28,23 +28,21 @@ namespace SceneEngine
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
 		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
 		lightingState.ConfigureLightScene(parsingContext.GetProjectionDesc(), lightScene);
-		return RenderCore::LightingEngine::LightingTechniqueInstance { threadContext, parsingContext, pipelineAccelerators, compiledTechnique };
+		return RenderCore::LightingEngine::LightingTechniqueInstance { threadContext, parsingContext, compiledTechnique };
 	}
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene)
 	{
 		using namespace RenderCore;
-		LightingEngine::LightingTechniqueInstance prepareLightingIterator(pipelineAccelerators, compiledTechnique);
+		LightingEngine::LightingTechniqueInstance prepareLightingIterator(compiledTechnique);
 
 		for (;;) {
 			auto next = prepareLightingIterator.GetNextStep();

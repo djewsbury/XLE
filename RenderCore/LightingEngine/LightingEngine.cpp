@@ -225,11 +225,10 @@ namespace RenderCore { namespace LightingEngine
 	LightingTechniqueIterator::LightingTechniqueIterator(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
-		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
 		const CompiledLightingTechnique& compiledTechnique)
 	: _threadContext(&threadContext)
 	, _parsingContext(&parsingContext)
-	, _pipelineAcceleratorPool(&pipelineAcceleratorPool)
+	, _pipelineAcceleratorPool(compiledTechnique._pipelineAccelerators.get())
 	, _compiledTechnique(&compiledTechnique)
 	{
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
@@ -317,12 +316,9 @@ namespace RenderCore { namespace LightingEngine
 	LightingTechniqueInstance::LightingTechniqueInstance(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
-		Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
 		CompiledLightingTechnique& compiledTechnique)
 	{
-		_iterator = std::make_unique<LightingTechniqueIterator>(
-			threadContext, parsingContext, pipelineAcceleratorPool,
-			compiledTechnique);
+		_iterator = std::make_unique<LightingTechniqueIterator>(threadContext, parsingContext, compiledTechnique);
 	}
 
 	LightingTechniqueInstance::~LightingTechniqueInstance() {}
@@ -390,11 +386,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	LightingTechniqueInstance::LightingTechniqueInstance(
-		Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		CompiledLightingTechnique& technique)
 	{
 		_prepareResourcesIterator = std::make_unique<PrepareResourcesIterator>();
-		_prepareResourcesIterator->_pipelineAcceleratorPool = &pipelineAccelerators;
+		_prepareResourcesIterator->_pipelineAcceleratorPool = technique._pipelineAccelerators.get();
 		_prepareResourcesIterator->_steps = technique._steps;
 		_prepareResourcesIterator->_stepIterator = _prepareResourcesIterator->_steps.begin();
 	}

@@ -177,19 +177,20 @@ namespace RenderOverlays
         bool onlyHighlighted)
     {
 		Techniques::FrameBufferDescFragment fbDesc;
-		SubpassDesc mainPass;
+		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
-        fbDesc.AddSubpass(std::move(mainPass));
-		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
-
-        auto stencilSrv = rpi.GetInputAttachmentSRV(
-            0,
+		mainPass.AppendView(
+            fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth),
+            BindFlag::ShaderResource,
             TextureViewDesc{
                 {TextureViewDesc::Aspect::Stencil},
                 TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined,
 				TextureViewDesc::Flags::JustStencil});
+        fbDesc.AddSubpass(std::move(mainPass));
+		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
+
+        auto stencilSrv = rpi.GetView(0);
         if (!stencilSrv) return;
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
@@ -232,14 +233,14 @@ namespace RenderOverlays
 		const bool doDepthTest = true;
         auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;
 
-		SubpassDesc subpass0;
+		Techniques::FrameBufferDescFragment::SubpassDesc subpass0;
 		subpass0.AppendOutput(n_offscreen);
 		subpass0.SetDepthStencil(AttachmentViewDesc { n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil } });
 		fbDescFrag.AddSubpass(std::move(subpass0));
 
-		SubpassDesc subpass1;
+		Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
 		subpass1.AppendOutput(n_mainColor);
-		subpass1.AppendInput(n_offscreen);
+		subpass1.AppendView(n_offscreen);
 		fbDescFrag.AddSubpass(std::move(subpass1));
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
@@ -251,7 +252,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
+        auto* srv = _pimpl->_rpi.GetView(0).get();
         assert(srv);
 
         if (srv) {
@@ -280,7 +281,7 @@ namespace RenderOverlays
             //  using some filtering
 
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
+        auto* srv = _pimpl->_rpi.GetView(0).get();
         assert(srv);
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
@@ -309,7 +310,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentSRV(0).get();
+        auto* srv = _pimpl->_rpi.GetView(0).get();
         assert(srv);
 
             //  now we can render these objects over the main image, 

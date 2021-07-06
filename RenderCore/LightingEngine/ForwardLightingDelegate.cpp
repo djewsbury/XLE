@@ -110,21 +110,23 @@ namespace RenderCore { namespace LightingEngine
 			output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::Clear);
 		auto depth = result.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f, msDepthDesc);
 
-		SubpassDesc depthOnlySubpass;
+		Techniques::FrameBufferDescFragment::SubpassDesc depthOnlySubpass;
 		depthOnlySubpass.SetDepthStencil(depth);
+		depthOnlySubpass.SetName("DepthOnly");
+		result.AddSubpass(std::move(depthOnlySubpass), depthOnlyDelegate, Techniques::BatchFilter::General);
 
-		SubpassDesc mainSubpass;
+		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
 		mainSubpass.AppendOutput(output);
 		mainSubpass.SetDepthStencil(depth);
-
-		result.AddSubpass(depthOnlySubpass.SetName("DepthOnly"), depthOnlyDelegate, Techniques::BatchFilter::General);
+		mainSubpass.SetName("MainForward");
 
 		// todo -- parameters should be configured based on how the scene is set up
 		ParameterBox box;
 		// box.SetParameter((const utf8*)"SKY_PROJECTION", lightBindRes._skyTextureProjection);
 		box.SetParameter((const utf8*)"HAS_DIFFUSE_IBL", 1);
 		box.SetParameter((const utf8*)"HAS_SPECULAR_IBL", 1);
-		result.AddSubpass(mainSubpass.SetName("MainForward"), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box));
+		
+		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box));
 		return result;
 	}
 

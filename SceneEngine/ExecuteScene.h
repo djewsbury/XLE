@@ -36,13 +36,11 @@ namespace SceneEngine
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique);
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
 

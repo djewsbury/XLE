@@ -106,7 +106,7 @@ namespace RenderCore { namespace LightingEngine
 					Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f,
 					// Main multisampled depth stencil
 					{ RenderCore::Format::D24_UNORM_S8_UINT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear, LoadStore::Retain });
+						LoadStore::Clear, LoadStore::Retain, 0, BindFlag::DepthStencil | BindFlag::ShaderResource });
 
 						// Generally the deferred pixel shader will just copy information from the albedo
 						// texture into the first deferred buffer. So the first deferred buffer should
@@ -131,7 +131,7 @@ namespace RenderCore { namespace LightingEngine
 					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
 						LoadStore::Clear, LoadStore::Retain });
 
-				SubpassDesc subpass;
+				Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 				subpass.AppendOutput(diffuse);
 				subpass.AppendOutput(normal);
 				if (gbufferType == GBufferType::PositionNormalParameters)
@@ -170,7 +170,7 @@ namespace RenderCore { namespace LightingEngine
 			TextureDesc::Dimensionality::Undefined,
 			TextureViewDesc::Flags::JustDepth};
 
-		SubpassDesc subpasses[2];
+		Techniques::FrameBufferDescFragment::SubpassDesc subpasses[2];
 		subpasses[0].AppendOutput(lightResolveTarget);
 		subpasses[0].SetDepthStencil(depthTarget);
 
@@ -180,15 +180,10 @@ namespace RenderCore { namespace LightingEngine
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
-		subpasses[1].AppendInput(
-			AttachmentViewDesc {
-				fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Retain, gbufferStore),
-				{diffuseAspect}
-			});
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Retain, gbufferStore));
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Retain, gbufferStore));
-		subpasses[1].AppendInput(
-			AttachmentViewDesc { depthTarget, justDepthWindow });
+		subpasses[1].AppendView(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Retain, gbufferStore), BindFlag::ShaderResource, {diffuseAspect});
+		subpasses[1].AppendView(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Retain, gbufferStore));
+		subpasses[1].AppendView(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Retain, gbufferStore));
+		subpasses[1].AppendView(depthTarget, BindFlag::ShaderResource, justDepthWindow);
 
 		// fragment.AddSubpasses(MakeIteratorRange(subpasses), std::move(fn));
 		fragment.AddSkySubpass(std::move(subpasses[0]));
@@ -204,9 +199,9 @@ namespace RenderCore { namespace LightingEngine
 		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain, LoadStore::DontCare);
 		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::DontCare, LoadStore::Retain);
 
-		SubpassDesc subpass;
+		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 		subpass.AppendOutput(ldrOutput);
-		subpass.AppendInput(hdrInput);
+		subpass.AppendView(hdrInput);
 		fragment.AddSubpass(std::move(subpass), std::move(fn));
 		return fragment;
 	}
@@ -288,7 +283,7 @@ namespace RenderCore { namespace LightingEngine
 		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
 		UniformsStream us;
-		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentSRV(0).get() };
+		IResourceView* srvs[] = { iterator._rpi.GetView(0).get() };
 		us._resourceViews = MakeIteratorRange(srvs);
 		uniforms.ApplyLooseUniforms(metalContext, encoder, us);
 		encoder.Bind({}, Topology::TriangleStrip);
@@ -453,11 +448,11 @@ namespace RenderCore { namespace LightingEngine
 		const auto cascadeIndexSemantic = Utility::Hash64("CascadeIndex");
 		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
 		Techniques::FrameBufferDescFragment fbDesc;
-		SubpassDesc sp;
+		Techniques::FrameBufferDescFragment::SubpassDesc sp;
 		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(cascadeIndexSemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
 		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(sampleDensitySemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
-		sp.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-		sp.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		sp.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
+		sp.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
 		fbDesc.AddSubpass(std::move(sp));
 
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
@@ -466,7 +461,7 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(0, Utility::Hash64("GBuffer_Normals"));
 		usi.BindResourceView(1, Utility::Hash64("DepthTexture"));
 		usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
-		IResourceView* srvs[] = { rpi.GetInputAttachmentSRV(0).get(), rpi.GetInputAttachmentSRV(1).get() };
+		IResourceView* srvs[] = { rpi.GetView(0).get(), rpi.GetView(1).get() };
 		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);

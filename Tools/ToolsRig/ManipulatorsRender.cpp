@@ -208,14 +208,14 @@ namespace ToolsRig
         const Float3& centre, float radius)
     {
         Techniques::FrameBufferDescFragment fbDesc;
-		SubpassDesc mainPass;
+		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("RenderCylinderHighlight");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		mainPass.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
-        auto depthSrv = rpi.GetInputAttachmentSRV(0, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
+        auto depthSrv = rpi.GetView(0);
         if (!depthSrv) return;
 
         TRY
@@ -263,14 +263,14 @@ namespace ToolsRig
 		RectangleHighlightType type)
     {
         Techniques::FrameBufferDescFragment fbDesc;
-		SubpassDesc mainPass;
+		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("RenderRectangleHighlight");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		mainPass.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
-        auto depthSrv = rpi.GetInputAttachmentSRV(0, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
+        auto depthSrv = rpi.GetView(0);
         if (!depthSrv) return;
 
         TRY

@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
 	void ApplyLooseUniforms(
 		SequencerUniformsHelper& sequencerUniformsHelper,
 		Metal::DeviceContext& metalContext,
-		Metal::GraphicsEncoder_Optimized& encoder,
+		Metal::SharedEncoder& encoder,
 		ParsingContext& parsingContext,
 		Metal::BoundUniforms&,
 		unsigned groupIndex);

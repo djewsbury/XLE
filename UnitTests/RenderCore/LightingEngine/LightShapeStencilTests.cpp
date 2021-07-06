@@ -89,7 +89,7 @@ namespace UnitTests
 	static void PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
-		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*testApparatus._pipelineAcceleratorPool, lightingTechnique);
+		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
 		auto prepareMarker = prepareLightingIterator.GetResourcePreparationMarker();
 		if (prepareMarker) {
@@ -120,7 +120,7 @@ namespace UnitTests
 
 		{
 			RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-				threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, lightingTechnique);
+				threadContext, parsingContext, lightingTechnique);
 			ParseScene(lightingIterator, drawableWriter);
 		}
 

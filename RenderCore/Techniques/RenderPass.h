@@ -48,7 +48,16 @@ namespace RenderCore { namespace Techniques
 			uint64_t semantic,
             unsigned width, unsigned height, unsigned arrayLayerCount,
             const AttachmentDesc& request);
+        
+        struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
+        struct SubpassDesc : public RenderCore::SubpassDesc
+        {
+            IteratorRange<const ViewedAttachment*> GetViews() const { return MakeIteratorRange(_views); }
+            void AppendView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
+            std::vector<ViewedAttachment> _views;
+        };
         void AddSubpass(SubpassDesc&& subpass);
+        void AddSubpass(RenderCore::SubpassDesc&& subpass);
 
         FrameBufferDescFragment();
         ~FrameBufferDescFragment();
@@ -114,6 +123,9 @@ namespace RenderCore { namespace Techniques
             std::vector<PreregisteredAttachment> _fullAttachmentDescriptions;
             std::vector<AttachmentTransform> _attachmentTransforms;
             std::string _log;
+            std::vector<FrameBufferDescFragment::ViewedAttachment> _viewedAttachments;
+            std::vector<unsigned> _viewedAttachmentsMap;      // subpassIdx -> index in _viewedAttachments
+            PipelineType _pipelineType = PipelineType::Graphics;
         };
 
         StitchResult TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments);
@@ -157,10 +169,10 @@ namespace RenderCore { namespace Techniques
         struct GetResourceResult
         {
             IResourcePtr _resource;
-            bool _needsCompleteResource = false;            // set to true if the caller must call Metal::CompleteResource() to finalize preparation for this resource 
         };
         GetResourceResult GetResource(AttachmentName resName) const;
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
+        auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
         struct ReservationFlag
         {
@@ -187,6 +199,8 @@ namespace RenderCore { namespace Techniques
     {
     public:
         IteratorRange<const AttachmentName*> GetResourceIds() const { return MakeIteratorRange(_reservedAttachments); }
+        void CompleteInitialization(IThreadContext&);
+        bool HasPendingCompleteInitialization() const;
         Reservation();
         ~Reservation();
         Reservation(Reservation&&);
@@ -255,7 +269,7 @@ namespace RenderCore { namespace Techniques
 		auto GetInputAttachmentSRV(unsigned inputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
 
 		auto GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> IResourcePtr;
-		auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
+	    auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
 
 		auto GetDepthStencilAttachmentResource() const -> IResourcePtr;
 		auto GetDepthStencilAttachmentSRV(const TextureViewDesc& window = {}) const -> std::shared_ptr<IResourceView>;
@@ -263,6 +277,8 @@ namespace RenderCore { namespace Techniques
 		// The "AttachmentNames" here map onto the names used by the FrameBufferDesc used to initialize this RPI
         auto GetResourceForAttachmentName(AttachmentName resName) const -> IResourcePtr;
         auto GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window = {}) const -> std::shared_ptr<IResourceView>;
+
+        auto GetView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>;
 
         // Construct from a fully actualized "FrameBufferDesc" (eg, one generated via a
         // FragmentStitchingContext)
@@ -294,7 +310,6 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
 			AttachmentPool& attachmentPool);
-
         ~RenderPassInstance();
 
         RenderPassInstance();
@@ -306,8 +321,10 @@ namespace RenderCore { namespace Techniques
         Metal::DeviceContext* _attachedContext;
         AttachmentPool* _attachmentPool;
         AttachmentPool::Reservation _attachmentPoolReservation;
-
 		FrameBufferDesc _layout;
+
+        std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;
+        std::vector<unsigned> _viewedAttachmentsMap;
     };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -101,8 +101,8 @@ namespace RenderCore { namespace Techniques
 
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
-			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, i->second, 0);
 
+			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, i->second, 0);
 			if (!descSets.empty())
 				i->second.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
 			i->second.ApplyLooseUniforms(metalContext, encoder, us, 1);
@@ -207,9 +207,11 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 
+			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, i->second, 0);
 			if (!descSets.empty())
 				i->second.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
 			i->second.ApplyLooseUniforms(metalContext, encoder, us, 1);
+			
 			encoder.Dispatch(*_pipeline, countX, countY, countZ);
 		}
 

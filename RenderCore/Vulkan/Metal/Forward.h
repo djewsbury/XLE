@@ -14,9 +14,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
     class DeviceContext;
     class ObjectFactory;
+    class SharedEncoder;
     class GraphicsEncoder;
     class GraphicsEncoder_Optimized;
     class GraphicsEncoder_ProgressivePipeline;
+    class ComputeEncoder;
     class GraphicsPipeline;
     class CommandList;
 

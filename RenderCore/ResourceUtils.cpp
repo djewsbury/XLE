@@ -333,7 +333,7 @@ namespace RenderCore
 
 	const std::shared_ptr<IResourceView>& ViewPool::GetTextureView(const std::shared_ptr<IResource>& resource, BindFlag::Enum usage, const TextureViewDesc& viewDesc)
 	{
-		uint64_t hash = HashCombine(resource->GetGUID(), CalculateHash(viewDesc) ^ usage);
+		uint64_t hash = HashCombine(resource->GetGUID(), CalculateHash(viewDesc) + usage);
 		auto i = LowerBound(_views, hash);
 		if (i != _views.end() && i->first == hash)
 			return i->second._view;

@@ -35,17 +35,17 @@ namespace RenderCore { namespace LightingEngine
             unsigned width, unsigned height, unsigned arrayLayerCount,
             const AttachmentDesc& request);
 		void AddSubpass(
-			RenderCore::SubpassDesc&& subpass,
+			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& techniqueDelegate = nullptr,
 			Techniques::BatchFilter batchFilter = Techniques::BatchFilter::Max,
 			ParameterBox&& sequencerSelectors = {},
 			std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegates = {});
 		void AddSubpass(
-			RenderCore::SubpassDesc&& subpass,
+			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			std::function<void(LightingTechniqueIterator&)>&& fn);
-		void AddSkySubpass(RenderCore::SubpassDesc&& subpass);
+		void AddSkySubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass);
 		void AddSubpasses(
-			IteratorRange<const RenderCore::SubpassDesc*> subpasses,
+			IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
 			std::function<void(LightingTechniqueIterator&)>&& fn);
 
 		RenderStepFragmentInterface(RenderCore::PipelineType);

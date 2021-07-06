@@ -355,7 +355,7 @@ namespace RenderCore { namespace Techniques
 	void ApplyLooseUniforms(
 		SequencerUniformsHelper& uniformsHelper,
 		Metal::DeviceContext& metalContext,
-		Metal::GraphicsEncoder_Optimized& encoder,
+		Metal::SharedEncoder& encoder,
 		ParsingContext& parsingContext,
 		Metal::BoundUniforms& boundUniforms,
 		unsigned groupIdx)

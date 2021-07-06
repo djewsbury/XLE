@@ -107,7 +107,6 @@ namespace RenderCore { namespace LightingEngine
 		LightingTechniqueIterator(
 			IThreadContext& threadContext,
 			Techniques::ParsingContext& parsingContext,
-			Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool,
 			const CompiledLightingTechnique& compiledTechnique);
 
 	private:

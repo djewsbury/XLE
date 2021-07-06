@@ -31,14 +31,12 @@ namespace RenderCore { namespace LightingEngine
 		LightingTechniqueInstance(
 			IThreadContext&,
 			Techniques::ParsingContext&,
-			Techniques::IPipelineAcceleratorPool&,
 			CompiledLightingTechnique&);
 		~LightingTechniqueInstance();
 
 		// For ensuring that required resources are prepared/loaded
 		std::shared_ptr<::Assets::IAsyncMarker> GetResourcePreparationMarker();
 		LightingTechniqueInstance(
-			Techniques::IPipelineAcceleratorPool&,
 			CompiledLightingTechnique&);
 	private:
 		std::unique_ptr<LightingTechniqueIterator> _iterator;

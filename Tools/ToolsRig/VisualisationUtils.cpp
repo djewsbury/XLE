@@ -279,7 +279,7 @@ namespace ToolsRig
 			parserContext.GetProjectionDesc() = sceneView._projection;
 			{
 				auto lightingIterator = SceneEngine::BeginLightingTechnique(
-					threadContext, parserContext, *_pipelineAccelerators,
+					threadContext, parserContext,
 					*actualizedScene->_envSettings, *actualizedScene->_compiledLightingTechnique);
 
 				for (;;) {
@@ -388,7 +388,7 @@ namespace ToolsRig
 
 						auto pendingResources = SceneEngine::PrepareResources(
 							*RenderCore::Techniques::GetThreadContext(),
-							*pipelineAccelerators, *actualizedLightingTechnique, *scene);
+							*actualizedLightingTechnique, *scene);
 						if (pendingResources) {
 							thatFuture.SetPollingFunction(
 								[pendingResources, preparedScene](::Assets::FuturePtr<PreparedScene>& thatFuture) {
