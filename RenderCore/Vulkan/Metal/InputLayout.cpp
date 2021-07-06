@@ -34,7 +34,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		StringSection<> _name;
 	};
 
-	ReflectionVariableInformation GetReflectionVariableInformation(
+	static ReflectionVariableInformation GetReflectionVariableInformation(
 		const SPIRVReflection& reflection, SPIRVReflection::ObjectId objectId)
 	{
 		ReflectionVariableInformation result;
@@ -54,11 +54,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// exhaustively
 
 		auto v = LowerBound(reflection._variables, objectId);
-		// storage "Input/Output" should be attributes and can be ignored
-		if (v != reflection._variables.end() && v->first == objectId
-			&& v->second._storage != SPIRVReflection::StorageType::Input 
-			&& v->second._storage != SPIRVReflection::StorageType::Output
-			&& v->second._storage != SPIRVReflection::StorageType::Function) {
+		if (v != reflection._variables.end() && v->first == objectId) {
 			result._storageType = v->second._storage;
 			auto typeToLookup = v->second._type;
 
@@ -489,7 +485,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			// We'll need an input value for every binding in the shader reflection
 			for (const auto&v:reflection._variables) {
 				auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
-				if (reflectionVariable._slotType == DescriptorType::Unknown) continue;
+				if (reflectionVariable._slotType == DescriptorType::Unknown
+					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
+					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
+					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
 				uint64_t hashName = reflectionVariable._name.IsEmpty() ? 0 : Hash64(reflectionVariable._name.begin(), reflectionVariable._name.end());
 
 				// The _descriptorSet value can be ~0u for push constants, vertex attribute inputs, etc

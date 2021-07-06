@@ -110,10 +110,12 @@ namespace RenderCore { namespace Techniques
 
 			if (!_inputAssembly.empty()) {
 				Metal::BoundInputLayout ia(MakeIteratorRange(_inputAssembly), shader);
+				assert(ia.AllAttributesBound());
 				builder.Bind(ia, _topology);
 			} else {
 				Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(_miniInputAssembly), 0 };
 				Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
+				assert(ia.AllAttributesBound());
 				builder.Bind(ia, _topology);
 			}
 

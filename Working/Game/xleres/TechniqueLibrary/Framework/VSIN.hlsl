@@ -7,7 +7,7 @@
 
 #include "../Math/SurfaceAlgorithm.hlsl"
 
-#if !defined(GEO_HAS_POSITION)
+#if !defined(GEO_HAS_POSITION) && !defined(GEO_HAS_PIXELPOSITION)
 	#define GEO_HAS_POSITION 1
 #endif
 

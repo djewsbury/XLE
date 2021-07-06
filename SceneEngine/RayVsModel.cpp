@@ -153,7 +153,7 @@ namespace SceneEngine
 				0, VK_WHOLE_SIZE
 			};
 		context.GetActiveCommandList().PipelineBarrier(
-			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT,
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
 			0,
 			0, nullptr,

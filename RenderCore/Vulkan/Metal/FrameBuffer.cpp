@@ -249,10 +249,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			for (unsigned attachmentName=0; attachmentName<attachmentCount; ++attachmentName) {
 				auto usage = subpassAttachmentUsages[attachmentName];
-				if (!(usage & ~(Internal::AttachmentUsageType::ShaderResource|Internal::AttachmentUsageType::HintGeneral))) continue;
+				if (!usage) continue;
 
 				auto i = LowerBound(workingAttachments, attachmentName);
 				if (i == workingAttachments.end() || i->first != attachmentName) {
+					// To protect against cases where attachments are only used as shader resources, don't register a new attachment
+					// unless we have a non-shader resource flag associated
+					if (!(usage & ~(Internal::AttachmentUsageType::ShaderResource|Internal::AttachmentUsageType::HintGeneral))) continue;
+
 					i = workingAttachments.insert(i, {attachmentName, WorkingAttachment{}});
 					assert(attachmentName < layout.GetAttachments().size());
 					i->second._desc = layout.GetAttachments()[attachmentName];
@@ -460,8 +464,12 @@ namespace RenderCore { namespace Metal_Vulkan
 					i->srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._first._usage & (Internal::AttachmentUsageType::Input | Internal::AttachmentUsageType::ShaderResource)) {
+				if (d._first._usage & Internal::AttachmentUsageType::Input) {
 					i->srcAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+				}
+				if (d._first._usage & Internal::AttachmentUsageType::ShaderResource) {
+					i->srcAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
 
@@ -473,8 +481,12 @@ namespace RenderCore { namespace Metal_Vulkan
 					i->dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._second._usage & (Internal::AttachmentUsageType::Input | Internal::AttachmentUsageType::ShaderResource)) {
+				if (d._second._usage & Internal::AttachmentUsageType::Input) {
 					i->dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+				}
+				if (d._second._usage & Internal::AttachmentUsageType::ShaderResource) {
+					i->dstAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
 			}
