@@ -176,7 +176,7 @@ namespace RenderCore { namespace LightingEngine
 
 			// In the second subpass, the depth buffer is bound as stencil-only (so we can read the depth values as shader inputs)
 		subpasses[1].AppendOutput(lightResolveTarget);
-		subpasses[1].SetDepthStencil({ depthTarget, justStencilWindow });
+		subpasses[1].SetDepthStencil(depthTarget, justStencilWindow);
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;

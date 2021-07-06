@@ -98,7 +98,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			enum Flags
 			{
 				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2,
-				HintGeneral = 1<<3		// if "general" is explicitly requested in the input FrameBufferDesc
+				ShaderResource = 1<<3,
+				HintGeneral = 1<<4		// if "general" is explicitly requested in the input FrameBufferDesc
 			};
 			using BitField = unsigned;
 		}
@@ -171,19 +172,20 @@ namespace RenderCore { namespace Metal_Vulkan
 			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentUsageType::DepthStencil));
 			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentUsageType::Output));
 			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentUsageType::Input));
+			bool isAttachmentShaderResource = !!(usage & unsigned(Internal::AttachmentUsageType::ShaderResource));
 			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentUsageType::HintGeneral));
 			if (hintGeneral) {
 				return VK_IMAGE_LAYOUT_GENERAL;
 			} else if (isDepthStencil) {
 				assert(!isColorOutput);
-				if (isAttachmentInput)
+				if (isAttachmentInput || isAttachmentShaderResource)
 					return VK_IMAGE_LAYOUT_GENERAL;
 				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			} else if (isColorOutput) {
-				if (isAttachmentInput)
+				if (isAttachmentInput || isAttachmentShaderResource)
 					return VK_IMAGE_LAYOUT_GENERAL;
 				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			} else if (isAttachmentInput) {
+			} else if (isAttachmentInput || isAttachmentShaderResource) {
 				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			} else {
 				// (sometimes we use this function just to convert from BindFlag to a VkImageLayout -- in which case we can get here)
@@ -240,12 +242,14 @@ namespace RenderCore { namespace Metal_Vulkan
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentUsageType::DepthStencil;
 			for (const auto& r:spDesc.GetInputs()) 
 				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::Input;
+			for (const auto& r:spDesc.GetViews()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::ShaderResource;
 
 			//////////////////////////////////////////////////////////////////////////////////////////
 
 			for (unsigned attachmentName=0; attachmentName<attachmentCount; ++attachmentName) {
 				auto usage = subpassAttachmentUsages[attachmentName];
-				if (!usage) continue;
+				if (!(usage & ~(Internal::AttachmentUsageType::ShaderResource|Internal::AttachmentUsageType::HintGeneral))) continue;
 
 				auto i = LowerBound(workingAttachments, attachmentName);
 				if (i == workingAttachments.end() || i->first != attachmentName) {
@@ -448,28 +452,28 @@ namespace RenderCore { namespace Metal_Vulkan
 						0});
 
 				// note -- making assumptions about attachments usage here -- (in particular, ignoring shader resources bound to shaders other than the fragment shader)
-				if (d._first._usage | Internal::AttachmentUsageType::Output) {
+				if (d._first._usage & Internal::AttachmentUsageType::Output) {
 					i->srcAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 				}
-				if (d._first._usage | Internal::AttachmentUsageType::DepthStencil) {
+				if (d._first._usage & Internal::AttachmentUsageType::DepthStencil) {
 					i->srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._first._usage | Internal::AttachmentUsageType::Input) {
+				if (d._first._usage & (Internal::AttachmentUsageType::Input | Internal::AttachmentUsageType::ShaderResource)) {
 					i->srcAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
 
-				if (d._second._usage | Internal::AttachmentUsageType::Output) {
+				if (d._second._usage & Internal::AttachmentUsageType::Output) {
 					i->dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 				}
-				if (d._second._usage | Internal::AttachmentUsageType::DepthStencil) {
+				if (d._second._usage & Internal::AttachmentUsageType::DepthStencil) {
 					i->dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._second._usage | Internal::AttachmentUsageType::Input) {
+				if (d._second._usage & (Internal::AttachmentUsageType::Input | Internal::AttachmentUsageType::ShaderResource)) {
 					i->dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}

@@ -49,15 +49,8 @@ namespace RenderCore { namespace Techniques
             unsigned width, unsigned height, unsigned arrayLayerCount,
             const AttachmentDesc& request);
         
-        struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
-        struct SubpassDesc : public RenderCore::SubpassDesc
-        {
-            IteratorRange<const ViewedAttachment*> GetViews() const { return MakeIteratorRange(_views); }
-            void AppendView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
-            std::vector<ViewedAttachment> _views;
-        };
+        using SubpassDesc = RenderCore::SubpassDesc;
         void AddSubpass(SubpassDesc&& subpass);
-        void AddSubpass(RenderCore::SubpassDesc&& subpass);
 
         FrameBufferDescFragment();
         ~FrameBufferDescFragment();
@@ -123,7 +116,7 @@ namespace RenderCore { namespace Techniques
             std::vector<PreregisteredAttachment> _fullAttachmentDescriptions;
             std::vector<AttachmentTransform> _attachmentTransforms;
             std::string _log;
-            std::vector<FrameBufferDescFragment::ViewedAttachment> _viewedAttachments;
+            std::vector<AttachmentViewDesc> _viewedAttachments;
             std::vector<unsigned> _viewedAttachmentsMap;      // subpassIdx -> index in _viewedAttachments
             PipelineType _pipelineType = PipelineType::Graphics;
         };

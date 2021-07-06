@@ -235,7 +235,7 @@ namespace RenderOverlays
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass0;
 		subpass0.AppendOutput(n_offscreen);
-		subpass0.SetDepthStencil(AttachmentViewDesc { n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil } });
+		subpass0.SetDepthStencil(n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil });
 		fbDescFrag.AddSubpass(std::move(subpass0));
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
