@@ -18,7 +18,7 @@
 #include "../../../Utility/Streams/SerializationUtils.h"
 #include <cmath>
 
-std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo& rp_info);
+std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo2& rp_info);
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -193,6 +193,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
+
+	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, Internal::AttachmentUsageType::BitField usage, const TextureViewDesc& window)
+	{
+		return VkAttachmentReference2 {
+			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+			nullptr,
+			attachmentName,
+			LayoutFromBindFlagsAndUsage(0, usage),
+			GetAspectForTextureView(window)};
+	}
+
 	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
         const Metal_Vulkan::ObjectFactory& factory,
         const FrameBufferDesc& layout)
@@ -290,7 +302,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the VkAttachmentDescription objects
-		std::vector<VkAttachmentDescription> attachmentDescs;
+		std::vector<VkAttachmentDescription2> attachmentDescs;
         attachmentDescs.reserve(workingAttachments.size());
         for (auto&a:workingAttachments) {
             const auto& attachmentDesc = a.second._desc;
@@ -317,7 +329,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			LoadStore originalLoad = attachmentDesc._loadFromPreviousPhase;
 			LoadStore finalStore = attachmentDesc._storeToNextPhase;
 
-            VkAttachmentDescription desc;
+            VkAttachmentDescription2 desc;
+			desc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+			desc.pNext = nullptr;
             desc.flags = 0;
             desc.format = (VkFormat)AsVkFormat(resolvedFormat);
             desc.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -350,15 +364,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the actual VkSubpassDescription objects
 
-		std::vector<VkAttachmentReference> attachReferences;
+		std::vector<VkAttachmentReference2> attachReferences;
         std::vector<uint32_t> preserveAttachments;
 
-        std::vector<VkSubpassDescription> subpassDesc;
+        std::vector<VkSubpassDescription2> subpassDesc;
         subpassDesc.reserve(subpasses.size());
         for (auto&p:subpasses) {
-            VkSubpassDescription desc;
+            VkSubpassDescription2 desc;
+			desc.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
+			desc.pNext = nullptr;
             desc.flags = 0;
             desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			desc.viewMask = 0;
 
             // Input attachments are going to be difficult, because they must be bound both
             // by the sub passes and by the descriptor set! (and they must be explicitly listed as
@@ -370,10 +387,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
-				// todo -- we need to use VkAttachmentReference2 here to specify what aspect to use for depth/stencil attachments (pretty important for enabling stencil in subpasses that read from depth)
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
+				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, a._window));
             }
-            desc.pInputAttachments = (const VkAttachmentReference*)(beforeInputs+1);
+            desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
             desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
 
             auto beforeOutputs = attachReferences.size();
@@ -382,9 +398,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
+				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, a._window));
             }
-            desc.pColorAttachments = (const VkAttachmentReference*)(beforeOutputs+1);
+            desc.pColorAttachments = (const VkAttachmentReference2*)(beforeOutputs+1);
             desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
             desc.pResolveAttachments = nullptr; // not supported
 			desc.pPreserveAttachments = nullptr;
@@ -395,8 +411,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
-				desc.pDepthStencilAttachment = (const VkAttachmentReference*)(attachReferences.size()+1);
-				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
+				desc.pDepthStencilAttachment = (const VkAttachmentReference2*)(attachReferences.size()+1);
+				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, p.GetDepthStencil()._window));
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
@@ -423,7 +439,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the actual VkSubpassDependency objects
 
-        std::vector<VkSubpassDependency> vkDeps;
+        std::vector<VkSubpassDependency2> vkDeps;
 		for (unsigned c=0;c<unsigned(subpasses.size()); ++c) {
 			// Find the list of SubPassDependency objects where _second is this subpass. We'll
 			// then find the unique list of subpasses referenced by _first, and generate the
@@ -438,16 +454,17 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (d._second._subpassIdx == c && d._first._subpassIdx != ~0u)
 					terminatingDependencies.push_back(d);
 
-			std::vector<VkSubpassDependency> deps;
+			std::vector<VkSubpassDependency2> deps;
 			for (const auto& d:terminatingDependencies) {
 				auto i = std::find_if(
 					deps.begin(), deps.end(),
-					[&d](const VkSubpassDependency& vkd) { return vkd.srcSubpass == d._first._subpassIdx; });
+					[&d](const VkSubpassDependency2& vkd) { return vkd.srcSubpass == d._first._subpassIdx; });
 				if (i == deps.end())
 					i = deps.insert(deps.end(), {
+						VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2, nullptr,
 						d._first._subpassIdx, c, 
 						0, 0, 0, 0,	// mask and access flags set below
-						0});
+						0, 0});
 
 				// note -- making assumptions about attachments usage here -- (in particular, ignoring shader resources bound to shaders other than the fragment shader)
 				if (d._first._usage & Internal::AttachmentUsageType::Output) {
@@ -497,15 +514,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the final render pass object
 
-        VkRenderPassCreateInfo rp_info = {};
-        rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        VkRenderPassCreateInfo2 rp_info = {};
+        rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2;
         rp_info.pNext = nullptr;
+		rp_info.flags = 0;
         rp_info.attachmentCount = (uint32_t)attachmentDescs.size();
         rp_info.pAttachments = attachmentDescs.data();
         rp_info.subpassCount = (uint32_t)subpassDesc.size();
         rp_info.pSubpasses = subpassDesc.data();
         rp_info.dependencyCount = (uint32_t)vkDeps.size();
         rp_info.pDependencies = vkDeps.data();
+		rp_info.correlatedViewMaskCount = 0;
+		rp_info.pCorrelatedViewMasks = nullptr;
 
 		Log(Verbose) << "Vulkan render pass generated: " << std::endl;
 		Log(Verbose) << rp_info << std::endl;
@@ -691,7 +711,7 @@ std::ostream& SerializationOperator(std::ostream& str, VkImageLayout layout)
 	}
 }
 
-std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo& rp)
+std::ostream& SerializationOperator(std::ostream& str, const VkRenderPassCreateInfo2& rp)
 {
 	using namespace RenderCore;
 	using namespace RenderCore::Metal_Vulkan;

@@ -65,7 +65,7 @@ extern "C"
     typedef VkFlags VkShaderStageFlags;
 	typedef VkFlags VkQueryPipelineStatisticFlags;
 
-    typedef struct VkRenderPassCreateInfo VkRenderPassCreateInfo;
+    typedef struct VkRenderPassCreateInfo2 VkRenderPassCreateInfo2;
     typedef struct VkImageCreateInfo VkImageCreateInfo;
     typedef struct VkImageViewCreateInfo VkImageViewCreateInfo;
     typedef struct VkBufferViewCreateInfo VkBufferViewCreateInfo;

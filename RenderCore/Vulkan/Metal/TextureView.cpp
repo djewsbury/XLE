@@ -47,7 +47,36 @@ namespace RenderCore { namespace Metal_Vulkan
         }
     }
 
-    static VkImageViewCreateInfo MakeImageViewCreateInfo(TextureViewDesc window, VkImage image, bool isArray)
+    VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window)
+    {
+        VkImageAspectFlags aspectMask = 0;
+        switch (window._format._aspect) {
+        case TextureViewDesc::Depth:
+            aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+            break;
+        case TextureViewDesc::DepthStencil:
+            aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+        case TextureViewDesc::Stencil:
+            aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+        case TextureViewDesc::ColorLinear:
+        case TextureViewDesc::ColorSRGB:
+            aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
+            break;
+
+        default:
+            aspectMask |= AsImageAspectMask(window._format._explicitFormat);
+            break;
+        }
+
+        // disable depth or stencil when requiring just a single subaspect
+        if (window._flags & TextureViewDesc::Flags::JustDepth) aspectMask &= ~VK_IMAGE_ASPECT_STENCIL_BIT;
+        if (window._flags & TextureViewDesc::Flags::JustStencil) aspectMask &= ~VK_IMAGE_ASPECT_DEPTH_BIT;
+        return aspectMask;
+    }
+
+    static VkImageViewCreateInfo MakeImageViewCreateInfo(const TextureViewDesc& window, VkImage image, bool isArray)
     {
         // Note that the arrayCount value is sometimes set to 1 when we want 
         // an array texture with a single array slice (as opposed to 0, meaning no array at all).
@@ -72,31 +101,7 @@ namespace RenderCore { namespace Metal_Vulkan
             view_info.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
         if (window._arrayLayerRange._count == TextureViewDesc::Unlimited)
             view_info.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-        switch (window._format._aspect) {
-        case TextureViewDesc::Depth:
-            view_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-            break;
-        case TextureViewDesc::DepthStencil:
-            view_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-            break;
-        case TextureViewDesc::Stencil:
-            view_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-            break;
-        case TextureViewDesc::ColorLinear:
-        case TextureViewDesc::ColorSRGB:
-            view_info.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
-            break;
-
-        default:
-            view_info.subresourceRange.aspectMask = AsImageAspectMask(window._format._explicitFormat);
-            break;
-        }
-
-        // disable depth or stencil when requiring just a single subaspect
-        if (window._flags & TextureViewDesc::Flags::JustDepth) view_info.subresourceRange.aspectMask &= ~VK_IMAGE_ASPECT_STENCIL_BIT;
-        if (window._flags & TextureViewDesc::Flags::JustStencil) view_info.subresourceRange.aspectMask &= ~VK_IMAGE_ASPECT_DEPTH_BIT;
-
+        view_info.subresourceRange.aspectMask = GetAspectForTextureView(window);
         return view_info;
     }
 

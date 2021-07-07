@@ -104,11 +104,11 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
     VulkanUniquePtr<VkRenderPass> ObjectFactory::CreateRenderPass(
-        const VkRenderPassCreateInfo& createInfo) const
+        const VkRenderPassCreateInfo2& createInfo) const
     {
         auto d = _destruction.get();
         VkRenderPass rawPtr = nullptr;
-        auto res = vkCreateRenderPass(_device.get(), &createInfo, g_allocationCallbacks, &rawPtr);
+        auto res = vkCreateRenderPass2(_device.get(), &createInfo, g_allocationCallbacks, &rawPtr);
         auto renderPass = VulkanUniquePtr<VkRenderPass>(
             rawPtr,
             [d](VkRenderPass pass) { d->Destroy(pass); });

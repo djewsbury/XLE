@@ -77,7 +77,7 @@ namespace RenderCore { namespace Metal_Vulkan
             VkDeviceSize allocationSize, unsigned memoryTypeIndex) const;
 
         VulkanUniquePtr<VkRenderPass> CreateRenderPass(
-            const VkRenderPassCreateInfo& createInfo) const;
+            const VkRenderPassCreateInfo2& createInfo) const;
 
         VulkanUniquePtr<VkImage> CreateImage(
             const VkImageCreateInfo& createInfo,
