@@ -2,28 +2,10 @@ DescriptorSet Numeric
 {
 	SampledTexture tex0;				// 0
 	SampledTexture tex1;				// 1
-	SampledTexture tex2;				// 2
-	SampledTexture tex3;				// 3
-	SampledTexture tex4;				// 4
-	SampledTexture tex5;				// 5
-	SampledTexture tex6;				// 6
-	SampledTexture tex7;				// 7
-	SampledTexture tex8;				// 8
-	SampledTexture tex9;				// 9
-	SampledTexture tex10;				// 10
-	SampledTexture tex11;				// 11
-	SampledTexture tex12;				// 12
-	SampledTexture tex13;				// 13
-	SampledTexture tex14;				// 14
+	SubpassInput attachment0;			// 2
 
-	Sampler sampler0;					// 15
-	Sampler sampler1;					// 16
-	Sampler sampler2;					// 17
+	UniformBuffer cb0;					// 3
+	UniformBuffer cb1;					// 4
 
-	UniformBuffer cb0;					// 18
-	UniformBuffer cb1;					// 19
-	UniformBuffer cb2;					// 20
-	UniformBuffer cb3;					// 21
-
-	Sampler hlslcc_DummySampler;		// 22
+	Sampler hlslcc_DummySampler;		// 5
 };

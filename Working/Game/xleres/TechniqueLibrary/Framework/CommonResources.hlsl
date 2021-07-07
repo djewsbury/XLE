@@ -14,8 +14,6 @@ SamplerState	ClampingSampler         BIND_SEQ_S1;
 SamplerState    AnisotropicSampler      BIND_SEQ_S2;
 SamplerState    PointClampSampler       BIND_SEQ_S3;
 
-SamplerState    WrapUSampler            BIND_NUMERIC_S0;
-
 #if !defined(PREFER_ANISOTROPIC) || PREFER_ANISOTROPIC==0
     #define MaybeAnisotropicSampler   DefaultSampler
 #else

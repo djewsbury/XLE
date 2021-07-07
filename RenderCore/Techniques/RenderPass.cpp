@@ -174,7 +174,7 @@ namespace RenderCore { namespace Techniques
     FrameBufferDescFragment::FrameBufferDescFragment() {}
     FrameBufferDescFragment::~FrameBufferDescFragment() {}
 
-    void FrameBufferDescFragment::SubpassDesc::AppendView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
+    void FrameBufferDescFragment::SubpassDesc::AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
     {
         ViewedAttachment view;
         view._resourceName = name;
@@ -434,26 +434,16 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 
-    auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>
+    auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetSRV(_attachmentPoolReservation.GetResourceIds()[resName], subPass.GetInputs()[inputAttachmentSlot]._window);
+            return _attachmentPool->GetView(_attachmentPoolReservation.GetResourceIds()[resName], BindFlag::InputAttachment, subPass.GetInputs()[inputAttachmentSlot]._window);
         return nullptr;
 	}
 	
-	auto RenderPassInstance::GetInputAttachmentSRV(unsigned inputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
-	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
-		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
-		assert(_attachmentPool);
-        if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetSRV(_attachmentPoolReservation.GetResourceIds()[resName], window);
-        return nullptr;
-	}
-
 	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> IResourcePtr
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
@@ -494,7 +484,7 @@ namespace RenderCore { namespace Techniques
         return nullptr;
 	}
 
-    auto RenderPassInstance::GetView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>
+    auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>
     {
         auto spIdx = GetCurrentSubpassIndex();
         assert((spIdx+1) < _viewedAttachmentsMap.size());
@@ -1639,7 +1629,7 @@ namespace RenderCore { namespace Techniques
 			result.SetResolveDepthStencil(remapFunction(remapped._resourceName), remapped._window);
 		}
         for (auto src:input.GetViews())
-			result.AppendView(remapFunction(src._resourceName), src._usage, src._window);
+			result.AppendNonFrameBufferAttachmentView(remapFunction(src._resourceName), src._usage, src._window);
 		return result;
 	}
 

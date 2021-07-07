@@ -29,10 +29,6 @@
 #define BIND_SEQ_S2 : register(s2)
 #define BIND_SEQ_S3 : register(s3)
 
-#define BIND_NUMERIC_S0 : register(s4)
-#define BIND_NUMERIC_S1 : register(s5)
-#define BIND_NUMERIC_S2 : register(s6)
-
 #define BIND_MAT_S12 : register(s7)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,18 +53,6 @@
 #define BIND_NUMERIC_T0 : register(t0)
 #define BIND_NUMERIC_T1 : register(t1)
 #define BIND_NUMERIC_T2 : register(t2)
-#define BIND_NUMERIC_T3 : register(t3)
-#define BIND_NUMERIC_T4 : register(t4)
-#define BIND_NUMERIC_T5 : register(t5)
-#define BIND_NUMERIC_T6 : register(t6)
-#define BIND_NUMERIC_T7 : register(t7)
-#define BIND_NUMERIC_T8 : register(t8)
-#define BIND_NUMERIC_T9 : register(t9)
-#define BIND_NUMERIC_T10 : register(t10)
-#define BIND_NUMERIC_T11 : register(t11)
-#define BIND_NUMERIC_T12 : register(t12)
-#define BIND_NUMERIC_T13 : register(t13)
-#define BIND_NUMERIC_T14 : register(t14)
 
 #define BIND_DRAW_T1 : register(t15)
 
@@ -87,17 +71,8 @@
 
 #define BIND_NUMERIC_B0 : register(b0)
 #define BIND_NUMERIC_B1 : register(b1)
-#define BIND_NUMERIC_B2 : register(b2)
-#define BIND_NUMERIC_B3 : register(b3)
 
 #define BIND_DRAW_B0 : register(b13)
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define BIND_NUMERIC_U0 : register(u0)
-#define BIND_NUMERIC_U1 : register(u1)
-#define BIND_NUMERIC_U2 : register(u2)
-#define BIND_NUMERIC_U3 : register(u3)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -121,10 +96,6 @@
 #define BIND_SEQ_S1 : register(s14, space0)
 #define BIND_SEQ_S2 : register(s15, space0)
 #define BIND_SEQ_S3 : register(s16, space0)
-
-#define BIND_NUMERIC_S0 : register(s15, space3)
-#define BIND_NUMERIC_S1 : register(s16, space3)
-#define BIND_NUMERIC_S2 : register(s17, space3)
 
 #define BIND_MAT_S12 : register(s12, space1)
 
@@ -153,18 +124,6 @@
 #define BIND_NUMERIC_T0 : register(t0, space3)
 #define BIND_NUMERIC_T1 : register(t1, space3)
 #define BIND_NUMERIC_T2 : register(t2, space3)
-#define BIND_NUMERIC_T3 : register(t3, space3)
-#define BIND_NUMERIC_T4 : register(t4, space3)
-#define BIND_NUMERIC_T5 : register(t5, space3)
-#define BIND_NUMERIC_T6 : register(t6, space3)
-#define BIND_NUMERIC_T7 : register(t7, space3)
-#define BIND_NUMERIC_T8 : register(t8, space3)
-#define BIND_NUMERIC_T9 : register(t9, space3)
-#define BIND_NUMERIC_T10 : register(t10, space3)
-#define BIND_NUMERIC_T11 : register(t11, space3)
-#define BIND_NUMERIC_T12 : register(t12, space3)
-#define BIND_NUMERIC_T13 : register(t13, space3)
-#define BIND_NUMERIC_T14 : register(t14, space3)
 
 #define BIND_DRAW_T2 : register(t2, space2)
 
@@ -181,20 +140,11 @@
 #define BIND_MAT_B1 : register(b1, space1)
 #define BIND_MAT_B2 : register(b2, space1)
 
-#define BIND_NUMERIC_B0 : register(b18, space3)
-#define BIND_NUMERIC_B1 : register(b19, space3)
-#define BIND_NUMERIC_B2 : register(b20, space3)
-#define BIND_NUMERIC_B3 : register(b21, space3)
+#define BIND_NUMERIC_B0 : register(b3, space3)
+#define BIND_NUMERIC_B1 : register(b4, space3)
 
 #define BIND_DRAW_B0 : register(b0, space2)
 #define BIND_DRAW_B1 : register(b1, space2)
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define BIND_NUMERIC_U0 : register(u0)
-#define BIND_NUMERIC_U1 : register(u1)
-#define BIND_NUMERIC_U2 : register(u2)
-#define BIND_NUMERIC_U3 : register(u3)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

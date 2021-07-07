@@ -120,16 +120,22 @@ namespace RenderOverlays
     {
         assert(stencilSrv);
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
+        const bool inputAttachmentMode = true;
 
         UniformsStream::ImmediateData cbData[] = {
             MakeOpaqueIteratorRange(settings)
         };
         auto numericUniforms = encoder.BeginNumericUniformsInterface();
         numericUniforms.BindConstantBuffers(0, cbData);
-        numericUniforms.Bind(0, MakeIteratorRange(&stencilSrv, &stencilSrv+1));
-        if (shaders) {
-            IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get() };
-            numericUniforms.Bind(3, MakeIteratorRange(srvs));
+        if (inputAttachmentMode) {
+            if (shaders) {
+                IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get() };
+                numericUniforms.Bind(1, MakeIteratorRange(srvs));
+            }
+            numericUniforms.Bind(2, MakeIteratorRange(&stencilSrv, &stencilSrv+1));
+        } else {
+            IResourceView* srvs[] = { stencilSrv, shaders ? (*shaders)->_distinctColorsSRV.get() : nullptr };
+            numericUniforms.Bind(0, MakeIteratorRange(srvs));
         }
         numericUniforms.Apply(metalContext, encoder);
         encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
@@ -146,7 +152,8 @@ namespace RenderOverlays
                 
         StringMeld<64, ::Assets::ResChar> params;
         params << "ONLY_HIGHLIGHTED=" << unsigned(onlyHighlighted);
-        params << ";INPUT_MODE=" << (stencilInput?0:1);
+        if (inputAttachmentMode) params << ";INPUT_MODE=" << 2;
+        else params << ";INPUT_MODE=" << (stencilInput?0:2);
 
         auto highlightShader = LoadShaderProgram(
             encoder.GetPipelineLayout(),
@@ -180,9 +187,8 @@ namespace RenderOverlays
 		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendView(
+		mainPass.AppendInput(
             fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth),
-            BindFlag::ShaderResource,
             TextureViewDesc{
                 {TextureViewDesc::Aspect::Stencil},
                 TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined,
@@ -190,7 +196,7 @@ namespace RenderOverlays
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
 
-        auto stencilSrv = rpi.GetView(0);
+        auto stencilSrv = rpi.GetInputAttachmentView(0);
         if (!stencilSrv) return;
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
@@ -240,7 +246,7 @@ namespace RenderOverlays
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
 		subpass1.AppendOutput(n_mainColor);
-		subpass1.AppendView(n_offscreen);
+		subpass1.AppendInput(n_offscreen);
 		fbDescFrag.AddSubpass(std::move(subpass1));
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
@@ -252,7 +258,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetView(0).get();
+        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
         assert(srv);
 
         if (srv) {
@@ -281,7 +287,7 @@ namespace RenderOverlays
             //  using some filtering
 
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetView(0).get();
+        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
         assert(srv);
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
@@ -310,7 +316,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetView(0).get();
+        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
         assert(srv);
 
             //  now we can render these objects over the main image, 

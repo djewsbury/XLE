@@ -211,11 +211,11 @@ namespace ToolsRig
 		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("RenderCylinderHighlight");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
+		mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
-        auto depthSrv = rpi.GetView(0);
+        auto depthSrv = rpi.GetNonFrameBufferAttachmentView(0);
         if (!depthSrv) return;
 
         TRY
@@ -266,11 +266,11 @@ namespace ToolsRig
 		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("RenderRectangleHighlight");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
+		mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
 
-        auto depthSrv = rpi.GetView(0);
+        auto depthSrv = rpi.GetNonFrameBufferAttachmentView(0);
         if (!depthSrv) return;
 
         TRY

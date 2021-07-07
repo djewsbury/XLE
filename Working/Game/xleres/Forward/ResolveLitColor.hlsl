@@ -7,7 +7,7 @@
 
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 #include "../TechniqueLibrary/LightingEngine/DirectionalResolve.hlsl"
-#include "../TechniqueLibrary/SceneEngine/Lighting/AmbientResolve.hlsl"
+// #include "../TechniqueLibrary/SceneEngine/Lighting/AmbientResolve.hlsl"
 #include "../TechniqueLibrary/SceneEngine/Lighting/BasicLightingEnvironment.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
@@ -59,9 +59,9 @@ float3 ResolveLitColor(
 		}
 	#endif
 
-	result += LightResolve_Ambient(
+	/*result += LightResolve_Ambient(
 		sample, directionToEye, BasicAmbient, screenDest,
-		AmbientResolveHelpers_Default());
+		AmbientResolveHelpers_Default());*/
 
 	return result;
 }

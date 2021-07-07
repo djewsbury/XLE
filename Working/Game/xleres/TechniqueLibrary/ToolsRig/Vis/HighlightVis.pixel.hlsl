@@ -15,7 +15,11 @@ cbuffer Settings BIND_NUMERIC_B0
 }
 
 #if !defined(INPUT_MODE)
-	#define INPUT_MODE 1
+	#if !defined(VULKAN)
+		#define INPUT_MODE 1
+	#else
+		#define INPUT_MODE 2
+	#endif
 #endif
 
 #if INPUT_MODE == 0
@@ -28,6 +32,8 @@ cbuffer Settings BIND_NUMERIC_B0
 	Texture2D<uint2>	StencilInput BIND_NUMERIC_T0;
 #elif INPUT_MODE == 1
  	Texture2D			StencilInput BIND_NUMERIC_T0;
+#elif INPUT_MODE == 2
+	[[vk::input_attachment_index(0)]] SubpassInput<uint>	StencilInput	 	BIND_NUMERIC_T2;
 #endif
 
 static const uint DummyMarker = 0xffffffff;
@@ -47,6 +53,8 @@ uint Marker(uint2 pos)
 		#endif
 	#elif INPUT_MODE == 1
 		uint result = uint(255.f * StencilInput.Load(uint3(pos, 0)).a);
+	#elif INPUT_MODE == 2
+		uint result = StencilInput.SubpassLoad();
 	#endif
 	if (result == BackgroundMarker) { return DummyMarker; }
 

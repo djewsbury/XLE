@@ -19,10 +19,10 @@ DescriptorSet PerLightDescriptors
 	UniformBuffer d1;	// 4
 	UniformBuffer d2;	// 5
 
-	SampledTexture GBuffer_Diffuse;				// 6
-	SampledTexture GBuffer_Normals;				// 7
-	SampledTexture GBuffer_Parameters;			// 8
-	SampledTexture DepthTexture;				// 9
+	SubpassInput GBuffer_Diffuse;				// 6
+	SubpassInput GBuffer_Normals;				// 7
+	SubpassInput GBuffer_Parameters;			// 8
+	SubpassInput DepthTexture;					// 9
 
 	SampledTexture d3;	// 10
 	SampledTexture d4;	// 11

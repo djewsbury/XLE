@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Framework/VSOUT.hlsl"
+#include "../Math/TextureAlgorithm.hlsl"		// for SystemInputs
 #include "../../Forward/ResolveLitColor.hlsl"
 #include "../../Objects/IllumShader/PerPixel.h"
 

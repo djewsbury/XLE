@@ -656,6 +656,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			dstBinding.descriptorType = (VkDescriptorType)AsVkDescriptorType(srcLayout[bIndex]._type);
 			dstBinding.descriptorCount = srcLayout[bIndex]._count;
 			dstBinding.stageFlags = stageFlags;
+			if (dstBinding.descriptorType == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT) {
+				assert(stageFlags & VK_SHADER_STAGE_FRAGMENT_BIT);
+				dstBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;	// only fragment shaders can access input attachments
+			}
 			if (bIndex < _fixedSamplers.size() && _fixedSamplers[bIndex]) {
 				tempSamplerArray[bIndex] = checked_cast<SamplerState*>(_fixedSamplers[bIndex].get())->GetUnderlying();
 				dstBinding.pImmutableSamplers = &tempSamplerArray[bIndex];

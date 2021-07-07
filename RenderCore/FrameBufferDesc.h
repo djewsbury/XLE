@@ -85,7 +85,6 @@ namespace RenderCore
         void SetDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
 		void AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& = {});
         void SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
-        void AppendView(AttachmentName attachment, BindFlag::Enum usage = BindFlag::ShaderResource, const TextureViewDesc& = {});
 
         uint64_t CalculateHash() const;
 

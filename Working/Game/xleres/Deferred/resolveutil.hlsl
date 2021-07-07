@@ -12,7 +12,23 @@
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 #include "../TechniqueLibrary/Framework/Binding.hlsl"
 
-Texture2D_MaybeMS<float>	DepthTexture	 	BIND_SEQ_T9;
+#if !defined(VULKAN)
+    #define GBUFFER_SHADER_RESOURCE 1
+#endif
+
+#if defined(GBUFFER_SHADER_RESOURCE)
+    Texture2D_MaybeMS<float>	DepthTexture	 	BIND_SEQ_T9;
+    float LoadSubpassDepth(uint2 pixelCoords, uint sampleIndex)
+    {
+        return LoadFloat1(DepthTexture, pixelCoords.xy, sampleIndex);
+    }
+#else
+    [[vk::input_attachment_index(3)]] SubpassInput<float>	DepthTexture	 	BIND_SEQ_T9;
+    float LoadSubpassDepth(uint2 pixelCoords, uint sampleIndex)
+    {
+        return DepthTexture.SubpassLoad();
+    }
+#endif
 
 struct ResolvePixelProperties
 {
@@ -32,7 +48,7 @@ ResolvePixelProperties ResolvePixelProperties_Create(float4 position, float3 vie
     result.screenDest.sampleIndex = GetSampleIndex(sys);
 
     // Note -- we could pre-multiply (miniProj.W/SysUniform_GetFarClip()) into the view frustum vector to optimise this slightly...?
-	result.ndcDepth = LoadFloat1(DepthTexture, pixelCoords.xy, GetSampleIndex(sys));
+    result.ndcDepth = LoadSubpassDepth(pixelCoords.xy, GetSampleIndex(sys));
     result.worldSpaceDepth = NDCDepthToWorldSpace(result.ndcDepth);
 
     const bool orthoProjection = true;
@@ -51,12 +67,12 @@ ResolvePixelProperties ResolvePixelProperties_Create(float4 position, float3 vie
 
 float GetLinear0To1Depth(int2 pixelCoords, uint sampleIndex)
 {
-	return NDCDepthToLinear0To1(LoadFloat1(DepthTexture, pixelCoords.xy, sampleIndex));
+	return NDCDepthToLinear0To1(LoadSubpassDepth(pixelCoords.xy, sampleIndex));
 }
 
 float GetWorldSpaceDepth(int2 pixelCoords, uint sampleIndex)
 {
-	return NDCDepthToWorldSpace(LoadFloat1(DepthTexture, pixelCoords.xy, sampleIndex));
+	return NDCDepthToWorldSpace(LoadSubpassDepth(pixelCoords.xy, sampleIndex));
 }
 
 float3 CalculateWorldPosition(int2 pixelCoords, uint sampleIndex, float3 viewFrustumVector)

@@ -10,6 +10,7 @@
 #include "../Utility/Colour.hlsl"
 
 Texture2D		InputTexture BIND_NUMERIC_T0;
+[[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment BIND_NUMERIC_T2;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +53,11 @@ float4 fake_tonemap(float4 position : SV_Position, float2 texCoord : TEXCOORD0) 
 float4 copy_bilinear(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
 	return InputTexture.SampleLevel(ClampingSampler, texCoord, 0);
+}
+
+float4 copy_inputattachment(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+{
+	return SubpassInputAttachment.SubpassLoad();
 }
 
 cbuffer ScreenSpaceOutput

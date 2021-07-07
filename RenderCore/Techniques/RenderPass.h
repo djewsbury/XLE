@@ -53,7 +53,7 @@ namespace RenderCore { namespace Techniques
         struct SubpassDesc : public RenderCore::SubpassDesc
         {
             IteratorRange<const ViewedAttachment*> GetViews() const { return MakeIteratorRange(_views); }
-            void AppendView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
+            void AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
             std::vector<ViewedAttachment> _views;
         };
         void AddSubpass(SubpassDesc&& subpass);
@@ -265,8 +265,7 @@ namespace RenderCore { namespace Techniques
         const AttachmentPool::Reservation& GetAttachmentReservation() const { return _attachmentPoolReservation; }
 
         auto GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> IResourcePtr;
-        auto GetInputAttachmentSRV(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>;
-		auto GetInputAttachmentSRV(unsigned inputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
+        auto GetInputAttachmentView(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>;
 
 		auto GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> IResourcePtr;
 	    auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
@@ -278,7 +277,7 @@ namespace RenderCore { namespace Techniques
         auto GetResourceForAttachmentName(AttachmentName resName) const -> IResourcePtr;
         auto GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window = {}) const -> std::shared_ptr<IResourceView>;
 
-        auto GetView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>;
+        auto GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>;
 
         // Construct from a fully actualized "FrameBufferDesc" (eg, one generated via a
         // FragmentStitchingContext)

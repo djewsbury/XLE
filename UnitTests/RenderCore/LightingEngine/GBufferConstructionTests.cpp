@@ -111,7 +111,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferDiffuse,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB),
 					"gbuffer-diffuse"
 				),
@@ -120,7 +120,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_SNORM),
 					"gbuffer-normals"
 				),
@@ -129,7 +129,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_UNORM),
 					"gbuffer-parameters"
 				),
@@ -391,7 +391,7 @@ namespace UnitTests
 					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
 					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Clear));
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
-					depthAttachmentDesc._finalLayout = BindFlag::ShaderResource;
+					depthAttachmentDesc._finalLayout = BindFlag::InputAttachment;
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
 					subpass.SetDepthStencil(fbFrag.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f, depthAttachmentDesc));
 					fbFrag.AddSubpass(std::move(subpass));
@@ -431,10 +431,10 @@ namespace UnitTests
 					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition"), LoadStore::Clear));
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal"), LoadStore::Clear));
-					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
-					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
-					subpass.AppendView(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
+					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
+					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
+					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
 					reconstructedWorldPosition = rpi.GetOutputAttachmentResource(0);
@@ -447,10 +447,10 @@ namespace UnitTests
 					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
 					UniformsStream us;
 					IResourceView* srvs[] = { 
-						rpi.GetView(0).get(),
-						rpi.GetView(1).get(),
-						rpi.GetView(2).get(),
-						rpi.GetView(3).get()
+						rpi.GetInputAttachmentView(0).get(),
+						rpi.GetInputAttachmentView(1).get(),
+						rpi.GetInputAttachmentView(2).get(),
+						rpi.GetInputAttachmentView(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
 					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
@@ -505,14 +505,14 @@ namespace UnitTests
 				// By comparing the reconstructed vs direct rendering outputs, we can see how much precision
 				// is lost via the gbuffer. So, for example, we may loose some precision related to the direction of
 				// the normal
-				if (0) {
+				if (1) {
 					auto directData = directWorldPosition->ReadBackSynchronized(*threadContext);
 					CalculateSimularity(
 						MakeIteratorRange((const Float4*)AsPointer(reconstructedPositionData.begin()), (const Float4*)AsPointer(reconstructedPositionData.end())), 
 						MakeIteratorRange((const Float4*)AsPointer(directData.begin()), (const Float4*)AsPointer(directData.end())));
 				}
 
-				if (0) {
+				if (1) {
 					auto directData = directWorldNormal->ReadBackSynchronized(*threadContext);
 					CalculateDirectionalSimularity(
 						MakeIteratorRange((const Float4*)AsPointer(reconstructedNormalData.begin()), (const Float4*)AsPointer(reconstructedNormalData.end())), 

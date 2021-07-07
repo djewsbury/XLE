@@ -386,10 +386,10 @@ namespace RenderCore { namespace LightingEngine
 		const auto& projectionDesc = parsingContext.GetProjectionDesc();
 		auto globalTransformUniforms = Techniques::BuildGlobalTransformConstants(projectionDesc);
 		cbvs[CB::GlobalTransform] = MakeOpaqueIteratorRange(globalTransformUniforms);
-		srvs[SR::GBuffer_Diffuse] = rpi.GetView(0).get();
-		srvs[SR::GBuffer_Normals] = rpi.GetView(1).get();
-		srvs[SR::GBuffer_Parameters] = rpi.GetView(2).get();
-		srvs[SR::DepthTexture] = rpi.GetView(3).get();
+		srvs[SR::GBuffer_Diffuse] = rpi.GetInputAttachmentView(0).get();
+		srvs[SR::GBuffer_Normals] = rpi.GetInputAttachmentView(1).get();
+		srvs[SR::GBuffer_Parameters] = rpi.GetInputAttachmentView(2).get();
+		srvs[SR::DepthTexture] = rpi.GetInputAttachmentView(3).get();
 
 			////////////////////////////////////////////////////////////////////////
 
@@ -439,6 +439,7 @@ namespace RenderCore { namespace LightingEngine
 			const LightResolveOperators::Pipeline* pipeline;
 			assert(i._operatorId < lightResolveOperators._pipelines.size());
 
+			while (shadowIterator != preparedShadows.end() && shadowIterator->first < lightScene._lights[l]._id) ++shadowIterator;
 			if (shadowIterator != preparedShadows.end() && shadowIterator->first == lightScene._lights[l]._id) {
 				IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
