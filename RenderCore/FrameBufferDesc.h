@@ -34,7 +34,6 @@ namespace RenderCore
     {
     public:
         AttachmentName _resourceName = ~0u;
-        BindFlag::BitField _usage = 0;      //< (only used in "view" type attachment references)
 		TextureViewDesc _window = {};
     };
 
@@ -113,14 +112,13 @@ namespace RenderCore
 		AttachmentViewDesc _attachmentViewBuffer[s_maxAttachmentCount];
 
 		unsigned _outputAttachmentCount = 0;
-        unsigned _viewedAttachmentCount = 0;
 		unsigned _inputAttachmentCount = 0;
 		unsigned _resolveOutputAttachmentCount = 0;
 
 		AttachmentViewDesc _depthStencil = Unused;
         AttachmentViewDesc _resolveDepthStencil = Unused;
 
-		unsigned BufferSpaceUsed() const { return _outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; }
+		unsigned BufferSpaceUsed() const { return _outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; }
     };
 
     class FrameBufferProperties
@@ -257,10 +255,10 @@ namespace RenderCore
 	inline void SubpassDesc::AppendOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
         assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
-		for (unsigned c=_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount; --c)
+		for (unsigned c=_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount; --c)
 			_attachmentViewBuffer[c] = _attachmentViewBuffer[c-1];
 
-        _attachmentViewBuffer[_outputAttachmentCount] = {attachment, 0, viewDesc};
+        _attachmentViewBuffer[_outputAttachmentCount] = {attachment, viewDesc};
 		++_outputAttachmentCount;
     }
 
@@ -277,27 +275,17 @@ namespace RenderCore
     inline void SubpassDesc::AppendInput(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
 		assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
-		for (unsigned c=_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount; --c)
+		for (unsigned c=_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount+_inputAttachmentCount; --c)
 			_attachmentViewBuffer[c] = _attachmentViewBuffer[c-1];
 
-        _attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount] = {attachment, 0, viewDesc};
+        _attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount] = {attachment, viewDesc};
 		++_inputAttachmentCount;
-    }
-
-    inline void SubpassDesc::AppendView(AttachmentName attachment, BindFlag::Enum usage, const TextureViewDesc& viewDesc)
-    {
-		assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
-		for (unsigned c=_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; c>_outputAttachmentCount+_viewedAttachmentCount; --c)
-			_attachmentViewBuffer[c] = _attachmentViewBuffer[c-1];
-
-        _attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount] = {attachment, (BindFlag::BitField)usage, viewDesc};
-		++_viewedAttachmentCount;
     }
 
 	inline void SubpassDesc::AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& viewDesc)
 	{
 		assert((BufferSpaceUsed()+1) <= s_maxAttachmentCount);
-        _attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount] = {attachment, 0, viewDesc};
+        _attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount] = {attachment, viewDesc};
 		++_resolveOutputAttachmentCount;
 	}
 
@@ -307,12 +295,12 @@ namespace RenderCore
     */
     inline void SubpassDesc::SetDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
     {
-        _depthStencil = {attachment, 0, viewDesc};
+        _depthStencil = {attachment, viewDesc};
     }
 
 	inline void SubpassDesc::SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& viewDesc)
 	{
-		_resolveDepthStencil = {attachment, 0, viewDesc};
+		_resolveDepthStencil = {attachment, viewDesc};
 	}
 
 	inline IteratorRange<const AttachmentViewDesc*> SubpassDesc::GetOutputs() const
@@ -327,17 +315,17 @@ namespace RenderCore
 
     inline IteratorRange<const AttachmentViewDesc*> SubpassDesc::GetViews() const
     {
-        return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount]);
+        return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount]);
     }
 
 	inline IteratorRange<const AttachmentViewDesc*> SubpassDesc::GetInputs() const
 	{
-		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount]);
+		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount]);
 	}
 
 	inline IteratorRange<const AttachmentViewDesc*> SubpassDesc::GetResolveOutputs() const
 	{
-		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_viewedAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount]);
+		return MakeIteratorRange(&_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount], &_attachmentViewBuffer[_outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount]);
 	}
 
 	inline const AttachmentViewDesc& SubpassDesc::GetResolveDepthStencil() const

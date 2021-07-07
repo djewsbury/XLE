@@ -52,9 +52,7 @@ namespace RenderCore
         for (unsigned c=0; c<subpass.GetOutputs().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetOutputs()[c]._resourceName; }
         str << "], DepthStencil: ";
         if (subpass.GetDepthStencil()._resourceName != ~0u) { str << subpass.GetDepthStencil()._resourceName; } else { str << "<<none>>"; }
-        str << ", viewed [";
-        for (unsigned c=0; c<subpass.GetViews().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetViews()[c]._resourceName; }
-        str << "], inputs [";
+        str << ", inputs [";
         for (unsigned c=0; c<subpass.GetInputs().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetInputs()[c]._resourceName; }
         /*str << "], preserve [";
         for (unsigned c=0; c<subpass._preserve.size(); ++c) { if (c!=0) str << ", "; str << subpass._preserve[c]._resourceName; }*/
@@ -105,6 +103,15 @@ namespace RenderCore { namespace Techniques
         auto dehash = AttachmentSemantics::TryDehash(semantic._value);
         if (dehash) str << dehash;
         else str << "0x" << std::hex << semantic._value << std::dec;
+        return str;
+    }
+
+    static std::ostream& operator<<(std::ostream& str, const FrameBufferDescFragment::SubpassDesc& subpass)
+    {
+        str << (const RenderCore::SubpassDesc&)subpass;
+        str << ", viewed [";
+        for (unsigned c=0; c<subpass.GetViews().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetViews()[c]._resourceName; }
+        str << "]";
         return str;
     }
 
@@ -159,8 +166,22 @@ namespace RenderCore { namespace Techniques
         _subpasses.emplace_back(std::move(subpass));
     }
 
+    void FrameBufferDescFragment::AddSubpass(RenderCore::SubpassDesc&& subpass)
+    {
+        _subpasses.emplace_back(SubpassDesc{std::move(subpass)});
+    }
+
     FrameBufferDescFragment::FrameBufferDescFragment() {}
     FrameBufferDescFragment::~FrameBufferDescFragment() {}
+
+    void FrameBufferDescFragment::SubpassDesc::AppendView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
+    {
+        ViewedAttachment view;
+        view._resourceName = name;
+        view._window = window;
+        view._usage = usage;
+        _views.push_back(view);
+    }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -561,7 +582,7 @@ namespace RenderCore { namespace Techniques
         _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
         _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
         for (const auto&view:stitchedFragment._viewedAttachments)
-            _viewedAttachments.push_back(_attachmentPool->GetView(_attachmentPoolReservation.GetResourceIds()[view._resourceName], (BindFlag::Enum)view._usage, view._window));
+            _viewedAttachments.push_back(_attachmentPool->GetView(_attachmentPoolReservation.GetResourceIds()[view._resourceName], view._usage, view._window));
     }
 
     RenderPassInstance::RenderPassInstance(
@@ -1491,7 +1512,7 @@ namespace RenderCore { namespace Techniques
 
         for (const auto&sp:fragment._subpasses) {
             result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
-            result._viewedAttachments.insert(result._viewedAttachments.end(), sp.GetViews().begin(), sp.GetViews().end());
+            result._viewedAttachments.insert(result._viewedAttachments.end(), sp._views.begin(), sp._views.end());
         }
         result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
 
@@ -1600,22 +1621,25 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			result.SetName(result._name);
 		#endif
-		for (auto remapped:input.GetOutputs())
-        	result.AppendOutput(remapFunction(remapped._resourceName), remapped._window);
+		for (auto remapped:input.GetOutputs()) {
+			result.AppendOutput(remapFunction(remapped._resourceName), remapped._window);
+		}
 		if (input.GetDepthStencil()._resourceName != ~0u) {
 			auto remapped = input.GetDepthStencil();
 			result.SetDepthStencil(remapFunction(remapped._resourceName), remapped._window);
 		}
-		for (auto remapped:input.GetInputs())
+		for (auto remapped:input.GetInputs()) {
 			result.AppendInput(remapFunction(remapped._resourceName), remapped._window);
-		for (auto remapped:input.GetResolveOutputs())
+		}
+		for (auto remapped:input.GetResolveOutputs()) {
 			result.AppendResolveOutput(remapFunction(remapped._resourceName), remapped._window);
+		}
 		if (input.GetResolveDepthStencil()._resourceName != ~0u) {
 			auto remapped = input.GetResolveDepthStencil();
 			result.SetResolveDepthStencil(remapFunction(remapped._resourceName), remapped._window);
 		}
         for (auto src:input.GetViews())
-			result.AppendView(remapFunction(src._resourceName), (BindFlag::Enum)src._usage, src._window);
+			result.AppendView(remapFunction(src._resourceName), src._usage, src._window);
 		return result;
 	}
 

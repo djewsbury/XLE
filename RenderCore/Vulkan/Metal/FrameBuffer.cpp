@@ -98,8 +98,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			enum Flags
 			{
 				Input = 1<<0, Output = 1<<1, DepthStencil = 1<<2,
-				ShaderResource = 1<<3,
-				HintGeneral = 1<<4		// if "general" is explicitly requested in the input FrameBufferDesc
+				HintGeneral = 1<<3		// if "general" is explicitly requested in the input FrameBufferDesc
 			};
 			using BitField = unsigned;
 		}
@@ -172,20 +171,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentUsageType::DepthStencil));
 			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentUsageType::Output));
 			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentUsageType::Input));
-			bool isAttachmentShaderResource = !!(usage & unsigned(Internal::AttachmentUsageType::ShaderResource));
 			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentUsageType::HintGeneral));
 			if (hintGeneral) {
 				return VK_IMAGE_LAYOUT_GENERAL;
 			} else if (isDepthStencil) {
 				assert(!isColorOutput);
-				if (isAttachmentInput || isAttachmentShaderResource)
+				if (isAttachmentInput)
 					return VK_IMAGE_LAYOUT_GENERAL;
 				return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			} else if (isColorOutput) {
-				if (isAttachmentInput || isAttachmentShaderResource)
+				if (isAttachmentInput)
 					return VK_IMAGE_LAYOUT_GENERAL;
 				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			} else if (isAttachmentInput || isAttachmentShaderResource) {
+			} else if (isAttachmentInput) {
 				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			} else {
 				// (sometimes we use this function just to convert from BindFlag to a VkImageLayout -- in which case we can get here)
@@ -242,8 +240,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentUsageType::DepthStencil;
 			for (const auto& r:spDesc.GetInputs()) 
 				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::Input;
-			for (const auto& r:spDesc.GetViews()) 
-				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::ShaderResource;
 
 			//////////////////////////////////////////////////////////////////////////////////////////
 
@@ -253,10 +249,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				auto i = LowerBound(workingAttachments, attachmentName);
 				if (i == workingAttachments.end() || i->first != attachmentName) {
-					// To protect against cases where attachments are only used as shader resources, don't register a new attachment
-					// unless we have a non-shader resource flag associated
-					if (!(usage & ~(Internal::AttachmentUsageType::ShaderResource|Internal::AttachmentUsageType::HintGeneral))) continue;
-
 					i = workingAttachments.insert(i, {attachmentName, WorkingAttachment{}});
 					assert(attachmentName < layout.GetAttachments().size());
 					i->second._desc = layout.GetAttachments()[attachmentName];
@@ -468,10 +460,6 @@ namespace RenderCore { namespace Metal_Vulkan
 					i->srcAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
-				if (d._first._usage & Internal::AttachmentUsageType::ShaderResource) {
-					i->srcAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-				}
 
 				if (d._second._usage & Internal::AttachmentUsageType::Output) {
 					i->dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -483,10 +471,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 				if (d._second._usage & Internal::AttachmentUsageType::Input) {
 					i->dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-				}
-				if (d._second._usage & Internal::AttachmentUsageType::ShaderResource) {
-					i->dstAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
 			}
