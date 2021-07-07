@@ -102,6 +102,7 @@ namespace RenderCore
 		UnorderedAccessTexture,
 		UnorderedAccessBuffer,
 		Sampler,
+		InputAttachment,
 		Unknown
 	};
 

@@ -165,7 +165,8 @@ namespace RenderCore { namespace Assets
 		std::make_pair("UnorderedAccessBuffer", 	DescriptorType::UnorderedAccessBuffer),
 		std::make_pair("StorageImage", 				DescriptorType::UnorderedAccessTexture),
 		std::make_pair("StorageBuffer", 			DescriptorType::UnorderedAccessBuffer),
-		std::make_pair("Sampler", 					DescriptorType::Sampler)
+		std::make_pair("Sampler", 					DescriptorType::Sampler),
+		std::make_pair("SubpassInput", 				DescriptorType::InputAttachment)
 	};
 
 	void PredefinedDescriptorSetLayout::Parse(ConditionalProcessingTokenizer& iterator)

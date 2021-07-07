@@ -30,7 +30,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER
 			|| writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 			|| writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-			|| writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+			|| writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+			|| writeDesc.descriptorType == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
 		return writeDesc.pImageInfo; 
 	}
 	template<> VkDescriptorBufferInfo const*& InfoPtr(VkWriteDescriptorSet& writeDesc) 
@@ -290,6 +291,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					AsVkDescriptorType(b),
 					blankStorageBuffer, false
 					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+			} else if (b == DescriptorType::InputAttachment) {
+				/* not sure what would be a correct dummy descriptor for an input attachment */
 			} else {
 				assert(0);
 				continue;
@@ -785,11 +788,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		//			   presumably the typical use case is to bind a large host synchronized 
 		// 			   dynamic buffer and update the offset for each draw call
 		//
-		// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
-		//			-- load from an attachment registered in the inputs list of the renderpass
-		//			   shader object is a "uniform subpassInput", and can be used with functions
-		//			   such as subpassLoad
-		//
 		// VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT
 		// VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
 		// VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV
@@ -802,6 +800,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		case DescriptorType::UniformBuffer:				return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		case DescriptorType::UnorderedAccessTexture:	return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 		case DescriptorType::UnorderedAccessBuffer:		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		case DescriptorType::InputAttachment:			return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 		default:										return VK_DESCRIPTOR_TYPE_SAMPLER;
 		}
 	}

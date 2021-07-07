@@ -143,7 +143,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlags, Internal::AttachmentUsageType::BitField usage)
 	{
 		if (bindFlags == BindFlag::ShaderResource) {
-			// make VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL accessible?
+			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		} else if (bindFlags == BindFlag::InputAttachment) {
 			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		} else if (bindFlags == BindFlag::TransferSrc) {
 			return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -369,6 +370,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i = LowerBound(workingAttachments, resource);
 				assert(i != workingAttachments.end() && i->first == resource);
 				auto internalName = std::distance(workingAttachments.begin(), i);
+				// todo -- we need to use VkAttachmentReference2 here to specify what aspect to use for depth/stencil attachments (pretty important for enabling stencil in subpasses that read from depth)
 				attachReferences.push_back(VkAttachmentReference{(uint32_t)internalName, LayoutFromBindFlagsAndUsage(0, i->second._attachmentUsage)});
             }
             desc.pInputAttachments = (const VkAttachmentReference*)(beforeInputs+1);

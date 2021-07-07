@@ -36,9 +36,10 @@ namespace RenderCore { namespace Metal_Vulkan
             unsigned _bindingPoint;
             unsigned _descriptorSet;
             unsigned _offset;
+            unsigned _inputAttachmentIndex;
 
-            Binding(unsigned location = ~0x0u, unsigned bindingPoint= ~0x0u, unsigned descriptorSet= ~0x0u, unsigned offset = ~0x0)
-            : _location(location), _bindingPoint(bindingPoint), _descriptorSet(descriptorSet), _offset(offset) {}
+            Binding(unsigned location = ~0x0u, unsigned bindingPoint= ~0x0u, unsigned descriptorSet= ~0x0u, unsigned offset = ~0x0, unsigned inputAttachmentIndex = ~0x0)
+            : _location(location), _bindingPoint(bindingPoint), _descriptorSet(descriptorSet), _offset(offset), _inputAttachmentIndex(inputAttachmentIndex) {}
         };
         std::vector<std::pair<ObjectId, Binding>>	_bindings;
         std::vector<std::pair<MemberId, Binding>>	_memberBindings;

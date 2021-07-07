@@ -148,8 +148,6 @@ namespace RenderCore { namespace ImplVulkan
 		static bool s_debugInitialized = false;
         static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( VkFlags msgFlags, VkDebugReportObjectTypeEXT objType, uint64_t srcObject, size_t location, int32_t msgCode, const char *pLayerPrefix, const char *pMsg, void *pUserData )
         {
-			if (XlFindString(pMsg, "vkCmdDraw-None-04584"))		// using an attachment as a shader resource while it's bound as an input attachment. We can't properly solve this without going to native Vulkan HLSL compilation
-				return false;
 	        (void)msgFlags; (void)objType; (void)srcObject; (void)location; (void)pUserData; (void)msgCode;
             Log(Verbose) << pLayerPrefix << ": " << pMsg << std::endl;
 	        return false;

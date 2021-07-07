@@ -467,7 +467,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		static bool SlotTypeCompatibleWithBinding(UniformStreamType bindingType, DescriptorType slotType)
 		{
 			if (bindingType == UniformStreamType::ResourceView)
-				return slotType == DescriptorType::SampledTexture || slotType == DescriptorType::UnorderedAccessTexture || slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UnorderedAccessBuffer;
+				return slotType == DescriptorType::SampledTexture || slotType == DescriptorType::UnorderedAccessTexture || slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UnorderedAccessBuffer || slotType == DescriptorType::InputAttachment;
 			else if (bindingType == UniformStreamType::ImmediateData)
 				return slotType == DescriptorType::UniformBuffer || slotType != DescriptorType::UnorderedAccessBuffer;
 			else if (bindingType == UniformStreamType::Sampler)

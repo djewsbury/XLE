@@ -31,7 +31,8 @@ namespace RenderCore { namespace Metal_Vulkan
             if (    decorationType == spv::DecorationBinding
                 ||  decorationType == spv::DecorationDescriptorSet
                 ||  decorationType == spv::DecorationLocation
-                ||  decorationType == spv::DecorationOffset) {
+                ||  decorationType == spv::DecorationOffset
+                ||  decorationType == spv::DecorationInputAttachmentIndex) {
 
                 if (paramCount < 1) return;
 
@@ -44,6 +45,7 @@ namespace RenderCore { namespace Metal_Vulkan
                 case spv::DecorationDescriptorSet: i->second._descriptorSet = params[0]; break;
                 case spv::DecorationLocation: i->second._location = params[0]; break;
                 case spv::DecorationOffset: i->second._offset = params[0]; break;
+                case spv::DecorationInputAttachmentIndex: i->second._inputAttachmentIndex = params[0]; break;
                 default: break;
                 }
             }

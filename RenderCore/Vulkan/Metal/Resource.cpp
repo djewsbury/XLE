@@ -221,6 +221,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					VK_PIPELINE_STAGE_VERTEX_SHADER_BIT /*| VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT*/
 					| VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 				};
+			case BindFlag::InputAttachment:
+				return { ImageLayout::ShaderReadOnlyOptimal, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT };	// can only read from input attachments from the fragment shader
 			case BindFlag::UnorderedAccess:
 				return { 
 					ImageLayout::General,
@@ -596,6 +598,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			_steadyStateLayout = lyt::ShaderReadOnlyOptimal;
 			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::ShaderResource)._accessFlags;
 			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::ShaderResource)._pipelineStageFlags;
+		}
+		if (bindFlags & BindFlag::InputAttachment) {
+			_steadyStateLayout = lyt::ShaderReadOnlyOptimal;
+			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::InputAttachment)._accessFlags;
+			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::InputAttachment)._pipelineStageFlags;
 		}
 		if (bindFlags & BindFlag::UnorderedAccess) {
 			_steadyStateLayout = lyt::General;

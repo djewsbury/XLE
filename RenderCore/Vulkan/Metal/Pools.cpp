@@ -247,7 +247,8 @@ namespace RenderCore { namespace Metal_Vulkan
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 64},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 512},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 64},
-            {VK_DESCRIPTOR_TYPE_SAMPLER, 64}
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 128},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 64}
         };
 
         VkDescriptorPoolCreateInfo descriptor_pool = {};
