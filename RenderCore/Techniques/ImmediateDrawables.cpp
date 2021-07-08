@@ -25,57 +25,6 @@
 
 namespace RenderCore { namespace Techniques
 {
-	struct ReciprocalViewportDimensions
-	{
-	public:
-		float _reciprocalWidth, _reciprocalHeight;
-		float _pad[2];
-	};
-
-	RenderCore::ConstantBufferElementDesc ReciprocalViewportDimensions_Elements[] = {
-		{ Hash64("ReciprocalViewportDimensions"), Format::R32G32_FLOAT, (unsigned)offsetof(ReciprocalViewportDimensions, _reciprocalWidth) }
-	};
-
-	class ImmediateRendererResourceDelegate : public IShaderResourceDelegate
-	{
-	public:
-		ViewportConstants _rvd;
-
-		virtual void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
-		{
-			switch (idx) {
-			case 0:
-				std::memcpy(dst.begin(), &_rvd, std::min(sizeof(_rvd), dst.size()));
-				break;
-			default:
-				assert(0);
-				break;
-			}
-		}
-
-		virtual size_t GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx)
-		{
-			switch (idx) {
-			case 0: return sizeof(ViewportConstants);
-			default: assert(0); return 0;
-			}
-		}
-
-		void Configure(IThreadContext& context, Float2 viewportDimensions)
-		{
-			_rvd._reciprocalViewportDimensions = Float2 { 1.f / viewportDimensions[0], 1.f / viewportDimensions[1] };
-		}
-
-		UniformsStreamInterface _usi;
-		const UniformsStreamInterface& GetInterface() { return _usi; }
-
-		ImmediateRendererResourceDelegate()
-		{
-			_usi.BindImmediateData(0, Hash64("ReciprocalViewportDimensionsCB"), MakeIteratorRange(ReciprocalViewportDimensions_Elements));
-			_rvd._reciprocalViewportDimensions = Float2 { 1.f / 256.f, 1.f / 256.f };
-		}
-	};
-
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
@@ -317,11 +266,7 @@ namespace RenderCore { namespace Techniques
 				fbDesc, subpassIndex);
 
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
-			Float2 viewportDimensions { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
-			_resourceDelegate->Configure(context, viewportDimensions);
-
-			std::shared_ptr<Techniques::IShaderResourceDelegate> delegates[] = { _resourceDelegate };
-			SequencerUniformsHelper uniformsHelper{parserContext, MakeIteratorRange(delegates)};
+			SequencerUniformsHelper uniformsHelper{parserContext};
 			Draw(
 				context, parserContext,
 				*_pipelineAcceleratorPool,
@@ -354,7 +299,6 @@ namespace RenderCore { namespace Techniques
 			const DescriptorSetLayoutAndBinding& sequencerDescSetLayout)
 		{
 			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, pipelineLayout, 0, matDescSetLayout, sequencerDescSetLayout);
-			_resourceDelegate = std::make_shared<ImmediateRendererResourceDelegate>();
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
@@ -365,7 +309,6 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<DrawableGeo>> _drawableGeosInWorkingPkt;
 		std::deque<std::shared_ptr<DrawableGeo>> _reservedDrawableGeos;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-		std::shared_ptr<ImmediateRendererResourceDelegate> _resourceDelegate;
 		std::vector<std::pair<uint64_t, std::shared_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegate;
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
