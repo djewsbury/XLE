@@ -254,10 +254,10 @@ GBufferValues GetSystemStruct_GBufferValues()
 struct DepthNormalVelocityEncoded
 {
     float3 normalBuffer     : SV_Target0;
-    float3 velocityBuffer   : SV_Target1;
+    int2 velocityBuffer   : SV_Target1;
 };
 
-DepthNormalVelocityEncoded EncodeDepthNormalVelocity(GBufferValues values, float3 velocity)
+DepthNormalVelocityEncoded EncodeDepthNormalVelocity(GBufferValues values, int2 velocity)
 {
         //
         //      Take the raw gbuffer input values and

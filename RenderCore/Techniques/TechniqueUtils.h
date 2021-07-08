@@ -83,6 +83,8 @@ namespace RenderCore { namespace Techniques
     {
     public:
         Float2 _reciprocalViewportDimensions;
+        Float2 _xyMin;
+        Float2 _widthHeight;
         unsigned _dummy[2];
     };
 

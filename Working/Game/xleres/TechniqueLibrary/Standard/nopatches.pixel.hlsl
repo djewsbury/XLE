@@ -76,7 +76,6 @@ float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
 #endif
 void depthonly() {}
 
-
 #if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
 	[earlydepthstencil]
 #endif
@@ -90,9 +89,11 @@ DepthNormalVelocityEncoded depthNormalVelocity(VSOUT geo)
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy /= SysUniform_ReciprocalViewportDimensions();
+		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
+		prevPos.xyz -= geo.position.xyz;
+		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthNormalVelocity(result, prevPos);
+	return EncodeDepthNormalVelocity(result, int2(prevPos.xy));
 }

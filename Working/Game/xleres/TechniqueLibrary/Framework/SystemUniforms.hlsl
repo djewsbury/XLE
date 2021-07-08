@@ -50,8 +50,12 @@ uint 		SysUniform_GetGlobalSamplingPassCount() { return GlobalSamplingPassCount;
 cbuffer ReciprocalViewportDimensionsCB BIND_SEQ_B1
 {
 	float2 ReciprocalViewportDimensions;
+	float2 ViewportMinXY;
+	float2 ViewportWidthHeight;
 }
 
 float2 		SysUniform_ReciprocalViewportDimensions() { return ReciprocalViewportDimensions; }
+float2 		SysUniform_GetViewportMinXY() { return ViewportMinXY; }
+float2 		SysUniform_GetViewportWidthHeight() { return ViewportWidthHeight; }
 
 #endif

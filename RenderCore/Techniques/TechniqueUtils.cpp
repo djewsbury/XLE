@@ -186,7 +186,11 @@ namespace RenderCore { namespace Techniques
 
     ViewportConstants BuildViewportConstants(const ViewportDesc& viewport)
     {
-        return ViewportConstants { Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 0, 0 };
+        return ViewportConstants { 
+            Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 
+            Float2{viewport._x, viewport._y},
+            Float2{viewport._width, viewport._height},
+            0, 0 };
     }
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera)
