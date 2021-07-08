@@ -76,6 +76,7 @@ namespace Sample
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
         auto v = sampleGlobals._renderDevice->GetDesc();
         sampleGlobals._windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE sample [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
+        sampleGlobals._windowApparatus->_osWindow->Resize(1920, 1080);
 
             //  Create the debugging system, and add any "displays"
             //  If we have any custom displays to add, we can add them here. Often it's 

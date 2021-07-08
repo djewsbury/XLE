@@ -263,6 +263,16 @@ namespace PlatformRig
         return std::make_pair(Int2(clientRect.left, clientRect.top), Int2(clientRect.right, clientRect.bottom));
     }
 
+    void OverlappedWindow::Resize(unsigned width, unsigned height)
+    {
+        RECT adjusted { 0, 0, (LONG)width, (LONG)height };
+        AdjustWindowRectEx(&adjusted, GetWindowStyle(_pimpl->_hwnd), FALSE, GetWindowExStyle(_pimpl->_hwnd));
+        SetWindowPos(
+            _pimpl->_hwnd, (HWND)INVALID_HANDLE_VALUE,
+            0, 0, adjusted.right - adjusted.left, adjusted.bottom - adjusted.top,
+            SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOZORDER);
+    }
+
     void OverlappedWindow::SetTitle(const char titleText[])
     {
         SetWindowTextA(_pimpl->_hwnd, titleText);
