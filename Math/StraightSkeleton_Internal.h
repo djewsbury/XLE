@@ -142,71 +142,6 @@ namespace XLEMath
 		#endif
 	}
 
-#if 0
-	T1(Primitive) Vector2T<Primitive> CalculateVertexVelocity_FirstMethod(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
-	{
-		// Calculate the velocity of vertex v1, assuming segments vex0->vex1 && vex1->vex2
-		// are moving at a constant velocity inwards.
-		// Note that the winding order is important. We're assuming these are polygon edge vertices
-		// arranged in a clockwise order. This means that v1 will move towards the left side of the
-		// segments.
-
-		// let segment 1 be v0->v1
-		// let segment 2 be v1->v2
-		// let m1,m2 = gradient of segments
-		// let u1,u2 = speed in X axis of points on segments
-		// let v1,v1 = speed in Y axis of points on segments
-		//
-		// We're going to center our coordinate system on the initial intersection point, v0
-		// We want to know where the intersection point of the 2 segments will be after time 't'
-		// (since the intersection point will move in a straight line, we only need to calculate
-		// it for t=1)
-		//
-		// I've calculated this out using basic algebra -- but we may be able to get a more efficient
-		// method using vector math.
-
-		if (AdaptiveEquivalent(vex0, vex2, GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-
-		auto t0 = Vector2T<Primitive>(vex1-vex0);
-		auto t1 = Vector2T<Primitive>(vex2-vex1);
-
-		if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-		if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-
-		// create normal pointing in direction of movement
-		auto N0 = Normalize(EdgeTangentToMovementDir(t0));
-		auto N1 = Normalize(EdgeTangentToMovementDir(t1));
-		auto a = N0[0], b = N0[1];
-		auto c = N1[0], d = N1[1];
-		const auto t = Primitive(1);		// time = 1.0f, because we're calculating the velocity
-
-		// Now, line1 is 0 = xa + yb - t and line2 is 0 = xc + yd - t
-
-		// we can calculate the intersection of the lines using this formula...
-		auto B0 = Primitive(0), B1 = Primitive(0);
-		if (d<-GetEpsilon<Primitive>() || d>GetEpsilon<Primitive>()) B0 = a - b*c/d;
-		if (c<-GetEpsilon<Primitive>() || c>GetEpsilon<Primitive>()) B1 = b - a*d/c;
-
-		Primitive x, y;
-		if (std::abs(B0) > std::abs(B1)) {
-			if (B0 > -GetEpsilon<Primitive>() && B0 < GetEpsilon<Primitive>()) return Zero<Vector2T<Primitive>>();
-			auto A = Primitive(1) - b/d;
-			x = t * A / B0;
-			y = (t - x*c) / d;
-		} else {
-			if (B1 > -GetEpsilon<Primitive>() && B1 < GetEpsilon<Primitive>()) return Zero<Vector2T<Primitive>>();
-			auto A = Primitive(1) - a/c;
-			y = t * A / B1;
-			x = (t - y*d) / c;
-		}
-
-		assert(Dot(Vector2T<Primitive>(x, y), N0+N1) > Primitive(0));
-
-		assert(IsFiniteNumber(x) && IsFiniteNumber(y));
-		return Vector2T<Primitive>(x, y);
-	}
-#endif
-
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
@@ -280,17 +215,11 @@ namespace XLEMath
 		// points at both times (actually vex1 is already an intersection point). Since the intersection always moves in a straight path, we
 		// can just use the difference between those intersections to calculate the velocity
 
-		// if (AdaptiveEquivalent(vex0, vex2, GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-
 		auto t0 = Vector2T<Primitive>(vex1-vex0);
 		auto t1 = Vector2T<Primitive>(vex2-vex1);
 
-		// if (Equivalent(t0, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-		// if (Equivalent(t1, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
-
 		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
 		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
-		// if (AdaptiveEquivalent(N0, N1, GetEpsilon<Primitive>()) || AdaptiveEquivalent(N0, Vector2T<Primitive>(-N1), GetEpsilon<Primitive>())) return Zero<Vector2T<Primitive>>();
     
 		auto A = vex0 - vex1 + N0;
 		auto B = N0;
@@ -301,150 +230,6 @@ namespace XLEMath
 		// result is is the distance travelled in "movementTime"
 		return LineIntersection<Primitive>({A, B}, {C, D});
 	}
-
-	static const int static_velocityVectorScale = INT32_MAX; // 0x7fff;
-	T1(Primitive) struct VelocityVectorScale { static const Primitive Value; };
-	template<> struct VelocityVectorScale<int> { static const int Value = static_velocityVectorScale; };
-	template<> struct VelocityVectorScale<int64_t> { static const int64_t Value = static_velocityVectorScale; };
-	T1(Primitive) const Primitive VelocityVectorScale<Primitive>::Value = Primitive(1);
-
-#if 0
-	T1(Primitive) auto CalculateVertexVelocity(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
-		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
-	{
-		Vector2T<Primitive> firstMethod = CalculateVertexVelocity_FirstMethod(vex0, vex1, vex2);
-		Vector2T<Primitive> lineIntersection = CalculateVertexVelocity_LineIntersection(vex0, vex1, vex2, Primitive(1));
-		(void)firstMethod;
-		// assert(AdaptiveEquivalent(firstMethod, lineIntersection, GetEpsilon<Primitive>()));
-		// assert(!AdaptiveEquivalent(lineIntersection, Zero<Vector2T<Primitive>>(), GetEpsilon<Primitive>()));
-		return lineIntersection;
-	}
-
-	T1(Primitive) auto CalculateVertexVelocity(Vector2T<Primitive> vex0, Vector2T<Primitive> vex1, Vector2T<Primitive> vex2)
-		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
-	{
-		// "CalculateVertexVelocity_FirstMethod" is not accurate when using integer & fixed point.
-		// We need to use the line intersection method. This also allow us to scale up the length of the 
-		// velocity vector so we represent it using integers.
-		return CalculateVertexVelocity_LineIntersection(vex0, vex1, vex2, Primitive(static_velocityVectorScale));
-	}
-
-	T1(Primitive) static Primitive CalculateCollapseTime_FirstMethod(Vector2T<Primitive> p0, Vector2T<Primitive> v0, Vector2T<Primitive> p1, Vector2T<Primitive> v1)
-	{
-		auto d0x = v0[0] - v1[0];
-		auto d0y = v0[1] - v1[1];
-		if (std::abs(d0x) > std::abs(d0y)) {
-			if (std::abs(d0x) < GetEpsilon<Primitive>()) return std::numeric_limits<Primitive>::max();
-			auto t = (p1[0] - p0[0]) / d0x;
-
-			auto ySep = p0[1] + t * v0[1] - p1[1] - t * v1[1];
-			if (t > 0.f && std::abs(ySep) < (10 * GetEpsilon<Primitive>())) {
-				// assert(std::abs(p0[0] + t * v0[0] - p1[0] - t * v1[0]) < GetEpsilon<Primitive>());
-				return t;	// (todo -- we could refine with the x results?
-			}
-		} else {
-			if (std::abs(d0y) < GetEpsilon<Primitive>()) return std::numeric_limits<Primitive>::max();
-			auto t = (p1[1] - p0[1]) / d0y;
-
-			auto xSep = p0[0] + t * v0[0] - p1[0] - t * v1[0];
-			if (t > 0.0f && std::abs(xSep) < (10 * GetEpsilon<Primitive>())) {
-				// sassert(std::abs(p0[1] + t * v0[1] - p1[1] - t * v1[1]) < GetEpsilon<Primitive>());
-				return t;	// (todo -- we could refine with the y results?
-			}
-		}
-
-		return std::numeric_limits<Primitive>::max();
-	}
-
-	T1(Primitive) static Primitive CalculateCollapseTime_LineIntersection(Vector2T<Primitive> p0, Vector2T<Primitive> v0, Vector2T<Primitive> p1, Vector2T<Primitive> v1)
-	{
-		// Attempt to find the collapse time for these 2 vertices
-		// Since we're doing this with integer coordinates, we should try to pick a method that will work well at limited
-		// precision
-		// There another way to do this... Effectively we want to find where 3 moving edges intersect in time.
-		// We can do that algebraically
-		auto intr = LineIntersection<Primitive>({Zero<Vector2T<Primitive>>(), v0}, {p1-p0, p1-p0+v1});
-		using PromotedType = Primitive; // typename PromoteIntegral<Primitive>::Value;
-		auto t0 = std::numeric_limits<PromotedType>::max();
-		auto scale = VelocityVectorScale<Primitive>::Value;
-		if (std::abs(v0[0]) > std::abs(v0[1]))	t0 = PromotedType(intr[0]) * PromotedType(scale) / PromotedType(v0[0]);
-		else									t0 = PromotedType(intr[1]) * PromotedType(scale) / PromotedType(v0[1]);
-
-		auto t1 = std::numeric_limits<PromotedType>::max();
-		if (std::abs(v1[0]) > std::abs(v1[1]))	t1 = PromotedType(intr[0] - p1[0] + p0[0]) * PromotedType(scale) / PromotedType(v1[0]);
-		else									t1 = PromotedType(intr[1] - p1[1] + p0[1]) * PromotedType(scale) / PromotedType(v1[1]);
-
-		if (std::abs(t0 - t1) < (50 * GetEpsilon<Primitive>())) {
-			auto result = Primitive(t0+t1)/Primitive(2);
-			auto test0 = Vector2T<Primitive>(	Primitive(PromotedType(p0[0]) + PromotedType(v0[0]) * PromotedType(result) / PromotedType(scale)),
-												Primitive(PromotedType(p0[1]) + PromotedType(v0[1]) * PromotedType(result) / PromotedType(scale)));
-			auto test1 = Vector2T<Primitive>(	Primitive(PromotedType(p1[0]) + PromotedType(v1[0]) * PromotedType(result) / PromotedType(scale)),
-												Primitive(PromotedType(p1[1]) + PromotedType(v1[1]) * PromotedType(result) / PromotedType(scale)));
-			assert(AdaptiveEquivalent(test0, Vector2T<Primitive>(intr + p0), 50 * GetEpsilon<Primitive>()));
-			assert(AdaptiveEquivalent(test1, Vector2T<Primitive>(intr + p0), 50 * GetEpsilon<Primitive>()));
-			(void)test0; (void)test1;
-			return result;
-		}
-		return std::numeric_limits<Primitive>::max();
-	}
-
-	T1(Primitive) auto CalculateCollapseTime(Vector2T<Primitive> p0, Vector2T<Primitive> v0, Vector2T<Primitive> p1, Vector2T<Primitive> v1)
-		-> typename std::enable_if<!std::is_integral<Primitive>::value, Primitive>::type
-	{
-		auto firstMethod = CalculateCollapseTime_FirstMethod(p0, v0, p1, v1);
-		assert(firstMethod > 0.f);
-		return firstMethod;
-		/*auto lineIntersection = CalculateCollapseTime_LineIntersection(p0, v0, p1, v1);
-		(void)firstMethod;
-		//assert(AdaptiveEquivalent(firstMethod, lineIntersection, GetEpsilon<Primitive>()));
-		return lineIntersection;*/
-	}
-
-	T1(Primitive) auto CalculateCollapseTime(Vector2T<Primitive> p0, Vector2T<Primitive> v0, Vector2T<Primitive> p1, Vector2T<Primitive> v1)
-		-> typename std::enable_if<std::is_integral<Primitive>::value, Primitive>::type
-	{
-		return CalculateCollapseTime_LineIntersection(p0, v0, p1, v1);
-	}
-
-	T1(Primitive) static Vector3T<Primitive> CalculateTriangleCollapse(Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
-	{
-		Matrix3x3T<Primitive> M;
-		Vector3T<Primitive> res;
-		Vector2T<Primitive> As[] = { p0, p1, p2 };
-		Vector2T<Primitive> Bs[] = { p1, p2, p0 };
-		for (unsigned c=0; c<3; ++c) {
-			auto mag = (Primitive)std::hypot(Bs[c][0] - As[c][0], Bs[c][1] - As[c][1]);
-			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
-			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
-			M(c, 0) = Nx;
-			M(c, 1) = Ny;
-			M(c, 2) = -Nx*Nx-Ny*Ny;
-			res[c]  = As[c][0] * Nx + As[c][1] * Ny;
-		}
-		return cml::inverse(M) * res;
-	}
-
-	T1(Primitive) static Vector3T<Primitive> CalculateTriangleCollapse_Offset(Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
-	{
-		Matrix3x3T<Primitive> M;
-		Vector3T<Primitive> res;
-		Vector2T<Primitive> As[] = { Zero<Vector2T<Primitive>>(), p1 - p0, p2 - p0 };
-		Vector2T<Primitive> Bs[] = { p1 - p0, p2 - p0, Zero<Vector2T<Primitive>>() };
-		for (unsigned c=0; c<3; ++c) {
-			auto mag = (Primitive)std::hypot(Bs[c][0] - As[c][0], Bs[c][1] - As[c][1]);
-			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
-			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
-			M(c, 0) = Nx;
-			M(c, 1) = Ny;
-			M(c, 2) = -Nx*Nx-Ny*Ny;
-			res[c]  = As[c][0] * Nx + As[c][1] * Ny;
-		}
-		auto result = cml::inverse(M) * res;
-		result[0] += p0[0];
-		result[1] += p0[1];
-		return result;
-	}
-#endif
 
 	T1(Primitive) static bool InvertInplaceSafe(Matrix3x3T<Primitive>& M)
 	{
@@ -497,14 +282,9 @@ namespace XLEMath
 		for (unsigned c=0; c<3; ++c) {
 			auto mag = (Primitive)std::hypot(Bs[c][0] - As[c][0], Bs[c][1] - As[c][1]);
 			assert(IsFiniteNumber(mag));
-			// If pm1->p0 or p1->p2 are too small, we can't accurately calculate the collapse time. This can 
-			// happen if there's an earlier collapse event on the left or right of this edge. In these cases,
-			// we should process those collapse events first.
-			// if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
-				// return {};
 
-			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
-			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
+			auto Nx = Primitive((As[c][1] - Bs[c][1]) / mag);
+			auto Ny = Primitive((Bs[c][0] - As[c][0]) / mag);
 			assert(Nx != 0 || Ny != 0);
 			M(c, 0) = Nx;
 			M(c, 1) = Ny;
@@ -679,134 +459,7 @@ namespace XLEMath
 		return {};
 	}
 
-#if 0
-	T1(Primitive) static Primitive CalculateTriangleCollapse_Area_Internal(
-		Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2,
-		Vector2T<Primitive> v0, Vector2T<Primitive> v1, Vector2T<Primitive> v2)
-	{
-		auto a = (v1[0]-v0[0])*(v2[1]-v0[1]) - (v2[0]-v0[0])*(v1[1]-v0[1]);
-		if (Equivalent(a, Primitive(0), GetEpsilon<Primitive>())) return std::numeric_limits<Primitive>::max();
-			
-		auto c = (p1[0]-p0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(p1[1]-p0[1]);
-		auto b = (p1[0]-p0[0])*(v2[1]-v0[1]) + (v1[0]-v0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(v1[1]-v0[1]) - (v2[0]-v0[0])*(p1[1]-p0[1]);
-			
-		// x = (-b +/- sqrt(b*b - 4*a*c)) / 2*a
-		auto K = b*b - Primitive(4)*a*c;
-		if (K < Primitive(0)) return std::numeric_limits<Primitive>::max();
-
-		auto Q = std::sqrt(K);
-		Primitive ts[] = {
-			Primitive((-b + Q) / (decltype(Q)(2)*a)),
-			Primitive((-b - Q) / (decltype(Q)(2)*a))
-		};
-		if (ts[0] > 0.0f && ts[0] < ts[1]) return ts[0];
-		return ts[1];
-	}
-
-	T1(Primitive) static Primitive CalculateTriangleCollapse_Area(
-		Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2,
-		Vector2T<Primitive> v0, Vector2T<Primitive> v1, Vector2T<Primitive> v2)
-	{
-		auto test = CalculateTriangleCollapse_Area_Internal(p0, p1, p2, v0, v1, v2);
-		if (test != std::numeric_limits<Primitive>::max())
-			return test;
-
-		test = CalculateTriangleCollapse_Area_Internal(p1, p2, p0, v1, v2, v0);
-		if (test != std::numeric_limits<Primitive>::max())
-			return test;
-
-		test = CalculateTriangleCollapse_Area_Internal(p2, p0, p1, v2, v0, v1);
-		if (test != std::numeric_limits<Primitive>::max())
-			return test;
-
-		return std::numeric_limits<Primitive>::max();
-	}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#if 0
-	T1(Primitive) static bool BuildCrashEvent_OldMethod(
-		Vector3T<Primitive>& pointAndTime,
-		Vertex<Primitive> edgeHead, Vertex<Primitive> edgeTail,
-		Vertex<Primitive> motorcycle)
-	{
-		// Attempt to find a crash event between the given motor cycle and the given edge.
-		// Since the edge segments are moving, the solution is a little complex
-		// We can create a triangle between head, tail & the motorcycle head
-		// If there is a collision, the triangle area will be zero at that point.
-		// So we can search for a time when the triangle area is zero, and check to see
-		// if a collision has actually occurred at that time.
-		const auto calcTime = std::max(std::max(edgeHead._initialTime, edgeTail._initialTime), motorcycle._initialTime);
-		auto p0 = edgeHead.PositionAtTime(calcTime);
-		auto p1 = edgeTail.PositionAtTime(calcTime);
-		auto v0 = edgeHead._velocity;
-		auto v1 = edgeTail._velocity;
-
-		auto p2 = motorcycle.PositionAtTime(calcTime);
-		auto v2 = motorcycle._velocity;
-
-		// 2 * signed triangle area = 
-		//		(p1[0]-p0[0]) * (p2[1]-p0[1]) - (p2[0]-p0[0]) * (p1[1]-p0[1])
-		//
-		// A =	(p1[0]+t*v1[0]-p0[0]-t*v0[0]) * (p2[1]+t*v2[1]-p0[1]-t*v0[1])
-		// B =  (p2[0]+t*v2[0]-p0[0]-t*v0[0]) * (p1[1]+t*v1[1]-p0[1]-t*v0[1]);
-		//
-		// A =   (p1[0]-p0[0]) * (p2[1]+t*v2[1]-p0[1]-t*v0[1])
-		//	 + t*(v1[0]-v0[0]) * (p2[1]+t*v2[1]-p0[1]-t*v0[1])
-		//
-		// A =   (p1[0]-p0[0]) * (p2[1]-p0[1]+t*(v2[1]-v0[1]))
-		//	 + t*(v1[0]-v0[0]) * (p2[1]-p0[1]+t*(v2[1]-v0[1]))
-		//
-		// A =   (p1[0]-p0[0])*(p2[1]-p0[1]) + t*(p1[0]-p0[0])*(v2[1]-v0[1])
-		//	 + t*(v1[0]-v0[0])*(p2[1]-p0[1]) + t*t*(v1[0]-v0[0])*(v2[1]-v0[1])
-		//
-		// B =   (p2[0]-p0[0])*(p1[1]-p0[1]) + t*(p2[0]-p0[0])*(v1[1]-v0[1])
-		//	 + t*(v2[0]-v0[0])*(p1[1]-p0[1]) + t*t*(v2[0]-v0[0])*(v1[1]-v0[1])
-		//
-		// 0 = t*t*a + t*b + c
-		// c = (p1[0]-p0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(p1[1]-p0[1])
-		// b = (p1[0]-p0[0])*(v2[1]-v0[1]) + (v1[0]-v0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(v1[1]-v0[1]) - (v2[0]-v0[0])*(p1[1]-p0[1])
-		// a = (v1[0]-v0[0])*(v2[1]-v0[1]) - (v2[0]-v0[0])*(v1[1]-v0[1])
-
-		auto a = (v1[0]-v0[0])*(v2[1]-v0[1]) - (v2[0]-v0[0])*(v1[1]-v0[1]);
-		if (Equivalent(a, Primitive(0), GetEpsilon<Primitive>())) return false;
-			
-		auto c = (p1[0]-p0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(p1[1]-p0[1]);
-		auto b = (p1[0]-p0[0])*(v2[1]-v0[1]) + (v1[0]-v0[0])*(p2[1]-p0[1]) - (p2[0]-p0[0])*(v1[1]-v0[1]) - (v2[0]-v0[0])*(p1[1]-p0[1]);
-			
-		// x = (-b +/- sqrt(b*b - 4*a*c)) / 2*a
-		auto K = b*b - Primitive(4)*a*c;
-		if (K < Primitive(0)) return false;
-
-		auto Q = std::sqrt(K);
-		Primitive ts[] = {
-			calcTime + Primitive((-b + Q) / (decltype(Q)(2)*a)),
-			calcTime + Primitive((-b - Q) / (decltype(Q)(2)*a))
-		};
-
-		// Is there is a viable collision at either t0 or t1?
-		// All 3 points should be on the same line at this point -- so we just need to check if
-		// the motorcycle is between them (or intersecting a vertex)
-		for (auto t:ts) {
-			if (t <= std::max(edgeHead._initialTime, edgeTail._initialTime)) continue;	// don't need to check collisions that happen too late
-			auto P0 = edgeHead.PositionAtTime(t);
-			auto P1 = edgeTail.PositionAtTime(t);
-			auto P2 = motorcycle.PositionAtTime(t);
-			if ((Dot(P1-P0, P2-P0) > Primitive(0)) && (Dot(P0-P1, P2-P1) > Primitive(0))) {
-				// good collision
-				pointAndTime = Expand(P2, t);
-				return true;
-			} else if (AdaptiveEquivalent(P0, P2, GetEpsilon<Primitive>()) || AdaptiveEquivalent(P1, P2, GetEpsilon<Primitive>())) {
-				// collided with vertex (or close enough)
-				pointAndTime = Expand(P2, t);
-				return true;
-			}
-		}
-
-		return false;
-	}
-#endif
 
 	T1(Primitive) static std::optional<PointAndTime<Primitive>> FindCrashEvent(
 		Vector2T<Primitive> edgeHead, Vector2T<Primitive> edgeTail, Vector2T<Primitive> motorVelocity)
@@ -817,15 +470,13 @@ namespace XLEMath
 
 		auto mag = (Primitive)std::hypot(edgeHead[0] - edgeTail[0], edgeHead[1] - edgeTail[1]);
 		assert(IsFiniteNumber(mag));
-		//if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
-			//return false;
 
 		Matrix3x3T<Primitive> M;
 		Vector3T<Primitive> res;
 
 		// first row tests for intersection with the edge segment (as it's moving along its normal)
-		auto Nx = Primitive((edgeTail[1] - edgeHead[1]) * VelocityVectorScale<Primitive>::Value / mag);
-		auto Ny = Primitive((edgeHead[0] - edgeTail[0]) * VelocityVectorScale<Primitive>::Value / mag);
+		auto Nx = Primitive((edgeTail[1] - edgeHead[1]) / mag);
+		auto Ny = Primitive((edgeHead[0] - edgeTail[0]) / mag);
 		M(0, 0) = Nx;
 		M(0, 1) = Ny;
 		M(0, 2) = -Nx*Nx-Ny*Ny;
@@ -864,14 +515,9 @@ namespace XLEMath
 		for (unsigned c=0; c<3; ++c) {
 			auto mag = (Primitive)std::hypot(Bs[c][0] - As[c][0], Bs[c][1] - As[c][1]);
 			assert(IsFiniteNumber(mag));
-			// If pm1->p0 or p1->p2 are too small, we can't accurately calculate the collapse time. This can 
-			// happen if there's an earlier collapse event on the left or right of this edge. In these cases,
-			// we should process those collapse events first.
-			//if (Equivalent(mag, Primitive(0), GetEpsilon<Primitive>()))
-				//return {};
 
-			auto Nx = Primitive((As[c][1] - Bs[c][1]) * VelocityVectorScale<Primitive>::Value / mag);
-			auto Ny = Primitive((Bs[c][0] - As[c][0]) * VelocityVectorScale<Primitive>::Value / mag);
+			auto Nx = Primitive((As[c][1] - Bs[c][1]) / mag);
+			auto Ny = Primitive((Bs[c][0] - As[c][0]) / mag);
 			M(c, 0) = Nx;
 			M(c, 1) = Ny;
 			M(c, 2) = -Nx*Nx-Ny*Ny;

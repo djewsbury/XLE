@@ -9,13 +9,6 @@
 #include <optional>
 #include <deque>
 
-#if defined(_DEBUG)
-	// #define EXTRA_VALIDATION
-#endif
-
-#pragma warning(disable:4505) // 'SceneEngine::StraightSkeleton::ReplaceVertex': unreferenced local function has been removed
-
-
 namespace XLEMath
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
