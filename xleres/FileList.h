@@ -16,7 +16,8 @@
 
 #define MAIN_PIPELINE "xleres/TechniqueLibrary/Config/main.pipeline"
 #define IMMEDIATE_PIPELINE "xleres/TechniqueLibrary/Config/immediate.pipeline"
-#define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/Config/lighting_operator.pipeline"
+#define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"
+#define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"
 
 #define ROOT_SIGNATURE_CFG "xleres/TechniqueLibrary/System/RootSignature.cfg"
 #define ROOT_SIGNATURE_COMPUTE_CFG "xleres/TechniqueLibrary/System/RootSignatureCS.cfg"
@@ -43,6 +44,8 @@
 #define METRICS_RENDER_VERTEX_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.vertex.hlsl"
 #define METRICS_RENDER_GEO_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.geo.hlsl"
 #define METRICS_RENDER_PIXEL_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.pixel.hlsl"
+
+#define AO_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/ao.compute.hlsl"
 
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/TechniqueLibrary/RenderOverlays/dd/Shapes.hlsl"
 

@@ -1,0 +1,27 @@
+
+#include "xleres/TechniqueLibrary/Config/sequencer.pipeline"
+
+DescriptorSet AODS
+{
+	ConstantBuffer cb;
+	SampledTexture InputTexture;
+	UnorderedAccessTexture OutputTexture;
+	UnorderedAccessTexture DownsampleDepths;
+	UnorderedAccessTexture AccumulationAO;
+	ConstantBuffer AOProps;
+	SampledTexture InputNormals;
+	SampledTexture InputVelocities;
+	SampledTexture AccumulationAOLast;
+};
+
+PipelineLayout ComputeMain
+{
+	ComputeDescriptorSet Sequencer;
+	ComputeDescriptorSet AODS;
+};
+
+PipelineLayout GraphicsMain
+{
+	ComputeDescriptorSet Sequencer;
+	DescriptorSet AODS;
+};

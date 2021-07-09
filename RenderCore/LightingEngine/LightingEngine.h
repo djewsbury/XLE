@@ -25,6 +25,8 @@ namespace RenderCore { namespace LightingEngine
 			StepType _type = StepType::Abort;
 			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			Techniques::DrawablesPacket* _pkt = nullptr;
+
+			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};
 		Step GetNextStep();
 
