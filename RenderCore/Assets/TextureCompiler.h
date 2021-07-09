@@ -5,10 +5,13 @@
 #pragma once
 
 #include "../../Assets/IntermediateCompilers.h"
+#include "../../Utility/MemoryUtils.h"
 
 namespace RenderCore { namespace Assets
 {
-	::Assets::CompilerRegistration RegisterMaterialCompiler(
+	static const auto TextureCompilerProcessType = ConstHash64<'Text', 'ure'>::Value;
+
+	::Assets::CompilerRegistration RegisterTextureCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers);
 }}
 

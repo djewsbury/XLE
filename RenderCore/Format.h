@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Metal/Detail/DXGIFormatValues.h"         // maintain format number compatibility with DXGI whenever possible
+#include "../Utility/StringUtils.h"
 
 namespace Utility { namespace ImpliedTyping { class TypeDesc; } }
 
@@ -102,6 +103,6 @@ namespace RenderCore
 	Utility::ImpliedTyping::TypeDesc AsImpliedType(Format fmt);
 
     const char* AsString(Format);
-	Format AsFormat(const char name[]);
+	Format AsFormat(StringSection<> name);
 }
 

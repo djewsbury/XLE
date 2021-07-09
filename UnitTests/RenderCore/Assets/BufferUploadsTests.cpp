@@ -8,7 +8,7 @@
 #include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../BufferUploads/MemoryManagement.h"
 #include "../../../BufferUploads/Metrics.h"
-#include "../../../RenderCore/Techniques/TextureLoaders.h"
+#include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/IDevice.h"
@@ -153,8 +153,8 @@ namespace UnitTests
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 
-		auto ddsLoader = Techniques::CreateDDSTextureLoader();
-		auto wicLoader = Techniques::CreateWICTextureLoader();
+		auto ddsLoader = RenderCore::Assets::CreateDDSTextureLoader();
+		auto wicLoader = RenderCore::Assets::CreateWICTextureLoader();
 		const char* texturesToTry[] {
 			"xleres/DefaultResources/glosslut.dds",
 			"xleres/DefaultResources/waternoise.png"
@@ -166,7 +166,7 @@ namespace UnitTests
 			if (XlEndsWithI(MakeStringSection(texturesToTry[c]), MakeStringSection(".dds"))) {
 				asyncSource = ddsLoader(texturesToTry[c], 0);
 			} else {
-				asyncSource = wicLoader(texturesToTry[c], Techniques::TextureLoaderFlags::GenerateMipmaps);
+				asyncSource = wicLoader(texturesToTry[c], RenderCore::Assets::TextureLoaderFlags::GenerateMipmaps);
 			}
 
 			auto transaction = bu->Transaction_Begin(asyncSource, BindFlag::ShaderResource | BindFlag::TransferSrc);

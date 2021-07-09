@@ -13,6 +13,8 @@ set(Src
     SkinningScaffold.cpp
     TransformationCommands.cpp
     PipelineConfigurationUtils.cpp
+    TextureCompiler.cpp
+    TextureLoaders.cpp
     ../GeoProc/GeometryAlgorithm.cpp
     ../GeoProc/GeoProcUtil.cpp
     ../GeoProc/MeshDatabase.cpp
@@ -57,3 +59,15 @@ target_link_libraries(RenderCoreAssets PUBLIC ShaderParser RenderCore ConsoleRig
 add_library(RenderCoreAssetsServices STATIC "Services.cpp")
 xle_configure_library(RenderCoreAssetsServices)
 target_link_libraries(RenderCoreAssetsServices PUBLIC RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
+
+target_include_directories(RenderCoreAssets PRIVATE "C:\\codelibrary\\Compressonator_4.1.5083\\include")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_link_libraries(RenderCoreAssets PUBLIC "C:\\codelibrary\\Compressonator_4.1.5083\\lib\\VS2017\\x64\\Compressonator_MDd.lib")
+else ()
+    target_link_libraries(RenderCoreAssets PUBLIC "C:\\codelibrary\\Compressonator_4.1.5083\\lib\\VS2017\\x64\\Compressonator_MD.lib")
+endif ()
+
+if (WIN32)
+    target_link_libraries(RenderCoreAssets PRIVATE DirectXTex)
+    target_compile_definitions(RenderCoreAssets PRIVATE ENABLE_DXTEX=1)
+endif ()

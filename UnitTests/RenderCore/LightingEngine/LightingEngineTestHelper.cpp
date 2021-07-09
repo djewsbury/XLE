@@ -44,8 +44,8 @@ namespace UnitTests
 		// Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(_metalTestHelper->_device);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
 		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
 		techniqueServices->SetBufferUploads(_bufferUploads);
 

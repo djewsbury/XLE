@@ -173,8 +173,8 @@ namespace RenderCore { namespace Techniques
 		_bufferUploads = BufferUploads::CreateManager(*device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
-		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[dD][dD][sS])"}, Techniques::CreateDDSTextureLoader());
-		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*)"}, Techniques::CreateWICTextureLoader());
+		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[dD][dD][sS])"}, RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*)"}, RenderCore::Assets::CreateWICTextureLoader());
 
 		_techniqueServices->GetDeformOperationFactory().RegisterDeformOperation("skin", SkinDeformer::InstantiationFunction);
 

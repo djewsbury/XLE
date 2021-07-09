@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "TextureLoaders.h"
+#include "../Assets/TextureLoaders.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 #include <cassert>
@@ -31,9 +31,9 @@ namespace RenderCore { namespace Techniques
 		/////////////////////////////
 		//   T E X T U R E   L O A D E R S
 		////////////////////////////////////////////
-		unsigned 	RegisterTextureLoader(const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, std::function<TextureLoaderSignature>&& loader);
+		unsigned 	RegisterTextureLoader(const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, std::function<Assets::TextureLoaderSignature>&& loader);
 		void 		DeregisterTextureLoader(unsigned pluginId);
-		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, TextureLoaderFlags::BitField flags);
+		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags);
 
 		void 		SetBufferUploads(const std::shared_ptr<BufferUploads::IManager>&);
 		

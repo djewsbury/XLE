@@ -10,7 +10,7 @@
 
 namespace BufferUploads { class IAsyncDataSource; }
 
-namespace RenderCore { namespace Techniques
+namespace RenderCore { namespace Assets
 {
     namespace TextureLoaderFlags
     {

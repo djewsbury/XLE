@@ -10,12 +10,12 @@
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/Services.h"
-#include "../../../RenderCore/Techniques/TextureLoaders.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/Format.h"
@@ -223,8 +223,8 @@ namespace UnitTests
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), Techniques::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), Techniques::CreateWICTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
+		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
 
 		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
 		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);

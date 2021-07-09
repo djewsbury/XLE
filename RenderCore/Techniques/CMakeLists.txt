@@ -27,7 +27,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         TechniqueUtils.cpp
         Services.cpp
         ModelCache.cpp
-        TextureLoaders.cpp
         SequencerDescriptorSet.cpp
         PipelineCollection.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
@@ -66,8 +65,5 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     xle_configure_library(RenderCoreTechniques-${metal_name})
     target_compile_definitions(RenderCoreTechniques-${metal_name} PUBLIC ${metal_macro})
     target_link_libraries(RenderCoreTechniques-${metal_name} PUBLIC RenderCoreAssets RenderCore_${metal_name} RenderCore Utility ForeignMisc)
-    if (WIN32)
-        target_link_libraries(RenderCoreTechniques-${metal_name} PRIVATE DirectXTex)
-    endif ()
 
 endforeach()

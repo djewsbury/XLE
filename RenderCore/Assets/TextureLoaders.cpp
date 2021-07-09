@@ -16,7 +16,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include <memory>
 
-#define ENABLE_DXTEX 1
 #if ENABLE_DXTEX
 	#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
 		#include "../../OSServices/WinAPI/IncludeWindows.h"	// get in before DirectXTex includes it
@@ -28,7 +27,7 @@
 	#undef DeleteFile
 #endif
 
-namespace RenderCore { namespace Techniques
+namespace RenderCore { namespace Assets
 {
 
 	static RenderCore::TextureDesc BuildTextureDesc(const DirectX::TexMetadata& metadata)
@@ -76,6 +75,35 @@ namespace RenderCore { namespace Techniques
 		}
 
 		return desc;
+	}
+
+	static DirectX::TexMetadata BuildTexMetadata(const TextureDesc& srcDesc)
+	{
+		DirectX::TexMetadata result;
+		result.width = srcDesc._width;
+		result.height = std::max(1u, (unsigned)srcDesc._height);
+		result.depth = std::max(1u, (unsigned)srcDesc._depth);
+		result.arraySize = std::max(1u, (unsigned)srcDesc._arrayCount);
+		result.mipLevels = std::max(1u, (unsigned)srcDesc._mipCount);
+		result.miscFlags = result.miscFlags2 = 0;
+		result.format = (DXGI_FORMAT)srcDesc._format;
+		switch (srcDesc._dimensionality) {
+		case TextureDesc::Dimensionality::T1D: 
+			result.dimension = DirectX::TEX_DIMENSION_TEXTURE1D;
+			break;
+		default:
+		case TextureDesc::Dimensionality::T2D:
+			result.dimension = DirectX::TEX_DIMENSION_TEXTURE2D;
+			break;
+		case TextureDesc::Dimensionality::T3D:
+			result.dimension = DirectX::TEX_DIMENSION_TEXTURE3D;
+			break;
+		case TextureDesc::Dimensionality::CubeMap:
+			result.dimension = DirectX::TEX_DIMENSION_TEXTURE2D;
+			result.miscFlags |= DirectX::TEX_MISC_TEXTURECUBE;
+			break;
+		}
+		return result;
 	}
 
 	static void PrepareSubresourcesFromDXImage(IteratorRange<const BufferUploads::IAsyncDataSource::SubResource*> subResources, DirectX::ScratchImage& scratchImage)
@@ -239,7 +267,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		Assets::DependencyValidation GetDependencyValidation() const override
+		::Assets::DependencyValidation GetDependencyValidation() const override
 		{
 			return ::Assets::GetDepValSys().Make(_filename);
 		}
@@ -391,7 +419,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		Assets::DependencyValidation GetDependencyValidation() const override
+		::Assets::DependencyValidation GetDependencyValidation() const override
 		{
 			return ::Assets::GetDepValSys().Make(_filename);
 		}
@@ -422,6 +450,25 @@ namespace RenderCore { namespace Techniques
 		return [](StringSection<> filename, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
 			return std::make_shared<WICDataSource>(filename.AsString(), flags);
 		};
+	}
+
+	::Assets::Blob PrepareDDSBlob(
+		const TextureDesc& tDesc,
+		size_t& headerSize)
+	{
+		auto dstSize = ByteCount(tDesc);
+		auto metadata = BuildTexMetadata(tDesc);
+
+		headerSize = 0;
+		auto directXFlags = DirectX::DDS_FLAGS_NONE;
+		auto hr = DirectX::_EncodeDDSHeader(metadata, directXFlags, nullptr, 0, headerSize);
+		assert(SUCCEEDED(hr));
+
+		auto result = std::make_shared<std::vector<uint8_t>>(dstSize+headerSize);
+		DirectX::_EncodeDDSHeader(metadata, directXFlags, result->data(), result->size(), headerSize);
+		assert(SUCCEEDED(hr));
+
+		return result;
 	}
 
 }}

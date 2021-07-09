@@ -17,7 +17,7 @@ namespace RenderCore { namespace Techniques
 		struct TexturePlugin
 		{
 			std::regex _initializerMatcher;
-			std::function<TextureLoaderSignature> _loader;
+			std::function<Assets::TextureLoaderSignature> _loader;
 			unsigned _id;
 		};
 		std::vector<TexturePlugin> _texturePlugins;
@@ -26,7 +26,7 @@ namespace RenderCore { namespace Techniques
 
 	unsigned Services::RegisterTextureLoader(
 		const std::basic_regex<char, std::regex_traits<char>>& initializerMatcher, 
-		std::function<TextureLoaderSignature>&& loader)
+		std::function<Assets::TextureLoaderSignature>&& loader)
 	{
 		auto res = _pimpl->_nextTexturePluginId++;
 
@@ -45,7 +45,7 @@ namespace RenderCore { namespace Techniques
 			_pimpl->_texturePlugins.erase(i);
 	}
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(StringSection<> identifier, TextureLoaderFlags::BitField flags)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags)
 	{
 		for (const auto& plugin:_pimpl->_texturePlugins)
 			if (std::regex_match(identifier.begin(), identifier.end(), plugin._initializerMatcher))

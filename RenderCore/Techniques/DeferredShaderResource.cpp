@@ -3,8 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeferredShaderResource.h"
-#include "TextureLoaders.h"
 #include "Services.h"
+#include "../Assets/TextureLoaders.h"
 #include "../Format.h"
 #include "../IDevice.h"
 #include "../../BufferUploads/IBufferUploads.h"
@@ -144,7 +144,7 @@ namespace RenderCore { namespace Techniques
         }
 
         using namespace BufferUploads;
-        TextureLoaderFlags::BitField flags = init._generateMipmaps ? TextureLoaderFlags::GenerateMipmaps : 0;
+        Assets::TextureLoaderFlags::BitField flags = init._generateMipmaps ? Assets::TextureLoaderFlags::GenerateMipmaps : 0;
 
 		// We're going to check for the existance of a "shadowing" file first. We'll write onto "filename"
 		// two names -- a possible shadowing file, and the original file as well. But don't do this for

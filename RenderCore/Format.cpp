@@ -781,7 +781,7 @@ namespace RenderCore
         }
     }
 
-    Format AsFormat(const char name[])
+    Format AsFormat(StringSection<> name)
     {
         #define _EXP(X, Y, Z, U)    if (XlEqStringI(name, STRINGIZE(X##_##Y))) return Format::X##_##Y;
             #include "Metal/Detail/DXGICompatibleFormats.h"
