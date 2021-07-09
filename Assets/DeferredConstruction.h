@@ -249,7 +249,7 @@ namespace Assets
 	template<
 		typename Future,
 		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::Constructor_ChunkFileContainer && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(Future& future, StringSection<ResChar> initializer)
+		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
 		WhenAll(containerFuture).ThenConstructToFuture(
@@ -262,7 +262,7 @@ namespace Assets
 	template<
 		typename Future,
 		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
-		void AutoConstructAssetToFuture(Future& future, StringSection<ResChar> initializer)
+		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
 		WhenAll(containerFuture).ThenConstructToFuture(
@@ -271,6 +271,14 @@ namespace Assets
 				auto chunks = container->ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<typename Future::PromisedType>::ChunkRequests));
 				return Internal::ConstructFinalAssetObject<typename Future::PromisedType>(MakeIteratorRange(chunks), container->GetDependencyValidation());
 			});
+	}
+
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<Future<AssetType>> MakeFuture(Params... initialisers)
+	{
+		auto future = std::make_shared<Future<AssetType>>(Internal::AsString(initialisers...));
+		AutoConstructToFuture(*future, std::forward<Params>(initialisers)...);
+		return future;
 	}
 }
 
