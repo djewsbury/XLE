@@ -204,11 +204,7 @@ namespace Assets
 					state = AssetState::Invalid;
 				} CATCH_END
 
-				auto artifactCollection = std::make_shared<BlobArtifactCollection>(
-					MakeIteratorRange(serializedArtifacts), state,
-					::Assets::MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal));
-
-				finalCollections.push_back(std::make_pair(target._targetCode, artifactCollection));
+				std::shared_ptr<IArtifactCollection> artifactCollection;
 
 				// Write out the intermediate file that lists the products of this compile operation
 				if (destinationStore) {
@@ -231,7 +227,7 @@ namespace Assets
 					if (!storedInArchive) {
 						StringMeld<MaxPath> nameWithTargetCode;
 						nameWithTargetCode << initializers.ArchivableName() << "-" << std::hex << target._targetCode;
-						destinationStore->StoreCompileProducts(
+						artifactCollection = destinationStore->StoreCompileProducts(
 							nameWithTargetCode.AsStringSection(),
 							delegate._storeGroupId,
 							MakeIteratorRange(serializedArtifacts),
@@ -239,6 +235,13 @@ namespace Assets
 							MakeIteratorRange(deps));
 					}
 				}
+
+				if (!artifactCollection)
+					artifactCollection = std::make_shared<BlobArtifactCollection>(
+						MakeIteratorRange(serializedArtifacts), state,
+						::Assets::MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal));
+
+				finalCollections.push_back(std::make_pair(target._targetCode, artifactCollection));
 			}
        
 			compileMarker.SetArtifactCollections(MakeIteratorRange(finalCollections));

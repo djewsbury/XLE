@@ -43,7 +43,7 @@ namespace Assets
 		using ArchiveEntryId = uint64_t;
 
 		// --------- Store & retrieve loose files ---------
-		void StoreCompileProducts(
+		std::shared_ptr<IArtifactCollection> StoreCompileProducts(
             StringSection<> archivableName,
 			CompileProductsGroupId groupId,
 			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,

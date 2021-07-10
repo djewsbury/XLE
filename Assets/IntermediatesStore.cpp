@@ -216,7 +216,7 @@ namespace Assets
 		return groupi->second._looseFilesStorage->RetrieveCompileProducts(archivableName, _pimpl->_storeRefCounts, hashCode);
 	}
 
-	void IntermediatesStore::StoreCompileProducts(
+	std::shared_ptr<IArtifactCollection> IntermediatesStore::StoreCompileProducts(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId,
 		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
@@ -236,7 +236,7 @@ namespace Assets
 		std::sort(uniqueDependencies.begin(), uniqueDependencies.end());
 		auto i = std::unique(uniqueDependencies.begin(), uniqueDependencies.end());
 
-		groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {uniqueDependencies.begin(), i});
+		return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {uniqueDependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
 	}
 
 	std::shared_ptr<IArtifactCollection> IntermediatesStore::RetrieveCompileProducts(

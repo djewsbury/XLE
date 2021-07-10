@@ -19,11 +19,13 @@ namespace Assets
 	class LooseFilesStorage
 	{
 	public:
-		void StoreCompileProducts(
+		std::shared_ptr<IArtifactCollection> StoreCompileProducts(
 			StringSection<> archivableName,
 			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
-			IteratorRange<const DependentFileState*> dependencies);
+			IteratorRange<const DependentFileState*> dependencies,
+			const std::shared_ptr<StoreReferenceCounts>& storeRefCounts,
+			uint64_t refCountHashCode);
 
 		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
 			StringSection<> archivableName,

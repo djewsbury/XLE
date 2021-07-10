@@ -162,6 +162,25 @@ namespace Assets
 		}
 	}
 
+	static ::Assets::DependencyValidation GetDepVal(const CompileProductsFile& finalProductsFile, StringSection<> archivableName)
+	{
+		auto depVal = GetDepValSys().Make();
+		for (const auto&dep:finalProductsFile._dependencies) {
+			if (!finalProductsFile._basePath.empty()) {
+				auto adjustedDep = dep;
+				char buffer[MaxPath];
+				Legacy::XlConcatPath(buffer, dimof(buffer), finalProductsFile._basePath.c_str(), AsPointer(dep._filename.begin()), AsPointer(dep._filename.end()));
+				adjustedDep._filename = buffer;
+				if (!IntermediatesStore::TryRegisterDependency(depVal, adjustedDep, archivableName))
+					Log(Warning) << "Asset already out-of-date while registering dependency for: " << dep._filename << std::endl;
+			} else {
+				if (!IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName))
+					Log(Warning) << "Asset already out-of-date while registering dependency for: " << dep._filename << std::endl;
+			}
+		}
+		return depVal;
+	}
+
 	std::shared_ptr<IArtifactCollection> LooseFilesStorage::RetrieveCompileProducts(
 		StringSection<> archivableName,
 		const std::shared_ptr<StoreReferenceCounts>& storeRefCounts,
@@ -182,24 +201,7 @@ namespace Assets
 
 		CompileProductsFile finalProductsFile;
 		formatter >> finalProductsFile;
-
-		auto depVal = GetDepValSys().Make();
-
-		for (const auto&dep:finalProductsFile._dependencies) {
-			if (!finalProductsFile._basePath.empty()) {
-				auto adjustedDep = dep;
-				char buffer[MaxPath];
-				Legacy::XlConcatPath(buffer, dimof(buffer), finalProductsFile._basePath.c_str(), AsPointer(dep._filename.begin()), AsPointer(dep._filename.end()));
-				adjustedDep._filename = buffer;
-				if (!IntermediatesStore::TryRegisterDependency(depVal, adjustedDep, archivableName))
-					return nullptr;
-			} else {
-				if (!IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName))
-					return nullptr;
-			}
-		}
-
-		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal, storeRefCounts, hashCode);
+		return MakeArtifactCollection(finalProductsFile, _filesystem, GetDepVal(finalProductsFile, archivableName), storeRefCounts, hashCode);
 	}
 
 	static std::string MakeSafeName(StringSection<> input)
@@ -219,11 +221,13 @@ namespace Assets
 		return result;
 	}
 
-	void LooseFilesStorage::StoreCompileProducts(
+	std::shared_ptr<IArtifactCollection> LooseFilesStorage::StoreCompileProducts(
 		StringSection<> archivableName,
 		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
-		IteratorRange<const DependentFileState*> dependencies)
+		IteratorRange<const DependentFileState*> dependencies,
+		const std::shared_ptr<StoreReferenceCounts>& storeRefCounts,
+		uint64_t hashCode)
 	{
 		CompileProductsFile compileProductsFile;
 		compileProductsFile._state = state;
@@ -268,7 +272,16 @@ namespace Assets
 				chunksInMainFile.push_back(a);
 			}
 
-		if (!chunksInMainFile.empty()) {
+		if (chunksInMainFile.size() == 1) {
+			auto& a = chunksInMainFile[0];
+			std::string mainArtifactName = productsName + "-" + MakeSafeName(a._name);
+			if (a._name.find('.') == std::string::npos)
+				mainArtifactName += ".artifact";
+			auto outputFile = OpenFileInterface(*_filesystem, mainArtifactName + ".staging", "wb", 0);
+			outputFile->Write((const void*)AsPointer(a._data->cbegin()), 1, a._data->size());
+			compileProductsFile._compileProducts.push_back({a._chunkTypeCode, mainArtifactName});
+			renameOps.push_back({mainArtifactName + ".staging", mainArtifactName});
+		} else if (!chunksInMainFile.empty()) {
 			auto mainBlobName = productsName + ".chunk";
 			auto outputFile = OpenFileInterface(*_filesystem, mainBlobName + ".staging", "wb", 0);
 			ChunkFile::BuildChunkFile(*outputFile, MakeIteratorRange(chunksInMainFile), _compilerVersionInfo);
@@ -310,6 +323,8 @@ namespace Assets
 			std::filesystem::remove(renameOp.second);
 			std::filesystem::rename(renameOp.first, renameOp.second);
 		}
+
+		return MakeArtifactCollection(compileProductsFile, _filesystem, GetDepVal(compileProductsFile, archivableName), storeRefCounts, hashCode);
 	}
 
 	std::string LooseFilesStorage::MakeProductsFileName(StringSection<> archivableName)
@@ -361,7 +376,7 @@ namespace Assets
 			// files. Though we only do this with "sharedblob" types
 			for (size_t r=0; r<requests.size(); ++r) {
 				bool foundExactMatch = false;
-				if (requests[r]._dataType == ArtifactRequest::DataType::SharedBlob)
+				if (requests[r]._dataType == ArtifactRequest::DataType::SharedBlob) {
 					for (const auto&prod:_productsFile._compileProducts)
 						if (prod._type == requests[r]._chunkTypeCode) {
 							auto fileData = TryLoadFileAsBlob(*_filesystem, prod._intermediateArtifact);
@@ -369,6 +384,14 @@ namespace Assets
 							foundExactMatch = true;
 							break;
 						}
+				} else if (requests[r]._dataType == ArtifactRequest::DataType::Filename) {
+					for (const auto&prod:_productsFile._compileProducts)
+						if (prod._type == requests[r]._chunkTypeCode) {
+							result[r] = {nullptr, 0, {}, nullptr, prod._intermediateArtifact};
+							foundExactMatch = true;
+							break;
+						}
+				}
 
 				if (!foundExactMatch) {
 					requestsForMultiMapping.push_back((unsigned)r);

@@ -28,7 +28,8 @@ namespace Assets
         {
             ReopenFunction, 
 			Raw, BlockSerializer,
-			SharedBlob
+			SharedBlob,
+			Filename
         };
         DataType        _dataType;
     };
@@ -40,6 +41,7 @@ namespace Assets
         size_t                                      _bufferSize = 0;
 		Blob										_sharedBlob;
 		ArtifactReopenFunction						_reopenFunction;
+		std::string 								_artifactFilename;
     };
 
 	class IArtifactCollection
