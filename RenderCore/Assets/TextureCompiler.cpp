@@ -12,6 +12,7 @@
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/PathUtils.h"
 #include "../../Core/Exceptions.h"
 
 #include "Compressonator.h"
@@ -256,7 +257,7 @@ namespace RenderCore { namespace Assets
 
 				_serializedArtifacts = std::vector<SerializedArtifact>{
 					{
-						TextureCompilerProcessType, 0, srcFN, destinationBlob
+						TextureCompilerProcessType, 0, MakeFileNameSplitter(srcFN).File().AsString() + ".dds", destinationBlob
 					}
 				};
 

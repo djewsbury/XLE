@@ -5,6 +5,7 @@
 #include "DeferredShaderResource.h"
 #include "Services.h"
 #include "../Assets/TextureLoaders.h"
+#include "../Assets/TextureCompiler.h"
 #include "../Format.h"
 #include "../IDevice.h"
 #include "../../BufferUploads/IBufferUploads.h"
@@ -88,55 +89,21 @@ namespace RenderCore { namespace Techniques
         }
     }
 
-#if 0
-	static bool CheckShadowingFile(const FileNameSplitter<::Assets::ResChar>& splitter)
-	{
-		return !XlEqStringI(splitter.Extension(), "dds")
-			&& !std::find(splitter.FullFilename().begin(), splitter.FullFilename().end(), ';');
-	}
-
-	template<int Count>
-		static void BuildRequestString(
-			::Assets::ResChar (&buffer)[Count],
-			const FileNameSplitter<::Assets::ResChar>& splitter)
-	{
-		auto& store = ::Assets::Services::GetAsyncMan().GetShadowingStore();
-		store->MakeIntermediateName(
-			buffer, Count, MakeStringSection(splitter.DriveAndPath().begin(), splitter.File().end()));
-		XlCatString(buffer, Count, ".dds;");
-		XlCatString(buffer, Count, splitter.AllExceptParameters());
-	}
-#endif
-
-	void DeferredShaderResource::ConstructToFuture(
+	static void ConstructToFutureImageFile(
 		::Assets::FuturePtr<DeferredShaderResource>& future,
-		StringSection<> initializer)
+		const FileNameSplitter<char>& splitter)
     {
-            // parse initialiser for flags
-		auto splitter = MakeFileNameSplitter(initializer);
         DecodedInitializer init(splitter);
-
 		assert(!splitter.File().IsEmpty());
 
 		std::shared_ptr<::Assets::FuturePtr<TextureMetaData>> metaDataFuture;
-
-		::Assets::ResChar filename[MaxPath];
-        if (init._colSpaceRequestString == SourceColorSpace::Unspecified) {
-                // No color space explicitly requested. We need to calculate the default
-                // color space for this texture...
-                // Most textures should be in SRGB space. However, some texture represent
-                // geometry details (or are lookup tables for shader calculations). These
-                // need to be marked as linear space (so they don't go through the SRGB->Linear 
-                // conversion.
-                //
+		{
+            ::Assets::ResChar filename[MaxPath];
                 // Some resources might have a little xml ".metadata" file attached. This 
                 // can contain a setting that can tell us the intended source color format.
                 //
                 // Some textures use "_ddn" to mark them as normal maps... So we'll take this
                 // as a hint that they are in linear space. 
-
-                // trigger a load of the metadata file (which should proceed in the background)
-            
             XlCopyString(filename, splitter.AllExceptParameters());
             XlCatString(filename, ".metadata");
 			if (::Assets::MainFileSystem::TryGetDesc(filename)._state == ::Assets::FileDesc::State::Normal)
@@ -146,18 +113,7 @@ namespace RenderCore { namespace Techniques
         using namespace BufferUploads;
         Assets::TextureLoaderFlags::BitField flags = init._generateMipmaps ? Assets::TextureLoaderFlags::GenerateMipmaps : 0;
 
-		// We're going to check for the existance of a "shadowing" file first. We'll write onto "filename"
-		// two names -- a possible shadowing file, and the original file as well. But don't do this for
-		// DDS files. We'll assume they do not have a shadowing file.
-		std::shared_ptr<BufferUploads::IAsyncDataSource> pkt;
-		/*const bool checkForShadowingFile = CheckShadowingFile(splitter);
-		if (checkForShadowingFile) {
-			BuildRequestString(filename, splitter);
-			pkt = CreateStreamingTextureSource(RenderCore::Techniques::Services::GetInstance().GetTexturePlugins(), MakeStringSection(filename), flags);
-		} else*/ {
-			pkt = Services::GetInstance().CreateTextureDataSource(splitter.AllExceptParameters(), flags);
-		}
-
+		auto pkt = Services::GetInstance().CreateTextureDataSource(splitter.AllExceptParameters(), flags);
         if (!pkt) {
             future.SetInvalidAsset({}, ::Assets::AsBlob("Could not find matching texture loader"));
 			return;
@@ -178,7 +134,7 @@ namespace RenderCore { namespace Techniques
 
         future.SetPollingFunction(
 			[   metaDataFuture, init, 
-                initializerStr = initializer.AsString(), 
+                initializerStr = splitter.FullFilename().AsString(), 
                 pkt,
                 captures](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
                     
@@ -243,6 +199,110 @@ namespace RenderCore { namespace Techniques
 				return false;
 			});
     }
+
+    class TextureArtifact
+    {
+    public:
+        static const auto CompileProcessType = RenderCore::Assets::TextureCompilerProcessType;
+        static const ::Assets::ArtifactRequest ChunkRequests[1];
+        std::string _artifactFile;
+        ::Assets::DependencyValidation _depVal;
+
+        TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
+        : _depVal(depVal)
+        {
+            _artifactFile = chunks[0]._artifactFilename;
+        }
+        TextureArtifact() = default;
+        ~TextureArtifact() = default;
+        TextureArtifact(TextureArtifact&&) = default;
+        TextureArtifact& operator=(TextureArtifact&&) = default;
+        TextureArtifact(const TextureArtifact&) = default;
+        TextureArtifact& operator=(const TextureArtifact&) = default;
+    };
+    const ::Assets::ArtifactRequest TextureArtifact::ChunkRequests[1] {
+        ::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::Filename }
+    };
+
+    static void ConstructToFutureArtifact(
+		::Assets::FuturePtr<DeferredShaderResource>& future,
+		const TextureArtifact& artifact,
+        std::string originalRequest)
+    {
+        using namespace BufferUploads;
+		auto pkt = Services::GetInstance().CreateTextureDataSource(artifact._artifactFile, 0);
+        if (!pkt) {
+            future.SetInvalidAsset(artifact._depVal, ::Assets::AsBlob("Could not find matching texture loader"));
+			return;
+        }
+
+        auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
+		if (!transactionMarker.IsValid()) {
+			future.SetInvalidAsset(artifact._depVal, ::Assets::AsBlob("Could not begin buffer uploads transaction"));
+			return;
+		}
+
+		struct Captures
+        {
+            std::future<BufferUploads::ResourceLocator> _futureResource;
+        };
+        auto captures = std::make_shared<Captures>();
+        captures->_futureResource = std::move(transactionMarker._future);
+
+        future.SetPollingFunction(
+			[originalRequest, pkt, captures, depVal=artifact._depVal](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
+                using namespace std::chrono_literals;
+                auto resStatus = captures->_futureResource.wait_for(0s);
+                if (resStatus == std::future_status::timeout)
+                    return true;
+
+                BufferUploads::ResourceLocator locator;
+                TRY {
+                    locator = captures->_futureResource.get();
+                } CATCH(const std::exception& e) {
+                    Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+                } CATCH_END
+
+				TextureViewDesc viewDesc{}; 
+                auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
+				if (!view) {
+					thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource"));
+					return false;
+				}
+
+				auto finalAsset = std::make_shared<DeferredShaderResource>(
+                    std::move(view), originalRequest,
+                    locator.GetCompletionCommandList(), depVal);
+				thatFuture.SetAsset(std::move(finalAsset), nullptr);
+				return false;
+			});
+    }
+
+    static void ConstructToFutureTextureCompile(
+		::Assets::FuturePtr<DeferredShaderResource>& future,
+		const FileNameSplitter<char>& splitter)
+    {
+        auto containerInitializer = splitter.AllExceptParameters();
+		auto containerFuture = ::Assets::MakeFuture<TextureArtifact>(containerInitializer);
+        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
+            future,
+            [originalRequest=splitter.FullFilename().AsString()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
+                ConstructToFutureArtifact(thatFuture, containerActual, originalRequest);
+            });
+    }
+
+    void DeferredShaderResource::ConstructToFuture(
+		::Assets::FuturePtr<DeferredShaderResource>& future,
+		StringSection<> initializer)
+    {
+        auto splitter = MakeFileNameSplitter(initializer);
+        if (XlEqStringI(splitter.Extension(), "texture")) {
+            ConstructToFutureTextureCompile(future, splitter);
+        } else {
+            ConstructToFutureImageFile(future, splitter);
+        }
+    }
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
