@@ -425,7 +425,7 @@ namespace RenderCore { namespace Assets
 		}
 
 		WICDataSource(const std::string& filename, TextureLoaderFlags::BitField flags)
-		: _filename(filename)
+		: _filename(filename), _flags(flags)
 		{
 			_hasBeenInitialized = false;
 		}

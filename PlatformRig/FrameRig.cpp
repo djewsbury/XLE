@@ -291,7 +291,7 @@ namespace PlatformRig
         RenderCore::Techniques::TechniqueContext techniqueContext;
         if (drawingApparatus) {
     		techniqueContext._systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
-    		techniqueContext._drawablesSharedResources = drawingApparatus->_drawablesSharedResources;
+            techniqueContext._commonResources = drawingApparatus->_commonResources;
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
