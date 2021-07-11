@@ -109,26 +109,26 @@ namespace RenderCore { namespace Metal_Vulkan
 		enum class Mode { Read, WriteDiscardPrevious };
 
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			DeviceContext& context, IResource& resource,
 			Mode mapMode);
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			DeviceContext& context, IResource& resource,
 			Mode mapMode,
 			SubResourceId subResource);
 		ResourceMap(
-			VkDevice dev, IResource& resource,
+			DeviceContext& context, IResource& resource,
 			Mode mapMode,
 			VkDeviceSize offset, VkDeviceSize size);
 
 		ResourceMap(
-			DeviceContext& context, IResource& resource,
+			IDevice& context, IResource& resource,
 			Mode mapMode);
 		ResourceMap(
-			DeviceContext& context, IResource& resource,
+			IDevice& context, IResource& resource,
 			Mode mapMode,
 			SubResourceId subResource);
 		ResourceMap(
-			DeviceContext& context, IResource& resource,
+			IDevice& context, IResource& resource,
 			Mode mapMode,
 			VkDeviceSize offset, VkDeviceSize size);
 
@@ -139,6 +139,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		ResourceMap& operator=(const ResourceMap&) = delete;
 		ResourceMap(ResourceMap&&) never_throws;
 		ResourceMap& operator=(ResourceMap&&) never_throws;
+
+		// ----------- Vulkan specific interface -----------
+
+		ResourceMap(
+			VkDevice dev, IResource& resource,
+			Mode mapMode);
+		ResourceMap(
+			VkDevice dev, IResource& resource,
+			Mode mapMode,
+			SubResourceId subResource);
+		ResourceMap(
+			VkDevice dev, IResource& resource,
+			Mode mapMode,
+			VkDeviceSize offset, VkDeviceSize size);
 
 		ResourceMap(
 			VkDevice dev, VkDeviceMemory memory,

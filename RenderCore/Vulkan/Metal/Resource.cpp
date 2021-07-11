@@ -1373,6 +1373,36 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	}
 
+	static VkDevice GetUnderlyingDevice(IDevice& device)
+	{
+		auto vkDevice = (IDeviceVulkan*)device.QueryInterface(typeid(IDeviceVulkan).hash_code());
+		if (!vkDevice) Throw("Incorrect device type passed to ResourceMap");
+		return vkDevice->GetUnderlyingDevice();
+	}
+
+	ResourceMap::ResourceMap(
+		IDevice& device, IResource& resource,
+		Mode mapMode)
+	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode)
+	{
+	}
+
+	ResourceMap::ResourceMap(
+		IDevice& device, IResource& resource,
+		Mode mapMode,
+		SubResourceId subResource)
+	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode, subResource)
+	{
+	}
+
+	ResourceMap::ResourceMap(
+		IDevice& device, IResource& resource,
+		Mode mapMode,
+		VkDeviceSize offset, VkDeviceSize size)
+	: ResourceMap(GetUnderlyingDevice(device), resource, mapMode, offset, size)
+	{
+	}
+
 	void ResourceMap::TryUnmap()
 	{
         if (_dev && _mem)
