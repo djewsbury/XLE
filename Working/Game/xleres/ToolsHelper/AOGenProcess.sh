@@ -12,7 +12,7 @@ float AreaElement(float x, float y)
     return atan2(x * y, sqrt(x * x + y * y + 1.f));
 }
 
-float TexelCoordSolidAngle(uint2 tc, uint2 dims)
+float CubeMapTexelSolidAngle(uint2 tc, uint2 dims)
 {
         // Based on the method from here:
         //      http://www.rorydriscoll.com/2012/01/15/cubemap-texel-solid-angle/
@@ -57,7 +57,7 @@ float TexelCoordSolidAngle(uint2 tc, uint2 dims)
         for (uint x=mins.x; x<maxs.x; ++x) {
             float depthValue = InputCubeMap[uint3(x, y, face)];
             float occlusion = (depthValue >= 1.f)?0.f:1.f;
-            result += occlusion * TexelCoordSolidAngle(uint2(x, y), dims.xy);
+            result += occlusion * CubeMapTexelSolidAngle(uint2(x, y), dims.xy);
         }
 
     OutputTexture[dispatchThreadId] = result;
