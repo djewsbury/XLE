@@ -47,14 +47,11 @@ namespace RenderCore { namespace Techniques
 		virtual ~ITechniqueDelegate();
 	};
 
-	class TechniqueSharedResources;
 	class TechniqueSetFile;
 	class CompiledShaderPatchCollection;
-	std::shared_ptr<TechniqueSharedResources> CreateTechniqueSharedResources(IDevice&);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources);
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
 
 	namespace TechniqueDelegateForwardFlags { 
 		enum { DisableDepthWrite = 1<<0 };
@@ -62,32 +59,27 @@ namespace RenderCore { namespace Techniques
 	}
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		TechniqueDelegateForwardFlags::BitField flags = 0);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias = RSDepthBias(),
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias = RSDepthBias(),
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthNormalVelocity(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources);
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
 
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.

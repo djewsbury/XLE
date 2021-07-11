@@ -85,8 +85,7 @@ namespace UnitTests
 
 			auto mainPool = Techniques::CreatePipelineAcceleratorPool();
 			std::shared_ptr<Techniques::TechniqueSetFile> techniqueSetFile = ::Assets::AutoConstructAsset<Techniques::TechniqueSetFile>(ILLUM_TECH);
-			auto techniqueSharedResources = std::make_shared<Techniques::TechniqueSharedResources>();
-			auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, techniqueSharedResources);
+			auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 			// compoundmaterial.hlsl contains a material definition and some shader code embedded alongside
 			// Ensure that we can load it and access the material properties 

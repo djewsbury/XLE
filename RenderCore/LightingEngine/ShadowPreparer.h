@@ -21,6 +21,7 @@ namespace RenderCore { namespace Techniques
 	class AttachmentPool;
 	class SequencerConfig;
 	class IShaderResourceDelegate;
+	class CommonResourceBox;
 }}
 namespace RenderCore { class IThreadContext; class IDescriptorSet; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
@@ -106,6 +107,7 @@ namespace RenderCore { namespace LightingEngine
 		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
 	class ShadowPreparationOperators : public IShadowProjectionFactory
@@ -124,6 +126,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////

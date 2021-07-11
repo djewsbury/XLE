@@ -81,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
 	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
-		Techniques::GraphicsPipelinePool& pipelineCollection,
+		Techniques::PipelinePool& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
 		const Internal::ShadowResolveParam& shadowResolveParam,
@@ -137,7 +137,7 @@ namespace RenderCore { namespace LightingEngine
 		pipelineDesc._blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
 		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main";
 
-		return pipelineCollection.CreatePipeline(
+		return pipelineCollection.CreateGraphicsPipeline(
 			pipelineLayout, pipelineDesc, selectors,
 			inputStates, fbTarget);
 	}
@@ -189,7 +189,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
-		Techniques::GraphicsPipelinePool& pipelineCollection,
+		Techniques::PipelinePool& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,

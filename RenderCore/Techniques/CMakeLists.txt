@@ -3,7 +3,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     set(Src
         Apparatuses.cpp
-        BasicDelegates.cpp
         CommonResources.cpp
         CommonUtils.cpp
         CompiledShaderPatchCollection.cpp
@@ -29,11 +28,11 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         ModelCache.cpp
         SequencerDescriptorSet.cpp
         PipelineCollection.cpp
+        TextureCompilerUtil.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers
         Apparatuses.h
-        BasicDelegates.h
         CommonBindings.h
         CommonResources.h
         CommonUtils.h

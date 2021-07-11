@@ -87,7 +87,7 @@ namespace UnitTests
 		{
 			RenderCore::Techniques::TechniqueContext techniqueContext;
 			techniqueContext._systemUniformsDelegate = _drawingApparatus->_systemUniformsDelegate;
-			techniqueContext._drawablesSharedResources = _drawingApparatus->_drawablesSharedResources;
+			techniqueContext._commonResources = _drawingApparatus->_commonResources;
 			techniqueContext._attachmentPool = _frameRenderingApparatus->_attachmentPool;
 			techniqueContext._frameBufferPool = _frameRenderingApparatus->_frameBufferPool;
 			return techniqueContext;

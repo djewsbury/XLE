@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
+#include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -62,13 +63,14 @@ namespace UnitTests
 			MakeMaterialDescriptorSetLayout(),
 			MakeSequencerDescriptorSetLayout());
 
-		_techniquesSharedResources = RenderCore::Techniques::CreateTechniqueSharedResources(*_metalTestHelper->_device);
-		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>(_techniquesSharedResources);
+		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
+		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
+
+		_pipelinePool = std::make_shared<Techniques::PipelinePool>(_metalTestHelper->_device, _commonResources);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
-		_techniqueContext->_drawablesSharedResources = Techniques::CreateDrawablesSharedResources();
-		auto commonResources = std::make_shared<Techniques::CommonResourceBox>(*_metalTestHelper->_device);
-		_techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device, *commonResources);
+		_techniqueContext->_commonResources = _commonResources;
+		_techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device, *_commonResources);
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 	}

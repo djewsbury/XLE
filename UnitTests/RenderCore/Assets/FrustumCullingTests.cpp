@@ -291,7 +291,7 @@ namespace UnitTests
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-				techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
+				techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
 				Techniques::ParsingContext parsingContext{*techniqueContext};
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};

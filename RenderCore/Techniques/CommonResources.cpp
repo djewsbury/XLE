@@ -32,7 +32,11 @@ namespace RenderCore { namespace Techniques
     RasterizationDesc CommonResourceBox::s_rsCullDisable { CullMode::None };
     RasterizationDesc CommonResourceBox::s_rsCullReverse { CullMode::Back, FaceWinding::CW };
 
+    static uint64_t s_nextCommonResourceBoxGuid = 1;
+
     CommonResourceBox::CommonResourceBox(IDevice& device)
+    : _samplerPool(device)
+    , _guid(s_nextCommonResourceBoxGuid++)
     {
         using namespace RenderCore::Metal;
 #if GFXAPI_TARGET == GFXAPI_DX11

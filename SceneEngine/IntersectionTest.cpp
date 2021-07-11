@@ -156,7 +156,7 @@ namespace SceneEngine
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
         techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
-        techniqueContext._drawablesSharedResources = drawingApparatus._drawablesSharedResources;
+        techniqueContext._commonResources = drawingApparatus._commonResources;
         return techniqueContext;
     }
 

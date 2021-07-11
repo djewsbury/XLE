@@ -7,7 +7,7 @@
 #include "LightingEngine.h"
 #include "../../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class GraphicsPipelinePool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelinePool; class CommonResourceBox; } }
 namespace RenderCore { class IDevice; class FrameBufferProperties; }
 namespace RenderCore { namespace Assets { class PredefinedPipelineLayoutFile; }}
 
@@ -34,7 +34,8 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pipelineCollection,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
+		const std::shared_ptr<Techniques::PipelinePool>& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,

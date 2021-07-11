@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
@@ -147,7 +148,7 @@ namespace UnitTests
 	{
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool> _pipelineCollection;
+		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelineCollection;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
@@ -161,7 +162,7 @@ namespace UnitTests
 			auto pipelineInit = i->second->MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::GraphicsPipelinePool>(testHelper._device);
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device, std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper._device));
 		}
 	};
 
@@ -261,7 +262,7 @@ namespace UnitTests
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
+				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, testApparatus._commonResources, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -338,7 +339,7 @@ namespace UnitTests
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testHelper->_device,
-				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
+				testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, testApparatus._commonResources, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 			auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);

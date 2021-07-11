@@ -39,7 +39,6 @@ namespace SceneEngine
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
-		std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources> _techniqueSharedResources;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _shadowGenDelegate;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSetFile->GetDependencyValidation(); }
@@ -63,9 +62,8 @@ namespace SceneEngine
 		ShadowGenTechniqueDelegateBox(const Desc& desc)
 		{
 			_techniqueSetFile = ::Assets::AutoConstructAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_techniqueSharedResources = std::make_shared<RenderCore::Techniques::TechniqueSharedResources>();
 			_shadowGenDelegate = RenderCore::Techniques::CreateTechniqueDelegate_ShadowGen(
-				_techniqueSetFile, _techniqueSharedResources,
+				_techniqueSetFile,
 				desc._singleSidedBias, desc._doubleSidedBias, desc._windingCullMode);
 		}
 	};

@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Math/Transformations.h"
@@ -245,7 +246,7 @@ namespace UnitTests
 	static void RunSimpleFullscreen(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<RenderCore::Techniques::GraphicsPipelinePool>& pipelinePool,
+		const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::Techniques::RenderPassInstance& rpi,
 		StringSection<> pixelShader,
@@ -363,9 +364,9 @@ namespace UnitTests
 		SECTION("write gbuffer")
 		{
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, testApparatus._techniquesSharedResources);
+			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
-			auto pipelinePool = std::make_shared<Techniques::GraphicsPipelinePool>(testHelper->_device);
+			auto pipelinePool = std::make_shared<Techniques::PipelinePool>(testHelper->_device, std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device));
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				const auto& camera = cameras[c];
@@ -403,7 +404,7 @@ namespace UnitTests
 					depthResource = rpi.GetDepthStencilAttachmentResource();
 
 					auto gbufferWriteCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
-						Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, Techniques::CreateTechniqueSharedResources(*testHelper->_device)),
+						Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 						ParameterBox {},
 						rpi.GetFrameBufferDesc());
 

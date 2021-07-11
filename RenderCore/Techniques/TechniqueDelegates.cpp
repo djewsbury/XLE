@@ -23,20 +23,6 @@
 
 namespace RenderCore { namespace Techniques
 {
-	class TechniqueSharedResources
-	{
-	public:
-		CommonResourceBox _commonResources;
-		TechniqueSharedResources(IDevice& device) : _commonResources(device) {}
-		~TechniqueSharedResources() {}
-	};
-
-	std::shared_ptr<TechniqueSharedResources> CreateTechniqueSharedResources(IDevice& device)
-	{
-		return std::make_shared<TechniqueSharedResources>(device);
-	}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
@@ -251,23 +237,19 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Deferred(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-			const std::shared_ptr<TechniqueSharedResources>& sharedResources)
-		: _sharedResources(sharedResources)
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
-		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources)
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 	{
-		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet, sharedResources);
+		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -370,11 +352,8 @@ namespace RenderCore { namespace Techniques
 
 		TechniqueDelegate_Forward(
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
-			_sharedResources = sharedResources;
-
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 
@@ -386,16 +365,14 @@ namespace RenderCore { namespace Techniques
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
-		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		DepthStencilDesc _depthStencil;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
-		return std::make_shared<TechniqueDelegate_Forward>(techniqueSet, sharedResources, flags);
+		return std::make_shared<TechniqueDelegate_Forward>(techniqueSet, flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -485,14 +462,11 @@ namespace RenderCore { namespace Techniques
 
 		TechniqueDelegate_DepthOnly(
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode,
 			bool shadowGen)
 		{
-			_sharedResources = sharedResources;
-
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
 				*_techniqueFileHelper, 
@@ -503,28 +477,25 @@ namespace RenderCore { namespace Techniques
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
-		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		RasterizationDesc _rs[2];
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, sharedResources, singleSidedBias, doubleSidedBias, cullMode, false);
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, false);
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, sharedResources, singleSidedBias, doubleSidedBias, cullMode, true);
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, true);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -621,11 +592,8 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_DepthNormalVelocity(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-			const std::shared_ptr<TechniqueSharedResources>& sharedResources)
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 		{
-			_sharedResources = sharedResources;
-
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 
@@ -634,15 +602,13 @@ namespace RenderCore { namespace Techniques
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
-		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		RasterizationDesc _rs[2];
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthNormalVelocity(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources)
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 	{
-		return std::make_shared<TechniqueDelegate_DepthNormalVelocity>(techniqueSet, sharedResources);
+		return std::make_shared<TechniqueDelegate_DepthNormalVelocity>(techniqueSet);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -726,13 +692,10 @@ namespace RenderCore { namespace Techniques
 
 		TechniqueDelegate_RayTest(
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-			const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 			unsigned testTypeParameter,
 			const StreamOutputInitializers& soInit)
 		: _testTypeParameter(testTypeParameter)
 		{
-			_sharedResources = sharedResources;
-			
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
 
@@ -741,7 +704,6 @@ namespace RenderCore { namespace Techniques
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
-		std::shared_ptr<TechniqueSharedResources> _sharedResources;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
 		unsigned _testTypeParameter;
@@ -749,11 +711,10 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{
-		return std::make_shared<TechniqueDelegate_RayTest>(techniqueSet, sharedResources, testTypeParameter, soInit);
+		return std::make_shared<TechniqueDelegate_RayTest>(techniqueSet, testTypeParameter, soInit);
 	}
 
 	uint64_t GraphicsPipelineDesc::GetHash() const

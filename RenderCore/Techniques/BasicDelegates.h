@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if 0
+
 #pragma once
 
 #include "DrawableDelegates.h"
@@ -21,3 +23,5 @@ namespace RenderCore { namespace Techniques
 		unsigned _cbIndex = 0;
     };
 }}
+
+#endif

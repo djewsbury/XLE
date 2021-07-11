@@ -34,6 +34,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual void Dispatch(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Dispatch(IThreadContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IComputeShaderOperator();
 	};
@@ -41,7 +42,7 @@ namespace RenderCore { namespace Techniques
 	class RenderPassInstance;
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<GraphicsPipelinePool>& pool,
+		const std::shared_ptr<PipelinePool>& pool,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
@@ -49,7 +50,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<GraphicsPipelinePool>& pool,
+		const std::shared_ptr<PipelinePool>& pool,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,
@@ -57,13 +58,14 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelinePool>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<RenderCore::IDevice>& device,
+		const std::shared_ptr<PipelinePool>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,

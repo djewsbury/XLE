@@ -7,6 +7,7 @@
 #include "../Techniques/Apparatuses.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/PipelineCollection.h"
+#include "../Techniques/CommonResources.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../IDevice.h"
@@ -16,17 +17,16 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox(const std::shared_ptr<Techniques::TechniqueSharedResources>& sharedResources)
-	: _sharedResources(sharedResources)
+	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox()
 	{
 		_techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-		_forwardIllumDelegate_DisableDepthWrite = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, _sharedResources, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
-		_depthOnlyDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, _sharedResources);
-		_deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(_techniqueSetFile, _sharedResources);
+		_forwardIllumDelegate_DisableDepthWrite = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+		_depthOnlyDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile);
+		_deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(_techniqueSetFile);
 	}
 
 	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus)
-	: SharedTechniqueDelegateBox(drawingApparatus._techniqueSharedResources)
+	: SharedTechniqueDelegateBox()
 	{}
 
 	LightingEngineApparatus::LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus> drawingApparatus)
@@ -36,6 +36,7 @@ namespace RenderCore { namespace LightingEngine
 		_device = drawingApparatus->_device;
 		_pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
 		_sharedDelegates = std::make_shared<SharedTechniqueDelegateBox>(*drawingApparatus);
+		_commonResources = drawingApparatus->_commonResources;
 
 		auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();
@@ -46,10 +47,10 @@ namespace RenderCore { namespace LightingEngine
 		auto i = _lightingOperatorsPipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
 		if (i == _lightingOperatorsPipelineLayoutFile->_pipelineLayouts.end())
 			Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-		auto pipelineInit = i->second->MakePipelineLayoutInitializer(drawingApparatus->_shaderCompiler->GetShaderLanguage());
+		auto pipelineInit = i->second->MakePipelineLayoutInitializer(drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
 		_lightingOperatorLayout = _device->CreatePipelineLayout(pipelineInit);
 
-		_lightingOperatorCollection = std::make_shared<Techniques::GraphicsPipelinePool>(_device);
+		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device, drawingApparatus->_commonResources);
 	}
 
 	LightingEngineApparatus::~LightingEngineApparatus() {}

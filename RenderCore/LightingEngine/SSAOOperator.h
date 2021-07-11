@@ -8,7 +8,7 @@
 #include <memory>
 
 namespace RenderCore { class IResourceView; class IDevice; }
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; }}
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -41,7 +41,7 @@ namespace RenderCore { namespace LightingEngine
 
         static void ConstructToFuture(
 			::Assets::FuturePtr<SSAOOperator>& future,
-			std::shared_ptr<RenderCore::IDevice> device);
+			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool);
     private:
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _computeOp;
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _upsampleOp;

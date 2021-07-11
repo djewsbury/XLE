@@ -7,7 +7,7 @@
 #include "LightingEngine.h"
 #include "../../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class CommonResourceBox; } }
 namespace RenderCore { class IDevice; class FrameBufferProperties; }
 
 namespace RenderCore { namespace LightingEngine
@@ -21,6 +21,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 }}

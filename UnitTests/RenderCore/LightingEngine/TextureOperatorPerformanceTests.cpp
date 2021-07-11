@@ -260,7 +260,7 @@ namespace UnitTests
 			UniformsStreamInterface usi;
 			UniformsStream us;
 			auto op = Techniques::CreateFullViewportOperator(
-				std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device),
+				testApparatus._pipelinePool,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, testApparatus._metalTestHelper->_pipelineLayout,
 				rpi, usi);
@@ -292,7 +292,7 @@ namespace UnitTests
 		us._samplers = MakeIteratorRange(samplers);
 
 		auto op = Techniques::CreateFullViewportOperator(
-			std::make_shared<Techniques::GraphicsPipelinePool>(testApparatus._metalTestHelper->_device),
+			testApparatus._pipelinePool,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, testApparatus._metalTestHelper->_pipelineLayout,
 			rpi, usi);
@@ -363,6 +363,7 @@ namespace UnitTests
 			"ut-data/minimal_compute.pipeline");
 		
 		auto op = Techniques::CreateComputeOperator(
+			testApparatus._pipelinePool,
 			pipelineLayouts->_pipelineLayouts["ComputeMain"],
 			"ut-data/downsample.compute.hlsl:main",
 			{}, usi);

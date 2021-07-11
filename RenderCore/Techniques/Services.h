@@ -19,6 +19,7 @@ namespace BufferUploads { class IManager; }
 namespace RenderCore { namespace Techniques
 {
 	class DeformOperationFactory;
+	class CommonResourceBox;
 
 	class Services
 	{
@@ -27,6 +28,7 @@ namespace RenderCore { namespace Techniques
 		static DeformOperationFactory& GetDeformOperationFactory() { assert(GetInstance()._deformOpsFactory); return *GetInstance()._deformOpsFactory; }
 		static RenderCore::IDevice& GetDevice() { return *GetInstance()._device; }
 		static std::shared_ptr<RenderCore::IDevice> GetDevicePtr() { return GetInstance()._device; }
+		static std::shared_ptr<CommonResourceBox> GetCommonResources() { return GetInstance()._commonResources; }
 
 		/////////////////////////////
 		//   T E X T U R E   L O A D E R S
@@ -36,6 +38,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags);
 
 		void 		SetBufferUploads(const std::shared_ptr<BufferUploads::IManager>&);
+		void 		SetCommonResources(const std::shared_ptr<CommonResourceBox>&);
 		
 		Services(const std::shared_ptr<RenderCore::IDevice>& device);
 		~Services();
@@ -47,6 +50,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::IDevice> _device;
 		std::shared_ptr<DeformOperationFactory> _deformOpsFactory;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		std::shared_ptr<CommonResourceBox> _commonResources;
 
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

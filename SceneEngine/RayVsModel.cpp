@@ -37,7 +37,6 @@ namespace SceneEngine
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
 		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter);
 
 	class RayDefinitionUniformDelegate : public Techniques::IShaderResourceDelegate
@@ -245,7 +244,6 @@ namespace SceneEngine
 	{
 	public:
 		FrameBufferDesc _fbDesc;
-		std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources> _techniqueSharedResources;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _rayTestTechniqueDelegate;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _frustumTechniqueDelegate;
 		::Assets::DependencyValidation _depVal;
@@ -257,9 +255,8 @@ namespace SceneEngine
 		{
 			auto& device = RenderCore::Techniques::Services::GetDevice();
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_techniqueSharedResources = RenderCore::Techniques::CreateTechniqueSharedResources(device);
-			_rayTestTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, _techniqueSharedResources, 0);
-			_frustumTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, _techniqueSharedResources, 1);
+			_rayTestTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 0);
+			_frustumTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 1);
 
 			std::vector<SubpassDesc> subpasses;
 			subpasses.emplace_back(SubpassDesc{});
@@ -379,11 +376,10 @@ namespace SceneEngine
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
 		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
-		const std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources>& sharedResources,
 		unsigned testTypeParameter)
 	{
 		return RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
-			techniqueSet, sharedResources, testTypeParameter, 
+			techniqueSet, testTypeParameter, 
 			StreamOutputInitializers {
 				MakeIteratorRange(s_soEles),
 				MakeIteratorRange(s_soStrides)});

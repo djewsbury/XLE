@@ -95,7 +95,7 @@ namespace RenderCore { namespace Techniques
     class SystemUniformsDelegate;
     class AttachmentPool;
     class FrameBufferPool;
-    class DrawablesSharedResources;
+    class CommonResourceBox;
 
     class TechniqueContext
     {
@@ -105,7 +105,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
         std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
-        std::shared_ptr<DrawablesSharedResources> _drawablesSharedResources;
+        std::shared_ptr<CommonResourceBox> _commonResources;
     };
 
 	UnderlyingAPI GetTargetAPI();

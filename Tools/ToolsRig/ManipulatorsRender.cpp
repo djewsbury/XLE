@@ -83,7 +83,6 @@ namespace ToolsRig
 	{
 	public:
 		::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
-		std::shared_ptr<RenderCore::Techniques::TechniqueSharedResources> _techniqueSharedResources;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _forwardIllumDelegate;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _techniqueSetFile->GetDependencyValidation(); }
@@ -92,8 +91,7 @@ namespace ToolsRig
 		TechniqueBox(const Desc&)
 		{
 			_techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_techniqueSharedResources = RenderCore::Techniques::CreateTechniqueSharedResources(RenderCore::Techniques::Services::GetInstance().GetDevice());
-			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, _techniqueSharedResources, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		}
 	};
 

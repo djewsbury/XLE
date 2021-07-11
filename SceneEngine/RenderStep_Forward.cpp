@@ -239,8 +239,7 @@ namespace SceneEngine
 		_techniqueDelegate = customDelegate;
 		if (!_techniqueDelegate) {
 			std::shared_ptr<Techniques::TechniqueSetFile> techniqueSetFile = ::Assets::AutoConstructAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			auto sharedResources = std::make_shared<RenderCore::Techniques::TechniqueSharedResources>();
-			_techniqueDelegate = RenderCore::Techniques::CreateTechniqueDelegate_DepthOnly(techniqueSetFile, sharedResources);
+			_techniqueDelegate = RenderCore::Techniques::CreateTechniqueDelegate_DepthOnly(techniqueSetFile);
 		}
 
 		AttachmentDesc msDepthDesc =

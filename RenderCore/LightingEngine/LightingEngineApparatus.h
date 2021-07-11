@@ -13,11 +13,11 @@
 namespace RenderCore { namespace Techniques 
 {
 	class TechniqueSetFile;
-	class TechniqueSharedResources;
 	class ITechniqueDelegate;
 	class DrawingApparatus;
 	class IPipelineAcceleratorPool;
-	class GraphicsPipelinePool;
+	class PipelinePool;
+	class CommonResourceBox;
 }}
 namespace RenderCore { class IDevice; }
 namespace Assets { class InitializerPack; }
@@ -31,13 +31,12 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
-		std::shared_ptr<Techniques::TechniqueSharedResources> _sharedResources;
 
 		template<typename... Args>
 			std::shared_ptr<Techniques::ITechniqueDelegate> GetShadowGenTechniqueDelegate(Args... args);
 
 		SharedTechniqueDelegateBox(Techniques::DrawingApparatus& drawingApparatus);
-		SharedTechniqueDelegateBox(const std::shared_ptr<Techniques::TechniqueSharedResources>& sharedResources);
+		SharedTechniqueDelegateBox();
 	private:
 		std::map<uint64_t, std::shared_ptr<Techniques::ITechniqueDelegate>> _shadowGenTechniqueDelegates;
 	};
@@ -46,10 +45,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<SharedTechniqueDelegateBox> _sharedDelegates;
+		std::shared_ptr<Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
-		std::shared_ptr<Techniques::GraphicsPipelinePool> _lightingOperatorCollection;
+		std::shared_ptr<Techniques::PipelinePool> _lightingOperatorCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
@@ -70,7 +70,7 @@ namespace RenderCore { namespace LightingEngine
 		if (i != _shadowGenTechniqueDelegates.end())
 			return i->second;
 
-		auto delegate = Techniques::CreateTechniqueDelegate_ShadowGen(_techniqueSetFile, _sharedResources, args...);
+		auto delegate = Techniques::CreateTechniqueDelegate_ShadowGen(_techniqueSetFile, args...);
 		_shadowGenTechniqueDelegates.insert(std::make_pair(hash, delegate));
 		return delegate;
 	}

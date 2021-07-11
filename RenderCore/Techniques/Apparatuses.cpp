@@ -57,9 +57,9 @@ namespace RenderCore { namespace Techniques
 		_shaderCompilerRegistration = RegisterShaderCompiler(_shaderSource, compilers);
 		_graphShaderCompiler2Registration = RegisterInstantiateShaderGraphCompiler(_shaderSource, compilers);
 
+		_commonResources = std::make_shared<CommonResourceBox>(*_device);
 		auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>(ILLUM_TECH);
-		_techniqueSharedResources = Techniques::CreateTechniqueSharedResources(*device);
-		_techniqueDelegateDeferred = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, _techniqueSharedResources);
+		_techniqueDelegateDeferred = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 		auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();
@@ -70,7 +70,7 @@ namespace RenderCore { namespace Techniques
 		auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
 		if (i == _pipelineLayoutFile->_pipelineLayouts.end())
 			Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage());
+		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
 		_compiledPipelineLayout = device->CreatePipelineLayout(pipelineInit);
 
 		PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
@@ -80,15 +80,14 @@ namespace RenderCore { namespace Techniques
 			poolFlags,
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
-
-		_commonResources = std::make_shared<CommonResourceBox>(*_device);
-		_drawablesSharedResources = CreateDrawablesSharedResources();
+		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device, *_commonResources);
 
-		_graphicsPipelinePool = std::make_shared<GraphicsPipelinePool>(_device);
+		_graphicsPipelinePool = std::make_shared<PipelinePool>(_device, _commonResources);
 
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);
+		_techniqueServices->SetCommonResources(_commonResources);
 		assert(_assetServices != nullptr);
 	}
 
@@ -131,7 +130,7 @@ namespace RenderCore { namespace Techniques
 		auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
 		if (i == _pipelineLayoutFile->_pipelineLayouts.end())
 			Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_mainDrawingApparatus->_shaderCompiler->GetShaderLanguage());
+		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_mainDrawingApparatus->_shaderCompiler->GetShaderLanguage(), &_mainDrawingApparatus->_commonResources->_samplerPool);
 		_compiledPipelineLayout = _mainDrawingApparatus->_device->CreatePipelineLayout(pipelineInit);
 
 		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(

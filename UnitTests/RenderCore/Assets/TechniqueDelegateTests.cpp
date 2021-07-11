@@ -13,6 +13,7 @@
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"

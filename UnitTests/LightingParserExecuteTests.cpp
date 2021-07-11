@@ -196,8 +196,7 @@ namespace UnitTests
 			//
 			using namespace RenderCore;
 			std::shared_ptr<Techniques::TechniqueSetFile> techniqueSetFile = ::Assets::AutoConstructAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
-			auto techniqueSharedResources = std::make_shared<Techniques::TechniqueSharedResources>();
-			auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, techniqueSharedResources);
+			auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 			auto mainPool = Techniques::CreatePipelineAcceleratorPool();
 			auto scene = std::make_shared<BasicScene>(*_device, *mainPool);

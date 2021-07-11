@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if 0
+
 #include "BasicDelegates.h"
 #include "ShaderVariationSet.h"
 #include "ParsingContext.h"
@@ -33,3 +35,5 @@ namespace RenderCore { namespace Techniques
 	}
 
 }}
+
+#endif

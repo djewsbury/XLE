@@ -152,7 +152,7 @@ namespace RenderCore { namespace LightingEngine
 
     void SSAOOperator::ConstructToFuture(
         ::Assets::FuturePtr<SSAOOperator>& future,
-        std::shared_ptr<RenderCore::IDevice> device)
+        std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool)
     {
         UniformsStreamInterface usi;
         usi.BindResourceView(0, Hash64("InputTexture"));
@@ -166,14 +166,14 @@ namespace RenderCore { namespace LightingEngine
 
         ParameterBox selectors;
         auto computeOp = Techniques::CreateComputeOperator(
-            device,
+            pipelinePool,
             AO_COMPUTE_HLSL ":main",
             selectors, 
             GENERAL_OPERATOR_PIPELINE ":ComputeMain",
             usi);
 
         auto upsampleOp = Techniques::CreateComputeOperator(
-            device,
+            pipelinePool,
             AO_COMPUTE_HLSL ":UpsampleOp",
             selectors, 
             GENERAL_OPERATOR_PIPELINE ":ComputeMain",

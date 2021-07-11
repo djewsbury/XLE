@@ -13,6 +13,7 @@
 #include "../Techniques/RenderStateResolver.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/CommonResources.h"
 #include "../Metal/DeviceContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../IDevice.h"
@@ -58,6 +59,7 @@ namespace RenderCore { namespace LightingEngine
 			ILightScene::ShadowOperatorId operatorId,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 			const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+			const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 		~DMShadowPreparer();
 
@@ -228,6 +230,7 @@ namespace RenderCore { namespace LightingEngine
 		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	: _pipelineAccelerators(pipelineAccelerators)
 	, _operatorId(operatorId)
@@ -302,7 +305,7 @@ namespace RenderCore { namespace LightingEngine
 		_uniformDelegate = std::make_shared<UniformDelegate>(*this);
 
 		if (descSetLayout) {
-			_descSetSig = descSetLayout->MakeDescriptorSetSignature();
+			_descSetSig = descSetLayout->MakeDescriptorSetSignature(&commonResources->_samplerPool);
 			_descSetSlotBindings.reserve(descSetLayout->_slots.size());
 			for (const auto& s:descSetLayout->_slots) {
 				if (s._name == "DMShadow") {
@@ -339,10 +342,11 @@ namespace RenderCore { namespace LightingEngine
 		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<ICompiledShadowPreparer>>();
-		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, operatorId, pipelineAccelerators, delegatesBox, descSetLayout), nullptr);
+		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, operatorId, pipelineAccelerators, delegatesBox, commonResources, descSetLayout), nullptr);
 		return result;
 	}
 
@@ -350,6 +354,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<ShadowPreparationOperators>>();
@@ -362,7 +367,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<PreparerFuture> futures;
 		futures.reserve(shadowGenerators.size());
 		for (unsigned operatorId=0; operatorId<shadowGenerators.size(); ++operatorId)
-			futures.push_back(CreateCompiledShadowPreparer(shadowGenerators[operatorId], operatorId, pipelineAccelerators, delegatesBox, descSetLayout));
+			futures.push_back(CreateCompiledShadowPreparer(shadowGenerators[operatorId], operatorId, pipelineAccelerators, delegatesBox, commonResources, descSetLayout));
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
 		result->SetPollingFunction(

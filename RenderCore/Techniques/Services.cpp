@@ -4,6 +4,7 @@
 
 #include "Services.h"
 #include "SimpleModelDeform.h"
+#include "CommonResources.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include <vector>
@@ -56,6 +57,11 @@ namespace RenderCore { namespace Techniques
 	void Services::SetBufferUploads(const std::shared_ptr<BufferUploads::IManager>& manager)
 	{
 		_bufferUploads = manager;
+	}
+
+	void Services::SetCommonResources(const std::shared_ptr<CommonResourceBox>& res)
+	{
+		_commonResources = res;
 	}
 
 	Services::Services(const std::shared_ptr<RenderCore::IDevice>& device)

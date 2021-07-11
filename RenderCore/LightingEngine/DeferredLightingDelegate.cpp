@@ -47,7 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<StandardLightScene> _lightScene;
-		std::shared_ptr<Techniques::GraphicsPipelinePool> _pipelineCollection;
+		std::shared_ptr<Techniques::PipelinePool> _pipelineCollection;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
@@ -294,7 +294,8 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pipelineCollection,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
+		const std::shared_ptr<Techniques::PipelinePool>& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
@@ -308,7 +309,7 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Could not find DMShadow descriptor set layout in the pipeline layout file"));
 
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
-		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet->second);
+		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, commonResources, shadowDescSet->second);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
@@ -424,6 +425,7 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_device,
 			apparatus->_pipelineAccelerators,
 			apparatus->_sharedDelegates,
+			apparatus->_commonResources,
 			apparatus->_lightingOperatorCollection,
 			apparatus->_lightingOperatorLayout,
 			apparatus->_lightingOperatorsPipelineLayoutFile,
@@ -439,7 +441,7 @@ namespace RenderCore { namespace LightingEngine
 	static void GenerateShadowingDebugTextures(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<Techniques::GraphicsPipelinePool>& pool,
+		const std::shared_ptr<Techniques::PipelinePool>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const ShadowOperatorDesc& shadowOpDesc,
 		const IPreparedShadowResult& preparedShadowResult,

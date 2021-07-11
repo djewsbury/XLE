@@ -7,44 +7,22 @@
 #pragma once
 
 #include "../StateDesc.h"
+#include "../ResourceUtils.h"
 #include "../IDevice_Forward.h"
 #include "../Metal/Metal.h"
-
-#if GFXAPI_TARGET == GFXAPI_DX11
-    #include "../Metal/State.h"
-#endif
 
 namespace RenderCore { namespace Techniques 
 {
     class CommonResourceBox
     {
     public:
-#if GFXAPI_TARGET == GFXAPI_DX11
-        Metal::DepthStencilState _dssReadWrite;
-        Metal::DepthStencilState _dssReadOnly;
-        Metal::DepthStencilState _dssDisable;
-        Metal::DepthStencilState _dssReadWriteWriteStencil;
-        Metal::DepthStencilState _dssWriteOnly;
-
-        Metal::BlendState _blendStraightAlpha;
-        Metal::BlendState _blendAlphaPremultiplied;
-        Metal::BlendState _blendOpaque;
-        Metal::BlendState _blendOneSrcAlpha;
-        Metal::BlendState _blendAdditive;
-
-        Metal::RasterizerState _defaultRasterizer;
-        Metal::RasterizerState _cullDisable;
-        Metal::RasterizerState _cullReverse;
-        
-        Metal::ConstantBuffer _localTransformBuffer;
-#endif
-
         std::shared_ptr<ISampler> _defaultSampler;
         std::shared_ptr<ISampler> _linearWrapSampler;
         std::shared_ptr<ISampler> _linearClampSampler;
         std::shared_ptr<ISampler> _anisotropicWrapSampler;
         std::shared_ptr<ISampler> _pointClampSampler;
         std::shared_ptr<ISampler> _unnormalizedBilinearClampSampler;
+        SamplerPool _samplerPool;
 
 		///////////////////////////////////////
 
@@ -65,12 +43,15 @@ namespace RenderCore { namespace Techniques
         static RasterizationDesc s_rsCullDisable;
         static RasterizationDesc s_rsCullReverse;
 
+        uint64_t GetGUID() const { return _guid; }
+
         CommonResourceBox(IDevice&);
         ~CommonResourceBox();
 
     private:
-        CommonResourceBox(CommonResourceBox&);
-        CommonResourceBox& operator=(const CommonResourceBox&);
+        CommonResourceBox(CommonResourceBox&) = delete;
+        CommonResourceBox& operator=(const CommonResourceBox&) = delete;
+        uint64_t _guid = 0;
     };
 
 }}

@@ -7,10 +7,11 @@
 #include "DrawablesInternal.h"
 #include "Techniques.h"
 #include "ParsingContext.h"
-#include "PipelineAccelerator.h"
+#include "PipelineAcceleratorInternal.h"
 #include "DescriptorSetAccelerator.h"
 #include "BasicDelegates.h"
 #include "CommonUtils.h"
+#include "CommonResources.h"
 #include "CompiledShaderPatchCollection.h"		// for DescriptorSetLayoutAndBinding
 #include "../UniformsStream.h"
 #include "../BufferView.h"
@@ -23,44 +24,6 @@
 namespace RenderCore { namespace Techniques
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	class DrawablesSharedResources
-	{
-	public:
-		std::unordered_map<uint64_t, std::unique_ptr<Metal::BoundUniforms>> _cachedBoundUniforms;
-	};
-
-	std::shared_ptr<DrawablesSharedResources> CreateDrawablesSharedResources()
-	{
-		return std::make_shared<DrawablesSharedResources>();
-	}
-
-	struct FixedDescriptorSetBinding
-	{
-		unsigned _slot;
-		uint64_t _hashName;
-		const DescriptorSetSignature* _signature;
-	};
-
-	static Metal::BoundUniforms* GetBoundUniforms(
-		const Metal::GraphicsPipeline& pipeline,
-		DrawablesSharedResources& sharedResources,
-        const UniformsStreamInterface& group0,
-		const UniformsStreamInterface& group1)
-	{
-		uint64_t hash = pipeline.GetInterfaceBindingGUID();
-		hash = HashCombine(group0.GetHash(), hash);
-		hash = HashCombine(group1.GetHash(), hash);
-
-		auto i = sharedResources._cachedBoundUniforms.find(hash);
-		if (i == sharedResources._cachedBoundUniforms.end())
-			i = sharedResources._cachedBoundUniforms.insert(
-				std::make_pair(
-					hash, 
-					std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1))).first;
-			
-		return i->second.get();
-	}
 
 	class RealExecuteDrawableContext
 	{
@@ -98,7 +61,7 @@ namespace RenderCore { namespace Techniques
 			*pipelineAccelerators.GetSequencerDescriptorSetLayout().GetLayout());
 
 		UniformsStreamInterface sequencerUSI = uniformsHelper.GetLooseUniformsStreamInterface();
-		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature();
+		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
 		sequencerUSI.BindFixedDescriptorSet(0, sequencerDescSetName, &sequencerDescriptorSet.second);
 		sequencerUSI.BindFixedDescriptorSet(1, materialDescSetName, &matDescSetLayout);
 
@@ -146,25 +109,24 @@ namespace RenderCore { namespace Techniques
 
 			//////////////////////////////////////////////////////////////////////////////
 
-			auto* boundUniforms = GetBoundUniforms(
-				*pipeline,
-				*parserContext.GetTechniqueContext()._drawablesSharedResources,
+			auto& boundUniforms = pipeline->_boundUniformsPool.Get(
+				*pipeline->_metalPipeline,
 				sequencerUSI,
 				drawable._looseUniformsInterface ? *drawable._looseUniformsInterface : UniformsStreamInterface{});
 
 			const IDescriptorSet* descriptorSets[2];
 			descriptorSets[0] = sequencerDescriptorSet.first.get();
 			descriptorSets[1] = matDescSet;
-			boundUniforms->ApplyDescriptorSets(
+			boundUniforms.ApplyDescriptorSets(
 				metalContext, encoder,
 				MakeIteratorRange(descriptorSets), 0);
-			if (__builtin_expect(boundUniforms->GetBoundLooseImmediateDatas(0) | boundUniforms->GetBoundLooseResources(0) | boundUniforms->GetBoundLooseResources(0), 0ull)) {
-				ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, *boundUniforms, 0);
+			if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+				ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, boundUniforms, 0);
 			}
 
 			//////////////////////////////////////////////////////////////////////////////
 
-			RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, pipeline, boundUniforms };
+			RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, pipeline->_metalPipeline.get(), &boundUniforms };
 			drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
 		}
 	}

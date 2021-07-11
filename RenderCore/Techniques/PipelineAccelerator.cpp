@@ -3,11 +3,12 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineAccelerator.h"
+#include "PipelineAcceleratorInternal.h"
 #include "DescriptorSetAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
-#include "PipelineAcceleratorInternal.h"
+#include "PipelineBuilderUtil.h"
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -411,7 +412,7 @@ namespace RenderCore { namespace Techniques
 			unsigned subpassIndex = 0) override;
 
 		const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
-		const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
+		Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 
 		const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
@@ -475,9 +476,9 @@ namespace RenderCore { namespace Techniques
 		return pipelineAccelerator._finalPipelines[sequencerIdx]._future;
 	}
 
-	const Metal::GraphicsPipeline* PipelineAcceleratorPool::TryGetPipeline(
+	auto PipelineAcceleratorPool::TryGetPipeline(
 		PipelineAccelerator& pipelineAccelerator, 
-		const SequencerConfig& sequencerConfig) const
+		const SequencerConfig& sequencerConfig) const -> Pipeline*
 	{
 		unsigned sequencerIdx = unsigned(sequencerConfig._cfgId);
 		#if defined(_DEBUG)
@@ -489,7 +490,7 @@ namespace RenderCore { namespace Techniques
 		#endif
 		
 		auto p = pipelineAccelerator._finalPipelines[sequencerIdx]._future->TryActualize();
-		if (p) return (*p)->_metalPipeline.get();
+		if (p) return p->get();
 		return nullptr;
 	}
 

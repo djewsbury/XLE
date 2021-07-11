@@ -31,7 +31,6 @@ namespace RenderCore { namespace Techniques
 {
 	class Services;
 	class IPipelineAcceleratorPool;
-	class TechniqueSharedResources;
 	class ITechniqueDelegate;
 	class IImmediateDrawables;
 	class TechniqueContext;
@@ -39,9 +38,8 @@ namespace RenderCore { namespace Techniques
 	class FrameBufferPool;
 	class SubFrameEvents;
 	class CommonResourceBox;
-	class DrawablesSharedResources;
 	class SystemUniformsDelegate;
-	class GraphicsPipelinePool;
+	class PipelinePool;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -63,7 +61,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _shaderCompilerRegistration;
 		::Assets::CompilerRegistration _graphShaderCompiler2Registration;
 
-		std::shared_ptr<TechniqueSharedResources> _techniqueSharedResources;
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegateDeferred;
 
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
@@ -73,10 +70,9 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 
 		std::shared_ptr<CommonResourceBox> _commonResources;
-		std::shared_ptr<DrawablesSharedResources> _drawablesSharedResources;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 
-		std::shared_ptr<GraphicsPipelinePool> _graphicsPipelinePool;
+		std::shared_ptr<PipelinePool> _graphicsPipelinePool;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

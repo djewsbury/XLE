@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Assets/TextureLoaders.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -271,7 +272,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, Techniques::CreateTechniqueSharedResources(*testHelper->_device)),
+				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -304,7 +305,7 @@ namespace UnitTests
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-				techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
+				techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
 				Techniques::ParsingContext parsingContext{*techniqueContext};
 				parsingContext.AddShaderResourceDelegate(globalDelegate);
 				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
@@ -336,7 +337,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, Techniques::CreateTechniqueSharedResources(*testHelper->_device)),
+				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -367,7 +368,7 @@ namespace UnitTests
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-					techniqueContext->_drawablesSharedResources = RenderCore::Techniques::CreateDrawablesSharedResources();
+					techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
 					Techniques::ParsingContext parsingContext{*techniqueContext};
 					parsingContext.AddShaderResourceDelegate(globalDelegate);
 					

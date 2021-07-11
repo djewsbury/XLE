@@ -7,6 +7,7 @@
 #include "../ReusableDataFiles.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
@@ -195,8 +196,7 @@ namespace UnitTests
 		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 
 		auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
-		auto techniqueSharedResources = Techniques::CreateTechniqueSharedResources(*testHelper->_device);
-		auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, techniqueSharedResources);
+		auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 		auto mainPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, testHelper->_pipelineLayout);
 		mainPool->SetGlobalSelector("GLOBAL_SEL", 55);
@@ -464,7 +464,7 @@ namespace UnitTests
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, Techniques::CreateTechniqueSharedResources(*testHelper->_device)),
+				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
 
@@ -559,7 +559,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile, Techniques::CreateTechniqueSharedResources(*testHelper->_device)),
+				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
 

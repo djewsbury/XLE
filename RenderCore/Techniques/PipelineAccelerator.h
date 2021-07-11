@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "../Metal/Forward.h"		// (for Metal::GraphicsPipeline)
 #include "../Types.h"
 #include "../StateDesc.h"
 #include "../../Assets/AssetsCore.h"
@@ -68,20 +67,10 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) = 0;
 
-		class Pipeline
-		{
-		public:
-			std::shared_ptr<Metal::GraphicsPipeline> _metalPipeline;
-			::Assets::DependencyValidation _depVal;
-			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-			#if defined(_DEBUG)
-				std::string _vsDescription, _psDescription, _gsDescription;
-			#endif
-		};
+		class Pipeline;
 
 		virtual const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual const Metal::GraphicsPipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
+		virtual Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 
 		virtual const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;

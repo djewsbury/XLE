@@ -7,6 +7,8 @@
 #include "DrawableDelegates.h"
 #include "ParsingContext.h"
 #include "DrawablesInternal.h"
+#include "Techniques.h"
+#include "CommonResources.h"
 #include "../BufferView.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/DeviceContext.h"
@@ -346,7 +348,7 @@ namespace RenderCore { namespace Techniques
 		initializer._bindItems._resourceViews = MakeIteratorRange(_pimpl->_queriedResources);
 		initializer._bindItems._samplers = MakeIteratorRange(_pimpl->_queriedSamplers);
 		initializer._bindItems._immediateData = MakeIteratorRange(_pimpl->_queriedImmediateDatas);
-		auto sig = descSetLayout.MakeDescriptorSetSignature();		// todo -- we probably have this stored somewhere else, it might not be a great idea to keep rebuilding it
+		auto sig = descSetLayout.MakeDescriptorSetSignature(&parsingContext.GetTechniqueContext()._commonResources->_samplerPool);		// todo -- we probably have this stored somewhere else, it might not be a great idea to keep rebuilding it
 		initializer._signature = &sig;
 		auto set = device.CreateDescriptorSet(initializer);
 		return std::make_pair(std::move(set), std::move(sig));

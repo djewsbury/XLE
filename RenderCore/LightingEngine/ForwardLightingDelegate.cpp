@@ -135,13 +135,14 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
-		return CreateForwardLightingTechnique(apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_sharedDelegates, preregisteredAttachments, fbProps);
+		return CreateForwardLightingTechnique(apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_sharedDelegates, apparatus->_commonResources, preregisteredAttachments, fbProps);
 	}
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
@@ -154,7 +155,7 @@ namespace RenderCore { namespace LightingEngine
 		captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
 
 		ShadowOperatorDesc defaultShadowGenerator;
-		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, 0, pipelineAccelerators, techDelBox, nullptr);
+		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, 0, pipelineAccelerators, techDelBox, commonResources, nullptr);
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
 		::Assets::WhenAll(shadowPreparerFuture).ThenConstructToFuture(
