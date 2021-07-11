@@ -45,9 +45,11 @@ namespace RenderCore { namespace Techniques
 
 	void SystemUniformsDelegate::WriteSamplers(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst)
 	{
-		assert(dst.size() == 4);
 		for (unsigned c=0; c<dimof(_samplers); ++c)
-			dst[c] = _samplers[c].get();
+			if (bindingFlags & (1ull<<uint64_t(c))) {
+				assert(c < dst.size());
+				dst[c] = _samplers[c].get();
+			}
 	}
 
 	SystemUniformsDelegate::SystemUniformsDelegate(IDevice& device, CommonResourceBox& commonResources)
@@ -60,14 +62,14 @@ namespace RenderCore { namespace Techniques
 		_localTransformFallback._localToWorld = Identity<Float3x4>();
 		_localTransformFallback._localSpaceView = Float3(0.f, 0.f, 0.f);
 
-		_interface.BindSampler(0, Hash64("DefaultSampler"));
+		/*_interface.BindSampler(0, Hash64("DefaultSampler"));
 		_samplers[0] = commonResources._defaultSampler;
 		_interface.BindSampler(1, Hash64("ClampingSampler"));
 		_samplers[1] = commonResources._linearClampSampler;
 		_interface.BindSampler(2, Hash64("AnisotropicSampler"));
 		_samplers[2] = commonResources._defaultSampler;
 		_interface.BindSampler(3, Hash64("PointClampSampler"));
-		_samplers[3] = commonResources._pointClampSampler;
+		_samplers[3] = commonResources._pointClampSampler;*/
 	}
 
 	SystemUniformsDelegate::~SystemUniformsDelegate()

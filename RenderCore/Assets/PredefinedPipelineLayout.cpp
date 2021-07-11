@@ -165,12 +165,12 @@ namespace RenderCore { namespace Assets
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile() {}
 	PredefinedPipelineLayoutFile::~PredefinedPipelineLayoutFile() {}
 
-	PipelineLayoutInitializer PredefinedPipelineLayoutFile::PipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language) const
+	PipelineLayoutInitializer PredefinedPipelineLayoutFile::PipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
 	{
 		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[_descriptorSets.size()];
 		for (size_t c=0; c<_descriptorSets.size(); ++c) {
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
-			descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature();
+			descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature(samplerPool);
 			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
 		}
 

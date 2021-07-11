@@ -85,8 +85,21 @@ namespace RenderCore
 
 	private:
 		struct Entry { std::shared_ptr<IResource> _resource; std::shared_ptr<IResourceView> _view; };
-		std::vector<std::pair<uint64, Entry>> _views;
+		std::vector<std::pair<uint64_t, Entry>> _views;
 	};
+
+    class ISampler;
+    class IDevice;
+
+    class SamplerPool
+    {
+    public:
+		std::shared_ptr<ISampler> GetSampler(const SamplerDesc&);
+        SamplerPool(IDevice& device);
+    private:
+        std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _samplers;
+        IDevice* _device = nullptr;
+    };
 
     std::ostream& SerializationOperator(std::ostream& strm, const ResourceDesc&);
 }

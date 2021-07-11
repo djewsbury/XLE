@@ -4,9 +4,11 @@
 
 #pragma once
 
+#include "../Utility/StringUtils.h"
 #include <cstdint>
 #include <iosfwd>
 #include <assert.h>
+#include <optional>
 
 namespace RenderCore
 {
@@ -189,7 +191,7 @@ namespace RenderCore
 
     namespace SamplerDescFlags
     {
-        enum Flags { DisableMipmaps = 1u<<0u, UnnormalizedCoordinates = 1u<<1u };
+        enum Flag { DisableMipmaps = 1u<<0u, UnnormalizedCoordinates = 1u<<1u };
         using BitField = unsigned;
     }
 
@@ -305,5 +307,10 @@ namespace RenderCore
 	const char* AsString(FilterMode);
 	const char* AsString(CompareOp);
 	const char* AsString(Topology);
+
+    std::optional<AddressMode> AsAddressMode(StringSection<>);
+	std::optional<FilterMode> AsFilterMode(StringSection<>);
+	std::optional<CompareOp> AsCompareOp(StringSection<>);
+    std::optional<SamplerDescFlags::Flag> AsSamplerDescFlag(StringSection<>);
 }
 

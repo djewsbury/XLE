@@ -5,6 +5,8 @@
 #include "PredefinedDescriptorSetLayout.h"
 #include "PredefinedCBLayout.h"
 #include "../UniformsStream.h"
+#include "../IDevice.h"
+#include "../ResourceUtils.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
@@ -20,6 +22,7 @@ namespace RenderCore { namespace Assets
 {
 	PredefinedCBLayout::NameAndType ParseStatement(ConditionalProcessingTokenizer& streamIterator, ParameterBox& defaults);
 	void AppendElement(PredefinedCBLayout& cbLayout, const PredefinedCBLayout::NameAndType& input, unsigned cbIterator[PredefinedCBLayout::AlignmentRules_Max]);
+	static SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& streamIterator);
 
 	void PredefinedDescriptorSetLayout::ParseSlot(ConditionalProcessingTokenizer& iterator, DescriptorType type)
 	{
@@ -59,6 +62,17 @@ namespace RenderCore { namespace Assets
 
 			_constantBuffers.push_back(newLayout);
 			result._cbIdx = (unsigned)_constantBuffers.size() - 1;
+		} else if (type == DescriptorType::Sampler && XlEqString(token._value, "{")) {
+			auto fixedSampler = ParseFixedSampler(iterator);
+
+			token = iterator.GetNextToken();
+			if (token._value.IsEmpty())
+				Throw(FormatException(StringMeld<256>() << "Unexpected end of file while parsing fixed sampler for (" << result._name << ") at " << token._value, token._start));
+			assert(XlEqString(token._value, "}"));
+			token = iterator.GetNextToken();		
+
+			_fixedSamplers.push_back(fixedSampler);
+			result._fixedSamplerIdx = (unsigned)_fixedSamplers.size() - 1;
 		}
 
 		if (XlEqString(token._value, "[")) {
@@ -247,7 +261,7 @@ namespace RenderCore { namespace Assets
 	{
 	}
 
-	DescriptorSetSignature PredefinedDescriptorSetLayout::MakeDescriptorSetSignature() const
+	DescriptorSetSignature PredefinedDescriptorSetLayout::MakeDescriptorSetSignature(SamplerPool* samplerPool) const
 	{
 		DescriptorSetSignature result;
 		result._slots.reserve(_slots.size());
@@ -256,6 +270,64 @@ namespace RenderCore { namespace Assets
 			auto count = std::max(s._arrayElementCount, 1u);
 			result._slots.push_back(DescriptorSlot{s._type, count});
 			result._slotNames.push_back(Hash64(s._name));
+		}
+		if (samplerPool && !_fixedSamplers.empty()) {
+			result._fixedSamplers.resize(_slots.size());
+			for (unsigned c=0; c<_slots.size(); ++c) {
+				if (_slots[c]._fixedSamplerIdx == ~0u) continue;
+				result._fixedSamplers[c] = samplerPool->GetSampler(_fixedSamplers[_slots[c]._fixedSamplerIdx]);
+			}
+		}
+		return result;
+	}
+
+	SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& iterator)
+	{
+		SamplerDesc result{};
+		for (;;) {
+			auto next = iterator.PeekNextToken();
+			if (next._value.IsEmpty() || XlEqString(next._value, "}"))
+				break;
+			iterator.GetNextToken();
+
+			if (XlEqString(next._value, "Filter")) {
+				if (!XlEqString(iterator.GetNextToken()._value, "="))
+					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+				next = iterator.GetNextToken();
+				auto filterMode = AsFilterMode(next._value);
+				if (!filterMode)
+					Throw(FormatException(StringMeld<256>() << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
+				result._filter = filterMode.value();
+			} else if (XlEqString(next._value, "AddressU") || XlEqString(next._value, "AddressV")) {
+				if (!XlEqString(iterator.GetNextToken()._value, "="))
+					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+				next = iterator.GetNextToken();
+				auto addressMode = AsAddressMode(next._value);
+				if (!addressMode)
+					Throw(FormatException(StringMeld<256>() << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
+				if (XlEqString(next._value, "AddressU")) result._addressU = addressMode.value();
+				else result._addressV = addressMode.value();
+			} else if (XlEqString(next._value, "Comparison")) {
+				if (!XlEqString(iterator.GetNextToken()._value, "="))
+					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+				next = iterator.GetNextToken();
+				auto compareMode = AsCompareOp(next._value);
+				if (!compareMode)
+					Throw(FormatException(StringMeld<256>() << "Unknown comparison mode (" << next._value << ")", iterator.GetLocation()));
+				result._comparison = compareMode.value();
+			} else {
+				auto flag = AsSamplerDescFlag(next._value);
+				if (!flag)
+					Throw(FormatException(StringMeld<256>() << "Unknown sampler field (" << next._value << ")", iterator.GetLocation()));
+				result._flags |= flag.value();
+			}
+
+			next = iterator.PeekNextToken();
+			if (next._value.IsEmpty() || XlEqString(next._value, "}"))
+				break;
+			if (!XlEqString(next._value, ","))
+				Throw(FormatException(StringMeld<256>() << "Expecting comma between values in sampler declaration", iterator.GetLocation()));
+			iterator.GetNextToken();
 		}
 
 		return result;

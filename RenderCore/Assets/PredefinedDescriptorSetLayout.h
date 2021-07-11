@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../StateDesc.h"
 #include "../../Assets/DepVal.h"
 #include "../../Utility/StringUtils.h"
 #include <string>
@@ -12,7 +13,7 @@
 
 namespace Assets { class DirectorySearchRules; class DependencyValidation; }
 namespace Utility { class ConditionalProcessingTokenizer; }
-namespace RenderCore { enum class DescriptorType; class DescriptorSetSignature; }
+namespace RenderCore { enum class DescriptorType; class DescriptorSetSignature; class SamplerPool; }
 
 namespace RenderCore { namespace Assets 
 {
@@ -21,34 +22,20 @@ namespace RenderCore { namespace Assets
 	class PredefinedDescriptorSetLayout
 	{
 	public:
-
-		// We should ideally support all of the descriptor slot type below
-		// There's a bit of ambiguity, though, because the shader language
-		// itself may not need to be so explicit about the slot type
-		// Sampler = VK_DESCRIPTOR_TYPE_SAMPLER
-		// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-		// Texture = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-		// UnorderedAccessTexture = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-		// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-		// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-		// ConstantBuffer = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-		// UnorderedAccessBuffer = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
-		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-		// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
-		// VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
-
 		struct ConditionalDescriptorSlot
 		{
 			std::string _name;
 			DescriptorType _type;
 			unsigned _arrayElementCount = 0u;
 			unsigned _cbIdx = ~0u;		// this is an idx into the _constantBuffers array for constant buffer types
+			unsigned _fixedSamplerIdx = ~0u;
 			std::string _conditions;
 		};
 		std::vector<ConditionalDescriptorSlot> _slots;
 		std::vector<std::shared_ptr<RenderCore::Assets::PredefinedCBLayout>> _constantBuffers;
+		std::vector<SamplerDesc> _fixedSamplers;
 
-		DescriptorSetSignature MakeDescriptorSetSignature() const;
+		DescriptorSetSignature MakeDescriptorSetSignature(SamplerPool*) const;
 
 		uint64_t CalculateHash() const;
 

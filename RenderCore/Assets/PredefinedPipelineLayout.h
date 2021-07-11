@@ -12,7 +12,7 @@
 
 namespace Assets { class DirectorySearchRules; class DependencyValidation; }
 namespace Utility { class ConditionalProcessingTokenizer; }
-namespace RenderCore { class PipelineLayoutInitializer; enum class ShaderLanguage; }
+namespace RenderCore { class PipelineLayoutInitializer; enum class ShaderLanguage; class SamplerPool; }
 
 namespace RenderCore { namespace Assets
 {
@@ -45,7 +45,7 @@ namespace RenderCore { namespace Assets
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _csPushConstants;
 
-            PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language) const;
+            PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
         };
         std::unordered_map<std::string, std::shared_ptr<PipelineLayout>> _pipelineLayouts;
 

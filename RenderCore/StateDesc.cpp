@@ -192,5 +192,44 @@ namespace RenderCore
 		default: return "<<unknown>>";
 		}
 	}
+
+    std::optional<AddressMode> AsAddressMode(StringSection<> input)
+    {
+        if (XlEqString(input, "Wrap")) return AddressMode::Wrap;
+        if (XlEqString(input, "Mirror")) return AddressMode::Mirror;
+        if (XlEqString(input, "Clamp")) return AddressMode::Clamp;
+        if (XlEqString(input, "Border")) return AddressMode::Border;
+        return {};
+    }
+
+	std::optional<FilterMode> AsFilterMode(StringSection<> input)
+    {
+        if (XlEqString(input, "Point")) return FilterMode::Point;
+        if (XlEqString(input, "Trilinear")) return FilterMode::Trilinear;
+        if (XlEqString(input, "Anisotropic")) return FilterMode::Anisotropic;
+        if (XlEqString(input, "Bilinear")) return FilterMode::Bilinear;
+        if (XlEqString(input, "ComparisonBilinear")) return FilterMode::ComparisonBilinear;
+        return {};
+    }
+
+	std::optional<CompareOp> AsCompareOp(StringSection<> input)
+    {
+        if (XlEqString(input, "Never")) return CompareOp::Never;
+        if (XlEqString(input, "Less")) return CompareOp::Less;
+        if (XlEqString(input, "Equal")) return CompareOp::Equal;
+        if (XlEqString(input, "LessEqual")) return CompareOp::LessEqual;
+        if (XlEqString(input, "Greater")) return CompareOp::Greater;
+        if (XlEqString(input, "NotEqual")) return CompareOp::NotEqual;
+        if (XlEqString(input, "GreaterEqual")) return CompareOp::GreaterEqual;
+        if (XlEqString(input, "Always")) return CompareOp::Always;
+        return {};
+    }
+
+    std::optional<SamplerDescFlags::Flag> AsSamplerDescFlag(StringSection<> input)
+    {
+        if (XlEqString(input, "DisableMipmaps")) return SamplerDescFlags::DisableMipmaps;
+        if (XlEqString(input, "UnnormalizedCoordinates")) return SamplerDescFlags::UnnormalizedCoordinates;
+        return {};
+    }
 }
 

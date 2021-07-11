@@ -362,4 +362,16 @@ namespace RenderCore
     {
         return Metrics { (unsigned)_views.size() };
     }
+
+    std::shared_ptr<ISampler> SamplerPool::GetSampler(const SamplerDesc& desc)
+    {
+        auto hash = desc.Hash();
+        auto i = LowerBound(_samplers, hash);
+		if (i != _samplers.end() && i->first == hash)
+			return i->second;
+        auto newSampler = _device->CreateSampler(desc);
+		i = _samplers.emplace(i, std::make_pair(hash, newSampler));
+		return newSampler;
+    }
+    SamplerPool::SamplerPool(IDevice& device) : _device(&device) {}
 }
