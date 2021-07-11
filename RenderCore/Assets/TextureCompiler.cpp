@@ -4,6 +4,7 @@
 
 #include "TextureCompiler.h"
 #include "../Techniques/Services.h"
+#include "../Techniques/TextureCompilerUtil.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Assets/IntermediateCompilers.h"
@@ -13,6 +14,7 @@
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/BitUtils.h"
 #include "../../Core/Exceptions.h"
 
 #include "Compressonator.h"
@@ -197,8 +199,8 @@ namespace RenderCore { namespace Assets
 				InputStreamFormatter<> inputFormatter{MakeStringSection((const char*)inputBlock.get(), (const char*)PtrAdd(inputBlock.get(), inputBlockSize))};
 				StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
 				auto type = dom.RootElement().Attribute("Operation");
-				if (!type || !XlEqStringI(type.Value(), "Convert"))
-					Throw(std::runtime_error("Expecting 'Convert' operation in texture compiler file: " + srcFN));
+				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap")))
+					Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.Value().AsString() + ")"));
 				auto srcFile = dom.RootElement().Attribute("SourceFile");
 				auto dstFormatName = dom.RootElement().Attribute("Format");
 				if (!srcFile || !dstFormatName)
@@ -210,6 +212,21 @@ namespace RenderCore { namespace Assets
 
 				auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(srcFile.Value(), 0);
 				_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(srcFile.Value()));
+
+				if (XlEqString(type.Value(), "EquRectToCubeMap")) {
+					auto srcDst = srcPkt->GetDesc();
+					srcDst.wait();
+					auto targetDesc = srcDst.get()._textureDesc;
+					targetDesc._width = 512;
+					targetDesc._height = 512;
+					targetDesc._depth = 1;
+					targetDesc._arrayCount = 6;
+					targetDesc._mipCount = IntegerLog2(targetDesc._width);
+					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+					auto processed = Techniques::EquRectToCube(*srcPkt, targetDesc);
+					srcPkt = processed._newDataSource;
+					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				}
 				CompressonatorTexture input{*srcPkt};
 
 				auto dstDesc = input._srcDesc;

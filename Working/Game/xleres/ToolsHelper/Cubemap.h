@@ -2,29 +2,29 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+// See DirectX documentation:
+// https://msdn.microsoft.com/en-us/library/windows/desktop/bb204881(v=vs.85).aspx
+// OpenGL/OpenGLES use the same standard
+static const float3 CubeMapFaces[6][3] =
+{
+        // +X, -X
+    float3(0,0,-1), float3(0,-1,0), float3(1,0,0),
+    float3(0,0,1), float3(0,-1,0), float3(-1,0,0),
+
+        // +Y, -Y
+    float3(1,0,0), float3(0,0,1), float3(0,1,0),
+    float3(1,0,0), float3(0,0,-1), float3(0,-1,0),
+
+        // +Z, -Z
+    float3(1,0,0), float3(0,-1,0), float3(0,0,1),
+    float3(-1,0,0), float3(0,-1,0), float3(0,0,-1)
+};
+
 float3 CalculateCubeMapDirection(uint faceIndex, float2 texCoord)
 {
-    // See DirectX documentation:
-    // https://msdn.microsoft.com/en-us/library/windows/desktop/bb204881(v=vs.85).aspx
-    // OpenGL/OpenGLES use the same standard
-    const float3 CubeMapFaces[6*3] =
-    {
-            // +X, -X
-        float3(0,0,-1), float3(0,-1,0), float3(1,0,0),
-        float3(0,0,1), float3(0,-1,0), float3(-1,0,0),
-
-            // +Y, -Y
-        float3(1,0,0), float3(0,0,1), float3(0,1,0),
-        float3(1,0,0), float3(0,0,-1), float3(0,-1,0),
-
-            // +Z, -Z
-        float3(1,0,0), float3(0,-1,0), float3(0,0,1),
-        float3(-1,0,0), float3(0,-1,0), float3(0,0,-1)
-    };
-
-    float3 plusU  = CubeMapFaces[faceIndex*3+0];
-    float3 plusV  = CubeMapFaces[faceIndex*3+1];
-    float3 center = CubeMapFaces[faceIndex*3+2];
+    float3 plusU  = CubeMapFaces[faceIndex][0];
+    float3 plusV  = CubeMapFaces[faceIndex][1];
+    float3 center = CubeMapFaces[faceIndex][2];
     return normalize(
           center
         + plusU * (2.f * texCoord.x - 1.f)

@@ -12,6 +12,13 @@ DescriptorSet AODS
 	SampledTexture InputNormals;
 	SampledTexture InputVelocities;
 	SampledTexture AccumulationAOLast;
+
+	Sampler FixedSampler
+	{
+		Filter = Bilinear,
+		AddressU = Wrap,
+		AddressV = Wrap
+	};
 };
 
 PipelineLayout ComputeMain
@@ -22,6 +29,6 @@ PipelineLayout ComputeMain
 
 PipelineLayout GraphicsMain
 {
-	ComputeDescriptorSet Sequencer;
+	DescriptorSet Sequencer;
 	DescriptorSet AODS;
 };

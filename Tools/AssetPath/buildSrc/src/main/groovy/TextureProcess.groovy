@@ -194,7 +194,7 @@ class EquirectToCube extends TextureTransformStep
 	{
 		return makeCommandLine(
 			output,
-			"ToolsHelper/EquirectangularToCube.sh:${shader}",
+			"ToolsHelper/EquirectangularToCube.hlsl:${shader}",
 			"Input=${input.getAbsolutePath()}; Dims={${faceSize*3}, ${faceSize*4}}; Format=${format}");
 	}
 }

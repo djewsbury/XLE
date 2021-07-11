@@ -1,0 +1,17 @@
+
+DescriptorSet OperatorsDS
+{
+	SampledTexture Input;
+	UnorderedAccessTexture Output;
+	Sampler FixedPointSampler
+	{
+		Filter = Point,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
+};
+
+PipelineLayout ComputeMain
+{
+	ComputeDescriptorSet OperatorsDS;
+};

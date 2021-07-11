@@ -8,8 +8,9 @@
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
-Texture2D Input;
-SamplerState DefaultSampler;
+Texture2D Input : register(t0, space0);
+RWTexture2DArray<float4> Output : register(u1, space0);
+SamplerState FixedPointSampler : register(s2, space0);
 
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
@@ -26,24 +27,21 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
     if (    tc.x >= tcMins.x && tc.y >= tcMins.y
         &&  tc.x <  tcMaxs.x && tc.y <  tcMaxs.y) {
 
-        tc.x = 2.0f * (tc.x - tcMins.x) / (tcMaxs.x - tcMins.x) - 1.0f;
-        tc.y = 2.0f * (tc.y - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
-
-        float3 finalDirection = center + plusX * tc.x + plusY * tc.y;
-		finalDirection = normalize(finalDirection);
-        float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
-
-		// note -- 	There isn't a 1:1 relationship between input pixel and output
-		// 			pixel. The solid angle of the cubemap pixel and the solid
-		//			angle of the equirectangular input pixel changes...!
-		//			We can a better result by sampling in a regular pattern over
-		//			the full range of the output pixel...
-		//			Note that we could build mipmaps in this way as well. it
-		//			should give a correctly balanced result, and it would mean
-		//			that the mip maps are built from the original texture, not
-		//			some derived texture
-        result.rgb = Input.SampleLevel(DefaultSampler, finalCoord, 0);
-        result.a = 1.f;
+		result.rgb = 0.0.xxx;
+		result.a = 1.f;
+		// brute-force filtering! It's kind of silly, but it should be reasonably close to correct
+		for (uint y=0; y<32; y++) {
+			for (uint x=0; x<32; x++) {
+				float2 face;
+				face.x = 2.0f * (tc.x + x/32.0f - tcMins.x) / (tcMaxs.x - tcMins.x) - 1.0f;
+        		face.y = 2.0f * (tc.y + y/32.0f - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
+				float3 finalDirection = center + plusX * face.x + plusY * face.y;
+				finalDirection = normalize(finalDirection);
+				float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
+				result.rgb += Input.SampleLevel(FixedPointSampler, finalCoord, 0).rgb;
+			}
+		}
+		result.rgb /= (32*32);
     }
 }
 
@@ -110,5 +108,21 @@ float4 hemi(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Tar
 		return Horizontal(texCoord, true);
 	} else {
 		return Vertical(texCoord, true);
+	}
+}
+
+[numthreads(8, 8, 6)]
+	void EquRectToCube(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	uint2 textureDims; uint arrayLayerCount;
+	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
+		float4 color;
+		Panel(
+			color,
+			dispatchThreadId.xy, 0.0.xx, textureDims.xy,
+			CubeMapFaces[dispatchThreadId.z],
+			false);
+		Output[dispatchThreadId.xyz] = color;
 	}
 }

@@ -8,6 +8,7 @@
 #include "../Assets/TextureCompiler.h"
 #include "../Format.h"
 #include "../IDevice.h"
+#include "../IThreadContext.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetFuture.h"
@@ -21,6 +22,9 @@
 #include "../../Utility/ParameterBox.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include <chrono>
+
+#include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
 
 namespace RenderCore { namespace Techniques 
 {
@@ -207,6 +211,7 @@ namespace RenderCore { namespace Techniques
         static const ::Assets::ArtifactRequest ChunkRequests[1];
         std::string _artifactFile;
         ::Assets::DependencyValidation _depVal;
+        const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
         TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
         : _depVal(depVal)
@@ -478,6 +483,71 @@ namespace RenderCore { namespace Techniques
 
 	DeferredShaderResource::~DeferredShaderResource()
     {
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    std::shared_ptr<IResource> CreateResourceImmediately(
+        IThreadContext& threadContext,
+        BufferUploads::IAsyncDataSource& pkt,
+        BindFlag::BitField bindFlags)
+    {
+        auto descFuture = pkt.GetDesc();
+        descFuture.wait();
+        auto desc = descFuture.get();
+        auto device = threadContext.GetDevice();
+        std::vector<uint8_t> data(ByteCount(desc._textureDesc));
+        auto arrayCount = std::max(1u, (unsigned)desc._textureDesc._arrayCount), mipCount = std::max(1u, (unsigned)desc._textureDesc._mipCount);
+        BufferUploads::IAsyncDataSource::SubResource srs[arrayCount*mipCount];
+        for (unsigned a=0; a<arrayCount; ++a)
+            for (unsigned m=0; m<mipCount; ++m) {
+                auto srOffset = GetSubResourceOffset(desc._textureDesc, m, a);
+                srs[m+a*mipCount]._destination = MakeIteratorRange(PtrAdd(AsPointer(data.begin()), srOffset._offset), PtrAdd(AsPointer(data.begin()), srOffset._offset+srOffset._size));
+                srs[m+a*mipCount]._id = {m, a};
+                srs[m+a*mipCount]._pitches = srOffset._pitches;
+            }
+        auto dataFuture = pkt.PrepareData({srs, &srs[arrayCount*mipCount]});
+        dataFuture.wait();
+
+        auto stagingDesc = desc;
+        stagingDesc._cpuAccess = CPUAccess::Read|CPUAccess::Write;
+        stagingDesc._gpuAccess = 0;
+        stagingDesc._bindFlags = BindFlag::TransferSrc;
+        auto stagingResource = device->CreateResource(
+            stagingDesc,
+            [data=std::move(data), textureDesc=desc._textureDesc](auto sr) {
+                auto srOffset = GetSubResourceOffset(textureDesc, sr._mip, sr._arrayLayer);
+                return SubResourceInitData {
+                    MakeIteratorRange(PtrAdd(AsPointer(data.begin()), srOffset._offset), PtrAdd(AsPointer(data.begin()), srOffset._offset+srOffset._size)),
+                    srOffset._pitches
+                };
+            });
+        desc._bindFlags |= bindFlags | BindFlag::TransferDst;
+        auto finalResource = device->CreateResource(desc);
+        auto& devContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::CompleteInitialization(devContext, {stagingResource.get(), finalResource.get()});
+        devContext.BeginBlitEncoder().Copy(*finalResource, *stagingResource);
+        return finalResource;
+    }
+
+    std::shared_ptr<IResource> DestageResource(
+        IThreadContext& threadContext,
+        const std::shared_ptr<IResource>& input)
+    {
+        auto inputDesc = input->GetDesc();
+        if (inputDesc._gpuAccess == 0)
+            return input;
+
+        auto destagingDesc = inputDesc;
+        destagingDesc._cpuAccess = CPUAccess::Read|CPUAccess::Write;
+        destagingDesc._gpuAccess = 0;
+        destagingDesc._bindFlags = BindFlag::TransferDst;
+        auto destagingResource = threadContext.GetDevice()->CreateResource(destagingDesc);
+        auto& devContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::CompleteInitialization(devContext, {destagingResource.get()});
+        devContext.BeginBlitEncoder().Copy(*destagingResource, *input);
+        threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
+        return destagingResource;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

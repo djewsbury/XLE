@@ -7,12 +7,13 @@
 #pragma once
 
 #include "../IDevice_Forward.h"
+#include "../ResourceDesc.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
 
 namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; }
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -69,6 +70,15 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
         BufferUploads::CommandListID _completionCommandList;
     };
+
+    std::shared_ptr<IResource> CreateResourceImmediately(
+        IThreadContext& threadContext,
+        BufferUploads::IAsyncDataSource& pkt,
+        BindFlag::BitField bindFlags);
+
+    std::shared_ptr<IResource> DestageResource(
+        IThreadContext& threadContext,
+        const std::shared_ptr<IResource>& input);
     
 	/// <summary>Set the RES_HAS technique materials parameter</summary>
     /// There are a few standard RES_HAS shader parameters that are defined by

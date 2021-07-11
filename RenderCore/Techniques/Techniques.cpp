@@ -4,7 +4,10 @@
 
 #include "Techniques.h"
 #include "RenderStateResolver.h"
+#include "Services.h"
 #include "../UniformsStream.h"
+#include "../IDevice.h"
+#include "../IThreadContext.h"
 #include "../Metal/Metal.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/DepVal.h"
@@ -442,7 +445,12 @@ namespace RenderCore { namespace Techniques
 	static thread_local std::weak_ptr<IThreadContext> s_mainThreadContext;
 	std::shared_ptr<IThreadContext> GetThreadContext()
 	{
-		return s_mainThreadContext.lock();
+		auto threadContext = s_mainThreadContext.lock();
+		if (!threadContext) {
+			threadContext = Services::GetInstance().GetDevice().CreateDeferredContext();
+			s_mainThreadContext = threadContext;
+		}
+		return threadContext;
 	}
 
 	void SetThreadContext(const std::shared_ptr<IThreadContext>& threadContext)
