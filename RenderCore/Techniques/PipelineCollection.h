@@ -17,6 +17,8 @@
 namespace RenderCore { namespace Techniques
 {
 	class RenderPassInstance;
+	class CommonResourceBox;
+
 	struct FrameBufferTarget
 	{
 		const FrameBufferDesc* _fbDesc;
@@ -34,28 +36,36 @@ namespace RenderCore { namespace Techniques
 		uint64_t GetHash() const;
 	};
 
-    class GraphicsPipelinePool
+    class PipelinePool
 	{
 	public:
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreatePipeline(
+		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateGraphicsPipeline(
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
 
+		::Assets::PtrToFuturePtr<Metal::ComputePipeline> CreateComputePipeline(
+			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
+
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
+		const std::shared_ptr<CommonResourceBox>& GetCommonResources() { return _commonResources; }
 		uint64_t GetGUID() const { return _guid; }
 
-		GraphicsPipelinePool(std::shared_ptr<IDevice> device);
-		~GraphicsPipelinePool();
+		PipelinePool(std::shared_ptr<IDevice> device, std::shared_ptr<CommonResourceBox> commonResources);
+		~PipelinePool();
 	private:
 		std::shared_ptr<IDevice> _device;
 		Threading::Mutex _pipelinesLock;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pipelines;
+		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _graphicsPipelines;
+		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::ComputePipeline>>> _computePipelines;
 
 		class SharedPools;
 		std::shared_ptr<SharedPools> _sharedPools;
+		std::shared_ptr<CommonResourceBox> _commonResources;
 		uint64_t _guid = ~0ull;
 
 		void ConstructToFuture(
@@ -65,6 +75,12 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
+
+		void ConstructToFuture(
+			std::shared_ptr<::Assets::FuturePtr<Metal::ComputePipeline>> future,
+			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
 	};
 
 }}

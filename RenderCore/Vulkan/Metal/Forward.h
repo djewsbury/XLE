@@ -20,6 +20,7 @@ namespace RenderCore { namespace Metal_Vulkan
     class GraphicsEncoder_ProgressivePipeline;
     class ComputeEncoder;
     class GraphicsPipeline;
+    class ComputePipeline;
     class CommandList;
 
 	class ShaderProgram;

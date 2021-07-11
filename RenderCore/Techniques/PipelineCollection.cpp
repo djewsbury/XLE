@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineCollection.h"
-#include "PipelineAcceleratorInternal.h"
+#include "PipelineBuilderUtil.h"
 #include "ShaderVariationSet.h"
 #include "RenderPass.h"
 #include "../Metal/DeviceContext.h"
@@ -34,7 +34,7 @@ namespace RenderCore { namespace Techniques
 		return HashInputAssembly(_inputLayout, seed);
 	}
 
-	class GraphicsPipelinePool::SharedPools
+	class PipelinePool::SharedPools
 	{
 	public:
 		Threading::Mutex _lock;
@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 	template<typename Type>
 		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
-	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> GraphicsPipelinePool::CreatePipeline(
+	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> PipelinePool::CreateGraphicsPipeline(
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDesc,
 		const ParameterBox& selectors,
@@ -55,11 +55,12 @@ namespace RenderCore { namespace Techniques
 		hash = HashCombine(pipelineDesc.GetHash(), hash);
 		hash = HashCombine(selectors.GetParameterNamesHash(), hash);
 		hash = HashCombine(selectors.GetHash(), hash);
+		hash = HashCombine(pipelineLayout->GetGUID(), hash);
 
 		std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
 		bool replaceExisting = false;
-		auto i = LowerBound(_pipelines, hash);
-		if (i != _pipelines.end() && i->first == hash) {
+		auto i = LowerBound(_graphicsPipelines, hash);
+		if (i != _graphicsPipelines.end() && i->first == hash) {
 			if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
 				return i->second;
 			replaceExisting = true;
@@ -69,7 +70,7 @@ namespace RenderCore { namespace Techniques
 		if (replaceExisting) {
 			i->second = result;
 		} else
-			_pipelines.insert(i, std::make_pair(hash, result));
+			_graphicsPipelines.insert(i, std::make_pair(hash, result));
 		lk = {};
 		ConstructToFuture(result, pipelineLayout, pipelineDesc, selectors, inputStates, fbTarget);
 		return result;
@@ -101,7 +102,7 @@ namespace RenderCore { namespace Techniques
 		return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), definesTable);
 	}
 
-	void GraphicsPipelinePool::ConstructToFuture(
+	void PipelinePool::ConstructToFuture(
 		std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDescInit,
@@ -125,18 +126,20 @@ namespace RenderCore { namespace Techniques
 					&selectorsCopy
 				};
 
-				ScopedLock(sharedPools->_lock);
-				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-					if (!pipelineDesc._shaders[c].empty()) {
-						const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = {
-							pipelineDescWithFiltering->_automaticFiltering[c].get()
-						};
-						filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
-							MakeIteratorRange(paramBoxes),
-							pipelineDesc._manualSelectorFiltering,
-							MakeIteratorRange(autoFiltering),
-							pipelineDescWithFiltering->_preconfiguration.get());
-					}
+				{
+					ScopedLock(sharedPools->_lock);
+					for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
+						if (!pipelineDesc._shaders[c].empty()) {
+							const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = {
+								pipelineDescWithFiltering->_automaticFiltering[c].get()
+							};
+							filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
+								MakeIteratorRange(paramBoxes),
+								pipelineDesc._manualSelectorFiltering,
+								MakeIteratorRange(autoFiltering),
+								pipelineDescWithFiltering->_preconfiguration.get());
+						}
+				}
 
 				auto configurationDepVal = ::Assets::GetDepValSys().Make();
 				if (pipelineDesc.GetDependencyValidation())
@@ -180,18 +183,84 @@ namespace RenderCore { namespace Techniques
 						// todo -- we have to use configurationDepVal for something!
 						return builder.CreatePipeline(Metal::GetObjectFactory());
 					});
-			});		
+			});
+	}
+
+	::Assets::PtrToFuturePtr<Metal::ComputePipeline> PipelinePool::CreateComputePipeline(
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		auto hash = Hash64(shader, HashCombine(selectors.GetParameterNamesHash(), selectors.GetHash()));
+		hash = HashCombine(pipelineLayout->GetGUID(), hash);
+
+		std::unique_lock<Threading::Mutex> lk(_pipelinesLock);
+		bool replaceExisting = false;
+		auto i = LowerBound(_computePipelines, hash);
+		if (i != _computePipelines.end() && i->first == hash) {
+			if (i->second->GetDependencyValidation().GetValidationIndex() == 0)
+				return i->second;
+			replaceExisting = true;
+		}
+
+		auto result = std::make_shared<::Assets::FuturePtr<Metal::ComputePipeline>>();
+		if (replaceExisting) {
+			i->second = result;
+		} else
+			_computePipelines.insert(i, std::make_pair(hash, result));
+		lk = {};
+		ConstructToFuture(result, pipelineLayout, shader, selectors);
+		return result;
+	}
+
+	void PipelinePool::ConstructToFuture(
+		std::shared_ptr<::Assets::FuturePtr<Metal::ComputePipeline>> future,
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		auto filteringFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
+
+		::Assets::WhenAll(filteringFuture).ThenConstructToFuture(
+			*future,
+			[selectorsCopy = selectors, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout=pipelineLayout]( 
+				::Assets::FuturePtr<Metal::ComputePipeline>& resultFuture,
+				std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {
+
+				UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors;
+				const ParameterBox* paramBoxes[] = { &selectorsCopy };
+				{
+					ScopedLock(sharedPools->_lock);
+					const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = { automaticFiltering.get() };
+					filteredSelectors = sharedPools->_selectorVariationsSet.FilterSelectors(
+						MakeIteratorRange(paramBoxes),
+						{}, MakeIteratorRange(autoFiltering), nullptr);
+				}
+
+				auto configurationDepVal = ::Assets::GetDepValSys().Make();
+				configurationDepVal.RegisterDependency(automaticFiltering->GetDependencyValidation());
+
+				auto shader = Internal::MakeComputeShader(pipelineLayout, shaderCopy, filteredSelectors, nullptr, {});
+				::Assets::WhenAll(shader).ThenConstructToFuture(
+					resultFuture,
+					[](std::shared_ptr<Metal::ComputeShader> shaderActual) {
+						Metal::ComputePipelineBuilder builder;
+						builder.Bind(*shaderActual);
+						return builder.CreatePipeline(Metal::GetObjectFactory());
+					});
+			});
 	}
 
 	static uint64_t s_nextGraphicsPipelinePoolGUID = 1;
-	GraphicsPipelinePool::GraphicsPipelinePool(std::shared_ptr<IDevice> device)
+	PipelinePool::PipelinePool(std::shared_ptr<IDevice> device, std::shared_ptr<CommonResourceBox> commonResources)
 	: _device(std::move(device))
+	, _commonResources(std::move(commonResources))
 	, _guid(s_nextGraphicsPipelinePoolGUID++)
 	{
 		_sharedPools = std::make_shared<SharedPools>();
 	}
 
-	GraphicsPipelinePool::~GraphicsPipelinePool()
+	PipelinePool::~PipelinePool()
 	{}
 
 }}
