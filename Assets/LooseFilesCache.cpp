@@ -162,8 +162,9 @@ namespace Assets
 		}
 	}
 
-	static ::Assets::DependencyValidation GetDepVal(const CompileProductsFile& finalProductsFile, StringSection<> archivableName)
+	static std::pair<::Assets::DependencyValidation, bool> GetDepVal(const CompileProductsFile& finalProductsFile, StringSection<> archivableName)
 	{
+		bool stillValid = true;
 		auto depVal = GetDepValSys().Make();
 		for (const auto&dep:finalProductsFile._dependencies) {
 			if (!finalProductsFile._basePath.empty()) {
@@ -171,14 +172,12 @@ namespace Assets
 				char buffer[MaxPath];
 				Legacy::XlConcatPath(buffer, dimof(buffer), finalProductsFile._basePath.c_str(), AsPointer(dep._filename.begin()), AsPointer(dep._filename.end()));
 				adjustedDep._filename = buffer;
-				if (!IntermediatesStore::TryRegisterDependency(depVal, adjustedDep, archivableName))
-					Log(Warning) << "Asset already out-of-date while registering dependency for: " << dep._filename << std::endl;
+				stillValid &= IntermediatesStore::TryRegisterDependency(depVal, adjustedDep, archivableName);
 			} else {
-				if (!IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName))
-					Log(Warning) << "Asset already out-of-date while registering dependency for: " << dep._filename << std::endl;
+				stillValid &= IntermediatesStore::TryRegisterDependency(depVal, dep, archivableName);
 			}
 		}
-		return depVal;
+		return std::make_pair(std::move(depVal), stillValid);
 	}
 
 	std::shared_ptr<IArtifactCollection> LooseFilesStorage::RetrieveCompileProducts(
@@ -201,7 +200,10 @@ namespace Assets
 
 		CompileProductsFile finalProductsFile;
 		formatter >> finalProductsFile;
-		return MakeArtifactCollection(finalProductsFile, _filesystem, GetDepVal(finalProductsFile, archivableName), storeRefCounts, hashCode);
+		auto depVal = GetDepVal(finalProductsFile, archivableName);
+		if (!depVal.second)
+			return nullptr;
+		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal.first, storeRefCounts, hashCode);
 	}
 
 	static std::string MakeSafeName(StringSection<> input)
@@ -324,7 +326,7 @@ namespace Assets
 			std::filesystem::rename(renameOp.first, renameOp.second);
 		}
 
-		return MakeArtifactCollection(compileProductsFile, _filesystem, GetDepVal(compileProductsFile, archivableName), storeRefCounts, hashCode);
+		return MakeArtifactCollection(compileProductsFile, _filesystem, GetDepVal(compileProductsFile, archivableName).first, storeRefCounts, hashCode);
 	}
 
 	std::string LooseFilesStorage::MakeProductsFileName(StringSection<> archivableName)
