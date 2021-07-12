@@ -187,19 +187,20 @@ float3 CartesianToSpherical_YUp(float3 direction)
     // inc is the angle of inclination, and starts at 0 on the XZ plane,
     // and is a positive number looking up
     float3 result;
-    float rDist = rsqrt(dot(direction, direction));
-    result[0] = asin(direction.y * rDist);			// inc
-    result[1] = atan2(-direction.x, direction.z);	// theta
-    result[2] = 1.0f / rDist;
+    // float rDist = rsqrt(dot(direction, direction));
+    // result[0] = asin(direction.y * rDist);			// inc
+	result[0] = atan2(direction.y, sqrt(direction.x*direction.x+direction.z*direction.z));	// inc
+    result[1] = -atan2(direction.x, direction.z);	// theta
+    result[2] = sqrt(dot(direction, direction));
     return result;
 }
 
-float3 EquirectangularCoordToDirection_YUp(uint2 inCoord, uint2 dims)
+float3 EquirectangularCoordToDirection_YUp(float2 inCoord)
 {
     // Given the x, y pixel coord within an equirectangular texture, what
     // is the corresponding direction vector?
-    float theta = 2.f * pi * (float(inCoord.x) / float(dims.x));
-    float inc = pi * (.5f - float(inCoord.y) / float(dims.y));
+    float theta = 2.f * pi * inCoord.x;
+    float inc = pi * (.5f - inCoord.y);
     return SphericalToCartesian_YUp(inc, theta);
 }
 

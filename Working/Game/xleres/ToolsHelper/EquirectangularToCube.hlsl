@@ -25,14 +25,8 @@ void swap(inout float lhs, inout float rhs)
 	lhs = t;
 }
 
-float3 EquirectangularCoordToDirection_YUp2(float2 inCoord)
-{
-    // Given the x, y pixel coord within an equirectangular texture, what
-    // is the corresponding direction vector?
-    float theta = 2.f * pi * inCoord.x;
-    float inc = pi * (.5f - inCoord.y);
-    return SphericalToCartesian_YUp(inc, theta);
-}
+float minX(float x, float y, float z, float w) { return min(min(min(x, y), z), w); }
+float maxX(float x, float y, float z, float w) { return max(max(max(x, y), z), w); }
 
 float AreaElement(float x, float y)
 {
@@ -53,6 +47,11 @@ float CubeMapTexelSolidAngle(float2 faceCoordMin, float2 faceCoordMax)
 	 	 - AreaElement(faceCoordMin.x, faceCoordMax.y)
 		 - AreaElement(faceCoordMax.x, faceCoordMin.y)
 		 + AreaElement(faceCoordMax.x, faceCoordMax.y);
+}
+
+float4 LoadInput(float2 xy, int2 dims)
+{
+	return Input.Load(uint3((int(xy.x)+dims.x)%dims.x, (int(xy.y)+dims.y)%dims.y, 0));
 }
 
 void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 panel[3], bool hemi)
@@ -77,7 +76,7 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
         		face.y = 2.0f * (tc.y + y/32.0f - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
 				float3 finalDirection = center + plusX * face.x + plusY * face.y;
 				float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
-				result.rgb += Input.SampleLevel(FixedPointSampler, finalCoord, 0).rgb;
+				result.rgb += Input.SampleLevel(EquirectangularPointSampler, finalCoord, 0).rgb;
 			}
 		}
 		result.rgb /= (32*32);
@@ -93,46 +92,129 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 		int2 inputDims;
 		Input.GetDimensions(inputDims.x, inputDims.y);
 
-		float3 lowDirection = center + plusX * faceMin.x + plusY * faceMin.y;
-		float3 highDirection = center + plusX * faceMax.x + plusY * faceMax.y;
-		float maxTheta = -atan2(lowDirection.x, lowDirection.z);
-		float minTheta = -atan2(highDirection.x, highDirection.z);
-		if (minTheta < 0) minTheta += 2.0f * pi;
-		if (maxTheta < 0) maxTheta += 2.0f * pi;
+		// Find the min/max theta values for the projected cubemap texel in equirectangular coords
+		// Fortunately the min/max values should always be at one of the corners, even in the case of the +Y,-Y faces
+		float3 corners[] = {
+			center + plusX * faceMin.x + plusY * faceMin.y,
+			center + plusX * faceMax.x + plusY * faceMin.y,
+			center + plusX * faceMin.x + plusY * faceMax.y,
+			center + plusX * faceMax.x + plusY * faceMax.y
+		};
+		float maxTheta = CartesianToSpherical_YUp(corners[0]).y;
+		float minTheta = maxTheta;
+		[unroll] for (uint c=1; c<4; ++c) {
+			float t = CartesianToSpherical_YUp(corners[c]).y;
+			maxTheta = max(maxTheta, t);
+			minTheta = min(minTheta, t);
+		}
+		if ((maxTheta - minTheta) > pi) {
+			// wrapping near the theta=pi point
+			minTheta += 2.0f * pi;
+			swap(minTheta, maxTheta);
+		}
 
-		float minEquRectX = 0.5f*minTheta*reciprocalPi, maxEquRectX = 0.5f*maxTheta*reciprocalPi;
-		for (float x=floor(inputDims.x * minEquRectX); x<ceil(inputDims.x * maxEquRectX); x+=1) {
-		// for (float x=0; x<inputDims.x; x+=4) {
-			float theta = x/float(inputDims.x)*2.0f;
-			theta = fmod(theta + 0.25, 0.5) - 0.25;
-			theta *= pi;										// we need theta in the (-.25*pi, .25*pi) for the following calculations
-			float minInc = atan(lowDirection.y*cos(theta));		// cos(theta) here takes care of warping of the shape that occurs in X,-X,Z,-Z panels
-			float maxInc = atan(highDirection.y*cos(theta));
-			float minEquRectY = 0.5f-(minInc * reciprocalPi), maxEquRectY = 0.5f-(maxInc*reciprocalPi);
-			for (float y=floor(inputDims.y * minEquRectY); y<ceil(inputDims.y * maxEquRectY); y+=1) {
-			// for (float y=0; y<inputDims.y; y+=4) {
-				// We can project equirectangular point back onto the cubemap plane and see how much it overlaps with the 
-				// cubemap pixel. The pixel has a distorted shape post projection; but if we assume that equirectangular input
-				// pixels are small relative to the cubemap pixels, we may be able to ignore this
-				float3 pixelDirection0 = EquirectangularCoordToDirection_YUp2(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
-				float3 pixelDirection1 = EquirectangularCoordToDirection_YUp2(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)));
-				// float3 pixelDirection0 = EquirectangularCoordToDirection_YUp2(float2((x-0.5)/float(inputDims.x),(y-0.5)/float(inputDims.y)));
-				// float3 pixelDirection1 = EquirectangularCoordToDirection_YUp2(float2((x+0.5)/float(inputDims.x),(y+0.5)/float(inputDims.y)));
-				if (dot(pixelDirection0, center) < 0) continue;
-				pixelDirection0 /= dot(pixelDirection0, center);
-				pixelDirection1 /= dot(pixelDirection1, center);
-				float2 cube0 = float2(dot(pixelDirection0 - center, plusX), dot(pixelDirection0 - center, plusY));
-				float2 cube1 = float2(dot(pixelDirection1 - center, plusX), dot(pixelDirection1 - center, plusY));
-				float minX = max(max(min(cube0.x, cube1.x), min(faceMin.x, faceMax.x)), -1);
-				float minY = max(max(min(cube0.y, cube1.y), min(faceMin.y, faceMax.y)), -1);
-				float maxX = min(min(max(cube0.x, cube1.x), max(faceMin.x, faceMax.x)), 1);
-				float maxY = min(min(max(cube0.y, cube1.y), max(faceMin.y, faceMax.y)), 1);
-				if (minX < maxX && minY < maxY) {
-					float weight = CubeMapTexelSolidAngle(float2(minX, minY), float2(maxX, maxY));
-					result += float4(weight*Input.SampleLevel(FixedPointSampler, float2(x/inputDims.x, y/inputDims.y), 0).rgb, weight);
+		if (center.y == -1 || center.y == 1) {
+
+			float minEquRectX = 0.5f*minTheta*reciprocalPi, maxEquRectX = 0.5f*maxTheta*reciprocalPi;
+			for (float x=floor(inputDims.x * minEquRectX); x<ceil(inputDims.x * maxEquRectX); x+=1) {
+				float theta = x/float(inputDims.x)*2.0f;
+				float faceTheta = fmod(theta + 2.25, 0.5) - 0.25;
+				theta = (theta-faceTheta)*pi;
+				faceTheta *= pi;
+
+				// alternative form:
+				// float distanceToEdge = 1.0f / cos(faceTheta);
+				// float inc = -atan2(1, distanceToEdge);
+
+				// Let's try to find the min & max inclination for the cubemap texel in the equirectangular
+				// projection.
+				// Here we're going to be assuming that the min & max inclination will be at the corners... Which is
+				// not entirely correct. The projected shape will bow out a little bit. It's pretty slight, though; this
+				// might only cause us to miss a few pixels. We could just add a few pixels on the top & bottom to
+				// compensate for this, since looping through additional pixels doesn't actually harm anything
+				float2 axis = float2(-sin(theta), cos(theta));	// must match definition of theta in SphericalToCartesian_YUp
+				float maxProjDist = dot(corners[0].xz - center.xz, axis);
+				float minProjDist = maxProjDist;
+				[unroll] for (uint c=1; c<4; ++c) {
+					float len = dot(corners[c].xz - center.xz, axis);
+					minProjDist = min(minProjDist, len);
+					maxProjDist = max(maxProjDist, len);
 				}
-				// result += float4(Input.SampleLevel(FixedPointSampler, float2(x/inputDims.x, y/inputDims.y), 0).rgb, 1);
+				float minInc, maxInc;
+				if (center.y < 0) {
+					minInc = -atan2(cos(faceTheta), maxProjDist);
+					maxInc = -atan2(cos(faceTheta), minProjDist);
+				} else {
+					minInc = atan2(cos(faceTheta), minProjDist);
+					maxInc = atan2(cos(faceTheta), maxProjDist);
+				}
+
+				float minEquRectY = 0.5f-(minInc * reciprocalPi), maxEquRectY = 0.5f-(maxInc*reciprocalPi);
+				for (float y=floor(inputDims.y * minEquRectY); y<ceil(inputDims.y * maxEquRectY); y+=1) {
+					float3 pixelDirection0 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
+					float3 pixelDirection1 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y)/float(inputDims.y)));
+					float3 pixelDirection2 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y+1)/float(inputDims.y)));
+					float3 pixelDirection3 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)));
+					pixelDirection0 /= dot(pixelDirection0, center);
+					pixelDirection1 /= dot(pixelDirection1, center);
+					pixelDirection2 /= dot(pixelDirection2, center);
+					pixelDirection3 /= dot(pixelDirection3, center);
+					float2 cube0 = float2(dot(pixelDirection0 - center, plusX), dot(pixelDirection0 - center, plusY));
+					float2 cube1 = float2(dot(pixelDirection1 - center, plusX), dot(pixelDirection1 - center, plusY));
+					float2 cube2 = float2(dot(pixelDirection2 - center, plusX), dot(pixelDirection2 - center, plusY));
+					float2 cube3 = float2(dot(pixelDirection3 - center, plusX), dot(pixelDirection3 - center, plusY));
+					float2 minCube = float2(minX(cube0.x, cube1.x, cube2.x, cube3.x), minX(cube0.y, cube1.y, cube2.y, cube3.y));
+					float2 maxCube = float2(maxX(cube0.x, cube1.x, cube2.x, cube3.x), maxX(cube0.y, cube1.y, cube2.y, cube3.y));
+					float minX = max(max(minCube.x, min(faceMin.x, faceMax.x)), -1);
+					float minY = max(max(minCube.y, min(faceMin.y, faceMax.y)), -1);
+					float maxX = min(min(maxCube.x, max(faceMin.x, faceMax.x)), 1);
+					float maxY = min(min(maxCube.y, max(faceMin.y, faceMax.y)), 1);
+					if (minX < maxX && minY < maxY) {
+						float weight = CubeMapTexelSolidAngle(float2(minX, minY), float2(maxX, maxY));
+						result += float4(weight*LoadInput(float2(x,y), inputDims).rgb, weight);
+					}
+					// result += float4(Input.SampleLevel(EquirectangularPointSampler, float2(x/inputDims.x, y/inputDims.y), 0).rgb, 1);
+				}
 			}
+
+		} else {
+
+			float3 lowDirection = center + plusX * faceMin.x + plusY * faceMin.y;
+			float3 highDirection = center + plusX * faceMax.x + plusY * faceMax.y;
+
+			float minEquRectX = 0.5f*minTheta*reciprocalPi, maxEquRectX = 0.5f*maxTheta*reciprocalPi;
+			for (float x=floor(inputDims.x * minEquRectX); x<ceil(inputDims.x * maxEquRectX); x+=1) {
+			// for (float x=0; x<inputDims.x; x+=4) {
+				float faceTheta = x/float(inputDims.x)*2.0f;
+				faceTheta = fmod(faceTheta + 2.25, 0.5) - 0.25;
+				faceTheta *= pi;										// we need faceTheta in the (-.25*pi, .25*pi) for the following calculations
+				float minInc = atan(lowDirection.y*cos(faceTheta));		// cos(faceTheta) here takes care of warping of the shape that occurs in X,-X,Z,-Z panels
+				float maxInc = atan(highDirection.y*cos(faceTheta));
+				float minEquRectY = 0.5f-(minInc * reciprocalPi), maxEquRectY = 0.5f-(maxInc*reciprocalPi);
+				for (float y=floor(inputDims.y * minEquRectY); y<ceil(inputDims.y * maxEquRectY); y+=1) {
+				// for (float y=0; y<inputDims.y; y+=4) {
+					// We can project equirectangular point back onto the cubemap plane and see how much it overlaps with the 
+					// cubemap pixel. The pixel has a distorted shape post projection; but if we assume that equirectangular input
+					// pixels are small relative to the cubemap pixels, we may be able to ignore this
+					float3 pixelDirection0 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
+					float3 pixelDirection1 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)));
+					// if (dot(pixelDirection0, center) < 0) continue;
+					pixelDirection0 /= dot(pixelDirection0, center);
+					pixelDirection1 /= dot(pixelDirection1, center);
+					float2 cube0 = float2(dot(pixelDirection0 - center, plusX), dot(pixelDirection0 - center, plusY));
+					float2 cube1 = float2(dot(pixelDirection1 - center, plusX), dot(pixelDirection1 - center, plusY));
+					float minX = max(max(min(cube0.x, cube1.x), min(faceMin.x, faceMax.x)), -1);
+					float minY = max(max(min(cube0.y, cube1.y), min(faceMin.y, faceMax.y)), -1);
+					float maxX = min(min(max(cube0.x, cube1.x), max(faceMin.x, faceMax.x)), 1);
+					float maxY = min(min(max(cube0.y, cube1.y), max(faceMin.y, faceMax.y)), 1);
+					if (minX < maxX && minY < maxY) {
+						float weight = CubeMapTexelSolidAngle(float2(minX, minY), float2(maxX, maxY));
+						result += float4(weight*LoadInput(float2(x,y), inputDims).rgb, weight);
+					}
+					// result += float4(Input.SampleLevel(EquirectangularPointSampler, float2(x/inputDims.x, y/inputDims.y), 0).rgb, 1);
+				}
+			}
+
 		}
 
 		result /= result.a;
@@ -213,16 +295,12 @@ float4 hemi(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Tar
 	uint2 textureDims; uint arrayLayerCount;
 	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
-		if (dispatchThreadId.z == 2 || dispatchThreadId.z == 3) {
-			Output[dispatchThreadId.xyz] = float4(0,0,0,1);
-		} else {
-			float4 color;
-			Panel(
-				color,
-				dispatchThreadId.xy, 0.0.xx, textureDims.xy,
-				CubeMapFaces[dispatchThreadId.z],
-				false);
-			Output[dispatchThreadId.xyz] = color;
-		}
+		float4 color;
+		Panel(
+			color,
+			dispatchThreadId.xy, 0.0.xx, textureDims.xy,
+			CubeMapFaces[dispatchThreadId.z],
+			false);
+		Output[dispatchThreadId.xyz] = color;
 	}
 }

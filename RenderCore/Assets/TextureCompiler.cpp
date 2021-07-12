@@ -216,12 +216,13 @@ namespace RenderCore { namespace Assets
 				if (XlEqString(type.Value(), "EquRectToCubeMap")) {
 					auto srcDst = srcPkt->GetDesc();
 					srcDst.wait();
+					bool mipMapsFromSource = XlEqStringI(dom.RootElement().Attribute("MipMapFilter").Value(), "FromSource");
 					auto targetDesc = srcDst.get()._textureDesc;
-					targetDesc._width = 512;
-					targetDesc._height = 512;
+					targetDesc._width = dom.RootElement().Attribute("FaceDim", 512);
+					targetDesc._height = dom.RootElement().Attribute("FaceDim", 512);
 					targetDesc._depth = 1;
 					targetDesc._arrayCount = 6;
-					targetDesc._mipCount = IntegerLog2(targetDesc._width);
+					targetDesc._mipCount = mipMapsFromSource ? IntegerLog2(targetDesc._width)+1 : 1;
 					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 					auto processed = Techniques::EquRectToCube(*srcPkt, targetDesc);
 					srcPkt = processed._newDataSource;

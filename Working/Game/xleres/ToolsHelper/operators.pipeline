@@ -3,10 +3,10 @@ DescriptorSet OperatorsDS
 {
 	SampledTexture Input;
 	UnorderedAccessTexture Output;
-	Sampler FixedPointSampler
+	Sampler EquirectangularPointSampler
 	{
 		Filter = Point,
-		AddressU = Clamp,
+		AddressU = Wrap,
 		AddressV = Clamp
 	};
 };
