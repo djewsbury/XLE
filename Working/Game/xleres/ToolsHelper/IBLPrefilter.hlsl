@@ -2,18 +2,118 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../TechniqueLibrary/Math/MathConstants.hlsl"
-#include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
-#include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
-#include "Cubemap.h"
+#define FORCE_GGX_REF
 
-Texture2D<float3> Input;
-SamplerState DefaultSampler;
+#include "Cubemap.hlsl"
+#include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
+#include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
+
+Texture2D Input : register(t0, space0);
+RWTexture2DArray<float4> Output : register(u1, space0);
+SamplerState EquirectangularBilinearSampler : register(s2, space0);
+
+// static const uint PassSampleCount = 256;
+static const uint PassSampleCount = 16;
+cbuffer FilterPassParams : register(b3, space0)
+{
+    uint MipIndex;
+    uint PassIndex, PassCount;
+};
+
+float3 IBLPrecalc_SampleInputTexture(float3 direction)
+{
+    float2 coord = DirectionToEquirectangularCoord_YUp(direction);
+    return Input.SampleLevel(EquirectangularBilinearSampler, coord, 0).rgb;
+}
+
+#include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
+
+float4 GenerateSplitSumGlossLUT(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+{
+    float2 dims = position.xy / texCoord.xy;
+    float NdotV = texCoord.x + (.1/dims.x);  // (add some small amount just to get better values in the lower left corner)
+    float roughness = texCoord.y;
+    const uint sampleCount = 64 * 1024;
+    return float4(GenerateSplitTerm(NdotV, roughness, sampleCount, 0, 1), 0, 1);
+}
+
+float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+{
+    float NdotV = texCoord.x;
+    float roughness = texCoord.y;
+    const uint sampleCount = 64 * 1024;
+
+    const uint ArrayIndex = 0;
+
+    float specular = saturate(0.05f + ArrayIndex / 32.f);
+    float iorIncident = F0ToRefractiveIndex(SpecularParameterToF0(specular));
+    float iorOutgoing = 1.f;
+    return float4(GenerateSplitTermTrans(NdotV, roughness, iorIncident, iorOutgoing, sampleCount, 0, 1), 0, 0, 1);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+[numthreads(8, 8, 6)]
+    void EquiRectFilterGlossySpecular(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
+{
+    // This is the second term of the "split-term" solution for IBL glossy specular
+    // Here, we prefilter the reflection texture in such a way that the blur matches
+    // the GGX equation.
+    //
+    // This is very similar to calculating the full IBL reflections. However, we're
+    // making some simplifications to make it practical to precalculate it.
+    // We can choose to use an importance-sampling approach. This will limit the number
+    // of samples to some fixed amount. Alternatively, we can try to sample the texture
+    // it some regular way (ie, by sampling every texel instead of just the ones suggested
+    // by importance sampling).
+    //
+    // If we sample every pixel we need to weight by the solid angle of the texel we're
+    // reading from. But if we're just using the importance sampling approach, we can skip
+    // this step (it's just taken care of by the probability density function weighting)
+    uint2 textureDims; uint arrayLayerCount;
+	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
+        float2 texCoord = dispatchThreadId.xy / float2(textureDims);
+        float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
+        float roughness = MipmapToRoughness(MipIndex);
+        float3 r = GenerateFilteredSpecular(
+            cubeMapDirection, roughness,
+            PassSampleCount, PassIndex, PassCount);
+        if (PassIndex == 0) Output[dispatchThreadId.xyz] = float4(0,0,0,1);
+        Output[dispatchThreadId.xyz].rgb += r / float(PassCount);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+[numthreads(8, 8, 6)]
+    void EquiRectFilterGlossySpecularTrans(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
+{
+    // Following the simplifications we use for split-sum specular reflections, here
+    // is the equivalent sampling for specular transmission
+    uint2 textureDims; uint arrayLayerCount;
+	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
+        float2 texCoord = dispatchThreadId.xy / float2(textureDims);
+        float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
+        float roughness = MipmapToRoughness(MipIndex);
+        float iorIncident = SpecularTransmissionIndexOfRefraction;
+        float iorOutgoing = 1.f;
+        float3 r = CalculateFilteredTextureTrans(
+            cubeMapDirection, roughness,
+            iorIncident, iorOutgoing,
+            PassSampleCount, PassIndex, PassCount);
+        if (PassIndex == 0) Output[dispatchThreadId.xyz] = float4(0,0,0,1);
+        Output[dispatchThreadId.xyz].rgb += r / float(PassCount);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float4 ReferenceDiffuseFilter(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
     uint2 dims = uint2(position.xy / texCoord);
-    float3 direction = EquirectangularCoordToDirection_YUp(uint2(position.xy), dims);
+    float3 direction = EquirectangularCoordToDirection_YUp(float2(position.xy) / float2(dims));
 
     float3 result = float3(0,0,0);
 
@@ -25,14 +125,14 @@ float4 ReferenceDiffuseFilter(float4 position : SV_Position, float2 texCoord : T
         texelAreaWeight *= verticalDistortion;
 
         for (uint x=0; x<inputDims.x; ++x) {
-            float3 sampleDirection = EquirectangularCoordToDirection_YUp(uint2(x, y), inputDims);
+            float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
             float cosFilter = max(0.0, dot(sampleDirection, direction)) / pi;
 
-            result += texelAreaWeight * cosFilter * Input.Load(uint3(x, y, 0));
+            result += texelAreaWeight * cosFilter * Input.Load(uint3(x, y, 0)).rgb;
         }
     }
 
-    return float4(result, 1.0f);
+    return float4(result, 1.0f);    // note -- weighted by 4*pi steradians
 
     // float2 back = EquirectangularMappingCoord(direction);
     // float2 diff = back - float2(position.xy) / float2(dims);
@@ -81,7 +181,7 @@ float4 ProjectToSphericalHarmonic(float4 position : SV_Position, float2 texCoord
         texelAreaWeight *= verticalDistortion;
 
         for (uint x=0; x<inputDims.x; ++x) {
-            float3 sampleDirection = EquirectangularCoordToDirection_YUp(uint2(x, y), inputDims);
+            float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
 
 			float value = EvalSHBasis(index, sampleDirection);
             result += (texelAreaWeight) * value * Input.Load(uint3(x, y, 0)).rgb;
@@ -92,7 +192,7 @@ float4 ProjectToSphericalHarmonic(float4 position : SV_Position, float2 texCoord
 
 	// we should expect weightAccum to be exactly 4*pi here
 	// return float4((4*pi)/weightAccum.xxx, 1.0);
-    return float4(result, 1.0f);
+    return float4(result, 1.0f);    // note -- weighted by 4*pi steradians
 }
 
 // These are the band factors from Peter-Pike Sloan's paper, via S�bastien Lagarde's modified cubemapgen
@@ -148,18 +248,14 @@ float3 ResolveSH(float3 direction)
 float4 ResolveSphericalHarmonic(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
     uint2 dims = uint2(position.xy / texCoord);
-    float3 D = EquirectangularCoordToDirection_YUp(uint2(position.xy), dims);
+    float3 D = EquirectangularCoordToDirection_YUp(float2(position.xy) / float2(dims));
 	return float4(ResolveSH(D), 1.0f);
-}
-
-cbuffer SubResourceId
-{
-    uint ArrayIndex, MipIndex;
-    uint PassIndex, PassCount;
 }
 
 float4 ResolveSphericalHarmonicToCubeMap(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
+    const uint ArrayIndex = 0;
+
     float3 cubeMapDirection = CalculateCubeMapDirection(ArrayIndex, texCoord);
 	return float4(ResolveSH(cubeMapDirection), 1.0f);
 }
@@ -214,3 +310,4 @@ float4 ResolveSphericalHarmonic2(float4 position : SV_Position, float2 texCoord 
 	return float4(result, 1.0f);
 }
 #endif
+

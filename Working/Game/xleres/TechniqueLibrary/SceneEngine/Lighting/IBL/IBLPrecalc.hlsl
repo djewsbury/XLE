@@ -9,7 +9,7 @@
 
 #include "IBLAlgorithm.hlsl"
 #include "../../../LightingEngine/LightingAlgorithm.hlsl"
-
+#include "../../../LightingEngine/SpecularMethods.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //  Split-term LUT
@@ -252,7 +252,7 @@ float3 GenerateFilteredSpecular(
             // texture. This would help avoid sampling artifacts, and we would
             // end up with slightly more blurry result.
 
-        float3 lightColor = IBLPrecalc_SampleInputTexture(L);
+        float3 incidentLight = IBLPrecalc_SampleInputTexture(L);
 
         const uint Method_Unreal = 0u;
         const uint Method_Flat = 1u;
@@ -269,7 +269,7 @@ float3 GenerateFilteredSpecular(
             // slightly.
             weight = saturate(dot(normal, L));
         } else if (method == Method_Flat) {
-            lightColor *= InversePDFWeight(H, normal, viewDirection, alphad);
+            incidentLight *= InversePDFWeight(H, normal, viewDirection, alphad);
             weight = 1.f;
         } else if (method == Method_PDF) {
             // This method weights the each point by the GGX sampling pdf associated
@@ -305,7 +305,7 @@ float3 GenerateFilteredSpecular(
             precise float brdf1 = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
             weight = brdf1 / brdf0 * InversePDFWeight(H, normal, viewDirection, alphad);
         }
-        result += lightColor * weight;
+        result += incidentLight * weight;
         totalWeight += weight;
     }
 
@@ -388,7 +388,7 @@ float3 CalculateFilteredTextureTrans(
             corei, alphad);
 #endif
 
-        float3 lightColor = IBLPrecalc_SampleInputTexture(i);
+        float3 incidentLight = IBLPrecalc_SampleInputTexture(i);
 
 #if 1
         float bsdf;
@@ -410,7 +410,7 @@ float3 CalculateFilteredTextureTrans(
         float weight = bsdf * InversePDFWeight(H, coreNormal, float3(0.0f, 0.0f, 0.0f), alphad);
 #endif
 
-        result += lightColor * weight;
+        result += incidentLight * weight;
         totalWeight += weight;
     }
 

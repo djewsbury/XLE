@@ -26,21 +26,21 @@ namespace RenderCore { namespace Assets
 	static CMP_FORMAT AsCompressonatorFormat(Format fmt)
 	{
 		switch (fmt) {
-		case Format::R32G32B32A32_FLOAT: return CMP_FORMAT_RGBA_32F;
+		case Format::R32G32B32A32_FLOAT: return CMP_FORMAT_ARGB_32F;
 
-		case Format::R16G16B16A16_FLOAT: return CMP_FORMAT_RGBA_16F;
-		case Format::R16G16B16A16_TYPELESS: return CMP_FORMAT_RGBA_16;
-		case Format::R16G16B16A16_UNORM: return CMP_FORMAT_RGBA_16;
+		case Format::R16G16B16A16_FLOAT: return CMP_FORMAT_ARGB_16F;
+		case Format::R16G16B16A16_TYPELESS: return CMP_FORMAT_ARGB_16;
+		case Format::R16G16B16A16_UNORM: return CMP_FORMAT_ARGB_16;
 
 		case Format::R32G32_FLOAT: return CMP_FORMAT_RG_32F;
 
 		case Format::R10G10B10A2_TYPELESS: return CMP_FORMAT_ARGB_2101010;
 		case Format::R10G10B10A2_UNORM: return CMP_FORMAT_ARGB_2101010;
 
-		case Format::R8G8B8A8_TYPELESS: return CMP_FORMAT_RGBA_8888;
-		case Format::R8G8B8A8_UNORM: return CMP_FORMAT_RGBA_8888;
-		case Format::R8G8B8A8_SNORM: return CMP_FORMAT_RGBA_8888_S;
-		case Format::R8G8B8A8_UNORM_SRGB: return CMP_FORMAT_RGBA_8888;
+		case Format::R8G8B8A8_TYPELESS: return CMP_FORMAT_ARGB_8888;
+		case Format::R8G8B8A8_UNORM: return CMP_FORMAT_ARGB_8888;
+		case Format::R8G8B8A8_SNORM: return CMP_FORMAT_ARGB_8888_S;
+		case Format::R8G8B8A8_UNORM_SRGB: return CMP_FORMAT_ARGB_8888;
 
 		case Format::R16G16_FLOAT: return CMP_FORMAT_RG_16F;
 		case Format::R16G16_TYPELESS: return CMP_FORMAT_RG_16;
@@ -60,9 +60,9 @@ namespace RenderCore { namespace Assets
 		case Format::R8_UNORM: return CMP_FORMAT_R_8;
 		case Format::R8_SNORM: return CMP_FORMAT_R_8_S;
 
-		case Format::B8G8R8A8_TYPELESS: return CMP_FORMAT_BGRA_8888;
-		case Format::B8G8R8A8_UNORM: return CMP_FORMAT_BGRA_8888;
-		case Format::B8G8R8A8_UNORM_SRGB: return CMP_FORMAT_BGRA_8888;
+		case Format::B8G8R8A8_TYPELESS: return CMP_FORMAT_ABGR_8888;
+		case Format::B8G8R8A8_UNORM: return CMP_FORMAT_ABGR_8888;
+		case Format::B8G8R8A8_UNORM_SRGB: return CMP_FORMAT_ABGR_8888;
 
 		case Format::R32G32B32_FLOAT: return CMP_FORMAT_RGB_32F;
 
@@ -199,7 +199,7 @@ namespace RenderCore { namespace Assets
 				InputStreamFormatter<> inputFormatter{MakeStringSection((const char*)inputBlock.get(), (const char*)PtrAdd(inputBlock.get(), inputBlockSize))};
 				StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
 				auto type = dom.RootElement().Attribute("Operation");
-				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap")))
+				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap") && !XlEqStringI(type.Value(), "EquiRectFilterGlossySpecular")))
 					Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.Value().AsString() + ")"));
 				auto srcFile = dom.RootElement().Attribute("SourceFile");
 				auto dstFormatName = dom.RootElement().Attribute("Format");
@@ -224,7 +224,21 @@ namespace RenderCore { namespace Assets
 					targetDesc._arrayCount = 6;
 					targetDesc._mipCount = mipMapsFromSource ? IntegerLog2(targetDesc._width)+1 : 1;
 					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-					auto processed = Techniques::EquRectToCube(*srcPkt, targetDesc);
+					auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap);
+					srcPkt = processed._newDataSource;
+					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				} else if (XlEqString(type.Value(), "EquiRectFilterGlossySpecular")) {
+					auto srcDst = srcPkt->GetDesc();
+					srcDst.wait();
+					auto targetDesc = srcDst.get()._textureDesc;
+					targetDesc._width = dom.RootElement().Attribute("FaceDim", 512);
+					targetDesc._height = dom.RootElement().Attribute("FaceDim", 512);
+					targetDesc._depth = 1;
+					targetDesc._arrayCount = 6;
+					targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
+					targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
+					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+					auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
 					srcPkt = processed._newDataSource;
 					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
 				}
@@ -256,7 +270,8 @@ namespace RenderCore { namespace Assets
 						destTexture.dwPitch    = 0;
 						destTexture.format     = comprDstFormat;
 						destTexture.dwDataSize = dstOffset._size;
-						assert(destTexture.dwDataSize == CMP_CalculateBufferSize(&destTexture));
+						auto calcSize = CMP_CalculateBufferSize(&destTexture);
+						assert(destTexture.dwDataSize == calcSize);
 						destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
 						assert(PtrAdd(destTexture.pData, destTexture.dwDataSize) <= AsPointer(destinationBlob->end()));
 

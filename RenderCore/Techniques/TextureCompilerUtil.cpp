@@ -28,7 +28,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-        virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
 		{
 			for (const auto& sr:subResources) {
 				Metal::ResourceMap map {
@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-        virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		DataSourceFromResourceSynchronized(
 			std::shared_ptr<IThreadContext> threadContext, 
@@ -61,48 +61,72 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
-	ProcessedTexture EquRectToCube(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc)
+	ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
 		assert(targetDesc._arrayCount == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 		auto threadContext = GetThreadContext();
 		
+		ProcessedTexture result;
+
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Input"));
 		usi.BindResourceView(1, Hash64("Output"));
-		auto computeOpFuture = CreateComputeOperator(
-			std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
-			"xleres/ToolsHelper/EquirectangularToCube.hlsl:EquRectToCube",
-			{},
-			"xleres/ToolsHelper/operators.pipeline:ComputeMain",
-			usi);
-			
+		usi.BindImmediateData(0, Hash64("FilterPassParams"));
+
+		unsigned passCount = 1;
+		::Assets::PtrToFuturePtr<IComputeShaderOperator> computeOpFuture;
+		if (filter == EquRectFilterMode::ToCubeMap) {
+ 			computeOpFuture = CreateComputeOperator(
+				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
+				"xleres/ToolsHelper/EquirectangularToCube.hlsl:EquRectToCube",
+				{},
+				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				usi);
+			// todo -- we really want to extract the full set of dependencies from the depVal
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/EquirectangularToCube.hlsl"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+		} else {
+			computeOpFuture = CreateComputeOperator(
+				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
+				"xleres/ToolsHelper/IBLPrefilter.hlsl:EquiRectFilterGlossySpecular",
+				{},
+				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				usi);
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/IBLPrefilter.hlsl"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+			passCount = 128;
+		}
+
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
-        computeOpFuture->StallWhilePending();
-        auto computeOp = computeOpFuture->Actualize();
+		computeOpFuture->StallWhilePending();
+		auto computeOp = computeOpFuture->Actualize();
 
-        auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
-        for (unsigned mip=0; mip<std::max(1u, (unsigned)targetDesc._mipCount); ++mip) {
-            TextureViewDesc view;
-            view._mipRange = {mip, 1};
-            auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
-            IResourceView* resViews[] = { inputView.get(), outputView.get() }; 
-            UniformsStream us;
-    		us._resourceViews = MakeIteratorRange(resViews);
-            auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
-            computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
-        }
+		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
+		for (unsigned mip=0; mip<std::max(1u, (unsigned)targetDesc._mipCount); ++mip) {
+			TextureViewDesc view;
+			view._mipRange = {mip, 1};
+			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+			IResourceView* resViews[] = { inputView.get(), outputView.get() };
+			for (unsigned p=0; p<passCount; ++p) {
+				struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
+				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(filterPassParams) };
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+				us._immediateData = MakeIteratorRange(immData);
+				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+				computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
+			}
+		}
 
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
-        ProcessedTexture result;
 		result._newDataSource = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-        result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/EquirectangularToCube.hlsl"));
-        result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
-        return result;
+		return result;
 	}
+
 }}

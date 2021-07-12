@@ -113,14 +113,14 @@ float3 ResolveSH_Reference(float3 coefficients[SHCoefficientCount], float3 dir)
     return result;
 }
 
-#if defined(__VERSION__)
+#if defined(GLES)
     static const float ShBandFactors[] = float[] (1.0f, 2.0f / 3.0f, 1.0f / 4.0f);
 #else
     static const float ShBandFactors[] = {1.0f, 2.0f / 3.0f, 1.0f / 4.0f};
 #endif
 static const float rsqrtPi = rsqrt(pi);
 
-#if defined(__VERSION__)
+#if defined(GLES)
 static const float ShPremultipliers[] = float[]
 (
 #else
@@ -137,7 +137,7 @@ static const float ShPremultipliers[] = {
      ShBandFactors[2] * .25f * sqrt( 5.f) * rsqrtPi,
     -ShBandFactors[2] * .5f  * sqrt(15.f) * rsqrtPi,
      ShBandFactors[2] * .25f * sqrt(15.f) * rsqrtPi
-#if defined(__VERSION__)
+#if defined(GLES)
 );
 #else
 };

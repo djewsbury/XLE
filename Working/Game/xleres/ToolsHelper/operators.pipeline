@@ -3,12 +3,13 @@ DescriptorSet OperatorsDS
 {
 	SampledTexture Input;
 	UnorderedAccessTexture Output;
-	Sampler EquirectangularPointSampler
+	Sampler EquirectangularBilinearSampler
 	{
-		Filter = Point,
+		Filter = Bilinear,
 		AddressU = Wrap,
 		AddressV = Clamp
 	};
+	UniformBuffer FilterPassParams;
 };
 
 PipelineLayout ComputeMain

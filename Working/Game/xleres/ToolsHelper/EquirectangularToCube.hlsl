@@ -4,13 +4,12 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "Cubemap.h"
+#include "Cubemap.hlsl"
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
 Texture2D Input : register(t0, space0);
 RWTexture2DArray<float4> Output : register(u1, space0);
-SamplerState FixedPointSampler : register(s2, space0);
 
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
@@ -28,11 +27,6 @@ void swap(inout float lhs, inout float rhs)
 float minX(float x, float y, float z, float w) { return min(min(min(x, y), z), w); }
 float maxX(float x, float y, float z, float w) { return max(max(max(x, y), z), w); }
 
-float AreaElement(float x, float y)
-{
-    return atan2(x * y, sqrt(x * x + y * y + 1.f));
-}
-
 float CubeMapTexelSolidAngle(float2 faceCoordMin, float2 faceCoordMax)
 {
         // Based on the method from here:
@@ -43,10 +37,10 @@ float CubeMapTexelSolidAngle(float2 faceCoordMin, float2 faceCoordMax)
         // the comments section for a number of altnerative derivations (including
         // an interesting formula for the ratio of the area of a texel and the area on
         // the equivalent sphere surface).
-    return AreaElement(faceCoordMin.x, faceCoordMin.y) 
-	 	 - AreaElement(faceCoordMin.x, faceCoordMax.y)
-		 - AreaElement(faceCoordMax.x, faceCoordMin.y)
-		 + AreaElement(faceCoordMax.x, faceCoordMax.y);
+    return CubeMapAreaElement(faceCoordMin.x, faceCoordMin.y) 
+	 	 - CubeMapAreaElement(faceCoordMin.x, faceCoordMax.y)
+		 - CubeMapAreaElement(faceCoordMax.x, faceCoordMin.y)
+		 + CubeMapAreaElement(faceCoordMax.x, faceCoordMax.y);
 }
 
 float4 LoadInput(float2 xy, int2 dims)
@@ -223,12 +217,7 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
     }
 }
 
-float4 Horizontal(float2 texCoord, bool hemi)
-{
-	return 0.0.xxxx;
-}
-
-float4 Vertical(float2 texCoord, bool hemi)
+float4 VerticalCubeMapCross(float2 texCoord, bool hemi)
 {
 	float4 result = 0.0.xxxx;
 	Panel(
@@ -269,24 +258,14 @@ float4 Vertical(float2 texCoord, bool hemi)
 	return result;
 }
 
-float4 main(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+float4 WriteVerticalCubeMapCross(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
-    uint2 dims = uint2(position.xy / texCoord);
-    if (dims.x >= dims.y) {
-		return Horizontal(texCoord, false);
-    } else {
-		return Vertical(texCoord, false);
-    }
+	return VerticalCubeMapCross(texCoord, false);
 }
 
-float4 hemi(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
-	uint2 dims = uint2(position.xy / texCoord);
-	if (dims.x >= dims.y) {
-		return Horizontal(texCoord, true);
-	} else {
-		return Vertical(texCoord, true);
-	}
+	return VerticalCubeMapCross(texCoord, true);
 }
 
 [numthreads(8, 8, 6)]

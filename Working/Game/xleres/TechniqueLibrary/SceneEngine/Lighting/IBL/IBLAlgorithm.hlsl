@@ -7,7 +7,9 @@
 #if !defined(IBL_ALGORITHM_H)
 #define IBL_ALGORITHM_H
 
-#include "../../../LightingEngine/LightingAlgorithm.hlsl"
+#if !defined(LIGHTING_ALGORITHM_H)
+    #error Include LightingAlgorithm.hlsl before inlcuding this file
+#endif
 
 static const float MinSamplingAlpha = 0.001f;
 static const float MinSamplingRoughness = 0.03f;
@@ -171,12 +173,12 @@ float MipmapToRoughness(uint mipIndex)
     // will be using trilinear filtering to get a value between 2 mipmaps.
     // Arguably a roughness of "0.0" is not very interesting -- but we commit our
     // highest resolution mipmap to that.
-    return 0.05f + saturate(float(mipIndex) / float(SpecularIBLMipMapCount));
+    return 0.08f + 0.33f * saturate(float(mipIndex) / float(SpecularIBLMipMapCount));
 }
 
 float RoughnessToMipmap(float roughness)
 {
-    return saturate(roughness - 0.05f) * SpecularIBLMipMapCount;
+    return saturate(3.0f * roughness - 0.08f) * SpecularIBLMipMapCount;
 }
 
 
