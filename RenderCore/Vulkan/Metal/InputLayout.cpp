@@ -30,7 +30,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		SPIRVReflection::Binding _binding = {};
 		SPIRVReflection::StorageType _storageType = SPIRVReflection::StorageType::Unknown;
-		DescriptorType _slotType = DescriptorType::UniformBuffer;
+		const SPIRVReflection::BasicType* _type = nullptr;
+		bool _isStructType = false;
 		StringSection<> _name;
 	};
 
@@ -64,28 +65,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			auto t = LowerBound(reflection._basicTypes, typeToLookup);
 			if (t != reflection._basicTypes.end() && t->first == typeToLookup) {
-				switch (t->second) {
-				case SPIRVReflection::BasicType::SampledImage:
-				case SPIRVReflection::BasicType::Image:
-					// image types can map onto different input slots, so we may need to be
-					// more expressive here
-					result._slotType = DescriptorType::SampledTexture;
-					break;
-
-				case SPIRVReflection::BasicType::Sampler:
-					result._slotType = DescriptorType::Sampler;
-					break;
-
-				default:
-					#if defined(_DEBUG)
-						std::cout << "Could not understand type information for input " << result._name << std::endl;
-					#endif
-					break;
-				}
+				result._type = &t->second;
 			} else {
 				if (std::find(reflection._structTypes.begin(), reflection._structTypes.end(), typeToLookup) != reflection._structTypes.end()) {
 					// a structure will require some kind of buffer as input
-					result._slotType = DescriptorType::UniformBuffer;
+					result._isStructType = true;
 
 					// When using the HLSLCC cross-compiler; we end up with the variable having name
 					// like "<cbuffername>_inst" and the type will be "<cbuffername>"
@@ -105,8 +89,6 @@ namespace RenderCore { namespace Metal_Vulkan
 					#endif
 				}
 			}
-		} else {
-			result._slotType = DescriptorType::Unknown;
 		}
 
 		return result;
@@ -477,6 +459,26 @@ namespace RenderCore { namespace Metal_Vulkan
 			return true;
 		}
 
+		static bool ShaderVariableCompatibleWithDescriptorSet(const ReflectionVariableInformation& reflectionVariable, DescriptorType slotType)
+		{
+			switch (slotType) { 
+			case DescriptorType::SampledTexture:
+			case DescriptorType::UnorderedAccessTexture:
+				return !reflectionVariable._isStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image); 
+			case DescriptorType::UniformBuffer:
+			case DescriptorType::UnorderedAccessBuffer:
+				return reflectionVariable._isStructType || !reflectionVariable._type || (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler);
+			case DescriptorType::Sampler:
+				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
+			case DescriptorType::InputAttachment:
+				return reflectionVariable._binding._inputAttachmentIndex != ~0u;
+			case DescriptorType::Unknown:
+			default:
+				assert(0);
+				return true;
+			}
+		}
+
 		void BindReflection(const SPIRVReflection& reflection, uint32_t shaderStageMask)
 		{
 			assert(_looseUniforms.size() <= 4);
@@ -485,8 +487,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// We'll need an input value for every binding in the shader reflection
 			for (const auto&v:reflection._variables) {
 				auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
-				if (reflectionVariable._slotType == DescriptorType::Unknown
-					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
+				if (   reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
 					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
 					|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
 				uint64_t hashName = reflectionVariable._name.IsEmpty() ? 0 : Hash64(reflectionVariable._name.begin(), reflectionVariable._name.end());
@@ -503,16 +504,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
 						auto descSetSigBindings = _pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet)->GetDescriptorSlots();
 
+						if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
+							Throw(std::runtime_error("Shader input assignment is off the pipeline layout, or the shader type does not agree with descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
+
 						unsigned inputSlot = ~0u, groupIdx = ~0u;
 						UniformStreamType bindingType = UniformStreamType::None;
 						std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, hashName);
 
 						if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
-							if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !SlotTypeCompatibleWithBinding(bindingType, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
-								Throw(std::runtime_error("Shader input assignment is off the pipeline layout, or the types do not agree (variable: " + reflectionVariable._name.AsString() + ")"));
-
-							if (bindingType == UniformStreamType::Sampler && reflectionVariable._slotType != DescriptorType::Sampler)
-								Throw(std::runtime_error("Attempting to bind a sampler to a non-sampler shader variable (variable: " + reflectionVariable._name.AsString() + ")"));
+							if (!SlotTypeCompatibleWithBinding(bindingType, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
+								Throw(std::runtime_error("Shader input binding does not agree with descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 
 							AddLooseUniformBinding(
 								bindingType,
@@ -543,7 +544,7 @@ namespace RenderCore { namespace Metal_Vulkan
 								Throw(std::runtime_error("Shader input variable is not included in fixed descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 							
 							auto& descSetSlot = signature->_slots[reflectionVariable._binding._bindingPoint];
-							if (reflectionVariable._slotType != descSetSlot._type)
+							if (!ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSlot._type))
 								Throw(std::runtime_error("Shader input variable type does not agree with the type in the given fixed descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 						}
 
