@@ -14,6 +14,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Threading/CompletionThreadPool.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/FastParseValue.h"
 #include <memory>
 
 #if ENABLE_DXTEX
@@ -449,6 +450,156 @@ namespace RenderCore { namespace Assets
 		CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 		return [](StringSection<> filename, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
 			return std::make_shared<WICDataSource>(filename.AsString(), flags);
+		};
+	}
+
+	class HDRDataSource : public BufferUploads::IAsyncDataSource, public std::enable_shared_from_this<HDRDataSource>
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			struct Captures
+			{
+				std::promise<ResourceDesc> _promise;
+			};
+			auto cap = std::make_shared<Captures>();
+			auto result = cap->_promise.get_future();
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+				[weakThis{weak_from_this()}, captures=std::move(cap)]() {
+					try
+					{
+						auto that = weakThis.lock();
+						if (!that)
+							Throw(std::runtime_error("Data source has expired"));
+
+						ScopedLock(that->_lock);
+						if (!that->_hasBeenInitialized) {
+							that->_file = ::Assets::MainFileSystem::OpenMemoryMappedFile(that->_filename, 0ull, "r");
+							auto data = that->_file.GetData();
+
+							const auto headerLen = strlen("#?RADIANCE\n");
+							bool radianceHeader = (that->_file.GetSize() >= headerLen) && (std::strncmp((const char*)data.begin(), "#?RADIANCE\n", headerLen) == 0);
+							const auto headerLen2 = strlen("#?RGBE\n");
+							bool rgbeHeader = (that->_file.GetSize() >= headerLen2) && (std::strncmp((const char*)data.begin(), "#?RGBE\n", headerLen2) == 0);
+							if (!radianceHeader && !rgbeHeader)
+								Throw(std::runtime_error("Failure while reading texture file (" + that->_filename + "). Check for corrupted data."));
+
+							auto i = (const char*)data.begin();
+							while (i != data.end() && *i != '\n') ++i;
+							assert(*i == '\n'); ++i;
+
+							unsigned width = 0, height = 0;
+							for (;;) {
+								while (i != data.end() && *i == '\n') ++i;
+								auto fieldBegin = i;
+								while (i != data.end() && *i != '\n') ++i;
+								if (strncmp(fieldBegin, "FORMAT=", 7) == 0) {
+									if (!XlEqString(MakeStringSection(fieldBegin, i), "FORMAT=32-bit_rle_rgbe"))
+										Throw(std::runtime_error("Unknown pixel format in HDR file (" + that->_filename + "). Only RGBE data supported."));
+								} else if (strncmp(fieldBegin, "-Y ", 3) == 0) {
+									auto q = FastParseValue(MakeStringSection(fieldBegin+3, i), height);
+									if (strncmp(q, " +X ", 4) != 0)
+										Throw(std::runtime_error("Bad header in HDR file (" + that->_filename + ")."));
+									q += 4;
+									auto end = FastParseValue(MakeStringSection(q, i), width);
+									if (end != i)
+										Throw(std::runtime_error("Bad header in HDR file (" + that->_filename + ")."));
+									break;
+								}
+							}
+							while (i != data.end() && *i == '\n') ++i;
+							if (!width || !height)
+								Throw(std::runtime_error("Bad header in HDR file (" + that->_filename + ")."));
+
+							auto expectedByteSize = 4*width*height;
+							if (data.size() != (i-(char*)data.begin())+expectedByteSize)
+								Throw(std::runtime_error("Run length compressed HDR files not supported while reading HDR file (" + that->_filename + ")."));
+
+							// The real file format is R8G8B8E8 (8 bit shared exponent)
+							that->_desc = CreateDesc(
+								0, 0, 0, TextureDesc::Plain2D(width, height, Format::R32G32B32_FLOAT),
+								that->_filename);
+							that->_dataBegin = (uint8_t*)i;
+							that->_hasBeenInitialized = true;
+						}
+
+						captures->_promise.set_value(that->_desc);
+					} catch(...) {
+						captures->_promise.set_exception(std::current_exception());
+					}
+				});
+
+			return result;
+		}
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			struct Captures
+			{
+				std::promise<void> _promise;
+				std::vector<SubResource> _subResources;
+				Captures(IteratorRange<const SubResource*> subResources) :_subResources(subResources.begin(), subResources.end()) {}
+			};
+			auto cap = std::make_shared<Captures>(subResources);
+			auto result = cap->_promise.get_future();
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+				[weakThis{weak_from_this()}, captures = std::move(cap)]() mutable {
+					try
+					{
+						auto that = weakThis.lock();
+						if (!that)
+							Throw(std::runtime_error("Data source has expired"));
+
+						ScopedLock(that->_lock);
+						assert(that->_hasBeenInitialized);
+
+						assert(captures->_subResources.size() == 1);
+						auto sr = captures->_subResources[0];
+						for (unsigned c=0; c<(that->_desc._textureDesc._width*that->_desc._textureDesc._height); ++c) {
+							float* dstBegin = &((float*)sr._destination.begin())[c*3];
+							assert((dstBegin+3)<=sr._destination.end());
+							uint8_t* src = (uint8_t*)&that->_dataBegin[c*4];
+							dstBegin[0] = std::ldexp(src[0], src[3] - int(128 + 8));
+							dstBegin[1] = std::ldexp(src[1], src[3] - int(128 + 8));
+							dstBegin[2] = std::ldexp(src[2], src[3] - int(128 + 8));
+						}
+
+						captures->_promise.set_value();
+					} catch(...) {
+						captures->_promise.set_exception(std::current_exception());
+					}
+				});
+			return result;
+		}
+
+		::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return ::Assets::GetDepValSys().Make(_filename);
+		}
+
+		HDRDataSource(const std::string& filename, TextureLoaderFlags::BitField flags)
+		: _filename(filename), _flags(flags)
+		{
+			if (_flags & TextureLoaderFlags::GenerateMipmaps)
+				Throw(std::runtime_error("Mipmap generation not supported by HDR data source"));
+			_hasBeenInitialized = false;
+		}
+		~HDRDataSource() {}
+	private:
+		std::string _filename;
+		TextureLoaderFlags::BitField _flags;
+
+		std::mutex _lock;
+		OSServices::MemoryMappedFile _file;
+		bool _hasBeenInitialized = false;
+		ResourceDesc _desc;
+		uint8_t* _dataBegin = nullptr;
+	};
+
+	std::function<TextureLoaderSignature> CreateHDRTextureLoader()
+	{
+		return [](StringSection<> filename, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
+			return std::make_shared<HDRDataSource>(filename.AsString(), flags);
 		};
 	}
 

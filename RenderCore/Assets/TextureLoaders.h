@@ -21,4 +21,5 @@ namespace RenderCore { namespace Assets
     using TextureLoaderSignature = std::shared_ptr<BufferUploads::IAsyncDataSource>(StringSection<>, TextureLoaderFlags::BitField);
     std::function<TextureLoaderSignature> CreateDDSTextureLoader();
     std::function<TextureLoaderSignature> CreateWICTextureLoader();
+    std::function<TextureLoaderSignature> CreateHDRTextureLoader();
 }}
