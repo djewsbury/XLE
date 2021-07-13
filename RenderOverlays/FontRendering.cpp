@@ -188,7 +188,7 @@ namespace RenderOverlays
 		const Font& font, const TextStyle& style,
 		float x, float y, StringSection<ucs4> text,
 		float spaceExtra, float scale, float mx, float depth,
-		unsigned colorARGB, bool applyDescender, Quad* q)
+		unsigned colorARGB, bool applyDescender)
 	{
 		using namespace RenderCore;
 		if (text.IsEmpty()) return 0.f;
@@ -258,83 +258,85 @@ namespace RenderOverlays
 			prev_rsb_delta = bitmap._rsbDelta;
 			*/
 
-			float baseX = x + bitmap._bitmapOffsetX * xScale;
-			float baseY = y + (bitmap._bitmapOffsetY - descent) * yScale;
-			if (style._options.snap) {
-				baseX = xScale * (int)(0.5f + baseX / xScale);
-				baseY = yScale * (int)(0.5f + baseY / yScale);
+			if (bitmap._width && bitmap._height) {
+				float baseX = x + bitmap._bitmapOffsetX * xScale;
+				float baseY = y + (bitmap._bitmapOffsetY - descent) * yScale;
+				if (style._options.snap) {
+					baseX = xScale * (int)(0.5f + baseX / xScale);
+					baseY = yScale * (int)(0.5f + baseY / yScale);
+				}
+
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+				Quad tc = Quad::MinMax(
+					bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
+					bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
+
+				if (style._options.outline) {
+					Quad shadowPos;
+					unsigned shadowColor = ColorB::FromNormalized(0, 0, 0, opacity).AsUInt32();
+
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+				}
+
+				if (style._options.shadow) {
+					Quad shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, ColorB::FromNormalized(0,0,0,opacity).AsUInt32(), tc, depth);
+				}
+
+				workingVertices.PushQuad(pos, RenderCore::ARGBtoABGR(colorOverride?colorOverride:colorARGB), tc, depth);
 			}
-
-			Quad pos = Quad::MinMax(
-				baseX, baseY, 
-				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-			Quad tc = Quad::MinMax(
-				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
-				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
-
-			if (style._options.outline) {
-				Quad shadowPos;
-				unsigned shadowColor = ColorB::FromNormalized(0, 0, 0, opacity).AsUInt32();
-
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-			}
-
-			if (style._options.shadow) {
-				Quad shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, ColorB::FromNormalized(0,0,0,opacity).AsUInt32(), tc, depth);
-			}
-
-			workingVertices.PushQuad(pos, RenderCore::ARGBtoABGR(colorOverride?colorOverride:colorARGB), tc, depth);
 
 			x += bitmap._xAdvance * xScale;
 			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
@@ -343,26 +345,6 @@ namespace RenderOverlays
 			}
 			if (ch == ' ') {
 				x += spaceExtra;
-			}
-
-			if (q) {
-				if (i == 0) {
-					*q = pos;
-				} else {
-					if (q->min[0] > pos.min[0]) {
-						q->min[0] = pos.min[0];
-					}
-					if (q->min[1] > pos.min[1]) {
-						q->min[1] = pos.min[1];
-					}
-
-					if (q->max[0] < pos.max[0]) {
-						q->max[0] = pos.max[0];
-					}
-					if (q->max[1] < pos.max[1]) {
-						q->max[1] = pos.max[1];
-					}
-				}
 			}
 		}
 

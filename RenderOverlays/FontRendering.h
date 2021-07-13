@@ -30,7 +30,7 @@ namespace RenderOverlays
 						const Font& font, const TextStyle& style,
                         float x, float y, StringSection<ucs4> text,
                         float spaceExtra, float scale, float mx, float depth,
-                        unsigned colorARGB, bool applyDescender, Quad* q);
+                        unsigned colorARGB, bool applyDescender);
 
 	class FontRenderingManager
 	{

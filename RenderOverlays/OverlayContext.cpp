@@ -224,7 +224,7 @@ namespace RenderOverlays
 			convertedText,
 			0.f, 1.f, 0.f, 
 			LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
-			col.AsUInt32(), true, nullptr); // &q);
+			col.AsUInt32(), true);
 	}
 
 	void ImmediateOverlayContext::CaptureState() 
