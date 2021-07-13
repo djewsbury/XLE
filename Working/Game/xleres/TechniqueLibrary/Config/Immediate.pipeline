@@ -1,40 +1,5 @@
 #include "numeric.pipeline"
-
-DescriptorSet Sequencer
-{
-	UniformBuffer GlobalTransform						// 0
-	{
-		float4x4 WorldToClip;
-		float4 FrustumCorners[4];
-		float3 WorldSpaceView;
-		float FarClip;
-		float4 MinimalProjection;
-		float4x4 CameraBasis;
-	};
-
-	UniformBuffer ReciprocalViewportDimensionsCB		// 1
-	{
-		float2 ReciprocalViewportDimensions;
-	};
-
-	UniformBuffer cb;							// 2	
-	UniformBuffer cb0;							// 3
-	UniformBuffer cb1;							// 4
-	UniformBuffer cb2;							// 5
-
-	SampledTexture tex0;						// 6
-	SampledTexture tex1;						// 7
-	SampledTexture tex2;						// 8
-	SampledTexture tex3;						// 9
-	SampledTexture tex4;						// 10
-	SampledTexture tex5;						// 11
-	SampledTexture tex6;						// 12
-
-	Sampler DefaultSampler;						// 13
-	Sampler ClampingSampler;					// 14
-	Sampler AnisotropicSampler;					// 15
-	Sampler PointClampSampler;					// 16
-};
+#include "sequencer.pipeline"
 
 DescriptorSet Draw
 {
@@ -73,4 +38,3 @@ PipelineLayout ImmediateDrawables
 	DescriptorSet Draw;
 	DescriptorSet Numeric;
 };
-

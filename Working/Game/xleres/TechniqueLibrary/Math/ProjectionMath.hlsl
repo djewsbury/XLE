@@ -252,11 +252,22 @@ MiniProjZW GlobalMiniProjZW()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-float3 CalculateWorldPosition(
+float3 WorldPositionFromLinear0To1Depth_Perspective(
     float3 viewFrustumVector, float linear0To1Depth,
     float3 viewPosition)
 {
     return viewPosition + viewFrustumVector * linear0To1Depth;
+}
+
+float3 WorldPositionFromLinear0To1Depth(float3 viewFrustumVector, float linear0To1Depth)
+{
+    if (!SysUniform_IsOrthogonalProjection()) {
+        return SysUniform_GetWorldSpaceView() + viewFrustumVector * linear0To1Depth;
+    } else {
+        float4x4 cameraBasis = SysUniform_GetCameraBasis();
+        float3 cameraForward = -float3(cameraBasis[0].z, cameraBasis[1].z, cameraBasis[2].z);
+        return viewFrustumVector + SysUniform_GetWorldSpaceView() - linear0To1Depth * cameraForward;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

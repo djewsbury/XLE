@@ -44,7 +44,7 @@ float4 ResolveAmbient(
 
 	float outscatterScale = 1.f;
 	#if (RESOLVE_RANGE_FOG==1)
-		float screenSpaceDepth = GetWorldSpaceDepth(position, GetSampleIndex(sys));
+		float screenSpaceDepth = LoadWorldSpaceDepth(position, GetSampleIndex(sys));
 
 		float3 inscatter;
 		LightResolve_RangeFog(RangeFog, screenSpaceDepth, outscatterScale, inscatter);

@@ -23,33 +23,31 @@ DescriptorSet Sequencer
 	UniformBuffer RayDefinition;				// 4
 	UniformBuffer ShadowProjection;				// 5
 
-	SampledTexture NormalsFittingTexture;		// 6
+	SampledTexture tex0;						// 6
 	SampledTexture tex1;						// 7
 	SampledTexture tex2;						// 8
 	SampledTexture tex3;						// 9
-	SampledTexture tex4;						// 10
-	SampledTexture tex5;						// 11
-	SampledTexture tex6;						// 12
+	SampledTexture NormalsFittingTexture;		// 10
 
-	Sampler DefaultSampler						// 13
+	Sampler DefaultSampler						// 11
 	{
 		Filter = Trilinear,
 		AddressU = Wrap,
 		AddressV = Wrap
 	};
-	Sampler ClampingSampler						// 14
+	Sampler ClampingSampler						// 12
 	{
 		Filter = Trilinear,
 		AddressU = Clamp,
 		AddressV = Clamp
 	};
-	Sampler AnisotropicSampler					// 15
+	Sampler AnisotropicSampler					// 13
 	{
 		Filter = Anisotropic,
 		AddressU = Wrap,
 		AddressV = Wrap
 	};
-	Sampler PointClampSampler					// 16
+	Sampler PointClampSampler					// 14
 	{
 		Filter = Point,
 		AddressU = Clamp,

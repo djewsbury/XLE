@@ -25,13 +25,11 @@ float GetLinear0To1Depth(int2 pixelCoords, uint sampleIndex)
 	return NDCDepthToLinear0To1(depth);
 }
 
-float3 CalculateWorldPosition(int2 pixelCoords, uint sampleIndex, float3 viewFrustumVector)
+float3 WorldPositionFromLinear0To1Depth(int2 pixelCoords, uint sampleIndex, float3 viewFrustumVector)
 {
 	float linear0To1Depth = GetLinear0To1Depth(pixelCoords, sampleIndex);
-	return CalculateWorldPosition(
-		viewFrustumVector, linear0To1Depth, SysUniform_GetWorldSpaceView());
+	return WorldPositionFromLinear0To1Depth(viewFrustumVector, linear0To1Depth);
 }
-
 
 float4 ps_circlehighlight(	float4 position : SV_Position,
 							float2 texCoord : TEXCOORD0,
@@ -42,7 +40,7 @@ float4 ps_circlehighlight(	float4 position : SV_Position,
 
 		//	draw a cylindrical highlight around the given position, with
 		//	the given radius. The cylinder is always arranged so +Z is up
-	float3 worldPosition = CalculateWorldPosition(pixelCoords, GetSampleIndex(sys), viewFrustumVector);
+	float3 worldPosition = LoadWorldPosition(pixelCoords, GetSampleIndex(sys), viewFrustumVector);
 
 	float2 xyOffset = worldPosition.xy - HighlightCenter.xy;
 	float r = length(xyOffset);
@@ -78,7 +76,7 @@ float4 ps_rectanglehighlight(	float4 position : SV_Position,
 {
 	int2 pixelCoords	= position.xy;
 
-	float3 worldPosition = CalculateWorldPosition(pixelCoords, GetSampleIndex(sys), viewFrustumVector);
+	float3 worldPosition = LoadWorldPosition(pixelCoords, GetSampleIndex(sys), viewFrustumVector);
 
 		//	find how this worldPosition relates to the min/max rectangle we're
 		//	rendering. The texture we're using was build for circles. But we
@@ -122,8 +120,7 @@ float4 ps_lockedareahighlight(	float4 position : SV_Position,
 
 	float linear0To1Depth = GetLinear0To1Depth(pixelCoords, GetSampleIndex(sys));
 	if (linear0To1Depth >= 0.99999f) discard;
-	float3 worldPosition = CalculateWorldPosition(
-		viewFrustumVector, linear0To1Depth, SysUniform_GetWorldSpaceView());
+	float3 worldPosition = WorldPositionFromLinear0To1Depth(viewFrustumVector, linear0To1Depth);
 
 	float distances[4] =
 		{ 	worldPosition.x - Mins.x, worldPosition.y - Mins.y,

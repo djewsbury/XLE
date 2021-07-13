@@ -123,9 +123,8 @@ float3 CalculateSamplePoint(uint3 cellIndex)
 		+ bottomRightWeight * SysUniform_GetFrustumCorners(3).xyz
 		;
 
-	return CalculateWorldPosition(
-		viewFrustumVectorToCentre, gridCellCentreDepth / SysUniform_GetFarClip(),
-		SysUniform_GetWorldSpaceView());
+	return WorldPositionFromLinear0To1Depth(
+		viewFrustumVectorToCentre, gridCellCentreDepth / SysUniform_GetFarClip());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

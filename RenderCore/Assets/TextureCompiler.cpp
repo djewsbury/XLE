@@ -199,19 +199,24 @@ namespace RenderCore { namespace Assets
 				InputStreamFormatter<> inputFormatter{MakeStringSection((const char*)inputBlock.get(), (const char*)PtrAdd(inputBlock.get(), inputBlockSize))};
 				StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
 				auto type = dom.RootElement().Attribute("Operation");
-				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap") && !XlEqStringI(type.Value(), "EquiRectFilterGlossySpecular")))
+				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap") && !XlEqStringI(type.Value(), "EquiRectFilterGlossySpecular")  && !XlEqStringI(type.Value(), "ComputeShader")))
 					Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.Value().AsString() + ")"));
-				auto srcFile = dom.RootElement().Attribute("SourceFile");
-				auto dstFormatName = dom.RootElement().Attribute("Format");
-				if (!srcFile || !dstFormatName)
-					Throw(std::runtime_error("Expecting 'SourceFile' and 'Format' fields in texture compiler file: " + srcFN));
 
+				auto dstFormatName = dom.RootElement().Attribute("Format");
+				if (!dstFormatName)
+					Throw(std::runtime_error("Expecting 'Format' field in texture compiler file: " + srcFN));
 				auto dstFormat = AsFormat(dstFormatName.Value());
 				if (dstFormat == Format::Unknown)
 					Throw(std::runtime_error("Unknown 'Format' field in texture compiler file: " + srcFN));
 
-				auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(srcFile.Value(), 0);
-				_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(srcFile.Value()));
+				std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
+				if (!XlEqString(type.Value(), "ComputeShader")) {
+					auto srcFile = dom.RootElement().Attribute("SourceFile");
+					if (!srcFile)
+						Throw(std::runtime_error("Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
+					srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(srcFile.Value(), 0);
+					_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(srcFile.Value()));
+				}
 
 				if (XlEqString(type.Value(), "EquRectToCubeMap")) {
 					auto srcDst = srcPkt->GetDesc();
@@ -239,6 +244,17 @@ namespace RenderCore { namespace Assets
 					targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 					auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
+					srcPkt = processed._newDataSource;
+					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				} else if (XlEqString(type.Value(), "ComputeShader")) {
+					auto targetDesc = TextureDesc::Plain2D(
+						dom.RootElement().Attribute("Width", 512),
+						dom.RootElement().Attribute("Height", 512),
+						Format::R32G32B32A32_FLOAT); // use full float precision for the pre-compression format
+					auto shader = dom.RootElement().Attribute("Shader");
+					if (!shader)
+						Throw(std::runtime_error("Expecting 'Shader' field in texture compiler file: " + srcFN));
+					auto processed = Techniques::GenerateFromComputeShader(shader.Value(), targetDesc);
 					srcPkt = processed._newDataSource;
 					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
 				}

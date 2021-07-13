@@ -60,7 +60,7 @@ float4 main(
             lerp(SysUniform_GetFrustumCorners(0).xyz, SysUniform_GetFrustumCorners(1).xyz, tc.y),
             lerp(SysUniform_GetFrustumCorners(2).xyz, SysUniform_GetFrustumCorners(3).xyz, tc.y),
             tc.x);
-    float3 worldPosition = CalculateWorldPosition(MousePosition, 0, viewFrustumVector);
+    float3 worldPosition = LoadWorldPosition(MousePosition, 0, viewFrustumVector);
 
     GBufferValues sample = LoadGBuffer(MousePosition, SystemInputs_Default());
 
@@ -136,7 +136,7 @@ float4 main(
         // We need to find the intersection of the view ray with the light plane
         // Easiest to do this if we transform the view ray into light space, and look for
         // intersections in light space.
-        float3 drawingPointWorldPosition = CalculateWorldPosition(position.xy, 0, drawingPointViewFrustumVector);
+        float3 drawingPointWorldPosition = LoadWorldPosition(position.xy, 0, drawingPointViewFrustumVector);
         float3 drawingPointLight = mul(worldToLight, drawingPointWorldPosition - lightCenter);
         float3 drawPointViewDirectionLight = mul(worldToLight, -normalize(drawingPointViewFrustumVector));
         float2 viewRayIntersection = drawingPointLight.xy + drawPointViewDirectionLight.xy * (-drawingPointLight.z/drawPointViewDirectionLight.z);

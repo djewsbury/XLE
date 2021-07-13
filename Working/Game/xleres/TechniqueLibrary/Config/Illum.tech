@@ -89,7 +89,7 @@ Deferred_PerPixelAndEarlyRejection=~
 
 Forward_NoPatches=~
 	Inherit=~; Forward
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:forward
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches-forward.pixel.hlsl:forward
 
 Forward_PerPixel=~
 	Inherit=~; Forward

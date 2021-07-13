@@ -21,26 +21,26 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(TILED_LIGHTS_RESOLVE_MS)
-    Texture2D_MaybeMS<float4>	TiledLightsResolve	 	BIND_NUMERIC_T6;
+    Texture2D_MaybeMS<float4>	TiledLightsResolve;
 #else
-    Texture2D<float4>			TiledLightsResolve	 	BIND_NUMERIC_T6;
+    Texture2D<float4>			TiledLightsResolve;
 #endif
 
 #if HAS_SCREENSPACE_AO == 1
-    Texture2D<float>			AmbientOcclusion		BIND_NUMERIC_T5;
+    Texture2D<float>			AmbientOcclusion;
 #endif
 
 #if SKY_PROJECTION == 5
-    TextureCube					SkyReflectionTexture BIND_NUMERIC_T6;
+    TextureCube					SkyReflectionTexture;
 #elif SKY_PROJECTION == 1
-    Texture2D					SkyReflectionTexture[3] BIND_NUMERIC_T6;
+    Texture2D					SkyReflectionTexture[3];
 #else
-    Texture2D					SkyReflectionTexture BIND_NUMERIC_T6;
+    Texture2D					SkyReflectionTexture;
 #endif
 
 #if CALCULATE_SCREENSPACE_REFLECTIONS==1
-    Texture2D<float4>			ScreenSpaceReflResult	BIND_NUMERIC_T7;
-    Texture2D<float4>			LightBufferCopy			BIND_NUMERIC_T8;
+    Texture2D<float4>			ScreenSpaceReflResult;
+    Texture2D<float4>			LightBufferCopy;
 #endif
 
 #if !defined(SKY_PROJECTION)

@@ -290,7 +290,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 		
 		samplerCreateInfo.addressModeU = Internal::AsVkAddressMode(desc._addressU);
-		samplerCreateInfo.addressModeV = Internal::AsVkAddressMode(desc._addressU);
+		samplerCreateInfo.addressModeV = Internal::AsVkAddressMode(desc._addressV);
 		samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
 		samplerCreateInfo.mipLodBias = 0.f;

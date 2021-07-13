@@ -9,7 +9,7 @@
 #include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
 Texture2D Input : register(t0, space0);
-RWTexture2DArray<float4> Output : register(u1, space0);
+RWTexture2DArray<float4> OutputArray : register(u1, space0);
 
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
@@ -272,7 +272,7 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 	void EquRectToCube(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 textureDims; uint arrayLayerCount;
-	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
 		float4 color;
 		Panel(
@@ -280,6 +280,6 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 			dispatchThreadId.xy, 0.0.xx, textureDims.xy,
 			CubeMapFaces[dispatchThreadId.z],
 			false);
-		Output[dispatchThreadId.xyz] = color;
+		OutputArray[dispatchThreadId.xyz] = color;
 	}
 }

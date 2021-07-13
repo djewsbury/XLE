@@ -1,15 +1,30 @@
 
 DescriptorSet OperatorsDS
 {
-	SampledTexture Input;
-	UnorderedAccessTexture Output;
-	Sampler EquirectangularBilinearSampler
+	SampledTexture Input;							// 0
+	UnorderedAccessTexture Output;					// 1
+	Sampler EquirectangularBilinearSampler			// 2
 	{
 		Filter = Bilinear,
 		AddressU = Wrap,
 		AddressV = Clamp
 	};
-	UniformBuffer FilterPassParams;
+	UniformBuffer FilterPassParams;					// 3
+
+	SampledTexture tex0;							// 4
+	SampledTexture tex1;							// 5
+	SampledTexture tex2;							// 6
+	SampledTexture tex3;							// 7
+	SampledTexture tex4;							// 8
+	SampledTexture tex5;							// 9
+	SampledTexture tex6;							// 10
+
+	Sampler DefaultSampler							// 11
+	{
+		Filter = Trilinear,
+		AddressU = Wrap,
+		AddressV = Wrap
+	};
 };
 
 PipelineLayout ComputeMain

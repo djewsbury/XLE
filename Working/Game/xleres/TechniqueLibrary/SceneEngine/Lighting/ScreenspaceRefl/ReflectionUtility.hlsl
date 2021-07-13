@@ -41,7 +41,7 @@ float3 CalculateWorldSpacePosition(uint2 samplingPixel, uint2 outputDimensions, 
  		;
 
     outputLinearDepth = linear0To1Depth;
-	return CalculateWorldPosition(viewFrustumVector, linear0To1Depth, SysUniform_GetWorldSpaceView());
+	return WorldPositionFromLinear0To1Depth(viewFrustumVector, linear0To1Depth);
 }
 
 float3 NDCToViewSpace(float3 ndc)

@@ -50,7 +50,7 @@ float3 ToWorldSpacePosition(float3 recordedViewFrustumCoord)
 
 	float linear0To1Depth = NDCDepthToLinear0To1_Perspective(
 		recordedViewFrustumCoord.z, AsMiniProjZW(Recorded_MinimalProjection), Recorded_FarClip);
-	return CalculateWorldPosition(
+	return WorldPositionFromLinear0To1Depth_Perspective(
 		viewFrustumVector, linear0To1Depth,
 		Recorded_WorldSpaceView);
 }

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
 
@@ -21,4 +22,6 @@ namespace RenderCore { namespace Techniques
     };
     enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular };
     ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter = EquRectFilterMode::ToCubeMap);
+
+    ProcessedTexture GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc);
 }}

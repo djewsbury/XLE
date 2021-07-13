@@ -1,19 +1,21 @@
 
-#include "xleres/TechniqueLibrary/Config/sequencer.pipeline"
+#include "../Config/sequencer.pipeline"
+#include "lighting-engine.pipeline"
 
 DescriptorSet AODS
 {
-	ConstantBuffer cb;
-	SampledTexture InputTexture;
-	UnorderedAccessTexture OutputTexture;
-	UnorderedAccessTexture DownsampleDepths;
-	UnorderedAccessTexture AccumulationAO;
-	ConstantBuffer AOProps;
-	SampledTexture InputNormals;
-	SampledTexture InputVelocities;
-	SampledTexture AccumulationAOLast;
-
-	Sampler FixedSampler
+	ConstantBuffer cb;							// 0
+	SampledTexture InputTexture;				// 1
+	UnorderedAccessTexture OutputTexture;		// 2
+	UnorderedAccessTexture DownsampleDepths;	// 3
+	UnorderedAccessTexture AccumulationAO;		// 4
+	ConstantBuffer AOProps;						// 5
+	SampledTexture InputNormals;				// 6
+	SampledTexture InputVelocities;				// 7
+	SampledTexture AccumulationAOLast;			// 8
+	SampledTexture tex0;						// 9
+	SampledTexture tex1;						// 10
+	Sampler FixedSampler						// 11
 	{
 		Filter = Bilinear,
 		AddressU = Wrap,
@@ -25,10 +27,12 @@ PipelineLayout ComputeMain
 {
 	ComputeDescriptorSet Sequencer;
 	ComputeDescriptorSet AODS;
+	ComputeDescriptorSet LightingEngine;
 };
 
 PipelineLayout GraphicsMain
 {
 	DescriptorSet Sequencer;
 	DescriptorSet AODS;
+	DescriptorSet LightingEngine;
 };

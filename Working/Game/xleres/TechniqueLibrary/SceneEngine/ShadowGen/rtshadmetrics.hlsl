@@ -26,7 +26,7 @@ float4 ps_main(float4 position : SV_Position, float2 texCoord : TEXCOORD0, Syste
     float4 cascadeNormCoords;
     FindCascade_CameraToShadowMethod(
         finalCascadeIndex, cascadeNormCoords,
-        texCoord, GetWorldSpaceDepth(pixelCoords, GetSampleIndex(sys)));
+        texCoord, LoadWorldSpaceDepth(pixelCoords, GetSampleIndex(sys)));
     if (finalCascadeIndex==0) {
         // Draw a heat-map type color based on the number of triangles that
         // need to be tested for shadowing of this pixel

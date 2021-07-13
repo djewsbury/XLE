@@ -1,0 +1,11 @@
+
+DescriptorSet LightingEngine
+{
+    ConstantBuffer Spacer;              // 0
+    SampledTexture SpecularIBL;         // 1
+    SampledTexture GlossLUT;            // 2
+    SampledTexture GGXTable;            // 3
+
+    SampledTexture DiffuseIBL;            // 4
+    SampledTexture GlossTransLUT;            // 5
+};

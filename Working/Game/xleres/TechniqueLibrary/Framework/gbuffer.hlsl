@@ -10,7 +10,7 @@
 #include "../Framework/Binding.hlsl"
 #include "../Framework/CommonResources.hlsl"    // for ClampingSampler
 
-Texture2D       NormalsFittingTexture BIND_SEQ_T6;
+Texture2D       NormalsFittingTexture BIND_SEQ_T10;
 
 static const bool SignedNormalOutput = true;
 

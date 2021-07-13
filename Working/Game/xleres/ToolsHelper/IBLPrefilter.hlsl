@@ -9,7 +9,8 @@
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 
 Texture2D Input : register(t0, space0);
-RWTexture2DArray<float4> Output : register(u1, space0);
+RWTexture2DArray<float4> OutputArray : register(u1, space0);
+RWTexture2D<float4> Output : register(u1, space0);
 SamplerState EquirectangularBilinearSampler : register(s2, space0);
 
 // static const uint PassSampleCount = 256;
@@ -28,13 +29,18 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 #include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
 
-float4 GenerateSplitSumGlossLUT(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+[numthreads(8, 8, 6)]
+    void GenerateSplitSumGlossLUT(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    float2 dims = position.xy / texCoord.xy;
-    float NdotV = texCoord.x + (.1/dims.x);  // (add some small amount just to get better values in the lower left corner)
+    // float2 dims = position.xy / texCoord.xy;
+
+    uint2 textureDims;
+	Output.GetDimensions(textureDims.x, textureDims.y);
+    float2 texCoord = dispatchThreadId.xy / float2(textureDims);
+    float NdotV = texCoord.x + (.1/float(textureDims.x));  // (add some small amount just to get better values in the lower left corner)
     float roughness = texCoord.y;
     const uint sampleCount = 64 * 1024;
-    return float4(GenerateSplitTerm(NdotV, roughness, sampleCount, 0, 1), 0, 1);
+    Output[dispatchThreadId.xy] = float4(GenerateSplitTerm(NdotV, roughness, sampleCount, 0, 1), 0, 1);
 }
 
 float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
@@ -71,7 +77,7 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
     // reading from. But if we're just using the importance sampling approach, we can skip
     // this step (it's just taken care of by the probability density function weighting)
     uint2 textureDims; uint arrayLayerCount;
-	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
         float2 texCoord = dispatchThreadId.xy / float2(textureDims);
         float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
@@ -79,8 +85,8 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
         float3 r = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
             PassSampleCount, PassIndex, PassCount);
-        if (PassIndex == 0) Output[dispatchThreadId.xyz] = float4(0,0,0,1);
-        Output[dispatchThreadId.xyz].rgb += r / float(PassCount);
+        if (PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
+        OutputArray[dispatchThreadId.xyz].rgb += r / float(PassCount);
     }
 }
 
@@ -92,7 +98,7 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
     // Following the simplifications we use for split-sum specular reflections, here
     // is the equivalent sampling for specular transmission
     uint2 textureDims; uint arrayLayerCount;
-	Output.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
         float2 texCoord = dispatchThreadId.xy / float2(textureDims);
         float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
@@ -103,8 +109,9 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
             cubeMapDirection, roughness,
             iorIncident, iorOutgoing,
             PassSampleCount, PassIndex, PassCount);
-        if (PassIndex == 0) Output[dispatchThreadId.xyz] = float4(0,0,0,1);
-        Output[dispatchThreadId.xyz].rgb += r / float(PassCount);
+        if (PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
+        OutputArray[dispatchThreadId.xyz].rgb += r / float(PassCount);
+        OutputArray[dispatchThreadId.xyz].rgb = 1.0.xxx;
     }
 }
 

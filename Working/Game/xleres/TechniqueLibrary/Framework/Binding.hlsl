@@ -92,10 +92,10 @@
 
 #else
 
-#define BIND_SEQ_S0 : register(s13, space0)
-#define BIND_SEQ_S1 : register(s14, space0)
-#define BIND_SEQ_S2 : register(s15, space0)
-#define BIND_SEQ_S3 : register(s16, space0)
+#define BIND_SEQ_S0 : register(s11, space0)
+#define BIND_SEQ_S1 : register(s12, space0)
+#define BIND_SEQ_S2 : register(s13, space0)
+#define BIND_SEQ_S3 : register(s14, space0)
 
 #define BIND_MAT_S12 : register(s12, space1)
 
@@ -109,8 +109,6 @@
 #define BIND_SEQ_T8 : register(t8, space0)
 #define BIND_SEQ_T9 : register(t9, space0)
 #define BIND_SEQ_T10 : register(t10, space0)
-#define BIND_SEQ_T11 : register(t11, space0)
-#define BIND_SEQ_T12 : register(t12, space10
 
 #define BIND_MAT_T3 : register(t3, space1)
 #define BIND_MAT_T4 : register(t4, space1)

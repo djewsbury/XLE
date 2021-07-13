@@ -93,6 +93,31 @@ namespace RenderCore { namespace Techniques
         }
     }
 
+    static TextureViewDesc MakeTextureViewDesc(const TextureDesc& tDesc, const DecodedInitializer& init, const TextureMetaData* actualizedMetaData = nullptr)
+    {
+            // calculate the color space to use (resolving the defaults, request string and metadata)
+        auto colSpace = SourceColorSpace::Unspecified;
+        auto fmtComponentType = GetComponentType(tDesc._format);
+        if (fmtComponentType == FormatComponentType::UNorm_SRGB) {
+            colSpace = SourceColorSpace::SRGB;
+        } else if (fmtComponentType != FormatComponentType::Typeless) {
+            colSpace = SourceColorSpace::Linear;
+        } else if (init._colSpaceRequestString != SourceColorSpace::Unspecified) {
+            colSpace = init._colSpaceRequestString;
+        } else if (actualizedMetaData) {
+            if (actualizedMetaData->_colorSpace != SourceColorSpace::Unspecified)
+                colSpace = actualizedMetaData->_colorSpace;
+        }
+
+        if (colSpace == SourceColorSpace::Unspecified && init._colSpaceDefault != SourceColorSpace::Unspecified)
+            colSpace = init._colSpaceDefault;
+
+        TextureViewDesc viewDesc{}; 
+        if (colSpace == SourceColorSpace::SRGB) viewDesc._format._aspect = TextureViewDesc::Aspect::ColorSRGB;
+        else if (colSpace == SourceColorSpace::Linear) viewDesc._format._aspect = TextureViewDesc::Aspect::ColorLinear;
+        return viewDesc;
+    }
+
 	static void ConstructToFutureImageFile(
 		::Assets::FuturePtr<DeferredShaderResource>& future,
 		const FileNameSplitter<char>& splitter)
@@ -165,31 +190,14 @@ namespace RenderCore { namespace Techniques
                 auto desc = locator.GetContainingResource()->GetDesc();
                 auto depVal = pkt->GetDependencyValidation();
 
-					// calculate the color space to use (resolving the defaults, request string and metadata)
-				auto colSpace = SourceColorSpace::Unspecified;
-				auto fmtComponentType = GetComponentType(desc._textureDesc._format);
-				if (fmtComponentType == FormatComponentType::UNorm_SRGB) {
-					colSpace = SourceColorSpace::SRGB;
-				} else if (fmtComponentType != FormatComponentType::Typeless) {
-					colSpace = SourceColorSpace::Linear;
-				} else if (init._colSpaceRequestString != SourceColorSpace::Unspecified) {
-					colSpace = init._colSpaceRequestString;
-				} else if (actualizedMetaData) {
-                    if (actualizedMetaData->_colorSpace != SourceColorSpace::Unspecified)
-                        colSpace = actualizedMetaData->_colorSpace;
+                if (actualizedMetaData) {
                     auto parentDepVal = ::Assets::GetDepValSys().Make();
                     parentDepVal.RegisterDependency(depVal);
                     parentDepVal.RegisterDependency(metaDataDepVal);
                     depVal = parentDepVal;
-				}
+                }
 
-				if (colSpace == SourceColorSpace::Unspecified && init._colSpaceDefault != SourceColorSpace::Unspecified)
-					colSpace = init._colSpaceDefault;
-
-				TextureViewDesc viewDesc{}; 
-				if (colSpace == SourceColorSpace::SRGB) viewDesc._format._aspect = TextureViewDesc::Aspect::ColorSRGB;
-				else if (colSpace == SourceColorSpace::Linear) viewDesc._format._aspect = TextureViewDesc::Aspect::ColorLinear;
-
+                auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, actualizedMetaData.get());
                 auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
 				if (!view) {
 					thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource"));
@@ -268,7 +276,8 @@ namespace RenderCore { namespace Techniques
                     Throw(::Assets::Exceptions::ConstructionError(e, depVal));
                 } CATCH_END
 
-				TextureViewDesc viewDesc{}; 
+                auto desc = locator.GetContainingResource()->GetDesc();
+				auto viewDesc = MakeTextureViewDesc(desc._textureDesc, DecodedInitializer{originalRequest});
                 auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
 				if (!view) {
 					thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource"));

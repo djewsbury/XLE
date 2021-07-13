@@ -189,7 +189,7 @@ float Pow4(float x)
 	return x*x*x*x;
 }
 
-Texture2D<float4> GGXTable : register(t16);
+Texture2D<float4> GGXTable : register(t3, space2);
 
 float LightingFuncGGX_OPT4(float3 N, float3 V, float3 L, float roughness, float F0)
 {

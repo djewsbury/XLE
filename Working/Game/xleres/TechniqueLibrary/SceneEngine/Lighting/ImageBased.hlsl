@@ -11,7 +11,6 @@
     #define SPECULAR_METHOD 1
 #endif
 
-#include "AmbientResolve.hlsl"
 #include "../../LightingEngine/SpecularMethods.hlsl"
 #include "../../LightingEngine/LightDesc.hlsl"
 #include "IBL/IBLAlgorithm.hlsl"
@@ -20,25 +19,28 @@
 #include "../../Math/Misc.hlsl"        // for DitherPatternInt
 #include "../../Framework/SystemUniforms.hlsl"           // for SysUniform_GetGlobalSamplingPassCount(), SysUniform_GetGlobalSamplingPassIndex()
 
-TextureCube DiffuseIBL BIND_NUMERIC_T7;
-TextureCube SpecularIBL BIND_NUMERIC_T8;
-Texture2D<float2> GlossLUT BIND_NUMERIC_T9;        // this is the look up table used in the split-sum IBL glossy reflections
-Texture2DArray<float> GlossTransLUT : register(t10);
+TextureCube SpecularIBL : register(t1, space2);
+Texture2D<float2> GlossLUT : register(t2, space2);        // this is the look up table used in the split-sum IBL glossy reflections
+
+TextureCube DiffuseIBL : register(t4, space2);
+Texture2DArray<float> GlossTransLUT : register(t5, space2);
 
 #if MAT_SEPARATE_REFRACTION_MAP
-    TextureCube SpecularTransIBL : register(t30);
+    TextureCube SpecularTransIBL;
 #endif
 
 // #define RECALC_SPLIT_TERM
 // #define RECALC_FILTERED_TEXTURE
 // #define REF_IBL
 
-float3 IBLPrecalc_SampleInputTexture(float3 direction)
-{
-    return ReadSkyReflectionTexture(InvAdjSkyCubeMapCoords(direction), 0.f);
-}
+#if defined(REF_IBL)
+    float3 IBLPrecalc_SampleInputTexture(float3 direction)
+    {
+        return ReadSkyReflectionTexture(InvAdjSkyCubeMapCoords(direction), 0.f);
+    }
 
-#include "IBL/IBLPrecalc.hlsl"
+    #include "IBL/IBLPrecalc.hlsl"
+#endif
 
 float3 SampleDiffuseIBL(float3 worldSpaceNormal, LightScreenDest lsd)
 {
@@ -94,7 +96,7 @@ float2 SplitSumIBL_IntegrateBRDF(float roughness, float NdotV, uint dither)
     //          use a small texture and bilinear filtering, or a large texture
     //          and no filtering?
     #if !defined(RECALC_SPLIT_TERM)
-        return GlossLUT.SampleLevel(ClampingSampler, float2(NdotV, 1.f - roughness), 0).xy;
+        return GlossLUT.SampleLevel(ClampingSampler, float2(NdotV, roughness), 0).xy;
     #else
         const uint sampleCount = 64;
         return GenerateSplitTerm(saturate(NdotV), saturate(roughness), sampleCount, dither&0xf, 16);
@@ -105,11 +107,6 @@ float3 SampleSpecularIBL_SplitSum(float3 normal, float3 viewDirection, SpecularP
 {
     // This is the split-sum approximation for glossy specular reflections from
     // Brian Karis for Unreal.
-    //
-    // This is a useful method for us, because we can use some existing tools for
-    // generating the input textures for this.
-    // For example, see IBL Baker:
-    //      https://github.com/derkreature/IBLBaker
     //
     // See http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
     // for more details.

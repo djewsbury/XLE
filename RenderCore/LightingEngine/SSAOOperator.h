@@ -12,10 +12,10 @@ namespace RenderCore { namespace Techniques { class FragmentStitchingContext; cl
 
 namespace RenderCore { namespace LightingEngine
 {
-    class LightingTechniqueIterator;
-    class RenderStepFragmentInterface;
+	class LightingTechniqueIterator;
+	class RenderStepFragmentInterface;
 
-    class SSAOOperator : public std::enable_shared_from_this<SSAOOperator>
+	class SSAOOperator : public std::enable_shared_from_this<SSAOOperator>
 	{
 	public:
 		void Execute(
@@ -28,24 +28,24 @@ namespace RenderCore { namespace LightingEngine
 			RenderCore::IResourceView& accumulation1UAV,
 			RenderCore::IResourceView& aoOutputUAV);
 
-        RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment();
-        void PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment();
+		void PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
 
-        void ResetAccumulation();
+		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;
 
-        SSAOOperator(
+		SSAOOperator(
 			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> computeOp,
 			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> upsampleOp);
-        ~SSAOOperator();
+		~SSAOOperator();
 
-        static void ConstructToFuture(
+		static void ConstructToFuture(
 			::Assets::FuturePtr<SSAOOperator>& future,
 			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool);
-    private:
+	private:
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _computeOp;
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _upsampleOp;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
-    };
+	};
 }}

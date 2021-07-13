@@ -2,7 +2,7 @@
 Forward=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:forward
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches-forward.pixel.hlsl:forward
 
 Deferred=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Deferred

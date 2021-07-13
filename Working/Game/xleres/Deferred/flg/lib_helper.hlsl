@@ -28,8 +28,8 @@ export void Setup(
     )
 {
     int2 pixelCoords = position.xy;
-    worldSpaceDepth = GetWorldSpaceDepth(pixelCoords, sampleIndex);
-    worldPosition = SysUniform_GetWorldSpaceView() + (worldSpaceDepth / SysUniform_GetFarClip()) * viewFrustumVector;
+    worldSpaceDepth = LoadWorldSpaceDepth(pixelCoords, sampleIndex);
+    worldPosition = WorldPositionFromLinear0To1Depth(viewFrustumVector, worldSpaceDepth / SysUniform_GetFarClip());
 
     #if HAS_SCREENSPACE_AO==1
         screenSpaceOcclusion = LoadFloat1(AmbientOcclusion, pixelCoords, sampleIndex);

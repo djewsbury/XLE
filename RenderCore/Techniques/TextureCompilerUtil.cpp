@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Input"));
-		usi.BindResourceView(1, Hash64("Output"));
+		usi.BindResourceView(1, Hash64("OutputArray"));
 		usi.BindImmediateData(0, Hash64("FilterPassParams"));
 
 		unsigned passCount = 1;
@@ -125,6 +125,47 @@ namespace RenderCore { namespace Techniques
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
+		result._newDataSource = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+		return result;
+	}
+
+	ProcessedTexture GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc)
+	{
+		auto threadContext = GetThreadContext();
+		
+		ProcessedTexture result;
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Hash64("Output"));
+		usi.BindImmediateData(0, Hash64("FilterPassParams"));
+
+ 		auto computeOpFuture = CreateComputeOperator(
+			std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
+			shader, {}, "xleres/ToolsHelper/operators.pipeline:ComputeMain", usi);
+		// todo -- we really want to extract the full set of dependencies from the depVal
+		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(shader));
+		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		computeOpFuture->StallWhilePending();
+		auto computeOp = computeOpFuture->Actualize();
+
+		for (unsigned mip=0; mip<std::max(1u, (unsigned)targetDesc._mipCount); ++mip) {
+			TextureViewDesc view;
+			view._mipRange = {mip, 1};
+			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+			IResourceView* resViews[] = { outputView.get() };
+			struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, 0, 1, 0 };
+			const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(filterPassParams) };
+			UniformsStream us;
+			us._resourceViews = MakeIteratorRange(resViews);
+			us._immediateData = MakeIteratorRange(immData);
+			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+			computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
+		}
+
+		auto depVal = ::Assets::GetDepValSys().Make();
+		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		result._newDataSource = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
 		return result;
 	}

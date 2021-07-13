@@ -49,7 +49,7 @@ float4 DoResolveFog(
 	int2 pixelCoords		= position.xy;
 	float depth				= LoadFloat1(DepthTexture, pixelCoords.xy, GetSampleIndex(sys));
 	float worldSpaceDepth	= NDCDepthToWorldSpace(depth);
-	float3 worldPosition 	= CalculateWorldPosition(viewFrustumVector, NDCDepthToLinear0To1(depth), SysUniform_GetWorldSpaceView());
+	float3 worldPosition 	= WorldPositionFromLinear0To1Depth(viewFrustumVector, NDCDepthToLinear0To1(depth));
 
 	float transmission = 1.f;
 	float inscatter = 0.f;
@@ -59,7 +59,7 @@ float4 DoResolveFog(
 
 		float slice	= worldSpaceDepth / WorldSpaceGridDepth;
 		if (slice > 1.f) {
-			float3 gridEnd = CalculateWorldPosition(viewFrustumVector, WorldSpaceGridDepth / SysUniform_GetFarClip(), SysUniform_GetWorldSpaceView());
+			float3 gridEnd = WorldPositionFromLinear0To1Depth(viewFrustumVector, WorldSpaceGridDepth / SysUniform_GetFarClip());
 			CalculateTransmissionAndInscatter(desc, gridEnd, worldPosition, transmission, inscatter);
 
 			#if (MONOCHROME_INSCATTER!=1)

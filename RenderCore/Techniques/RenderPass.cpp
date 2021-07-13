@@ -1486,6 +1486,10 @@ namespace RenderCore { namespace Techniques
                 }
                 result._attachmentTransforms.push_back(transform);
             } else {
+                #if defined(_DEBUG)
+                    if (a._desc._format == Format::Unknown)
+                        Log(Warning) << "Missing format information for attachment with semantic: " << AttachmentSemantic{a._inputSemanticBinding} << std::endl;
+                #endif 
                 auto newAttachment = BuildPreregisteredAttachment(a, usageFlags, _workingProps);
                 result._fullAttachmentDescriptions.push_back(newAttachment);
                 AttachmentTransform transform;

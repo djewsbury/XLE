@@ -26,8 +26,7 @@ float3 CalculateReflectionVector(uint2 pixelCoord, float3 viewFrustumVector, flo
 {
 	const uint msaaSampleIndex = 0;
 	const float linear0To1Depth = NDCDepthToLinear0To1(LoadFloat1(DepthTexture, pixelCoord, msaaSampleIndex));
-	float3 worldSpacePosition =
-		CalculateWorldPosition(viewFrustumVector, linear0To1Depth, SysUniform_GetWorldSpaceView());
+	float3 worldSpacePosition = WorldPositionFromLinear0To1Depth(viewFrustumVector, linear0To1Depth);
 
 	float3 worldSpaceReflection = reflect(normalize(worldSpacePosition - SysUniform_GetWorldSpaceView()), worldSpaceNormal);
 	return worldSpaceReflection;

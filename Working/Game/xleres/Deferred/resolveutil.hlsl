@@ -50,35 +50,26 @@ ResolvePixelProperties ResolvePixelProperties_Create(float4 position, float3 vie
     // Note -- we could pre-multiply (miniProj.W/SysUniform_GetFarClip()) into the view frustum vector to optimise this slightly...?
     result.ndcDepth = LoadSubpassDepth(pixelCoords.xy, GetSampleIndex(sys));
     result.worldSpaceDepth = NDCDepthToWorldSpace(result.ndcDepth);
-
-    const bool orthoProjection = true;
-    if (!SysUniform_IsOrthogonalProjection()) {
-        result.worldPosition = SysUniform_GetWorldSpaceView() + (result.worldSpaceDepth / SysUniform_GetFarClip()) * viewFrustumVector;
-    } else {
-        float4x4 cameraBasis = SysUniform_GetCameraBasis();
-        float3 cameraForward = -float3(cameraBasis[0].z, cameraBasis[1].z, cameraBasis[2].z);
-        result.worldPosition = viewFrustumVector + SysUniform_GetWorldSpaceView() - (SysUniform_GetFarClip() - result.worldSpaceDepth) * cameraForward;
-    }
-
+    result.worldPosition = WorldPositionFromLinear0To1Depth(viewFrustumVector, result.worldSpaceDepth / SysUniform_GetFarClip());
 	return result;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-float GetLinear0To1Depth(int2 pixelCoords, uint sampleIndex)
+float LoadLinear0To1Depth(int2 pixelCoords, uint sampleIndex)
 {
 	return NDCDepthToLinear0To1(LoadSubpassDepth(pixelCoords.xy, sampleIndex));
 }
 
-float GetWorldSpaceDepth(int2 pixelCoords, uint sampleIndex)
+float LoadWorldSpaceDepth(int2 pixelCoords, uint sampleIndex)
 {
 	return NDCDepthToWorldSpace(LoadSubpassDepth(pixelCoords.xy, sampleIndex));
 }
 
-float3 CalculateWorldPosition(int2 pixelCoords, uint sampleIndex, float3 viewFrustumVector)
+float3 LoadWorldPosition(int2 pixelCoords, uint sampleIndex, float3 viewFrustumVector)
 {
-	float depth = GetLinear0To1Depth(pixelCoords, sampleIndex);
-	return CalculateWorldPosition(viewFrustumVector, depth, SysUniform_GetWorldSpaceView());
+	float depth = LoadLinear0To1Depth(pixelCoords, sampleIndex);
+	return WorldPositionFromLinear0To1Depth(viewFrustumVector, depth);
 }
 
 #endif
