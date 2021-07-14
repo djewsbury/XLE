@@ -517,7 +517,7 @@ namespace RenderCore { namespace Assets
 
 							// The real file format is R8G8B8E8 (8 bit shared exponent)
 							that->_desc = CreateDesc(
-								0, 0, 0, TextureDesc::Plain2D(width, height, Format::R32G32B32_FLOAT),
+								0, 0, 0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT),
 								that->_filename);
 							that->_dataBegin = (uint8_t*)i;
 							that->_hasBeenInitialized = true;
@@ -556,12 +556,13 @@ namespace RenderCore { namespace Assets
 						assert(captures->_subResources.size() == 1);
 						auto sr = captures->_subResources[0];
 						for (unsigned c=0; c<(that->_desc._textureDesc._width*that->_desc._textureDesc._height); ++c) {
-							float* dstBegin = &((float*)sr._destination.begin())[c*3];
-							assert((dstBegin+3)<=sr._destination.end());
+							float* dstBegin = &((float*)sr._destination.begin())[c*4];
+							assert((dstBegin+4)<=sr._destination.end());
 							uint8_t* src = (uint8_t*)&that->_dataBegin[c*4];
 							dstBegin[0] = std::ldexp(src[0], src[3] - int(128 + 8));
 							dstBegin[1] = std::ldexp(src[1], src[3] - int(128 + 8));
 							dstBegin[2] = std::ldexp(src[2], src[3] - int(128 + 8));
+							dstBegin[4] = 1.0f;
 						}
 
 						captures->_promise.set_value();

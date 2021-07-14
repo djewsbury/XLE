@@ -27,6 +27,7 @@ namespace RenderCore { namespace Assets
 	{
 		switch (fmt) {
 		case Format::R32G32B32A32_FLOAT: return CMP_FORMAT_ARGB_32F;
+		case Format::R32G32B32_FLOAT: return CMP_FORMAT_RGB_32F;
 
 		case Format::R16G16B16A16_FLOAT: return CMP_FORMAT_ARGB_16F;
 		case Format::R16G16B16A16_TYPELESS: return CMP_FORMAT_ARGB_16;
@@ -63,8 +64,6 @@ namespace RenderCore { namespace Assets
 		case Format::B8G8R8A8_TYPELESS: return CMP_FORMAT_ABGR_8888;
 		case Format::B8G8R8A8_UNORM: return CMP_FORMAT_ABGR_8888;
 		case Format::B8G8R8A8_UNORM_SRGB: return CMP_FORMAT_ABGR_8888;
-
-		case Format::R32G32B32_FLOAT: return CMP_FORMAT_RGB_32F;
 
 		case Format::R8G8B8_TYPELESS: return CMP_FORMAT_RGB_888;
 		case Format::R8G8B8_UNORM: return CMP_FORMAT_RGB_888;
