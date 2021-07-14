@@ -1,5 +1,6 @@
 #include "xleres/TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "xleres/TechniqueLibrary/Math/Misc.hlsl"
+#include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
 Texture2D<float> InputTexture : register(t1, space1);
 RWTexture2D<float> OutputTexture : register(u2, space1);
@@ -31,25 +32,29 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 }
 
 [numthreads(8, 8, 1)]
-	void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
+	uint2 textureDims;
+	InputTexture.GetDimensions(textureDims.x, textureDims.y);
+
+	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
+
 	///////////// downsample ///////////
-	float zero  = InputTexture.Load(uint3(dispatchThreadId.xy*2, 0));
-	float one   = InputTexture.Load(uint3(dispatchThreadId.xy*2 + uint2(1,0), 0));
-	float two   = InputTexture.Load(uint3(dispatchThreadId.xy*2 + uint2(0,1), 0));
-	float three = InputTexture.Load(uint3(dispatchThreadId.xy*2 + uint2(1,1), 0));
-	if (((dispatchThreadId.x+dispatchThreadId.y)&1) == 0) {
-		DownsampleDepths[dispatchThreadId.xy] = min(min(min(zero, one), two), three);
+	float zero  = InputTexture.Load(uint3(pixelId.xy*2, 0));
+	float one   = InputTexture.Load(uint3(pixelId.xy*2 + uint2(1,0), 0));
+	float two   = InputTexture.Load(uint3(pixelId.xy*2 + uint2(0,1), 0));
+	float three = InputTexture.Load(uint3(pixelId.xy*2 + uint2(1,1), 0));
+	if (((pixelId.x+pixelId.y)&1) == 0) {
+		DownsampleDepths[pixelId.xy] = min(min(min(zero, one), two), three);
 	} else {
-		DownsampleDepths[dispatchThreadId.xy] = max(max(max(zero, one), two), three);
+		DownsampleDepths[pixelId.xy] = max(max(max(zero, one), two), three);
 	}
 	//////////////////////////////////
 	AllMemoryBarrierWithGroupSync();
 
 	// in world space units, how big is the distance between samples in the sample direction?
 	// For orthogonal, this only depends on the angle phi since there's no foreshortening
-	uint2 textureDims;
-	InputTexture.GetDimensions(textureDims.x, textureDims.y);
 	float worldSpacePixelSizeSq = 100.0 / (float)textureDims.x;		// hard coded for the particular camera we're using
 	worldSpacePixelSizeSq *= worldSpacePixelSizeSq;
 
@@ -58,8 +63,8 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 #if !defined(DITHER3x3)
 	// The cost of looking up the dither pattern here is not trivially cheap; but you have a big impact
 	// on the visual result... If we had a way of doing this without a table lookup it might be a bit faster
-	// uint ditherValue = (dispatchThreadId.x%4)+(dispatchThreadId.y%4)*4;
-	uint ditherValue = DitherPatternInt(dispatchThreadId.xy);
+	// uint ditherValue = (pixelId.x%4)+(pixelId.y%4)*4;
+	uint ditherValue = DitherPatternInt(pixelId.xy);
 	uint idx = frameIdxOrder[FrameIdx%frameWrap] * 16 + ditherValue * 6;
 	#if BOTH_WAYS
 		float phi = idx / 96.0 * 3.14159;
@@ -67,7 +72,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 		float phi = idx / 96.0 * 2.0 * 3.14159;
 	#endif
 #else
-	uint ditherValue = Dither3x3PatternInt(dispatchThreadId.xy);
+	uint ditherValue = Dither3x3PatternInt(pixelId.xy);
 	uint idx = frameIdxOrder[FrameIdx%frameWrap] * 9 + ditherValue * 6;
 	#if BOTH_WAYS
 		float phi = frac(idx / 54.0) * 3.14159;
@@ -90,9 +95,9 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	}
 	// xStep = 1;
 	// yStep = 0;
-	float2 xy = dispatchThreadId.xy + float2(xStep, yStep);
+	float2 xy = pixelId.xy + float2(xStep, yStep);
 
-	float d0 = DownsampleDepths.Load(dispatchThreadId.xy);
+	float d0 = DownsampleDepths.Load(pixelId.xy);
 	float cosMaxTheta = 0.0;
 	int c=1;
 	for (; c<8; ++c) {
@@ -115,7 +120,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 
 #if BOTH_WAYS
 	float cosMaxTheta2 = 0.0;
-	xy = dispatchThreadId.xy - float2(xStep, yStep);
+	xy = pixelId.xy - float2(xStep, yStep);
 	for (c=1; c<8; ++c) {
 		float d = DownsampleDepths.Load(xy);
 		xy -= float2(xStep, yStep);
@@ -151,9 +156,9 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	// 2 A sin(B) + cos^2(A) (-cos(B)) + sin^2(A) cos(B) - 2 sin(A) cos(A) sin(B) + cos(B)
 	//
 
-	float3 worldSpaceNormal = InputNormals.Load(uint3(dispatchThreadId.xy*2, 0)).rgb;		// todo -- maybe can avoid this normalize with a different encoding scheme
+	float3 worldSpaceNormal = InputNormals.Load(uint3(pixelId.xy*2, 0)).rgb;		// todo -- maybe can avoid this normalize with a different encoding scheme
 	if (dot(worldSpaceNormal, worldSpaceNormal) == 0) {
-		AccumulationAO[dispatchThreadId.xy] = 0;
+		AccumulationAO[pixelId.xy] = 0;
 		return;
 	}
 	worldSpaceNormal = normalize(worldSpaceNormal);
@@ -195,16 +200,16 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 #endif
 
 	if (ClearAccumulation) {
-		AccumulationAO[dispatchThreadId.xy] = final;
+		AccumulationAO[pixelId.xy] = final;
 	} else {
-		int2 vel = InputVelocities.Load(uint3(dispatchThreadId.xy*2, 0)).rg;
-		// uint2 accumulationYesterdayPos = round(dispatchThreadId.xy + vel / 2);
-		uint2 accumulationYesterdayPos = dispatchThreadId.xy + vel / 2;
+		int2 vel = InputVelocities.Load(uint3(pixelId.xy*2, 0)).rg;
+		// uint2 accumulationYesterdayPos = round(pixelId.xy + vel / 2);
+		uint2 accumulationYesterdayPos = pixelId.xy + vel / 2;
 		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
-		float2 diff = accumulationYesterdayPos.xy - float2(dispatchThreadId.xy);
+		float2 diff = accumulationYesterdayPos.xy - float2(pixelId.xy);
 		float magSq = dot(diff, diff);
 		if (max(abs(vel.x), abs(vel.y)) >= 127) {
-			AccumulationAO[dispatchThreadId.xy] = 0;
+			AccumulationAO[pixelId.xy] = 0;
 		} else {
 			// We have to set the "Nvalue" here to a multiple of frameWrap, or we will start to get
 			// a strobing effect. Just tweaking this for what looks right
@@ -213,7 +218,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 			float Nvalue = frameWrap*lerp(3,1,saturate(magSq/(25.0*25.0)));
 			float alpha = 2.0/(Nvalue+1.0);
 			float accumulationToday = accumulationYesterday * (1-alpha) + final * alpha;
-			AccumulationAO[dispatchThreadId.xy] = accumulationToday;
+			AccumulationAO[pixelId.xy] = accumulationToday;
 		}
 	}
 }
@@ -242,13 +247,18 @@ void AccumulateSample(
 }
 
 [numthreads(8, 8, 1)]
-	void UpsampleOp(uint3 dispatchThreadId : SV_DispatchThreadID)
+	void UpsampleOp(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
+	uint2 textureDims;
+	InputTexture.GetDimensions(textureDims.x, textureDims.y);
+	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 outputPixel = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 16, groupThreadId.xy, groupId.xy);
+
 #if 0
-	OutputTexture[dispatchThreadId.xy*2] = AccumulationAO[dispatchThreadId.xy + int2(0,0)];
-	OutputTexture[dispatchThreadId.xy*2 + uint2(1,0)] = AccumulationAO[dispatchThreadId.xy + int2(0,0)];
-	OutputTexture[dispatchThreadId.xy*2 + uint2(0,1)] = AccumulationAO[dispatchThreadId.xy + int2(0,0)];
-	OutputTexture[dispatchThreadId.xy*2 + uint2(1,1)] = AccumulationAO[dispatchThreadId.xy + int2(0,0)];
+	OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
+	OutputTexture[outputPixel.xy*2 + uint2(1,0)] = AccumulationAO[outputPixel.xy + int2(0,0)];
+	OutputTexture[outputPixel.xy*2 + uint2(0,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
+	OutputTexture[outputPixel.xy*2 + uint2(1,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
 	return;
 #endif
 
@@ -256,7 +266,7 @@ void AccumulateSample(
 	// an underlying pattern in the input data we're upsampling: there is a pattern that
 	// repeats in each block of 4x4 pixels. In this case, the AO sampling direction is
 	// a fixed dither pattern that repeats in 4x4 blocks.
-	int2 base = dispatchThreadId.xy;
+	int2 base = outputPixel.xy;
 
 	float outDepth0 = InputTexture[base.xy*2 + int2(0,0)];
 	float outDepth1 = InputTexture[base.xy*2 + int2(1,0)];

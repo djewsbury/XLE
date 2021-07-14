@@ -40,9 +40,15 @@
 [submodule "Foreign/freetype"]
 	path = Foreign/freetype
 	url = git@github.com:freetype/freetype
+[submodule "Foreign/glslang"]
+	path = Foreign/glslang
+	url = git@github.com:KhronosGroup/glslang
 [submodule "Foreign/HLSLCC"]
 	path = Foreign/HLSLCC
 	url = git@github.com:djewsbury/HLSLCrossCompiler
 [submodule "Foreign/cutf"]
 	path = Foreign/cutf
 	url = git@github.com:tapika/cutf
+[submodule "Working/Game/xleres/Foreign/ThreadGroupIDSwizzling"]
+	path = Working/Game/xleres/Foreign/ThreadGroupIDSwizzling
+	url = https://github.com/LouisBavoil/ThreadGroupIDSwizzling
