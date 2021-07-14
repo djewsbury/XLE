@@ -11,6 +11,13 @@
 Texture2D Input : register(t0, space0);
 RWTexture2DArray<float4> OutputArray : register(u1, space0);
 
+struct FilterPassParamsStruct
+{
+    uint MipIndex;
+    uint PassIndex, PassCount;
+};
+[[vk::push_constant]] FilterPassParamsStruct FilterPassParams;
+
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
 	if (hemi) return DirectionToHemiEquirectangularCoord_YUp(direction);
@@ -268,18 +275,26 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 	return VerticalCubeMapCross(texCoord, true);
 }
 
-[numthreads(8, 8, 6)]
-	void EquRectToCube(uint3 dispatchThreadId : SV_DispatchThreadID)
+[numthreads(8, 8, 1)]
+	void EquRectToCube(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
-	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
+
+	uint pWidth = (textureDims.x+7)/8;
+	uint pHeight = (textureDims.y+7)/8;
+	uint3 pixelId = uint3(
+        (FilterPassParams.PassIndex%pWidth)*8+groupThreadId.x, 
+        ((FilterPassParams.PassIndex/pWidth)%pHeight)*8+groupThreadId.y, 
+        groupId.z);
+
+	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
 		float4 color;
 		Panel(
 			color,
-			dispatchThreadId.xy, 0.0.xx, textureDims.xy,
-			CubeMapFaces[dispatchThreadId.z],
+			pixelId.xy, 0.0.xx, textureDims.xy,
+			CubeMapFaces[groupId.z],
 			false);
-		OutputArray[dispatchThreadId.xyz] = color;
+		OutputArray[pixelId.xyz] = color;
 	}
 }

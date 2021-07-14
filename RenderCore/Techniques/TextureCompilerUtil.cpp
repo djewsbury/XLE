@@ -75,7 +75,6 @@ namespace RenderCore { namespace Techniques
 		usi.BindResourceView(1, Hash64("OutputArray"));
 		const auto pushConstantsBinding = Hash64("FilterPassParams");
 
-		unsigned passCount = 1;
 		::Assets::PtrToFuturePtr<IComputeShaderOperator> computeOpFuture;
 		if (filter == EquRectFilterMode::ToCubeMap) {
  			computeOpFuture = CreateComputeOperator(
@@ -88,6 +87,7 @@ namespace RenderCore { namespace Techniques
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/EquirectangularToCube.hlsl"));
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
 		} else {
+			assert(filter == EquRectFilterMode::ToGlossySpecular);
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
 				"xleres/ToolsHelper/IBLPrefilter.hlsl:EquiRectFilterGlossySpecular",
@@ -110,19 +110,27 @@ namespace RenderCore { namespace Techniques
 			view._mipRange = {mip, 1};
 			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
 			IResourceView* resViews[] = { inputView.get(), outputView.get() };
-
 			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
-			passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
 
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
 			computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 
-			for (unsigned p=0; p<passCount; ++p) {
-				struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-				computeOp->Dispatch(8, 8, 1, MakeOpaqueIteratorRange(filterPassParams));
+			if (filter == EquRectFilterMode::ToCubeMap) {
+				auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8;
+				for (unsigned p=0; p<passCount; ++p) {
+					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
+					computeOp->Dispatch(1, 1, 6, MakeOpaqueIteratorRange(filterPassParams));
+				}
+			} else {
+				assert(filter == EquRectFilterMode::ToGlossySpecular);
+				auto passCount = mipDesc._width * mipDesc._height;
+				for (unsigned p=0; p<passCount; ++p) {
+					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
+					computeOp->Dispatch(1, 1, 6, MakeOpaqueIteratorRange(filterPassParams));
+				}
 			}
-				
+
 			computeOp->EndDispatches();
 		}
 
