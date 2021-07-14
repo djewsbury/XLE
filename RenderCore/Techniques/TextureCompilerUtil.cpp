@@ -73,7 +73,7 @@ namespace RenderCore { namespace Techniques
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Input"));
 		usi.BindResourceView(1, Hash64("OutputArray"));
-		usi.BindImmediateData(0, Hash64("FilterPassParams"));
+		const auto pushConstantsBinding = Hash64("FilterPassParams");
 
 		unsigned passCount = 1;
 		::Assets::PtrToFuturePtr<IComputeShaderOperator> computeOpFuture;
@@ -96,7 +96,6 @@ namespace RenderCore { namespace Techniques
 				usi);
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/IBLPrefilter.hlsl"));
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
-			passCount = 128;
 		}
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
@@ -111,15 +110,20 @@ namespace RenderCore { namespace Techniques
 			view._mipRange = {mip, 1};
 			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
 			IResourceView* resViews[] = { inputView.get(), outputView.get() };
+
+			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+			passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
+
+			UniformsStream us;
+			us._resourceViews = MakeIteratorRange(resViews);
+			computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+
 			for (unsigned p=0; p<passCount; ++p) {
 				struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(filterPassParams) };
-				UniformsStream us;
-				us._resourceViews = MakeIteratorRange(resViews);
-				us._immediateData = MakeIteratorRange(immData);
-				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
-				computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
+				computeOp->Dispatch(8, 8, 1, MakeOpaqueIteratorRange(filterPassParams));
 			}
+				
+			computeOp->EndDispatches();
 		}
 
 		auto depVal = ::Assets::GetDepValSys().Make();

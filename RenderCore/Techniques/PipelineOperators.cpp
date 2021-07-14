@@ -221,36 +221,72 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 		::Assets::DependencyValidation _depVal;
 
+		virtual void BeginDispatches(
+			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
+			uint64_t pushConstantsBinding = 0) override
+		{
+			assert(!_betweenBeginEnd);
+			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
+			UniformsStreamInterface pushConstantsUSI;
+			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi, pushConstantsUSI);
+
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+
+			ApplyLooseUniforms(uniformsHelper, metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
+			if (!descSets.empty())
+				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
+			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);
+			_betweenBeginEnd = true;
+		}
+
+		virtual void BeginDispatches(IThreadContext& threadContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0) override
+		{
+			assert(!_betweenBeginEnd);
+			UniformsStreamInterface pushConstantsUSI;
+			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi, pushConstantsUSI);
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			if (!descSets.empty())
+				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
+			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);
+			_betweenBeginEnd = true;
+		}
+
+		virtual void EndDispatches() override
+		{
+			assert(_betweenBeginEnd);
+			_activeEncoder = {};
+			_betweenBeginEnd = false;
+		}
+
 		virtual void Dispatch(
 			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
 			unsigned countX, unsigned countY, unsigned countZ, 
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
-			auto sysUsiHash = sysUsi.GetHash();
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
-
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			auto encoder = metalContext.BeginComputeEncoder(_pipelineLayout);
-
-			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, boundUniforms, 0);
-			if (!descSets.empty())
-				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
-			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 1);
-			
-			encoder.Dispatch(*_pipeline, countX, countY, countZ);
+			BeginDispatches(threadContext, parsingContext, uniformsHelper, us, descSets);
+			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			_activeEncoder = {};
+			_betweenBeginEnd = false;
 		}
 
 		virtual void Dispatch(IThreadContext& threadContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi);
+			BeginDispatches(threadContext, us, descSets);
+			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			_activeEncoder = {};
+			_betweenBeginEnd = false;
+		}
 
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			auto encoder = metalContext.BeginComputeEncoder(_pipelineLayout);
-			if (!descSets.empty())
-				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
-			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 1);
-			encoder.Dispatch(*_pipeline, countX, countY, countZ);
+		virtual void Dispatch(unsigned countX, unsigned countY, unsigned countZ, IteratorRange<const void*> pushConstants) override
+		{
+			assert(_betweenBeginEnd);
+			_activeEncoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstants);
+			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 		}
 
 		static void ConstructToFuture(
@@ -270,6 +306,7 @@ namespace RenderCore { namespace Techniques
 					op->_pipelineLayout = pipelineLayout;
 					op->_usi = std::move(usi);
 					op->_pipeline = std::move(pipeline);
+					assert(op->_pipeline);
 					if (pipelineLayoutDepVal) {
 						op->_depVal = ::Assets::GetDepValSys().Make();
 						op->_depVal.RegisterDependency(op->_pipeline->GetDependencyValidation());
@@ -278,6 +315,9 @@ namespace RenderCore { namespace Techniques
 					return op;
 				});
 		}
+
+		RenderCore::Metal::ComputeEncoder _activeEncoder;
+		bool _betweenBeginEnd = false;
 	};
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
