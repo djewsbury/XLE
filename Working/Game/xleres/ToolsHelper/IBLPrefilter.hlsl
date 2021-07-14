@@ -7,6 +7,7 @@
 #include "Cubemap.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
+#include "../Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
 Texture2D Input : register(t0, space0);
 RWTexture2DArray<float4> OutputArray : register(u1, space0);
@@ -15,11 +16,13 @@ SamplerState EquirectangularBilinearSampler : register(s2, space0);
 
 // static const uint PassSampleCount = 256;
 static const uint PassSampleCount = 16;
-cbuffer FilterPassParams : register(b3, space0)
+// cbuffer FilterPassParams : register(b3, space0)
+struct FilterPassParamsStruct
 {
     uint MipIndex;
     uint PassIndex, PassCount;
 };
+[[vk::push_constant]] FilterPassParamsStruct FilterPassParams;
 
 float3 IBLPrecalc_SampleInputTexture(float3 direction)
 {
@@ -29,18 +32,21 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 #include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
 
-[numthreads(8, 8, 6)]
+[numthreads(8, 8, 1)]
     void GenerateSplitSumGlossLUT(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    // float2 dims = position.xy / texCoord.xy;
-
     uint2 textureDims;
 	Output.GetDimensions(textureDims.x, textureDims.y);
     float2 texCoord = dispatchThreadId.xy / float2(textureDims);
-    float NdotV = texCoord.x + (.1/float(textureDims.x));  // (add some small amount just to get better values in the lower left corner)
+    float NdotV = texCoord.x; // + (.1/float(textureDims.x));  // (add some small amount just to get better values in the lower left corner)
     float roughness = texCoord.y;
+        
     const uint sampleCount = 64 * 1024;
-    Output[dispatchThreadId.xy] = float4(GenerateSplitTerm(NdotV, roughness, sampleCount, 0, 1), 0, 1);
+    Output[dispatchThreadId.xy] = float4(0,0,0,1);
+    for (uint p=0; p<6; ++p) {
+        Output[dispatchThreadId.xy].rg += GenerateSplitTerm(NdotV, roughness, sampleCount, p, 6);
+        AllMemoryBarrierWithGroupSync();
+    }
 }
 
 float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
@@ -59,8 +65,9 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-[numthreads(8, 8, 6)]
-    void EquiRectFilterGlossySpecular(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
+groupshared float4 sharedOutput[64];
+[numthreads(64, 1, 1)]
+    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
 {
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
@@ -78,15 +85,33 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
     // this step (it's just taken care of by the probability density function weighting)
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
-	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
-        float2 texCoord = dispatchThreadId.xy / float2(textureDims);
-        float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
-        float roughness = MipmapToRoughness(MipIndex);
-        float3 r = GenerateFilteredSpecular(
+
+    uint pwidth = max(1u, textureDims.x/8u);
+    uint pheight = max(1u, textureDims.y/8u);
+    uint3 pixelId = uint3(
+        (FilterPassParams.PassIndex%pwidth)*8+groupId.x, 
+        ((FilterPassParams.PassIndex/pwidth)%pheight)*8+groupId.y, 
+        FilterPassParams.PassIndex/(pwidth*pheight));
+
+	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
+        
+        // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
+        float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
+        float3 cubeMapDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
+        float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
+
+        sharedOutput[groupThreadId.x].rgb = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
-            PassSampleCount, PassIndex, PassCount);
-        if (PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
-        OutputArray[dispatchThreadId.xyz].rgb += r / float(PassCount);
+            PassSampleCount, groupThreadId.x, 64);
+
+        //////////////////////////////////
+        // Sync, and then combine together the results from all of the samples
+        AllMemoryBarrierWithGroupSync();
+        if (groupThreadId.x == 0) {
+            OutputArray[pixelId.xyz] = float4(0,0,0,1);
+            for (uint c=0; c<64; ++c)
+                OutputArray[pixelId.xyz].rgb += sharedOutput[c].rgb/64.0f;
+        }
     }
 }
 
@@ -102,15 +127,15 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
 	if (dispatchThreadId.x < textureDims.x && dispatchThreadId.y < textureDims.y) {
         float2 texCoord = dispatchThreadId.xy / float2(textureDims);
         float3 cubeMapDirection = CalculateCubeMapDirection(dispatchThreadId.z, texCoord);
-        float roughness = MipmapToRoughness(MipIndex);
+        float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
         float iorIncident = SpecularTransmissionIndexOfRefraction;
         float iorOutgoing = 1.f;
         float3 r = CalculateFilteredTextureTrans(
             cubeMapDirection, roughness,
             iorIncident, iorOutgoing,
-            PassSampleCount, PassIndex, PassCount);
-        if (PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
-        OutputArray[dispatchThreadId.xyz].rgb += r / float(PassCount);
+            PassSampleCount, FilterPassParams.PassIndex, FilterPassParams.PassCount);
+        if (FilterPassParams.PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
+        OutputArray[dispatchThreadId.xyz].rgb += r / float(FilterPassParams.PassCount);
         OutputArray[dispatchThreadId.xyz].rgb = 1.0.xxx;
     }
 }
@@ -145,7 +170,6 @@ float4 ReferenceDiffuseFilter(float4 position : SV_Position, float2 texCoord : T
     // float2 diff = back - float2(position.xy) / float2(dims);
     // return float4(abs(diff.xy), 0, 1);
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 

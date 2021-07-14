@@ -30,4 +30,12 @@ DescriptorSet OperatorsDS
 PipelineLayout ComputeMain
 {
 	ComputeDescriptorSet OperatorsDS;
+
+	CSPushConstants FilterPassParams
+	{
+		uint MipIndex;
+		uint PassIndex;
+		uint PassCount;
+		uint Dummy;
+	};
 };
