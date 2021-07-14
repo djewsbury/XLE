@@ -511,10 +511,6 @@ namespace RenderCore { namespace Assets
 							if (!width || !height)
 								Throw(std::runtime_error("Bad header in HDR file (" + that->_filename + ")."));
 
-							auto expectedByteSize = 4*width*height;
-							if (data.size() != (i-(char*)data.begin())+expectedByteSize)
-								Throw(std::runtime_error("Run length compressed HDR files not supported while reading HDR file (" + that->_filename + ")."));
-
 							// The real file format is R8G8B8E8 (8 bit shared exponent)
 							that->_desc = CreateDesc(
 								0, 0, 0, TextureDesc::Plain2D(width, height, Format::R32G32B32A32_FLOAT),
@@ -534,6 +530,7 @@ namespace RenderCore { namespace Assets
 
 		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
 		{
+			assert(subResources.size() == 1 && !subResources[0]._destination.empty());
 			struct Captures
 			{
 				std::promise<void> _promise;
@@ -555,14 +552,62 @@ namespace RenderCore { namespace Assets
 
 						assert(captures->_subResources.size() == 1);
 						auto sr = captures->_subResources[0];
-						for (unsigned c=0; c<(that->_desc._textureDesc._width*that->_desc._textureDesc._height); ++c) {
-							float* dstBegin = &((float*)sr._destination.begin())[c*4];
-							assert((dstBegin+4)<=sr._destination.end());
-							uint8_t* src = (uint8_t*)&that->_dataBegin[c*4];
-							dstBegin[0] = std::ldexp(src[0], src[3] - int(128 + 8));
-							dstBegin[1] = std::ldexp(src[1], src[3] - int(128 + 8));
-							dstBegin[2] = std::ldexp(src[2], src[3] - int(128 + 8));
-							dstBegin[4] = 1.0f;
+
+						auto width = that->_desc._textureDesc._width, height = that->_desc._textureDesc._height;
+
+						// Referencing STBI (https://github.com/nothings/stb/blob/master/stb_image.h) for the RLE encoding method
+						bool isRLE = (that->_dataBegin[0] == 2) && (that->_dataBegin[1] == 2) && !(that->_dataBegin[2]&0x80);
+						if (!isRLE) {
+							auto expectedByteSize = 4*width*height;
+							auto data = that->_file.GetData();
+							if (data.size() != (that->_dataBegin-(uint8_t*)data.begin())+expectedByteSize)
+								Throw(std::runtime_error("Unexpected file size while reading HDR file (" + that->_filename + ")."));
+								
+							for (unsigned c=0; c<(that->_desc._textureDesc._width*that->_desc._textureDesc._height); ++c) {
+								float* dstBegin = &((float*)sr._destination.begin())[c*4];
+								assert((dstBegin+4)<=sr._destination.end());
+								uint8_t* src = (uint8_t*)&that->_dataBegin[c*4];
+								dstBegin[0] = std::ldexp(src[0], src[3] - int(128 + 8));
+								dstBegin[1] = std::ldexp(src[1], src[3] - int(128 + 8));
+								dstBegin[2] = std::ldexp(src[2], src[3] - int(128 + 8));
+								dstBegin[4] = 1.0f;
+							}
+						} else {
+							
+							auto scanLineBuffer = std::make_unique<uint8_t[]>(width*4);
+
+							uint8_t* i = that->_dataBegin;
+							for (unsigned y=0; y<height; ++y) {
+								auto encodedScanLineWidth = (i[2]<<8)|i[3];
+								assert(encodedScanLineWidth == width);
+								i+=4;
+								auto* scanline = scanLineBuffer.get();
+								for (unsigned component=0; component<4; ++component) {
+									for (unsigned x=0; x<width;) {
+										if (i[0] > 128u) {
+											unsigned count = i[0]-128u; 
+											for (unsigned q=0; q<count; ++q)
+												*scanline++ = i[1];
+											i += 2;
+											x += count;
+										} else {
+											auto count = *i++;
+											for (unsigned q=0; q<count; ++q)
+												*scanline++ = *i++;
+											x += count;
+										}
+									}
+								}
+
+								float* dst = &((float*)sr._destination.begin())[y*width*4];
+								for (unsigned x=0; x<width; ++x, dst+=4) {
+									dst[0] = std::ldexp(scanLineBuffer[x], scanLineBuffer[3*width+x] - int(128 + 8));
+									dst[1] = std::ldexp(scanLineBuffer[1*width+x], scanLineBuffer[3*width+x] - int(128 + 8));
+									dst[2] = std::ldexp(scanLineBuffer[2*width+x], scanLineBuffer[3*width+x] - int(128 + 8));
+									dst[4] = 1.0f;
+								}
+							}
+
 						}
 
 						captures->_promise.set_value();
