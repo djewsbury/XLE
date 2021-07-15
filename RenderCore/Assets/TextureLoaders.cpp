@@ -570,7 +570,7 @@ namespace RenderCore { namespace Assets
 								dstBegin[0] = std::ldexp(src[0], src[3] - int(128 + 8));
 								dstBegin[1] = std::ldexp(src[1], src[3] - int(128 + 8));
 								dstBegin[2] = std::ldexp(src[2], src[3] - int(128 + 8));
-								dstBegin[4] = 1.0f;
+								dstBegin[3] = 1.0f;
 							}
 						} else {
 							
@@ -604,7 +604,7 @@ namespace RenderCore { namespace Assets
 									dst[0] = std::ldexp(scanLineBuffer[x], scanLineBuffer[3*width+x] - int(128 + 8));
 									dst[1] = std::ldexp(scanLineBuffer[1*width+x], scanLineBuffer[3*width+x] - int(128 + 8));
 									dst[2] = std::ldexp(scanLineBuffer[2*width+x], scanLineBuffer[3*width+x] - int(128 + 8));
-									dst[4] = 1.0f;
+									dst[3] = 1.0f;
 								}
 							}
 

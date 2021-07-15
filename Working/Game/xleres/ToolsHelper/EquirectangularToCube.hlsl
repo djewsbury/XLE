@@ -67,6 +67,9 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 		result.rgb = 0.0.xxx;
 		result.a = 0.f;
 
+		int2 inputDims;
+		Input.GetDimensions(inputDims.x, inputDims.y);
+
 #if 0
 
 		// brute-force filtering! It's kind of silly, but it should be reasonably close to correct
@@ -77,21 +80,18 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
         		face.y = 2.0f * (tc.y + y/32.0f - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
 				float3 finalDirection = center + plusX * face.x + plusY * face.y;
 				float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
-				result.rgb += Input.SampleLevel(EquirectangularPointSampler, finalCoord, 0).rgb;
+				result.rgb += LoadInput(finalCoord.xy * float2(inputDims), inputDims).rgb;
 			}
 		}
 		result.rgb /= (32*32);
 		result.a = 1;
 
-#elif 1
+#else
 
 		float2 faceMin = 2.0f * float2((tc.x - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
 		float2 faceMax = 2.0f * float2((tc.x + 1 - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y + 1 - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
 		// float2 faceMin = 2.0f * float2((tc.x - 0.5 - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y - 0.5 - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
 		// float2 faceMax = 2.0f * float2((tc.x + 0.5 - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y + 0.5 - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
-
-		int2 inputDims;
-		Input.GetDimensions(inputDims.x, inputDims.y);
 
 		// Find the min/max theta values for the projected cubemap texel in equirectangular coords
 		// Fortunately the min/max values should always be at one of the corners, even in the case of the +Y,-Y faces
@@ -224,6 +224,135 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
     }
 }
 
+float EACWeight2(precise float minTheta, precise float maxTheta, precise float inc, uint minSamples)
+{
+	// integrate atan(tan(inc)/cos(theta)) dtheta
+	// .... not easy to integrate, unfortunately ...
+
+	float result = 0;
+	uint sampleCount = max(32, minSamples*2);
+	for (uint c=0; c<sampleCount; c++) {
+		float theta = lerp(minTheta, maxTheta, c/32.0f);
+		result += atan(tan(inc)/cos(theta));
+	}
+	result += atan(tan(inc)/cos(maxTheta));
+	result *= (maxTheta - minTheta)/float(sampleCount+1);
+	return result;
+}
+
+
+void PanelEAC(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 panel[3], bool hemi)
+{
+    float3 plusX = panel[0];
+    float3 plusY = panel[1];
+    float3 center = panel[2];
+
+    if (    tc.x >= tcMins.x && tc.y >= tcMins.y
+        &&  tc.x <  tcMaxs.x && tc.y <  tcMaxs.y) {
+
+		result.rgb = 0.0.xxx;
+		result.a = 0.f;
+
+		int2 inputDims;
+		Input.GetDimensions(inputDims.x, inputDims.y);
+
+#if 0
+
+		// EAC version of brute-force filtering
+		for (uint y=0; y<32; y++) {
+			for (uint x=0; x<32; x++) {
+				float2 face;
+				face.x = 2.0f * (tc.x + x/32.0f - tcMins.x) / (tcMaxs.x - tcMins.x) - 1.0f;
+        		face.y = 2.0f * (tc.y + y/32.0f - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
+				float3 finalDirection = center + plusX * tan(face.x*0.25*pi) + plusY * tan(face.y*0.25*pi);
+
+				float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
+
+				// x = -atan(tan(faceTheta.x))
+				// y = atan(tan(faceTheta.y)/sqrt(1+tan(faceTheta.x)^2))
+				// float2 faceAngles = float2(face.x*0.25*pi, face.y*0.25*pi);
+				// float y2 = atan2(tan(faceAngles.y), sqrt(1+tan(faceAngles.x)*tan(faceAngles.x)));
+				// y2 = 0.5-y2/pi;
+				// finalCoord.y = y2;
+
+				result.rgb += LoadInput(finalCoord.xy * float2(inputDims), inputDims).rgb;
+			}
+		}
+		result.rgb /= (32*32);
+		result.a = 1;
+
+#elif 0
+
+		float2 face;
+		face.x = 2.0f * (tc.x + tcMins.x) / (tcMaxs.x - tcMins.x) - 1.0f;
+		face.y = 2.0f * (tc.y + tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
+		float3 finalDirection = center + plusX * tan(face.x*0.25*pi) + plusY * tan(face.y*0.25*pi);
+		float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
+		result = LoadInput(finalCoord.xy * float2(inputDims), inputDims);
+
+#else
+
+		float2 faceMin = 2.0f * float2((tc.x - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
+		float2 faceMax = 2.0f * float2((tc.x + 1 - tcMins.x) / (tcMaxs.x - tcMins.x), (tc.y + 1 - tcMins.y) / (tcMaxs.y - tcMins.y)) - 1.0.xx;
+
+		// Find the min/max theta values for the projected cubemap texel in equirectangular coords
+		// Fortunately the min/max values should always be at one of the corners, even in the case of the +Y,-Y faces
+
+		if (center.y == -1 || center.y == 1) {
+
+			result = float4(0,0,0,1);
+			for (uint y=0; y<64; y++) {
+				for (uint x=0; x<64; x++) {
+					float2 face;
+					face.x = 2.0f * (tc.x + x/64.0f - tcMins.x) / (tcMaxs.x - tcMins.x) - 1.0f;
+					face.y = 2.0f * (tc.y + y/64.0f - tcMins.y) / (tcMaxs.y - tcMins.y) - 1.0f;
+					float3 finalDirection = center + plusX * tan(face.x*0.25*pi) + plusY * tan(face.y*0.25*pi);
+					float2 finalCoord = DirectionToEquirectangularCoord(finalDirection, hemi);
+					result.rgb += LoadInput(finalCoord.xy * float2(inputDims), inputDims).rgb / (64.f*64.f);
+				}
+			}
+
+		} else {
+
+			float centerTheta = CartesianToSpherical_YUp(center).y;
+			float centerX = floor(centerTheta*inputDims.x/(2.0*pi));
+			for (float faceThetaI=floor(faceMin.x*0.125*inputDims.x); faceThetaI<ceil(faceMax.x*0.125*inputDims.x); faceThetaI+=1) {
+				float x = -faceThetaI+centerX;
+				float faceTheta0 = faceThetaI*2.0*pi/inputDims.x, faceTheta1 = (faceThetaI+1)*2.0*pi/inputDims.x;
+
+				// inc = atan(tan(faceTheta.y)/sqrt(1+tan(faceTheta.x)^2))
+				// inc = atan(tan(faceTheta.y)*cos(faceTheta.x))
+
+				float minInc = atan(tan(faceMin.y*0.25*pi)*cos(faceTheta0));
+				float maxInc = atan(tan(faceMax.y*0.25*pi)*cos(faceTheta0));
+
+				float minColumnY = floor(inputDims.y * (0.5f+minInc/pi)), maxColumnY = ceil(inputDims.y * (0.5f+maxInc/pi));
+				for (float y=minColumnY; y<maxColumnY; y+=1) {
+					float inc0 = (-0.5f+y/inputDims.y)*pi;
+					float inc1 = (-0.5f+(y+1)/inputDims.y)*pi;
+
+					float minX = max(max(faceTheta0, faceMin.x*0.25*pi), -0.25*pi);
+					float maxX = min(min(faceTheta1, faceMax.x*0.25*pi),  0.25*pi);
+					float minY = max(max(inc0, minInc), -0.25*pi);
+					float maxY = min(min(inc1, maxInc),  0.25*pi);
+					if (minX < maxX && minY < maxY) {
+						float weight = EACWeight2(faceTheta0, faceTheta1, maxY, uint(maxColumnY-minColumnY)) - EACWeight2(faceTheta0, faceTheta1, minY, uint(maxColumnY-minColumnY));
+						weight = abs(weight);
+						result += float4(weight*LoadInput(float2(x,y), inputDims).rgb, weight);
+					}
+				}
+			}
+
+			float texelArea = (0.5f*pi/(tcMaxs.x-tcMins.x))*(0.5f*pi/(tcMaxs.y-tcMins.y));
+			result /= texelArea;
+			result.a = 1;
+
+		}
+
+#endif
+    }
+}
+
 float4 VerticalCubeMapCross(float2 texCoord, bool hemi)
 {
 	float4 result = 0.0.xxxx;
@@ -286,14 +415,14 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 	uint3 pixelId = uint3(
         (FilterPassParams.PassIndex%pWidth)*8+groupThreadId.x, 
         ((FilterPassParams.PassIndex/pWidth)%pHeight)*8+groupThreadId.y, 
-        groupId.z);
+        FilterPassParams.PassIndex/(pWidth*pHeight));
 
-	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
+	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
 		float4 color;
-		Panel(
+		PanelEAC(
 			color,
 			pixelId.xy, 0.0.xx, textureDims.xy,
-			CubeMapFaces[groupId.z],
+			CubeMapFaces[pixelId.z],
 			false);
 		OutputArray[pixelId.xyz] = color;
 	}

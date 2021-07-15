@@ -117,10 +117,10 @@ namespace RenderCore { namespace Techniques
 			computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 
 			if (filter == EquRectFilterMode::ToCubeMap) {
-				auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8;
+				auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
 				for (unsigned p=0; p<passCount; ++p) {
 					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-					computeOp->Dispatch(1, 1, 6, MakeOpaqueIteratorRange(filterPassParams));
+					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 				}
 			} else {
 				assert(filter == EquRectFilterMode::ToGlossySpecular);

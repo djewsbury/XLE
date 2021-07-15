@@ -193,7 +193,15 @@ namespace Assets
 		typename std::enable_if<Internal::HasConstructToFutureOverride<typename Future::PromisedType, Params...>::value>::type* = nullptr>
 		void AutoConstructToFuture(Future& future, Params... initialisers)
 	{
-		Internal::RemoveSmartPtrType<typename Future::PromisedType>::ConstructToFuture(future, std::forward<Params>(initialisers)...);
+		TRY {
+			Internal::RemoveSmartPtrType<typename Future::PromisedType>::ConstructToFuture(future, std::forward<Params>(initialisers)...);
+		} CATCH(const Exceptions::ConstructionError& e) {
+			future.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
+		} CATCH (const Exceptions::InvalidAsset& e) {
+			future.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
+		} CATCH(const std::exception& e) {
+			future.SetInvalidAsset({}, AsBlob(e));
+		} CATCH_END
 	}
 
 	template<
