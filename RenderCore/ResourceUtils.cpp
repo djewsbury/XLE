@@ -171,7 +171,7 @@ namespace RenderCore
             }
         } else {
             for (unsigned mipIterator = 0; mipIterator < mipCount; ++mipIterator) {
-                result += std::max(width, 1u) * std::max(height, 1u) * std::max(depth, 1u) * bbp / 8u;
+                result += (std::max(width, 1u) * bbp / 8u) * std::max(height, 1u) * std::max(depth, 1u);        // ordering to avoid overflowing on 8k textures
                 width >>= 1; height >>= 1; depth >>= 1;
             }
         }
@@ -240,7 +240,7 @@ namespace RenderCore
             }
         } else {
             for (unsigned mipIterator = 0; mipIterator < mipCount; ++mipIterator) {
-                auto mipSize = std::max(width, 1u) * std::max(height, 1u) * std::max(depth, 1u) * bbp / 8u;
+                auto mipSize = (std::max(width, 1u) * bbp / 8u) * std::max(height, 1u) * std::max(depth, 1u) ;
 
                 if (mipIterator == mipIndex) {
                     mipOffset._offset = workingOffset;
