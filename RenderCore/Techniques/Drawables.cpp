@@ -78,7 +78,7 @@ namespace RenderCore { namespace Techniques
 				if (!actualizedDescSet)
 					continue;
 				matDescSet = actualizedDescSet->GetDescriptorSet().get();
-				parserContext._requiredBufferUploadsCommandList = std::max(parserContext._requiredBufferUploadsCommandList, actualizedDescSet->GetCompletionCommandList());
+				parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
 			}
 
 			////////////////////////////////////////////////////////////////////////////// 

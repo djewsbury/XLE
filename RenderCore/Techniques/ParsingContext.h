@@ -63,6 +63,7 @@ namespace RenderCore { namespace Techniques
         SystemUniformsDelegate& GetSystemUniformsDelegate() const;
 
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
+        void RequireCommandList(BufferUploads::CommandListID);
 
 			//  ----------------- Frame buffer / render pass state -----------------
         /*std::vector<PreregisteredAttachment> _preregisteredAttachments;
@@ -142,5 +143,13 @@ namespace RenderCore { namespace Techniques
     #define CATCH_ASSETS_BEGIN TRY {
     #define CATCH_ASSETS_END(parserContext) } CATCH_ASSETS(parserContext) CATCH_END
     /// @}
+
+
+    inline void ParsingContext::RequireCommandList(BufferUploads::CommandListID cmdList)
+    {
+        if (cmdList != ~0u)
+            _requiredBufferUploadsCommandList = std::max(cmdList, _requiredBufferUploadsCommandList);
+        assert(_requiredBufferUploadsCommandList != ~0u);
+    }
 }}
 
