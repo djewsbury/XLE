@@ -154,17 +154,10 @@ float RoughnessToGAlpha(float roughness)
     // We're using the Disney remapping. It helps to reduce
     // the brighness of the specular around the edges of high
     // roughness materials.
-    float alphag = roughness*.5+.5;
+    // float alphag = roughness*.5+.5;
+    float alphag = roughness;
     alphag *= alphag;
     return alphag;
-}
-
-float RoughnessToGAlpha_IBL(float roughness)
-{
-    // We can't do the disney remapping when using IBL.
-    // It seems to change the probability density function
-    // in confusing ways. We just don't get the right result.
-    return roughness * roughness;
 }
 
 float RoughnessToDAlpha(float roughness)
@@ -435,6 +428,10 @@ float3 CalculateSpecular(
         #endif
 
         return reflected + parameters.transmission * transmitted;
+
+    #elif SPECULAR_METHOD==2
+
+        return pow(dot(reflect(negativeLightDirection, normal), directionToEye), 4);
 
     #endif
 }

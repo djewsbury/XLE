@@ -22,7 +22,10 @@ float VanderCorputRadicalInverse(uint bits)
     // This is the "Van der Corput radical inverse" function
     // see source:
     //      http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-    // Note -- Can't we just use the HLSL intrinsic "reversebits"? Is there a benefit?
+    // The result is intended to reflect the bits of the input around the decimal
+    // place. So we take an integer as input and return a 0-1 value. So the constant
+    // here is to transform from (0, max int] back into the (0-1] range.
+    // 
     return float(reversebits(bits)) * 2.3283064365386963e-10f;
     // bits = (bits << 16u) | (bits >> 16u);
     // bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
@@ -63,7 +66,8 @@ float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float 
     // for more information about normalized "PDFs" in this context
     //
     // Note that I've swapped xi.x & xi.y from the Unreal implementation. Maybe
-    // not a massive change.
+    // not a massive change, but it seems to help the distribution of the output
+    // samples significantly. xi.x is evenly distributed, while xi.y is not
     alphad = max(MinSamplingAlpha, alphad);
 
     #if !defined(OLD_M_DISTRIBUTION_FN)
@@ -101,7 +105,7 @@ float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float 
     H.z = cosTheta;
 
     // we're just building a tangent frame to give meaning to theta and phi...
-    float3 up = abs(normal.z) < 0.999f ? float3(0,0,1) : float3(1,0,0);
+    float3 up = (abs(normal.x) < 0.5f) ? float3(1,0,0) : float3(0,1,0);
     float3 tangentX = normalize(cross(up, normal));
     float3 tangentY = cross(normal, tangentX);
     return tangentX * H.x + tangentY * H.y + normal * H.z;

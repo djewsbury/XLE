@@ -32,8 +32,8 @@ float2 GenerateSplitTerm(
     // hemisphere with white incoming light. We use importance sampling with a fixed
     // number of samples to try to make the work load manageable...
 
-    float3 normal = float3(0.0f, 0.0f, 1.0f);
-    float3 V = float3(sqrt(1.0f - NdotV * NdotV), 0.0f, NdotV);
+    precise float3 normal = float3(0.0f, 0.0f, 1.0f);
+    precise float3 V = float3(sqrt(1.0f - NdotV * NdotV), 0.0f, NdotV);
 
         // Karis suggests that using our typical Disney remapping
         // for the alpha value for the G term will make IBL much too dark.
@@ -45,35 +45,19 @@ float2 GenerateSplitTerm(
         // good, however... Because without it, low roughness get a clear
         // halo around their edges. This doesn't happen so much with the
         // runtime specular. So it actually seems better with the this remapping.
-    roughness = max(roughness, MinSamplingRoughness);
-    float alphag = RoughnessToGAlpha(roughness);
-    float alphad = RoughnessToDAlpha(roughness);
-    float G2 = SmithG(NdotV, alphag);
+    // roughness = max(roughness, MinSamplingRoughness);
+    precise float alphag = RoughnessToGAlpha(roughness);
+    precise float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness)); //roughness);
+    precise float G2 = SmithG(NdotV, alphag);
 
-    float A = 0.f, B = 0.f;
+    precise float A = 0.f, B = 0.f;
     LOOP_DIRECTIVE for (uint s=0u; s<passSampleCount; ++s) {
-        float3 H, L;
+        precise float3 H = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, normal, alphad);
+        precise float3 L = 2.f * dot(V, H) * H - V;
 
-            // Our sampling variable is the microfacet normal (which is the halfVector)
-            // We will calculate a set of half vectors that are distributed in such a
-            // way to reduce the sampling artifacts in the final image.
-            //
-            // We could consider clustering the samples around the highlight.
-            // However, this changes the probability density function in confusing
-            // ways. The result is similiar -- but it is as if a shadow has moved
-            // across the output image.
-        const bool clusterAroundHighlight = false;
-        if (clusterAroundHighlight) {
-            L = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, reflect(-V, normal), alphad);
-            H = normalize(L + V);
-        } else {
-            H = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, normal, alphad);
-            L = 2.f * dot(V, H) * H - V;
-        }
-
-        float NdotL = L.z;
-        float NdotH = saturate(H.z);
-        float VdotH = saturate(dot(V, H));
+        precise float NdotL = L.z;
+        precise float NdotH = saturate(H.z);
+        precise float VdotH = saturate(dot(V, H));
 
         if (NdotL > 0.0f) {
                 // using "precise" here has a massive effect...
@@ -98,12 +82,12 @@ float2 GenerateSplitTerm(
 
             normalizedSpecular *= NdotL;
 
-            A += (1.f - F) * normalizedSpecular;
-            B += F * normalizedSpecular;
+            A += ((1.f - F) * normalizedSpecular) / float(passSampleCount);
+            B += (F * normalizedSpecular) / float(passSampleCount);
         }
     }
 
-    return float2(A, B) / float2(passSampleCount, passSampleCount);
+    return float2(A, B) / float(passCount);
 }
 
 float GenerateSplitTermTrans(
@@ -212,19 +196,18 @@ float3 GenerateFilteredSpecular(
     // Here is the key simplification -- we assume that the normal and view direction are
     // the same. This means that some distortion on extreme angles is lost. This might be
     // incorrect, but it will probably only be noticeable when compared to a ray traced result.
-    float3 normal = cubeMapDirection;
-    float3 viewDirection = cubeMapDirection;
+    precise float3 normal = cubeMapDirection;
+    precise float3 viewDirection = cubeMapDirection;
 
     // Very small roughness values break this equation, because D converges to infinity
     // when NdotH is 1.f. We must clamp roughness, or this convergence produces bad
     // floating point numbers.
-    roughness = max(roughness, MinSamplingRoughness);
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
 
-    float alphag = RoughnessToGAlpha(specParam.roughness);
-    float alphad = RoughnessToDAlpha(specParam.roughness);
+    precise float alphag = RoughnessToGAlpha(specParam.roughness);
+    precise float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
 
-    float3 result = float3(0.0f, 0.0f, 0.0f);
+    precise float3 result = float3(0.0f, 0.0f, 0.0f);
     float totalWeight = 0.f;
 
     #if 0
@@ -239,23 +222,38 @@ float3 GenerateFilteredSpecular(
         // Anyway, we need to split it up into multiple passes, otherwise
         // the GPU gets locked up in the single draw call for too long.
     LOOP_DIRECTIVE for (uint s=0u; s<passSampleCount; ++s) {
+
             // We could build a distribution of "H" vectors here,
             // or "L" vectors. It makes sense to use H vectors
         precise float3 H = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, normal, alphad);
         precise float3 L = 2.f * dot(viewDirection, H) * H - viewDirection;
 
-            // Now we can light as if the point on the reflection map
-            // is a directonal light.
-            // Note that we could estimate the average distance between
-            // samples in this step, and compare that to the input texture
-            // size. In this way, we could select a mipmap from the input
-            // texture. This would help avoid sampling artifacts, and we would
-            // end up with slightly more blurry result.
-
-        float3 incidentLight = IBLPrecalc_SampleInputTexture(L);
+            // Sampling the input texture here is effectively sampling the incident light from a given direction
+            // The math for "split-sum" assumes that the incidient light is uniform. But, in a way, we're integrating
+            // the reflected light assuming that uniform incident light, and then modulating the integration with a
+            // single tap from the filtered cube map.
+            //
+            // We could meet the strict split-sum function by not filtering the texture at all and instead just copy
+            // the values from a single tap of our environmental map... But that's not very satisfying, because we're 
+            // relying on this filtering to give the right kind of look to the final result.
+            //
+            // So we have some flexibility about how to filter the texture; and we have a goal in that we want the
+            // filtering to reflect the shape of the BRDF.
+            // One way to do that is to use the BRDF itself as a filtering function. However when we do this, we 
+            // need to be sure that we're only changing the blurring and not impacting the overall brightness of 
+            // the end result tap -- recalling that it's actually the other part of split-sum equation that is 
+            // more important for overall brightness.
+            //
+            // There's also a question about whether we should weight the results using the InversePDFWeight() function
+            // That reflects the distribution of samples we're making with SampleMicrofacetNormalGGX. If we use that
+            // weighting, it means we can take more samples around the area where we expect greatest variation, but then
+            // readjust so that it's as if we'd sampled each direction evenly...
+            // The problem here is that SampleMicrofacetNormalGGX() accounts for the area of variation in the filtering 
+            // function, but not in the texture we're sampling in... Which means we can still end up with few samples around
+            // bright areas in the image (ie, typically the sun)
+        precise float3 incidentLight = IBLPrecalc_SampleInputTexture(L);
 
         const uint Method_Unreal = 0u;
-        const uint Method_Flat = 1u;
         const uint Method_PDF = 2u;
         const uint Method_Constant = 3u;
         const uint Method_Balanced = 4u;
@@ -268,9 +266,6 @@ float3 GenerateFilteredSpecular(
             // It seems to distort the shape of the GGX equation
             // slightly.
             weight = saturate(dot(normal, L));
-        } else if (method == Method_Flat) {
-            incidentLight *= InversePDFWeight(H, normal, viewDirection, alphad);
-            weight = 1.f;
         } else if (method == Method_PDF) {
             // This method weights the each point by the GGX sampling pdf associated
             // with this direction. This may be a little odd, because it's in effect
@@ -311,7 +306,9 @@ float3 GenerateFilteredSpecular(
 
     // Might be more accurate to divide by "PassSampleCount" here, and then later on divide
     // by PassCount...?
-    return result / (totalWeight + 1e-6f);
+    return result / totalWeight;
+    // return result / (totalWeight + 1e-6f);
+    // return result / float(passSampleCount);
 }
 
 float3 SampleNormal(float3 core, uint s, uint sampleCount)

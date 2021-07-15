@@ -15,9 +15,7 @@
 #include "../../LightingEngine/LightDesc.hlsl"
 #include "IBL/IBLAlgorithm.hlsl"
 #include "IBL/IBLRef.hlsl"
-#include "../../Framework/CommonResources.hlsl"
 #include "../../Math/Misc.hlsl"        // for DitherPatternInt
-#include "../../Framework/SystemUniforms.hlsl"           // for SysUniform_GetGlobalSamplingPassCount(), SysUniform_GetGlobalSamplingPassIndex()
 
 TextureCube SpecularIBL : register(t1, space2);
 Texture2D<float2> GlossLUT : register(t2, space2);        // this is the look up table used in the split-sum IBL glossy reflections
@@ -40,6 +38,7 @@ Texture2DArray<float> GlossTransLUT : register(t5, space2);
     }
 
     #include "IBL/IBLPrecalc.hlsl"
+    #include "../../Framework/SystemUniforms.hlsl"           // for SysUniform_GetGlobalSamplingPassCount(), SysUniform_GetGlobalSamplingPassIndex()
 #endif
 
 float3 SampleDiffuseIBL(float3 worldSpaceNormal, LightScreenDest lsd)

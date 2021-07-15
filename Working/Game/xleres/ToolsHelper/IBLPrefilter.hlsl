@@ -14,9 +14,7 @@ RWTexture2DArray<float4> OutputArray : register(u1, space0);
 RWTexture2D<float4> Output : register(u1, space0);
 SamplerState EquirectangularBilinearSampler : register(s2, space0);
 
-// static const uint PassSampleCount = 256;
-static const uint PassSampleCount = 16;
-// cbuffer FilterPassParams : register(b3, space0)
+static const uint PassSampleCount = 1024;
 struct FilterPassParamsStruct
 {
     uint MipIndex;
@@ -65,7 +63,7 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-groupshared float4 sharedOutput[64];
+groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 [numthreads(64, 1, 1)]
     void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
 {
@@ -86,21 +84,17 @@ groupshared float4 sharedOutput[64];
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 
-    uint pwidth = max(1u, textureDims.x/8u);
-    uint pheight = max(1u, textureDims.y/8u);
     uint3 pixelId = uint3(
-        (FilterPassParams.PassIndex%pwidth)*8+groupId.x, 
-        ((FilterPassParams.PassIndex/pwidth)%pheight)*8+groupId.y, 
-        FilterPassParams.PassIndex/(pwidth*pheight));
-
+        FilterPassParams.PassIndex%textureDims.x, 
+        (FilterPassParams.PassIndex/textureDims.x)%textureDims.y, 
+        groupId.z);
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
-        
         // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
         float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
         float3 cubeMapDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
         float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
 
-        sharedOutput[groupThreadId.x].rgb = GenerateFilteredSpecular(
+        EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
             PassSampleCount, groupThreadId.x, 64);
 
@@ -110,7 +104,7 @@ groupshared float4 sharedOutput[64];
         if (groupThreadId.x == 0) {
             OutputArray[pixelId.xyz] = float4(0,0,0,1);
             for (uint c=0; c<64; ++c)
-                OutputArray[pixelId.xyz].rgb += sharedOutput[c].rgb/64.0f;
+                OutputArray[pixelId.xyz].rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/64.0f;
         }
     }
 }

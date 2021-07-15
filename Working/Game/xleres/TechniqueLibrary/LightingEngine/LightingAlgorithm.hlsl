@@ -191,7 +191,7 @@ float3 CartesianToSpherical_YUp(float3 direction)
     // result[0] = asin(direction.y * rDist);			// inc
 	result[0] = atan2(direction.y, sqrt(direction.x*direction.x+direction.z*direction.z));	// inc
     result[1] = -atan2(direction.x, direction.z);	// theta
-    result[2] = sqrt(dot(direction, direction));
+    result[2] = length(direction);
     return result;
 }
 
