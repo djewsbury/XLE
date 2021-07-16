@@ -45,6 +45,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (n != reflection._names.end() && n->first == objectId)
 			result._name = n->second;
 
+		if (result._name.IsEmpty()) return result;
+
 		auto b = LowerBound(reflection._bindings, objectId);
 		if (b != reflection._bindings.end() && b->first == objectId)
 			result._binding = b->second;
@@ -505,7 +507,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		static bool SlotTypeCompatibleWithBinding(UniformStreamType bindingType, DescriptorType slotType)
 		{
 			if (bindingType == UniformStreamType::ResourceView)
-				return slotType == DescriptorType::SampledTexture || slotType == DescriptorType::UnorderedAccessTexture || slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UnorderedAccessBuffer || slotType == DescriptorType::InputAttachment;
+				return slotType == DescriptorType::SampledTexture || slotType == DescriptorType::UnorderedAccessTexture 
+					|| slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UnorderedAccessBuffer 
+					|| slotType == DescriptorType::InputAttachment
+					|| slotType == DescriptorType::UniformTexelBuffer || slotType == DescriptorType::UnorderedAccessTexelBuffer;
 			else if (bindingType == UniformStreamType::ImmediateData)
 				return slotType == DescriptorType::UniformBuffer || slotType != DescriptorType::UnorderedAccessBuffer;
 			else if (bindingType == UniformStreamType::Sampler)
@@ -520,10 +525,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			switch (slotType) { 
 			case DescriptorType::SampledTexture:
 			case DescriptorType::UnorderedAccessTexture:
-				return !reflectionVariable._isStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image); 
+				return !reflectionVariable._isStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage); 
 			case DescriptorType::UniformBuffer:
 			case DescriptorType::UnorderedAccessBuffer:
 				return reflectionVariable._isStructType || !reflectionVariable._type || (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler);
+			case DescriptorType::UniformTexelBuffer:
+				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::TexelBuffer; 
+			case DescriptorType::UnorderedAccessTexelBuffer:
+				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::StorageTexelBuffer; 
 			case DescriptorType::Sampler:
 				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
 			case DescriptorType::InputAttachment:

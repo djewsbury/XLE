@@ -198,10 +198,17 @@ namespace RenderCore { namespace Metal_Vulkan
                 break;
 
             case OpTypeImage:
-                if (paramStart[2] == 5) {
-                    _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageBuffer));
-                } else
-                    _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
+                if (paramStart[6] == 2) {
+                    if (paramStart[2] == 5) {
+                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageTexelBuffer));
+                    } else
+                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageImage));
+                } else {
+                    if (paramStart[2] == 5) {
+                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::TexelBuffer));
+                    } else
+                        _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
+                }
                 break;
 
             case OpTypeStruct:

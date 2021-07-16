@@ -149,12 +149,15 @@ namespace RenderCore
 		if (XlEqStringI(type, "cbuffer"))
 			return DescriptorType::UniformBuffer;
 
-		if (XlEqStringI(type, "tbuffer"))
-			Throw(std::runtime_error("Encountered texel buffer descriptor slot type within shader. These are not supported."));
+		if (XlEqStringI(type, "tbuffer") || XlEqStringI(type, "Buffer"))
+			return DescriptorType::UniformTexelBuffer;
+
+		if (XlEqStringI(type, "RWBuffer"))
+			return DescriptorType::UnorderedAccessTexelBuffer;
 
 		const char* bufferTypes[] {
-			"StructuredBuffer", "Buffer", "ByteAddressBuffer", "AppendStructuredBuffer",
-			"RWBuffer", "RWByteAddressBuffer", "RWStructuredBuffer"
+			"StructuredBuffer", "ByteAddressBuffer", "AppendStructuredBuffer",
+			"RWByteAddressBuffer", "RWStructuredBuffer"
 		};
 
 		for (unsigned c=0; c<dimof(bufferTypes); ++c)

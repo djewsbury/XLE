@@ -1180,7 +1180,7 @@ namespace UnitTests
 			auto desc = CreateDesc(
 				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
 				LinearBufferDesc::Create(sizeof(Float4)),
-				"temporary-out");
+				"uav-buffer");
 			auto res = testHelper->_device->CreateResource(desc, SubResourceInitData{MakeOpaqueIteratorRange(colors[c])});
 			colorBufferViews[c] = res->CreateBufferView(BindFlag::UnorderedAccess);
 		}
@@ -1190,7 +1190,6 @@ namespace UnitTests
 			DescriptorSetSignature descSetSignature;
 			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessTexture});
 			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessBuffer, 8});
-			descSetSignature._slotNames.push_back(Hash64("ArrayInput"));
 
 			PipelineLayoutInitializer pipelineLayoutInitializer;
 			pipelineLayoutInitializer.AppendDescriptorSet("main", descSetSignature, PipelineType::Compute);
@@ -1242,6 +1241,142 @@ namespace UnitTests
 			REQUIRE(colorBreakdown.find(AsPackedColor(f)) != colorBreakdown.end());
 		for (unsigned c=0; c<8; ++c)
 			REQUIRE(pixels[interfaceRemapping[c]*targetDesc._textureDesc._width] == AsPackedColor(colors[c]));
+	}
+
+	TEST_CASE( "InputLayout-UnorderedAccessBinding", "[rendercore_metal]" )
+	{
+		// -------------------------------------------------------------------------------------
+		// Declare a shader with an array uniform and ensure that we can bind it using BoundUniforms
+		// -------------------------------------------------------------------------------------
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		auto targetDesc = CreateDesc(
+			BindFlag::UnorderedAccess | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+			"temporary-out");
+
+		// -------------------------------------------------------------------------------------
+
+		testHelper->BeginFrameCapture();
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto targetTexture = testHelper->_device->CreateResource(targetDesc); 
+		Metal::CompleteInitialization(metalContext, {targetTexture.get()});
+
+		static const char s_computeShaderText[] = R"--(
+			RWTexture2D<float4> Output : register(u0, space0);
+			
+			struct InputStruct { float4 A; };
+			StructuredBuffer<InputStruct> UnorderedAccessReadBuffer : register(t1, space0);
+			RWStructuredBuffer<InputStruct> UnorderedAccessRWBuffer : register(u2, space0);
+
+			// Buffer & RWBuffer translated into "uniform texel buffer" and "storage texel buffer" in Vulkan terminology, as per the HLSL shader compile terminology 
+			RWBuffer<float4> TexelBuffer : register(u3, space0);
+			Buffer<float4> InputTexelBuffer : register(t4, space0);
+			
+			// AppendStructureBuffer, ConsumeStructuredBuffer, ByteAddressBuffer, RWByteAddressBuffer (not tested here)
+
+			[numthreads(8, 8, 1)]
+				void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+			{
+				if ((dispatchThreadId.y%4) == 0) Output[dispatchThreadId.xy] = UnorderedAccessReadBuffer[0].A;
+				else if ((dispatchThreadId.y%4) == 1) Output[dispatchThreadId.xy] = UnorderedAccessRWBuffer[0].A;
+				else if ((dispatchThreadId.y%4) == 2) Output[dispatchThreadId.xy] = TexelBuffer[0];
+				else if ((dispatchThreadId.y%4) == 3) Output[dispatchThreadId.xy] = InputTexelBuffer[0];
+			}
+		)--";
+
+		Float4 colors[] {
+			Float4{1, 0, 0, 1},
+			Float4{0, 1, 0, 1},
+			Float4{0, 0, 1, 1},
+			Float4{1, 1, 0, 1}
+		};
+		std::shared_ptr<IResourceView> colorBufferViews[dimof(colors)];
+
+		auto UnorderedAccessReadBuffer = testHelper->_device->CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(sizeof(Float4)),
+				"srv-buffer"), 
+			SubResourceInitData{MakeOpaqueIteratorRange(colors[0])})->CreateBufferView(BindFlag::UnorderedAccess);
+
+		auto UnorderedAccessRWBuffer = testHelper->_device->CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(sizeof(Float4)),
+				"uav-buffer"), 
+			SubResourceInitData{MakeOpaqueIteratorRange(colors[1])})->CreateBufferView(BindFlag::UnorderedAccess);
+
+		auto TexelBuffer = testHelper->_device->CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess | BindFlag::TexelBuffer, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(sizeof(Float4)),
+				"uav-texture"), 
+			SubResourceInitData{MakeOpaqueIteratorRange(colors[2])})->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32G32B32A32_FLOAT}});
+
+		auto InputTexelBuffer = testHelper->_device->CreateResource(
+			CreateDesc(
+				BindFlag::ShaderResource | BindFlag::TexelBuffer, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(sizeof(Float4)),
+				"uav-texture"), 
+			SubResourceInitData{MakeOpaqueIteratorRange(colors[3])})->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32G32B32A32_FLOAT}});
+
+		////////////////////////////////////////////////////////////////////////////////////////
+		{
+			DescriptorSetSignature descSetSignature;
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessTexture});		// 0 (StorageImage)
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessBuffer});			// 1 (UnorderedAccessReadBuffer)
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessBuffer});			// 2 (UnorderedAccessRWBuffer)
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessTexelBuffer});	// 3 (TexelBuffer)
+			descSetSignature._slots.push_back({DescriptorType::UniformTexelBuffer});			// 4 (InputTexelBuffer)
+
+			PipelineLayoutInitializer pipelineLayoutInitializer;
+			pipelineLayoutInitializer.AppendDescriptorSet("main", descSetSignature, PipelineType::Compute);
+
+			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+
+			Metal::ComputeShader computeShader(
+				Metal::GetObjectFactory(),
+				pipelineLayout,
+				testHelper->MakeShader(s_computeShaderText, "cs_*"));
+			Metal::ComputePipelineBuilder pipelineBuilder;
+			pipelineBuilder.Bind(computeShader);
+			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
+
+			auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Hash64("Output"));
+			usi.BindResourceView(1, Hash64("UnorderedAccessReadBuffer"));
+			usi.BindResourceView(2, Hash64("UnorderedAccessRWBuffer"));
+			usi.BindResourceView(3, Hash64("TexelBuffer"));
+			usi.BindResourceView(4, Hash64("InputTexelBuffer"));
+			Metal::BoundUniforms uniforms { *pipeline, usi };
+
+			auto targetView = targetTexture->CreateTextureView(BindFlag::UnorderedAccess);
+			const IResourceView* resourceViews[] { targetView.get(), UnorderedAccessReadBuffer.get(), UnorderedAccessRWBuffer.get(), TexelBuffer.get(), InputTexelBuffer.get() };
+			UniformsStream uniformsStream;
+			uniformsStream._resourceViews = resourceViews;
+			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+
+			encoder.Dispatch(*pipeline, targetDesc._textureDesc._width/8, targetDesc._textureDesc._height/8);
+		}
+		////////////////////////////////////////////////////////////////////////////////////////
+
+		testHelper->EndFrameCapture();
+
+		auto output = targetTexture->ReadBackSynchronized(*threadContext);
+		std::map<unsigned, unsigned> colorBreakdown;
+		auto pixels = MakeIteratorRange((unsigned*)AsPointer(output.begin()), (unsigned*)AsPointer(output.end()));
+		for (auto p:pixels) colorBreakdown[p]++;
+		REQUIRE(colorBreakdown.size() == 4);
+		REQUIRE(colorBreakdown.find(0xff000000u) == colorBreakdown.end());
+		for (auto f:colors)
+			REQUIRE(colorBreakdown.find(AsPackedColor(f)) != colorBreakdown.end());
+		for (unsigned c=0; c<4; ++c)
+			REQUIRE(pixels[c*targetDesc._textureDesc._width] == AsPackedColor(colors[c]));
 	}
 
 	// error cases we could try:

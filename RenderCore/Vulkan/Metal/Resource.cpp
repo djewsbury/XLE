@@ -48,11 +48,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkBufferUsageFlags result = 0;
 		if (bindFlags & BindFlag::VertexBuffer) result |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 		if (bindFlags & BindFlag::IndexBuffer) result |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		if (bindFlags & BindFlag::ConstantBuffer) result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		if (bindFlags & BindFlag::DrawIndirectArgs) result |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
         if (bindFlags & BindFlag::TransferSrc) result |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         if (bindFlags & BindFlag::TransferDst) result |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        if (bindFlags & BindFlag::UnorderedAccess) result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		if (bindFlags & BindFlag::TexelBuffer) {
+			if (bindFlags & BindFlag::UnorderedAccess) result |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+			else if (bindFlags & (BindFlag::ShaderResource|BindFlag::ConstantBuffer)) result |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+			else assert(0);
+		} else {
+        	if (bindFlags & BindFlag::UnorderedAccess) result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+			else if (bindFlags & BindFlag::ConstantBuffer) result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		}
 
 		// from VK_EXT_transform_feedback
 		if (bindFlags & BindFlag::StreamOutput) result |= VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT;
@@ -421,6 +427,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			if ((desc._cpuAccess & CPUAccess::WriteDynamic) == CPUAccess::WriteDynamic)
 				buf_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
+			assert(buf_info.usage != 0);
 			_underlyingBuffer = factory.CreateBuffer(buf_info);
 
 			vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);

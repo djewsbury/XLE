@@ -86,7 +86,8 @@ namespace RenderCore
             InputAttachment     = 1<<11,    ///< Used as an input attachment for a render pass (usually appears in combination with ShaderResource as well as some other output oriented flags)
             TransferSrc         = 1<<12,    ///< Primarily used as the source resource in a copy operation (typically for staging texture)
             TransferDst         = 1<<13,    ///< Primarily used as the destination resource in a copy operation (typically for readback textures)
-            PresentationSrc     = 1<<14     ///< Part of a swap chain that can be presented to the screen
+            PresentationSrc     = 1<<14,    ///< Part of a swap chain that can be presented to the screen
+            TexelBuffer         = 1<<15,    ///< Combine with UnorderedAccess to get an UnorderedAccessTexelBuffer or ShaderResource to get a UniformTexelBuffer
         };
         typedef unsigned BitField;
     }

@@ -179,6 +179,9 @@ namespace RenderCore { namespace Assets
 		std::make_pair("UnorderedAccessBuffer", 	DescriptorType::UnorderedAccessBuffer),
 		std::make_pair("StorageImage", 				DescriptorType::UnorderedAccessTexture),
 		std::make_pair("StorageBuffer", 			DescriptorType::UnorderedAccessBuffer),
+		std::make_pair("StorageTexelBuffer", 			DescriptorType::UnorderedAccessTexelBuffer),
+		std::make_pair("UnorderedAccessTexelBuffer", 	DescriptorType::UnorderedAccessTexelBuffer),
+		std::make_pair("UniformTexelBuffer", 			DescriptorType::UniformTexelBuffer),
 		std::make_pair("Sampler", 					DescriptorType::Sampler),
 		std::make_pair("SubpassInput", 				DescriptorType::InputAttachment)
 	};

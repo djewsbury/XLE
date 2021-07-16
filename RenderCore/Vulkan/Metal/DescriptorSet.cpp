@@ -338,6 +338,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		switch (slotType) {
 		case DescriptorType::UniformBuffer:
 		case DescriptorType::UnorderedAccessBuffer:
+		case DescriptorType::UniformTexelBuffer:
+		case DescriptorType::UnorderedAccessTexelBuffer:
 			WriteBinding(
 				descriptorSetBindPoint,
 				AsVkDescriptorType(slotType),
@@ -436,6 +438,8 @@ namespace RenderCore { namespace Metal_Vulkan
 						AsVkDescriptorType(b),
 						blankStorageBuffer, false
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::UniformTexelBuffer || b == DescriptorType::UnorderedAccessTexelBuffer) {
+					/* note sure if there's a good dummy here, because we may have to match the texel format from the shader */
 				} else if (b == DescriptorType::InputAttachment) {
 					/* not sure what would be a correct dummy descriptor for an input attachment */
 				} else {
@@ -939,14 +943,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		// VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 		//			-- as the name suggests
 		//
-		// VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-		// VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-		//			-- we bind a "buffer" type object but the shader reads it like a texture
-		//			   The shader object is a "uniform samplerBuffer", which can be used with
-		//			   functions like texelFetch
-		//			   On the host, we just bind an arbitrary buffer (using VkBufferView, etc)
-		//			   See texel_buffer.cpp sample
-		//
 		// VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
 		// VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
 		//			-- like the non-dynamic versions, but there is an offset value specified
@@ -961,13 +957,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		//
 
 		switch (type) {
-		case DescriptorType::Sampler:					return VK_DESCRIPTOR_TYPE_SAMPLER;
-		case DescriptorType::SampledTexture:			return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		case DescriptorType::UniformBuffer:				return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		case DescriptorType::UnorderedAccessTexture:	return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		case DescriptorType::UnorderedAccessBuffer:		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		case DescriptorType::InputAttachment:			return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-		default:										return VK_DESCRIPTOR_TYPE_SAMPLER;
+		case DescriptorType::Sampler:						return VK_DESCRIPTOR_TYPE_SAMPLER;
+		case DescriptorType::SampledTexture:				return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		case DescriptorType::UniformBuffer:					return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case DescriptorType::UnorderedAccessTexture:		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		case DescriptorType::UnorderedAccessBuffer:			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		case DescriptorType::UnorderedAccessTexelBuffer:	return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+		case DescriptorType::UniformTexelBuffer:			return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+		case DescriptorType::InputAttachment:				return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		default:											return VK_DESCRIPTOR_TYPE_SAMPLER;
 		}
 	}
 }}

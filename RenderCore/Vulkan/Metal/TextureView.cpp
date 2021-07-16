@@ -145,9 +145,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
-		if (res->GetDesc()._type != ResourceDesc::Type::Texture)
-            Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
-
         const auto& tDesc = res->GetDesc()._textureDesc;
         if (res->GetImage()) {
             auto adjWindow = window;
@@ -170,10 +167,14 @@ namespace RenderCore { namespace Metal_Vulkan
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
         } else {
+            if (!(res->GetDesc()._bindFlags & BindFlag::TexelBuffer))
+                Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
+
             assert(res->GetBuffer());
             auto finalFmt = ResolveVkFormat(tDesc._format, window._format, formatUsage);
             auto createInfo = MakeBufferViewCreateInfo(finalFmt, 0, VK_WHOLE_SIZE, res->GetBuffer());
             _bufferView = factory.CreateBufferView(createInfo);
+            _type = Type::BufferView;
         }
 
         _resource = std::static_pointer_cast<Resource>(image);

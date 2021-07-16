@@ -103,6 +103,8 @@ namespace RenderCore
 		UnorderedAccessBuffer,
 		Sampler,
 		InputAttachment,
+		UniformTexelBuffer,					// "uniform texel buffer" in Vulkan terminology 
+		UnorderedAccessTexelBuffer,			// "storage texel buffer" in Vulkan terminology 
 		Unknown
 	};
 
