@@ -52,3 +52,6 @@
 [submodule "Working/Game/xleres/Foreign/ThreadGroupIDSwizzling"]
 	path = Working/Game/xleres/Foreign/ThreadGroupIDSwizzling
 	url = https://github.com/LouisBavoil/ThreadGroupIDSwizzling
+[submodule "Foreign/FidelityFX-SSSR"]
+	path = Foreign/FidelityFX-SSSR
+	url = git@github.com:GPUOpen-Effects/FidelityFX-SSSR
