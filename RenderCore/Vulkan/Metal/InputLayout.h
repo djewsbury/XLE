@@ -131,16 +131,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		BoundUniforms& operator=(BoundUniforms&&) never_throws;
 
 	private:
-		struct LooseUniformBind { uint32_t _descSetSlot; uint32_t _inputUniformStreamIdx; };
 		struct AdaptiveSetBindingRules
 		{
 			uint32_t _descriptorSetIdx = 0u;
 			uint32_t _shaderStageMask = 0u;
 			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
 
-			std::vector<LooseUniformBind> _resourceViewBinds;
-			std::vector<LooseUniformBind> _immediateDataBinds;
-			std::vector<LooseUniformBind> _samplerBinds;
+			std::vector<uint32_t> _resourceViewBinds;
+			std::vector<uint32_t> _immediateDataBinds;
+			std::vector<uint32_t> _samplerBinds;
 			
 			// these exist so we default out slots that are used by the shader, but not provided as input
 			std::vector<DescriptorSlot> _sig;

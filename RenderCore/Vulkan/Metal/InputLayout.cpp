@@ -31,6 +31,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		SPIRVReflection::Binding _binding = {};
 		SPIRVReflection::StorageType _storageType = SPIRVReflection::StorageType::Unknown;
 		const SPIRVReflection::BasicType* _type = nullptr;
+		std::optional<unsigned> _arrayElementCount;
 		bool _isStructType = false;
 		StringSection<> _name;
 	};
@@ -62,6 +63,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto p = LowerBound(reflection._pointerTypes, typeToLookup);
 			if (p != reflection._pointerTypes.end() && p->first == typeToLookup)
 				typeToLookup = p->second._targetType;
+			
+			auto a = LowerBound(reflection._arrayTypes, typeToLookup);
+			if (a != reflection._arrayTypes.end() && a->first == typeToLookup) {
+				result._arrayElementCount = a->second._elementCount;
+				typeToLookup = a->second._elementType;
+			}
 
 			auto t = LowerBound(reflection._basicTypes, typeToLookup);
 			if (t != reflection._basicTypes.end() && t->first == typeToLookup) {
@@ -286,6 +293,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		return std::make_tuple(UniformStreamType::None, ~0u, ~0u);
 	}
 
+	const uint32_t s_arrayBindingFlag = 1u<<31u;
+
 	class BoundUniforms::ConstructionHelper
 	{
 	public:
@@ -422,7 +431,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto& groupRules = _group[groupIdx];
 			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
 
-			std::vector<LooseUniformBind>* binds;
+			std::vector<uint32_t>* binds;
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
 				groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(inputUniformStreamIdx));
@@ -435,14 +444,61 @@ namespace RenderCore { namespace Metal_Vulkan
 				groupRules._boundLooseSamplerStates |= (1ull << uint64_t(inputUniformStreamIdx));
 			}
 
-			auto existing = std::find_if(
-				binds->begin(), binds->end(),
-				[outputDescriptorSetSlot](const auto&c) { return c._descSetSlot == outputDescriptorSetSlot; });
+			auto existing = binds->begin();
+			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing+=2;
 			if (existing != binds->end()) {
-				if (existing->_inputUniformStreamIdx != inputUniformStreamIdx)
+				if (existing[1] != inputUniformStreamIdx)
 					Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
 			} else {
-				binds->push_back({outputDescriptorSetSlot, inputUniformStreamIdx});
+				assert(!(inputUniformStreamIdx& s_arrayBindingFlag));
+				binds->push_back(outputDescriptorSetSlot);
+				binds->push_back(inputUniformStreamIdx);
+			}
+		}
+
+		void AddLooseUniformArrayBinding(
+			UniformStreamType uniformStreamType,
+			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
+			unsigned groupIdx, IteratorRange<const unsigned*> inputUniformStreamIdx, uint32_t shaderStageMask)
+		{
+			if (_descSetInfos.size() <= outputDescriptorSet)
+				_descSetInfos.resize(outputDescriptorSet+1);
+
+			_descSetInfos[outputDescriptorSet]._shaderUsageMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
+			_descSetInfos[outputDescriptorSet]._shaderStageMask |= shaderStageMask;
+			if (uniformStreamType == UniformStreamType::Dummy) {
+				_descSetInfos[outputDescriptorSet]._dummyMask |= 1ull<<uint64_t(outputDescriptorSetSlot);
+				return;
+			}
+
+			auto& groupsWr = _descSetInfos[outputDescriptorSet]._groupsThatWriteHere;
+			if (std::find(groupsWr.begin(), groupsWr.end(), groupIdx) == groupsWr.end()) groupsWr.push_back(groupIdx);
+
+			assert(groupIdx < 4);
+			auto& groupRules = _group[groupIdx];
+			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
+
+			std::vector<uint32_t>* binds;
+			if (uniformStreamType == UniformStreamType::ImmediateData) {
+				binds = &adaptiveSet->_immediateDataBinds;
+				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(streamIdx));
+			} else if (uniformStreamType == UniformStreamType::ResourceView) {
+				binds = &adaptiveSet->_resourceViewBinds;
+				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseResources |= (1ull << uint64_t(streamIdx));
+			} else {
+				assert(uniformStreamType == UniformStreamType::Sampler);
+				binds = &adaptiveSet->_samplerBinds;
+				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseSamplerStates |= (1ull << uint64_t(streamIdx));
+			}
+
+			auto existing = binds->begin();
+			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing+=2;
+			if (existing != binds->end()) {
+				Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
+			} else {
+				binds->push_back(outputDescriptorSetSlot);
+				binds->push_back(uint32_t(inputUniformStreamIdx.size())|s_arrayBindingFlag);
+				binds->insert(binds->end(), inputUniformStreamIdx.begin(), inputUniformStreamIdx.end());
 			}
 		}
 
@@ -509,17 +565,48 @@ namespace RenderCore { namespace Metal_Vulkan
 
 						unsigned inputSlot = ~0u, groupIdx = ~0u;
 						UniformStreamType bindingType = UniformStreamType::None;
-						std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, hashName);
+						bool foundBinding = false;
+						if (!reflectionVariable._arrayElementCount) {
+							std::tie(bindingType, groupIdx, inputSlot) = FindBinding(_looseUniforms, hashName);
+							if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
+								if (!SlotTypeCompatibleWithBinding(bindingType, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
+									Throw(std::runtime_error("Shader input binding does not agree with descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
 
-						if (bindingType == UniformStreamType::ResourceView || bindingType == UniformStreamType::ImmediateData || bindingType == UniformStreamType::Sampler) {
-							if (!SlotTypeCompatibleWithBinding(bindingType, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
-								Throw(std::runtime_error("Shader input binding does not agree with descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
-
-							AddLooseUniformBinding(
-								bindingType,
-								reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-								groupIdx, inputSlot, shaderStageMask);
+								AddLooseUniformBinding(
+									bindingType,
+									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
+									groupIdx, inputSlot, shaderStageMask);
+								foundBinding = true;
+							}
 						} else {
+							auto eleCount = reflectionVariable._arrayElementCount.value();
+							unsigned inputSlots[eleCount];
+							for (unsigned c=0; c<eleCount; ++c) inputSlots[c] = ~0u;
+							for (unsigned c=0; c<eleCount; ++c) {
+								unsigned eleGroupIdx = ~0u;
+								UniformStreamType eleBindingType = UniformStreamType::None;
+								std::tie(eleBindingType, eleGroupIdx, inputSlot) = FindBinding(_looseUniforms, hashName+c);
+								if (eleBindingType != UniformStreamType::None) {
+									if (groupIdx != ~0u && eleGroupIdx != groupIdx)
+										Throw(std::runtime_error("Array elements for shader input split across multiple BoundUniforms groups (variable: " + reflectionVariable._name.AsString() + "). This is not supported, elements for the same array must be in the same input group."));
+									if (bindingType != UniformStreamType::None && eleBindingType != bindingType)
+										Throw(std::runtime_error("Array elements for shader input given with different types (variable: " + reflectionVariable._name.AsString() + "). This is not supported, elements for the same array must have the same type."));
+									groupIdx = eleGroupIdx;
+									bindingType = eleBindingType;
+									inputSlots[c] = inputSlot;
+									foundBinding = true;
+								}
+							}
+
+							if (foundBinding) {
+								AddLooseUniformArrayBinding(
+									bindingType,
+									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
+									groupIdx, MakeIteratorRange(inputSlots, &inputSlots[eleCount]), shaderStageMask);
+							}
+						}
+						
+						if (!foundBinding) {
 							// no binding found -- just mark it as an input variable we need, it will get filled in with a default binding
 							bool isFixedSampler = false;
 							if (reflectionVariable._binding._descriptorSet < _pipelineLayout->GetDescriptorSetCount())
@@ -881,7 +968,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			ProgressiveDescriptorSetBuilder& builder,
 			ObjectFactory& factory,
 			IteratorRange<const UniformsStream::ImmediateData*> pkts,
-			IteratorRange<const LooseUniformBind*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies)
 		{
 			if (bindingIndicies.empty()) return {};
 
@@ -889,11 +976,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			size_t totalSize = 0;
 
 			auto alignment = factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment;
-			for (auto bind:bindingIndicies) {
-				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
-				assert(bind._inputUniformStreamIdx < pkts.size());
-				auto alignedSize = CeilToMultiple((unsigned)pkts[bind._inputUniformStreamIdx].size(), alignment);
-				totalSize += alignedSize;
+			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
+				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
+				if (!(bind[1]&s_arrayBindingFlag)) {
+					assert(bind[1] < pkts.size());
+					auto alignedSize = CeilToMultiple((unsigned)pkts[bind[1]].size(), alignment);
+					totalSize += alignedSize;
+					bind+=2;
+				} else {
+					assert(0);		// arrays for immediate data bindings not supported
+				}
 			}
 			assert(totalSize != 0);
 
@@ -903,10 +995,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				size_t iterator = 0;
 				auto beginInResource = temporaryMapping.GetBeginAndEndInResource().first;
 
-				for (auto bind:bindingIndicies) {
-					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
+				for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
+					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
+					assert(!(bind[1] & s_arrayBindingFlag));
 					
-					auto& pkt = pkts[bind._inputUniformStreamIdx];
+					auto& pkt = pkts[bind[1]];
 					assert(!pkt.empty());
 											
 					std::memcpy(PtrAdd(temporaryMapping.GetData().begin(), iterator), pkt.data(), pkt.size());
@@ -914,26 +1007,29 @@ namespace RenderCore { namespace Metal_Vulkan
 					tempSpace.buffer = checked_cast<Resource*>(temporaryMapping.GetResource().get())->GetBuffer();
 					tempSpace.offset = beginInResource + iterator;
 					tempSpace.range = pkt.size();
-					builder.Bind(bind._descSetSlot, tempSpace VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+					builder.Bind(bind[0], tempSpace VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
 
 					auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
 					iterator += alignedSize;
 
-					bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
+					bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
+					bind += 2;
 				}
 			} else {
 				// This path is very much not recommended. It's just here to catch extreme cases
 				Log(Warning) << "Failed to allocate temporary buffer space. Falling back to new buffer." << std::endl;
-				for (auto bind:bindingIndicies) {
-					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
-					auto& pkt = pkts[bind._inputUniformStreamIdx];
+				for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
+					assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
+					assert(!(bind[1] & s_arrayBindingFlag));
+					auto& pkt = pkts[bind[1]];
 					assert(!pkt.empty());
 					Resource cb{
 						factory, 
 						CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(unsigned(pkt.size())), "overflow-buf"), 
 						SubResourceInitData{pkt}};
-					builder.Bind(bind._descSetSlot, { cb.GetBuffer(), 0, VK_WHOLE_SIZE } VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
-					bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
+					builder.Bind(bind[0], { cb.GetBuffer(), 0, VK_WHOLE_SIZE } VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+					bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
+					bind += 2;
 				}
 			}
 
@@ -943,19 +1039,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		static uint64_t WriteResourceViewBindings(
 			ProgressiveDescriptorSetBuilder& builder,
 			IteratorRange<const IResourceView*const*> srvs,
-			IteratorRange<const LooseUniformBind*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies)
 		{
 			uint64_t bindingsWrittenTo = 0u;
 
-			for (auto bind:bindingIndicies) {
-				assert(bind._inputUniformStreamIdx < srvs.size());
-				auto* srv = srvs[bind._inputUniformStreamIdx];
+			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
+				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
+				bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
 
-				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
-
-				builder.Bind(bind._descSetSlot, *checked_cast<const ResourceView*>(srv));
-
-				bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
+				if (!(bind[1]&s_arrayBindingFlag)) {
+					assert(bind[1] < srvs.size());
+					auto* srv = srvs[bind[1]];
+					builder.Bind(bind[0], *checked_cast<const ResourceView*>(srv));
+					bind += 2;
+				} else {
+					auto count = bind[1]&~s_arrayBindingFlag;
+					const ResourceView* resViews[count];
+					for (unsigned c=0; c<count; ++c)
+						resViews[c] = checked_cast<const ResourceView*>(srvs[bind[2+c]]);
+					builder.BindArray(bind[0], MakeIteratorRange(resViews, &resViews[count]));
+					bind += 2+count;
+				}
 			}
 
 			return bindingsWrittenTo;
@@ -964,19 +1068,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		static uint64_t WriteSamplerStateBindings(
 			ProgressiveDescriptorSetBuilder& builder,
 			IteratorRange<const SamplerState*const*> samplerStates,
-			IteratorRange<const LooseUniformBind*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies)
 		{
 			uint64_t bindingsWrittenTo = 0u;
 
-			for (auto bind:bindingIndicies) {
-				assert(bind._inputUniformStreamIdx < samplerStates.size());
-				auto& samplerState = samplerStates[bind._inputUniformStreamIdx];
-
-				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind._descSetSlot))));
-
-				builder.Bind(bind._descSetSlot, samplerState->GetUnderlying());
-
-				bindingsWrittenTo |= (1ull << uint64_t(bind._descSetSlot));
+			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
+				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
+				bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
+				
+				if (!(bind[1]&s_arrayBindingFlag)) {
+					assert(bind[1] < samplerStates.size());
+					auto& samplerState = samplerStates[bind[1]];
+					builder.Bind(bind[0], samplerState->GetUnderlying());
+				} else {
+					assert(0);	// array sampler bindings not supported yet
+					auto count = bind[1]&~s_arrayBindingFlag;
+					bind += 2+count;
+				}
 			}
 
 			return bindingsWrittenTo;

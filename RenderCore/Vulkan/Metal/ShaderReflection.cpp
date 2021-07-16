@@ -9,13 +9,16 @@
 #define HAS_SPIRV_HEADERS
 #if defined(HAS_SPIRV_HEADERS)
 
+#include "../../../OSServices/Log.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/StringFormat.h"
 
 // Vulkan SDK includes -- 
 #pragma push_macro("new")
 #undef new
+#define ENABLE_OPT 1
 #include "glslang/SPIRV/spirv.hpp"
+#include "glslang/SPIRV/SpvTools.h"
 #pragma pop_macro("new")
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -73,6 +76,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
     SPIRVReflection::SPIRVReflection(IteratorRange<const void*> byteCode)
     {
+        /*std::vector<unsigned int> spirv { (unsigned*)byteCode.begin(), (unsigned*)byteCode.end() };
+        glslang::SpirvToolsDisassemble(Log(Warning), spirv);
+        Log(Warning) << std::endl;*/
+
         _entryPoint._id = ~0x0u;
 
         using namespace spv;
@@ -158,6 +165,14 @@ namespace RenderCore { namespace Metal_Vulkan
                     break;
                 }
 
+            case OpConstant:
+                {
+                    auto i = std::find_if(_basicTypes.begin(), _basicTypes.end(), [q=paramStart[0]](auto c) { return c.first == q; });
+                    if (i!=_basicTypes.end() && i->second == BasicType::Int)
+                        _integerConstants.push_back(std::make_pair(paramStart[1], paramStart[2]));
+                }
+                break;
+
             case OpTypeBool:
                 _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Bool));
                 break;
@@ -183,7 +198,10 @@ namespace RenderCore { namespace Metal_Vulkan
                 break;
 
             case OpTypeImage:
-                _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
+                if (paramStart[2] == 5) {
+                    _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::StorageBuffer));
+                } else
+                    _basicTypes.push_back(std::make_pair(paramStart[0], BasicType::Image));
                 break;
 
             case OpTypeStruct:
@@ -192,6 +210,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
             case OpTypePointer:  
                 _pointerTypes.push_back(std::make_pair(paramStart[0], PointerType{paramStart[2], AsStorageType(paramStart[1])}));
+                break;
+
+            case OpTypeArray:
+                {
+                    unsigned elementCount = 1;
+                    auto i = std::find_if(_integerConstants.begin(), _integerConstants.end(), [q=paramStart[2]](auto c) { return c.first == q; });
+                    if (i!=_integerConstants.end())
+                        elementCount = i->second;
+                    _arrayTypes.push_back(std::make_pair(paramStart[0], ArrayType{paramStart[1], elementCount}));
+                }
                 break;
 
             case OpVariable:
@@ -210,6 +238,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::sort(_basicTypes.begin(), _basicTypes.end(), CompareFirst<ObjectId, BasicType>());
         std::sort(_vectorTypes.begin(), _vectorTypes.end(), CompareFirst<ObjectId, VectorType>());
         std::sort(_pointerTypes.begin(), _pointerTypes.end(), CompareFirst<ObjectId, PointerType>());
+        std::sort(_arrayTypes.begin(), _arrayTypes.end(), CompareFirst<ObjectId, ArrayType>());
         std::sort(_variables.begin(), _variables.end(), CompareFirst<ObjectId, Variable>());
 
         // build the quick lookup table, which matches hash names to binding values
@@ -235,11 +264,7 @@ namespace RenderCore { namespace Metal_Vulkan
             // now insert the type name into the quick lookup table ---
             auto v = LowerBound(_variables, bindingName);
             if (v != _variables.end() && v->first == bindingName) {
-                auto type = v->second._type;
-                auto ptr = LowerBound(_pointerTypes, type);
-                if (ptr != _pointerTypes.end() && ptr->first == type)
-                    type = ptr->second._targetType;
-                
+                auto type = DecayType(v->second._type);                
                 n = LowerBound(_names, type);
                 if (n != _names.end() && n->first == type) {
                     auto nameStart = n->second.begin();
@@ -276,11 +301,7 @@ namespace RenderCore { namespace Metal_Vulkan
                 // This occurs in our HLSL path for constant buffers. Constant buffers
                 // become a pointer to a struct (where the struct has the name we want),
                 // and the actual variable just has an empty name.
-                auto type = v->second._type;
-                auto ptr = LowerBound(_pointerTypes, type);
-                if (ptr != _pointerTypes.end() && ptr->first == type)
-                    type = ptr->second._targetType;
-                
+                auto type = DecayType(v->second._type);
                 n = LowerBound(_names, type);
                 if (n != _names.end() && n->first == type) {
                     nameStart = n->second.begin();
@@ -378,6 +399,26 @@ namespace RenderCore { namespace Metal_Vulkan
 		return str;
 	}
 
+    auto SPIRVReflection::DecayType(ObjectId type) const -> ObjectId
+    {
+        for (;;) {
+            auto ptr = LowerBound(_pointerTypes, type);
+            if (ptr != _pointerTypes.end() && ptr->first == type) {
+                type = ptr->second._targetType;
+                continue;
+            }
+
+            auto array = LowerBound(_arrayTypes, type);
+            if (array != _arrayTypes.end() && array->first == type) {
+                type = array->second._elementType;
+                continue;
+            }
+
+            break;
+        }
+        return type;
+    }
+
 	std::ostream& SPIRVReflection::DescribeVariable(std::ostream& str, ObjectId variable) const
 	{
 		auto n = LowerBound(_names, variable);
@@ -389,13 +430,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		auto v = LowerBound(_variables, variable);
 		if (v != _variables.end() && v->first == variable) {
-			auto type = v->second._type;
-
 			StringSection<> variableType;
-			auto ptr = LowerBound(_pointerTypes, type);
-            if (ptr != _pointerTypes.end() && ptr->first == type)
-                type = ptr->second._targetType;
-                
+			auto type = DecayType(v->second._type);
             n = LowerBound(_names, type);
             if (n != _names.end() && n->first == type)
 				variableType = n->second;

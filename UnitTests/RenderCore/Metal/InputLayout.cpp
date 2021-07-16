@@ -1132,6 +1132,118 @@ namespace UnitTests
 		REQUIRE(breakdown.size() > 2);       // if filtering is working, we will get a large variety of colors
 	}
 
+	static uint32_t AsPackedColor(Float4 f) { return uint32_t(f[0]*255.f) | (uint32_t(f[1]*255.f) << 8) | (uint32_t(f[2]*255.f) << 16) | uint32_t(f[3]*255.f)<<24; }
+
+	TEST_CASE( "InputLayout-ArrayUniforms", "[rendercore_metal]" )
+	{
+		// -------------------------------------------------------------------------------------
+		// Declare a shader with an array uniform and ensure that we can bind it using BoundUniforms
+		// -------------------------------------------------------------------------------------
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		auto targetDesc = CreateDesc(
+			BindFlag::UnorderedAccess | BindFlag::TransferSrc, 0, GPUAccess::Write,
+			TextureDesc::Plain2D(256, 256, Format::R8G8B8A8_UNORM),
+			"temporary-out");
+
+		// -------------------------------------------------------------------------------------
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto targetTexture = testHelper->_device->CreateResource(targetDesc); 
+		Metal::CompleteInitialization(metalContext, {targetTexture.get()});
+
+		static const char s_computeShaderText[] = R"--(
+			RWTexture2D<float4> Output : register(u0, space0);
+			struct InputStruct { float4 color; };
+			StructuredBuffer<InputStruct> ArrayInput[8] : register(t1, space0);
+			[numthreads(8, 8, 1)]
+				void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+			{
+				Output[dispatchThreadId.xy] = ArrayInput[dispatchThreadId.y%8][0].color;
+			}
+		)--";
+
+		Float4 colors[] {
+			Float4{1, 0, 0, 1},
+			Float4{0, 1, 0, 1},
+			Float4{0, 0, 1, 1},
+			Float4{1, 1, 0, 1},
+			Float4{0, 1, 1, 1},
+			Float4{1, 0, 1, 1},
+			Float4{1, 1, 1, 1},
+			Float4{0.5, 0.5, 0.5, 1}
+		};
+		unsigned interfaceRemapping[] = {5,3,7,1,2,6,4,0};
+		std::shared_ptr<IResourceView> colorBufferViews[dimof(colors)];
+		for (unsigned c=0; c<dimof(colors); ++c) {
+			auto desc = CreateDesc(
+				BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(sizeof(Float4)),
+				"temporary-out");
+			auto res = testHelper->_device->CreateResource(desc, SubResourceInitData{MakeOpaqueIteratorRange(colors[c])});
+			colorBufferViews[c] = res->CreateBufferView(BindFlag::UnorderedAccess);
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////
+		{
+			DescriptorSetSignature descSetSignature;
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessTexture});
+			descSetSignature._slots.push_back({DescriptorType::UnorderedAccessBuffer, 8});
+			descSetSignature._slotNames.push_back(Hash64("ArrayInput"));
+
+			PipelineLayoutInitializer pipelineLayoutInitializer;
+			pipelineLayoutInitializer.AppendDescriptorSet("main", descSetSignature, PipelineType::Compute);
+
+			auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
+
+			Metal::ComputeShader computeShader(
+				Metal::GetObjectFactory(),
+				pipelineLayout,
+				testHelper->MakeShader(s_computeShaderText, "cs_*"));
+			Metal::ComputePipelineBuilder pipelineBuilder;
+			pipelineBuilder.Bind(computeShader);
+			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
+
+			auto encoder = metalContext.BeginComputeEncoder(pipelineLayout);
+
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Hash64("ArrayInput")+interfaceRemapping[0]);
+			usi.BindResourceView(1, Hash64("ArrayInput")+interfaceRemapping[1]);
+			usi.BindResourceView(2, Hash64("ArrayInput")+interfaceRemapping[2]);
+			usi.BindResourceView(3, Hash64("ArrayInput")+interfaceRemapping[3]);
+			usi.BindResourceView(4, Hash64("ArrayInput")+interfaceRemapping[4]);
+			usi.BindResourceView(5, Hash64("ArrayInput")+interfaceRemapping[5]);
+			usi.BindResourceView(6, Hash64("ArrayInput")+interfaceRemapping[6]);
+			usi.BindResourceView(7, Hash64("ArrayInput")+interfaceRemapping[7]);
+			usi.BindResourceView(8, Hash64("Output"));
+			Metal::BoundUniforms uniforms { *pipeline, usi };
+
+			const IResourceView* resourceViews[9];
+			auto targetView = targetTexture->CreateTextureView(BindFlag::UnorderedAccess);
+			resourceViews[8] = targetView.get();
+			for (unsigned c=0; c<dimof(colors); ++c)
+				resourceViews[c] = colorBufferViews[c].get();
+			UniformsStream uniformsStream;
+			uniformsStream._resourceViews = resourceViews;
+			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+
+			encoder.Dispatch(*pipeline, targetDesc._textureDesc._width/8, targetDesc._textureDesc._height/8);
+		}
+		////////////////////////////////////////////////////////////////////////////////////////
+
+		auto output = targetTexture->ReadBackSynchronized(*threadContext);
+		std::map<unsigned, unsigned> colorBreakdown;
+		auto pixels = MakeIteratorRange((unsigned*)AsPointer(output.begin()), (unsigned*)AsPointer(output.end()));
+		for (auto p:pixels) colorBreakdown[p]++;
+		REQUIRE(colorBreakdown.size() == 8);
+		REQUIRE(colorBreakdown.find(0xff000000u) == colorBreakdown.end());
+		for (auto f:colors)
+			REQUIRE(colorBreakdown.find(AsPackedColor(f)) != colorBreakdown.end());
+		for (unsigned c=0; c<8; ++c)
+			REQUIRE(pixels[interfaceRemapping[c]*targetDesc._textureDesc._width] == AsPackedColor(colors[c]));
+	}
+
 	// error cases we could try:
 	//      * not binding all attributes
 	//      * refering to a vertex buffer in the InputElementDesc, and then not providing it

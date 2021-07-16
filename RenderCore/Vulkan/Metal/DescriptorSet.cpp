@@ -70,9 +70,37 @@ namespace RenderCore { namespace Metal_Vulkan
 	template<> 
 		VkBufferView& ProgressiveDescriptorSetBuilder::AllocateInfo(const VkBufferView& init)
 	{
-		assert(0);
-		static VkBufferView dummy;
-		return dummy;
+		assert(_pendingBufferViews < s_pendingBufferLength);
+		auto& i = _bufferViews[_pendingBufferViews++];
+		i = init;
+		return i;
+	}
+
+	template<> 
+		VkDescriptorImageInfo* ProgressiveDescriptorSetBuilder::AllocateInfos(unsigned count)
+	{
+		assert((_pendingImageInfos+count) <= s_pendingBufferLength);
+		auto* i = &_imageInfo[_pendingImageInfos];
+		_pendingImageInfos += count;
+		return i;
+	}
+
+	template<> 
+		VkDescriptorBufferInfo* ProgressiveDescriptorSetBuilder::AllocateInfos(unsigned count)
+	{
+		assert((_pendingBufferInfos+count) <= s_pendingBufferLength);
+		auto* i = &_bufferInfo[_pendingBufferInfos];
+		_pendingBufferInfos += count;
+		return i;
+	}
+
+	template<> 
+		VkBufferView* ProgressiveDescriptorSetBuilder::AllocateInfos(unsigned count)
+	{
+		assert((_pendingBufferViews+count) <= s_pendingBufferLength);
+		auto* i = &_bufferViews[_pendingBufferViews];
+		_pendingBufferViews += count;
+		return i;
 	}
 
 	template<typename BindingInfo>
@@ -119,11 +147,53 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+	template<typename BindingInfo>
+		void    ProgressiveDescriptorSetBuilder::WriteArrayBinding(
+			unsigned bindingPoint, VkDescriptorType_ type, IteratorRange<const BindingInfo*> bindingInfo
+			VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description))
+	{
+			// (we're limited by the number of bits in _sinceLastFlush)
+		assert(bindingPoint < 64u);
+		assert(!bindingInfo.empty());
+
+		if (_sinceLastFlush & (1ull<<bindingPoint)) {
+			// we already have a pending write to this slot. Let's find it, and just
+			// update the details with the new view.
+			bool foundExisting = false; (void)foundExisting;
+			for (unsigned p=0; p<_pendingWrites; ++p) {
+				auto& w = _writes[p];
+				if (w.descriptorType == type && w.dstBinding == bindingPoint) {
+					InfoPtr<BindingInfo>(w) = bindingInfo.begin();
+					foundExisting = true;
+					break;
+				}
+			}
+			assert(foundExisting);
+		} else {
+			_sinceLastFlush |= 1ull<<bindingPoint;
+
+			assert(_pendingWrites < s_pendingBufferLength);
+			auto& w = _writes[_pendingWrites++];
+			w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			w.pNext = nullptr;
+			w.dstSet = nullptr;
+			w.dstBinding = bindingPoint;
+			w.dstArrayElement = 0;
+			w.descriptorCount = (uint32_t)bindingInfo.size();
+			w.descriptorType = (VkDescriptorType)type;
+
+			InfoPtr<BindingInfo>(w) = bindingInfo.begin();
+		}
+
+		#if defined(VULKAN_VERBOSE_DEBUG)
+			if (_verboseDescription._bindingDescriptions.size() <= bindingPoint)
+				_verboseDescription._bindingDescriptions.resize(bindingPoint+1);
+			_verboseDescription._bindingDescriptions[bindingPoint] = { type, description };
+		#endif
+	}
+
 	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ResourceView& resourceView)
 	{
-		// Our "StructuredBuffer" objects are being mapped onto uniform buffers in SPIR-V
-		// So sometimes a SRV will end up writing to a VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-		// descriptor.
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			std::string description;
 			if (resourceView.GetVulkanResource()) {
@@ -175,6 +245,81 @@ namespace RenderCore { namespace Metal_Vulkan
 				AsVkDescriptorType(slotType),
 				resourceView.GetBufferView(), true
 				VULKAN_VERBOSE_DEBUG_ONLY(, description));
+			break;
+
+		default:
+			assert(0);
+		}
+	}
+
+	void    ProgressiveDescriptorSetBuilder::BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources)
+	{
+		assert(!resources.empty());
+		assert(resources[0]);
+		#if defined(VULKAN_VERBOSE_DEBUG)
+			std::string description{"ArrayOfResourceViews"};
+		#endif
+
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			for (auto v:resources) if (v->GetVulkanResource()) ValidateResourceVisibility(*v->GetVulkanResource());
+		#endif
+
+		assert(descriptorSetBindPoint < _signature.size());
+		auto slotType = _signature[descriptorSetBindPoint]._type;
+		assert(_signature[descriptorSetBindPoint]._count == resources.size());
+
+		switch (resources[0]->GetType()) {
+		case ResourceView::Type::ImageView:
+			{
+				VkDescriptorImageInfo* imageInfos = AllocateInfos<VkDescriptorImageInfo>(resources.size());
+				for (unsigned c=0; c<resources.size(); ++c) {
+					assert(resources[c]->GetType() == ResourceView::Type::ImageView);
+					assert(resources[c]->GetVulkanResource() && resources[c]->GetImageView());
+					imageInfos[c] = VkDescriptorImageInfo { nullptr, resources[c]->GetImageView(), (VkImageLayout)Internal::AsVkImageLayout(resources[c]->GetVulkanResource()->_steadyStateLayout) };
+				}
+				WriteArrayBinding<VkDescriptorImageInfo>(
+					descriptorSetBindPoint,
+					AsVkDescriptorType(slotType),
+					MakeIteratorRange(imageInfos, &imageInfos[resources.size()])
+					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+			}
+			break;
+
+		case ResourceView::Type::BufferAndRange:
+			{
+				VkDescriptorBufferInfo* bufferInfos = AllocateInfos<VkDescriptorBufferInfo>(resources.size());
+				for (unsigned c=0; c<resources.size(); ++c) {
+					assert(resources[c]->GetType() == ResourceView::Type::BufferAndRange);
+					assert(resources[c]->GetVulkanResource() && resources[c]->GetVulkanResource()->GetBuffer());
+					auto range = resources[c]->GetBufferRangeOffsetAndSize();
+					uint64_t rangeBegin = range.first, rangeEnd = range.second;
+					if (rangeBegin == 0 && rangeEnd == 0)
+						rangeEnd = VK_WHOLE_SIZE;
+					assert((rangeEnd-rangeBegin) != 0);
+					bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeEnd };
+				}
+				WriteArrayBinding<VkDescriptorBufferInfo>(
+					descriptorSetBindPoint,
+					AsVkDescriptorType(slotType),
+					MakeIteratorRange(bufferInfos, &bufferInfos[resources.size()])
+					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+			}
+			break;
+
+		case ResourceView::Type::BufferView:
+			{
+				VkBufferView* bufferViews = AllocateInfos<VkBufferView>(resources.size());
+				for (unsigned c=0; c<resources.size(); ++c) {
+					assert(resources[c]->GetType() == ResourceView::Type::BufferView);
+					bufferViews[c] = resources[c]->GetBufferView();
+				}
+
+				WriteArrayBinding<VkBufferView>(
+					descriptorSetBindPoint,
+					AsVkDescriptorType(slotType),
+					MakeIteratorRange(bufferViews, &bufferViews[resources.size()])
+					VULKAN_VERBOSE_DEBUG_ONLY(, description));
+			}
 			break;
 
 		default:
@@ -260,42 +405,57 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (!(dummyDescWriteMask & (1ull<<uint64(bIndex)))) continue;
 
 			auto b = _signature[bIndex]._type;
-			assert(_signature[bIndex]._count == 1);
-			if (b == DescriptorType::UniformBuffer) {
-				WriteBinding(
-					bIndex,
-					AsVkDescriptorType(b),
-					blankBuffer, false
-					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-			} else if (b == DescriptorType::SampledTexture) {
-				WriteBinding(
-					bIndex,
-					AsVkDescriptorType(b),
-					blankImage, false
-					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-			} else if (b == DescriptorType::Sampler) {
-				WriteBinding(
-					bIndex,
-					AsVkDescriptorType(b),
-					blankSampler, false
-					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-			} else if (b == DescriptorType::UnorderedAccessTexture) {
-				WriteBinding(
-					bIndex,
-					AsVkDescriptorType(b),
-					blankStorageImage, false
-					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-			} else if (b == DescriptorType::UnorderedAccessBuffer) {
-				WriteBinding(
-					bIndex,
-					AsVkDescriptorType(b),
-					blankStorageBuffer, false
-					VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-			} else if (b == DescriptorType::InputAttachment) {
-				/* not sure what would be a correct dummy descriptor for an input attachment */
+			if (_signature[bIndex]._count == 1) {
+				if (b == DescriptorType::UniformBuffer) {
+					WriteBinding(
+						bIndex,
+						AsVkDescriptorType(b),
+						blankBuffer, false
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::SampledTexture) {
+					WriteBinding(
+						bIndex,
+						AsVkDescriptorType(b),
+						blankImage, false
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::Sampler) {
+					WriteBinding(
+						bIndex,
+						AsVkDescriptorType(b),
+						blankSampler, false
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::UnorderedAccessTexture) {
+					WriteBinding(
+						bIndex,
+						AsVkDescriptorType(b),
+						blankStorageImage, false
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::UnorderedAccessBuffer) {
+					WriteBinding(
+						bIndex,
+						AsVkDescriptorType(b),
+						blankStorageBuffer, false
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::InputAttachment) {
+					/* not sure what would be a correct dummy descriptor for an input attachment */
+				} else {
+					assert(0);
+					continue;
+				}
 			} else {
-				assert(0);
-				continue;
+				if (b == DescriptorType::UnorderedAccessBuffer) {
+					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankStorageBuffer)>>(_signature[bIndex]._count);
+					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
+						bindingInfos[c] = blankStorageBuffer;
+					WriteArrayBinding<std::decay_t<decltype(blankStorageBuffer)>>(
+						bIndex,
+						AsVkDescriptorType(b),
+						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else {
+					assert(0);
+					continue;
+				}
 			}
 			bindingsWrittenTo |= 1ull << uint64(bIndex);
 		}
@@ -348,8 +508,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			copyCount, copies);
 
 		_pendingWrites = 0;
-		_pendingImageInfos = 0;
-		_pendingBufferInfos = 0;
+		_pendingImageInfos = _pendingBufferInfos = _pendingBufferViews = 0;
 		auto result = _sinceLastFlush;
 		_sinceLastFlush = 0;
 
@@ -400,6 +559,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pendingWrites = 0u;
 		_pendingImageInfos = 0u;
 		_pendingBufferInfos = 0u;
+		_pendingBufferViews = 0u;
 
 		XlZeroMemory(_bufferInfo);
 		XlZeroMemory(_imageInfo);
@@ -433,6 +593,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pendingWrites = moveFrom._pendingWrites; moveFrom._pendingWrites = 0;
         _pendingImageInfos = moveFrom._pendingImageInfos; moveFrom._pendingImageInfos = 0;
         _pendingBufferInfos = moveFrom._pendingBufferInfos; moveFrom._pendingBufferInfos = 0;
+		_pendingBufferViews = moveFrom._pendingBufferViews; moveFrom._pendingBufferViews = 0;
         _sinceLastFlush = moveFrom._sinceLastFlush; moveFrom._sinceLastFlush = 0;
 		_flags = moveFrom._flags; moveFrom._flags = 0;
 
@@ -454,6 +615,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pendingWrites = moveFrom._pendingWrites; moveFrom._pendingWrites = 0;
         _pendingImageInfos = moveFrom._pendingImageInfos; moveFrom._pendingImageInfos = 0;
         _pendingBufferInfos = moveFrom._pendingBufferInfos; moveFrom._pendingBufferInfos = 0;
+		_pendingBufferViews = moveFrom._pendingBufferViews; moveFrom._pendingBufferViews = 0;
         _sinceLastFlush = moveFrom._sinceLastFlush; moveFrom._sinceLastFlush = 0;
 		_flags = moveFrom._flags; moveFrom._flags = 0;
 

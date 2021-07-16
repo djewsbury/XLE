@@ -46,6 +46,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void    Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> description = {});
 		void    Bind(unsigned descriptorSetBindPoint, VkSampler sampler, StringSection<> description = {});
 
+		void    BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources);
+
 		uint64_t	BindDummyDescriptors(GlobalPools& globalPools, uint64_t dummyDescWriteMask);
 
 		bool		HasChanges() const;
@@ -76,11 +78,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
         VkDescriptorBufferInfo  _bufferInfo[s_pendingBufferLength];
         VkDescriptorImageInfo   _imageInfo[s_pendingBufferLength];
+		VkBufferView			_bufferViews[s_pendingBufferLength];
         VkWriteDescriptorSet    _writes[s_pendingBufferLength];
 
         unsigned	_pendingWrites = 0;
         unsigned	_pendingImageInfos = 0;
         unsigned	_pendingBufferInfos = 0;
+		unsigned	_pendingBufferViews = 0;
 
         uint64_t	_sinceLastFlush = 0;
 		std::vector<DescriptorSlot> _signature;
@@ -100,8 +104,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			void WriteBinding(
 				unsigned bindingPoint, VkDescriptorType_ type, const BindingInfo& bindingInfo, bool reallocateBufferInfo
 				VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description));
+		template<typename BindingInfo> 
+			void WriteArrayBinding(
+				unsigned bindingPoint, VkDescriptorType_ type, IteratorRange<const BindingInfo*> bindingInfo
+				VULKAN_VERBOSE_DEBUG_ONLY(, const std::string& description));
 		template<typename BindingInfo>
 			BindingInfo& AllocateInfo(const BindingInfo& init);
+		template<typename BindingInfo>
+			BindingInfo* AllocateInfos(unsigned count);
 	};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////

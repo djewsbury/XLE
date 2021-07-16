@@ -293,7 +293,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return std::move(_underlying);
 	}
 
-	CommandList::CommandList(CommandList&&) = default;;
+	CommandList::CommandList(CommandList&&) = default;
 	
 	CommandList& CommandList::operator=(CommandList&& moveFrom)
 	{

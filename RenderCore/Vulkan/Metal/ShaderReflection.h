@@ -48,18 +48,22 @@ namespace RenderCore { namespace Metal_Vulkan
         //
         //      Types
         //
-        enum class BasicType { Int, Float, Bool, Image, Sampler, SampledImage };
+        enum class BasicType { Int, Float, Bool, Image, Sampler, SampledImage, StorageBuffer };
         enum class StorageType { UniformConstant, Input, Uniform, Output, Workgroup, CrossWorkgroup, Private, Function, Generic, PushConstant, AtomicCounter, Image, Unknown };
         struct VectorType { ObjectId _componentType; unsigned _componentCount; };
         struct PointerType { ObjectId _targetType; StorageType _storage; };
+        struct ArrayType { ObjectId _elementType; unsigned _elementCount; };
 
         std::vector<std::pair<ObjectId, BasicType>>     _basicTypes;
         std::vector<std::pair<ObjectId, VectorType>>    _vectorTypes;
         std::vector<std::pair<ObjectId, PointerType>>   _pointerTypes;
         std::vector<ObjectId>                           _structTypes;
+        std::vector<std::pair<ObjectId, ArrayType>>     _arrayTypes;
 
         struct Variable { ObjectId _type; StorageType _storage; };
         std::vector<std::pair<ObjectId, Variable>>      _variables;
+
+        std::vector<std::pair<ObjectId, unsigned>>      _integerConstants;
 
         //
         //      Interface (eg, vertex input)
@@ -91,6 +95,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::ostream& DescribeVariable(std::ostream& str, ObjectId variable) const;
 		StringSection<> GetName(ObjectId objectId) const;
+        ObjectId DecayType(ObjectId type) const;
 
         SPIRVReflection(IteratorRange<const void*> byteCode);
         SPIRVReflection();

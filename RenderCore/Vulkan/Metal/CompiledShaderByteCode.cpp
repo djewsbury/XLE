@@ -11,7 +11,7 @@ namespace RenderCore { namespace Metal_DX11
 	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler();
 }}
 
-#if defined(ENABLE_HLSLCC)
+#if defined(ENABLE_GLSLLANG)
 
 #include "DeviceContext.h"
 #include "ShaderReflection.h"		// (for metrics string)
@@ -757,7 +757,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	HLSLCCToSPIRVCompiler::~HLSLCCToSPIRVCompiler()
 	{
 	}
-
+}}
 #endif
 
 
