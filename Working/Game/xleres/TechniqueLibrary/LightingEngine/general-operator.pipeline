@@ -11,7 +11,7 @@ DescriptorSet AODS
 	UnorderedAccessTexture AccumulationAO;		// 4
 	ConstantBuffer AOProps;						// 5
 	SampledTexture InputNormals;				// 6
-	SampledTexture InputVelocities;				// 7
+	SampledTexture GBufferMotion;				// 7
 	SampledTexture AccumulationAOLast;			// 8
 	SampledTexture tex0;						// 9
 	SampledTexture tex1;						// 10

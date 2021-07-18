@@ -33,6 +33,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;
+		uint32_t GetCompletionCommandList() const { return 0; }
 
 		SSAOOperator(
 			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> computeOp,

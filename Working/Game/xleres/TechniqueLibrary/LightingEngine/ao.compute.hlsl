@@ -7,7 +7,7 @@ RWTexture2D<float> OutputTexture : register(u2, space1);
 RWTexture2D<float> DownsampleDepths : register(u3, space1);
 RWTexture2D<float> AccumulationAO : register(u4, space1);
 Texture2D InputNormals : register(t6, space1);
-Texture2D<int2> InputVelocities : register(t7, space1);
+Texture2D<int2> GBufferMotion : register(t7, space1);
 Texture2D<float> AccumulationAOLast : register(t8, space1);
 
 cbuffer AOProps : register(b5, space1)
@@ -202,7 +202,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	if (ClearAccumulation) {
 		AccumulationAO[pixelId.xy] = final;
 	} else {
-		int2 vel = InputVelocities.Load(uint3(pixelId.xy*2, 0)).rg;
+		int2 vel = GBufferMotion.Load(uint3(pixelId.xy*2, 0)).rg;
 		// uint2 accumulationYesterdayPos = round(pixelId.xy + vel / 2);
 		uint2 accumulationYesterdayPos = pixelId.xy + vel / 2;
 		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
@@ -604,7 +604,7 @@ float4 Value(uint2 position)
     float input = normalize(InputNormals.Load(uint3(position.xy, 0)).xyz).r;
     float minValue = -1.0, maxValue = 1.0;
 #elif 1
-    float2 vel = InputVelocities.Load(uint3(position.xy, 0)).xy;
+    float2 vel = GBufferMotion.Load(uint3(position.xy, 0)).xy;
 	vel /= 127;
 	vel = 0.5 + 0.5 * vel;
 	return float4(vel, 0.5, 1);

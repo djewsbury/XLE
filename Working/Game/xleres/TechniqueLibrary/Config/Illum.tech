@@ -124,7 +124,7 @@ DepthNormalVelocity_NoPatches=~
 	Inherit=~; Deferred
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthNormalVelocity
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthNormalMotion
 
 DepthNormalVelocity_PerPixel=~
 	Inherit=~; Deferred

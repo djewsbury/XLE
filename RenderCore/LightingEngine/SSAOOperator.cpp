@@ -85,7 +85,7 @@ namespace RenderCore { namespace LightingEngine
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferVelocity));
+        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
 
         spDesc.AppendNonFrameBufferAttachmentView(downresDepths, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
@@ -161,7 +161,7 @@ namespace RenderCore { namespace LightingEngine
         usi.BindResourceView(3, Hash64("AccumulationAO"));
         usi.BindResourceView(4, Hash64("AccumulationAOLast"));
         usi.BindResourceView(5, Hash64("InputNormals"));
-        usi.BindResourceView(6, Hash64("InputVelocities"));
+        usi.BindResourceView(6, Hash64("GBufferMotion"));
         usi.BindImmediateData(0, Hash64("AOProps"));
 
         ParameterBox selectors;

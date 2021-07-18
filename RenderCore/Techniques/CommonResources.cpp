@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
             case GBufferDiffuse: return "GBufferDiffuse";
             case GBufferNormal: return "GBufferNormal";
             case GBufferParameter: return "GBufferParameter";
-            case GBufferVelocity: return "GBufferVelocity";
+            case GBufferMotion: return "GBufferMotion";
             case ColorLDR: return "ColorLDR";
             case ColorHDR: return "ColorHDR";
             case Depth: return "Depth";

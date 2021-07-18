@@ -43,7 +43,7 @@ void depthonly() {}
 #if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
 	[earlydepthstencil]
 #endif
-DepthNormalVelocityEncoded depthNormalVelocity(VSOUT geo)
+DepthNormalMotionEncoded depthNormalMotion(VSOUT geo)
 {
 	DoAlphaTest(geo, GetAlphaThreshold());
 	GBufferValues result = IllumShader_PerPixel(geo);
@@ -59,5 +59,5 @@ DepthNormalVelocityEncoded depthNormalVelocity(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthNormalVelocity(result, int2(prevPos.xy));
+	return EncodeDepthNormalMotion(result, int2(prevPos.xy));
 }
