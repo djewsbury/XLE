@@ -96,6 +96,8 @@ namespace RenderCore
 
 namespace RenderCore { namespace Techniques
 {
+    static std::shared_ptr<IResource> s_nullResourcePtr;
+    static std::shared_ptr<IResourceView> s_nullResourceViewPtr;
     static BindFlag::BitField CalculateBindFlags(const FrameBufferDescFragment& fragment, unsigned attachmentName);
     struct AttachmentSemantic { uint64_t _value = 0; };
     static std::ostream& operator<<(std::ostream& str, AttachmentSemantic semantic)
@@ -202,7 +204,7 @@ namespace RenderCore { namespace Techniques
     IResourcePtr NamedAttachmentsWrapper::GetResource(AttachmentName resName, const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const
     {
         assert(resName < _poolMapping.size());
-        auto result = _pool->GetResource(_poolMapping[resName])._resource;
+        auto result = _pool->GetResource(_poolMapping[resName]);
 
         #if defined(_DEBUG)
             // Validate that the "desc" for the returned resource matches what the caller was requesting
@@ -287,9 +289,9 @@ namespace RenderCore { namespace Techniques
 
         uint64_t hashValue = DefaultSeed64;
         for (unsigned c=0; c<desc.GetAttachments().size(); ++c) {
-            auto matchedAttachment = attachmentPool.GetResource(poolAttachments.GetResourceIds()[c]);
-            assert(matchedAttachment._resource);
-            hashValue = HashCombine(matchedAttachment._resource->GetGUID(), hashValue);
+            auto* matchedAttachment = attachmentPool.GetResource(poolAttachments.GetResourceIds()[c]).get();
+            assert(matchedAttachment);
+            hashValue = HashCombine(matchedAttachment->GetGUID(), hashValue);
 
             // The attachment descriptions in the input FrameBufferDesc may not be 100% complete, however
             // in the process of matching them to the attachment pool, we will have filled in any missing
@@ -297,7 +299,7 @@ namespace RenderCore { namespace Techniques
             // We must merge this updated information back into the FrameBufferDesc.
             // This also has the effect of normalizing the attachment desc information for the hash value,
             // which would help cases where functionality identical information produces different hash value
-            auto resDesc = matchedAttachment._resource->GetDesc();
+            auto resDesc = matchedAttachment->GetDesc();
             AttachmentDesc completeAttachmentDesc = desc.GetAttachments()[c];
             completeAttachmentDesc._format = resDesc._textureDesc._format;
             adjustedAttachments.push_back({completeAttachmentDesc});
@@ -407,83 +409,83 @@ namespace RenderCore { namespace Techniques
         return _frameBuffer->GetDefaultViewport();
     }
 
-    auto RenderPassInstance::GetResourceForAttachmentName(AttachmentName resName) const -> IResourcePtr
+    auto RenderPassInstance::GetResourceForAttachmentName(AttachmentName resName) const -> const std::shared_ptr<IResource>&
     {
         assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName])._resource;
-        return nullptr;
+            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName]);
+        return s_nullResourcePtr;
     }
 
-    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
+    auto RenderPassInstance::GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
     {
         assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
             return _attachmentPool->GetSRV(_attachmentPoolReservation.GetResourceIds()[resName], window);
-        return nullptr;
+        return s_nullResourceViewPtr;
     }
 
-    auto RenderPassInstance::GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> IResourcePtr
+    auto RenderPassInstance::GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName])._resource;
-        return nullptr;
+            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName]);
+        return s_nullResourcePtr;
 	}
 
-    auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>
+    auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
             return _attachmentPool->GetView(_attachmentPoolReservation.GetResourceIds()[resName], BindFlag::InputAttachment, subPass.GetInputs()[inputAttachmentSlot]._window);
-        return nullptr;
+        return s_nullResourceViewPtr;
 	}
 	
-	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> IResourcePtr
+	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> const std::shared_ptr<IResource>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName])._resource;
-        return nullptr;
+            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName]);
+        return s_nullResourcePtr;
 	}
 	
-	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
+	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
             return _attachmentPool->GetSRV(_attachmentPoolReservation.GetResourceIds()[resName], window);
-        return nullptr;
+        return s_nullResourceViewPtr;
 	}
 
-	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>
+	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetDepthStencil()._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
             return _attachmentPool->GetSRV(_attachmentPoolReservation.GetResourceIds()[resName], window);
-        return nullptr;
+        return s_nullResourceViewPtr;
 	}
 
-	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> IResourcePtr
+	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&
 	{
 		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetDepthStencil()._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
-            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName])._resource;
-        return nullptr;
+            return _attachmentPool->GetResource(_attachmentPoolReservation.GetResourceIds()[resName]);
+        return s_nullResourcePtr;
 	}
 
-    auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>
+    auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
     {
         auto spIdx = GetCurrentSubpassIndex();
         assert((spIdx+1) < _viewedAttachmentsMap.size());
@@ -697,24 +699,24 @@ namespace RenderCore { namespace Techniques
         attach->_resource = _device->CreateResource(attach->_desc);
         return attach->_resource != nullptr;
     }
-    
-    auto AttachmentPool::GetResource(AttachmentName attachName) const -> GetResourceResult
+
+    auto AttachmentPool::GetResource(AttachmentName attachName) const -> const std::shared_ptr<IResource>&
     {
         Pimpl::Attachment* attach = nullptr;
         if (attachName & (1u<<31u)) {
             auto semanticAttachIdx = attachName & ~(1u<<31u);
-            if (semanticAttachIdx >= _pimpl->_semanticAttachments.size()) return {nullptr};
+            if (semanticAttachIdx >= _pimpl->_semanticAttachments.size()) return s_nullResourcePtr;
             attach = &_pimpl->_semanticAttachments[semanticAttachIdx];
         } else {
-            if (attachName >= _pimpl->_attachments.size()) return {nullptr};
+            if (attachName >= _pimpl->_attachments.size()) return s_nullResourcePtr;
             attach = &_pimpl->_attachments[attachName];
         }
         assert(attach);
         if (attach->_resource)
-            return GetResourceResult { attach->_resource };
+            return attach->_resource;
             
         _pimpl->BuildAttachment(attachName);
-        return GetResourceResult { attach->_resource };
+        return attach->_resource;
 	}
 
     static TextureViewDesc CompleteTextureViewDesc(const TextureViewDesc& viewDesc, TextureViewDesc::Aspect defaultAspect)

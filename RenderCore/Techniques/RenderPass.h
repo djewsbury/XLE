@@ -166,11 +166,7 @@ namespace RenderCore { namespace Techniques
         void UnbindAll();
 		auto GetBoundResource(uint64_t semantic) -> IResourcePtr;
 
-        struct GetResourceResult
-        {
-            IResourcePtr _resource;
-        };
-        GetResourceResult GetResource(AttachmentName resName) const;
+        const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
@@ -264,20 +260,20 @@ namespace RenderCore { namespace Techniques
         ViewportDesc GetDefaultViewport() const;
         const AttachmentPool::Reservation& GetAttachmentReservation() const { return _attachmentPoolReservation; }
 
-        auto GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> IResourcePtr;
-        auto GetInputAttachmentView(unsigned inputAttachmentSlot) const -> std::shared_ptr<IResourceView>;
+        auto GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&;
+        auto GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&;
 
-		auto GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> IResourcePtr;
-	    auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> std::shared_ptr<IResourceView>;
+		auto GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> const std::shared_ptr<IResource>&;
+	    auto GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&;
 
-		auto GetDepthStencilAttachmentResource() const -> IResourcePtr;
-		auto GetDepthStencilAttachmentSRV(const TextureViewDesc& window = {}) const -> std::shared_ptr<IResourceView>;
+		auto GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&;
+		auto GetDepthStencilAttachmentSRV(const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
 		// The "AttachmentNames" here map onto the names used by the FrameBufferDesc used to initialize this RPI
-        auto GetResourceForAttachmentName(AttachmentName resName) const -> IResourcePtr;
-        auto GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window = {}) const -> std::shared_ptr<IResourceView>;
+        auto GetResourceForAttachmentName(AttachmentName resName) const -> const std::shared_ptr<IResource>&;
+        auto GetSRVForAttachmentName(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
-        auto GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> std::shared_ptr<IResourceView>;
+        auto GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&;
 
         // Construct from a fully actualized "FrameBufferDesc" (eg, one generated via a
         // FragmentStitchingContext)
