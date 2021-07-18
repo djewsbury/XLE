@@ -447,7 +447,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
 			auto existing = binds->begin();
-			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing+=2;
+			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing += (existing[1]&s_arrayBindingFlag)?(2+(existing[1]&~s_arrayBindingFlag)):2;
 			if (existing != binds->end()) {
 				if (existing[1] != inputUniformStreamIdx)
 					Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
@@ -494,7 +494,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
 			auto existing = binds->begin();
-			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing+=2;
+			while (existing != binds->end() && *existing != outputDescriptorSetSlot) existing += (existing[1]&s_arrayBindingFlag)?(2+(existing[1]&~s_arrayBindingFlag)):2;
 			if (existing != binds->end()) {
 				Throw(std::runtime_error("Attempting to bind more than one different inputs to the descriptor set slot (" + std::to_string(outputDescriptorSetSlot) + ")"));
 			} else {
@@ -1064,8 +1064,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				} else {
 					auto count = bind[1]&~s_arrayBindingFlag;
 					const ResourceView* resViews[count];
-					for (unsigned c=0; c<count; ++c)
+					for (unsigned c=0; c<count; ++c) {
+						assert(bind[2+c] != ~0u);
 						resViews[c] = checked_cast<const ResourceView*>(srvs[bind[2+c]]);
+					}
 					builder.BindArray(bind[0], MakeIteratorRange(resViews, &resViews[count]));
 					bind += 2+count;
 				}

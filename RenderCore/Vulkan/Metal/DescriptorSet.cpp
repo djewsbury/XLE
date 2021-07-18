@@ -456,6 +456,24 @@ namespace RenderCore { namespace Metal_Vulkan
 						AsVkDescriptorType(b),
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::SampledTexture) {
+					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankImage)>>(_signature[bIndex]._count);
+					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
+						bindingInfos[c] = blankImage;
+					WriteArrayBinding<std::decay_t<decltype(blankImage)>>(
+						bIndex,
+						AsVkDescriptorType(b),
+						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::UnorderedAccessTexture) {
+					auto* bindingInfos = AllocateInfos<std::decay_t<decltype(blankStorageImage)>>(_signature[bIndex]._count);
+					for (unsigned c=0; c<_signature[bIndex]._count; ++c)
+						bindingInfos[c] = blankStorageImage;
+					WriteArrayBinding<std::decay_t<decltype(blankStorageImage)>>(
+						bIndex,
+						AsVkDescriptorType(b),
+						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
+						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else {
 					assert(0);
 					continue;

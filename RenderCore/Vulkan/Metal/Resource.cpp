@@ -53,11 +53,11 @@ namespace RenderCore { namespace Metal_Vulkan
         if (bindFlags & BindFlag::TransferDst) result |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 		if (bindFlags & BindFlag::TexelBuffer) {
 			if (bindFlags & BindFlag::UnorderedAccess) result |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-			else if (bindFlags & (BindFlag::ShaderResource|BindFlag::ConstantBuffer)) result |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
-			else assert(0);
+			if (bindFlags & (BindFlag::ShaderResource|BindFlag::ConstantBuffer)) result |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+			assert((bindFlags&(BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::ConstantBuffer)) != 0);		// must combine TexelBuffer with one of the usage flags
 		} else {
         	if (bindFlags & BindFlag::UnorderedAccess) result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-			else if (bindFlags & BindFlag::ConstantBuffer) result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+			if (bindFlags & BindFlag::ConstantBuffer) result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		}
 
 		// from VK_EXT_transform_feedback

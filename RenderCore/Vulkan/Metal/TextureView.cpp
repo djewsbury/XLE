@@ -145,9 +145,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!res)
 			Throw(::Exceptions::BasicLabel("Incorrect resource type passed to Vulkan ResourceView"));
 
-        const auto& tDesc = res->GetDesc()._textureDesc;
+        auto resDesc = res->GetDesc();
         if (res->GetImage()) {
             auto adjWindow = window;
+            assert(resDesc._type == ResourceDesc::Type::Texture);
+            const auto& tDesc = resDesc._textureDesc;
 
             // Some parts of the "TextureViewDesc" can be set to "undefined". In these cases,
             // we should fill them in with the detail from the resource.
@@ -156,7 +158,7 @@ namespace RenderCore { namespace Metal_Vulkan
                 adjWindow._dimensionality = tDesc._dimensionality;
 
             if (adjWindow._dimensionality == TextureDesc::Dimensionality::CubeMap) {
-                // The "array layer" range values are a bit awkward for cubemaps. Let's Support only 
+                // The "array layer" range values are a bit awkward for cubemaps. Let's support only 
                 // views of the entire cubemap resource for now
                 assert(adjWindow._arrayLayerRange._count == 6 || adjWindow._arrayLayerRange._count == TextureViewDesc::Unlimited);
                 assert(adjWindow._arrayLayerRange._min == 0);
@@ -171,7 +173,10 @@ namespace RenderCore { namespace Metal_Vulkan
                 Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
 
             assert(res->GetBuffer());
-            auto finalFmt = ResolveVkFormat(tDesc._format, window._format, formatUsage);
+            auto finalFmt = window._format._explicitFormat;
+            if (resDesc._type == ResourceDesc::Type::Texture)
+                finalFmt = ResolveVkFormat(resDesc._textureDesc._format, window._format, formatUsage);
+            assert(finalFmt != Format::Unknown);
             auto createInfo = MakeBufferViewCreateInfo(finalFmt, 0, VK_WHOLE_SIZE, res->GetBuffer());
             _bufferView = factory.CreateBufferView(createInfo);
             _type = Type::BufferView;

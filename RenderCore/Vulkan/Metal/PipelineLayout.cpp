@@ -181,6 +181,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					break;
 
 				case DescriptorType::SampledTexture:
+				case DescriptorType::UniformTexelBuffer:
 					result._sampledImageCount += b._count;
 					break;
 
@@ -193,6 +194,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					break;
 
 				case DescriptorType::UnorderedAccessTexture:
+				case DescriptorType::UnorderedAccessTexelBuffer:
 					result._storageImageCount += b._count;
 					break;
 
