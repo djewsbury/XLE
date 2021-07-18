@@ -246,13 +246,50 @@ void AccumulateSample(
 	outWeight += w;
 }
 
+groupshared float GroupAO[16][16];
+groupshared float GroupDepths[16][16];
+
+void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
+{
+	// Load a 16x16 region which we'll access randomly in this group. This creates some overlaps with neighbouring
+	// groups. Each thread loads 4 of the 16x16 samples
+	dispatchThreadId.xy -= 4;
+	GroupAO[groupThreadId.y][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy];
+	GroupDepths[groupThreadId.y][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy];
+
+	GroupAO[groupThreadId.y][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,0)];
+	GroupDepths[groupThreadId.y][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,0)];
+
+	GroupAO[groupThreadId.y+8][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy+int2(0,8)];
+	GroupDepths[groupThreadId.y+8][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy+int2(0,8)];
+
+	GroupAO[groupThreadId.y+8][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,8)];
+	GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,8)];
+	GroupMemoryBarrierWithGroupSync();
+}
+
+float LoadGroupSharedAO(int2 base, int2 offset) { return GroupAO[base.y+offset.y+4][base.x+offset.x+4]; }
+float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+offset.y+4][base.x+offset.x+4]; }
+
 [numthreads(8, 8, 1)]
 	void UpsampleOp(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
 	uint2 textureDims;
 	InputTexture.GetDimensions(textureDims.x, textureDims.y);
 	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
-	uint2 outputPixel = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 16, groupThreadId.xy, groupId.xy);
+
+	// Not sure that the thread group tiling actually helps any more with better use of group shared
+	// memory. It doesn't seem particularly impactful with some basic profiling 
+	// See also FFX_DNSR_Reflections_RemapLane8x8() in GPUOpen repo for AMD's approach to this 
+	#if 1
+		uint2 outputPixel = groupId.xy*8+groupThreadId.xy;
+	#else
+		uint2 outputPixel = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 16, groupThreadId.xy, groupId.xy);
+		groupId.xy = outputPixel.xy/8;
+		groupThreadId.xy = outputPixel.xy-groupId.xy*8;
+	#endif
+
+	InitializeGroupSharedMem(outputPixel, groupThreadId.xy);
 
 #if 0
 	OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
@@ -297,40 +334,42 @@ void AccumulateSample(
 	const float weightCenter = 1, weightNearEdge = .75, weightFarEdge = .25;
 	const float weightNearCorner = weightNearEdge*weightNearEdge, weightMidCorner = weightNearEdge*weightFarEdge, weightFarCorner = weightFarEdge*weightFarEdge;
 
-	float topLeft10 = AccumulationAO[base.xy + int2(-2,-2)];
-	float topLeft10Depth = DownsampleDepths[base.xy + int2(-2,-2)];
+	base = groupThreadId;
+
+	float topLeft10 = LoadGroupSharedAO(base.xy, int2(-2,-2));
+	float topLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,-2));
 	float2 topLeft10ExpectedDepth = float2(-4, -4);
 	ACC(topLeft10, 0, weightNearCorner);
 	ACC(topLeft10, 1, weightMidCorner);
 	ACC(topLeft10, 2, weightMidCorner);
 	ACC(topLeft10, 3, weightFarCorner);
 
-	float top11 = AccumulationAO[base.xy + int2(-1,-2)];
-	float top11Depth = DownsampleDepths[base.xy + int2(-1,-2)];
+	float top11 = LoadGroupSharedAO(base.xy, int2(-1,-2));
+	float top11Depth = LoadGroupSharedDepth(base.xy, int2(-1,-2));
 	float2 top11ExpectedDepth = float2(-2, -4);
 	ACC(top11, 0, weightNearEdge);
 	ACC(top11, 1, weightNearEdge);
 	ACC(top11, 2, weightFarEdge);
 	ACC(top11, 3, weightFarEdge);
 
-	float top8 = AccumulationAO[base.xy + int2(0,-2)];
-	float top8Depth = DownsampleDepths[base.xy + int2(0,-2)];
+	float top8 = LoadGroupSharedAO(base.xy, int2(0,-2));
+	float top8Depth = LoadGroupSharedDepth(base.xy, int2(0,-2));
 	float2 top8ExpectedDepth = float2(0, -4);
 	ACC(top8, 0, weightNearEdge);
 	ACC(top8, 1, weightNearEdge);
 	ACC(top8, 2, weightFarEdge);
 	ACC(top8, 3, weightFarEdge);
 
-	float top9 = AccumulationAO[base.xy + int2(1,-2)];
-	float top9Depth = DownsampleDepths[base.xy + int2(1,-2)];
+	float top9 = LoadGroupSharedAO(base.xy, int2(1,-2));
+	float top9Depth = LoadGroupSharedDepth(base.xy, int2(1,-2));
 	float2 top9ExpectedDepth = float2(2, -4);
 	ACC(top9, 0, weightNearEdge);
 	ACC(top9, 1, weightNearEdge);
 	ACC(top9, 2, weightFarEdge);
 	ACC(top9, 3, weightFarEdge);
 
-	float topRight10 = AccumulationAO[base.xy + int2(2,-2)];
-	float topRight10Depth = DownsampleDepths[base.xy + int2(2,-2)];
+	float topRight10 = LoadGroupSharedAO(base.xy, int2(2,-2));
+	float topRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,-2));
 	float2 topRight10ExpectedDepth = float2(4, -4);
 	ACC(topRight10, 0, weightMidCorner);
 	ACC(topRight10, 1, weightNearCorner);
@@ -339,40 +378,40 @@ void AccumulateSample(
 
 	////////////////////////////////////////////////////////
 
-	float left14 = AccumulationAO[base.xy + int2(-2,-1)];
-	float left14Depth = DownsampleDepths[base.xy + int2(-2,-1)];
+	float left14 = LoadGroupSharedAO(base.xy, int2(-2,-1));
+	float left14Depth = LoadGroupSharedDepth(base.xy, int2(-2,-1));
 	float2 left14ExpectedDepth = float2(-4, -2);
 	ACC(left14, 0, weightNearEdge);
 	ACC(left14, 1, weightFarEdge);
 	ACC(left14, 2, weightNearEdge);
 	ACC(left14, 3, weightFarEdge);
 
-	float center15 = AccumulationAO[base.xy + int2(-1,-1)];
-	float center15Depth = DownsampleDepths[base.xy + int2(-1,-1)];
+	float center15 = LoadGroupSharedAO(base.xy, int2(-1,-1));
+	float center15Depth = LoadGroupSharedDepth(base.xy, int2(-1,-1));
 	float2 center15ExpectedDepth = float2(-2, -2);
 	ACC(center15, 0, weightCenter);
 	ACC(center15, 1, weightCenter);
 	ACC(center15, 2, weightCenter);
 	ACC(center15, 3, weightCenter);
 
-	float center12 = AccumulationAO[base.xy + int2(0,-1)];
-	float center12Depth = DownsampleDepths[base.xy + int2(0,-1)];
+	float center12 = LoadGroupSharedAO(base.xy, int2(0,-1));
+	float center12Depth = LoadGroupSharedDepth(base.xy, int2(0,-1));
 	float2 center12ExpectedDepth = float2(0, -2);
 	ACC(center12, 0, weightCenter);
 	ACC(center12, 1, weightCenter);
 	ACC(center12, 2, weightCenter);
 	ACC(center12, 3, weightCenter);
 
-	float center13 = AccumulationAO[base.xy + int2(1,-1)];
-	float center13Depth = DownsampleDepths[base.xy + int2(1,-1)];
+	float center13 = LoadGroupSharedAO(base.xy, int2(1,-1));
+	float center13Depth = LoadGroupSharedDepth(base.xy, int2(1,-1));
 	float2 center13ExpectedDepth = float2(2, -2);
 	ACC(center13, 0, weightCenter);
 	ACC(center13, 1, weightCenter);
 	ACC(center13, 2, weightCenter);
 	ACC(center13, 3, weightCenter);
 
-	float right14 = AccumulationAO[base.xy + int2(2,-1)];
-	float right14Depth = DownsampleDepths[base.xy + int2(2,-1)];
+	float right14 = LoadGroupSharedAO(base.xy, int2(2,-1));
+	float right14Depth = LoadGroupSharedDepth(base.xy, int2(2,-1));
 	float2 right14ExpectedDepth = float2(4, -2);
 	ACC(right14, 0, weightFarEdge);
 	ACC(right14, 1, weightNearEdge);
@@ -381,40 +420,40 @@ void AccumulateSample(
 
 	////////////////////////////////////////////////////////
 
-	float left2 = AccumulationAO[base.xy + int2(-2,0)];
-	float left2Depth = DownsampleDepths[base.xy + int2(-2,0)];
+	float left2 = LoadGroupSharedAO(base.xy, int2(-2,0));
+	float left2Depth = LoadGroupSharedDepth(base.xy, int2(-2,0));
 	float2 left2ExpectedDepth = float2(-4, 0);
 	ACC(left2, 0, weightNearEdge);
 	ACC(left2, 1, weightFarEdge);
 	ACC(left2, 2, weightNearEdge);
 	ACC(left2, 3, weightFarEdge);
 
-	float center3 = AccumulationAO[base.xy + int2(-1,0)];
-	float center3Depth = DownsampleDepths[base.xy + int2(-1,0)];
+	float center3 = LoadGroupSharedAO(base.xy, int2(-1,0));
+	float center3Depth = LoadGroupSharedDepth(base.xy, int2(-1,0));
 	float2 center3ExpectedDepth = float2(-2, 0);
 	ACC(center3, 0, weightCenter);
 	ACC(center3, 1, weightCenter);
 	ACC(center3, 2, weightCenter);
 	ACC(center3, 3, weightCenter);
 
-	float center0 = AccumulationAO[base.xy + int2(0,0)];
-	float center0Depth = DownsampleDepths[base.xy + int2(0,0)];
+	float center0 = LoadGroupSharedAO(base.xy, int2(0,0));
+	float center0Depth = LoadGroupSharedDepth(base.xy, int2(0,0));
 	float2 center0ExpectedDepth = float2(0, 0);
 	ACC(center0, 0, weightCenter);
 	ACC(center0, 1, weightCenter);
 	ACC(center0, 2, weightCenter);
 	ACC(center0, 3, weightCenter);
 
-	float center1 = AccumulationAO[base.xy + int2(1,0)];
-	float center1Depth = DownsampleDepths[base.xy + int2(1,0)];
+	float center1 = LoadGroupSharedAO(base.xy, int2(1,0));
+	float center1Depth = LoadGroupSharedDepth(base.xy, int2(1,0));
 	float2 center1ExpectedDepth = float2(2, 0);
 	ACC(center1, 0, weightCenter);
 	ACC(center1, 1, weightCenter);
 	ACC(center1, 2, weightCenter);
 	ACC(center1, 3, weightCenter);
 
-	float right2 = AccumulationAO[base.xy + int2(2,0)];
-	float right2Depth = DownsampleDepths[base.xy + int2(2,0)];
+	float right2 = LoadGroupSharedAO(base.xy, int2(2,0));
+	float right2Depth = LoadGroupSharedDepth(base.xy, int2(2,0));
 	float2 right2ExpectedDepth = float2(4, 0);
 	ACC(right2, 0, weightFarEdge);
 	ACC(right2, 1, weightNearEdge);
@@ -423,40 +462,40 @@ void AccumulateSample(
 
 	////////////////////////////////////////////////////////
 
-	float left6 = AccumulationAO[base.xy + int2(-2,1)];
-	float left6Depth = DownsampleDepths[base.xy + int2(-2,1)];
+	float left6 = LoadGroupSharedAO(base.xy, int2(-2,1));
+	float left6Depth = LoadGroupSharedDepth(base.xy, int2(-2,1));
 	float2 left6ExpectedDepth = float2(-4, 2);
 	ACC(left6, 0, weightNearEdge);
 	ACC(left6, 1, weightFarEdge);
 	ACC(left6, 2, weightNearEdge);
 	ACC(left6, 3, weightFarEdge);
 
-	float center7 = AccumulationAO[base.xy + int2(-1,1)];
-	float center7Depth = DownsampleDepths[base.xy + int2(-1,1)];
+	float center7 = LoadGroupSharedAO(base.xy, int2(-1,1));
+	float center7Depth = LoadGroupSharedDepth(base.xy, int2(-1,1));
 	float2 center7ExpectedDepth = float2(-2, 2);
 	ACC(center7, 0, weightCenter);
 	ACC(center7, 1, weightCenter);
 	ACC(center7, 2, weightCenter);
 	ACC(center7, 3, weightCenter);
 
-	float center4 = AccumulationAO[base.xy + int2(0,1)];
-	float center4Depth = DownsampleDepths[base.xy + int2(0,1)];
+	float center4 = LoadGroupSharedAO(base.xy, int2(0,1));
+	float center4Depth = LoadGroupSharedDepth(base.xy, int2(0,1));
 	float2 center4ExpectedDepth = float2(0, 2);
 	ACC(center4, 0, weightCenter);
 	ACC(center4, 1, weightCenter);
 	ACC(center4, 2, weightCenter);
 	ACC(center4, 3, weightCenter);
 
-	float center5 = AccumulationAO[base.xy + int2(1,1)];
-	float center5Depth = DownsampleDepths[base.xy + int2(1,1)];
+	float center5 = LoadGroupSharedAO(base.xy, int2(1,1));
+	float center5Depth = LoadGroupSharedDepth(base.xy, int2(1,1));
 	float2 center5ExpectedDepth = float2(2, 2);
 	ACC(center5, 0, weightCenter);
 	ACC(center5, 1, weightCenter);
 	ACC(center5, 2, weightCenter);
 	ACC(center5, 3, weightCenter);
 
-	float right6 = AccumulationAO[base.xy + int2(2,1)];
-	float right6Depth = DownsampleDepths[base.xy + int2(2,1)];
+	float right6 = LoadGroupSharedAO(base.xy, int2(2,1));
+	float right6Depth = LoadGroupSharedDepth(base.xy, int2(2,1));
 	float2 right6ExpectedDepth = float2(4, 2);
 	ACC(right6, 0, weightFarEdge);
 	ACC(right6, 1, weightNearEdge);
@@ -465,40 +504,40 @@ void AccumulateSample(
 
 	////////////////////////////////////////////////////////
 
-	float bottomLeft10 = AccumulationAO[base.xy + int2(-2,2)];
-	float bottomLeft10Depth = DownsampleDepths[base.xy + int2(-2,2)];
+	float bottomLeft10 = LoadGroupSharedAO(base.xy, int2(-2,2));
+	float bottomLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,2));
 	float2 bottomLeft10ExpectedDepth = float2(-4, 4);
 	ACC(bottomLeft10, 0, weightMidCorner);
 	ACC(bottomLeft10, 1, weightFarCorner);
 	ACC(bottomLeft10, 2, weightNearCorner);
 	ACC(bottomLeft10, 3, weightMidCorner);
 
-	float bottom11 = AccumulationAO[base.xy + int2(-1,2)];
-	float bottom11Depth = DownsampleDepths[base.xy + int2(-1,2)];
+	float bottom11 = LoadGroupSharedAO(base.xy, int2(-1,2));
+	float bottom11Depth = LoadGroupSharedDepth(base.xy, int2(-1,2));
 	float2 bottom11ExpectedDepth = float2(-2, 4);
 	ACC(bottom11, 0, weightFarEdge);
 	ACC(bottom11, 1, weightFarEdge);
 	ACC(bottom11, 2, weightNearEdge);
 	ACC(bottom11, 3, weightNearEdge);
 
-	float bottom8 = AccumulationAO[base.xy + int2(0,2)];
-	float bottom8Depth = DownsampleDepths[base.xy + int2(0,2)];
+	float bottom8 = LoadGroupSharedAO(base.xy, int2(0,2));
+	float bottom8Depth = LoadGroupSharedDepth(base.xy, int2(0,2));
 	float2 bottom8ExpectedDepth = float2(0, 4);
 	ACC(bottom8, 0, weightFarEdge);
 	ACC(bottom8, 1, weightFarEdge);
 	ACC(bottom8, 2, weightNearEdge);
 	ACC(bottom8, 3, weightNearEdge);
 
-	float bottom9 = AccumulationAO[base.xy + int2(1,2)];
-	float bottom9Depth = DownsampleDepths[base.xy + int2(1,2)];
+	float bottom9 = LoadGroupSharedAO(base.xy, int2(1,2));
+	float bottom9Depth = LoadGroupSharedDepth(base.xy, int2(1,2));
 	float2 bottom9ExpectedDepth = float2(2, 4);
 	ACC(bottom9, 0, weightFarEdge);
 	ACC(bottom9, 1, weightFarEdge);
 	ACC(bottom9, 2, weightNearEdge);
 	ACC(bottom9, 3, weightNearEdge);
 
-	float bottomRight10 = AccumulationAO[base.xy + int2(2,2)];
-	float bottomRight10Depth = DownsampleDepths[base.xy + int2(2,2)];
+	float bottomRight10 = LoadGroupSharedAO(base.xy, int2(2,2));
+	float bottomRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,2));
 	float2 bottomRight10ExpectedDepth = float2(4, 4);
 	ACC(bottomRight10, 0, weightFarCorner);
 	ACC(bottomRight10, 1, weightMidCorner);
@@ -576,10 +615,10 @@ void AccumulateSample(
 
 #endif
 
-	OutputTexture[base.xy*2] = out0 / out0TotalWeight;
-	OutputTexture[base.xy*2 + uint2(1,0)] = out1 / out1TotalWeight;
-	OutputTexture[base.xy*2 + uint2(0,1)] = out2 / out2TotalWeight;
-	OutputTexture[base.xy*2 + uint2(1,1)] = out3 / out3TotalWeight;
+	OutputTexture[outputPixel.xy*2] = out0 / out0TotalWeight;
+	OutputTexture[outputPixel.xy*2 + uint2(1,0)] = out1 / out1TotalWeight;
+	OutputTexture[outputPixel.xy*2 + uint2(0,1)] = out2 / out2TotalWeight;
+	OutputTexture[outputPixel.xy*2 + uint2(1,1)] = out3 / out3TotalWeight;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
