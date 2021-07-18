@@ -283,9 +283,18 @@ namespace RenderCore { namespace Metal_DX11
 			// more here: https://simoncoenen.com/blog/programming/graphics/DxcCompiling
 			LPCWSTR fixedArguments[] {
 				L"-spirv",
-				L"-fspv-target-env=vulkan1.0",
+				L"-fspv-target-env=vulkan1.1",
+#if 0
+				L"-Qembed_debug",
+				L"-Zi",
+				L"-Od",
+				L"-fspv-debug=line",
+				L"-fspv-debug=source",
+#else
 				L"-Qstrip_debug",
 				L"-Qstrip_reflect",
+				L"-O3"
+#endif
 			};
 
 			ResChar shaderModel[64];

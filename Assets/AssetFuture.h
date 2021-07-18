@@ -227,6 +227,13 @@ namespace Assets
 					std::swap(pollingFunction, _pollingFunction);
 				}
 
+				if (_state != AssetState::Pending) {
+					actualized = _actualized;
+					depVal = _actualizedDepVal;
+					actualizationLog = _actualizationLog;
+					return _state;
+				}
+
 				if (_pendingState != AssetState::Pending) {
 					actualized = _pending;
 					depVal = _pendingDepVal;

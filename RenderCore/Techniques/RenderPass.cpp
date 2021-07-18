@@ -384,6 +384,7 @@ namespace RenderCore { namespace Techniques
 			assert(_frameBuffer);
 			_attachedContext->BeginNextSubpass(*_frameBuffer);
 		}
+        ++_currentSubpassIndex;
     }
 
     void RenderPassInstance::End()
@@ -396,11 +397,9 @@ namespace RenderCore { namespace Techniques
     
     unsigned RenderPassInstance::GetCurrentSubpassIndex() const
     {
-		if (_attachedContext) {
-			return _attachedContext->GetCurrentSubpassIndex();
-		} else {
-			return 0;
-		}
+		if (_attachedContext)
+			assert(_currentSubpassIndex == _attachedContext->GetCurrentSubpassIndex());
+		return _currentSubpassIndex;
     }
 
     ViewportDesc RenderPassInstance::GetDefaultViewport() const
@@ -620,9 +619,11 @@ namespace RenderCore { namespace Techniques
 	, _layout(std::move(moveFrom._layout))
     , _viewedAttachments(std::move(moveFrom._viewedAttachments))
     , _viewedAttachmentsMap(std::move(moveFrom._viewedAttachmentsMap))
+    , _currentSubpassIndex(moveFrom._currentSubpassIndex)
     {
         moveFrom._attachedContext = nullptr;
         moveFrom._attachmentPool = nullptr;
+        moveFrom._currentSubpassIndex = 0;
     }
 
     RenderPassInstance& RenderPassInstance::operator=(RenderPassInstance&& moveFrom) never_throws
@@ -640,6 +641,8 @@ namespace RenderCore { namespace Techniques
 		_layout = std::move(moveFrom._layout);
         _viewedAttachments = std::move(moveFrom._viewedAttachments);
         _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
+        _currentSubpassIndex = moveFrom._currentSubpassIndex;
+        moveFrom._currentSubpassIndex = 0;
         return *this;
     }
 

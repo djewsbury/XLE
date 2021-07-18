@@ -56,13 +56,13 @@ namespace RenderCore { namespace Techniques
 				if (!_pipelineLayout)
 					Throw(::Assets::Exceptions::ConstructionError(
 						::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-						predefinedLayouts->GetDependencyValidation(),
-						"Could not find section (%s) in given pipeline layout file"));
+						_containingFile->GetDependencyValidation(),
+						"Could not find section (%s) in given pipeline layout file", section.c_str()));
 			} else {
 				if (_containingFile->_pipelineLayouts.empty())
 					Throw(::Assets::Exceptions::ConstructionError(
 						::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-						predefinedLayouts->GetDependencyValidation(),
+						_containingFile->GetDependencyValidation(),
 						"No pipeline layouts in pipeline layout file"));
 				auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
 				_pipelineLayout = device->CreatePipelineLayout(initializer);
@@ -285,8 +285,15 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(unsigned countX, unsigned countY, unsigned countZ, IteratorRange<const void*> pushConstants) override
 		{
 			assert(_betweenBeginEnd);
-			_activeEncoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstants);
+			if (!pushConstants.empty())
+				_activeEncoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstants);
 			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+		}
+
+		virtual void DispatchIndirect(const IResource& indirectArgsBuffer, unsigned offset, IteratorRange<const void*> pushConstants) override
+		{
+			assert(_betweenBeginEnd);
+			_activeEncoder.DispatchIndirect(*_pipeline, indirectArgsBuffer, offset);
 		}
 
 		static void ConstructToFuture(
@@ -303,7 +310,7 @@ namespace RenderCore { namespace Techniques
 				future,
 				[usi=usi, pipelineLayout, pipelineLayoutDepVal](std::shared_ptr<Metal::ComputePipeline> pipeline) {
 					auto op = std::make_shared<ComputeOperator>();
-					op->_pipelineLayout = pipelineLayout;
+					op->_pipelineLayout = std::move(pipelineLayout);
 					op->_usi = std::move(usi);
 					op->_pipeline = std::move(pipeline);
 					assert(op->_pipeline);

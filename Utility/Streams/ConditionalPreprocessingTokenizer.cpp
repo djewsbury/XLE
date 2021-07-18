@@ -840,7 +840,7 @@ namespace Utility
                         }
                     }
 
-                } else if (XlEqStringI(directive._value, "line") || XlEqStringI(directive._value, "error") || XlEqStringI(directive._value, "pragma")) {
+                } else if (XlEqStringI(directive._value, "line") || XlEqStringI(directive._value, "error") || XlEqStringI(directive._value, "pragma") || XlEqStringI(directive._value, "extension")) {
 
                     // These don't have any effects relevant to us. We can just go ahead and skip them
                     helper.ReadUntilEndOfLine();

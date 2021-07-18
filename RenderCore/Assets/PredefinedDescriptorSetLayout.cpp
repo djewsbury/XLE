@@ -213,7 +213,7 @@ namespace RenderCore { namespace Assets
 				ParseSlot(iterator, i->second);
 			} else {
 				StringMeld<4096> meld;
-				meld << "Unknown identifier. Expecting one of the following: ";
+				meld << "Unknown identifier (" << token._value << "). Expecting one of the following: ";
 				for (unsigned c=0; c<dimof(s_descriptorTypeNames); ++c) {
 					if (c != 0) meld << ", ";
 					meld << s_descriptorTypeNames[c].first;

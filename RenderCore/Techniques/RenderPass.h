@@ -321,6 +321,7 @@ namespace RenderCore { namespace Techniques
         AttachmentPool* _attachmentPool;
         AttachmentPool::Reservation _attachmentPoolReservation;
 		FrameBufferDesc _layout;
+        unsigned _currentSubpassIndex = 0;
 
         std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;
         std::vector<unsigned> _viewedAttachmentsMap;
