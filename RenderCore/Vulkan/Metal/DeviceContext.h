@@ -269,6 +269,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		void        Dispatch(const ComputePipeline& pipeline, unsigned countX, unsigned countY=1, unsigned countZ=1);
+		void        DispatchIndirect(const ComputePipeline& pipeline, const IResource& res, unsigned offset=0);
 
 		ComputeEncoder(ComputeEncoder&&);
 		ComputeEncoder& operator=(ComputeEncoder&&);

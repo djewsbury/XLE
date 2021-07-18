@@ -710,6 +710,21 @@ namespace RenderCore { namespace Metal_Vulkan
 			countX, countY, countZ);
 	}
 
+	void ComputeEncoder::DispatchIndirect(const ComputePipeline& pipeline, const IResource& res, unsigned offset)
+	{
+		assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+		vkCmdBindPipeline(
+			_sharedState->_commandList.GetUnderlying().get(),
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			pipeline.get());
+		DEBUG_ONLY(LogPipeline(pipeline));
+
+		vkCmdDispatchIndirect(
+			_sharedState->_commandList.GetUnderlying().get(),
+			checked_cast<const Resource*>(&res)->GetBuffer(),
+			offset);
+	}
+
 	ComputeEncoder::ComputeEncoder(ComputeEncoder&& moveFrom)
 	: SharedEncoder(std::move(moveFrom))
 	{
@@ -853,6 +868,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	auto        DeviceContext::ResolveCommandList() -> std::shared_ptr<CommandList>
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
+		assert(_sharedState->_commandList._asyncTracker);
 		if (_captureForBindRecords)
 			Internal::ValidateIsEmpty(*_captureForBindRecords);		// always complete these captures before completing a command list
 		auto res = vkEndCommandBuffer(_sharedState->_commandList.GetUnderlying().get());
