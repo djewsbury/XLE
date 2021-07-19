@@ -345,37 +345,29 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
 	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
 	float3 negCameraForward = float3(SysUniform_GetCameraBasis()[0].z, SysUniform_GetCameraBasis()[1].z, SysUniform_GetCameraBasis()[2].z);
-
-#if 0
-	float3 planePNormal = (cameraRight * -sinPhi - cameraUp * cosPhi);
-	float3 projectedWorldSpaceNormal = worldSpaceNormal - worldSpaceNormal * dot(worldSpaceNormal, planePNormal);
-	float magProjectedWorldSpaceNormal = length(projectedWorldSpaceNormal);
-	float cosGamma = saturate(dot(projectedWorldSpaceNormal/magProjectedWorldSpaceNormal, negCameraForward));
-
-	float gamma = acos(cosGamma);
-	float3 planePTangent = cameraRight * cosPhi - cameraUp * sinPhi;
-	if (dot(projectedWorldSpaceNormal, planePTangent) < 0) gamma = -gamma;
-	float sinGamma = sin(gamma);
-#else
 	float projNormX = dot(cameraRight * cosPhi - cameraUp * sinPhi, worldSpaceNormal);
 	float projNormZ = dot(negCameraForward, worldSpaceNormal);
-	float magProjectedWorldSpaceNormal = sqrt(projNormX*projNormX+projNormZ*projNormZ);
-	float cosGamma = saturate(projNormZ/magProjectedWorldSpaceNormal);
+	float reciprocalMagProjectedWorldSpaceNormal = rsqrt(projNormX*projNormX+projNormZ*projNormZ);
+	float cosGamma = saturate(projNormZ*reciprocalMagProjectedWorldSpaceNormal);
 	float gamma = acos(cosGamma);
 	float sinGamma = sin(gamma);
-#endif
 
 	float maxTheta = acos(min(1,cosMaxTheta));
-	float gtoa = cosGamma + 2 * maxTheta * sinGamma - cos(2*maxTheta - gamma);	// 0.25f * magProjectedWorldSpaceNormal below
+	float gtoa = cosGamma + 2 * maxTheta * sinGamma - cos(2*maxTheta - gamma);	// 0.25f * reciprocalMagProjectedWorldSpaceNormal below
 
 #if BOTH_WAYS
 	float maxTheta2 = acos(min(1,cosMaxTheta2));
-	float gtoa2 = cosGamma + 2 * maxTheta2 * sinGamma - cos(2*maxTheta2 - gamma);	// 0.25f * magProjectedWorldSpaceNormal below
+	float gtoa2 = cosGamma + 2 * maxTheta2 * sinGamma - cos(2*maxTheta2 - gamma);	// 0.25f * reciprocalMagProjectedWorldSpaceNormal below
 
 	float final = gtoa + gtoa2;
 	final *= 0.25 * magProjectedWorldSpaceNormal;
 #else
-	float final = gtoa * 2.0 * 0.25 * magProjectedWorldSpaceNormal;	// don't need to divide by pi here -- we're taking the integral 0->pi then dividing by pi. The pis just cancel out
+		// Jimenez et al divide by reciprocalMagProjectedWorldSpaceNormal here, but that creates extra darkening on surfaces sloped
+		// relative to the camera. It's also not completely clear what the motivation is, given that gamma is just an angle on the
+		// disc we're sampling, and the equations above should find reliably. For now, we seem to get a better result with that
+		// term ommitted.
+		// (also don't need to divide by pi here -- we're taking the integral 0->pi then dividing by pi. The pis just cancel out)
+	float final = gtoa * 2.0 * 0.25; 
 #endif
 
 	if (ClearAccumulation) {
