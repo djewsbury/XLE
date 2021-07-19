@@ -22,14 +22,13 @@ cbuffer AOProps : register(b5, space1)
 // #define DITHER3x3 1
 #define HAS_HIERARCHICAL_DEPTHS 1
 
-float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 {
 	// in world space units, how big is the distance between samples in the sample direction?
 	// For orthogonal, this only depends on the angle phi since there's no foreshortening
 	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
 
 	float cosMaxTheta = 0.0;
-#if !defined(HAS_HIERARCHICAL_DEPTHS)
 	float xStep, yStep;
 	float stepDistanceSq;
 	if (abs(sinPhi) > abs(cosPhi)) {
@@ -66,7 +65,15 @@ float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 
 		// note -- thickness heuristic
 	}
-#else
+
+	return cosMaxTheta;
+}
+
+float TraverseRay_HierachicalDepths_0(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+{
+	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
+	float cosMaxTheta = 0.0;
+
 	float2 direction = float2(cosPhi, sinPhi);
 	float2 xyJumpFromFloor = direction.xy < 0 ? 0 : 1;
 	float2 uvOffset = float2(0.005,0.005) * exp2(1) / textureDims;	// shift just off the pixel edge when iterating
@@ -80,7 +87,7 @@ float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 	float2 initialUV = currentUV;
 	float d0 = HierarchicalDepths.Load(uint3(currentUV*currentMipRes, currentMipLevel));
 
-	const bool oneFreeJump = true;
+	const bool oneFreeJump = false;
 	if (oneFreeJump) {
 		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
 		xyPlane = xyPlane/currentMipRes+uvOffset;
@@ -89,7 +96,7 @@ float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 	}
 
 	int c=0;
-	for (; c<32; ++c) {
+	for (; c<64; ++c) {
 		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
 		// uvOffset = float2(0.005,0.005) * exp2(currentMipLevel) / textureDims;
 		// uvOffset = direction.xy < 0 ? -uvOffset : uvOffset;
@@ -105,8 +112,9 @@ float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 		const bool accurateDistanceCalc = true;
 		float2 texel = floor(newUV*currentMipRes);
 		if (accurateDistanceCalc) {
-			float2 center = (texel+0.5.xx)/currentMipRes;
+			float2 center = (texel+0.5.xx+0.5*direction)/currentMipRes;
 			float distanceToCenter = dot(direction, center-initialUV);
+			// float distanceToCenter = length(center-initialUV);
 			azmuthalXSq = dot(distanceToCenter*direction*orthoProjSize, distanceToCenter*direction*orthoProjSize);
 		} else {
 			azmuthalXSq = dot(uvMovement*orthoProjSize, uvMovement*orthoProjSize);
@@ -147,8 +155,96 @@ float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 	}
 
 	// cosMaxTheta = float(c)/32;
-#endif
 	return cosMaxTheta;
+}
+
+float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+{
+	// There are 2 ways to ray march through the depth field
+	//	a) visit every pixel that intersects the given ray even if the ray only touches the edge
+	//	b) take the longest axis and step along that; even if it means missing some intersecting pixels
+	// type (b) is a lot more efficient, and just seems to produce few artifacts. Since we're sampling
+	// so many directions, the skipped pixels will still be accounted for; so type (B) just seems better
+	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
+	float cosMaxTheta = 0.0;
+
+	float xStep, yStep;
+	float stepDistanceSq;
+	if (abs(sinPhi) > abs(cosPhi)) {
+		xStep = cosPhi / abs(sinPhi);
+		yStep = sign(sinPhi);
+	} else {
+		xStep = sign(cosPhi);
+		yStep = sinPhi / abs(cosPhi);
+	}
+
+	const uint mostDetailedMipLevel = 1;
+	uint currentMipLevel = mostDetailedMipLevel;
+	float2 mostDetailedMipRes = textureDims*pow(0.5, mostDetailedMipLevel);
+	float currentMipLevelScale = exp2(currentMipLevel-mostDetailedMipLevel);
+
+	float2 worldSpacePixelSize = orthoProjSize / mostDetailedMipRes;
+	worldSpacePixelSize *= float2(xStep, yStep);
+	stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+
+	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	const float initialStepSize = 1;
+	float2 xy = pixelId.xy + initialStepSize*float2(xStep, yStep);
+	int c=1;
+	float stepsAtMostDetailedRes = initialStepSize;
+	for (; c<32; ++c) {
+		if (any(xy < 0) || any(xy >= mostDetailedMipRes)) break;
+		if (WaveActiveCountBits(true) <= 8) break;	// exit due to low occupancy
+
+		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
+
+		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		float azmuthalXSq = stepsAtMostDetailedRes * stepsAtMostDetailedRes * stepDistanceSq;
+		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
+		
+		// Shift the mip level we're testing up or down to either refine the estimate or attempt to make a bigger step
+		// on the next loop iteration
+		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
+		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
+#if 1
+		if (cosTheta > cosMaxTheta) {
+			if (currentMipLevel == mostDetailedMipLevel) {
+				cosMaxTheta = cosTheta;
+				xy += float2(xStep, yStep);
+				stepsAtMostDetailedRes += 1.0f;
+			} else {
+				// refine estimate at higher mip level before we commit to it
+				--currentMipLevel;
+				currentMipLevelScale /= 2;
+			}
+		} else {
+			xy += float2(xStep, yStep)*currentMipLevelScale;
+			stepsAtMostDetailedRes += currentMipLevelScale;
+
+			// if we're on a boundary with the next mip level, then decrease
+			float2 test = xy / (2*currentMipLevelScale);
+			bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
+			currentMipLevel += nextMipLevelBoundary;
+			currentMipLevelScale *= nextMipLevelBoundary?2:1;
+		}
+#else
+		cosMaxTheta = max(cosMaxTheta, cosTheta);
+		xy += float2(xStep, yStep);
+		stepsAtMostDetailedRes += 1.0f;
+#endif
+	}
+
+	// cosMaxTheta = float(c)/64;
+	return cosMaxTheta;
+}
+
+float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+{
+	#if !defined(HAS_HIERARCHICAL_DEPTHS)
+		return TraverseRay_NonHierachicalDepths(pixelId, cosPhi, sinPhi, textureDims);
+	#else
+		return TraverseRay_HierachicalDepths_1(pixelId, cosPhi, sinPhi, textureDims);
+	#endif
 }
 
 uint Dither3x3PatternInt(uint2 pixelCoords)
@@ -339,16 +435,21 @@ void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 	// groups. Each thread loads 4 of the 16x16 samples
 	dispatchThreadId.xy -= 4;
 	GroupAO[groupThreadId.y][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy];
-	GroupDepths[groupThreadId.y][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy];
-
 	GroupAO[groupThreadId.y][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,0)];
-	GroupDepths[groupThreadId.y][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,0)];
-
 	GroupAO[groupThreadId.y+8][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy+int2(0,8)];
-	GroupDepths[groupThreadId.y+8][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy+int2(0,8)];
-
 	GroupAO[groupThreadId.y+8][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,8)];
-	GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,8)];
+
+	#if !defined(HAS_HIERARCHICAL_DEPTHS)
+		GroupDepths[groupThreadId.y][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy];
+		GroupDepths[groupThreadId.y][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,0)];
+		GroupDepths[groupThreadId.y+8][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy+int2(0,8)];
+		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,8)];
+	#else
+		GroupDepths[groupThreadId.y][groupThreadId.x] = HierarchicalDepths.Load(int3(dispatchThreadId.xy, 1));
+		GroupDepths[groupThreadId.y][groupThreadId.x+8] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(8,0), 1));
+		GroupDepths[groupThreadId.y+8][groupThreadId.x] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(0,8), 1));
+		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(8,8), 1));
+	#endif
 	GroupMemoryBarrierWithGroupSync();
 }
 
