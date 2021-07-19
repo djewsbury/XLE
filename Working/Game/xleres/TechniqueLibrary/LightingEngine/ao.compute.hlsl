@@ -564,7 +564,9 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	float outDepth2 = InputTexture[base.xy*2 + int2(0,1)];
 	float outDepth3 = InputTexture[base.xy*2 + int2(1,1)];
 
-#if 1
+	base = groupThreadId.xy;
+
+#if 0
 	float2 depth0divs = float2(outDepth1 - outDepth0, outDepth2 - outDepth0);
 	float2 depth1divs = float2(outDepth1 - outDepth0, outDepth3 - outDepth1);
 	float2 depth2divs = float2(outDepth3 - outDepth2, outDepth2 - outDepth0);
@@ -573,6 +575,22 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	float depthDDX = lerp(outDepth1 - outDepth0, outDepth3 - outDepth2, 0.5);
 	float depthDDY = lerp(outDepth2 - outDepth0, outDepth3 - outDepth1, 0.5);
 	float2 depth0divs = float2(depthDDX, depthDDY), depth1divs = float2(depthDDX, depthDDY), depth2divs = float2(depthDDX, depthDDY), depth3divs = float2(depthDDX, depthDDY);
+#elif 0
+	float2 depth0divs = 0.25f * float2(LoadGroupSharedDepth(base.xy, int2(2,0)) - LoadGroupSharedDepth(base.xy, int2(0,0)), LoadGroupSharedDepth(base.xy, int2(0,2)) - LoadGroupSharedDepth(base.xy, int2(0,0)));
+	float2 depth1divs = depth0divs;
+	float2 depth2divs = depth0divs;
+	float2 depth3divs = depth0divs;
+#elif 1
+	float3 worldSpaceNormal = normalize(InputNormals.Load(uint3(outputPixel.xy*2, 0)).rgb);
+	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
+	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
+	float3 negCameraForward = float3(SysUniform_GetCameraBasis()[0].z, SysUniform_GetCameraBasis()[1].z, SysUniform_GetCameraBasis()[2].z);
+	float dotZ = dot(worldSpaceNormal, -negCameraForward), dotX = dot(worldSpaceNormal, cameraRight), dotY = dot(worldSpaceNormal, -cameraUp);
+
+	float2 depth0divs = float2(-dotX/dotZ, -dotY/dotZ)*1*float2((100.f/1920)*1/400.f,(100.f/1920)*1/400.f);
+	float2 depth1divs = depth0divs;
+	float2 depth2divs = depth0divs;
+	float2 depth3divs = depth0divs;
 #else
 	float2 depth0divs = float2(0, 0), depth1divs = float2(0, 0), depth2divs = float2(0, 0), depth3divs = float2(0, 0);
 #endif
@@ -582,13 +600,11 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 #if !defined(DITHER3x3)
 
-	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, outDepth##N + dot(depth##N##divs, X##ExpectedDepth), W)
+	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, saturate(outDepth##N + dot(depth##N##divs, X##ExpectedDepth)), W)
 // 	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, outDepth##N, W)
 
 	const float weightCenter = 1, weightNearEdge = .75, weightFarEdge = .25;
 	const float weightNearCorner = weightNearEdge*weightNearEdge, weightMidCorner = weightNearEdge*weightFarEdge, weightFarCorner = weightFarEdge*weightFarEdge;
-
-	base = groupThreadId.xy;
 
 	float topLeft10 = LoadGroupSharedAO(base.xy, int2(-2,-2));
 	float topLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,-2));
