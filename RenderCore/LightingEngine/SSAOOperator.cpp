@@ -34,13 +34,14 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& downresDepthsUAV,
         IResourceView& accumulation0UAV,
         IResourceView& accumulation1UAV,
-        IResourceView& aoOutputUAV)
+        IResourceView& aoOutputUAV,
+        IResourceView& hierarchicalDepths)
     {
         IResourceView* accumulationUAV = (_pingPongCounter&1) ? &accumulation0UAV : &accumulation1UAV;
         IResourceView* accumulationLastUAV = (_pingPongCounter&1) ? &accumulation1UAV : &accumulation0UAV;
         
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &downresDepthsUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV };
+        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &downresDepthsUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &hierarchicalDepths };
         us._resourceViews = MakeIteratorRange(srvs);
         UInt4 aoProps { _pingPongCounter, _pingPongCounter == ~0u, 0, 0 };
         UniformsStream::ImmediateData immData[] = {
@@ -62,7 +63,7 @@ namespace RenderCore { namespace LightingEngine
         ++_pingPongCounter;
     }
 
-    LightingEngine::RenderStepFragmentInterface SSAOOperator::CreateFragment()
+    LightingEngine::RenderStepFragmentInterface SSAOOperator::CreateFragment(const RenderCore::FrameBufferProperties& fbProps)
     {
         LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
@@ -91,6 +92,7 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation1, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
+        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("HierarchicalDepths")), BindFlag::ShaderResource);
         spDesc.SetName("ao-operator");
 
         result.AddSubpass(
@@ -104,7 +106,8 @@ namespace RenderCore { namespace LightingEngine
                     *iterator._rpi.GetNonFrameBufferAttachmentView(3),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(4),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(5),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(6));
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(6),
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(7));
             });
 
         return result;
@@ -162,6 +165,7 @@ namespace RenderCore { namespace LightingEngine
         usi.BindResourceView(4, Hash64("AccumulationAOLast"));
         usi.BindResourceView(5, Hash64("InputNormals"));
         usi.BindResourceView(6, Hash64("GBufferMotion"));
+        usi.BindResourceView(7, Hash64("HierarchicalDepths"));
         usi.BindImmediateData(0, Hash64("AOProps"));
 
         ParameterBox selectors;

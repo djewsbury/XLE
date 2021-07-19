@@ -7,7 +7,7 @@
 #include "../../Assets/AssetsCore.h"
 #include <memory>
 
-namespace RenderCore { class IResourceView; class IDevice; }
+namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; }
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; }}
 
 namespace RenderCore { namespace LightingEngine
@@ -26,9 +26,10 @@ namespace RenderCore { namespace LightingEngine
 			RenderCore::IResourceView& downresDepthsUAV,
 			RenderCore::IResourceView& accumulation0UAV,
 			RenderCore::IResourceView& accumulation1UAV,
-			RenderCore::IResourceView& aoOutputUAV);
+			RenderCore::IResourceView& aoOutputUAV,
+			IResourceView& hierarchicalDepths);
 
-		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment();
+		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const RenderCore::FrameBufferProperties& fbProps);
 		void PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
 
 		void ResetAccumulation();

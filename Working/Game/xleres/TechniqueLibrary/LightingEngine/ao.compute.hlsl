@@ -10,14 +10,146 @@ Texture2D InputNormals : register(t6, space1);
 Texture2D<int2> GBufferMotion : register(t7, space1);
 Texture2D<float> AccumulationAOLast : register(t8, space1);
 
+Texture2D<float> HierarchicalDepths : register(t9, space1);
+
 cbuffer AOProps : register(b5, space1)
 {
 	uint FrameIdx;
 	bool ClearAccumulation;
 }
 
-#define BOTH_WAYS 1
+// #define BOTH_WAYS 1
 // #define DITHER3x3 1
+#define HAS_HIERARCHICAL_DEPTHS 1
+
+float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+{
+	// in world space units, how big is the distance between samples in the sample direction?
+	// For orthogonal, this only depends on the angle phi since there's no foreshortening
+	float2 orthoProjSize = 100.0;		// hard coded for the particular camera we're using
+
+	float cosMaxTheta = 0.0;
+#if !defined(HAS_HIERARCHICAL_DEPTHS)
+	float xStep, yStep;
+	float stepDistanceSq;
+	if (abs(sinPhi) > abs(cosPhi)) {
+		xStep = cosPhi / abs(sinPhi);
+		yStep = sign(sinPhi);
+	} else {
+		xStep = sign(cosPhi);
+		yStep = sinPhi / abs(cosPhi);
+	}
+
+	float2 worldSpacePixelSize = orthoProjSize / float2(textureDims.xy/2);
+	worldSpacePixelSize *= float2(xStep, yStep);
+	stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
+
+	float2 xy = pixelId.xy + float2(xStep, yStep);
+
+	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	int c=1;
+	for (; c<8; ++c) {
+		float d = HierarchicalDepths.Load(uint3(xy, 1));
+		xy += float2(xStep, yStep);
+		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+		float C = float(c);		// maybe -0.5... or even 0.5. It depends if we wwant to see the pixels as cubes, pyramids or slopes?
+		float azmuthalXSq = C * C * stepDistanceSq;
+
+		//
+		// cosTheta = dot(normalized(vector to test point), direction to eye)
+		// the vector to test point in the azimuthal plane is just (x, worldSpaceDepthDifference)
+		// and direction to eye is always (0, 1) -- (assuming orthogonal, or at least ignoring distortion from persective)
+		// so we can just take worldSpaceDepthDifference / length(vector to test point)
+		//
+		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
+		cosMaxTheta = max(cosTheta, cosMaxTheta);
+
+		// note -- thickness heuristic
+	}
+#else
+	float2 direction = float2(cosPhi, sinPhi);
+	float2 xyJumpFromFloor = direction.xy < 0 ? 0 : 1;
+	float2 uvOffset = float2(0.005,0.005) * exp2(1) / textureDims;	// shift just off the pixel edge when iterating
+	// uvOffset *= 1000;
+	uvOffset = direction.xy < 0 ? -uvOffset : uvOffset;
+
+	const uint mostDetailedMipLevel = 1;
+	uint currentMipLevel = mostDetailedMipLevel;
+	float2 currentMipRes = textureDims/exp2(currentMipLevel);
+	float2 currentUV = pixelId.xy / float2(textureDims/2);
+	float2 initialUV = currentUV;
+	float d0 = HierarchicalDepths.Load(uint3(currentUV*currentMipRes, currentMipLevel));
+
+	const bool oneFreeJump = true;
+	if (oneFreeJump) {
+		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
+		xyPlane = xyPlane/currentMipRes+uvOffset;
+		float2 t = (xyPlane - initialUV)/direction;
+		currentUV = initialUV + min(t.x, t.y) * direction;
+	}
+
+	int c=0;
+	for (; c<32; ++c) {
+		float2 xyPlane = floor(currentUV * currentMipRes) + xyJumpFromFloor;
+		// uvOffset = float2(0.005,0.005) * exp2(currentMipLevel) / textureDims;
+		// uvOffset = direction.xy < 0 ? -uvOffset : uvOffset;
+		xyPlane = xyPlane/currentMipRes+uvOffset;
+		float2 t = (xyPlane - initialUV)/direction;
+		float2 uvMovement = min(t.x, t.y) * direction;
+		float2 newUV = initialUV + uvMovement;
+		
+		if (any(newUV.xy < 0) || any(newUV.xy >= 1)) break;
+		if (WaveActiveCountBits(true) <= 8) break;	// exit due to low occupancy
+
+		float azmuthalXSq;
+		const bool accurateDistanceCalc = true;
+		float2 texel = floor(newUV*currentMipRes);
+		if (accurateDistanceCalc) {
+			float2 center = (texel+0.5.xx)/currentMipRes;
+			float distanceToCenter = dot(direction, center-initialUV);
+			azmuthalXSq = dot(distanceToCenter*direction*orthoProjSize, distanceToCenter*direction*orthoProjSize);
+		} else {
+			azmuthalXSq = dot(uvMovement*orthoProjSize, uvMovement*orthoProjSize);
+		}
+
+		float d = HierarchicalDepths.Load(uint3(texel, currentMipLevel));
+		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
+
+		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
+		
+		// Shift the mip level we're testing up or down to either refine the estimate or attempt to make a bigger step
+		// on the next loop iteration
+		// Here, we're assuming that the depth downsampling is using a min() filter (ie, each depth value is the closest to the camera
+		// of the source pixels from the next more detailed mip). But, it may look visually acceptable with other mip filters also
+#if 1
+		if (cosTheta > cosMaxTheta) {
+			if (currentMipLevel == mostDetailedMipLevel) {
+				cosMaxTheta = cosTheta;
+				currentUV = newUV;
+			} else {
+				// refine estimate at higher mip level before we commit to it
+				--currentMipLevel;
+				currentMipRes *= 2;
+			}
+		} else {
+			currentUV = newUV;
+			// if we're on a boundary with the next mip level, then decrease
+			float2 nextMipRes = currentMipRes*0.5;
+			float2 test = (currentUV-uvOffset) * nextMipRes;
+			bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
+			currentMipLevel += nextMipLevelBoundary;
+			currentMipRes = nextMipLevelBoundary ? nextMipRes : currentMipRes;
+		}
+#else
+		cosMaxTheta = max(cosMaxTheta, cosTheta);
+		currentUV = newUV;
+#endif
+	}
+
+	// cosMaxTheta = float(c)/32;
+#endif
+	return cosMaxTheta;
+}
 
 uint Dither3x3PatternInt(uint2 pixelCoords)
 {
@@ -34,6 +166,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
+#if !defined(HAS_HIERARCHICAL_DEPTHS)
 	uint2 textureDims;
 	InputTexture.GetDimensions(textureDims.x, textureDims.y);
 
@@ -52,11 +185,12 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	}
 	//////////////////////////////////
 	AllMemoryBarrierWithGroupSync();
-
-	// in world space units, how big is the distance between samples in the sample direction?
-	// For orthogonal, this only depends on the angle phi since there's no foreshortening
-	float worldSpacePixelSizeSq = 100.0 / (float)textureDims.x;		// hard coded for the particular camera we're using
-	worldSpacePixelSizeSq *= worldSpacePixelSizeSq;
+#else
+	uint2 textureDims;
+	HierarchicalDepths.GetDimensions(textureDims.x, textureDims.y);
+	uint2 threadGroupCounts = uint2((textureDims.x/2)/8, (textureDims.y/2)/8);
+	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
+#endif
 
 	const uint frameWrap = 6;	
 	uint frameIdxOrder[] = { 0, 4, 2, 5, 3 };
@@ -83,61 +217,10 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 
 	float cosPhi, sinPhi;
 	sincos(phi, sinPhi, cosPhi);
-	float xStep, yStep;
-	if (abs(sinPhi) > abs(cosPhi)) {
-		xStep = cosPhi / abs(sinPhi);
-		yStep = sign(sinPhi);
-		worldSpacePixelSizeSq *= 1+xStep*xStep;
-	} else {
-		xStep = sign(cosPhi);
-		yStep = sinPhi / abs(cosPhi);
-		worldSpacePixelSizeSq *= 1+yStep*yStep;
-	}
-	// xStep = 1;
-	// yStep = 0;
-	float2 xy = pixelId.xy + float2(xStep, yStep);
-
-	float d0 = DownsampleDepths.Load(pixelId.xy);
-	float cosMaxTheta = 0.0;
-	int c=1;
-	for (; c<8; ++c) {
-		float d = DownsampleDepths.Load(xy);
-		xy += float2(xStep, yStep);
-		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
-		float azmuthalXSq = c * c * worldSpacePixelSizeSq;
-
-		//
-		// cosTheta = dot(normalized(vector to test point), direction to eye)
-		// the vector to test point in the azimuthal plane is just (x, worldSpaceDepthDifference)
-		// and direction to eye is always (0, 1) -- (assuming orthogonal, or at least ignoring distortion from persective)
-		// so we can just take worldSpaceDepthDifference / length(vector to test point)
-		//
-		float cosTheta = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
-		cosMaxTheta = max(cosTheta, cosMaxTheta);
-
-		// note -- thickness heuristic
-	}
+	float cosMaxTheta = TraverseRay(pixelId, cosPhi, sinPhi, textureDims);
 
 #if BOTH_WAYS
-	float cosMaxTheta2 = 0.0;
-	xy = pixelId.xy - float2(xStep, yStep);
-	for (c=1; c<8; ++c) {
-		float d = DownsampleDepths.Load(xy);
-		xy -= float2(xStep, yStep);
-		float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
-		float azmuthalXSq = c * c * worldSpacePixelSizeSq;
-
-		//
-		// cosTheta = dot(normalized(vector to test point), direction to eye)
-		// the vector to test point in the azimuthal plane is just (x, worldSpaceDepthDifference)
-		// and direction to eye is always (0, 1) -- (assuming orthogonal, or at least ignoring distortion from persective)
-		// so we can just take worldSpaceDepthDifference / length(vector to test point)
-		//
-		float cosTheta2 = worldSpaceDepthDifference * rsqrt(worldSpaceDepthDifference * worldSpaceDepthDifference + azmuthalXSq);
-		cosMaxTheta2 = max(cosTheta2, cosMaxTheta2);
-
-		// note -- thickness heuristic
-	}
+	float cosMaxTheta2 = TraverseRay(pixelId, -cosPhi, -sinPhi, textureDims);
 #endif
 
 	//
@@ -204,13 +287,14 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	} else {
 		int2 vel = GBufferMotion.Load(uint3(pixelId.xy*2, 0)).rg;
 		// uint2 accumulationYesterdayPos = round(pixelId.xy + vel / 2);
-		uint2 accumulationYesterdayPos = pixelId.xy + vel / 2;
-		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
-		float2 diff = accumulationYesterdayPos.xy - float2(pixelId.xy);
-		float magSq = dot(diff, diff);
-		if (max(abs(vel.x), abs(vel.y)) >= 127) {
-			AccumulationAO[pixelId.xy] = 0;
+		int2 accumulationYesterdayPos = pixelId.xy + vel / 2;
+		if (max(abs(vel.x), abs(vel.y)) >= 127 || any(accumulationYesterdayPos<0) || any(accumulationYesterdayPos>=(textureDims/2))) {
+			AccumulationAO[pixelId.xy] = final;
 		} else {
+			float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
+			float2 diff = accumulationYesterdayPos.xy - float2(pixelId.xy);
+			float magSq = dot(diff, diff);
+
 			// We have to set the "Nvalue" here to a multiple of frameWrap, or we will start to get
 			// a strobing effect. Just tweaking this for what looks right
 			// (also tone it down a little bit when we've moved considerably from the previous sample)
@@ -334,7 +418,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	const float weightCenter = 1, weightNearEdge = .75, weightFarEdge = .25;
 	const float weightNearCorner = weightNearEdge*weightNearEdge, weightMidCorner = weightNearEdge*weightFarEdge, weightFarCorner = weightFarEdge*weightFarEdge;
 
-	base = groupThreadId;
+	base = groupThreadId.xy;
 
 	float topLeft10 = LoadGroupSharedAO(base.xy, int2(-2,-2));
 	float topLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,-2));
