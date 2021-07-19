@@ -21,6 +21,7 @@ cbuffer AOProps : register(b5, space1)
 // #define BOTH_WAYS 1
 // #define DITHER3x3 1
 #define HAS_HIERARCHICAL_DEPTHS 1
+#define DO_LATE_TEMPORAL_FILTERING 1
 
 float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 {
@@ -259,6 +260,9 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	return ditherArray[t.x+t.y*3];
 }
 
+static const uint FrameWrap = 6;
+// static const uint FrameWrap = 12;
+
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -288,14 +292,15 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 #endif
 
-	const uint frameWrap = 6;	
 	uint frameIdxOrder[] = { 0, 4, 2, 5, 3 };
+	// uint frameIdxOrder[] = { 0, 10, 5, 2, 8, 11, 3, 6, 1, 9, 4, 7 };
+
 #if !defined(DITHER3x3)
 	// The cost of looking up the dither pattern here is not trivially cheap; but you have a big impact
 	// on the visual result... If we had a way of doing this without a table lookup it might be a bit faster
 	// uint ditherValue = (pixelId.x%4)+(pixelId.y%4)*4;
 	uint ditherValue = DitherPatternInt(pixelId.xy);
-	uint idx = frameIdxOrder[FrameIdx%frameWrap] * 16 + ditherValue * 6;
+	uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 16 + ditherValue * FrameWrap;
 	#if BOTH_WAYS
 		float phi = idx / 96.0 * 3.14159;
 	#else
@@ -303,7 +308,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	#endif
 #else
 	uint ditherValue = Dither3x3PatternInt(pixelId.xy);
-	uint idx = frameIdxOrder[FrameIdx%frameWrap] * 9 + ditherValue * 6;
+	uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 9 + ditherValue * FrameWrap;
 	#if BOTH_WAYS
 		float phi = frac(idx / 54.0) * 3.14159;
 	#else
@@ -370,6 +375,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	float final = gtoa * 2.0 * 0.25; 
 #endif
 
+#if !defined(DO_LATE_TEMPORAL_FILTERING)
 	if (ClearAccumulation) {
 		AccumulationAO[pixelId.xy] = final;
 	} else {
@@ -386,13 +392,16 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 			// We have to set the "Nvalue" here to a multiple of frameWrap, or we will start to get
 			// a strobing effect. Just tweaking this for what looks right
 			// (also tone it down a little bit when we've moved considerably from the previous sample)
-			// float Nvalue = frameWrap*3;
-			float Nvalue = frameWrap*lerp(3,1,saturate(magSq/(25.0*25.0)));
+			// float Nvalue = FrameWrap*3;
+			float Nvalue = FrameWrap*lerp(3,1,saturate(magSq/(25.0*25.0)));
 			float alpha = 2.0/(Nvalue+1.0);
 			float accumulationToday = accumulationYesterday * (1-alpha) + final * alpha;
 			AccumulationAO[pixelId.xy] = accumulationToday;
 		}
 	}
+#else
+	AccumulationAO[pixelId.xy] = final;
+#endif
 }
 
 float Weight(float downsampleDepth, float originalDepth)
@@ -420,6 +429,8 @@ void AccumulateSample(
 
 groupshared float GroupAO[16][16];
 groupshared float GroupDepths[16][16];
+groupshared uint AccumulationTemporary = 0;
+groupshared uint AccumulationTemporary2 = 0;
 
 void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 {
@@ -442,6 +453,69 @@ void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 		GroupDepths[groupThreadId.y+8][groupThreadId.x] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(0,8), 1));
 		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(8,8), 1));
 	#endif
+	#if defined(DO_LATE_TEMPORAL_FILTERING)
+		if (all(groupThreadId==0)) {
+			AccumulationTemporary = 0;
+			AccumulationTemporary2 = 0;
+		}
+	#endif
+	GroupMemoryBarrierWithGroupSync();
+}
+
+void DoTemporalAccumulation(int2 groupThreadId, int2 srcPixel, float minV, float maxV)
+{
+	int2 textureDims;
+	GBufferMotion.GetDimensions(textureDims.x, textureDims.y);
+	int2 vel = GBufferMotion.Load(uint3(srcPixel*2, 0)).rg;
+	int2 accumulationYesterdayPos = srcPixel.xy + vel / 2;
+	if (max(abs(vel.x), abs(vel.y)) >= 127 || any(accumulationYesterdayPos<0) || any(accumulationYesterdayPos>=(textureDims/2))) {
+		// no change; just keep the "today" 
+	} else {
+		float accumulationYesterday = AccumulationAOLast.Load(uint3(accumulationYesterdayPos.xy, 0));
+		const float Nvalue = FrameWrap*2;
+		const float alpha = 2.0/(Nvalue+1.0);
+		float accumulationToday = accumulationYesterday * (1-alpha) + GroupAO[groupThreadId.y][groupThreadId.x] * alpha;
+		accumulationToday = clamp(accumulationToday, minV, maxV);
+		GroupAO[groupThreadId.y][groupThreadId.x] = accumulationToday;
+	}
+}
+
+void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
+{
+	GroupMemoryBarrierWithGroupSync();
+
+	uint A = (uint)(255.f*GroupAO[groupThreadId.y][groupThreadId.x]);
+	uint B = (uint)(255.f*GroupAO[groupThreadId.y][groupThreadId.x+8]);
+	uint C = (uint)(255.f*GroupAO[groupThreadId.y+8][groupThreadId.x]);
+	uint D = (uint)(255.f*GroupAO[groupThreadId.y+8][groupThreadId.x+8]);
+	uint T = A+B+C+D;
+	uint T2 = A*A+B*B+C*C+D*D;
+	InterlockedAdd(AccumulationTemporary, T);
+	InterlockedAdd(AccumulationTemporary2, T2);
+	GroupMemoryBarrierWithGroupSync();
+	float valueSum = float(AccumulationTemporary);
+	float valueSumSq = float(AccumulationTemporary2);
+
+	const float sampleCount = 16*16;
+	float valueStd = (valueSumSq - valueSum * valueSum / sampleCount) / (sampleCount - 1.0);
+    float valueMean = valueSum / sampleCount;
+	valueStd /= 255.f;
+	valueMean /= 255.f;
+	// The clamping range here can be pretty important to minimize ghosting and streaking. Effectively we're define a value range for the post-temporal filtered
+	// values based on the values in the local spatial neighbourhood. If the temporal filtered value doesn't look like it matches the kinds of
+	// values we see in the spatial neighbourhood, we'll consider it to be a filtering artifact. Since for the most part the temporal distribution of
+	// values should match the spatial distribution of values, this tends to do a really good job. However it can also introduce flickering and artifacts of
+	// it's own in areas of high frequency changes. 
+	const float clampingRange = 3.5;		
+	const float minV = valueMean - clampingRange*valueStd, maxV = valueMean + clampingRange*valueStd;
+
+	DoTemporalAccumulation(groupThreadId, dispatchThreadId+int2(-4,-4), minV, maxV);
+	DoTemporalAccumulation(groupThreadId+int2(0,8), dispatchThreadId+int2(-4,4), minV, maxV);
+	DoTemporalAccumulation(groupThreadId+int2(8,0), dispatchThreadId+int2(4,-4), minV, maxV);
+	DoTemporalAccumulation(groupThreadId+int2(8,8), dispatchThreadId+int2(4,4), minV, maxV);
+
+	int2 pixelToWrite = groupThreadId + int2(groupThreadId.x<4?8:0, groupThreadId.y<4?8:0);
+	AccumulationAO[dispatchThreadId.xy-groupThreadId.xy+pixelToWrite.xy-int2(4,4)] = GroupAO[pixelToWrite.y][pixelToWrite.x];
 	GroupMemoryBarrierWithGroupSync();
 }
 
@@ -467,6 +541,9 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	#endif
 
 	InitializeGroupSharedMem(outputPixel, groupThreadId.xy);
+	#if defined(DO_LATE_TEMPORAL_FILTERING)
+		LateTemporalFiltering(outputPixel, groupThreadId.xy);
+	#endif
 
 #if 0
 	OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
