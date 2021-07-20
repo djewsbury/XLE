@@ -1,28 +1,28 @@
-// Copyright 2015 XLGAMES Inc.
-//
 // Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
 #pragma once
 
-#include "../RenderCore/Metal/DeviceContext.h"
-#include "../RenderCore/Metal/TextureView.h"
+#include <memory>
 
-namespace RenderCore { namespace Techniques { class ParsingContext; } }
+namespace RenderCore { class IResourceView; class IThreadContext; }
+namespace RenderCore { namespace Techniques { class ParsingContext; class PipelinePool; } }
 
 namespace SceneEngine
 {
-    RenderCore::Metal::ShaderResourceView TiledLighting_CalculateLighting(
-        RenderCore::Metal::DeviceContext* context, 
+    std::shared_ptr<RenderCore::IResourceView> TiledLighting_CalculateLighting(
+        RenderCore::IThreadContext& context, 
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const RenderCore::Metal::ShaderResourceView& depthsSRV, 
-        const RenderCore::Metal::ShaderResourceView& normalsSRV,
-		RenderCore::Metal::UnorderedAccessView& metricBufferUAV);
+        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pool,
+        RenderCore::IResourceView& depthsSRV, 
+        RenderCore::IResourceView& normalsSRV,
+		RenderCore::IResourceView& metricBufferUAV);
 
     void TiledLighting_RenderBeamsDebugging(  
-        RenderCore::Metal::DeviceContext* context, 
+        RenderCore::IThreadContext& context, 
         RenderCore::Techniques::ParsingContext& parsingContext,
+        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pool,
         bool active, unsigned mainViewportWidth, unsigned mainViewportHeight, 
         unsigned techniqueIndex);
 }
