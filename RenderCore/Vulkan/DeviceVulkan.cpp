@@ -743,6 +743,11 @@ namespace RenderCore { namespace ImplVulkan
         return DeviceDesc{s_underlyingApi, libVersion._versionString, libVersion._buildDateString};
     }
 
+	uint64_t Device::GetGUID() const
+	{
+		return (uint64_t)_underlying.get();		// we just need to return something unique that will distinguish us from any other devices present in the system
+	}
+
 	std::shared_ptr<ICompiledPipelineLayout> Device::CreatePipelineLayout(const PipelineLayoutInitializer& desc)
 	{
 		DoSecondStageInit();

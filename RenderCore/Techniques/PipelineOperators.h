@@ -6,6 +6,7 @@
 
 #include "PipelineCollection.h"
 #include "TechniqueDelegates.h"
+#include "TechniqueUtils.h"		// (for GetDefaultShaderLanguage())
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/ParameterBox.h"
 
@@ -77,4 +78,29 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,
 		const UniformsStreamInterface& usi);
+
+	class CompiledPipelineLayoutAsset
+	{
+	public:
+		const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const { return _pipelineLayout; }
+		const ::Assets::DependencyValidation GetDependencyValidation() const;
+
+		CompiledPipelineLayoutAsset(
+			std::shared_ptr<IDevice> device,
+			std::shared_ptr<Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
+			std::shared_ptr<Techniques::CommonResourceBox> commonResources,
+			std::string section,
+			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
+
+		static void ConstructToFuture(
+			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
+			const std::shared_ptr<IDevice>& device,
+			const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
+			StringSection<> srcFile,
+			ShaderLanguage shaderLanguage = GetDefaultShaderLanguage());
+
+	protected:
+		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
+		std::shared_ptr<Assets::PredefinedPipelineLayoutFile> _containingFile;
+	};
 }}

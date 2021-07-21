@@ -18,11 +18,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../xleres/FileList.h"
 
-namespace RenderCore
-{
-	uint64_t Hash64(const std::shared_ptr<RenderCore::IDevice>& device, uint64_t seed = DefaultSeed64) { return seed; }
-}
-
 namespace Assets
 {
 	uint64_t Hash64(const ::Assets::DependencyValidation&, uint64_t seed = DefaultSeed64) { return seed; }
@@ -30,62 +25,55 @@ namespace Assets
 
 namespace RenderCore { namespace Techniques
 {
-	class CompiledPipelineLayoutAsset
+	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _containingFile->GetDependencyValidation(); };
+
+	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
+		std::shared_ptr<RenderCore::IDevice> device,
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
+		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> commonResources,
+		std::string section,
+		RenderCore::ShaderLanguage shaderLanguage)
+	: _containingFile(std::move(predefinedLayouts))
 	{
-	public:
-		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _containingFile;
-
-		const ::Assets::DependencyValidation GetDependencyValidation() const { return _containingFile->GetDependencyValidation(); };
-
-		CompiledPipelineLayoutAsset(
-			std::shared_ptr<RenderCore::IDevice> device,
-			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-			std::shared_ptr<RenderCore::Techniques::CommonResourceBox> commonResources,
-			std::string section,
-			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
-		: _containingFile(std::move(predefinedLayouts))
-		{
-			if (!section.empty()) {
-				for (const auto& l:_containingFile->_pipelineLayouts)
-					if (l.first == section) {
-						auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
-						_pipelineLayout = device->CreatePipelineLayout(initializer);
-						break;
-					}
-				if (!_pipelineLayout)
-					Throw(::Assets::Exceptions::ConstructionError(
-						::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-						_containingFile->GetDependencyValidation(),
-						"Could not find section (%s) in given pipeline layout file", section.c_str()));
-			} else {
-				if (_containingFile->_pipelineLayouts.empty())
-					Throw(::Assets::Exceptions::ConstructionError(
-						::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-						_containingFile->GetDependencyValidation(),
-						"No pipeline layouts in pipeline layout file"));
-				auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
-				_pipelineLayout = device->CreatePipelineLayout(initializer);
-			}
+		if (!section.empty()) {
+			for (const auto& l:_containingFile->_pipelineLayouts)
+				if (l.first == section) {
+					auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
+					_pipelineLayout = device->CreatePipelineLayout(initializer);
+					break;
+				}
+			if (!_pipelineLayout)
+				Throw(::Assets::Exceptions::ConstructionError(
+					::Assets::Exceptions::ConstructionError::Reason::MissingFile,
+					_containingFile->GetDependencyValidation(),
+					"Could not find section (%s) in given pipeline layout file", section.c_str()));
+		} else {
+			if (_containingFile->_pipelineLayouts.empty())
+				Throw(::Assets::Exceptions::ConstructionError(
+					::Assets::Exceptions::ConstructionError::Reason::MissingFile,
+					_containingFile->GetDependencyValidation(),
+					"No pipeline layouts in pipeline layout file"));
+			auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
+			_pipelineLayout = device->CreatePipelineLayout(initializer);
 		}
+	}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
-			const std::shared_ptr<RenderCore::IDevice>& device,
-			const std::shared_ptr<RenderCore::Techniques::CommonResourceBox>& commonResources,
-			StringSection<> srcFile,
-			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
-		{
-			using namespace RenderCore;
-			auto splitter = MakeFileNameSplitter(srcFile);
-			auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(splitter.AllExceptParameters());
-			::Assets::WhenAll(src).ThenConstructToFuture(
-				future,
-				[device, shaderLanguage, section=splitter.Parameters().AsString(), commonResources=commonResources](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
-					return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), commonResources, section, shaderLanguage);
-				});
-		}
-	};
+	void CompiledPipelineLayoutAsset::ConstructToFuture(
+		::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
+		const std::shared_ptr<RenderCore::IDevice>& device,
+		const std::shared_ptr<RenderCore::Techniques::CommonResourceBox>& commonResources,
+		StringSection<> srcFile,
+		RenderCore::ShaderLanguage shaderLanguage)
+	{
+		using namespace RenderCore;
+		auto splitter = MakeFileNameSplitter(srcFile);
+		auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(splitter.AllExceptParameters());
+		::Assets::WhenAll(src).ThenConstructToFuture(
+			future,
+			[device, shaderLanguage, section=splitter.Parameters().AsString(), commonResources=commonResources](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
+				return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), commonResources, section, shaderLanguage);
+			});
+	}
 
 	class FullViewportOperator : public IShaderOperator
 	{
@@ -192,7 +180,7 @@ namespace RenderCore { namespace Techniques
 		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pool->GetCommonResources(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
-			return CreateFullViewportOperator(pool, pixelShader, selectors, (*fastLayout)->_pipelineLayout, (*fastLayout)->GetDependencyValidation(), fbTarget, usi);
+			return CreateFullViewportOperator(pool, pixelShader, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetDependencyValidation(), fbTarget, usi);
 		} else {
 			auto result = std::make_shared<::Assets::FuturePtr<FullViewportOperator>>();
 			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToFuture(
@@ -203,7 +191,7 @@ namespace RenderCore { namespace Techniques
 					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
 					FullViewportOperator::ConstructToFuture(
 						resultFuture, pool, pixelShader, selectors, 
-						pipelineLayout->_pipelineLayout, pipelineLayout->GetDependencyValidation(),
+						pipelineLayout->GetPipelineLayout(), pipelineLayout->GetDependencyValidation(),
 						{&fbDesc, subPassIdx}, usi);
 				});
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&result);
@@ -364,7 +352,7 @@ namespace RenderCore { namespace Techniques
 		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pool->GetCommonResources(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
-			return CreateComputeOperator(pool, (*fastLayout)->_pipelineLayout, (*fastLayout)->GetDependencyValidation(), computeShader, selectors, usi);
+			return CreateComputeOperator(pool, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetDependencyValidation(), computeShader, selectors, usi);
 		} else {
 			auto result = std::make_shared<::Assets::FuturePtr<ComputeOperator>>();
 			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToFuture(
@@ -372,7 +360,7 @@ namespace RenderCore { namespace Techniques
 				[computeShader=computeShader.AsString(), selectors=selectors, pool=pool,
 				usi=usi](::Assets::FuturePtr<ComputeOperator>& resultFuture,
 					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
-					ComputeOperator::ConstructToFuture(resultFuture, pool, pipelineLayout->_pipelineLayout, pipelineLayout->GetDependencyValidation(), computeShader, selectors, usi);
+					ComputeOperator::ConstructToFuture(resultFuture, pool, pipelineLayout->GetPipelineLayout(), pipelineLayout->GetDependencyValidation(), computeShader, selectors, usi);
 				});
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&result);
 		}

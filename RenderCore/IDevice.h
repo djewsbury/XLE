@@ -183,6 +183,7 @@ namespace RenderCore
         /// <summary>Returns description & version information for this device</summary>
         /// Queries build number and build date information.
         virtual DeviceDesc          GetDesc() = 0;
+        virtual uint64_t            GetGUID() const = 0;
         virtual ~IDevice();
     };
 
