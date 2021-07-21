@@ -567,10 +567,14 @@ namespace RenderCore { namespace Metal_Vulkan
 						if (reflectionVariable._binding._descriptorSet >= _pipelineLayout->GetDescriptorSetCount())
 							Throw(std::runtime_error("Shader input is assigned to a descriptor set that doesn't exist in the pipeline layout (variable: " + reflectionVariable._name.AsString() + ", ds index: " + std::to_string(reflectionVariable._binding._descriptorSet) + ")"));
 
-						auto descSetSigBindings = _pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet)->GetDescriptorSlots();
+						auto* descSetLayout = _pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet).get();
+						auto descSetSigBindings = descSetLayout->GetDescriptorSlots();
 
 						if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
 							Throw(std::runtime_error("Shader input assignment is off the pipeline layout, or the shader type does not agree with descriptor set (variable: " + reflectionVariable._name.AsString() + ")"));
+
+						if ((descSetLayout->GetVkShaderStageMask() & shaderStageMask) != shaderStageMask)
+							Throw(std::runtime_error("Shader is using a uniform, however that uniform is not enabled for the corresponding shader stage in the descriptor set layout (variable: " + reflectionVariable._name.AsString() + ")"));
 
 						unsigned inputSlot = ~0u, groupIdx = ~0u;
 						UniformStreamType bindingType = UniformStreamType::None;

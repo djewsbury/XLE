@@ -226,14 +226,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			{
 				assert(resourceView.GetVulkanResource() && resourceView.GetVulkanResource()->GetBuffer());
 				auto range = resourceView.GetBufferRangeOffsetAndSize();
-				uint64_t rangeBegin = range.first, rangeEnd = range.second;
-				if (rangeBegin == 0 && rangeEnd == 0)
-					rangeEnd = VK_WHOLE_SIZE;
-				assert((rangeEnd-rangeBegin) != 0);
+				uint64_t rangeBegin = range.first, rangeSize = range.second;
+				if (rangeBegin == 0 && rangeSize == 0)
+					rangeSize = VK_WHOLE_SIZE;
+				assert(rangeSize != 0);
 				WriteBinding(
 					descriptorSetBindPoint,
 					AsVkDescriptorType(slotType),
-					VkDescriptorBufferInfo { resourceView.GetVulkanResource()->GetBuffer(), rangeBegin, rangeEnd }, true
+					VkDescriptorBufferInfo { resourceView.GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize }, true
 					VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			}
 			break;
@@ -292,11 +292,11 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(resources[c]->GetType() == ResourceView::Type::BufferAndRange);
 					assert(resources[c]->GetVulkanResource() && resources[c]->GetVulkanResource()->GetBuffer());
 					auto range = resources[c]->GetBufferRangeOffsetAndSize();
-					uint64_t rangeBegin = range.first, rangeEnd = range.second;
-					if (rangeBegin == 0 && rangeEnd == 0)
-						rangeEnd = VK_WHOLE_SIZE;
-					assert((rangeEnd-rangeBegin) != 0);
-					bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeEnd };
+					uint64_t rangeBegin = range.first, rangeSize = range.second;
+					if (rangeBegin == 0 && rangeSize == 0)
+						rangeSize = VK_WHOLE_SIZE;
+					assert(rangeSize != 0);
+					bufferInfos[c] = VkDescriptorBufferInfo { resources[c]->GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize };
 				}
 				WriteArrayBinding<VkDescriptorBufferInfo>(
 					descriptorSetBindPoint,
@@ -826,7 +826,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<const DescriptorSlot*> srcLayout,
 		IteratorRange<const  std::shared_ptr<ISampler>*> fixedSamplers,
 		VkShaderStageFlags stageFlags)
-	: _shaderStageFlags(stageFlags)
+	: _vkShaderStageMask(stageFlags)
 	, _descriptorSlots(srcLayout.begin(), srcLayout.end())
 	, _fixedSamplers(fixedSamplers.begin(), fixedSamplers.end())
 	{

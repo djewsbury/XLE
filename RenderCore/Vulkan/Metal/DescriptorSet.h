@@ -133,7 +133,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		VkDescriptorSetLayout GetUnderlying() { return _layout.get(); }
 		IteratorRange<const DescriptorSlot*> GetDescriptorSlots() const { return MakeIteratorRange(_descriptorSlots); }
-		VkShaderStageFlags GetShaderStageFlags() { return _shaderStageFlags; }
+		VkShaderStageFlags GetVkShaderStageMask() { return _vkShaderStageMask; }
 		uint64_t GetDummyMask() const { return _dummyMask; }
 		bool IsFixedSampler(unsigned slotIdx);
 
@@ -149,7 +149,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VulkanUniquePtr<VkDescriptorSetLayout>	_layout;
 		std::vector<DescriptorSlot> _descriptorSlots;
 		std::vector<std::shared_ptr<ISampler>> _fixedSamplers;
-		VkShaderStageFlags _shaderStageFlags;
+		VkShaderStageFlags _vkShaderStageMask;
 		uint64_t _dummyMask = 0;
 	};
 
