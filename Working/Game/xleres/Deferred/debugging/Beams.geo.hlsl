@@ -5,7 +5,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
-#include "../../TechniqueLibrary/Framework/MainGeometry.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
 #include "../../TechniqueLibrary/Math/ProjectionMath.hlsl"
 

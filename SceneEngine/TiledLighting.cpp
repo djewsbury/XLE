@@ -20,7 +20,6 @@
 #include "../RenderCore/Metal/TextureView.h"
 #include "../RenderCore/Metal/State.h"
 #include "../RenderCore/Metal/Shader.h"
-#include "../RenderCore/Metal/Buffer.h"
 #include "../RenderCore/Metal/InputLayout.h"
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Metal/DeviceContextImpl.h"
@@ -59,6 +58,8 @@ namespace SceneEngine
         std::shared_ptr<RenderCore::IResource> _lightOutputResource;
         std::shared_ptr<RenderCore::IResource> _temporaryProjectedLights;
 
+        bool _pendingCompleteInitialization = true;
+
         void CompleteInitialization(IThreadContext& threadContext)
         {
             auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
@@ -68,6 +69,7 @@ namespace SceneEngine
             metalContext.Clear(*_debuggingTexture[0], clearValues);
             metalContext.Clear(*_debuggingTexture[1], clearValues);
             metalContext.Clear(*_debuggingTexture[2], clearValues);
+            _pendingCompleteInitialization = false;
         }
 
         TileLightingResources(IDevice& device, unsigned width, unsigned height, unsigned bitDepth);
@@ -80,27 +82,27 @@ namespace SceneEngine
         return result;
     }
 
-    static ResourceDesc BuildRenderTargetDesc(BindFlag::BitField bindFlags, TextureDesc tDesc, const char name[])
+    static ResourceDesc BuildTextureResourceDesc(BindFlag::BitField bindFlags, TextureDesc tDesc, const char name[])
     {
-        return CreateDesc(bindFlags, 0, GPUAccess::Write, tDesc, name);
+        return CreateDesc(bindFlags, 0, GPUAccess::Read|GPUAccess::Write, tDesc, name);
     }
 
     TileLightingResources::TileLightingResources(IDevice& device, unsigned width, unsigned height, unsigned bitDepth)
     {
         _resLocator0 = device.CreateResource(
-            BuildRenderTargetDesc(
-                BindFlag::UnorderedAccess | BindFlag::ShaderResource, 
-                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS, 1),
+            BuildTextureResourceDesc(
+                BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
+                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS),
                 "TileLighting0"));
         _resLocator1 = device.CreateResource(
-            BuildRenderTargetDesc(
-                BindFlag::UnorderedAccess | BindFlag::ShaderResource, 
-                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS, 1),
+            BuildTextureResourceDesc(
+                BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
+                TextureDesc::Plain2D(width, height, Format::R32_TYPELESS),
                 "TileLighting1"));
         _resLocator2 = device.CreateResource(
-            BuildRenderTargetDesc(
-                BindFlag::UnorderedAccess | BindFlag::ShaderResource, 
-                TextureDesc::Plain2D(width, height, Format::R16_TYPELESS, 1),
+            BuildTextureResourceDesc(
+                BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferDst,
+                TextureDesc::Plain2D(width, height, Format::R16_UINT),
                 "TileLighting2"));
 
         _debuggingTextureSRV[0] = _resLocator0->CreateTextureView(BindFlag::ShaderResource, {Format::R32_FLOAT});
@@ -114,24 +116,19 @@ namespace SceneEngine
             /////
 
         _lightOutputResource = device.CreateResource(
-            BuildRenderTargetDesc(
+            BuildTextureResourceDesc(
                 BindFlag::UnorderedAccess | BindFlag::ShaderResource, 
-                TextureDesc::Plain2D(width, height, (bitDepth==16)?Format::R16G16B16A16_FLOAT:Format::R32G32B32A32_FLOAT, 1),
+                TextureDesc::Plain2D(width, height, (bitDepth==16)?Format::R16G16B16A16_FLOAT:Format::R32G32B32A32_FLOAT),
                 "TileLighting3"));
-
-        ResourceDesc bufferDesc;
-        bufferDesc._type = ResourceDesc::Type::LinearBuffer;
-        bufferDesc._bindFlags = BindFlag::UnorderedAccess;
-        bufferDesc._cpuAccess = 0;
-        bufferDesc._gpuAccess = GPUAccess::Read | GPUAccess::Write;
-        bufferDesc._allocationRules = 0;
-        bufferDesc._linearBufferDesc._structureByteSize = 24;
-        bufferDesc._linearBufferDesc._sizeInBytes = 1024 * bufferDesc._linearBufferDesc._structureByteSize;
-        _temporaryProjectedLights = device.CreateResource(bufferDesc);
-
         _lightOutputTextureUAV = _lightOutputResource->CreateTextureView(BindFlag::UnorderedAccess);
         _lightOutputTextureSRV = _lightOutputResource->CreateTextureView(BindFlag::ShaderResource);
-        _temporaryProjectedLightsUAV = _temporaryProjectedLights->CreateTextureView(BindFlag::UnorderedAccess);
+
+        auto bufferDesc = CreateDesc(
+            BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+            LinearBufferDesc::Create(1024*24, 24),
+            "temporary-projected-lights");
+        _temporaryProjectedLights = device.CreateResource(bufferDesc);
+        _temporaryProjectedLightsUAV = _temporaryProjectedLights->CreateBufferView(BindFlag::UnorderedAccess);
     }
 
     TileLightingResources::~TileLightingResources()
@@ -186,12 +183,12 @@ namespace SceneEngine
         RenderCore::IResourceView& depthsSRV, RenderCore::IResourceView& normalsSRV,
 		RenderCore::IResourceView& metricBufferUAV)
     {
-        const bool doTiledRenderingTest             = Tweakable("DoTileRenderingTest", false);
-        const bool doClusteredRenderingTest         = Tweakable("TileClustering", true);
+        const bool doTiledRenderingTest             = Tweakable("DoTileRenderingTest", true);
+        const bool doClusteredRenderingTest         = Tweakable("TileClustering", false);
         const bool tiledBeams                       = Tweakable("TiledBeams", false);
 
         const unsigned maxLightCount                = 1024;
-        const unsigned tileLightCount               = std::min(Tweakable("TileLightCount", 512), int(maxLightCount));
+        const unsigned tileLightCount               = 16; // std::min(Tweakable("TileLightCount", 512), int(maxLightCount));
         const bool pause                            = Tweakable("Pause", false);
 
         if (doTiledRenderingTest && !tiledBeams) {
@@ -202,6 +199,9 @@ namespace SceneEngine
                 auto& device = *threadContext.GetDevice();
                 auto& metalContext = *Metal::DeviceContext::Get(threadContext);
                 auto& tileLightingResources = GetTileLightingResources(device, width, height, 16);
+
+                if (tileLightingResources._pendingCompleteInitialization)
+                    tileLightingResources.CompleteInitialization(threadContext);
 
                 auto worldToView = InvertOrthonormalTransform(
                     parsingContext.GetProjectionDesc()._cameraToWorld);
@@ -228,7 +228,7 @@ namespace SceneEngine
                 {
                     static Float3 baseLightPosition = Float3(1600.f, 2400.f, 150.f);
 
-                    auto mappedStorage = metalContext.MapTemporaryStorage((tileLightCount+1) * sizeof(LightStruct), BindFlag::ConstantBuffer);
+                    auto mappedStorage = metalContext.MapTemporaryStorage((tileLightCount+1) * sizeof(LightStruct), BindFlag::UnorderedAccess);
                     auto lightBufferResource = mappedStorage.GetResource();
                     auto beginAndEnd = mappedStorage.GetBeginAndEndInResource();
                     auto* dstLight = (LightStruct*)mappedStorage.GetData().begin();
@@ -249,6 +249,7 @@ namespace SceneEngine
 
                         // add dummy light
                     *dstLight++ = LightStruct(Float3(0.f, 0.f, 0.f), 0.f, Float3(0.f, 0.f, 0.f), 0.f);
+                    assert(beginAndEnd.second > beginAndEnd.first);
                     lightBufferResourceView = lightBufferResource->CreateBufferView(BindFlag::ConstantBuffer, beginAndEnd.first, beginAndEnd.second-beginAndEnd.first);
                 }
 
@@ -257,7 +258,7 @@ namespace SceneEngine
                 fov[1] = projDesc._verticalFov;
                 fov[0] = 2.f * XlATan(projDesc._aspectRatio * XlTan(projDesc._verticalFov  * .5f));
                 
-                const unsigned TileWidth = 16, TileHeight = 16;
+                const unsigned TileWidth = 8, TileHeight = 8;
                 struct LightCulling
                 {
 					unsigned	_lightCount;
@@ -306,10 +307,25 @@ namespace SceneEngine
                     threadContext, parsingContext, sequencerUniformsHelper,
                     (tileLightCount + 256 - 1) / 256, 1, 1,
                     us);
-                        
+
+                {
+                    VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+                    barrier.pNext = nullptr;
+                    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                    vkCmdPipelineBarrier(
+                        metalContext.GetActiveCommandList().GetUnderlying().get(),
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        0,
+                        1, &barrier,
+                        0, nullptr,
+                        0, nullptr);
+                }
+
                 ParameterBox definesTable;
                 definesTable.SetParameter("MSAA_SAMPLES", sampleCount);
-        
+                definesTable.SetParameter("_METRICS", 1);
                 if (doClusteredRenderingTest) {
                     auto& clusteredMain = *Techniques::CreateComputeOperator(
                         pipelinePool, 
@@ -377,28 +393,28 @@ namespace SceneEngine
                     savedGlobalTransform = Techniques::BuildGlobalTransformConstants(parsingContext.GetProjectionDesc());
                 }
 
-                auto& tileLightingResources = GetTileLightingResources(*context.GetDevice(), mainViewportWidth, mainViewportHeight, 16);
+                auto& tileLightingResources = GetTileLightingResources(*threadContext.GetDevice(), mainViewportWidth, mainViewportHeight, 16);
                 const bool isShadowsPass = false;
                 auto& pipelineLayoutAsset = *::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
                     pool->GetDevice(), pool->GetCommonResources(), 
-                    "xleres/Deferred/debugging/beams.pipeline:main");
+                    "xleres/Deferred/tiled.pipeline:BeamsDebugging");
                 auto& debuggingShader = *::Assets::Actualize<Metal::ShaderProgram>(
                     pipelineLayoutAsset.GetPipelineLayout(),
                     "xleres/Deferred/debugging/beams.vertex.hlsl:main:vs_*", 
                     "xleres/Deferred/debugging/beams.geo.hlsl:main:gs_*", 
                     "xleres/Deferred/debugging/beams.pixel.hlsl:main:ps_*",
-                    isShadowsPass?"SHADOWS=1;SHADOW_CASCADE_MODE=1":"");    // hack -- SHADOW_CASCADE_MODE let explicitly here
+                    isShadowsPass?"SHADOWS=1;SHADOW_CASCADE_MODE=1":"");    // hack -- SHADOW_CASCADE_MODE set explicitly here
 
 				UniformsStreamInterface usi;
 				usi.BindImmediateData(0, Hash64("RecordedTransform"));
                 usi.BindImmediateData(1, Hash64("GlobalTransform"));
-                usi.BindImmediateData(2, Hash64("$Globals"));
+                usi.BindImmediateData(2, Hash64("Parameters"));
                 usi.BindResourceView(0, Hash64("DebuggingTextureMin"));
                 usi.BindResourceView(1, Hash64("DebuggingTextureMax"));
 
                 Metal::BoundUniforms uniforms(debuggingShader, usi);
                 
-                const unsigned TileWidth = 16, TileHeight = 16;
+                const unsigned TileWidth = 8, TileHeight = 8;
                 uint32 globals[4] = {   (mainViewportWidth + TileWidth - 1) / TileWidth, 
                                         (mainViewportHeight + TileHeight + 1) / TileHeight, 
                                         0, 0 };
@@ -410,15 +426,15 @@ namespace SceneEngine
                 us._resourceViews = MakeIteratorRange(resViews);
 
                 auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-                auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(*pipelineLayoutAsset.GetPipelineLayout())
+                auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayoutAsset.GetPipelineLayout());
 
-                encoder.Bind(Techniques::CommonResources()._dssReadWrite);
+                encoder.Bind(Techniques::CommonResourceBox::s_dsReadWrite);
                 encoder.Bind({}, Topology::PointList);
 
                 if (!isShadowsPass && Tweakable("TiledBeamsTransparent", false)) {
                     AttachmentBlendDesc abd[] {Techniques::CommonResourceBox::s_abStraightAlpha};
                     encoder.Bind(MakeIteratorRange(abd));
-                    auto& predepth = ::Assets::Actualize<Metal::ShaderProgram>(
+                    auto& predepth = *::Assets::Actualize<Metal::ShaderProgram>(
                         pipelineLayoutAsset.GetPipelineLayout(),
                         "xleres/Deferred/debugging/beams.vertex.hlsl:main:vs_*", 
                         "xleres/Deferred/debugging/beams.geo.hlsl:main:gs_*", 

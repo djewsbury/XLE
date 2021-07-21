@@ -1,0 +1,37 @@
+
+#include "../TechniqueLibrary/Config/sequencer.pipeline"
+
+DescriptorSet TiledDS
+{
+    UnorderedAccessBuffer InputLightList;           // 0
+    UnorderedAccessBuffer ProjectedLightList;       // 1
+    ConstantBuffer LightCulling;                    // 2
+    SampledTexture DepthTexture;                    // 3
+    SampledTexture GBuffer_Normals;                 // 4
+    UnorderedAccessTexture LightOutput;             // 5
+    UnorderedAccessBuffer MetricsObject;            // 6
+    UnorderedAccessTexture DebuggingTextureMin;             // 7
+    UnorderedAccessTexture DebuggingTextureMax;             // 8
+    UnorderedAccessTexture DebuggingLightCountTexture;      // 9
+};
+
+PipelineLayout ComputeMain
+{
+    ComputeDescriptorSet Sequencer;
+    ComputeDescriptorSet TiledDS;
+};
+
+//////////////////////////////////////////////////////////////////////////
+
+DescriptorSet BeamsDebuggingDS
+{
+    ConstantBuffer Parameters;              // 0
+    SampledTexture DebuggingTextureMin;     // 1
+    SampledTexture DebuggingTextureMax;     // 2
+};
+
+PipelineLayout BeamsDebugging
+{
+    ComputeDescriptorSet Sequencer;
+    ComputeDescriptorSet BeamsDebuggingDS;
+};

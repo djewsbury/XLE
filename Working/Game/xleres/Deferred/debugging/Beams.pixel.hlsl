@@ -27,12 +27,9 @@
 		// oDiffuse = colorTable[colorIndex];
 		// oNormal = float4(normal.xyz, 1);
 
-		GBufferValues outputValues;
+		GBufferValues outputValues = GBufferValues_Default();
 		outputValues.diffuseAlbedo = .5f * colorTable[colorIndex];
 		outputValues.worldSpaceNormal = normal.xyz;
-		outputValues.blendingAlpha = 1.f;
-		outputValues.reflectivity = 1.f;
-		outputValues.normalMapAccuracy = 1.f;
 		output = Encode(outputValues);
 	}	
 

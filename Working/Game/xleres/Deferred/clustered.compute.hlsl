@@ -19,10 +19,10 @@ struct ProjectedLight
 	float2		BaseAngles;
 };
 
-StructuredBuffer<Light>				InputLightList			: register(t0);
-RWStructuredBuffer<ProjectedLight>	ProjectedLightList		: register(u1);
+StructuredBuffer<Light>				InputLightList			: register(t0, space1);
+RWStructuredBuffer<ProjectedLight>	ProjectedLightList		: register(u1, space1);
 
-cbuffer LightCulling : register(b2)
+cbuffer LightCulling : register(b2, space1)
 {
 	int					LightCount;
 	int2				GroupCounts;
@@ -40,17 +40,17 @@ cbuffer LightCulling : register(b2)
 	#define Texture2D_MaybeMS	Texture2D
 #endif
 
-Texture2D_MaybeMS<float>	DepthTexture	 			: register(t1);
-Texture2D_MaybeMS<float4>	GBuffer_Normals				: register(t2);
+Texture2D_MaybeMS<float>	DepthTexture	 			: register(t3, space1);
+Texture2D_MaybeMS<float4>	GBuffer_Normals				: register(t4, space1);
 
-RWTexture2D<float4>			LightOutput					: register(u0);
+RWTexture2D<float4>			LightOutput					: register(u5, space1);
 
 #if defined(_METRICS)
-	RWStructuredBuffer<MetricsStructure> MetricsObject		: register(u4);
+	RWStructuredBuffer<MetricsStructure> MetricsObject		: register(u6, space1);
 #endif
-RWTexture2D<uint>			DebuggingTextureMin			: register(u5);
-RWTexture2D<uint>			DebuggingTextureMax			: register(u6);
-RWTexture2D<uint>			DebuggingLightCountTexture	: register(u7);
+RWTexture2D<uint>			DebuggingTextureMin			: register(u7, space1);
+RWTexture2D<uint>			DebuggingTextureMax			: register(u8, space1);
+RWTexture2D<uint>			DebuggingLightCountTexture	: register(u9, space1);
 
 static const uint			ThreadWidth = 16;
 static const uint			ThreadHeight = 16;

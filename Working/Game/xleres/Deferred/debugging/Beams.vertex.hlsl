@@ -4,9 +4,12 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-uint2					TileDimensions;
-Texture2D<float>		DebuggingTextureMin;
-Texture2D<float>		DebuggingTextureMax;
+cbuffer Parameters : register(b0, space1)
+{
+	uint2					TileDimensions;
+};
+Texture2D<float>		DebuggingTextureMin : register(t1, space1);
+Texture2D<float>		DebuggingTextureMax : register(t2, space1);
 
 void main(	uint vertexIndex		: SV_VertexID,
 			out float3 minCoords	: MINCOORDS, 
@@ -27,4 +30,3 @@ void main(	uint vertexIndex		: SV_VertexID,
 		((tileCoords.y+1) / float(TileDimensions.y)),
 		DebuggingTextureMax.Load(int3(tileCoords*int2(16,16),0)));
 }
-

@@ -21,10 +21,10 @@ struct ProjectedLight
 	float2		BaseAngles;
 };
 
-StructuredBuffer<Light>				InputLightList			: register(t0);
-RWStructuredBuffer<ProjectedLight>	ProjectedLightList		: register(u1);
+StructuredBuffer<Light>				InputLightList			: register(t0, space1);
+RWStructuredBuffer<ProjectedLight>	ProjectedLightList		: register(u1, space1);
 
-cbuffer LightCulling : register(b2)
+cbuffer LightCulling : register(b2, space1)
 {
 	int					LightCount;
 	int2				GroupCounts;
@@ -32,6 +32,7 @@ cbuffer LightCulling : register(b2)
 	float2				FOV;
 }
 
+#include "../TechniqueLibrary/Framework/SystemUniforms.hlsl"
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "../TechniqueLibrary/Profiling/Metrics.hlsl"
@@ -42,26 +43,29 @@ cbuffer LightCulling : register(b2)
 	#define Texture2D_MaybeMS	Texture2D
 #endif
 
-Texture2D_MaybeMS<float>	DepthTexture	 			: register(t1);
-Texture2D_MaybeMS<float4>	GBuffer_Normals				: register(t2);
-RWTexture2D<float4>			LightOutput					: register(u0);
+Texture2D_MaybeMS<float>	DepthTexture	 			: register(t3, space1);
+Texture2D_MaybeMS<float4>	GBuffer_Normals				: register(t4, space1);
+RWTexture2D<float4>			LightOutput					: register(u5, space1);
 
 #if defined(_METRICS)
-	RWStructuredBuffer<MetricsStructure> MetricsObject		: register(u4);
+	RWStructuredBuffer<MetricsStructure> MetricsObject		: register(u6, space1);
 #endif
-RWTexture2D<uint>			DebuggingTextureMin			: register(u5);
-RWTexture2D<uint>			DebuggingTextureMax			: register(u6);
-RWTexture2D<uint>			DebuggingLightCountTexture	: register(u7);
+RWTexture2D<uint>			DebuggingTextureMin			: register(u7, space1);
+RWTexture2D<uint>			DebuggingTextureMax			: register(u8, space1);
+RWTexture2D<uint>			DebuggingLightCountTexture	: register(u9, space1);
 
-groupshared uint		DepthMin = 0xffffffff;
-groupshared uint		DepthMax = 0;
-groupshared uint		ActiveLightCount = 0;
+// groupshared uint		DepthMin = 0xffffffff;
+// groupshared uint		DepthMax = 0;
+// groupshared uint		ActiveLightCount = 0;
 
-static const uint		MaxLightCount = 1024;
+//static const uint		MaxLightCount = 1024;
+#define MaxLightCount 1024
 groupshared uint		ActiveLightIndices[MaxLightCount];
 
-static const uint		ThreadWidth = 16;
-static const uint		ThreadHeight = 16;
+// static const uint		ThreadWidth = 8;
+// static const uint		ThreadHeight = 8;
+#define ThreadWidth 8
+#define ThreadHeight 8
 
 float DistanceAttenuation(float distanceSq, float power)
 {
@@ -130,8 +134,12 @@ ProjectedLight BuildProjectedLight(Light l)
 				uint3 groupId : SV_GroupID,
 				uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	int2 groupPixelCoord = threadId.xy;
 	int2 pixelCoord		 = dispatchThreadId.xy;
+
+	/*if (all(threadId.xy == uint2(1,1))) {
+		ActiveLightCount = 0;
+	}*/
+
 
 		//		Read the depth value (as an uint) from the depth texture
 	#if MSAA_SAMPLES > 1
@@ -142,18 +150,24 @@ ProjectedLight BuildProjectedLight(Light l)
 	#else
 		uint2 outputDim;
 		DepthTexture.GetDimensions(outputDim.x, outputDim.y);
-		const uint depthAsInt = asuint(DepthTexture.mips[0][min(pixelCoord, outputDim.xy-int2(1,1))]);
+		const uint depthAsInt = asuint(DepthTexture.Load(uint3(min(pixelCoord, outputDim.xy-int2(1,1)), 0)));
 	#endif
-	if (depthAsInt < asuint(1.f)) {
+
+	// if (all(pixelCoord>0) && all(pixelCoord < outputDim))	
+	// 	LightOutput[pixelCoord] = float4(0,0,0,1);
+	// return;
+
+	uint DepthMin = WaveActiveMin(depthAsInt), DepthMax = WaveActiveMax(depthAsInt);
+	/*if (depthAsInt < asuint(1.f)) {
 		InterlockedMin(DepthMin, depthAsInt);
 		InterlockedMax(DepthMax, depthAsInt);
-	}
+	}*/
 
 		//		Wait until all threads in this group have completed
 		//		calculating Min/Max depth values.
 		//		Sync entire group.
 
-	GroupMemoryBarrierWithGroupSync();
+	// GroupMemoryBarrierWithGroupSync();
 
 	uint lightCullCount = 0;
 	uint lightCalculateCount = 0;
@@ -161,6 +175,7 @@ ProjectedLight BuildProjectedLight(Light l)
 
 	uint finalDepthMin = DepthMin;
 	uint finalDepthMax = DepthMax;
+	uint ActiveLightCount = 0;
 	[branch] if (finalDepthMin < finalDepthMax) {
 
 			//
@@ -197,7 +212,7 @@ ProjectedLight BuildProjectedLight(Light l)
 		const uint passes = (lightCount + lightsInOnePass - 1) / lightsInOnePass;
 		for (uint p=0; p<passes; ++p) {
 			uint lightIndex	 = p * lightsInOnePass + threadId.x + threadId.y * ThreadWidth;
-			lightIndex		 = min(lightIndex, lightCount);
+			lightIndex		 = min(lightIndex, lightCount);		// (there's a zero dummy as the last light in the list)
 
 				//
 				//		How to do light clipping...?
@@ -239,7 +254,7 @@ ProjectedLight BuildProjectedLight(Light l)
 				&&	((p.BaseAngles.y + p.ViewSpaceHalfSubtendingAngle) > minAngleY)
 				&&	((p.BaseAngles.y - p.ViewSpaceHalfSubtendingAngle) < maxAngleY))
 	#else
-			[branch] if (	((p.ViewSpacePosition.x + l.Radius) > minBox.x)
+			if (	((p.ViewSpacePosition.x + l.Radius) > minBox.x)
 				&&	((p.ViewSpacePosition.x - l.Radius) < maxBox.x)
 				&&	((p.ViewSpacePosition.y + l.Radius) > minBox.y)
 				&&	((p.ViewSpacePosition.y - l.Radius) < maxBox.y))
@@ -248,6 +263,7 @@ ProjectedLight BuildProjectedLight(Light l)
 
 					// todo -- is near clip plane distance correctly accounted for here?
 
+				/*
 				const float flatDepth = p.ViewSpacePosition.z;
 				[branch] if ((flatDepth + l.Radius) > worldDistanceMinDepth && (flatDepth - l.Radius) < worldDistanceMaxDepth) {
 						//	this light affects the pixels in this tile...
@@ -257,9 +273,18 @@ ProjectedLight BuildProjectedLight(Light l)
 					InterlockedAdd(ActiveLightCount, 1, pushLocation);
 					// pushLocation = min(pushLocation, MaxLightCount-1);
 					[branch] if (pushLocation < MaxLightCount) {
-						ActiveLightIndices[pushLocation] = lightIndex;
+						//ActiveLightIndices[pushLocation] = lightIndex;
 					}
 				}
+				*/
+
+				const float flatDepth = p.ViewSpacePosition.z;
+				bool writeToTile = (flatDepth + l.Radius) > worldDistanceMinDepth && (flatDepth - l.Radius) < worldDistanceMaxDepth;
+				uint laneAppendOffset = WavePrefixCountBits(writeToTile);
+				uint thisAppendCount = WaveActiveCountBits(writeToTile);
+				if (writeToTile && ActiveLightCount+laneAppendOffset < MaxLightCount)
+					ActiveLightIndices[ActiveLightCount+laneAppendOffset] = lightIndex;
+				ActiveLightCount += thisAppendCount;
 			}
 		}
 
@@ -268,6 +293,9 @@ ProjectedLight BuildProjectedLight(Light l)
 	} else {
 		finalDepthMin = finalDepthMax = 0;
 	}
+
+	if (any(pixelCoord >= outputDim))
+		return;
 
 		//		Write out the depth min / max for debugging
 	#if defined(_METRICS)
@@ -284,9 +312,9 @@ ProjectedLight BuildProjectedLight(Light l)
 	float3 pixelViewSpacePosition = float3(AB * frustumDim * viewSpaceDepth, viewSpaceDepth);
 
 	#if MSAA_SAMPLES > 1
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex));
+		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(pixelCoord, sampleIndex).xyz);
 	#else
-		float3 normal = DecompressGBufferNormal(GBuffer_Normals[pixelCoord]);
+		float3 normal = DecompressGBufferNormal(GBuffer_Normals.Load(uint3(pixelCoord, 0)).xyz);
 	#endif
 	float3 lightQuantity = 0.0.xxx;
 
@@ -296,10 +324,10 @@ ProjectedLight BuildProjectedLight(Light l)
 		DebuggingLightCountTexture[pixelCoord] = ActiveLightCount;
 	#endif
 
-	const uint activeLightCount = ActiveLightCount;
+	const uint activeLightCount = min(ActiveLightCount, MaxLightCount);
 	for (uint c=0; c<activeLightCount; ++c) {
-		Light l = GetInputLight(ActiveLightIndices[c]);
-		ProjectedLight p = GetProjectedLight(ActiveLightIndices[c]);
+		Light l = GetInputLight(min(ActiveLightIndices[c], LightCount-1));
+		ProjectedLight p = GetProjectedLight(min(ActiveLightIndices[c], LightCount-1));
 
 		float3 lightVector	 = p.ViewSpacePosition - pixelViewSpacePosition;
 		float distanceSq	 = dot(lightVector, lightVector);
@@ -314,7 +342,8 @@ ProjectedLight BuildProjectedLight(Light l)
 	}
 
 	lightCalculateCount = activeLightCount;
-	LightOutput[pixelCoord] = float4(lightQuantity,1);
+	if (all(pixelCoord>0) && all(pixelCoord < outputDim))
+		LightOutput[pixelCoord] = float4(lightQuantity,1);
 
 	#if defined(_METRICS)
 		uint buffer;
