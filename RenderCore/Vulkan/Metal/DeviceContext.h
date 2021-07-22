@@ -310,7 +310,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		void Clear(const IResourceView& depthStencil, ClearFilter::BitField clearFilter, float depth, unsigned stencil);
 		void ClearUInt(const IResourceView& unorderedAccess, const VectorPattern<unsigned,4>& clearColour);
 		void ClearFloat(const IResourceView& unorderedAccess, const VectorPattern<float,4>& clearColour);
-		void ClearStencil(const IResourceView& depthStencil, unsigned stencil);
 
 		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
 

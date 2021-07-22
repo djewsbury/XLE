@@ -1033,6 +1033,48 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	void        DeviceContext::ClearUInt(const IResourceView& renderTarget, const VectorPattern<unsigned,4>& clearColour)
+	{
+		// 
+		auto& resView = *checked_cast<const ResourceView*>(&renderTarget);
+		auto& res = *resView.GetVulkanResource();
+		if (res.GetImage()) {
+			VkClearColorValue clearValue;
+			clearValue.uint32[0] = clearColour[0];
+			clearValue.uint32[1] = clearColour[1];
+			clearValue.uint32[2] = clearColour[2];
+			clearValue.uint32[3] = clearColour[3];
+			VkImageSubresourceRange subResRange = resView.GetImageSubresourceRange();
+			_sharedState->_commandList.ClearColorImage(
+				res.GetImage(),
+				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				&clearValue, 1, &subResRange);
+		} else {
+			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
+		}
+	}
+
+	void        DeviceContext::ClearFloat(const IResourceView& renderTarget, const VectorPattern<float,4>& clearColour)
+	{
+		// 
+		auto& resView = *checked_cast<const ResourceView*>(&renderTarget);
+		auto& res = *resView.GetVulkanResource();
+		if (res.GetImage()) {
+			VkClearColorValue clearValue;
+			clearValue.float32[0] = clearColour[0];
+			clearValue.float32[1] = clearColour[1];
+			clearValue.float32[2] = clearColour[2];
+			clearValue.float32[3] = clearColour[3];
+			VkImageSubresourceRange subResRange = resView.GetImageSubresourceRange();
+			_sharedState->_commandList.ClearColorImage(
+				res.GetImage(),
+				(VkImageLayout)Internal::AsVkImageLayout(res._steadyStateLayout),
+				&clearValue, 1, &subResRange);
+		} else {
+			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
+		}
+	}
+
 	CommandList& DeviceContext::GetActiveCommandList()
 	{
 		assert(_sharedState->_commandList.GetUnderlying());
