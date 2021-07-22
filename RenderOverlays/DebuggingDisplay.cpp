@@ -35,7 +35,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     static const ColorB     HistoryGraphAxisColour(64,64,64,128);
     static const ColorB     HistoryGraphLineColor(255,255,255,255);
     static const ColorB     HistoryGraphExtraLineColor(255,128,128,255);
-    static const ColorB     HistoryGraphTopOfGraphBackground(200,255,200,196);
+    static const ColorB     HistoryGraphTopOfGraphBackground(200,255,200,64);
     static const ColorB     HistoryGraphBottomOfGraphBackground(200,255,200,0);
     static const ColorB     HistoryGraphTopOfGraphBackground_Peak(128,200,255,196);
     static const ColorB     HistoryGraphBottomOfGraphBackground_Peak(128,200,255,64);
@@ -481,8 +481,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             minValue = minValueHistory = std::min(LinearInterpolate(minValueHistory, minValue, 0.15f), minValue);
             maxValue = maxValueHistory = std::max(LinearInterpolate(maxValueHistory, maxValue, 0.15f), maxValue);
 
-            Float3 graphLinePoints[1024];
-            assert(dimof(graphLinePoints)>=(valuesCount*2));
+            Float3 graphLinePoints[valuesCount*2];
+            Float3 graphTrianglePoints[(valuesCount-1)*3*2];
+            ColorB graphTriangleColors[(valuesCount-1)*3*2];
 
             //  figure out y axis coordination conversion...
             float yB = -(graphArea._bottomRight[1]-graphArea._topLeft[1]-20)/float(maxValue-minValue);
@@ -490,6 +491,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
             float xB = (graphArea._bottomRight[0]-graphArea._topLeft[0])/float(maxValuesCount-1);
             float yZ = float(graphArea._bottomRight[1]);
 
+            Float3* ptIterator = graphTrianglePoints;
+            ColorB* colorIterator = graphTriangleColors;
             for (unsigned c=0; c<(valuesCount-1); ++c) {
                 float x0 = graphArea._topLeft[0] + xB*c;
                 float x1 = graphArea._topLeft[0] + xB*(c+1);
@@ -502,16 +505,24 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 bool peak = (c == peakIndex || (c+1) == peakIndex);
                 ColorB colorTop      = peak?HistoryGraphTopOfGraphBackground_Peak:HistoryGraphTopOfGraphBackground;
                 ColorB colorBottom   = peak?HistoryGraphBottomOfGraphBackground_Peak:HistoryGraphBottomOfGraphBackground;
-                context->DrawTriangle(  ProjectionMode::P2D, 
-                                        AsPixelCoords(Coord2(x0+.5f, y0+.5f)), colorTop,
-                                        AsPixelCoords(Coord2(x0+.5f, yZ+.5f)), colorBottom,
-                                        AsPixelCoords(Coord2(x1+.5f, y1+.5f)), colorTop );
-                context->DrawTriangle(  ProjectionMode::P2D, 
-                                        AsPixelCoords(Coord2(x1+.5f, y1+.5f)), colorTop,
-                                        AsPixelCoords(Coord2(x0+.5f, yZ+.5f)), colorBottom,
-                                        AsPixelCoords(Coord2(x1+.5f, yZ+.5f)), colorBottom );
+                *ptIterator++ = AsPixelCoords(Coord2(x0+.5f, y0+.5f));
+                *ptIterator++ = AsPixelCoords(Coord2(x0+.5f, yZ+.5f));
+                *ptIterator++ = AsPixelCoords(Coord2(x1+.5f, y1+.5f));
+                *colorIterator++ = colorTop;
+                *colorIterator++ = colorBottom;
+                *colorIterator++ = colorTop;
+
+                *ptIterator++ = AsPixelCoords(Coord2(x1+.5f, y1+.5f));
+                *ptIterator++ = AsPixelCoords(Coord2(x0+.5f, yZ+.5f));
+                *ptIterator++ = AsPixelCoords(Coord2(x1+.5f, yZ+.5f));
+                *colorIterator++ = colorTop;
+                *colorIterator++ = colorBottom;
+                *colorIterator++ = colorBottom;
             }
 
+            assert((ptIterator-graphTrianglePoints) == (valuesCount-1)*3*2);
+            assert((colorIterator-graphTriangleColors) == (valuesCount-1)*3*2);
+            context->DrawTriangles(ProjectionMode::P2D, graphTrianglePoints, ptIterator-graphTrianglePoints, graphTriangleColors);
             context->DrawLines(ProjectionMode::P2D, graphLinePoints, (valuesCount-1)*2, HistoryGraphLineColor);
 
             {

@@ -32,7 +32,7 @@ namespace PlatformRig { namespace Overlays
         typedef uint64 GPUTime;
         typedef unsigned FrameId;
 
-        static const unsigned DurationHistoryLength = 256;
+        static const unsigned DurationHistoryLength = 1024;
         struct Section
         {
             const char* _id;

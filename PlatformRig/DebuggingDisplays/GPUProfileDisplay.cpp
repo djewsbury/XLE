@@ -198,8 +198,8 @@ namespace PlatformRig { namespace Overlays
                 // DrawRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
                 Layout sectionLayout(sectionRect);
-                Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
-                Rect historyRect = sectionLayout.AllocateFullHeightFraction( .75f );
+                Rect labelRect = sectionLayout.AllocateFullHeightFraction( .15f );
+                Rect historyRect = sectionLayout.AllocateFullHeightFraction( .85f );
 
                 //  Section name in the top third of the label rect
                 Rect sectionNameRect( 
