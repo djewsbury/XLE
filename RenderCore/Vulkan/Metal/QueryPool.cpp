@@ -41,13 +41,14 @@ namespace RenderCore { namespace Metal_Vulkan
 				cmdList.ResetQueryPool(_timeStamps.get(), 0, b._queryEnd);
 				_allocatedCount -= _queryCount - b._queryStart;
 				_allocatedCount -= b._queryEnd;
-			} else {
+			} else if (b._queryEnd != b._queryStart) {
 				cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, b._queryEnd - b._queryStart);
 				_allocatedCount -= b._queryEnd - b._queryStart;
 			}
 			assert(_nextFree == b._queryStart);
 			assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
 			_nextFree = b._queryEnd;
+			if (_nextFree == _queryCount) _nextFree = 0;
 			b._frameId = FrameId_Invalid;
 		}
 		assert(b._frameId == FrameId_Invalid);
@@ -147,6 +148,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			_buffers[c]._pendingReset = false;
 			_buffers[c]._queryStart = _buffers[c]._queryEnd = 0;
 		}
+
+		// we must reset all queries first time around
+		_buffers[0]._pendingReset = true;
+		_buffers[0]._queryStart = 0;
+		_buffers[0]._queryEnd = _queryCount;
+		_allocatedCount = _queryCount;
 
 		VkPhysicalDeviceProperties physDevProps = {};
 		vkGetPhysicalDeviceProperties(factory.GetPhysicalDevice(), &physDevProps);
