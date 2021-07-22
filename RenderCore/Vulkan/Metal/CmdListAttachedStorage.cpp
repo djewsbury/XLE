@@ -153,7 +153,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, GetDefaultPageSize(type), type, _nextPageId++));
+		auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), GetDefaultPageSize(type));
+		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, type, _nextPageId++));
 		_pageReservations.Allocate(_pages.size()-1);
 
 		auto& page = *_pages[_pages.size()-1];
