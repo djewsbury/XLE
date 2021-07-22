@@ -147,6 +147,31 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		depthBiasClamp = desc._depthBiasClamp;
 		depthBiasSlopeFactor = desc._depthBiasSlopeFactor;
 		lineWidth = 1.0f;	// (set to 1.0f when this feature is disabled)
+
+		if (desc._flags & RasterizationDescFlags::ConservativeRaster) {
+			pNext = &_conservativeRasterExt;
+			_conservativeRasterExt.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
+			_conservativeRasterExt.pNext = nullptr;
+			_conservativeRasterExt.flags = 0;
+			_conservativeRasterExt.conservativeRasterizationMode = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
+			_conservativeRasterExt.extraPrimitiveOverestimationSize = 0.f;
+		}
+	}
+
+	VulkanRasterizerState::VulkanRasterizerState(const VulkanRasterizerState& copyFrom)
+	{
+		VkPipelineRasterizationStateCreateInfo::operator=(copyFrom);
+		_conservativeRasterExt = copyFrom._conservativeRasterExt;
+		if (pNext == &copyFrom._conservativeRasterExt)
+			pNext = &_conservativeRasterExt;
+	}
+    VulkanRasterizerState& VulkanRasterizerState::operator=(const VulkanRasterizerState& copyFrom)
+	{
+		VkPipelineRasterizationStateCreateInfo::operator=(copyFrom);
+		_conservativeRasterExt = copyFrom._conservativeRasterExt;
+		if (pNext == &copyFrom._conservativeRasterExt)
+			pNext = &_conservativeRasterExt;
+		return *this;
 	}
 
 	VulkanBlendState::VulkanBlendState( 

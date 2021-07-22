@@ -47,6 +47,10 @@ namespace RenderCore { namespace Metal_Vulkan
         {
         public:
             VulkanRasterizerState(const RasterizationDesc& desc = {});
+            VulkanRasterizerState(const VulkanRasterizerState&);
+            VulkanRasterizerState& operator=(const VulkanRasterizerState&);
+        private:
+            VkPipelineRasterizationConservativeStateCreateInfoEXT _conservativeRasterExt;
         };
 
             ////////////////////////////////////////////////////////////////////////////////////////////////

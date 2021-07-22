@@ -83,10 +83,12 @@ namespace RenderCore
 
 	uint64_t RasterizationDesc::Hash() const
 	{
-		assert((unsigned(_cullMode) & ~0xff) == 0);
+		assert((unsigned(_cullMode) & ~0xf) == 0);
+        assert((unsigned(_flags) & ~0xf) == 0);
         assert((unsigned(_frontFaceWinding) & ~0xff) == 0);
 		uint64_t p0 = 
-			  uint64_t(_cullMode) 
+			  uint64_t(_cullMode)
+            | uint64_t(_flags)<<4ull
 			| (uint64_t(_frontFaceWinding) << 8ull)
 			| (uint64_t(FloatBits(_depthBiasConstantFactor)) << 32ull);
 		uint64_t p1 = 

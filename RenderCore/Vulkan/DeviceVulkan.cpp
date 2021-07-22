@@ -343,6 +343,33 @@ namespace RenderCore { namespace ImplVulkan
 		Throw(Exceptions::BasicLabel("There are physical Vulkan devices, but none of them support rendering. You must have an up-to-date Vulkan driver installed."));
 	}
 
+	static void LogPhysicalDeviceExtensions(std::ostream& str, VkPhysicalDevice physDev)
+	{
+		VkExtensionProperties extensions[64];
+		std::vector<VkExtensionProperties> overflowExtensions;
+		IteratorRange<const VkExtensionProperties*> foundExtensions;
+		unsigned extPropertyCount = dimof(extensions);
+		auto res = vkEnumerateDeviceExtensionProperties(
+			physDev, nullptr,
+			&extPropertyCount, extensions);
+		if (res == VK_INCOMPLETE) {
+			res = vkEnumerateDeviceExtensionProperties(physDev, nullptr, &extPropertyCount, nullptr);
+			assert(res == VK_SUCCESS);
+			overflowExtensions.resize(extPropertyCount);
+			res = vkEnumerateDeviceExtensionProperties(
+				physDev, nullptr,
+				&extPropertyCount, overflowExtensions.data());
+			assert(res == VK_SUCCESS);
+			foundExtensions = MakeIteratorRange(overflowExtensions);
+		} else {
+			foundExtensions = MakeIteratorRange(extensions);
+		}
+
+		str << "[" << foundExtensions.size() << "] Vulkan physical device extensions" << std::endl;
+		for (auto c:foundExtensions)
+			str << "  " << c.extensionName << " (" << c.specVersion << ")" << std::endl;
+	}
+
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(SelectedPhysicalDevice physDev)
 	{
 		VkDeviceQueueCreateInfo queue_info = {};
@@ -363,6 +390,8 @@ namespace RenderCore { namespace ImplVulkan
 		// physicalDeviceFeatures.independentBlend = true;
 		// physicalDeviceFeatures.robustBufferAccess = true;
 		// physicalDeviceFeatures.multiViewport = true;
+		physicalDeviceFeatures.shaderImageGatherExtended = true;
+		physicalDeviceFeatures.fragmentStoresAndAtomics = true;
 
 		VkPhysicalDeviceTransformFeedbackFeaturesEXT transformFeedbackFeatures = {};
 		transformFeedbackFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT;
@@ -379,8 +408,12 @@ namespace RenderCore { namespace ImplVulkan
 		device_info.pNext = &enabledFeatures2;
 		device_info.queueCreateInfoCount = 1;
 		device_info.pQueueCreateInfos = &queue_info;
-		device_info.enabledExtensionCount = (uint32_t)dimof(s_deviceExtensions);
-		device_info.ppEnabledExtensionNames = s_deviceExtensions;
+
+		std::vector<const char*> extensions;
+		for (auto c:s_deviceExtensions) extensions.push_back(c);
+		extensions.push_back("VK_EXT_conservative_rasterization");
+		device_info.enabledExtensionCount = (uint32_t)extensions.size();
+		device_info.ppEnabledExtensionNames = extensions.data();
 
         #if defined(ENABLE_DEBUG_EXTENSIONS)
             auto availableLayers = EnumerateLayers();
@@ -513,6 +546,7 @@ namespace RenderCore { namespace ImplVulkan
     {
         if (!_underlying) {
 			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface);
+			LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
 			_underlying = CreateUnderlyingDevice(_physDev);
 			auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
 			_objectFactory = Metal_Vulkan::ObjectFactory(_physDev._dev, _underlying, extensionFunctions);

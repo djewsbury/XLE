@@ -175,6 +175,12 @@ namespace RenderCore
         uint64_t HashStencilAspect() const;
     };
 
+    namespace RasterizationDescFlags
+    {
+        enum Flag { ConservativeRaster = 1u<<0u };
+        using BitField = unsigned;
+    }
+
     /// Similar to VkPipelineRasterizationStateCreateInfo or D3D12_RASTERIZER_DESC
     /// (Metal just has separate function calls)
     class RasterizationDesc
@@ -185,6 +191,7 @@ namespace RenderCore
 		float			_depthBiasConstantFactor = 0.f;		///< truncated to integer on DX11 or DX12
 		float			_depthBiasClamp = 0.f;				///< zero means no clamping
 		float			_depthBiasSlopeFactor = 0.f;
+        RasterizationDescFlags::BitField _flags = 0;
 
 		uint64_t Hash() const;
     };
