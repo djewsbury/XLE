@@ -49,7 +49,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		TimeStampQueryPool(const TimeStampQueryPool&) = delete;
 		TimeStampQueryPool& operator=(const TimeStampQueryPool&) = delete;
 	private:
-		static const unsigned s_bufferCount = 3u;
+		static const unsigned s_bufferCount = 16u;
 		VulkanUniquePtr<VkQueryPool> _timeStamps;
 		unsigned _nextAllocation;
 		unsigned _nextFree;
@@ -62,7 +62,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			bool		_pendingReadback;
 			bool		_pendingReset;
 			unsigned	_queryStart;
-			unsigned	_queryEnd;
+			unsigned	_queryCount;
 		};
 		Buffer		_buffers[s_bufferCount];
 		unsigned	_activeBuffer;

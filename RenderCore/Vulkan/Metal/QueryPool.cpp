@@ -29,31 +29,38 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	auto TimeStampQueryPool::BeginFrame(DeviceContext& context) -> FrameId
 	{
+		for (unsigned q=0; q<dimof(_buffers); ++q) {
+			auto& b = _buffers[(_activeBuffer+q)%dimof(_buffers)];
+			if (b._pendingReset) {
+				auto& cmdList = context.GetActiveCommandList();
+				if ((b._queryStart + b._queryCount) > _queryCount) {
+					auto firstPartCount = _queryCount - b._queryStart;
+					cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, firstPartCount);
+					cmdList.ResetQueryPool(_timeStamps.get(), 0, b._queryCount-firstPartCount);
+					_allocatedCount -= b._queryCount;
+				} else if (b._queryCount) {
+					cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, b._queryCount);
+					_allocatedCount -= b._queryCount;
+				}
+				assert(_nextFree == b._queryStart);
+				assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
+				_nextFree = (b._queryStart + b._queryCount)%_queryCount;
+				if (_nextFree == _queryCount) _nextFree = 0;
+				b._frameId = FrameId_Invalid;
+				b._pendingReset = false;
+				b._queryStart = b._queryCount = 0;
+			}
+		}
+
 		auto& b = _buffers[_activeBuffer];
 		if (b._pendingReadback) {
 			Log(Warning) << "Query pool eating it's tail. Insufficient buffers." << std::endl;
 			return FrameId_Invalid;
 		}
-		if (b._pendingReset) {
-			auto& cmdList = context.GetActiveCommandList();
-			if (b._queryEnd < b._queryStart) {
-				cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, _queryCount - b._queryStart);
-				cmdList.ResetQueryPool(_timeStamps.get(), 0, b._queryEnd);
-				_allocatedCount -= _queryCount - b._queryStart;
-				_allocatedCount -= b._queryEnd;
-			} else if (b._queryEnd != b._queryStart) {
-				cmdList.ResetQueryPool(_timeStamps.get(), b._queryStart, b._queryEnd - b._queryStart);
-				_allocatedCount -= b._queryEnd - b._queryStart;
-			}
-			assert(_nextFree == b._queryStart);
-			assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
-			_nextFree = b._queryEnd;
-			if (_nextFree == _queryCount) _nextFree = 0;
-			b._frameId = FrameId_Invalid;
-		}
 		assert(b._frameId == FrameId_Invalid);
 		b._frameId = _nextFrameId;
 		b._queryStart = _nextAllocation;
+		b._queryCount = 0;
 		++_nextFrameId;
 		return b._frameId;
 	}
@@ -62,8 +69,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		auto& b = _buffers[_activeBuffer];
 		b._pendingReadback = true;
-		b._queryEnd = _nextAllocation;
-		assert(b._queryEnd != b._queryStart || _allocatedCount == 0);	// problems if we allocate all queries in a single frame currently
+		if (_nextAllocation >= b._queryStart) b._queryCount = _nextAllocation - b._queryStart;
+		else b._queryCount = _nextAllocation + (_queryCount - b._queryStart);
+		assert(b._queryCount != _queryCount);	// problems if we allocate all queries in a single frame currently
 		// roll forward to the next buffer
 		_activeBuffer = (_activeBuffer + 1) % s_bufferCount;
 	}
@@ -82,7 +90,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Requesting 64 bit timestamps on all hardware. We can also
 			// check the timestamp size by calling VkGetPhysicalDeviceProperties
 			// Our query buffer is circular, so we may need to wrap around to the start
-			if (b._queryEnd < b._queryStart) {
+			if ((b._queryStart + b._queryCount) > _queryCount) {
 				unsigned firstPartCount = _queryCount - b._queryStart;
 				auto res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
@@ -97,19 +105,19 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
-					0, b._queryEnd,
-					sizeof(uint64_t)*b._queryEnd,
+					0, b._queryCount-firstPartCount,
+					sizeof(uint64_t)*(b._queryCount-firstPartCount),
 					_timestampsBuffer.get(), sizeof(uint64_t),
 					VK_QUERY_RESULT_64_BIT);
 				if (res == VK_NOT_READY)
 					return FrameResults{ false };
 				if (res != VK_SUCCESS)
 					Throw(VulkanAPIFailure(res, "Failed while retrieving query pool results"));
-			} else if (b._queryEnd != b._queryStart) {
+			} else if (b._queryCount) {
 				auto res = vkGetQueryPoolResults(
 					_device, _timeStamps.get(),
-					b._queryStart, b._queryEnd - b._queryStart, 
-					sizeof(uint64_t)*(b._queryEnd - b._queryStart),
+					b._queryStart, b._queryCount, 
+					sizeof(uint64_t)*(b._queryCount),
 					&_timestampsBuffer[b._queryStart], sizeof(uint64_t),
 					VK_QUERY_RESULT_64_BIT);
 
@@ -146,13 +154,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			_buffers[c]._frameId = FrameId_Invalid;
 			_buffers[c]._pendingReadback = false;
 			_buffers[c]._pendingReset = false;
-			_buffers[c]._queryStart = _buffers[c]._queryEnd = 0;
+			_buffers[c]._queryStart = _buffers[c]._queryCount = 0;
 		}
 
 		// we must reset all queries first time around
 		_buffers[0]._pendingReset = true;
 		_buffers[0]._queryStart = 0;
-		_buffers[0]._queryEnd = _queryCount;
+		_buffers[0]._queryCount = _queryCount;
 		_allocatedCount = _queryCount;
 
 		VkPhysicalDeviceProperties physDevProps = {};
