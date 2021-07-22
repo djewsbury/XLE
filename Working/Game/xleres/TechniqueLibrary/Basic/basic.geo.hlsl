@@ -130,11 +130,16 @@ struct OutputVertex_PC
 }
 
 
-struct PT_viewfrustumVector
+struct ClipToNearVertex
 {
 	float4 position : SV_Position;
+#if defined(GS_FVF)
 	float2 texCoord : TEXCOORD0;
 	noperspective float3 vfv : VIEWFRUSTUMVECTOR;
+#endif
+#if defined(GS_OBJECT_INDEX)
+	nointerpolation uint objectIdx : OBJECT_INDEX;
+#endif
 };
 
 float3 CalculateViewFrustumVectorFromClipSpacePosition(float4 clipSpacePosition)
@@ -164,19 +169,24 @@ float3 CalculateViewFrustumVectorFromClipSpacePosition(float4 clipSpacePosition)
 		;
 }
 
-PT_viewfrustumVector Interpolate(PT_viewfrustumVector start, PT_viewfrustumVector end, float alpha)
+ClipToNearVertex Interpolate(ClipToNearVertex start, ClipToNearVertex end, float alpha)
 {
-	PT_viewfrustumVector result;
+	ClipToNearVertex result;
 	result.position = start.position * (1.0f - alpha) + end.position * alpha;
+#if defined(GS_FVF)
 	result.texCoord = start.texCoord * (1.0f - alpha) + end.texCoord * alpha;
 	// result.vfv = start.vfv * (1.0f - alpha) + end.vfv * alpha;
 	result.vfv = CalculateViewFrustumVectorFromClipSpacePosition(result.position);
+#endif
+#if defined(GS_OBJECT_INDEX)
+	result.objectIdx = start.objectIdx;
+#endif
 	return result;
 }
 
-PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
+ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 {
-	PT_viewfrustumVector result = input;
+	ClipToNearVertex result = input;
 	result.position.z = 1e-6f;
 	if (!SysUniform_IsOrthogonalProjection()) {
 		// The following is the distance to the near clip plane, but only valid for perspective ClipSpaceType::Positive or ClipSpaceType::PositiveRightHanded transforms
@@ -185,14 +195,19 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 		// For an orthoraphic projection, we can actually just clamp to z=0, we don't actually have to do the full clipping algorithm
 		result.position.w = 1;
 	}
+#if defined(GS_FVF)
 	result.vfv = CalculateViewFrustumVectorFromClipSpacePosition(result.position);
+#endif
+#if defined(GS_OBJECT_INDEX)
+	result.objectIdx = input.objectIdx;
+#endif
 	return result; 
 }
 
 [maxvertexcount(2*3)]
-	void PT_viewfrustumVector_clipToNear(triangle PT_viewfrustumVector input[3], inout TriangleStream<PT_viewfrustumVector> outputStream)
+	void ClipToNear(triangle ClipToNearVertex input[3], inout TriangleStream<ClipToNearVertex> outputStream)
 {
-	PT_viewfrustumVector outVert;
+	ClipToNearVertex outVert;
 
 	// This will clip the geometry to the near clip space, and then flatten the part belond the near clip plane so that
 	// it's lying exactly on the near clip plane 
@@ -215,8 +230,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 				// 0, 1 -> outside, 2 -> inside
 				float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
 				float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-				PT_viewfrustumVector B = Interpolate(input[1], input[2], alphaB);
-				PT_viewfrustumVector C = Interpolate(input[2], input[0], alphaC);
+				ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
+				ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
 
 				outputStream.Append(input[2]);
 				outputStream.Append(C);
@@ -229,8 +244,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 			// 0 -> outside, 1 -> inside, 2 -> outside
 			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
 			float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-			PT_viewfrustumVector A = Interpolate(input[0], input[1], alphaA);
-			PT_viewfrustumVector B = Interpolate(input[1], input[2], alphaB);
+			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
+			ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
 
 			outputStream.Append(input[1]);
 			outputStream.Append(B);
@@ -242,8 +257,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 			// 0 -> outside, 1, 2 -> inside
 			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
 			float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-			PT_viewfrustumVector A = Interpolate(input[0], input[1], alphaA);
-			PT_viewfrustumVector C = Interpolate(input[2], input[0], alphaC);
+			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
+			ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
 
 			outputStream.Append(input[1]);
 			outputStream.Append(input[2]);
@@ -257,8 +272,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 			// 0 -> inside, 1, 2 -> outside
 			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
 			float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-			PT_viewfrustumVector A = Interpolate(input[0], input[1], alphaA);
-			PT_viewfrustumVector C = Interpolate(input[2], input[0], alphaC);
+			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
+			ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
 
 			outputStream.Append(input[0]);
 			outputStream.Append(A);
@@ -270,8 +285,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 			// 0 -> inside, 1 -> outside, 2 -> inside
 			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
 			float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-			PT_viewfrustumVector A = Interpolate(input[0], input[1], alphaA);
-			PT_viewfrustumVector B = Interpolate(input[1], input[2], alphaB);
+			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
+			ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
 
 			outputStream.Append(input[2]);
 			outputStream.Append(input[0]);
@@ -284,8 +299,8 @@ PT_viewfrustumVector ProjectOntoNearPlane(PT_viewfrustumVector input)
 		// 0, 1 -> inside, 2 -> outside
 		float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
 		float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-		PT_viewfrustumVector B = Interpolate(input[1], input[2], alphaB);
-		PT_viewfrustumVector C = Interpolate(input[2], input[0], alphaC);
+		ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
+		ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
 
 		outputStream.Append(input[0]);
 		outputStream.Append(input[1]);

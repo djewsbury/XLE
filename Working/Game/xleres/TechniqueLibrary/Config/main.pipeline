@@ -11,7 +11,7 @@ DescriptorSet Draw
 
 	UniformBuffer DrawCallProperties;		// 1
 
-	SampledTexture tex0;					// 2
+	SampledTexture t2;						// 2
 };
 
 DescriptorSet Material

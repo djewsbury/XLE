@@ -42,26 +42,34 @@ namespace ToolsRig
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXTANGENT, RenderCore::Format::R32G32B32A32_FLOAT }
 	};
 
-    static void GeodesicSphere_Subdivide(const Float3 &v1, const Float3 &v2, const Float3 &v3, std::vector<Float3> &sphere_points, unsigned int depth) 
+    static void GeodesicSphere_Subdivide(
+        unsigned v1, unsigned v2, unsigned v3, 
+        std::vector<Float3>& sphere_points,
+        std::vector<unsigned>& sphere_indices,
+        unsigned int depth) 
     {
         if(depth == 0) 
         {
-            sphere_points.push_back(v1);
-            sphere_points.push_back(v2);
-            sphere_points.push_back(v3);
+            sphere_indices.push_back(v1);
+            sphere_indices.push_back(v2);
+            sphere_indices.push_back(v3);
             return;
         }
 
-        Float3 v12 = Normalize(v1 + v2);
-        Float3 v23 = Normalize(v2 + v3);
-        Float3 v31 = Normalize(v3 + v1);
-        GeodesicSphere_Subdivide( v1, v12, v31, sphere_points, depth - 1);
-        GeodesicSphere_Subdivide( v2, v23, v12, sphere_points, depth - 1);
-        GeodesicSphere_Subdivide( v3, v31, v23, sphere_points, depth - 1);
-        GeodesicSphere_Subdivide(v12, v23, v31, sphere_points, depth - 1);
+        unsigned v12 = (unsigned)sphere_points.size(), v23 = v12+1, v31 = v12+2;
+        Float3 v12p = Normalize(sphere_points[v1] + sphere_points[v2]);
+        Float3 v23p = Normalize(sphere_points[v2] + sphere_points[v3]);
+        Float3 v31p = Normalize(sphere_points[v3] + sphere_points[v1]);
+        sphere_points.push_back(v12p);
+        sphere_points.push_back(v23p);
+        sphere_points.push_back(v31p);
+        GeodesicSphere_Subdivide( v1, v12, v31, sphere_points, sphere_indices, depth - 1);
+        GeodesicSphere_Subdivide( v2, v23, v12, sphere_points, sphere_indices, depth - 1);
+        GeodesicSphere_Subdivide( v3, v31, v23, sphere_points, sphere_indices, depth - 1);
+        GeodesicSphere_Subdivide(v12, v23, v31, sphere_points, sphere_indices, depth - 1);
     }
 
-    static std::vector<Float3>     BuildGeodesicSpherePts(int detail)
+    static std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildGeodesicSpherePts(int detail)
     {
 
             //  
@@ -86,31 +94,36 @@ namespace ToolsRig
         };
 
         std::vector<Float3> spherePoints;
+        std::vector<unsigned> sphereIndices;
+        spherePoints.insert(spherePoints.end(), vdata, &vdata[dimof(vdata)]);
         for(int i = 0; i < 20; i++) {
                 // note -- flip here to flip the winding
             GeodesicSphere_Subdivide(
-                vdata[tindices[i][0]], vdata[tindices[i][2]], 
-                vdata[tindices[i][1]], spherePoints, detail);
+                tindices[i][0], tindices[i][2], 
+                tindices[i][1], spherePoints, sphereIndices, detail);
         }
-        return spherePoints;
+        return {std::move(sphereIndices), std::move(spherePoints)};
     }
 
     std::vector<Internal::Vertex3D>   BuildGeodesicSphere(int detail)
     {
             //      build a geodesic sphere at the origin with radius 1     //
-        auto pts = BuildGeodesicSpherePts(detail);
+        std::vector<Float3> spherePoints;
+        std::vector<unsigned> sphereIndices;
+        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
 
         std::vector<Internal::Vertex3D> result;
-        result.reserve(pts.size());
+        result.reserve(sphereIndices.size());
 
         const float texWrapsX = 8.f;
         const float texWrapsY = 4.f;
-        std::vector<bool> singularityVertex(pts.size(), false);
+        std::vector<bool> singularityVertex(sphereIndices.size(), false);
 
-        for (auto i=pts.cbegin(); i!=pts.cend(); ++i) {
+        for (auto i=sphereIndices.cbegin(); i!=sphereIndices.cend(); ++i) {
+            auto pt = spherePoints[*i];
             Internal::Vertex3D vertex;
-            vertex._position    = *i;
-            vertex._normal      = Normalize(*i);        // centre is the origin, so normal points towards the position
+            vertex._position    = pt;
+            vertex._normal      = Normalize(pt);        // centre is the origin, so normal points towards the position
 
                 //  Texture coordinates based on longitude / latitude
                 //  2 texture wraps horizontally, and 1 wrap vertically
@@ -137,7 +150,7 @@ namespace ToolsRig
                 } else {
                     vertex._tangent = Float4{-1.f, 0.f, 0.f, 1.0f};
                 }
-                singularityVertex[i-pts.cbegin()] = true;
+                singularityVertex[i-sphereIndices.cbegin()] = true;
             }
 
             // We can get the bitangent via cross product, as so (but that's not essential to store here)
@@ -269,7 +282,13 @@ namespace ToolsRig
 
     std::vector<Float3>     BuildGeodesicSphereP(int detail)
     {
-        return BuildGeodesicSpherePts(detail);
+        std::vector<Float3> spherePoints;
+        std::vector<unsigned> sphereIndices;
+        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+        std::vector<Float3> result;
+        result.reserve(sphereIndices.size());
+        for (auto i:sphereIndices) result.push_back(spherePoints[i]);
+        return result;
     }
 
     std::vector<Float3>     BuildRoughGeodesicHemiSphereP(int detail)
@@ -277,16 +296,40 @@ namespace ToolsRig
         //  Return only the triangles from a Geodesic sphere that are in the +Z hemisphere
         // It's a little awkward to remove the unwanted hemisphere cleanly. We're
         // just going to do it the easy way by deleting the triangles we don't want
-        std::vector<Float3> result = BuildGeodesicSpherePts(detail);
-        auto i = result.begin();
-        while (i != result.end()) {
-            if (i[0][2] < 0.f && i[1][2] < 0.f && i[2][2] < 0.f) {
-                i = result.erase(i, i+3);
+        std::vector<Float3> spherePoints;
+        std::vector<unsigned> sphereIndices;
+        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+
+        std::vector<Float3> result;
+        result.reserve(sphereIndices.size());
+        auto i = sphereIndices.begin();
+        while (i != sphereIndices.end()) {
+            if (spherePoints[i[0]][2] <= 0.f && spherePoints[i[1]][2] <= 0.f && spherePoints[i[2]][2] <= 0.f) {
+            } else {
+                result.push_back(spherePoints[i[0]]);
+                result.push_back(spherePoints[i[1]]);
+                result.push_back(spherePoints[i[2]]);
+            }
+            i += 3;
+        }
+        return result;
+    }
+
+    std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildIndexedRoughGeodesicHemiSphereP(int detail)
+    {
+        std::vector<Float3> spherePoints;
+        std::vector<unsigned> sphereIndices;
+        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+
+        auto i = sphereIndices.begin();
+        while (i != sphereIndices.end()) {
+            if (spherePoints[i[0]][2] <= 0.f && spherePoints[i[1]][2] <= 0.f && spherePoints[i[2]][2] <= 0.f) {
+                i = sphereIndices.erase(i, i+3);
             } else {
                 i += 3;
             }
         }
-        return result;
+        return {std::move(sphereIndices), std::move(spherePoints)};
     }
 
     std::vector<Float3>     BuildCubeP()

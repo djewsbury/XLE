@@ -17,6 +17,21 @@ namespace RenderCore { namespace Techniques { class RenderPassInstance; }}
 
 namespace RenderCore { namespace LightingEngine
 {
+	class LightStencilingGeometry
+	{
+	public:
+		std::shared_ptr<IResource> _geo;
+		std::pair<unsigned, unsigned> _sphereOffsetAndCount;
+		std::pair<unsigned, unsigned> _cubeOffsetAndCount;
+
+		std::shared_ptr<IResource> _lowDetailHemiSphereVB;
+		std::shared_ptr<IResource> _lowDetailHemiSphereIB;
+		unsigned _lowDetailHemiSphereIndexCount;
+
+		LightStencilingGeometry(IDevice& device);
+		LightStencilingGeometry() = default;
+	};
+
     class LightResolveOperators : public ILightSourceFactory
 	{
 	public:
@@ -34,9 +49,7 @@ namespace RenderCore { namespace LightingEngine
 		Metal::BoundUniforms _boundUniforms;
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
         bool _debuggingOn = false;
-		std::shared_ptr<IResource> _stencilingGeometry;
-		std::pair<unsigned, unsigned> _sphereOffsetAndCount;
-		std::pair<unsigned, unsigned> _cubeOffsetAndCount;
+		LightStencilingGeometry _stencilingGeometry;
 
 		std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 

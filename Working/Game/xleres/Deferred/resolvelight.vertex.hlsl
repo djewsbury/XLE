@@ -3,11 +3,12 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../TechniqueLibrary/Basic/basic2D.vertex.hlsl"
+#include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
-cbuffer LightBuffer BIND_SEQ_B1
+cbuffer IndividualLightBuffer BIND_DRAW_B0
 {
-	LightDesc Light;
+	LightDesc IndividualLight;
 }
 
 void main(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out float2 oTexCoord : TEXCOORD0, out ViewFrustumInterpolator vfi)
@@ -20,12 +21,12 @@ void main(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out f
         float3 cameraRight = float3(CameraBasis[0].x, CameraBasis[1].x, CameraBasis[2].x);
         float3 cameraUp = float3(CameraBasis[0].y, CameraBasis[1].y, CameraBasis[2].y);
         float3 cameraForward = -float3(CameraBasis[0].z, CameraBasis[1].z, CameraBasis[2].z);
-        float3 lightToView = Light.Position - WorldSpaceView;
+        float3 lightToView = IndividualLight.Position - WorldSpaceView;
         worldSpacePosition 
-            = Light.Position 
-            - Light.CutoffRange * cameraUp * iPosition.x
-            + Light.CutoffRange * cameraRight * iPosition.y
-            - Light.CutoffRange * cameraForward * iPosition.z
+            = IndividualLight.Position 
+            - IndividualLight.CutoffRange * cameraUp * iPosition.x
+            + IndividualLight.CutoffRange * cameraRight * iPosition.y
+            - IndividualLight.CutoffRange * cameraForward * iPosition.z
             ;
     #else
     #endif
@@ -58,4 +59,37 @@ void main(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out f
 		+ w2 * SysUniform_GetFrustumCorners(2).xyz
 		+ w3 * SysUniform_GetFrustumCorners(3).xyz
 		;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+StructuredBuffer<LightDesc> CombinedLightBuffer : register (t1, space1);
+
+void PrepareMany(
+	float3 iPosition : POSITION,
+	uint instanceIdx : SV_InstanceID,
+	out float4 oPosition : SV_Position,
+	out nointerpolation uint objectIdx : OBJECT_INDEX)
+{
+    float3 worldSpacePosition = iPosition;
+
+    // Depending on the light shape, transform the input position into "worldSpace"
+    {// Sphere
+		LightDesc lightDesc = CombinedLightBuffer[instanceIdx];
+        // Orienting towards the camera is unessential, but may help with some consistency around the edges
+        float3 cameraRight = float3(CameraBasis[0].x, CameraBasis[1].x, CameraBasis[2].x);
+        float3 cameraUp = float3(CameraBasis[0].y, CameraBasis[1].y, CameraBasis[2].y);
+        float3 cameraForward = -float3(CameraBasis[0].z, CameraBasis[1].z, CameraBasis[2].z);
+        float3 lightToView = lightDesc.Position - WorldSpaceView;
+		float range = lightDesc.CutoffRange;
+        worldSpacePosition 
+            = lightDesc.Position 
+            - range * cameraUp * iPosition.x
+            + range * cameraRight * iPosition.y
+            - range * cameraForward * iPosition.z
+            ;
+    }
+
+	oPosition = mul(SysUniform_GetWorldToClip(), float4(worldSpacePosition, 1));
+	objectIdx = instanceIdx;
 }

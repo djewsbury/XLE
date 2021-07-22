@@ -128,9 +128,10 @@ namespace RenderCore { namespace LightingEngine
 		} else {
 			inputStates._inputLayout = MakeIteratorRange(inputElements);
 			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":main";
-			pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":PT_viewfrustumVector_clipToNear";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 			inputStates._topology = Topology::TriangleList;
 			pipelineDesc._depthStencil._depthBoundsTestEnable = true;
+			pipelineDesc._manualSelectorFiltering._setValues.SetParameter("GS_FVF", 1);
 		}
 
 		pipelineDesc._rasterization = Techniques::CommonResourceBox::s_rsDefault;
@@ -335,25 +336,45 @@ namespace RenderCore { namespace LightingEngine
 					*finalResult->_pipelineLayout,
 					usi, sharedUsi};
 
-				{
-					auto sphereGeo = ToolsRig::BuildRoughGeodesicHemiSphereP(4);
-					auto cubeGeo = ToolsRig::BuildCubeP();
-					std::vector<uint8_t> geoInitBuffer;
-					geoInitBuffer.resize((sphereGeo.size() + cubeGeo.size()) * sizeof(Float3));
-					std::memcpy(geoInitBuffer.data(), cubeGeo.data(), cubeGeo.size() * sizeof(Float3));
-					std::memcpy(PtrAdd(geoInitBuffer.data(), cubeGeo.size() * sizeof(Float3)), sphereGeo.data(), sphereGeo.size() * sizeof(Float3));
-					finalResult->_stencilingGeometry = device->CreateResource(
-						CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(geoInitBuffer.size()), "light-stenciling-geometry"),
-						SubResourceInitData{MakeIteratorRange(geoInitBuffer)});
-					finalResult->_cubeOffsetAndCount = {0u, (unsigned)cubeGeo.size()};
-					finalResult->_sphereOffsetAndCount = {(unsigned)cubeGeo.size(), (unsigned)sphereGeo.size()};
-				} 
+				finalResult->_stencilingGeometry = LightStencilingGeometry(*device);
 
 				future.SetAsset(decltype(finalResult){finalResult}, nullptr);
 				return false;
 			});
 		return result;
 	}
+
+	LightStencilingGeometry::LightStencilingGeometry(IDevice& device)
+	{
+		auto sphereGeo = ToolsRig::BuildRoughGeodesicHemiSphereP(4);
+		auto cubeGeo = ToolsRig::BuildCubeP();
+		std::vector<uint8_t> geoInitBuffer;
+		geoInitBuffer.resize((sphereGeo.size() + cubeGeo.size()) * sizeof(Float3));
+		std::memcpy(geoInitBuffer.data(), cubeGeo.data(), cubeGeo.size() * sizeof(Float3));
+		std::memcpy(PtrAdd(geoInitBuffer.data(), cubeGeo.size() * sizeof(Float3)), sphereGeo.data(), sphereGeo.size() * sizeof(Float3));
+		_geo = device.CreateResource(
+			CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(geoInitBuffer.size()), "light-stenciling-geometry"),
+			SubResourceInitData{MakeIteratorRange(geoInitBuffer)});
+		_cubeOffsetAndCount = {0u, (unsigned)cubeGeo.size()};
+		_sphereOffsetAndCount = {(unsigned)cubeGeo.size(), (unsigned)sphereGeo.size()};
+
+		auto lowDetailHemi = ToolsRig::BuildIndexedRoughGeodesicHemiSphereP(0);
+		// float b = tan(pi/6)/tan(2*pi/6);
+		// float c = 1.0/cos(pi/6);
+		// float underestimationFactor = c*sin(pi/3)/(1+b);
+		//								= sin(pi/3)*cos(pi/6);
+		float underestimationFactor = std::sin(gPI/3.0f) * std::cos(gPI/6.0f);
+		for (auto& pt:lowDetailHemi.second) pt /= underestimationFactor;
+		_lowDetailHemiSphereVB = device.CreateResource(
+			CreateDesc(BindFlag::VertexBuffer, 0, 0, LinearBufferDesc::Create(sizeof(decltype(lowDetailHemi.second)::value_type)*lowDetailHemi.second.size()), "light-stenciling-geometry"),
+			SubResourceInitData{MakeIteratorRange(lowDetailHemi.second)});
+		std::vector<uint16_t> ib; ib.reserve(lowDetailHemi.first.size());
+		std::copy(lowDetailHemi.first.begin(), lowDetailHemi.first.end(), std::back_inserter(ib));
+		_lowDetailHemiSphereIB = device.CreateResource(
+			CreateDesc(BindFlag::IndexBuffer, 0, 0, LinearBufferDesc::Create(sizeof(uint16_t)*ib.size()), "light-stenciling-geometry"),
+			SubResourceInitData{MakeIteratorRange(ib)});
+		_lowDetailHemiSphereIndexCount = (unsigned)ib.size();
+	} 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -402,7 +423,7 @@ namespace RenderCore { namespace LightingEngine
 		boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(fixedDescSets), 1);
 
 		VertexBufferView vbvs[] = {
-			VertexBufferView { lightResolveOperators._stencilingGeometry.get() }
+			VertexBufferView { lightResolveOperators._stencilingGeometry._geo.get() }
 		};
 		encoder.Bind(MakeIteratorRange(vbvs), {});
 
@@ -486,7 +507,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,
 					// though, but in that case we can flatten the front of the sphere to the near clip plane
-					encoder.Draw(*pipeline->_pipeline, lightResolveOperators._sphereOffsetAndCount.second, lightResolveOperators._sphereOffsetAndCount.first);
+					encoder.Draw(*pipeline->_pipeline, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.second, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.first);
 				} else {
 					assert(0);
 				}
