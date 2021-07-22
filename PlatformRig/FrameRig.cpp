@@ -479,10 +479,11 @@ namespace PlatformRig
         static ColorB normalColor = ColorB(70, 31, 0, 0x9f);
         static ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
         static ColorB pressed = ColorB(128, 50, 0, 0xff);
+        /*      Disabled because the rounded rect shader not hooked up for non-DX11
         DrawRoundedRectangle(&context, displayRect, 
             FormatButton(interfaceState, Id_FrameRigDisplayMain, normalColor, mouseOverColor, pressed), 
             ColorB::White,
-            (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);
+            (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);*/
 
         static ColorB menuBkgrnd(128, 96, 64, 64);
         static ColorB menuBkgrndHigh(128, 96, 64, 192);

@@ -40,6 +40,7 @@ namespace PlatformRig
             TRY {
                 auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, _fontRenderer.get());
             
+                // todo -- we need the viewport that we're going to get when we begin the presentation target; not the viewport that we have now
                 Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
                 assert(viewportDims[0] * viewportDims[1]);
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });

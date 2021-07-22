@@ -22,39 +22,68 @@ namespace RenderOverlays
 {
 	using namespace RenderCore;
 
-	class Vertex_PC     { public: Float3 _position; unsigned _colour;                                                               Vertex_PC(Float3 position, unsigned colour) : _position(position), _colour(colour) {};                                          static MiniInputElementDesc inputElements[]; };
-	class Vertex_PCR    { public: Float3 _position; unsigned _colour; float _radius;                                                Vertex_PCR(Float3 position, unsigned colour, float radius) : _position(position), _colour(colour), _radius(radius) {};          static MiniInputElementDesc inputElements[]; };
-	class Vertex_PCT    { public: Float3 _position; unsigned _colour; Float2 _texCoord;                                             Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {};   static MiniInputElementDesc inputElements[]; };
-	class Vertex_PCCTT  { public: Float3 _position; unsigned _colour0; unsigned _colour1; Float2 _texCoord0; Float2 _texCoord1;     Vertex_PCCTT(Float3 position, unsigned colour0, unsigned colour1, Float2 texCoord0, Float2 texCoord1) : _position(position), _colour0(colour0), _colour1(colour1), _texCoord0(texCoord0), _texCoord1(texCoord1) {};   static MiniInputElementDesc inputElements[]; };
+	class Vertex_PC     { public: Float3 _position; unsigned _colour;                                                               Vertex_PC(Float3 position, unsigned colour) : _position(position), _colour(colour) {};                                          static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
+	class Vertex_PCR    { public: Float3 _position; unsigned _colour; float _radius;                                                Vertex_PCR(Float3 position, unsigned colour, float radius) : _position(position), _colour(colour), _radius(radius) {};          static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
+	class Vertex_PCT    { public: Float3 _position; unsigned _colour; Float2 _texCoord;                                             Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {};   static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
+	class Vertex_PCCTT  { public: Float3 _position; unsigned _colour0; unsigned _colour1; Float2 _texCoord0; Float2 _texCoord1;     Vertex_PCCTT(Float3 position, unsigned colour0, unsigned colour1, Float2 texCoord0, Float2 texCoord1) : _position(position), _colour0(colour0), _colour1(colour1), _texCoord0(texCoord0), _texCoord1(texCoord1) {};   static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
 
 	static inline unsigned  HardwareColor(ColorB input)
 	{
 		return (uint32(input.a) << 24) | (uint32(input.b) << 16) | (uint32(input.g) << 8) | uint32(input.r);
 	}
 
-	MiniInputElementDesc Vertex_PC::inputElements[] = 
+	MiniInputElementDesc Vertex_PC::inputElements3D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM }
 	};
 
-	MiniInputElementDesc Vertex_PCR::inputElements[] = 
+	MiniInputElementDesc Vertex_PCR::inputElements3D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::RADIUS, Format::R32_FLOAT }
 	};
 
-	MiniInputElementDesc Vertex_PCT::inputElements[] = 
+	MiniInputElementDesc Vertex_PCT::inputElements3D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT }
 	};
 
-	MiniInputElementDesc Vertex_PCCTT::inputElements[] = 
+	MiniInputElementDesc Vertex_PCCTT::inputElements3D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR + 1, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT },
+		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD + 1, Format::R32G32_FLOAT }
+	};
+
+	MiniInputElementDesc Vertex_PC::inputElements2D[] = 
+	{
+		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM }
+	};
+
+	MiniInputElementDesc Vertex_PCR::inputElements2D[] = 
+	{
+		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::RADIUS, Format::R32_FLOAT }
+	};
+
+	MiniInputElementDesc Vertex_PCT::inputElements2D[] = 
+	{
+		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT }
+	};
+
+	MiniInputElementDesc Vertex_PCCTT::inputElements2D[] = 
+	{
+		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR + 1, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT },
@@ -67,69 +96,76 @@ namespace RenderOverlays
 		unsigned				_vertexCount;
 		RenderCore::Topology	_topology;
 		IteratorRange<const MiniInputElementDesc*> _inputAssembly;
-		ProjectionMode	        _projMode = ProjectionMode::P2D;
 		StringSection<>			_shaderSelectorTable;
 	};
 	
 	void ImmediateOverlayContext::DrawPoint      (ProjectionMode proj, const Float3& v,     const ColorB& col,      uint8_t size)
 	{
-		typedef Vertex_PCR Vertex;
-		auto data = BeginDrawCall(DrawCall{1, Topology::PointList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PCR;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{1, Topology::PointList, inputElements}).Cast<Vertex*>();
 		data[0] = Vertex(v, HardwareColor(col), float(size));
 	}
 
 	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    uint8_t size)
 	{
-		typedef Vertex_PCR Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::PointList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PCR;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::PointList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col), float(size));
 	}
 
 	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   uint8_t size)
 	{
-		typedef Vertex_PCR Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::PointList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PCR;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::PointList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col[c]), float(size));
 	}
 
 	void ImmediateOverlayContext::DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1, float thickness)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{2, Topology::LineList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{2, Topology::LineList, inputElements}).Cast<Vertex*>();
 		data[0] = Vertex(v0, HardwareColor(colV0));
 		data[1] = Vertex(v1, HardwareColor(colV1));
 	}
 
 	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    float thickness)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::LineList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::LineList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col));
 	}
 
 	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   float thickness)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::LineList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::LineList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col[c]));
 	}
 
 	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::TriangleList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col));
 	}
 
 	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[])
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{numPoints, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{numPoints, Topology::TriangleList, inputElements}).Cast<Vertex*>();
 		for (unsigned c=0; c<numPoints; ++c)
 			data[c] = Vertex(v[c], HardwareColor(col[c]));
 	}
@@ -138,8 +174,9 @@ namespace RenderOverlays
 													const Float3& v0,    const ColorB& colV0,    const Float3& v1,     
 													const ColorB& colV1, const Float3& v2,       const ColorB& colV2)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{3, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{3, Topology::TriangleList, inputElements}).Cast<Vertex*>();
 		data[0] = Vertex(v0, HardwareColor(colV0));
 		data[1] = Vertex(v1, HardwareColor(colV1));
 		data[2] = Vertex(v2, HardwareColor(colV2));
@@ -153,8 +190,9 @@ namespace RenderOverlays
 		const Float2& minTex1, const Float2& maxTex1,
 		StringSection<> shaderSelectorTable)
 	{
-		typedef Vertex_PCCTT Vertex;
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj, shaderSelectorTable}).Cast<Vertex*>();
+		using Vertex = Vertex_PCCTT;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, shaderSelectorTable}).Cast<Vertex*>();
 		auto col0 = HardwareColor(color0);
 		auto col1 = HardwareColor(color1);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col0, col1, Float2(minTex0[0], minTex0[1]), Float2(minTex1[0], minTex1[1]));
@@ -171,8 +209,9 @@ namespace RenderOverlays
 			ColorB color,
 			StringSection<> shaderSelectorTable)
 	{
-		typedef Vertex_PC Vertex;
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj, shaderSelectorTable}).Cast<Vertex*>();
+		using Vertex = Vertex_PC;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, shaderSelectorTable}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col);
 		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col);
@@ -189,8 +228,9 @@ namespace RenderOverlays
 		ColorB color, const Float2& minTex0, const Float2& maxTex0)
 	{
 		assert(0);	// todo -- texture binding not supported via this path
-		typedef Vertex_PCCTT Vertex;
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, MakeIteratorRange(Vertex::inputElements), proj}).Cast<Vertex*>();
+		using Vertex = Vertex_PCCTT;
+		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col, col, Float2(minTex0[0], minTex0[1]), Float2(0.f, 0.f));
 		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, col, Float2(minTex0[0], maxTex0[1]), Float2(0.f, 0.f));

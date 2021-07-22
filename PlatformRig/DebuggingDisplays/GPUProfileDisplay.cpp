@@ -194,7 +194,8 @@ namespace PlatformRig { namespace Overlays
                     break;
                 }
 
-                DrawRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
+                // Disabled because the rounded rectangle shader isn't working for APIs other than DX11 
+                // DrawRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
                 Layout sectionLayout(sectionRect);
                 Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
@@ -218,7 +219,7 @@ namespace PlatformRig { namespace Overlays
                     Rect varianceRect( 
                         Coord2(labelRect._topLeft[0], durationRect._bottomRight[1]),
                         Coord2(labelRect._bottomRight[0], labelRect._bottomRight[1]) );
-                    DrawFormatText(&context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", sectionVariances[c2]);
+                    DrawFormatText(&context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", sectionVariances[smoothedSectionCosts[c2].second]);
                 }
 
                 //  Then draw the graph in the main part of the widget
