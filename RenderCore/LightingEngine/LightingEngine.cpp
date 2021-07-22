@@ -72,6 +72,8 @@ namespace RenderCore { namespace LightingEngine
 	auto CompiledLightingTechnique::CreateStep_RunFragments(RenderStepFragmentInterface&& fragments) -> FragmentInterfaceRegistration
 	{
 		assert(!_isConstructionCompleted);
+		if (!_pendingCreateFragmentSteps.empty() && _pendingCreateFragmentSteps[0].first.GetPipelineType() != fragments.GetPipelineType())
+			ResolvePendingCreateFragmentSteps();
 		_pendingCreateFragmentSteps.emplace_back(std::make_pair(std::move(fragments), _nextFragmentInterfaceRegistration));
 		++_nextFragmentInterfaceRegistration;
 		return _nextFragmentInterfaceRegistration-1;

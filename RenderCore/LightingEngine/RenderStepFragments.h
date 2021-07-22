@@ -52,6 +52,7 @@ namespace RenderCore { namespace LightingEngine
 		~RenderStepFragmentInterface();
 
 		const RenderCore::Techniques::FrameBufferDescFragment& GetFrameBufferDescFragment() const { return _frameBufferDescFragment; }
+		PipelineType GetPipelineType() const { return _frameBufferDescFragment._pipelineType; }
 
 		struct SubpassExtension
 		{
