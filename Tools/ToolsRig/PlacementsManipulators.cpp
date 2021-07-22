@@ -21,6 +21,9 @@
 //#include "../../RenderOverlays/OverlayUtils.h"
 #include "../../RenderCore/IThreadContext.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
+#include "../../RenderCore/Techniques/DeferredShaderResource.h"
+
+#include "../../Assets/Assets.h"
 
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
@@ -1405,7 +1408,7 @@ namespace ToolsRig
                     ProjectionMode::P2D, 
                     AsPixelCoords(iconRect._topLeft),
                     AsPixelCoords(iconRect._bottomRight),
-                    icons[c]);
+                    ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(icons[c])->GetShaderResource());
                 if (iconIds[c]) {
                     interactables.Register(Interactables::Widget(iconRect, iconIds[c]));
                 }

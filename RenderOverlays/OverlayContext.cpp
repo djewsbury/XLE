@@ -12,6 +12,7 @@
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
 #include "../RenderCore/StateDesc.h"
+#include "../RenderCore/UniformsStream.h"
 #include "../Assets/Assets.h"
 #include "../OSServices/Log.h"
 #include "../ConsoleRig/ResourceBox.h"
@@ -97,6 +98,7 @@ namespace RenderOverlays
 		RenderCore::Topology	_topology;
 		IteratorRange<const MiniInputElementDesc*> _inputAssembly;
 		StringSection<>			_shaderSelectorTable;
+		std::shared_ptr<RenderCore::IResourceView> _textureResource;
 	};
 	
 	void ImmediateOverlayContext::DrawPoint      (ProjectionMode proj, const Float3& v,     const ColorB& col,      uint8_t size)
@@ -224,13 +226,12 @@ namespace RenderOverlays
 	void ImmediateOverlayContext::DrawTexturedQuad(
 		ProjectionMode proj, 
 		const Float3& mins, const Float3& maxs, 
-		const std::string& texture,
+		std::shared_ptr<RenderCore::IResourceView> textureResource,
 		ColorB color, const Float2& minTex0, const Float2& maxTex0)
 	{
-		assert(0);	// todo -- texture binding not supported via this path
 		using Vertex = Vertex_PCCTT;
 		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements}).Cast<Vertex*>();
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, {}, std::move(textureResource)}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col, col, Float2(minTex0[0], minTex0[1]), Float2(0.f, 0.f));
 		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, col, Float2(minTex0[0], maxTex0[1]), Float2(0.f, 0.f));
@@ -295,10 +296,16 @@ namespace RenderOverlays
 	{
 		if (!drawCall._vertexCount) return {}; // (skip draw calls with zero vertices)
 
+		auto mat = AsMaterial(_currentState);
+		if (drawCall._textureResource) {
+			mat._uniformStreamInterface = _texturedUSI;
+			mat._uniforms._resourceViews.push_back(drawCall._textureResource);
+		}
+
 		return _immediateDrawables->QueueDraw(
 			drawCall._vertexCount,
 			drawCall._inputAssembly,
-			AsMaterial(_currentState),
+			std::move(mat),
 			drawCall._topology);
 	}
 
@@ -459,6 +466,8 @@ namespace RenderOverlays
 	, _threadContext(&threadContext)
 	, _fontRenderingManager(nullptr)
 	{
+		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
+		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
 	}
 
 	ImmediateOverlayContext::ImmediateOverlayContext(
@@ -470,6 +479,8 @@ namespace RenderOverlays
 		_fontRenderingManager = fontRenderingManager;
 		if (_fontRenderingManager)
 			_defaultFont = ConsoleRig::FindCachedBox2<DefaultFontBox>()._font;
+		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
+		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
 	}
 
 	ImmediateOverlayContext::~ImmediateOverlayContext()

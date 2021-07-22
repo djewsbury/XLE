@@ -23,7 +23,10 @@
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
+#include "../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../BufferUploads/IBufferUploads.h"
+
+#include "../Assets/Assets.h"
 
 #include "../OSServices/Log.h"
 #include "../OSServices/TimeUtils.h"
@@ -550,7 +553,7 @@ namespace PlatformRig
                             ProjectionMode::P2D, 
                             AsPixelCoords(iconRect._topLeft),
                             AsPixelCoords(iconRect._bottomRight),
-                            String_IconBegin + categories[c] + String_IconEnd);
+                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd)->GetShaderResource());
                         DrawText(
                             &context, rect, 0.f,
                             &tabHeader, tabHeaderColor, TextAlignment::Bottom,
@@ -563,7 +566,7 @@ namespace PlatformRig
                             ProjectionMode::P2D, 
                             AsPixelCoords(rect._topLeft),
                             AsPixelCoords(rect._bottomRight),
-                            String_IconBegin + categories[c] + String_IconEnd);
+                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd)->GetShaderResource());
 
                     }
 
@@ -594,7 +597,7 @@ namespace PlatformRig
                             ProjectionMode::P2D, 
                             AsPixelCoords(Coord2(rect._topLeft - Coord2(smallIconSize[0] + margin, 0))),
                             AsPixelCoords(Coord2(rect._topLeft[0]-margin, rect._bottomRight[1])),
-                            String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd);
+                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd)->GetShaderResource());
                         DrawText(
                             &context, rect, 0.f,
                             &tabHeader, tabHeaderColor, TextAlignment::Left,

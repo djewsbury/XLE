@@ -11,6 +11,7 @@
 #include "../Math/Matrix.h"
 #include "../Utility/StringUtils.h"
 
+namespace RenderCore { class IResourceView; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
 
 namespace RenderOverlays
@@ -87,7 +88,7 @@ namespace RenderOverlays
         virtual void    DrawTexturedQuad(
             ProjectionMode proj, 
             const Float3& mins, const Float3& maxs, 
-            const std::string& texture,
+            std::shared_ptr<RenderCore::IResourceView> textureResource,
             ColorB color = ColorB(0xffffffff),
             const Float2& minTex0 = Float2(0.f, 0.f), const Float2& maxTex0 = Float2(1.0f, 1.f)) = 0;
 
