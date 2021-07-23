@@ -1095,6 +1095,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(bind[1] < samplerStates.size());
 					auto& samplerState = samplerStates[bind[1]];
 					builder.Bind(bind[0], samplerState->GetUnderlying());
+					bind += 2;
 				} else {
 					assert(0);	// array sampler bindings not supported yet
 					auto count = bind[1]&~s_arrayBindingFlag;

@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/IThreadContext.h"
+#include "../../../RenderCore/IDevice.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/IAsyncMarker.h"
@@ -28,14 +29,6 @@
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
-
-namespace RenderCore
-{
-	uint64_t Hash64(const IDevice& device, uint64_t seed = DefaultSeed64)
-	{
-		return seed;
-	}
-}
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
@@ -305,47 +298,12 @@ namespace UnitTests
 			us);
 	}
 
-	class CompiledPipelineLayoutAsset
-	{
-	public:
-		std::unordered_map<std::string, std::shared_ptr<RenderCore::ICompiledPipelineLayout>> _pipelineLayouts;
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _predefinedLayouts;
-
-		CompiledPipelineLayoutAsset(
-			std::shared_ptr<RenderCore::IDevice> device,
-			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
-		: _predefinedLayouts(std::move(predefinedLayouts))
-		{
-			_pipelineLayouts.reserve(_predefinedLayouts->_pipelineLayouts.size());
-			for (const auto& l:_predefinedLayouts->_pipelineLayouts) {
-				auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage);
-				_pipelineLayouts.insert(std::make_pair(l.first, device->CreatePipelineLayout(initializer)));
-			}
-		}
-
-		static void ConstructToFuture(
-			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
-			const std::shared_ptr<RenderCore::IDevice>& device,
-			StringSection<> srcFile,
-			RenderCore::ShaderLanguage shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage())
-		{
-			using namespace RenderCore;
-			auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(srcFile);
-			::Assets::WhenAll(src).ThenConstructToFuture(
-				future,
-				[device, shaderLanguage](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
-					return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), shaderLanguage);
-				});
-		}
-	};
-
 	static void ComputeShaderBasedDownsample(
 		LightingEngineTestApparatus& testApparatus, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::IResourceView& outputUAV,
 		RenderCore::IResourceView& inputSRV,
-		RenderCore::Techniques::CommonResourceBox& commonResourceBox)
+		std::shared_ptr<RenderCore::Techniques::CommonResourceBox>& commonResourceBox)
 	{
 		using namespace RenderCore;
 		UniformsStreamInterface usi;
@@ -355,16 +313,16 @@ namespace UnitTests
 		UniformsStream us;
 		IResourceView* srvs[] = { &inputSRV, &outputUAV };
 		us._resourceViews = MakeIteratorRange(srvs);
-		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
+		ISampler* samplers[] = { commonResourceBox->_unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
 
-		auto pipelineLayouts = ::Assets::Actualize<CompiledPipelineLayoutAsset>(
-			testApparatus._metalTestHelper->_device,
-			"ut-data/minimal_compute.pipeline");
+		auto pipelineLayouts = ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
+			testApparatus._metalTestHelper->_device, commonResourceBox,
+			"ut-data/minimal_compute.pipeline:ComputeMain");
 		
 		auto op = Techniques::CreateComputeOperator(
 			testApparatus._pipelinePool,
-			pipelineLayouts->_pipelineLayouts["ComputeMain"],
+			pipelineLayouts->GetPipelineLayout(),
 			"ut-data/downsample.compute.hlsl:main",
 			{}, usi);
 
@@ -410,7 +368,7 @@ namespace UnitTests
 
 		const auto downsampledResult = Hash64("Downsampled");
 		auto drawableWriter = ToolsRig::CreateShapeStackDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
-		Techniques::CommonResourceBox commonResourceBox(*testHelper->_device);
+		auto commonResourceBox = std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device);
 
 		{
 			Metal::TimeStampQueryPool queryPool(Metal::GetObjectFactory());
@@ -450,7 +408,7 @@ namespace UnitTests
 				Techniques::RenderPassInstance rpi { *threadContext, parsingContext, fragDesc };
 				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 				for (unsigned c=0; c<iterationCount; ++c)
-					PixelShaderBasedDownsample(testApparatus, parsingContext, rpi, *downsampleSrcSRV, commonResourceBox);
+					PixelShaderBasedDownsample(testApparatus, parsingContext, rpi, *downsampleSrcSRV, *commonResourceBox);
 				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 				downsampledResource = rpi.GetOutputAttachmentResource(0);
 			}

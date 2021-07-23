@@ -1819,7 +1819,7 @@ namespace RenderCore { namespace Techniques
 
                         // We can steal the settings from an existing attachment with the same semantic
                         // name, if necessary. We get these from a capture of the working attachments
-                        // we made at the same of the fragment
+                        // we made at the start of the fragment
                         auto desc = interfaceAttachment._desc;
                         auto sameSemantic = defaultSemanticFormats.find(interfaceAttachment.GetOutputSemanticBinding());
                         if (sameSemantic != defaultSemanticFormats.end()) {
