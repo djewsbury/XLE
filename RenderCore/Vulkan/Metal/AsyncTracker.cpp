@@ -11,11 +11,8 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-	static Threading::RecursiveMutex tempLock;
-
 	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
 	{
-		ScopedLock(tempLock);
 		ScopedLock(_trackersWritingCommandsLock);
 		if (_initialMarker) {
 			// special case to ensure that the initial marker actually gets submitted (or abandoned) by something
@@ -30,58 +27,143 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void FenceBasedTracker::OnSubmitToQueue(Marker marker, VkFence fence)
+	VkFence FenceBasedTracker::FindAvailableFence(IteratorRange<const Marker*> markers, std::unique_lock<Threading::Mutex>& lock)
 	{
-		ScopedLock(tempLock);
-		// assert(std::this_thread::get_id() == _queueThreadId);
+		assert(!markers.empty());
+		std::optional<std::chrono::steady_clock::time_point> nextMsg;
+		for (;;) {
+			// We need to reserve enough fences for every marker in _trackersWritingCommands that is not part of "markers" and is earlier than
+			// the highest marker. We need to do this to ensure that those markers will complete (without themselves stalling due to and exhausted fence heap!)
+			// This can cause problems if there are 2 threads each with a large nunmber of interleaved
+			// markers at the same time 
+			auto highestMarker = *(markers.end()-1);
+			unsigned fencesToReserve = 0;
+			{
+				ScopedLock(_trackersWritingCommandsLock);	// warning -- locking both _trackersWritingCommandsLock & _trackersSubmittedToQueueLock here
+				for (auto& t:_trackersWritingCommands)
+					if (t.first < highestMarker && std::find(markers.begin(), markers.end(), t.first) == markers.end())
+						++fencesToReserve;
+			}
 
-		unsigned fenceIndex = 0;
-		for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
-		if (fenceIndex > _fences.size())
-			Throw(std::runtime_error("Incorrect fence passed to FenceBasedTracker::OnSubmitToQueue"));
+			if (_unallocatedFenceCount >= fencesToReserve+1) {
+				auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
+				if (firstAvailable != ~0u) {
+					_fenceAllocationFlags.Allocate(firstAvailable);
+					--_unallocatedFenceCount;
+					return _fences[firstAvailable].get();
+				}
+			}
 
-		if (!_fenceAllocationFlags.IsAllocated(fenceIndex))
-			_fenceAllocationFlags.Allocate(fenceIndex);
+			lock.unlock();
+			
+			auto now = std::chrono::steady_clock::now();
+			if (!nextMsg || nextMsg.value() < now) {
+				// We still here, because this can be a very problematic case.
+				// Because we don't track object reservations per command list, while there
+				// is a long life command list out here, no vulkan objects are going to be destroyed. That helps us keep the memory usage tracking efficient,
+				// but it means that we should try to avoid these kinds of cases.
+				// Plus this probably means that there's a command list out there that is taking a large number of frames to complete, which isn't great in the
+				// first place
+				Log(Warning) << "Stalling due to insufficient fences in FenceBasedTracker. This happens when a command list submitted in the background takes longer than multiple frames. Stalling until we can resynchronize" << std::endl;
+				nextMsg = now + std::chrono::milliseconds(250);
+			}
+			Threading::Sleep(1);
+			UpdateConsumer();
 
-		FlushTrackersPendingAbandon();
+			lock.lock();
+		}
+	}
 
-		Tracker tracker { fence, marker, State::SubmittedToQueue };
-		if (marker == _nextSubmittedToQueueMarker) {
-			_trackersSubmittedToQueue.push_back(tracker);
-			++_nextSubmittedToQueueMarker;
+	VkFence FenceBasedTracker::OnSubmitToQueue(IteratorRange<const Marker*> markers)
+	{
+		assert(!markers.empty());
+		for (auto i=markers.begin()+1; i!=markers.end(); ++i) assert(*(i-1) < *i);		// we need the markers to be in sorted order here
 
-			for (;;) {
-				auto i = std::find_if(
-					_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
-					[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
-				if (i != _trackersSubmittedPendingOrdering.end()) {
-					_trackersSubmittedToQueue.push_back(*i);
+		VkFence fence = nullptr;
+		// Now allocate a fence and update _trackersSubmittedToQueue & _trackersSubmittedPendingOrdering
+		{
+			std::unique_lock<Threading::Mutex> lock(_trackersSubmittedToQueueLock);
+
+			fence = FindAvailableFence(markers, lock);
+
+			for (auto marker:markers) {
+				Tracker tracker { fence, marker, State::SubmittedToQueue };
+				if (marker == _nextSubmittedToQueueMarker) {
+					_trackersSubmittedToQueue.push_back(tracker);
 					++_nextSubmittedToQueueMarker;
-					_trackersSubmittedPendingOrdering.erase(i);
-				} else
-					break;
+
+					for (;;) {
+						auto i = std::find_if(
+							_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
+							[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
+						if (i != _trackersSubmittedPendingOrdering.end()) {
+							_trackersSubmittedToQueue.push_back(*i);
+							++_nextSubmittedToQueueMarker;
+							_trackersSubmittedPendingOrdering.erase(i);
+						} else
+							break;
+					}
+				} else {
+					if (_trackersSubmittedPendingOrdering.size() > 16) {
+						Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
+						Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
+					}
+					_trackersSubmittedPendingOrdering.push_back(tracker);
+				}
 			}
-		} else {
-			if (_trackersSubmittedPendingOrdering.size() > 16) {
-				Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
-				Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
-			}
-			_trackersSubmittedPendingOrdering.push_back(tracker);
 		}
 
+		// update _trackersWritingCommands (we need to do this after FindAvailableFence(), because we use the _trackersWritingCommands for the number of 
+		// fences to reserve)
+		std::vector<unsigned> trackersPendingAbandon;
 		{
 			ScopedLock(_trackersWritingCommandsLock);
-			auto i = std::find_if(
+			auto i = std::remove_if(
 				_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
-				[marker](const auto& c) { return c.first == marker; });
-			assert(i != _trackersWritingCommands.end());
-			_trackersWritingCommands.erase(i);
+				[markers](const auto& c) { return std::find(markers.begin(), markers.end(), c.first) != markers.end(); });
+			_trackersWritingCommands.erase(i, _trackersWritingCommands.end());
+
+			// process _trackersPendingAbandon now
+			trackersPendingAbandon = std::move(_trackersPendingAbandon);
 		}
+
+		// flush trackers pending abandon if there are any...
+		if (!trackersPendingAbandon.empty()) {
+			std::sort(trackersPendingAbandon.begin(), trackersPendingAbandon.end());
+			ScopedLock(_trackersSubmittedToQueueLock);
+			for (const auto& marker:trackersPendingAbandon) {
+				Tracker tracker { nullptr, marker, State::Abandoned };
+				if (marker == _nextSubmittedToQueueMarker) {
+					_trackersSubmittedToQueue.push_back(tracker);
+					++_nextSubmittedToQueueMarker;
+
+					for (;;) {
+						auto i = std::find_if(
+							_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
+							[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
+						if (i != _trackersSubmittedPendingOrdering.end()) {
+							_trackersSubmittedToQueue.push_back(*i);
+							++_nextSubmittedToQueueMarker;
+							_trackersSubmittedPendingOrdering.erase(i);
+						} else
+							break;
+					}
+				} else {
+					if (_trackersSubmittedPendingOrdering.size() > 16) {
+						Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
+						Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
+					}
+					_trackersSubmittedPendingOrdering.push_back(tracker);
+				}
+			}
+			trackersPendingAbandon.clear();
+		}
+
+		return fence;
 	}
 
 	void FenceBasedTracker::AbandonMarker(Marker marker)
 	{
-		ScopedLock(tempLock);
 		ScopedLock(_trackersWritingCommandsLock);
 		auto i = std::find_if(
 			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
@@ -91,58 +173,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		_trackersPendingAbandon.push_back(marker);
 	}
 
-	void FenceBasedTracker::FlushTrackersPendingAbandon()
+	void FenceBasedTracker::CheckFenceResetAlreadyLocked(VkFence fence)
 	{
-		ScopedLock(tempLock);
-		// assert(std::this_thread::get_id() == _queueThreadId);
-		ScopedLock(_trackersWritingCommandsLock);
-		std::sort(_trackersPendingAbandon.begin(), _trackersPendingAbandon.end());
-		for (const auto& marker:_trackersPendingAbandon) {
-			Tracker tracker { nullptr, marker, State::Abandoned };
-			if (marker == _nextSubmittedToQueueMarker) {
-				_trackersSubmittedToQueue.push_back(tracker);
-				++_nextSubmittedToQueueMarker;
-
-				for (;;) {
-					auto i = std::find_if(
-						_trackersSubmittedPendingOrdering.begin(), _trackersSubmittedPendingOrdering.end(),
-						[next=_nextSubmittedToQueueMarker](const auto& c) { return c._frameMarker == next; });
-					if (i != _trackersSubmittedPendingOrdering.end()) {
-						_trackersSubmittedToQueue.push_back(*i);
-						++_nextSubmittedToQueueMarker;
-						_trackersSubmittedPendingOrdering.erase(i);
-					} else
-						break;
-				}
-			} else {
-				if (_trackersSubmittedPendingOrdering.size() > 16) {
-					Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
-					Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
-				}
-				_trackersSubmittedPendingOrdering.push_back(tracker);
-			}
-		}
-		_trackersPendingAbandon.clear();
-	}
-
-	VkFence FenceBasedTracker::FindAvailableFence()
-	{
-		ScopedLock(tempLock);
-		// assert(std::this_thread::get_id() == _queueThreadId);
-		auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
-		assert(firstAvailable != ~0u);
-		return _fences[firstAvailable].get();
-	}
-
-	void FenceBasedTracker::CheckFenceReset(VkFence fence)
-	{
-		ScopedLock(tempLock);
-		assert(std::this_thread::get_id() == _queueThreadId);
 		for (auto& tracker:_trackersSubmittedToQueue)
 			if (tracker._fence == fence)
 				return;
 		for (auto& tracker:_trackersSubmittedPendingOrdering)
 			if (tracker._fence == fence)
+				return;
+		for (auto f:_fencesCurrentlyInWaitOperation)	// Another thread is in a vkWaitForFences for this very marker. We can't reset/reuse it right now
+			if (f == fence)
 				return;
 
 		unsigned fenceIndex = 0;
@@ -150,41 +190,43 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(fenceIndex < _fences.size());
 		assert(_fenceAllocationFlags.IsAllocated(fenceIndex));
 		_fenceAllocationFlags.Deallocate(fenceIndex);
+		++_unallocatedFenceCount;
 		vkResetFences(_device, 1, &fence);
 	}
 
 	void FenceBasedTracker::UpdateConsumer()
 	{
-		ScopedLock(tempLock);
-		assert(std::this_thread::get_id() == _queueThreadId);
-		while (!_trackersSubmittedToQueue.empty()) {
-			auto next = *_trackersSubmittedToQueue.begin();
+		{
+			ScopedLock(_trackersSubmittedToQueueLock);
+			while (!_trackersSubmittedToQueue.empty()) {
+				auto next = *_trackersSubmittedToQueue.begin();
 
-			if (next._state == State::SubmittedToQueue) {
-				assert(next._fence);
-				auto res = vkGetFenceStatus(_device, next._fence);
-				if (res == VK_SUCCESS) {
+				if (next._state == State::SubmittedToQueue) {
+					assert(next._fence);
+					auto res = vkGetFenceStatus(_device, next._fence);
+					if (res == VK_SUCCESS) {
+						assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
+						_lastCompletedConsumerFrameMarker = next._frameMarker;
+						
+						auto fence = next._fence;
+						_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
+						CheckFenceResetAlreadyLocked(fence);
+					} else {
+						if (res == VK_ERROR_DEVICE_LOST)
+							Throw(std::runtime_error("Vulkan device lost"));
+						assert(res == VK_NOT_READY); (void)res;
+						break;
+					}
+				} else if (next._state == State::Abandoned) {
 					assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
 					_lastCompletedConsumerFrameMarker = next._frameMarker;
-					
-					auto fence = next._fence;
+
+					assert(next._fence == nullptr);
 					_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
-					CheckFenceReset(fence);
 				} else {
-					if (res == VK_ERROR_DEVICE_LOST)
-						Throw(std::runtime_error("Vulkan device lost"));
-					assert(res == VK_NOT_READY); (void)res;
+					assert(0);
 					break;
 				}
-			} else if (next._state == State::Abandoned) {
-				assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
-				_lastCompletedConsumerFrameMarker = next._frameMarker;
-
-				assert(next._fence == nullptr);
-				_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
-			} else {
-				assert(0);
-				break;
 			}
 		}
 
@@ -205,84 +247,60 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
-		ScopedLock(tempLock);
-		assert(std::this_thread::get_id() == _queueThreadId);
 		auto start = std::chrono::steady_clock::now();
-
-		if (marker <= _lastCompletedConsumerFrameMarker)
+		if (marker <= _lastCompletedConsumerFrameMarker.load())
 			return true;
 
-		bool foundTheFence = false;
-		for (unsigned c=0; c<_trackersSubmittedToQueue.size(); ++c)
-			if (_trackersSubmittedToQueue[c]._frameMarker == marker) {
-				assert(_trackersSubmittedToQueue[c]._state == State::SubmittedToQueue);
-				foundTheFence = true;
-				break;
-			}
-
-		if (!foundTheFence) {
-
-			// If the fence is in the "_trackersSubmittedPendingOrdering" list, we can still
-			// wait for it -- we just can't update _lastCompletedConsumerFrameMarker or reset the fence, etc
-			for (unsigned c=0; c<_trackersSubmittedPendingOrdering.size(); ++c)
-				if (_trackersSubmittedPendingOrdering[c]._frameMarker == marker) {
-					auto fence = _trackersSubmittedPendingOrdering[c]._fence;
-					if (timeout.has_value()) {
-						auto res = vkWaitForFences(_device, 1, &fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeout.value()).count());
-						assert(res == VK_SUCCESS);
-					} else {
-						auto res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
-						assert(res == VK_SUCCESS);
-					}
-					return true;
-				}
-
-			// assert(foundTheFence);
-			return false;
-		}
-
-		// Wait in order until we complete the one requested
-		while (!_trackersSubmittedToQueue.empty()) {
-			auto next = *_trackersSubmittedToQueue.begin();
-
-			if (next._state == State::SubmittedToQueue) {
-				assert(next._fence);
-				VkResult res;
-				if (timeout.has_value()) {
-					auto timeoutRemaining = ((start + timeout.value()) - std::chrono::steady_clock::now());
-					if (timeoutRemaining < std::chrono::seconds(0)) return false;
-					res = vkWaitForFences(_device, 1, &next._fence, true, std::chrono::duration_cast<std::chrono::nanoseconds>(timeoutRemaining).count());
-				} else {
-					res = vkWaitForFences(_device, 1, &next._fence, true, UINT64_MAX);
-				}
-				if (res == VK_SUCCESS) {
-					assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
-					_lastCompletedConsumerFrameMarker = next._frameMarker;
+		VkFence fence = nullptr;
+		{
+			ScopedLock(_trackersSubmittedToQueueLock);
+			for (auto& tracker:_trackersSubmittedToQueue)
+				if (tracker._frameMarker == marker) {
+					assert(tracker._state == State::SubmittedToQueue);
+					fence = tracker._fence;
 					
-					auto fence = next._fence;
-					_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
-					CheckFenceReset(fence);
-				} else {
-					if (res == VK_ERROR_DEVICE_LOST)
-						Throw(std::runtime_error("Vulkan device lost"));
 					break;
 				}
-			} else if (next._state == State::Abandoned) {
-				assert(next._frameMarker == _lastCompletedConsumerFrameMarker+1);
-				_lastCompletedConsumerFrameMarker = next._frameMarker;
-
-				assert(next._fence == nullptr);
-				_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
-			} else {
-				break;  // Unusued/WritingCommands -- end looping
-			}
-
-			if (_lastCompletedConsumerFrameMarker == marker)
-				return true;
+			if (!fence)
+				for (auto& tracker:_trackersSubmittedPendingOrdering)
+					if (tracker._frameMarker == marker) {
+						assert(tracker._state == State::SubmittedToQueue);
+						fence = tracker._fence;
+						break;
+					}
+			if (fence)
+				_fencesCurrentlyInWaitOperation.push_back(fence);
 		}
 
-		// completed all pending markers, but still didn't find the one requested (or timed out)
-		return false;
+		// If we didn't find the fence, we must assume that it's already been waited for/completed
+		if (!fence) return true;
+
+		// Stall for this specific fence now. But do this outside of a lock so that we won't interfer with
+		// other threads. Note that other threads can interact with the queue and submit or wait for fences
+		// at the same time
+		bool timedOut = false;
+		if (timeout.has_value()) {
+			// note -- set timeout to zero to query the current state without stalling
+			auto timeoutCount = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout.value()).count();
+			auto res = vkWaitForFences(_device, 1, &fence, true, timeoutCount);
+			assert(res == VK_SUCCESS || res == VK_TIMEOUT); (void)res;
+			timedOut = res == VK_TIMEOUT;
+		} else {
+			auto res = vkWaitForFences(_device, 1, &fence, true, UINT64_MAX);
+			assert(res == VK_SUCCESS); (void)res;
+		}
+
+		{
+			ScopedLock(_trackersSubmittedToQueueLock);
+			auto i = std::find(_fencesCurrentlyInWaitOperation.begin(), _fencesCurrentlyInWaitOperation.end(), fence);
+			assert(i!=_fencesCurrentlyInWaitOperation.end());
+			_fencesCurrentlyInWaitOperation.erase(i);
+			// Another thread may have already removed references to this fence from the trackers, but didn't reset
+			// it because we're waiting on it. If so, we should reset it now:
+			CheckFenceResetAlreadyLocked(fence);
+		}
+
+		return !timedOut;
 	}
 
 	FenceBasedTracker::FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth)
@@ -304,6 +322,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_initialMarker = true;
 		_device = factory.GetDevice().get();
 		_queueThreadId = std::this_thread::get_id();
+		_unallocatedFenceCount = queueDepth;
 	}
 
 	FenceBasedTracker::~FenceBasedTracker() {}

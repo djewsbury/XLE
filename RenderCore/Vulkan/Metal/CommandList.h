@@ -94,10 +94,12 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		struct SubmissionResult
 		{
+			VkFence _fence;
 			VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
 			std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
 		};
-		SubmissionResult OnSubmitToQueue(VkFence);
+		SubmissionResult OnSubmitToQueue();
+		IAsyncTracker& GetAsyncTracker() { return *_asyncTracker; }
 
 		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);

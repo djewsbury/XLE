@@ -7,6 +7,7 @@
 #include "VulkanCore.h"
 #include "AsyncTracker.h"
 #include "DeviceContext.h"
+#include "../../../Utility/Threading/Mutex.h"
 #include <memory>
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -34,6 +35,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkQueue _underlying;
 		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> _gpuTracker;
 		ObjectFactory* _factory;
+		Threading::Mutex _queueLock;
 	};
 }}
 

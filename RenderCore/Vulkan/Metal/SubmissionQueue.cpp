@@ -12,10 +12,10 @@ namespace RenderCore { namespace Metal_Vulkan
         IteratorRange<const VkSemaphore*> waitBeforeBegin,
 		IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages)
 	{
+		assert(&cmdList.GetAsyncTracker() == _gpuTracker.get());
         assert(waitBeforeBegin.size() == waitBeforeBeginStages.size());
 		cmdList.ValidateCommitToQueue(*_factory);
-		auto fence = _gpuTracker->FindAvailableFence();
-		auto underlyingCmdList = cmdList.OnSubmitToQueue(fence);
+		auto submitResult = cmdList.OnSubmitToQueue();
 
 		VkSubmitInfo submitInfo;
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -27,16 +27,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		submitInfo.signalSemaphoreCount = completionSignals.size();
 		submitInfo.pSignalSemaphores = completionSignals.begin();
 
-		VkCommandBuffer rawCmdBuffers[] = { underlyingCmdList._cmdBuffer.get() };
+		VkCommandBuffer rawCmdBuffers[] = { submitResult._cmdBuffer.get() };
 		submitInfo.commandBufferCount = dimof(rawCmdBuffers);
 		submitInfo.pCommandBuffers = rawCmdBuffers;
-	
-		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, fence);
+
+		ScopedLock(_queueLock);
+		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, submitResult._fence);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while queuing semaphore signal"));
 
-        assert(!underlyingCmdList._asyncTrackerMarkers.empty());
-		return *(underlyingCmdList._asyncTrackerMarkers.end()-1);
+        assert(!submitResult._asyncTrackerMarkers.empty());
+		return *(submitResult._asyncTrackerMarkers.end()-1);
 	}
 
     void SubmissionQueue::WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout)

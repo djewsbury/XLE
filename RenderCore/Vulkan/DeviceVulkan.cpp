@@ -569,8 +569,7 @@ namespace RenderCore { namespace ImplVulkan
             _foregroundPrimaryContext = std::make_shared<ThreadContext>(
 				shared_from_this(), 
 				_graphicsQueue,
-                Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()),
-				Metal_Vulkan::CommandBufferType::Primary, true);
+                Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
 			_foregroundPrimaryContext->AttachDestroyer(destroyer);
 
 			// We need to ensure that the "dummy" resources get their layout change to complete initialization
@@ -728,8 +727,7 @@ namespace RenderCore { namespace ImplVulkan
 		return std::make_unique<ThreadContext>(
             shared_from_this(), 
             _graphicsQueue,
-            Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr),
-            Metal_Vulkan::CommandBufferType::Primary, false);
+            Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr));
     }
 
 	IResourcePtr Device::CreateResource(
@@ -1082,8 +1080,6 @@ namespace RenderCore { namespace ImplVulkan
 		return result;
 	}
 
-	static Threading::Mutex dummyQueueMutex;
-
 	IResourcePtr    ThreadContext::BeginFrame(IPresentationChain& presentationChain)
 	{
 		// Our immediate context may have command list already, if it's been used
@@ -1127,7 +1123,6 @@ namespace RenderCore { namespace ImplVulkan
 
 	void            ThreadContext::Present(IPresentationChain& chain)
 	{
-		ScopedLock(dummyQueueMutex);
 		auto* swapChain = checked_cast<PresentationChain*>(&chain);
 		auto& syncs = swapChain->GetSyncs();
 		assert(!syncs._presentFence);
@@ -1147,7 +1142,6 @@ namespace RenderCore { namespace ImplVulkan
 
 	void	ThreadContext::CommitCommands(CommitCommandsFlags::BitField flags)
 	{
-		ScopedLock(dummyQueueMutex);
 		// Queue any commands that are prepared, and wait for the GPU to complete
 		// processing them
 		//
@@ -1164,15 +1158,7 @@ namespace RenderCore { namespace ImplVulkan
 			_nextQueueShouldWaitOnInterimBuffer = true;
 
 			if (waitForCompletion) {
-				#if 0			
-					// This must be done before calling _gpuTracker->UpdateConsumer();
-					// (otherwise the gpu tracker can check the status of fenceToWaitFor and reset it before
-					// we get to our wait)
-					auto res = vkWaitForFences(_underlyingDevice, 1, &fenceToWaitFor, true, UINT64_MAX);
-					assert(res == VK_SUCCESS);
-				#else
-					_submissionQueue->WaitForFence(fenceToWaitFor);
-				#endif
+				_submissionQueue->WaitForFence(fenceToWaitFor);
 			}
 		} else {
 			// note tht if we don't have an active command list, and flags is WaitForCompletion, we still don't actually wait for the GPU to catchup to any previously committed command lists
@@ -1188,9 +1174,9 @@ namespace RenderCore { namespace ImplVulkan
 
 	void ThreadContext::PumpDestructionQueues()
 	{
-		if (_foregroundPrimaryContext) {
+		if (_destrQueue) {
 			_submissionQueue->GetTracker()->UpdateConsumer();
-			if (_destrQueue) _destrQueue->Flush();
+			_destrQueue->Flush();
 			_globalPools->_mainDescriptorPool.FlushDestroys();
 			_globalPools->_longTermDescriptorPool.FlushDestroys();
 			_globalPools->_temporaryStorageManager->FlushDestroys();
@@ -1200,7 +1186,7 @@ namespace RenderCore { namespace ImplVulkan
 
     bool ThreadContext::IsImmediate() const
     {
-        return _foregroundPrimaryContext;
+        return _destrQueue != nullptr;
     }
 
     auto ThreadContext::GetStateDesc() const -> ThreadContextStateDesc
@@ -1228,9 +1214,7 @@ namespace RenderCore { namespace ImplVulkan
     ThreadContext::ThreadContext(
 		std::shared_ptr<Device> device,
 		std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue,
-        Metal_Vulkan::CommandPool&& cmdPool,
-		Metal_Vulkan::CommandBufferType cmdBufferType,
-		bool foregroundPrimaryContext)
+        Metal_Vulkan::CommandPool&& cmdPool)
     : _device(device)
 	, _frameId(0)
     , _renderingCommandPool(std::move(cmdPool))
@@ -1238,11 +1222,10 @@ namespace RenderCore { namespace ImplVulkan
 	, _globalPools(&device->GetGlobalPools())
 	, _submissionQueue(submissionQueue)
 	, _underlyingDevice(device->GetUnderlyingDevice())
-	, _foregroundPrimaryContext(foregroundPrimaryContext)
     {
 		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(
 			device->GetObjectFactory(), device->GetGlobalPools(), 
-            _renderingCommandPool, cmdBufferType);
+            _renderingCommandPool, Metal_Vulkan::CommandBufferType::Primary);
 	}
 
     ThreadContext::~ThreadContext() 

@@ -88,7 +88,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned		_pageId = ~0u;
 
 		unsigned		_pendingNewFront = ~0u;
-		CircularBuffer<MarkedDestroys, 8>	_markedDestroys;		// Note! we should only use _markedDestroys on the manager bound thread!
+		CircularBuffer<MarkedDestroys, 32>	_markedDestroys;		// Note! we should only use _markedDestroys on the manager bound thread!
 
 		unsigned		_lastBarrier;
 		DeviceContext*	_lastBarrierContext;

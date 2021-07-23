@@ -22,13 +22,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		virtual Marker GetProducerMarker() const { return _currentProducerFrameMarker; }
 
 		Marker IncrementProducerFrame();
-		void OnSubmitToQueue(Marker, VkFence);
+		VkFence OnSubmitToQueue(IteratorRange<const Marker*> marker);
 		void AbandonMarker(Marker);
 
-		VkFence FindAvailableFence();
-
 		void UpdateConsumer();
-		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
+		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
 
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
@@ -40,11 +38,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			Marker _frameMarker = Marker_Invalid;
 			State _state = State::Unused;
 		};
-		std::vector<Tracker> _trackersSubmittedToQueue;				// protected by _queueThreadId
-		std::vector<Tracker> _trackersSubmittedPendingOrdering;		// protected by _queueThreadId
-		std::vector<VulkanUniquePtr<VkFence>> _fences;				// protected by _queueThreadId
-		BitHeap _fenceAllocationFlags;								// protected by _queueThreadId
-		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _queueThreadId
+		std::vector<Tracker> _trackersSubmittedToQueue;				// protected by _trackersSubmittedToQueueLock
+		std::vector<Tracker> _trackersSubmittedPendingOrdering;		// protected by _trackersSubmittedToQueueLock
+		std::vector<VulkanUniquePtr<VkFence>> _fences;				// protected by _trackersSubmittedToQueueLock
+		std::vector<VkFence> _fencesCurrentlyInWaitOperation;		// protected by _trackersSubmittedToQueueLock
+		BitHeap _fenceAllocationFlags;								// protected by _trackersSubmittedToQueueLock
+		unsigned _unallocatedFenceCount = 0;						// protected by _trackersSubmittedToQueueLock
+		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _trackersSubmittedToQueueLock
+		Threading::Mutex _trackersSubmittedToQueueLock;
 
 		std::vector<std::pair<unsigned, std::chrono::steady_clock::time_point>> _trackersWritingCommands;				// protected by _trackersWritingCommandsLock
 		std::vector<unsigned> _trackersPendingAbandon;				// protected by _trackersWritingCommandsLock
@@ -57,8 +58,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::thread::id _queueThreadId;
 
-		void CheckFenceReset(VkFence fence);
-		void FlushTrackersPendingAbandon();
+		void CheckFenceResetAlreadyLocked(VkFence fence);
+		VkFence FindAvailableFence(IteratorRange<const Marker*> marker, std::unique_lock<Threading::Mutex>& lock);
 	};
 
 	class EventBasedTracker : public IAsyncTracker

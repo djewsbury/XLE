@@ -136,9 +136,7 @@ namespace RenderCore { namespace ImplVulkan
         ThreadContext(
             std::shared_ptr<Device> device, 
 			std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue,
-            Metal_Vulkan::CommandPool&& cmdPool,
-			Metal_Vulkan::CommandBufferType cmdBufferType,
-            bool foregroundPrimaryContext);
+            Metal_Vulkan::CommandPool&& cmdPool);
         ~ThreadContext();
     protected:
 		std::shared_ptr<Metal_Vulkan::DeviceContext> _metalContext;
@@ -157,7 +155,6 @@ namespace RenderCore { namespace ImplVulkan
         VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete2;
         bool                                _nextQueueShouldWaitOnInterimBuffer = false;
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
-        bool                                _foregroundPrimaryContext = false;
 
         Metal_Vulkan::IAsyncTracker::Marker QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
         Metal_Vulkan::IAsyncTracker::Marker CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
