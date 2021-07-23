@@ -11,8 +11,11 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+	static Threading::RecursiveMutex tempLock;
+
 	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
 	{
+		ScopedLock(tempLock);
 		ScopedLock(_trackersWritingCommandsLock);
 		if (_initialMarker) {
 			// special case to ensure that the initial marker actually gets submitted (or abandoned) by something
@@ -29,7 +32,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::OnSubmitToQueue(Marker marker, VkFence fence)
 	{
-		assert(std::this_thread::get_id() == _queueThreadId);
+		ScopedLock(tempLock);
+		// assert(std::this_thread::get_id() == _queueThreadId);
 
 		unsigned fenceIndex = 0;
 		for (; fenceIndex<_fences.size(); ++fenceIndex) if (_fences[fenceIndex].get() == fence) break;
@@ -77,6 +81,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::AbandonMarker(Marker marker)
 	{
+		ScopedLock(tempLock);
 		ScopedLock(_trackersWritingCommandsLock);
 		auto i = std::find_if(
 			_trackersWritingCommands.begin(), _trackersWritingCommands.end(),
@@ -88,7 +93,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::FlushTrackersPendingAbandon()
 	{
-		assert(std::this_thread::get_id() == _queueThreadId);
+		ScopedLock(tempLock);
+		// assert(std::this_thread::get_id() == _queueThreadId);
 		ScopedLock(_trackersWritingCommandsLock);
 		std::sort(_trackersPendingAbandon.begin(), _trackersPendingAbandon.end());
 		for (const auto& marker:_trackersPendingAbandon) {
@@ -121,7 +127,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VkFence FenceBasedTracker::FindAvailableFence()
 	{
-		assert(std::this_thread::get_id() == _queueThreadId);
+		ScopedLock(tempLock);
+		// assert(std::this_thread::get_id() == _queueThreadId);
 		auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
 		assert(firstAvailable != ~0u);
 		return _fences[firstAvailable].get();
@@ -129,6 +136,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::CheckFenceReset(VkFence fence)
 	{
+		ScopedLock(tempLock);
 		assert(std::this_thread::get_id() == _queueThreadId);
 		for (auto& tracker:_trackersSubmittedToQueue)
 			if (tracker._fence == fence)
@@ -147,6 +155,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::UpdateConsumer()
 	{
+		ScopedLock(tempLock);
 		assert(std::this_thread::get_id() == _queueThreadId);
 		while (!_trackersSubmittedToQueue.empty()) {
 			auto next = *_trackersSubmittedToQueue.begin();
@@ -196,6 +205,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	bool FenceBasedTracker::WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
+		ScopedLock(tempLock);
 		assert(std::this_thread::get_id() == _queueThreadId);
 		auto start = std::chrono::steady_clock::now();
 
@@ -227,7 +237,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					return true;
 				}
 
-			assert(foundTheFence);
+			// assert(foundTheFence);
 			return false;
 		}
 

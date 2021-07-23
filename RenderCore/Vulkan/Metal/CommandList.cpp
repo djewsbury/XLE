@@ -281,16 +281,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-	VulkanSharedPtr<VkCommandBuffer> CommandList::OnSubmitToQueue(VkFence fence)
+	auto CommandList::OnSubmitToQueue(VkFence fence) -> SubmissionResult
 	{
-		_attachedStorage.OnSubmitToQueue();
+		assert(!_asyncTrackerMarkers.empty());
+		_attachedStorage.OnSubmitToQueue(_asyncTrackerMarkers[0]);
 		assert(!_asyncTrackerMarkers.empty());
 		std::sort(_asyncTrackerMarkers.begin(), _asyncTrackerMarkers.end());
 		for (auto m:_asyncTrackerMarkers)
 			checked_cast<FenceBasedTracker*>(_asyncTracker.get())->OnSubmitToQueue(m, fence);
+
+		SubmissionResult result;
+		result._cmdBuffer = std::move(_underlying);
+		result._asyncTrackerMarkers = std::move(_asyncTrackerMarkers);
 		_asyncTrackerMarkers.clear();
 		_asyncTracker = nullptr;
-		return std::move(_underlying);
+		return result;
 	}
 
 	CommandList::CommandList(CommandList&&) = default;

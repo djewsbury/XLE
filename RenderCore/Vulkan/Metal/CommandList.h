@@ -91,7 +91,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		const VulkanSharedPtr<VkCommandBuffer>& GetUnderlying() const { return _underlying; }
 		CmdListAttachedStorage& GetCmdListAttachedStorage() { return _attachedStorage; }
-		VulkanSharedPtr<VkCommandBuffer> OnSubmitToQueue(VkFence);
+
+		struct SubmissionResult
+		{
+			VulkanSharedPtr<VkCommandBuffer> _cmdBuffer;
+			std::vector<IAsyncTracker::Marker> _asyncTrackerMarkers;
+		};
+		SubmissionResult OnSubmitToQueue(VkFence);
 
 		void RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuids);
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);

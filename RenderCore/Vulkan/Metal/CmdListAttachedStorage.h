@@ -87,7 +87,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::Enum type);
-		void OnSubmitToQueue();
+		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();
 		void WriteBarrier(DeviceContext& context, unsigned pageId);
 		void MergeIn(CmdListAttachedStorage&& src);

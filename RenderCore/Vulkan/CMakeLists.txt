@@ -21,6 +21,7 @@ set(Src
 	Metal/Resource.cpp
 	Metal/Shader.cpp
 	Metal/ShaderReflection.cpp
+	Metal/SubmissionQueue.cpp
 	Metal/State.cpp
 	Metal/TextureView.cpp
 	../DX11/Metal/CompiledShaderByteCode.cpp

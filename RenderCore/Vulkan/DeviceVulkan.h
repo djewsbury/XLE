@@ -4,12 +4,6 @@
 
 #pragma once
 
-#define FLEX_CONTEXT_Device					FLEX_CONTEXT_CONCRETE
-#define FLEX_CONTEXT_DeviceVulkan			FLEX_CONTEXT_CONCRETE
-#define FLEX_CONTEXT_PresentationChain		FLEX_CONTEXT_CONCRETE
-#define FLEX_CONTEXT_ThreadContext			FLEX_CONTEXT_CONCRETE
-#define FLEX_CONTEXT_ThreadContextVulkan	FLEX_CONTEXT_CONCRETE
-
 #include "../IDevice.h"
 #include "../IThreadContext.h"
 #include "IDeviceVulkan.h"
@@ -31,6 +25,7 @@ namespace RenderCore { namespace Metal_Vulkan
 {
     class EventBasedTracker;
     class FenceBasedTracker;
+    class SubmissionQueue;
 }}
 
 namespace RenderCore { namespace ImplVulkan
@@ -60,13 +55,10 @@ namespace RenderCore { namespace ImplVulkan
         void Resize(unsigned newWidth, unsigned newHeight) /*override*/;
 
         const std::shared_ptr<PresentationChainDesc>& GetDesc() const;
-        Metal_Vulkan::ResourceView* AcquireNextImage();
+        Metal_Vulkan::ResourceView* AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue);
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
-		void PresentToQueue(VkQueue queue);
-        void SetInitialLayout(
-            const Metal_Vulkan::ObjectFactory& factory, 
-            Metal_Vulkan::CommandPool& cmdPool, VkQueue queue);
+		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue);
 
 		class PresentSync
 		{
@@ -85,8 +77,7 @@ namespace RenderCore { namespace ImplVulkan
             VulkanSharedPtr<VkSurfaceKHR> surface, 
 			VectorPattern<unsigned, 2> extent,
 			unsigned queueFamilyIndex,
-            const void* platformValue,
-            std::shared_ptr<Metal_Vulkan::FenceBasedTracker> gpuTracker);
+            const void* platformValue);
         ~PresentationChain();
     private:
 		VulkanSharedPtr<VkSurfaceKHR>   _surface;
@@ -113,8 +104,6 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::CommandPool _primaryBufferPool;
 		VulkanSharedPtr<VkCommandBuffer> _primaryBuffers[3];
 
-        std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
-
         void BuildImages();
     };
 
@@ -136,7 +125,6 @@ namespace RenderCore { namespace ImplVulkan
 		void						InvalidateCachedState() const override;
 
         Metal_Vulkan::CommandPool&  GetRenderingCommandPool()   { return _renderingCommandPool; }
-        VkQueue                     GetQueue()                  { return _queue; }
 
 		IAnnotator&					GetAnnotator() override;
 
@@ -147,33 +135,32 @@ namespace RenderCore { namespace ImplVulkan
 
         ThreadContext(
             std::shared_ptr<Device> device, 
-			VkQueue queue,
-            std::shared_ptr<Metal_Vulkan::FenceBasedTracker> gpuTracker,
+			std::shared_ptr<Metal_Vulkan::SubmissionQueue> submissionQueue,
             Metal_Vulkan::CommandPool&& cmdPool,
-			Metal_Vulkan::CommandBufferType cmdBufferType);
+			Metal_Vulkan::CommandBufferType cmdBufferType,
+            bool foregroundPrimaryContext);
         ~ThreadContext();
     protected:
+		std::shared_ptr<Metal_Vulkan::DeviceContext> _metalContext;
         std::weak_ptr<Device>           _device;  // (must be weak, because Device holds a shared_ptr to the immediate context)
 		unsigned                        _frameId;
         Metal_Vulkan::CommandPool		_renderingCommandPool;
-		std::shared_ptr<Metal_Vulkan::DeviceContext>     _metalContext;
+        std::shared_ptr<Metal_Vulkan::SubmissionQueue> _submissionQueue;
 		std::unique_ptr<IAnnotator>		_annotator;
+        std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
 
 		VkDevice							_underlyingDevice;
-		VkQueue								_queue;
 		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
-
-		std::shared_ptr<Metal_Vulkan::FenceBasedTracker> _gpuTracker;
-		std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
 
         VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete;
         VulkanUniquePtr<VkSemaphore>		_interimCommandBufferComplete2;
         bool                                _nextQueueShouldWaitOnInterimBuffer = false;
         VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
+        bool                                _foregroundPrimaryContext = false;
 
-        VkFence QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
-        VkFence CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
+        Metal_Vulkan::IAsyncTracker::Marker QueuePrimaryContext(IteratorRange<const VkSemaphore*> completionSignals);
+        Metal_Vulkan::IAsyncTracker::Marker CommitPrimaryCommandBufferToQueue_Internal(Metal_Vulkan::CommandList& cmdList, IteratorRange<const VkSemaphore*> completionSignals);
         void PumpDestructionQueues();
     };
 
@@ -221,7 +208,7 @@ namespace RenderCore { namespace ImplVulkan
         SelectedPhysicalDevice              _physDev;
 		Metal_Vulkan::ObjectFactory		    _objectFactory;
         Metal_Vulkan::GlobalPools           _pools;
-        std::shared_ptr<Metal_Vulkan::FenceBasedTracker>	_gpuTracker;
+        std::shared_ptr<Metal_Vulkan::SubmissionQueue>	_graphicsQueue;
 
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
 
