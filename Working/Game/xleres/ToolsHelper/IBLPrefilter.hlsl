@@ -65,8 +65,8 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
 
 groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 [numthreads(64, 1, 1)]
-    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
-{
+    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
+{    
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
     // the GGX equation.
@@ -102,9 +102,10 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // Sync, and then combine together the results from all of the samples
         AllMemoryBarrierWithGroupSync();
         if (groupThreadId.x == 0) {
-            OutputArray[pixelId.xyz] = float4(0,0,0,1);
+            float4 result = float4(0,0,0,1);
             for (uint c=0; c<64; ++c)
-                OutputArray[pixelId.xyz].rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/64.0f;
+                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/64.0f;
+            OutputArray[pixelId.xyz] = result;
         }
     }
 }
@@ -136,29 +137,50 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float4 ReferenceDiffuseFilter(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+[numthreads(64, 1, 1)]
+    void ReferenceDiffuseFilter(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    uint2 dims = uint2(position.xy / texCoord);
-    float3 direction = EquirectangularCoordToDirection_YUp(float2(position.xy) / float2(dims));
+    uint2 textureDims; uint arrayLayerCount;
+	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 
-    float3 result = float3(0,0,0);
+    uint3 pixelId = uint3(
+        FilterPassParams.PassIndex%textureDims.x, 
+        (FilterPassParams.PassIndex/textureDims.x)%textureDims.y, 
+        groupId.z);
+	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
 
-    uint2 inputDims;
-    Input.GetDimensions(inputDims.x, inputDims.y);
-    for (uint y=0; y<inputDims.y; ++y) {
-		float texelAreaWeight = (4*pi*pi)/(2.f*inputDims.x*inputDims.y);
-		float verticalDistortion = sin(pi * (float(y)+0.5f) / float(inputDims.y));
-        texelAreaWeight *= verticalDistortion;
+        uint2 inputDims;
+        Input.GetDimensions(inputDims.x, inputDims.y);
 
-        for (uint x=0; x<inputDims.x; ++x) {
-            float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
-            float cosFilter = max(0.0, dot(sampleDirection, direction)) / pi;
+        float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
+        float3 normalDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
+        float3 result = float3(0,0,0);
 
-            result += texelAreaWeight * cosFilter * Input.Load(uint3(x, y, 0)).rgb;
+        for (uint q=0; q<(inputDims.y+63)/64; ++q) {
+            uint y=q*64+groupThreadId.x;
+            if (y >= inputDims.y) break;
+
+            float texelAreaWeight = (4*pi*pi)/(2.f*inputDims.x*inputDims.y);
+            float verticalDistortion = sin(pi * (float(y)+0.5f) / float(inputDims.y));
+            texelAreaWeight *= verticalDistortion;
+
+            for (uint x=0; x<inputDims.x; ++x) {
+                float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
+                float cosFilter = max(0.0, dot(sampleDirection, normalDirection)) / pi;
+                [branch] if (cosFilter > 0)
+                    result += texelAreaWeight * cosFilter * Input.Load(uint3(x, y, 0)).rgb;
+            }
+        }
+        EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = result;
+
+        AllMemoryBarrierWithGroupSync();
+        if (groupThreadId.x == 0) {
+            float4 result = float4(0,0,0,1);
+            for (uint c=0; c<64; ++c)
+                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb;
+            OutputArray[pixelId.xyz] = result;    // note -- weighted by 4*pi steradians
         }
     }
-
-    return float4(result, 1.0f);    // note -- weighted by 4*pi steradians
 
     // float2 back = EquirectangularMappingCoord(direction);
     // float2 diff = back - float2(position.xy) / float2(dims);
@@ -167,15 +189,12 @@ float4 ReferenceDiffuseFilter(float4 position : SV_Position, float2 texCoord : T
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static const uint coefficientCount = 25;
-
 // Take an input equirectangular input texture and generate the spherical
 // harmonic coefficients that best represent it.
-float4 ProjectToSphericalHarmonic(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+[numthreads(64, 1, 1)]
+    void ProjectToSphericalHarmonic(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) : SV_Target0
 {
-    // We're only going to support the first 3 orders; which means we generate 9 coefficients
-
-    uint index = uint(position.x)%coefficientCount;
+    uint index = groupId.x;
 	float weightAccum = 0.0f;
     float3 result = float3(0, 0, 0);
 
@@ -190,34 +209,45 @@ float4 ProjectToSphericalHarmonic(float4 position : SV_Position, float2 texCoord
 
     uint2 inputDims;
     Input.GetDimensions(inputDims.x, inputDims.y);
-    for (uint y=0; y<inputDims.y; ++y) {
+    for (uint q=0; q<(inputDims.y+63)/64; ++q) {
+        uint y=q*64+groupThreadId.x;
+        if (y >= inputDims.y) break;
 
-		// Let's weight the texel area based on the solid angle of each texel.
-		// The accumulated weight should total 4*pi, which is the total solid angle
-		// across a sphere in steradians.
-		//
-		// The solid angle varies for each row of the input texture. The integral
-		// of the "verticalDistortion" equation is 2.
-		//
+        // Let's weight the texel area based on the solid angle of each texel.
+        // The accumulated weight should total 4*pi, which is the total solid angle
+        // across a sphere in steradians.
+        //
+        // The solid angle varies for each row of the input texture. The integral
+        // of the "verticalDistortion" equation is 2.
+        //
 
         // float texelAreaWeight = 1.0f/(inputDims.x*inputDims.y); // (2.0f * pi / inputDims.x) * (pi / inputDims.y);
-		float texelAreaWeight = (4*pi*pi)/(2.f*inputDims.x*inputDims.y);
-		float verticalDistortion = sin(pi * (y+0.5f) / float(inputDims.y));
-        texelAreaWeight *= verticalDistortion;
+        const float texelAreaWeightBase = (4*pi*pi)/(2.f*inputDims.x*inputDims.y);
+        float verticalDistortion = sin(pi * (y+0.5f) / float(inputDims.y));
+        float texelAreaWeight = texelAreaWeightBase * verticalDistortion;
 
         for (uint x=0; x<inputDims.x; ++x) {
             float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
 
-			float value = EvalSHBasis(index, sampleDirection);
-            result += (texelAreaWeight) * value * Input.Load(uint3(x, y, 0)).rgb;
+            float value = EvalSHBasis(index, sampleDirection);
+            result += texelAreaWeight * value * Input.Load(uint3(x, y, 0)).rgb;
 
-			weightAccum += texelAreaWeight;
+            weightAccum += texelAreaWeight;
         }
     }
 
-	// we should expect weightAccum to be exactly 4*pi here
-	// return float4((4*pi)/weightAccum.xxx, 1.0);
-    return float4(result, 1.0f);    // note -- weighted by 4*pi steradians
+    EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = result;
+
+    AllMemoryBarrierWithGroupSync();
+    if (groupThreadId.x == 0) {
+        result = 0;
+        for (uint c=0; c<64; ++c)
+            result += EquiRectFilterGlossySpecular_SharedWorking[c].rgb;
+        
+        // we should expect weightAccum to be exactly 4*pi here
+        // Output[dispatchThreadId.xy] = float4((4*pi)/weightAccum.xxx, 1.0);
+        Output[groupId.xy] = float4(result, 1.0f);    // note -- weighted by 4*pi steradians
+    }
 }
 
 // These are the band factors from Peter-Pike Sloan's paper, via S�bastien Lagarde's modified cubemapgen
@@ -233,9 +263,9 @@ static const float SHBandFactor[] =
 
 float3 ResolveSH(float3 direction)
 {
+    const uint coefficientCount = 9;
     const bool useSharedCodePath = false;
     if (!useSharedCodePath) {
-    	const uint coefficients = 25;
     	float3 result = float3(0,0,0);
 
     	for (uint c=0; c<coefficientCount; ++c) {
@@ -264,9 +294,10 @@ float3 ResolveSH(float3 direction)
     	}
         return result;
     } else {
-        float3 coefficients[9];
-        for (uint c=0; c<9; ++c) coefficients[c] = Input.Load(uint3(c,0,0)).rgb;
-        return ResolveSH_Reference(coefficients, direction);
+        float3 result = 0;
+        for (uint c=0; c<coefficientCount; ++c)
+            result += ResolveSH_Reference(Input.Load(uint3(c,0,0)).rgb, c, direction);
+        return result;
     }
 }
 

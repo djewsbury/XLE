@@ -20,7 +20,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<BufferUploads::IAsyncDataSource> _newDataSource;
         std::vector<::Assets::DependentFileState> _depFileStates;
     };
-    enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular };
+    enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic };
     ProcessedTexture EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter = EquRectFilterMode::ToCubeMap);
 
     ProcessedTexture GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc);

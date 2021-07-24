@@ -65,18 +65,19 @@ namespace RenderCore { namespace Techniques
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
-		assert(targetDesc._arrayCount == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
+		if (filter != EquRectFilterMode::ProjectToSphericalHarmonic)
+			assert(targetDesc._arrayCount == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 		auto threadContext = GetThreadContext();
 		
 		ProcessedTexture result;
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("Input"));
-		usi.BindResourceView(1, Hash64("OutputArray"));
 		const auto pushConstantsBinding = Hash64("FilterPassParams");
 
 		::Assets::PtrToFuturePtr<IComputeShaderOperator> computeOpFuture;
 		if (filter == EquRectFilterMode::ToCubeMap) {
+			usi.BindResourceView(1, Hash64("OutputArray"));
  			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
 				"xleres/ToolsHelper/EquirectangularToCube.hlsl:EquRectToCube",
@@ -86,11 +87,23 @@ namespace RenderCore { namespace Techniques
 			// todo -- we really want to extract the full set of dependencies from the depVal
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/EquirectangularToCube.hlsl"));
 			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
-		} else {
-			assert(filter == EquRectFilterMode::ToGlossySpecular);
+		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
+			usi.BindResourceView(1, Hash64("OutputArray"));
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
 				"xleres/ToolsHelper/IBLPrefilter.hlsl:EquiRectFilterGlossySpecular",
+				// "xleres/ToolsHelper/IBLPrefilter.hlsl:ReferenceDiffuseFilter",
+				{},
+				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				usi);
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/IBLPrefilter.hlsl"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+		} else {
+			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
+			usi.BindResourceView(1, Hash64("Output"));
+			computeOpFuture = CreateComputeOperator(
+				std::make_shared<PipelinePool>(threadContext->GetDevice(), Services::GetCommonResources()),
+				"xleres/ToolsHelper/IBLPrefilter.hlsl:ProjectToSphericalHarmonic",
 				{},
 				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
 				usi);
@@ -122,13 +135,15 @@ namespace RenderCore { namespace Techniques
 					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
 					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 				}
-			} else {
-				assert(filter == EquRectFilterMode::ToGlossySpecular);
+			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 				auto passCount = mipDesc._width * mipDesc._height;
 				for (unsigned p=0; p<passCount; ++p) {
 					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
 					computeOp->Dispatch(1, 1, 6, MakeOpaqueIteratorRange(filterPassParams));
 				}
+			} else {
+				assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
+				computeOp->Dispatch(targetDesc._width, 1, 1);
 			}
 
 			computeOp->EndDispatches();

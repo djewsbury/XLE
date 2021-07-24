@@ -198,7 +198,9 @@ namespace RenderCore { namespace Assets
 				InputStreamFormatter<> inputFormatter{MakeStringSection((const char*)inputBlock.get(), (const char*)PtrAdd(inputBlock.get(), inputBlockSize))};
 				StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
 				auto type = dom.RootElement().Attribute("Operation");
-				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap") && !XlEqStringI(type.Value(), "EquiRectFilterGlossySpecular")  && !XlEqStringI(type.Value(), "ComputeShader")))
+				if (!type || (!XlEqStringI(type.Value(), "Convert") && !XlEqStringI(type.Value(), "EquRectToCubeMap") 
+							&& !XlEqStringI(type.Value(), "EquiRectFilterGlossySpecular") && !XlEqStringI(type.Value(), "ProjectToSphericalHarmonic")
+							&& !XlEqStringI(type.Value(), "ComputeShader")))
 					Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.Value().AsString() + ")"));
 
 				auto dstFormatName = dom.RootElement().Attribute("Format");
@@ -243,6 +245,11 @@ namespace RenderCore { namespace Assets
 					targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 					targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 					auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
+					srcPkt = processed._newDataSource;
+					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
+				} else if (XlEqString(type.Value(), "ProjectToSphericalHarmonic")) {
+					auto targetDesc = TextureDesc::Plain2D(dom.RootElement().Attribute("CoefficientCount", 9), 1, Format::R32G32B32A32_FLOAT);
+					auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ProjectToSphericalHarmonic);
 					srcPkt = processed._newDataSource;
 					_dependencies.insert(_dependencies.end(), processed._depFileStates.begin(), processed._depFileStates.end());
 				} else if (XlEqString(type.Value(), "ComputeShader")) {

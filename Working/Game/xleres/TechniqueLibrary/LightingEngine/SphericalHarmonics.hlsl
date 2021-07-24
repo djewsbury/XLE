@@ -92,25 +92,19 @@ float EvalSHBasis(uint index, float3 dir)
     return value;
 }
 
-static const uint SHCoefficientCount = 9u;
-
-float3 ResolveSH_Reference(float3 coefficients[SHCoefficientCount], float3 dir)
+float3 ResolveSH_Reference(float3 coefficients, uint coefficientIndex, float3 dir)
 {
-    float3 result = float3(0,0,0);
-    for (uint c=0u; c<SHCoefficientCount; ++c) {
-        float rsqrtPi = rsqrt(pi);
-        float z[5];  // these constants come from the formula for modulating a spherical harmonic by a rotated zonal harmonic
-        z[0] = .5f * rsqrtPi;
-        z[1] = sqrt(3.f)/3.0f * rsqrtPi;
-        z[2] = sqrt(5.f)/8.0f * rsqrtPi;
-        z[3] = 0.f;
-        z[4] = -1.f/16.0f * rsqrtPi;
-        uint l = (c>=16u) ? 4u : ((c>=9u) ? 3u : ((c>=4u) ? 2u : ((c>=1u) ? 1u : 0u)));
-        float A = sqrt(4.f * pi / (2.f*float(l)+1.f));
-        float f = A * z[l] * EvalSHBasis(c, dir);
-        result += coefficients[c] * f;
-    }
-    return result;
+    float rsqrtPi = rsqrt(pi);
+    float z[5];  // these constants come from the formula for modulating a spherical harmonic by a rotated zonal harmonic
+    z[0] = .5f * rsqrtPi;
+    z[1] = sqrt(3.f)/3.0f * rsqrtPi;
+    z[2] = sqrt(5.f)/8.0f * rsqrtPi;
+    z[3] = 0.f;
+    z[4] = -1.f/16.0f * rsqrtPi;
+    uint l = (coefficientIndex>=16u) ? 4u : ((coefficientIndex>=9u) ? 3u : ((coefficientIndex>=4u) ? 2u : ((coefficientIndex>=1u) ? 1u : 0u)));
+    float A = sqrt(4.f * pi / (2.f*float(l)+1.f));
+    float f = A * z[l] * EvalSHBasis(coefficientIndex, dir);
+    return coefficients * f;
 }
 
 #if defined(GLES)
