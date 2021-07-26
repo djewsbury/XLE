@@ -513,7 +513,7 @@ namespace Assets
 	namespace Internal
 	{
 		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(
-			TargetCode targetCode, InitializerPack&& initializers)
+			CompileRequestCode targetCode, InitializerPack&& initializers)
 		{
 			auto& compilers = Services::GetAsyncMan().GetIntermediateCompilers();
 			return compilers.Prepare(targetCode, std::move(initializers));

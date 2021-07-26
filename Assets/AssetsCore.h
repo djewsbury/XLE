@@ -19,6 +19,8 @@ namespace Assets
     using ResChar = char;
 	using rstring = std::basic_string<ResChar>;
 	using Blob = std::shared_ptr<std::vector<uint8_t>>;
+	using CompileRequestCode = uint64_t;
+	using ArtifactTargetCode = uint64_t;
 
     enum class AssetState { Pending, Ready, Invalid };
     class DependencyValidation;

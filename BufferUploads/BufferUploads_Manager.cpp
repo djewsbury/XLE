@@ -1391,6 +1391,7 @@ namespace BufferUploads
                 [   captureMaps{std::move(maps)}, 
                     weakThis, 
                     transactionID{prepareStagingStep._id}, 
+                    pkt{prepareStagingStep._packet},        // need to retain pkt until PrepareData completes
                     locator{std::move(stagingConstruction._locator)},
                     stagingToFinalMapping, byteCount]
                 (std::future<void> prepareFuture) mutable {

@@ -15,6 +15,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		StandardLightScene.cpp
 		SunSourceConfiguration.cpp
 		SSAOOperator.cpp
+		SHCoefficients.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

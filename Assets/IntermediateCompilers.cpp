@@ -44,8 +44,8 @@ namespace Assets
 
 	struct DelegateAssociation
 	{
-		std::vector<uint64_t> _targetCodes;
-		std::regex _regexFilter;
+		std::vector<CompileRequestCode> _compileRequestCodes;
+		std::optional<std::regex> _regexFilter;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ namespace Assets
 	class IntermediateCompilers : public IIntermediateCompilers
     {
     public:
-        virtual std::shared_ptr<IIntermediateCompileMarker> Prepare(TargetCode, InitializerPack&&) override;
+        virtual std::shared_ptr<IIntermediateCompileMarker> Prepare(CompileRequestCode, InitializerPack&&) override;
         virtual void StallOnPendingOperations(bool cancelAll) override;
 		
 		virtual RegisteredCompilerId RegisterCompiler(
@@ -84,7 +84,7 @@ namespace Assets
 			) override;
 
 		virtual void AssociateExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) override;
-		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(TargetCode typeCode) override;
+		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(CompileRequestCode typeCode) override;
 		virtual std::vector<uint64_t> GetTargetCodesForExtension(StringSection<>) override;
 
 		virtual void FlushCachedMarkers() override;
@@ -108,7 +108,7 @@ namespace Assets
     {
     public:
 		using IdentifiersList = IteratorRange<const StringSection<>*>;
-        std::shared_ptr<IArtifactCollection> GetExistingAsset(TargetCode) const override;
+        std::shared_ptr<IArtifactCollection> GetExistingAsset(CompileRequestCode) const override;
         std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
 		void StallForActiveFuture();
@@ -133,7 +133,7 @@ namespace Assets
 			IntermediatesStore* destinationStore);
     };
 
-    std::shared_ptr<IArtifactCollection> IntermediateCompilers::Marker::GetExistingAsset(TargetCode targetCode) const
+    std::shared_ptr<IArtifactCollection> IntermediateCompilers::Marker::GetExistingAsset(CompileRequestCode targetCode) const
     {
         if (!_intermediateStore) return nullptr;
 
@@ -161,8 +161,6 @@ namespace Assets
 		std::vector<DependentFileState> deps;
 		assert(!initializers.IsEmpty());
 
-		auto firstInitializer = initializers.GetInitializer<std::string>(0);		// first initializer is assumed to be a string
-
         TRY
         {
             auto model = delegate._delegate(initializers);
@@ -170,7 +168,7 @@ namespace Assets
 				Throw(std::runtime_error("Compiler library returned null to compile request on " + initializers.ArchivableName()));
 
 			deps = model->GetDependencies();
-			std::vector<std::pair<TargetCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
+			std::vector<std::pair<CompileRequestCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
 
 			// ICompileOperations can have multiple "targets", and then those targets can have multiple
 			// chunks within them. Each target should generally maps onto a single "asset" 
@@ -248,18 +246,12 @@ namespace Assets
 
 		} CATCH(const Exceptions::ConstructionError& e) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			if (deps.empty())
-				depVal.RegisterDependency(MakeFileNameSplitter(firstInitializer).AllExceptParameters());		// fallback case -- compiler might have failed because of bad input file. Interpret the initializer as a filename and create a dep val for it
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH(const std::exception& e) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			if (deps.empty())
-				depVal.RegisterDependency(MakeFileNameSplitter(firstInitializer).AllExceptParameters());
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH(...) {
 			auto depVal = MakeDepVal(MakeIteratorRange(deps), delegate._compilerLibraryDepVal);
-			if (deps.empty())
-				depVal.RegisterDependency(MakeFileNameSplitter(firstInitializer).AllExceptParameters());
 			Throw(Exceptions::ConstructionError(Exceptions::ConstructionError::Reason::Unknown, depVal, "%s", "unknown exception"));
 		} CATCH_END
     }
@@ -375,18 +367,23 @@ namespace Assets
 		if (existing != _markers.end())
 			return existing->second;
 
-		auto firstInitializer = initializers.GetInitializer<std::string>(0);		// first initializer is assumed to be a string
-
+		std::string firstInitializer;
 		for (const auto&a:_requestAssociations) {
-			auto i = std::find(a.second._targetCodes.begin(), a.second._targetCodes.end(), targetCode);
-			if (i == a.second._targetCodes.end())
+			auto i = std::find(a.second._compileRequestCodes.begin(), a.second._compileRequestCodes.end(), targetCode);
+			if (i == a.second._compileRequestCodes.end())
 				continue;
-			if (std::regex_match(firstInitializer.begin(), firstInitializer.end(), a.second._regexFilter)) {
+			bool passRegex = true;
+			if (a.second._regexFilter.has_value()) {
+				if (firstInitializer.empty())
+					firstInitializer = initializers.GetInitializer<std::string>(0);		// first initializer is assumed to be a string
+				passRegex = std::regex_match(firstInitializer.begin(), firstInitializer.end(), a.second._regexFilter.value());
+			}
+			if (passRegex) {
 				// find the associated delegate and use that
 				for (const auto&d:_delegates) {
 					if (d.first != a.first) continue;
 					auto result = std::make_shared<Marker>(std::move(initializers), d.second, d.first, _store);
-					for (auto markerTargetCode:a.second._targetCodes)
+					for (auto markerTargetCode:a.second._compileRequestCodes)
 						_markers.insert(std::make_pair(HashCombine(initializerArchivableHash, markerTargetCode), result));
 					return result;
 				}
@@ -455,13 +452,13 @@ namespace Assets
 	{
 		ScopedLock(_delegatesLock);
 		DelegateAssociation association;
-		association._targetCodes = std::vector<uint64_t>{ outputAssetTypes.begin(), outputAssetTypes.end() };
+		association._compileRequestCodes = std::vector<uint64_t>{ outputAssetTypes.begin(), outputAssetTypes.end() };
 		if (!initializerRegexFilter.empty())
 			association._regexFilter = std::regex{initializerRegexFilter, std::regex_constants::icase};
 		_requestAssociations.insert(std::make_pair(compiler, association));
 	}
 
-	std::vector<std::pair<std::string, std::string>> IntermediateCompilers::GetExtensionsForTargetCode(TargetCode targetCode)
+	std::vector<std::pair<std::string, std::string>> IntermediateCompilers::GetExtensionsForTargetCode(CompileRequestCode targetCode)
 	{
 		std::vector<std::pair<std::string, std::string>> ext;
 
@@ -469,7 +466,7 @@ namespace Assets
 		for (const auto&d:_delegates) {
 			auto a = _requestAssociations.equal_range(d.first);
 			for (auto association=a.first; association != a.second; ++association) {
-				if (std::find(association->second._targetCodes.begin(), association->second._targetCodes.end(), targetCode) != association->second._targetCodes.end()) {
+				if (std::find(association->second._compileRequestCodes.begin(), association->second._compileRequestCodes.end(), targetCode) != association->second._compileRequestCodes.end()) {
 					// This compiler can make this type. Let's check what extensions have been registered
 					auto r = _extensionsAndDelegatesMap.equal_range(d.first);
 					for (auto i=r.first; i!=r.second; ++i)
@@ -490,7 +487,7 @@ namespace Assets
 
 			auto a = _requestAssociations.equal_range(d.first);
 			for (auto association=a.first; association != a.second; ++association)
-				for (auto targetCode:association->second._targetCodes)
+				for (auto targetCode:association->second._compileRequestCodes)
 					if (std::find(result.begin(), result.end(), targetCode) == result.end())
 						result.push_back(targetCode);
 		}

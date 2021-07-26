@@ -14,7 +14,6 @@ RWTexture2DArray<float4> OutputArray : register(u1, space0);
 RWTexture2D<float4> Output : register(u1, space0);
 SamplerState EquirectangularBilinearSampler : register(s2, space0);
 
-static const uint PassSampleCount = 1024;
 struct FilterPassParamsStruct
 {
     uint MipIndex;
@@ -94,6 +93,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         float3 cubeMapDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
         float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
 
+        const uint PassSampleCount = 1024;
         EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
             PassSampleCount, groupThreadId.x, 64);
@@ -125,6 +125,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
         float iorIncident = SpecularTransmissionIndexOfRefraction;
         float iorOutgoing = 1.f;
+        const uint PassSampleCount = 1024;
         float3 r = CalculateFilteredTextureTrans(
             cubeMapDirection, roughness,
             iorIncident, iorOutgoing,

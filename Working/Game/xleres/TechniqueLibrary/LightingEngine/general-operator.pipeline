@@ -15,7 +15,8 @@ DescriptorSet AODS
 	SampledTexture AccumulationAOLast;			// 8
 	SampledTexture tex0;						// 9
 	SampledTexture tex1;						// 10
-	Sampler FixedSampler						// 11
+	ConstantBuffer b11;							// 11
+	Sampler FixedSampler						// 12
 	{
 		Filter = Bilinear,
 		AddressU = Wrap,

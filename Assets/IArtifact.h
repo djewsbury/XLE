@@ -73,7 +73,7 @@ namespace Assets
     class ArtifactCollectionFuture : public GenericFuture
     {
     public:
-		const std::shared_ptr<IArtifactCollection>& GetArtifactCollection(TargetCode);
+		const std::shared_ptr<IArtifactCollection>& GetArtifactCollection(ArtifactTargetCode);
 
         ArtifactCollectionFuture();
         ~ArtifactCollectionFuture();
@@ -83,11 +83,11 @@ namespace Assets
 		ArtifactCollectionFuture(const ArtifactCollectionFuture&) = delete;
 		ArtifactCollectionFuture& operator=(const ArtifactCollectionFuture&) = delete;
 
-		void SetArtifactCollections(IteratorRange<const std::pair<TargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts);
+		void SetArtifactCollections(IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts);
 		void StoreException(const std::exception_ptr&);
 
 	private:
-		std::vector<std::pair<TargetCode, std::shared_ptr<IArtifactCollection>>> _artifactCollections;
+		std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>> _artifactCollections;
 		std::exception_ptr _capturedException;
     };
 

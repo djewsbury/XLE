@@ -232,7 +232,7 @@ namespace RenderCore
 					definesTable
 				);
 			},
-			[shaderSource](::Assets::TargetCode targetCode, const ::Assets::InitializerPack& initializers) {
+			[shaderSource](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
 				std::string definesTable;
 				if (initializers.GetCount() > 1)

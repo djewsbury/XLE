@@ -410,7 +410,7 @@ namespace RenderCore { namespace Techniques
 					MakeIteratorRange(initializers.GetInitializer<std::vector<uint64_t>>(3))
 				);
 			},
-			[shaderSource](::Assets::TargetCode targetCode, const ::Assets::InitializerPack& initializers) {
+			[shaderSource](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
 				auto definesTable = initializers.GetInitializer<std::string>(1);
 				auto& patchCollection = *initializers.GetInitializer<std::shared_ptr<CompiledShaderPatchCollection>>(2);

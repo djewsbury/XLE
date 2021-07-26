@@ -13,15 +13,15 @@ namespace Assets
 {
 	class DependentFileState;
 	class InitializerPack;
-	using TargetCode = uint64_t;
+	using ArtifactTargetCode = uint64_t;
 
 	class ICompileOperation
 	{
 	public:
 		struct TargetDesc
 		{
-			TargetCode		_targetCode;
-			const char*		_name;
+			ArtifactTargetCode	_targetCode;
+			const char*			_name;
 		};
 		struct SerializedArtifact
 		{

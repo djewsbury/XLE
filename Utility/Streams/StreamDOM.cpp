@@ -40,32 +40,32 @@ namespace Utility
                         "Error while reading keyed item name in StreamDOM", formatter.GetLocation()));
 
                 next = formatter.PeekNext();
-            if (next == Formatter::Blob::BeginElement) {
+                if (next == Formatter::Blob::BeginElement) {
                     auto newElement = ParseElement(formatter, false, name);
-                if (lastChild == ~0u) {
-                    _elements[e]._firstChild = newElement;
-                } else {
-                    _elements[lastChild]._nextSibling = newElement;
-                }
-                lastChild = newElement;
+                    if (lastChild == ~0u) {
+                        _elements[e]._firstChild = newElement;
+                    } else {
+                        _elements[lastChild]._nextSibling = newElement;
+                    }
+                    lastChild = newElement;
                 } else if (next == Formatter::Blob::Value) {
-                typename Formatter::InteriorSection value;
-                    if (!formatter.TryValue(value))
-                    Throw(FormatException(
-                        "Error while reading attribute in StreamDOM", formatter.GetLocation()));
+                    typename Formatter::InteriorSection value;
+                        if (!formatter.TryValue(value))
+                        Throw(FormatException(
+                            "Error while reading attribute in StreamDOM", formatter.GetLocation()));
 
-                AttributeDesc attrib;
-                attrib._name = name;
-                attrib._value = value;
-                attrib._nextSibling = ~0u;
-                _attributes.push_back(attrib);
-                auto a = (unsigned)_attributes.size()-1;
-                if (lastAttribute == ~0u) {
-                    _elements[e]._firstAttribute = a;
-                } else {
-                    _attributes[lastAttribute]._nextSibling = a;
-                }
-                lastAttribute = a;
+                    AttributeDesc attrib;
+                    attrib._name = name;
+                    attrib._value = value;
+                    attrib._nextSibling = ~0u;
+                    _attributes.push_back(attrib);
+                    auto a = (unsigned)_attributes.size()-1;
+                    if (lastAttribute == ~0u) {
+                        _elements[e]._firstAttribute = a;
+                    } else {
+                        _attributes[lastAttribute]._nextSibling = a;
+                    }
+                    lastAttribute = a;
                 } else {
                     Throw(FormatException(
                         "Expecting either a value or element for keyed item in StreamDOM", formatter.GetLocation()));

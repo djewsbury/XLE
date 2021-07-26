@@ -21,17 +21,16 @@ namespace Assets
 	class InitializerPack;
 	class IntermediatesStore;
 	class DependencyValidation;
-	using TargetCode = uint64_t;
 
     class IIntermediateCompilers
     {
     public:
-        virtual std::shared_ptr<IIntermediateCompileMarker> Prepare(TargetCode, InitializerPack&&) = 0;
+        virtual std::shared_ptr<IIntermediateCompileMarker> Prepare(CompileRequestCode, InitializerPack&&) = 0;
         virtual void StallOnPendingOperations(bool cancelAll) = 0;
 		
 		struct SplitArchiveName { std::string _archive; uint64_t _entryId = 0ull; std::string _descriptiveName; };
 		using CompileOperationDelegate = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&)>;
-		using ArchiveNameDelegate = std::function<SplitArchiveName(TargetCode, const InitializerPack&)>;
+		using ArchiveNameDelegate = std::function<SplitArchiveName(ArtifactTargetCode, const InitializerPack&)>;
 
 		using RegisteredCompilerId = uint64_t;
 		virtual RegisteredCompilerId RegisterCompiler(
@@ -50,8 +49,8 @@ namespace Assets
 		// handle the request
 		virtual void AssociateRequest(
 			RegisteredCompilerId compiler,
-			IteratorRange<const uint64_t*> outputAssetTypes,	///< compiler can generate these output asset types (though this isn't strict, the ICompileOperation outputs can vary on a per-asset basis)
-			const std::string& initializerRegexFilter = ".*"	///< compiler will be invoked for assets that match this regex filter
+			IteratorRange<const CompileRequestCode*> compileRequestCode,	///< id used to request this compilation operation. Matches "CompileProcessType" in compilable asset types
+			const std::string& initializerRegexFilter = {}					///< compiler will be invoked for assets that match this regex filter
 			) = 0;
 
 		//
@@ -59,8 +58,8 @@ namespace Assets
 		// AssociateExtensions & GetExtensionsForTargetCodes are both used for FileOpen dialogs in tools
 		// It's so the tool knows what model formats are available to load (for example)
 		virtual void AssociateExtensions(RegisteredCompilerId associatedCompiler, const std::string& commaSeparatedExtensions) = 0;
-		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(TargetCode typeCode) = 0;
-		virtual std::vector<uint64_t> GetTargetCodesForExtension(StringSection<>) = 0;
+		virtual std::vector<std::pair<std::string, std::string>> GetExtensionsForTargetCode(CompileRequestCode typeCode) = 0;
+		virtual std::vector<CompileRequestCode> GetTargetCodesForExtension(StringSection<>) = 0;
 
 		//
 
@@ -109,7 +108,7 @@ namespace Assets
 	class IIntermediateCompileMarker
 	{
 	public:
-		virtual std::shared_ptr<IArtifactCollection> GetExistingAsset(TargetCode) const = 0;
+		virtual std::shared_ptr<IArtifactCollection> GetExistingAsset(ArtifactTargetCode) const = 0;
 		virtual std::shared_ptr<ArtifactCollectionFuture> InvokeCompile() = 0;
 		virtual ~IIntermediateCompileMarker();
 	};

@@ -22,7 +22,7 @@ namespace Assets
 		class FileKind
 		{
 		public:
-			IteratorRange<const TargetCode*> _targetCodes;
+			IteratorRange<const ArtifactTargetCode*> _targetCodes;
 			std::string		_regexFilter = {};
 			std::string		_name = {};
 			std::string		_shortName = {};

@@ -36,11 +36,11 @@ namespace Assets
 	IArtifactCollection::~IArtifactCollection() {}
 
 	void ArtifactCollectionFuture::SetArtifactCollections(
-		IteratorRange<const std::pair<TargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts)
+		IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts)
 	{
 		assert(!artifacts.empty());
 		assert(_artifactCollections.empty());
-		_artifactCollections = std::vector<std::pair<TargetCode, std::shared_ptr<IArtifactCollection>>>{
+		_artifactCollections = std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>{
 			artifacts.begin(), artifacts.end()
 		};
 		SetState(::Assets::AssetState::Ready);
@@ -53,7 +53,7 @@ namespace Assets
 		SetState(::Assets::AssetState::Invalid);
 	}
 
-	const std::shared_ptr<IArtifactCollection>& ArtifactCollectionFuture::GetArtifactCollection(TargetCode targetCode)
+	const std::shared_ptr<IArtifactCollection>& ArtifactCollectionFuture::GetArtifactCollection(ArtifactTargetCode targetCode)
 	{
 		if (_capturedException)
 			std::rethrow_exception(_capturedException);

@@ -20,7 +20,7 @@ namespace Assets
 
 	namespace Internal 
 	{
-		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(TargetCode targetCode, InitializerPack&&);
+		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(CompileRequestCode targetCode, InitializerPack&&);
 	}
 
 	namespace Internal
@@ -112,7 +112,7 @@ namespace Assets
 	}
 
 	template<typename Future>
-		void AutoConstructToFuture(Future& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, TargetCode targetCode = Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType)
+		void AutoConstructToFuture(Future& future, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<typename Future::PromisedType>::CompileProcessType)
 	{
 		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
 		// still going to end up constructing the asset in the main thread.
@@ -140,7 +140,7 @@ namespace Assets
 	template<typename Future, typename... Args>
 		static void DefaultCompilerConstruction(
 			Future& future,
-			TargetCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
 			Args... args)
 	{
 		// Begin a compilation operation via the registered compilers for this type.

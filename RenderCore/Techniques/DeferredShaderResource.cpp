@@ -212,46 +212,21 @@ namespace RenderCore { namespace Techniques
 			});
     }
 
-    class TextureArtifact
-    {
-    public:
-        static const auto CompileProcessType = RenderCore::Assets::TextureCompilerProcessType;
-        static const ::Assets::ArtifactRequest ChunkRequests[1];
-        std::string _artifactFile;
-        ::Assets::DependencyValidation _depVal;
-        const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
-
-        TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-        : _depVal(depVal)
-        {
-            _artifactFile = chunks[0]._artifactFilename;
-        }
-        TextureArtifact() = default;
-        ~TextureArtifact() = default;
-        TextureArtifact(TextureArtifact&&) = default;
-        TextureArtifact& operator=(TextureArtifact&&) = default;
-        TextureArtifact(const TextureArtifact&) = default;
-        TextureArtifact& operator=(const TextureArtifact&) = default;
-    };
-    const ::Assets::ArtifactRequest TextureArtifact::ChunkRequests[1] {
-        ::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::Filename }
-    };
-
     static void ConstructToFutureArtifact(
 		::Assets::FuturePtr<DeferredShaderResource>& future,
-		const TextureArtifact& artifact,
+		const RenderCore::Assets::TextureArtifact& artifact,
         std::string originalRequest)
     {
         using namespace BufferUploads;
-		auto pkt = Services::GetInstance().CreateTextureDataSource(artifact._artifactFile, 0);
+		auto pkt = artifact.BeginDataSource();
         if (!pkt) {
-            future.SetInvalidAsset(artifact._depVal, ::Assets::AsBlob("Could not find matching texture loader"));
+            future.SetInvalidAsset(artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not find matching texture loader"));
 			return;
         }
 
         auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
-			future.SetInvalidAsset(artifact._depVal, ::Assets::AsBlob("Could not begin buffer uploads transaction"));
+			future.SetInvalidAsset(artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not begin buffer uploads transaction"));
 			return;
 		}
 
@@ -263,7 +238,7 @@ namespace RenderCore { namespace Techniques
         captures->_futureResource = std::move(transactionMarker._future);
 
         future.SetPollingFunction(
-			[originalRequest, pkt, captures, depVal=artifact._depVal](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
+			[originalRequest, captures, depVal=artifact.GetDependencyValidation()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
                 using namespace std::chrono_literals;
                 auto resStatus = captures->_futureResource.wait_for(0s);
                 if (resStatus == std::future_status::timeout)
@@ -297,11 +272,11 @@ namespace RenderCore { namespace Techniques
 		const FileNameSplitter<char>& splitter)
     {
         auto containerInitializer = splitter.AllExceptParameters();
-		auto containerFuture = ::Assets::MakeFuture<TextureArtifact>(containerInitializer);
+		auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(containerInitializer);
         ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
             future,
             [originalRequest=splitter.FullFilename().AsString()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
-                ConstructToFutureArtifact(thatFuture, containerActual, originalRequest);
+                ConstructToFutureArtifact(thatFuture, *containerActual, originalRequest);
             });
     }
 

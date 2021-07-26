@@ -348,7 +348,7 @@ namespace ShaderSourceParser
 			[](auto initializers) {
 				return std::make_shared<ShaderSelectorFilteringCompileOperation>(initializers);
 			},
-			[](::Assets::TargetCode targetCode, const ::Assets::InitializerPack& initializers) {
+			[](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				assert(targetCode == SelectorFilteringRules::CompileProcessType);
 				::Assets::IIntermediateCompilers::SplitArchiveName result;
 				auto fn = initializers.GetInitializer<std::string>(0);
