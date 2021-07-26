@@ -14,6 +14,7 @@
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/IntermediatesStore.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -113,7 +114,8 @@ namespace RenderCore { namespace Techniques
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
-		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
@@ -136,10 +138,37 @@ namespace RenderCore { namespace Techniques
 					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 				}
 			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
-				auto passCount = mipDesc._width * mipDesc._height;
-				for (unsigned p=0; p<passCount; ++p) {
-					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-					computeOp->Dispatch(1, 1, 6, MakeOpaqueIteratorRange(filterPassParams));
+				auto pixelCount = mipDesc._width * mipDesc._height * std::max(1u, (unsigned)targetDesc._arrayCount);
+				auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
+				auto passesPerPixel = 8u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
+				auto dispatchCount = passesPerPixel*pixelCount;
+				auto dispatchesPerCommit = std::min(32768u, pixelCount);
+				for (unsigned d=0; d<dispatchCount; ++d) {
+					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, d, dispatchCount, 0 };
+					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+
+					if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
+						/* since successive passes add to the values written in previous passes when
+						 need some kind of barrier. But since we're submitting the command list, it's not required
+						{
+							VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+							barrier.pNext = nullptr;
+							barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+							vkCmdPipelineBarrier(
+								metalContext.GetActiveCommandList().GetUnderlying().get(),
+								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								0,
+								1, &barrier,
+								0, nullptr,
+								0, nullptr);
+						}*/
+
+						computeOp->EndDispatches();
+						threadContext->CommitCommands();
+						computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+					}
 				}
 			} else {
 				assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);

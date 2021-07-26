@@ -62,9 +62,11 @@ float4 GenerateSplitSumGlossTransmissionLUT(float4 position : SV_Position, float
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "../Foreign/ffx-reflection-dnsr/ffx_denoiser_reflections_common.h"
+
 groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 [numthreads(64, 1, 1)]
-    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
+    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID)
 {    
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
@@ -83,29 +85,48 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 
-    uint3 pixelId = uint3(
-        FilterPassParams.PassIndex%textureDims.x, 
-        (FilterPassParams.PassIndex/textureDims.x)%textureDims.y, 
-        groupId.z);
+    uint passesPerPixel = FilterPassParams.PassCount/(textureDims.x*textureDims.y*6);
+    uint3 pixelId;
+    uint linearPixel = FilterPassParams.PassIndex%(textureDims.x*textureDims.y*6);
+    uint passOfThisPixel = FilterPassParams.PassIndex/(textureDims.x*textureDims.y*6);
+    if (textureDims.x >= 8 && textureDims.y >= 8) {
+        uint blockWidth = ((textureDims.x+7)/8), blockHeight = ((textureDims.y+7)/8);
+        uint2 pixelInBlock = FFX_DNSR_Reflections_RemapLane8x8(linearPixel%64);
+        uint linearBlock = (FilterPassParams.PassIndex/64)%(blockWidth*blockHeight*6);
+
+        pixelId = uint3(
+            (linearBlock%blockWidth)*8+pixelInBlock.x, 
+            ((linearBlock/blockWidth)%blockHeight)*8+pixelInBlock.y, 
+            linearBlock/(blockWidth*blockHeight));
+    } else {
+        pixelId = uint3(
+            linearPixel%textureDims.x, 
+            (linearPixel/textureDims.x)%textureDims.y, 
+            linearPixel/(textureDims.x*textureDims.y));
+    }
+
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
         // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
         float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
         float3 cubeMapDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
-        float roughness = MipmapToRoughness(FilterPassParams.MipIndex);
+        int log2dim = firstbithigh(textureDims.x);
+        float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
 
-        const uint PassSampleCount = 1024;
+        const uint PassSampleCount = 256;
         EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
-            PassSampleCount, groupThreadId.x, 64);
+            PassSampleCount, groupThreadId.x + passOfThisPixel*64, passesPerPixel*64);
 
         //////////////////////////////////
         // Sync, and then combine together the results from all of the samples
         AllMemoryBarrierWithGroupSync();
         if (groupThreadId.x == 0) {
-            float4 result = float4(0,0,0,1);
+            if (passOfThisPixel == 0)
+                OutputArray[pixelId.xyz] = float4(0,0,0,1);
+            float3 result = 0;
             for (uint c=0; c<64; ++c)
-                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/64.0f;
-            OutputArray[pixelId.xyz] = result;
+                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/(64.0f*passesPerPixel);
+            OutputArray[pixelId.xyz].rgb += result;
         }
     }
 }
