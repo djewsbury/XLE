@@ -512,7 +512,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					|| slotType == DescriptorType::InputAttachment
 					|| slotType == DescriptorType::UniformTexelBuffer || slotType == DescriptorType::UnorderedAccessTexelBuffer;
 			else if (bindingType == UniformStreamType::ImmediateData)
-				return slotType == DescriptorType::UniformBuffer || slotType != DescriptorType::UnorderedAccessBuffer;
+				return slotType == DescriptorType::UniformBuffer;			// we can only actually write immediate data to uniform buffers currently -- storage buffers, texel buffers, etc, aren't supported (to avoid the extra complexity that support would bring)
 			else if (bindingType == UniformStreamType::Sampler)
 				return slotType == DescriptorType::Sampler;
 
@@ -981,14 +981,17 @@ namespace RenderCore { namespace Metal_Vulkan
 			ProgressiveDescriptorSetBuilder& builder,
 			ObjectFactory& factory,
 			IteratorRange<const UniformsStream::ImmediateData*> pkts,
-			IteratorRange<const uint32_t*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies,
+			BindFlag::Enum bindType)
 		{
 			if (bindingIndicies.empty()) return {};
 
 			uint64_t bindingsWrittenTo = 0u;
 			size_t totalSize = 0;
 
-			auto alignment = factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment;
+			auto alignment = (bindType == BindFlag::ConstantBuffer) 
+				? factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment
+				: factory.GetPhysicalDeviceProperties().limits.minStorageBufferOffsetAlignment;
 			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
 				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
 				if (!(bind[1]&s_arrayBindingFlag)) {
@@ -1002,7 +1005,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			assert(totalSize != 0);
 
-			auto temporaryMapping = context.MapTemporaryStorage(totalSize, BindFlag::ConstantBuffer);
+			auto temporaryMapping = context.MapTemporaryStorage(totalSize, bindType);
 			if (!temporaryMapping.GetData().empty()) {
 				assert(temporaryMapping.GetData().size() == totalSize);
 				size_t iterator = 0;
@@ -1156,19 +1159,20 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 			
-			auto cbBindingFlag = BindingHelper::WriteImmediateDataBindings(
+			auto descSetSlots = BindingHelper::WriteImmediateDataBindings(
 				context,
 				*builder,
 				context.GetFactory(),
 				stream._immediateData,
-				MakeIteratorRange(adaptiveSet._immediateDataBinds));
+				MakeIteratorRange(adaptiveSet._immediateDataBinds),
+				BindFlag::ConstantBuffer);
 
-			auto srvBindingFlag = BindingHelper::WriteResourceViewBindings(
+			descSetSlots |= BindingHelper::WriteResourceViewBindings(
 				*builder,
 				stream._resourceViews,
 				MakeIteratorRange(adaptiveSet._resourceViewBinds));
 
-			auto ssBindingFlag = BindingHelper::WriteSamplerStateBindings(
+			descSetSlots |= BindingHelper::WriteSamplerStateBindings(
 				*builder,
 				MakeIteratorRange((const SamplerState*const*)stream._samplers.begin(), (const SamplerState*const*)stream._samplers.end()),
 				MakeIteratorRange(adaptiveSet._samplerBinds));
@@ -1182,13 +1186,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			//
 			// In the most common case, there should be no dummy descriptors to fill in here... So we'll 
 			// optimise for that case.
-			uint64_t dummyDescWriteMask = (~(cbBindingFlag|srvBindingFlag|ssBindingFlag)) & adaptiveSet._dummyMask;
+			uint64_t dummyDescWriteMask = (~descSetSlots) & adaptiveSet._dummyMask;
 			uint64_t dummyDescWritten = 0;
 			if (dummyDescWriteMask != 0)
 				dummyDescWritten = builder->BindDummyDescriptors(context.GetGlobalPools(), dummyDescWriteMask);
 
 			if (doFlushNow) {
-				if (cbBindingFlag | srvBindingFlag | ssBindingFlag | dummyDescWriteMask) {
+				if (descSetSlots | dummyDescWriteMask) {
 					std::vector<uint64_t> resourceVisibilityList;
 					builder->FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
 					context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
