@@ -727,7 +727,7 @@ namespace RenderCore { namespace ImplVulkan
 		return std::make_unique<ThreadContext>(
             shared_from_this(), 
             _graphicsQueue,
-            Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, nullptr));
+            Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
     }
 
 	IResourcePtr Device::CreateResource(
