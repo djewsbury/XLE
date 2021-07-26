@@ -165,6 +165,8 @@ namespace RenderCore { namespace Metal_Vulkan
             }
 
             auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), tDesc._arrayCount > 1u);
+            if (formatUsage != BindFlag::ShaderResource && createInfo.viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+                createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
             _imageView = factory.CreateImageView(createInfo);
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
