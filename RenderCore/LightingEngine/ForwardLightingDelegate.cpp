@@ -105,10 +105,10 @@ namespace RenderCore { namespace LightingEngine
 		RenderStepFragmentInterface result(PipelineType::Graphics);
         AttachmentName output;
 		if (!writeDirectToLDR)
-			output = result.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::ColorHDR, 1.0f, 1.0f, lightResolveAttachmentDesc);
+			output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, lightResolveAttachmentDesc);
 		else
 			output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::Clear);
-		auto depth = result.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f, msDepthDesc);
+		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, msDepthDesc);
 
 		Techniques::FrameBufferDescFragment::SubpassDesc depthOnlySubpass;
 		depthOnlySubpass.SetDepthStencil(depth);

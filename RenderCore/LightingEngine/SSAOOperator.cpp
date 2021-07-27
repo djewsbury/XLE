@@ -31,7 +31,6 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& inputDepthsSRV,
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
-        IResourceView& downresDepthsUAV,
         IResourceView& accumulation0UAV,
         IResourceView& accumulation1UAV,
         IResourceView& aoOutputUAV,
@@ -41,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
         IResourceView* accumulationLastUAV = (_pingPongCounter&1) ? &accumulation1UAV : &accumulation0UAV;
         
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &downresDepthsUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &hierarchicalDepths };
+        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, accumulationUAV, accumulationLastUAV, &inputNormalsSRV, &inputVelocitiesSRV, &hierarchicalDepths };
         us._resourceViews = MakeIteratorRange(srvs);
         UInt4 aoProps { _pingPongCounter, _pingPongCounter == ~0u, 0, 0 };
         UniformsStream::ImmediateData immData[] = {
@@ -67,20 +66,16 @@ namespace RenderCore { namespace LightingEngine
     {
         LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
-        auto downresDepths = result.DefineAttachmentRelativeDims(
-            Hash_AODownres, 0.5f, 0.5f, 
-            AttachmentDesc{s_downresDepthsFormat, 0, LoadStore::DontCare, LoadStore::DontCare, 0, 0});
-
-        auto accumulation0 = result.DefineAttachmentRelativeDims(
-            Hash_AOAccumulation0, 0.5f, 0.5f, 
+        auto accumulation0 = result.DefineAttachment(
+            Hash_AOAccumulation0,
             AttachmentDesc{s_aoFormat, 0, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess});
 
-        auto accumulation1 = result.DefineAttachmentRelativeDims(
-            Hash_AOAccumulation1, 0.5f, 0.5f, 
+        auto accumulation1 = result.DefineAttachment(
+            Hash_AOAccumulation1,
             AttachmentDesc{s_aoFormat, 0, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess});
 
-        auto aoOutput = result.DefineAttachmentRelativeDims(
-            Hash_AOOutput, 1.0f, 1.0f, 
+        auto aoOutput = result.DefineAttachment(
+            Hash_AOOutput,
             AttachmentDesc{s_aoFormat, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess});
 
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
@@ -88,7 +83,6 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
 
-        spDesc.AppendNonFrameBufferAttachmentView(downresDepths, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation1, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
@@ -106,8 +100,7 @@ namespace RenderCore { namespace LightingEngine
                     *iterator._rpi.GetNonFrameBufferAttachmentView(3),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(4),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(5),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(6),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(7));
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(6));
             });
 
         return result;
@@ -160,12 +153,11 @@ namespace RenderCore { namespace LightingEngine
         UniformsStreamInterface usi;
         usi.BindResourceView(0, Hash64("InputTexture"));
         usi.BindResourceView(1, Hash64("OutputTexture"));
-        usi.BindResourceView(2, Hash64("DownsampleDepths"));
-        usi.BindResourceView(3, Hash64("AccumulationAO"));
-        usi.BindResourceView(4, Hash64("AccumulationAOLast"));
-        usi.BindResourceView(5, Hash64("InputNormals"));
-        usi.BindResourceView(6, Hash64("GBufferMotion"));
-        usi.BindResourceView(7, Hash64("HierarchicalDepths"));
+        usi.BindResourceView(2, Hash64("AccumulationAO"));
+        usi.BindResourceView(3, Hash64("AccumulationAOLast"));
+        usi.BindResourceView(4, Hash64("InputNormals"));
+        usi.BindResourceView(5, Hash64("GBufferMotion"));
+        usi.BindResourceView(6, Hash64("HierarchicalDepths"));
         usi.BindImmediateData(0, Hash64("AOProps"));
 
         ParameterBox selectors;

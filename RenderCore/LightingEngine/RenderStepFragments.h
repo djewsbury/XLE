@@ -25,14 +25,10 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		AttachmentName DefineAttachment(
             uint64_t semantic,
-            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain);
-        AttachmentName DefineAttachmentRelativeDims(
-			uint64_t semantic,
-            float width, float height,
-            const AttachmentDesc& request);
+            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain,
+			BindFlag::BitField initialLayout = 0, BindFlag::BitField finalLayout = 0);
 		AttachmentName DefineAttachment(
 			uint64_t semantic,
-            unsigned width, unsigned height, unsigned arrayLayerCount,
             const AttachmentDesc& request);
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,

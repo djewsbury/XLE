@@ -383,8 +383,8 @@ namespace UnitTests
 				// output 0: some arbitrary pixels for downsampling (Format::R11G11B10_FLOAT precision)
 				SubpassDesc writeInputTexture;
 				writeInputTexture.SetName("write-input-texture");
-				auto preDownsampleAttachment = fragDesc.DefineAttachmentRelativeDims(
-					Techniques::AttachmentSemantics::ColorLDR, 1.0f, 1.0f,
+				auto preDownsampleAttachment = fragDesc.DefineAttachment(
+					Techniques::AttachmentSemantics::ColorLDR,
 					{Format::Unknown, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource});
 				writeInputTexture.AppendOutput(preDownsampleAttachment);
 				fragDesc.AddSubpass(std::move(writeInputTexture));
@@ -399,10 +399,19 @@ namespace UnitTests
 				// downsample
 				// input 0: attachment to downsample
 				// output 0: downsampled result
+				parsingContext.GetFragmentStitchingContext().DefineAttachment(
+					Techniques::PreregisteredAttachment {
+						downsampledResult,
+						CreateDesc(
+							BindFlag::RenderTarget, 0, 0, 
+							TextureDesc::Plain2D(workingRes[0]/3, workingRes[1]/3, Format::R8_UNORM),
+							"downsampled-attachment"),
+						Techniques::PreregisteredAttachment::State::Uninitialized
+					});
 				Techniques::FrameBufferDescFragment fragDesc;
 				SubpassDesc downsampleStep;
 				downsampleStep.SetName("downsample");
-				downsampleStep.AppendOutput(fragDesc.DefineAttachmentRelativeDims(downsampledResult, 0.333f, 0.333f, {Format::R8_UNORM, 0, LoadStore::DontCare, LoadStore::Retain}));
+				downsampleStep.AppendOutput(fragDesc.DefineAttachment(downsampledResult, {Format::R8_UNORM, 0, LoadStore::DontCare, LoadStore::Retain}));
 				fragDesc.AddSubpass(std::move(downsampleStep));
 
 				Techniques::RenderPassInstance rpi { *threadContext, parsingContext, fragDesc };

@@ -232,9 +232,8 @@ namespace RenderOverlays
         _pimpl = std::make_unique<Pimpl>(threadContext, std::move(pipelineLayout));
 
 		Techniques::FrameBufferDescFragment fbDescFrag;
-		auto n_offscreen = fbDescFrag.DefineAttachmentRelativeDims(
-            0, 1.f, 1.f,
-			AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, LoadStore::DontCare, 0, BindFlag::ShaderResource });
+		auto n_offscreen = fbDescFrag.DefineAttachment(
+            0, AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, LoadStore::DontCare, 0, BindFlag::ShaderResource });
 		auto n_mainColor = fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR);
 		const bool doDepthTest = true;
         auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;

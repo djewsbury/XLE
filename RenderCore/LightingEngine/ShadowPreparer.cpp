@@ -266,7 +266,6 @@ namespace RenderCore { namespace LightingEngine
 			subpass.SetDepthStencil(
 				fragment.DefineAttachment(
 					Techniques::AttachmentSemantics::ShadowDepthMap, 
-					desc._width, desc._height, arrayCount,
 					AttachmentDesc{desc._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource | BindFlag::DepthStencil}));
 			fragment.AddSubpass(std::move(subpass));
 		}

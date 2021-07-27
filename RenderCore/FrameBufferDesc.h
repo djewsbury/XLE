@@ -41,7 +41,6 @@ namespace RenderCore
     {
     public:
         Format _format = Format(0);
-
         struct Flags
         {
             enum Enum
@@ -50,11 +49,12 @@ namespace RenderCore
             };
             using BitField = unsigned;
         };
-        Flags::BitField _flags = 0; // Flags::OutputRelativeDimensions;
+        Flags::BitField _flags = 0;
+
         LoadStore _loadFromPreviousPhase = LoadStore::Retain;       ///< equivalent to "load op" in a Vulkan attachment
         LoadStore _storeToNextPhase = LoadStore::Retain;            ///< equivalent to "store op" in a Vulkan attachment
-        BindFlag::BitField _initialLayout = 0u;  ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
-        BindFlag::BitField _finalLayout = 0u;  ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
+        BindFlag::BitField _initialLayout = 0u;                     ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
+        BindFlag::BitField _finalLayout = 0u;                       ///< we use this to select the optimal final layout of the resource. This is how the resource is left post-renderpass (for example, for presentation targets)
 
         uint64_t CalculateHash() const;
 

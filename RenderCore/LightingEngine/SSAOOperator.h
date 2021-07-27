@@ -23,7 +23,6 @@ namespace RenderCore { namespace LightingEngine
 			RenderCore::IResourceView& inputDepthsSRV,
 			RenderCore::IResourceView& inputNormalsSRV,
 			RenderCore::IResourceView& inputVelocitiesSRV,
-			RenderCore::IResourceView& downresDepthsUAV,
 			RenderCore::IResourceView& accumulation0UAV,
 			RenderCore::IResourceView& accumulation1UAV,
 			RenderCore::IResourceView& aoOutputUAV,

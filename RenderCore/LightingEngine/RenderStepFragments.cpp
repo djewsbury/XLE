@@ -7,22 +7,14 @@
 namespace RenderCore { namespace LightingEngine 
 {
 
-	RenderCore::AttachmentName RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, LoadStore loadOp, LoadStore storeOp)
+	RenderCore::AttachmentName RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, LoadStore loadOp, LoadStore storeOp, BindFlag::BitField initialLayout, BindFlag::BitField finalLayout)
 	{
-		return _frameBufferDescFragment.DefineAttachment(semantic, loadOp, storeOp);
+		return _frameBufferDescFragment.DefineAttachment(semantic, loadOp, storeOp, initialLayout, finalLayout);
 	}
 
-	RenderCore::AttachmentName RenderStepFragmentInterface::DefineAttachmentRelativeDims(uint64_t semantic, float width, float height, const AttachmentDesc& request)
+	AttachmentName RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
 	{
-		return _frameBufferDescFragment.DefineAttachmentRelativeDims(semantic, width, height, request);
-	}
-
-	AttachmentName RenderStepFragmentInterface::DefineAttachment(
-		uint64_t semantic,
-		unsigned width, unsigned height, unsigned arrayLayerCount,
-		const AttachmentDesc& request)
-	{
-		return _frameBufferDescFragment.DefineAttachment(semantic, width, height, arrayLayerCount, request);
+		return _frameBufferDescFragment.DefineAttachment(semantic, request);
 	}
 
 	void RenderStepFragmentInterface::AddSubpass(

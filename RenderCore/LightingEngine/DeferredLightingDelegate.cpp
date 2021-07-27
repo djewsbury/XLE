@@ -102,8 +102,8 @@ namespace RenderCore { namespace LightingEngine
 				// the gbuffer contents are useful for various effects.
 
 				auto createGBuffer = std::make_shared<RenderStepFragmentInterface>(RenderCore::PipelineType::Graphics);
-				auto msDepth = createGBuffer->DefineAttachmentRelativeDims(
-					Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f,
+				auto msDepth = createGBuffer->DefineAttachment(
+					Techniques::AttachmentSemantics::MultisampleDepth,
 					// Main multisampled depth stencil
 					{ RenderCore::Format::D24_UNORM_S8_UINT, AttachmentDesc::Flags::Multisampled,
 						LoadStore::Clear, LoadStore::Retain, 0, BindFlag::DepthStencil | BindFlag::ShaderResource });
@@ -116,18 +116,18 @@ namespace RenderCore { namespace LightingEngine
 						// that should be enough precision.
 						//      .. however, it possible some clients might prefer 10 or 16 bit albedo textures
 						//      In these cases, the first buffer should be a matching format.
-				auto diffuse = createGBuffer->DefineAttachmentRelativeDims(
-					Techniques::AttachmentSemantics::GBufferDiffuse, 1.0f, 1.0f,
+				auto diffuse = createGBuffer->DefineAttachment(
+					Techniques::AttachmentSemantics::GBufferDiffuse,
 					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
 						LoadStore::Clear, LoadStore::Retain });
 
-				auto normal = createGBuffer->DefineAttachmentRelativeDims(
-					Techniques::AttachmentSemantics::GBufferNormal, 1.0f, 1.0f,
+				auto normal = createGBuffer->DefineAttachment(
+					Techniques::AttachmentSemantics::GBufferNormal,
 					{ (!precisionTargets) ? Format::R8G8B8A8_SNORM : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
 						LoadStore::Clear, LoadStore::Retain });
 
-				auto parameter = createGBuffer->DefineAttachmentRelativeDims(
-					Techniques::AttachmentSemantics::GBufferParameter, 1.0f, 1.0f,
+				auto parameter = createGBuffer->DefineAttachment(
+					Techniques::AttachmentSemantics::GBufferParameter,
 					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
 						LoadStore::Clear, LoadStore::Retain });
 
@@ -154,8 +154,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
 		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_StencilClear, LoadStore::Retain);
-		auto lightResolveTarget = fragment.DefineAttachmentRelativeDims(
-			Techniques::AttachmentSemantics::ColorHDR, 1.0f, 1.0f,
+		auto lightResolveTarget = fragment.DefineAttachment(
+			Techniques::AttachmentSemantics::ColorHDR,
 			{ (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled, LoadStore::Clear, LoadStore::DontCare });
 
 		TextureViewDesc justStencilWindow {
@@ -451,8 +451,8 @@ namespace RenderCore { namespace LightingEngine
 		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
 		Techniques::FrameBufferDescFragment fbDesc;
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(cascadeIndexSemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
-		sp.AppendOutput(fbDesc.DefineAttachmentRelativeDims(sampleDensitySemantic + idx, 1.0f, 1.0f, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
+		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic + idx, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
+		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
 		fbDesc.AddSubpass(std::move(sp));

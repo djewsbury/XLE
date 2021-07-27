@@ -39,14 +39,10 @@ namespace RenderCore { namespace Techniques
     public:
         AttachmentName DefineAttachment(
             uint64_t semantic,
-            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain);
-        AttachmentName DefineAttachmentRelativeDims(
-            uint64_t semantic,
-            float width, float height,
-            const AttachmentDesc& request);
+            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain,
+            BindFlag::BitField initialLayout = 0, BindFlag::BitField finalLayout = 0);
 		AttachmentName DefineAttachment(
 			uint64_t semantic,
-            unsigned width, unsigned height, unsigned arrayLayerCount,
             const AttachmentDesc& request);
         
         struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
@@ -67,11 +63,6 @@ namespace RenderCore { namespace Techniques
             uint64_t _inputSemanticBinding;
             uint64_t _outputSemanticBinding;
             AttachmentDesc _desc;
-
-            // Parameters for temporary attachments
-            float _width = 1.0f, _height = 1.0f;
-            unsigned _arrayLayerCount = 0;
-            bool _relativeDimensionsMode = true;
 
             uint64_t GetInputSemanticBinding() const { return _inputSemanticBinding; }
             uint64_t GetOutputSemanticBinding() const { return _outputSemanticBinding; }

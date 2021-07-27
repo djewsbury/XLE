@@ -394,7 +394,7 @@ namespace UnitTests
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
 					depthAttachmentDesc._finalLayout = BindFlag::InputAttachment;
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
-					subpass.SetDepthStencil(fbFrag.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f, depthAttachmentDesc));
+					subpass.SetDepthStencil(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));
 					fbFrag.AddSubpass(std::move(subpass));
 
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, fbFrag);
@@ -467,7 +467,7 @@ namespace UnitTests
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal"), LoadStore::Clear));
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
-					subpass.SetDepthStencil(frag.DefineAttachmentRelativeDims(Techniques::AttachmentSemantics::MultisampleDepth, 1.0f, 1.0f, depthAttachmentDesc));
+					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
 

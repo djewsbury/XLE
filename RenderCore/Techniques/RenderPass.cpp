@@ -119,46 +119,28 @@ namespace RenderCore { namespace Techniques
 
     AttachmentName FrameBufferDescFragment::DefineAttachment(
         uint64_t semantic, 
-        LoadStore loadOp, LoadStore storeOp)
+        LoadStore loadOp, LoadStore storeOp,
+        BindFlag::BitField initialLayout, BindFlag::BitField finalLayout)
     {
         auto name = (AttachmentName)_attachments.size();
         Attachment attachment;
         attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
         attachment._desc._loadFromPreviousPhase = loadOp;
         attachment._desc._storeToNextPhase = storeOp;
-        _attachments.push_back(attachment);
-        return name;
-    }
-
-    AttachmentName FrameBufferDescFragment::DefineAttachmentRelativeDims(
-        uint64_t semantic,
-        float width, float height,
-        const AttachmentDesc& request)
-    {
-        auto name = (AttachmentName)_attachments.size();
-        Attachment attachment;
-        attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
-        attachment._desc = request;
-        attachment._width = width;
-        attachment._height = height;
-        attachment._relativeDimensionsMode = true;
+        attachment._desc._initialLayout = initialLayout;
+        attachment._desc._finalLayout = finalLayout;
         _attachments.push_back(attachment);
         return name;
     }
 
     AttachmentName FrameBufferDescFragment::DefineAttachment(
         uint64_t semantic,
-        unsigned width, unsigned height, unsigned arrayLayerCount,
         const AttachmentDesc& request)
     {
         auto name = (AttachmentName)_attachments.size();
         Attachment attachment;
         attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
         attachment._desc = request;
-        attachment._width = width;
-        attachment._height = height;
-        attachment._arrayLayerCount = arrayLayerCount;
-        attachment._relativeDimensionsMode = false;
         _attachments.push_back(attachment);
         return name;
     }
@@ -1291,18 +1273,10 @@ namespace RenderCore { namespace Techniques
         const FrameBufferProperties& props)
     {
         auto samples = (attachment._desc._flags & AttachmentDesc::Flags::Multisampled) ? props._samples : TextureSamples::Create();
-        if (attachment._relativeDimensionsMode) {
-            return TextureDesc::Plain2D(
-                unsigned(std::floor(attachment._width * props._outputWidth)),
-                unsigned(std::floor(attachment._height * props._outputHeight)),
-                attachment._desc._format, 1, attachment._arrayLayerCount,
-                samples);
-        } else {
-            return TextureDesc::Plain2D(
-                (unsigned)attachment._width, (unsigned)attachment._height,
-                attachment._desc._format, 1, attachment._arrayLayerCount,
-                samples);
-        }
+        return TextureDesc::Plain2D(
+            (unsigned)props._outputWidth, (unsigned)props._outputHeight,
+            attachment._desc._format, 1, 0u,
+            samples);
     }
 
     WorkingAttachment::WorkingAttachment(
@@ -1937,10 +1911,6 @@ namespace RenderCore { namespace Techniques
             r._desc._finalLayout = a._lastAccessFinalLayout;
             r._desc._loadFromPreviousPhase = a._firstAccessLoad;
             r._desc._storeToNextPhase = a._lastAccessStore;
-            r._width = (unsigned)a._textureDesc._width;
-            r._height = (unsigned)a._textureDesc._height;
-            r._arrayLayerCount = (unsigned)a._textureDesc._arrayCount;
-            r._relativeDimensionsMode = false;
             result._attachments.push_back(r);
         }
 
@@ -1988,18 +1958,7 @@ namespace RenderCore { namespace Techniques
         auto existing = LowerBound(remapping, input);
         if (existing == remapping.end() || existing->first != input) {
             auto semantic = srcFragment._attachments[input].GetInputSemanticBinding();
-            AttachmentName newName;
-            if (srcFragment._attachments[input]._relativeDimensionsMode) {
-                newName = dstFragment.DefineAttachmentRelativeDims(
-                    semantic,
-                    srcFragment._attachments[input]._width, srcFragment._attachments[input]._height,
-                    srcFragment._attachments[input]._desc);
-            } else {
-                newName = dstFragment.DefineAttachment(
-                    semantic,
-                    srcFragment._attachments[input]._width, srcFragment._attachments[input]._height, srcFragment._attachments[input]._arrayLayerCount,
-                    srcFragment._attachments[input]._desc);
-            }
+            auto newName = dstFragment.DefineAttachment(semantic, srcFragment._attachments[input]._desc);
             existing = remapping.insert(existing, {input, newName});
         }
 
