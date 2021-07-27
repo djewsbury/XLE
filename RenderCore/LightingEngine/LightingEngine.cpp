@@ -93,6 +93,7 @@ namespace RenderCore { namespace LightingEngine
 			Log(Warning) << "Merged fragment in lighting technique:" << std::endl << merged._log << std::endl;
 		#endif
 
+		_stitchingContext->UpdateAttachments(merged);
 		_fbDescs.emplace_back(std::move(merged));
 
 		// Generate commands for walking through the render pass
@@ -142,8 +143,6 @@ namespace RenderCore { namespace LightingEngine
 		Step endStep;
 		endStep._type = Step::Type::EndRenderPassInstance;
 		_steps.push_back(endStep);
-
-		_stitchingContext->UpdateAttachments(merged);
 
 		_pendingCreateFragmentSteps.clear();
 	}
