@@ -13,6 +13,7 @@
 #include "../IAnnotator.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Utility/BitUtils.h"
+#include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -123,9 +124,9 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox selectors;
 		auto resolveOp = Techniques::CreateComputeOperator(
 			pipelinePool,
-			"xleres/TechniqueLibrary/LightingEngine/hierarchical-depths.compute.hlsl:GenerateDownsampleDepths",
+			HIERARCHICAL_DEPTHS_HLSL ":GenerateDownsampleDepths",
 			selectors, 
-			"rawos/shaderlab/ssr.pipeline:DownsampleDepths",
+			SSR_PIPELINE ":DownsampleDepths",
 			usi);
 
 		::Assets::WhenAll(resolveOp).ThenConstructToFuture(
