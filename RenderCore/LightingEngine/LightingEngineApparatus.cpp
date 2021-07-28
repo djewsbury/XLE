@@ -21,7 +21,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 		_forwardIllumDelegate_DisableDepthWrite = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
-		_depthOnlyDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile);
+		_depthOnlyDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_techniqueSetFile, Techniques::PreDepthType::DepthOnly);
+		_depthMotionDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(_techniqueSetFile, Techniques::PreDepthType::DepthMotion);
 		_deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(_techniqueSetFile);
 	}
 
@@ -36,7 +37,6 @@ namespace RenderCore { namespace LightingEngine
 		_device = drawingApparatus->_device;
 		_pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
 		_sharedDelegates = std::make_shared<SharedTechniqueDelegateBox>(*drawingApparatus);
-		_commonResources = drawingApparatus->_commonResources;
 
 		auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();

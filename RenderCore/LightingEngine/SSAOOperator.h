@@ -29,7 +29,7 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView& hierarchicalDepths);
 
 		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const RenderCore::FrameBufferProperties& fbProps);
-		void PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;

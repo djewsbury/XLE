@@ -9,12 +9,24 @@
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
 #include "StandardLightScene.h"
+#include "HierarchicalDepths.h"
+#include "ScreenSpaceReflections.h"
+#include "LightTiler.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/CommonResources.h"
 #include "../Techniques/TechniqueDelegates.h"
+#include "../Techniques/PipelineOperators.h"
+#include "../IThreadContext.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Assets.h"
+#include "../../xleres/FileList.h"
+
+#include "../Metal/DeviceContext.h"
+#include "../Metal/InputLayout.h"
+#include "../Metal/Shader.h"
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -22,12 +34,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
-		std::shared_ptr<ICompiledShadowPreparer> _shadowPreparer;
+		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<StandardLightScene> _lightScene;
 
-		class UniformsDelegate : public Techniques::IShaderResourceDelegate
+		/*class UniformsDelegate : public Techniques::IShaderResourceDelegate
 		{
 		public:
 			virtual const UniformsStreamInterface& GetInterface() override { return _interface; }
@@ -51,7 +63,10 @@ namespace RenderCore { namespace LightingEngine
 			UniformsStreamInterface _interface;
 			ForwardLightingCaptures* _captures;
 		};
-		std::shared_ptr<UniformsDelegate> _uniformsDelegate;
+		std::shared_ptr<UniformsDelegate> _uniformsDelegate;*/
+
+		void DoShadowPrepare(LightingTechniqueIterator& iterator);
+		void DoToneMap(LightingTechniqueIterator& iterator);
 	};
 
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
@@ -86,120 +101,243 @@ namespace RenderCore { namespace LightingEngine
 		return res;
 	}
 
-	static RenderStepFragmentInterface CreateForwardSceneFragment(
-		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		std::shared_ptr<Techniques::ITechniqueDelegate> depthOnlyDelegate,
-		bool precisionTargets, bool writeDirectToLDR)
+	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator)
 	{
-		AttachmentDesc lightResolveAttachmentDesc =
-			{	(!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT,
-				AttachmentDesc::Flags::Multisampled,
-				LoadStore::Clear };
+		if (_shadowPreparationOperators->_operators.empty()) return;
 
-		AttachmentDesc msDepthDesc =
-            {   Format::D24_UNORM_S8_UINT,
-                AttachmentDesc::Flags::Multisampled,
-				LoadStore::Clear, LoadStore::Retain,
-				0, BindFlag::ShaderResource };
+		_preparedShadows.reserve(_lightScene->_shadowProjections.size());
+		ILightScene::LightSourceId prevLightId = ~0u; 
+		for (unsigned c=0; c<_lightScene->_shadowProjections.size(); ++c) {
+			auto shadowOperatorId = _lightScene->_shadowProjections[c]._operatorId;
+			auto& shadowPreparer = *_shadowPreparationOperators->_operators[shadowOperatorId]._preparer;
+			_preparedShadows.push_back(std::make_pair(
+				_lightScene->_shadowProjections[c]._lightId,
+				SetupShadowPrepare(iterator, *_lightScene->_shadowProjections[c]._desc, shadowPreparer, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
 
-		RenderStepFragmentInterface result(PipelineType::Graphics);
-        AttachmentName output;
-		if (!writeDirectToLDR)
-			output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, lightResolveAttachmentDesc);
-		else
-			output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::Clear);
-		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, msDepthDesc);
+			// shadow entries must be sorted by light id
+			assert(prevLightId == ~0u || prevLightId < _lightScene->_shadowProjections[c]._lightId);
+			prevLightId = _lightScene->_shadowProjections[c]._lightId;
+		}
+	}
 
-		Techniques::FrameBufferDescFragment::SubpassDesc depthOnlySubpass;
-		depthOnlySubpass.SetDepthStencil(depth);
-		depthOnlySubpass.SetName("DepthOnly");
-		result.AddSubpass(std::move(depthOnlySubpass), depthOnlyDelegate, Techniques::BatchFilter::General);
+	void ForwardLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
+	{
+		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
+		auto& pipelineLayout = ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
+			iterator._threadContext->GetDevice(), 
+			LIGHTING_OPERATOR_PIPELINE ":LightingOperator");
+		auto& copyShader = *::Assets::Actualize<Metal::ShaderProgram>(
+			pipelineLayout->GetPipelineLayout(),
+			BASIC2D_VERTEX_HLSL ":fullscreen",
+			BASIC_PIXEL_HLSL ":copy_inputattachment");
+		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout->GetPipelineLayout());
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+		Metal::BoundUniforms uniforms(copyShader, usi);
+		encoder.Bind(copyShader);
+		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
+		UniformsStream us;
+		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
+		us._resourceViews = MakeIteratorRange(srvs);
+		uniforms.ApplyLooseUniforms(metalContext, encoder, us);
+		encoder.Bind({}, Topology::TriangleStrip);
+		encoder.Draw(4);
+	}
+
+	static RenderStepFragmentInterface CreateToneMapFragment(
+		std::function<void(LightingTechniqueIterator&)>&& fn)
+	{
+		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
+		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain, LoadStore::DontCare);
+		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::DontCare, LoadStore::Retain);
+
+		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
+		subpass.AppendOutput(ldrOutput);
+		subpass.AppendInput(hdrInput);
+		subpass.SetName("tonemap");
+		fragment.AddSubpass(std::move(subpass), std::move(fn));
+		return fragment;
+	}
+
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
+	{
+		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		Techniques::PreregisteredAttachment attachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::MultisampleDepth,
+				CreateDesc(
+					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::UnorderedAccess | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::D24_UNORM_S8_UINT),
+					"main-depth")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorHDR,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::InputAttachment | BindFlag::UnorderedAccess, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
+					"color-hdr")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::GBufferNormal,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::UnorderedAccess, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
+					"gbuffer-normal")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::GBufferMotion,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::UnorderedAccess, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT),
+					"gbuffer-motion")
+			}
+		};
+		for (const auto& a:attachments)
+			stitchingContext.DefineAttachment(a);
+	}
+
+	static RenderStepFragmentInterface CreatePreDepthFragment(
+		std::shared_ptr<Techniques::ITechniqueDelegate> depthOnlyDelegate)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear);
+		auto motion = result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear);
+
+		Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
+		preDepthSubpass.AppendOutput(motion);
+		preDepthSubpass.SetDepthStencil(depth);
+		preDepthSubpass.SetName("PreDepth");
+		result.AddSubpass(std::move(preDepthSubpass), depthOnlyDelegate, Techniques::BatchFilter::General);
+		return result;
+	}
+
+	static RenderStepFragmentInterface CreateForwardSceneFragment(
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+        auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Clear);
+		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth);
 
 		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
-		mainSubpass.AppendOutput(output);
+		mainSubpass.AppendOutput(lightResolve);
 		mainSubpass.SetDepthStencil(depth);
 		mainSubpass.SetName("MainForward");
 
-		// todo -- parameters should be configured based on how the scene is set up
 		ParameterBox box;
-		// box.SetParameter((const utf8*)"SKY_PROJECTION", lightBindRes._skyTextureProjection);
-		box.SetParameter((const utf8*)"HAS_DIFFUSE_IBL", 1);
-		box.SetParameter((const utf8*)"HAS_SPECULAR_IBL", 1);
-		
 		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box));
 		return result;
 	}
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
-		return CreateForwardLightingTechnique(apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_sharedDelegates, apparatus->_commonResources, preregisteredAttachments, fbProps);
+		return CreateForwardLightingTechnique(apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, resolveOperators, shadowGenerators, preregisteredAttachments, fbProps);
 	}
+
+	class ForwardPlusLightFactory : public ILightSourceFactory
+	{
+	public:
+		virtual std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId)
+		{
+			return std::make_unique<StandardLightDesc>(0);
+		}
+	};
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps)
 	{
-		auto lightScene = std::make_shared<StandardLightScene>();
-		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
-		auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
-		auto captures = std::make_shared<ForwardLightingCaptures>();
-		captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
-		captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-		captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
+		auto shadowPreparationOperatorsFuture = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, nullptr);
 
-		ShadowOperatorDesc defaultShadowGenerator;
-		auto shadowPreparerFuture = CreateCompiledShadowPreparer(defaultShadowGenerator, 0, pipelineAccelerators, techDelBox, commonResources, nullptr);
+		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
+		auto lightTilerFuture = ::Assets::MakeFuture<std::shared_ptr<RasterizationLightTileOperator>>(pipelinePool);
+		auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool);
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		::Assets::WhenAll(shadowPreparerFuture).ThenConstructToFuture(
+		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
+		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
 			*result,
-			[device, captures, lightingTechnique, techDelBox](std::shared_ptr<ICompiledShadowPreparer> shadowPreparer) {
+			[device, techDelBox, preregisteredAttachments=std::move(preregisteredAttachments), fbProps, pipelineAccelerators]
+			(auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
+
+				auto lightScene = std::make_shared<StandardLightScene>();
+				lightScene->_shadowProjectionFactory = shadowPreparationOperators;
+				lightScene->_lightSourceFactory = std::make_shared<ForwardPlusLightFactory>();
+
+				auto captures = std::make_shared<ForwardLightingCaptures>();
+				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
+				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
+				captures->_lightScene = lightScene;
+				captures->_shadowPreparationOperators = shadowPreparationOperators;
+				// captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
+
+				Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
+				PreregisterAttachments(stitchingContext);
+				hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
+				lightTiler->PreregisterAttachments(stitchingContext);
+				ssr->PreregisterAttachments(stitchingContext);
+
+				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
 
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
-						iterator._parsingContext->AddShaderResourceDelegate(captures->_uniformsDelegate);
+						// iterator._parsingContext->AddShaderResourceDelegate(captures->_uniformsDelegate);
 					});
 
 				// Prepare shadows
-				captures->_shadowPreparer = std::move(shadowPreparer);
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
-
-						auto& lightScene = *captures->_lightScene;
-						captures->_preparedShadows.reserve(lightScene._shadowProjections.size());
-						ILightScene::LightSourceId prevLightId = ~0u; 
-						for (unsigned c=0; c<lightScene._shadowProjections.size(); ++c) {
-							captures->_preparedShadows.push_back(std::make_pair(
-								lightScene._shadowProjections[c]._lightId,
-								SetupShadowPrepare(iterator, *lightScene._shadowProjections[c]._desc, *captures->_shadowPreparer, *captures->_shadowGenFrameBufferPool, *captures->_shadowGenAttachmentPool)));
-
-							// shadow entries must be sorted by light id
-							assert(prevLightId == ~0u || prevLightId < lightScene._shadowProjections[c]._lightId);
-							prevLightId = lightScene._shadowProjections[c]._lightId;
-						}
+						captures->DoShadowPrepare(iterator);
 					});
+
+				// Pre depth
+				lightingTechnique->CreateStep_RunFragments(CreatePreDepthFragment(techDelBox->_depthMotionDelegate));
+
+				// Build hierarchical depths
+				lightingTechnique->CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(fbProps));
+
+				// Light tiling & configure lighting descriptors
+				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateInitFragment(fbProps));
+				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateFragment(fbProps));
+				lightingTechnique->ResolvePendingCreateFragmentSteps();	// don't merge the light tiling steps with the actual draws below
 
 				// Draw main scene
-				const bool writeDirectToLDR = true;
-				lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(
-					techDelBox->_forwardIllumDelegate_DisableDepthWrite,
-					techDelBox->_depthOnlyDelegate, 
-					false, writeDirectToLDR));
+				lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(techDelBox->_forwardIllumDelegate_DisableDepthWrite));
 
-				lightingTechnique->CreateStep_CallFunction(
+				// Calculate SSRs
+				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(fbProps));
+
+				// Post processing
+				auto toneMapFragment = CreateToneMapFragment(
+					[captures](LightingTechniqueIterator& iterator) {
+						captures->DoToneMap(iterator);
+					});
+				lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
+
+				/*lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_uniformsDelegate);
-					});
+					});*/
 
 				lightingTechnique->CompleteConstruction();
+
+				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
+				lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(lightTiler->GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(ssr->GetDependencyValidation());
 					
 				return lightingTechnique;
 			});

@@ -317,7 +317,7 @@ namespace UnitTests
 		us._samplers = MakeIteratorRange(samplers);
 
 		auto pipelineLayouts = ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
-			testApparatus._metalTestHelper->_device, commonResourceBox,
+			testApparatus._metalTestHelper->_device,
 			"ut-data/minimal_compute.pipeline:ComputeMain");
 		
 		auto op = Techniques::CreateComputeOperator(

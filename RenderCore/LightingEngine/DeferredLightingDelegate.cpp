@@ -294,7 +294,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 		const std::shared_ptr<Techniques::PipelinePool>& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
@@ -309,7 +308,7 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Could not find DMShadow descriptor set layout in the pipeline layout file"));
 
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
-		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, commonResources, shadowDescSet->second);
+		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet->second);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
@@ -425,7 +424,6 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_device,
 			apparatus->_pipelineAccelerators,
 			apparatus->_sharedDelegates,
-			apparatus->_commonResources,
 			apparatus->_lightingOperatorCollection,
 			apparatus->_lightingOperatorLayout,
 			apparatus->_lightingOperatorsPipelineLayoutFile,

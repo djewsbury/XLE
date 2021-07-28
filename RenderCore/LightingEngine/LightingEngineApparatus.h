@@ -17,7 +17,6 @@ namespace RenderCore { namespace Techniques
 	class DrawingApparatus;
 	class IPipelineAcceleratorPool;
 	class PipelinePool;
-	class CommonResourceBox;
 }}
 namespace RenderCore { class IDevice; }
 namespace Assets { class InitializerPack; }
@@ -30,6 +29,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::PtrToFuturePtr<Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
 
 		template<typename... Args>
@@ -45,7 +45,6 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<SharedTechniqueDelegateBox> _sharedDelegates;
-		std::shared_ptr<Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;

@@ -161,9 +161,9 @@ namespace RenderCore { namespace LightingEngine
 		srvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(1).get();			// g_spatially_denoised_reflections_read
 		srvs[17] = _indirectArgsBufferUAV.get();									// g_intersect_args
 
-		srvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(3).get();
-		srvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(2).get();
-		srvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(4).get();
+		srvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(2).get();			// HierarchicalDepths
+		srvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(3).get();			// GBufferMotion
+		srvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(4).get();			// GBufferNormal
 
 		srvs[21] = _blueNoiseRes->_sobolBufferView.get();
 		srvs[22] = _blueNoiseRes->_rankingTileBufferView.get();
@@ -275,12 +275,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto outputReflections = result.DefineAttachment(Hash64("SSRReflections"));
+		auto outputReflections = result.DefineAttachment(Hash64("SSRReflections"), LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::ShaderResource);
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("HierarchicalDepths")), BindFlag::ShaderResource);
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -291,7 +291,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void ScreenSpaceReflectionsOperator::PregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
+	void ScreenSpaceReflectionsOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
 		Techniques::PreregisteredAttachment attachments[] {
@@ -336,7 +336,7 @@ namespace RenderCore { namespace LightingEngine
 	, _reflectionsBlur(std::move(reflectionsBlur))
 	, _device(std::move(device))
 	{
-		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*device);
+		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*_device);
 
 		_depVal = ::Assets::GetDepValSys().Make();
 		_depVal.RegisterDependency(_classifyTiles->GetDependencyValidation());
@@ -399,9 +399,9 @@ namespace RenderCore { namespace LightingEngine
 
 		usi.BindResourceView(17, Hash64("g_intersect_args"));			
 
-		usi.BindResourceView(18, Hash64("GBufferNormal"));
+		usi.BindResourceView(18, Hash64("GBufferMotion"));
 		usi.BindResourceView(19, Hash64("DownsampleDepths"));
-		usi.BindResourceView(20, Hash64("GBufferMotion"));
+		usi.BindResourceView(20, Hash64("GBufferNormal"));
 
 		usi.BindResourceView(21, Hash64("BN_Sobol"));
 		usi.BindResourceView(22, Hash64("BN_Ranking"));

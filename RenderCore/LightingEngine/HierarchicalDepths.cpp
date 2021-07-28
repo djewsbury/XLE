@@ -53,7 +53,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::UnorderedAccess, TextureViewDesc { TextureViewDesc::Aspect::Depth });
-		auto hierarchicalDepthsAttachment = result.DefineAttachment(Hash64("HierarchicalDepths"), LoadStore::DontCare);
+		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths, LoadStore::DontCare);
 		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._outputWidth, fbProps._outputHeight))+1;
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;
@@ -73,13 +73,13 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void HierarchicalDepthsOperator::PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
+	void HierarchicalDepthsOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
 		unsigned depthsMipCount = IntegerLog2(std::max(fbSize[0], fbSize[1]))+1;
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
-				Hash64("HierarchicalDepths"),
+				Techniques::AttachmentSemantics::HierarchicalDepths,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32_FLOAT, depthsMipCount),

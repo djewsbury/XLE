@@ -34,6 +34,7 @@ namespace RenderCore { namespace LightingEngine
 		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter);
 		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig);
 
+		void ResolvePendingCreateFragmentSteps();
 		void CompleteConstruction();
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
@@ -86,8 +87,6 @@ namespace RenderCore { namespace LightingEngine
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
-
-		void ResolvePendingCreateFragmentSteps();
 	};
 
     class LightingTechniqueIterator

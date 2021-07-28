@@ -7,7 +7,8 @@
 #include <memory>
 #include "../../Assets/AssetsCore.h"
 
-namespace RenderCore {
+namespace RenderCore
+{
 	class FrameBufferProperties;
 	class IDevice;
 	class IResource;
@@ -15,7 +16,8 @@ namespace RenderCore {
 	class IThreadContext; 
 }
 
-namespace RenderCore { namespace Techniques { 
+namespace RenderCore { namespace Techniques
+{
 	class FragmentStitchingContext;
 	class IComputeShaderOperator;
 	class PipelinePool;
@@ -35,7 +37,7 @@ namespace RenderCore { namespace LightingEngine
 		void Execute(LightingEngine::LightingTechniqueIterator& iterator);
 
 		LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }

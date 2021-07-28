@@ -81,7 +81,7 @@ namespace RenderCore { namespace Techniques
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
 		
-		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device, *_commonResources);
+		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
 		_graphicsPipelinePool = std::make_shared<PipelinePool>(_device, _commonResources);
 

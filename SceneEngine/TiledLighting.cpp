@@ -170,7 +170,7 @@ namespace SceneEngine
         debuggingShader.Draw(threadContext, parsingContext, sequencerUniformsHelper, us);
     }
 
-    float PowerForHalfRadius(float halfRadius, float powerFraction)
+    static float PowerForHalfRadius(float halfRadius, float powerFraction)
     {
         const float attenuationScalar = 1.f;
         return (attenuationScalar*(halfRadius*halfRadius)+1.f) * (1.0f / (1.f-powerFraction));
@@ -188,7 +188,7 @@ namespace SceneEngine
         const bool tiledBeams                       = Tweakable("TiledBeams", false);
 
         const unsigned maxLightCount                = 1024;
-        const unsigned tileLightCount               = 16; // std::min(Tweakable("TileLightCount", 512), int(maxLightCount));
+        const unsigned tileLightCount               = std::min(Tweakable("TileLightCount", 512), int(maxLightCount));
         const bool pause                            = Tweakable("Pause", false);
 
         if (doTiledRenderingTest && !tiledBeams) {
@@ -226,7 +226,7 @@ namespace SceneEngine
                 static float startingAngle = 0.f;
                 std::shared_ptr<IResourceView> lightBufferResourceView;
                 {
-                    static Float3 baseLightPosition = Float3(1600.f, 2400.f, 150.f);
+                    static Float3 baseLightPosition = Float3(0.f, 0.f, 0.f);
 
                     auto mappedStorage = metalContext.MapTemporaryStorage((tileLightCount+1) * sizeof(LightStruct), BindFlag::UnorderedAccess);
                     auto lightBufferResource = mappedStorage.GetResource();
@@ -237,9 +237,9 @@ namespace SceneEngine
                         const float X = startingAngle + c / float(tileLightCount) * gPI * 2.f;
                         const float Y = 3.7397f * startingAngle + .7234f * c / float(tileLightCount) * gPI * 2.f;
                         const float Z = 13.8267f * startingAngle + 0.27234f * c / float(tileLightCount) * gPI * 2.f;
-                        const float radius = 60.f + 20.f * XlSin(Z);
+                        const float radius = 20.f + 10.f * XlSin(Z);
                         *dstLight++ = LightStruct(
-                            baseLightPosition + Float3(200.f * XlCos(X), 2.f * c, 80.f * XlSin(Y) * XlCos(Y)), 
+                            baseLightPosition + Float3(50.f * XlCos(X), 2.f * c, 50.f * XlSin(Y) * XlCos(Y)), 
                             radius, .25f * Float3(.65f + .35f * XlSin(Y), .65f + .35f * XlCos(Y), .65f + .35f * XlCos(X)),
                             PowerForHalfRadius(radius, 0.05f));
                     }

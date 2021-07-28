@@ -12,7 +12,6 @@
 namespace RenderCore { class ISampler; }
 namespace RenderCore { namespace Techniques
 {
-	class CommonResourceBox;
 	class SystemUniformsDelegate : public IShaderResourceDelegate
 	{
 	public:
@@ -22,7 +21,7 @@ namespace RenderCore { namespace Techniques
 		void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override;
 		void WriteSamplers(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst) override;
 		size_t GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx) override;
-		SystemUniformsDelegate(IDevice& device, CommonResourceBox& commonResources);
+		SystemUniformsDelegate(IDevice& device);
 		~SystemUniformsDelegate();
 	private:
 		UniformsStreamInterface _interface;

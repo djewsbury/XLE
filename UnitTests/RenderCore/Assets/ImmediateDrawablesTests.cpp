@@ -102,7 +102,7 @@ namespace UnitTests
 		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
 		Techniques::CommonResourceBox commonResources { *testHelper->_device };
-		techniqueContext->_systemUniformsDelegate = std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device, commonResources);
+		techniqueContext->_systemUniformsDelegate = std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device);
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(

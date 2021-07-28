@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 			}
 	}
 
-	SystemUniformsDelegate::SystemUniformsDelegate(IDevice& device, CommonResourceBox& commonResources)
+	SystemUniformsDelegate::SystemUniformsDelegate(IDevice& device)
 	{
 		_interface.BindImmediateData(0, Hash64("GlobalTransform"));
 		_interface.BindImmediateData(1, Hash64("LocalTransform"));

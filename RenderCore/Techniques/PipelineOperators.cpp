@@ -9,6 +9,7 @@
 #include "Drawables.h"
 #include "DrawablesInternal.h"
 #include "PipelineAcceleratorInternal.h"
+#include "Services.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
@@ -30,15 +31,15 @@ namespace RenderCore { namespace Techniques
 	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
 		std::shared_ptr<RenderCore::IDevice> device,
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> commonResources,
 		std::string section,
 		RenderCore::ShaderLanguage shaderLanguage)
 	: _containingFile(std::move(predefinedLayouts))
 	{
+		auto& commonResources = *Services::GetCommonResources();
 		if (!section.empty()) {
 			for (const auto& l:_containingFile->_pipelineLayouts)
 				if (l.first == section) {
-					auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
+					auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
 					_pipelineLayout = device->CreatePipelineLayout(initializer);
 					break;
 				}
@@ -53,7 +54,7 @@ namespace RenderCore { namespace Techniques
 					::Assets::Exceptions::ConstructionError::Reason::MissingFile,
 					_containingFile->GetDependencyValidation(),
 					"No pipeline layouts in pipeline layout file"));
-			auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources->_samplerPool);
+			auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
 			_pipelineLayout = device->CreatePipelineLayout(initializer);
 		}
 	}
@@ -61,7 +62,6 @@ namespace RenderCore { namespace Techniques
 	void CompiledPipelineLayoutAsset::ConstructToFuture(
 		::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
 		const std::shared_ptr<RenderCore::IDevice>& device,
-		const std::shared_ptr<RenderCore::Techniques::CommonResourceBox>& commonResources,
 		StringSection<> srcFile,
 		RenderCore::ShaderLanguage shaderLanguage)
 	{
@@ -70,8 +70,8 @@ namespace RenderCore { namespace Techniques
 		auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(splitter.AllExceptParameters());
 		::Assets::WhenAll(src).ThenConstructToFuture(
 			future,
-			[device, shaderLanguage, section=splitter.Parameters().AsString(), commonResources=commonResources](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
-				return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), commonResources, section, shaderLanguage);
+			[device, shaderLanguage, section=splitter.Parameters().AsString()](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
+				return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), section, shaderLanguage);
 			});
 	}
 
@@ -177,7 +177,7 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget,
 		const UniformsStreamInterface& usi)
 	{
-		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pool->GetCommonResources(), pipelineLayoutAssetName);
+		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
 			return CreateFullViewportOperator(pool, pixelShader, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetDependencyValidation(), fbTarget, usi);
@@ -349,7 +349,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pipelineLayoutAssetName,
 		const UniformsStreamInterface& usi)
 	{
-		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pool->GetCommonResources(), pipelineLayoutAssetName);
+		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
 			return CreateComputeOperator(pool, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetDependencyValidation(), computeShader, selectors, usi);

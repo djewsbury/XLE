@@ -4,10 +4,11 @@
 
 #pragma once
 
-#include <memory>
 #include "../../Assets/AssetsCore.h"
+#include <memory>
 
-namespace RenderCore {
+namespace RenderCore
+{
 	class FrameBufferProperties;
 	class IDevice;
 	class IResourceView;
@@ -27,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		void Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator);
 		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 
-		void PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 

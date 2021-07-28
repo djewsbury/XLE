@@ -58,6 +58,9 @@ namespace RenderCore { namespace Techniques
 
 		constexpr uint64_t ShadowDepthMap	= ConstHash64<'shad', 'owdm'>::Value;
 
+        constexpr uint64_t HierarchicalDepths	= ConstHash64<'Hier', 'arch', 'ical', 'Dept'>::Value;
+        constexpr uint64_t TiledLightBitField	= ConstHash64<'Tile', 'dLig', 'htBi', 'tFie'>::Value;
+
         const char* TryDehash(uint64_t);
 	}
 

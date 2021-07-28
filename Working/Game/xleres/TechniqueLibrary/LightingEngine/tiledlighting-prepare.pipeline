@@ -1,0 +1,15 @@
+#include "xleres/TechniqueLibrary/Config/sequencer.pipeline"
+
+DescriptorSet PrepareTilesDS
+{
+	UnorderedAccessTexture TiledLightBitField;		// 0
+	UnorderedAccessBuffer CombinedLightBuffer;		// 1
+	SampledTexture DownsampleDepths;				// 2
+	UnorderedAccessBuffer LightDepthTable;			// 3
+};
+
+PipelineLayout GraphicsMain
+{
+	DescriptorSet Sequencer;
+	DescriptorSet PrepareTilesDS;
+};

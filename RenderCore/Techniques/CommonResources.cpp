@@ -84,6 +84,8 @@ namespace RenderCore { namespace Techniques
             case ColorHDR: return "ColorHDR";
             case Depth: return "Depth";
             case ShadowDepthMap: return "ShadowDepthMap";
+            case HierarchicalDepths: return "HierarchicalDepths";
+            case TiledLightBitField: return "TiledLightBitField";
             default: return nullptr;
             }
         }

@@ -86,7 +86,7 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(accumulation0, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation1, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("HierarchicalDepths")), BindFlag::ShaderResource);
+        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
         spDesc.SetName("ao-operator");
 
         result.AddSubpass(
@@ -106,7 +106,7 @@ namespace RenderCore { namespace LightingEngine
         return result;
     }
 
-    void SSAOOperator::PregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext)
+    void SSAOOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext)
     {
         UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
         Techniques::PreregisteredAttachment preGeneratedAttachments[] {

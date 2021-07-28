@@ -88,14 +88,12 @@ namespace RenderCore { namespace Techniques
 		CompiledPipelineLayoutAsset(
 			std::shared_ptr<IDevice> device,
 			std::shared_ptr<Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-			std::shared_ptr<Techniques::CommonResourceBox> commonResources,
 			std::string section,
 			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
 			const std::shared_ptr<IDevice>& device,
-			const std::shared_ptr<Techniques::CommonResourceBox>& commonResources,
 			StringSection<> srcFile,
 			ShaderLanguage shaderLanguage = GetDefaultShaderLanguage());
 

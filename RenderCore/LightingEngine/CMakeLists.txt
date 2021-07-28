@@ -19,6 +19,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		HierarchicalDepths.cpp
 		ScreenSpaceReflections.cpp
 		BlueNoiseGenerator.cpp
+		LightTiler.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

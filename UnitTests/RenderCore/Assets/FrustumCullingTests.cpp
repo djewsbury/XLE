@@ -295,7 +295,7 @@ namespace UnitTests
 				Techniques::ParsingContext parsingContext{*techniqueContext};
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};
-				parsingContext.AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device, commonResBox));
+				parsingContext.AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 				
 				Techniques::Draw(
 					*threadContext,
