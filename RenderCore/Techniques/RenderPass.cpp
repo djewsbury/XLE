@@ -192,7 +192,7 @@ namespace RenderCore { namespace Techniques
             // Validate that the "desc" for the returned resource matches what the caller was requesting
             auto resultDesc = result->GetDesc();
             assert(requestDesc._format == Format(0) || AsTypelessFormat(requestDesc._format) == AsTypelessFormat(resultDesc._textureDesc._format));
-            assert((requestDesc._finalLayout & resultDesc._bindFlags) == requestDesc._finalLayout);
+            assert((requestDesc._finalLayout & resultDesc._bindFlags) == requestDesc._finalLayout);     // if you hit this it means that the final layout type was not one of the bind flags that the resource was initially created with
             assert((requestDesc._initialLayout & resultDesc._bindFlags) == requestDesc._initialLayout);
         #endif
 
@@ -829,38 +829,53 @@ namespace RenderCore { namespace Techniques
     {
         assert(semantic != 0);      // using zero as a semantic is not supported; this is used as a sentinel for "no semantic"
         
-        auto existingBinding = std::find_if(
+        auto binding = std::find_if(
             _pimpl->_semanticAttachments.begin(),
             _pimpl->_semanticAttachments.end(),
             [semantic](const Pimpl::SemanticAttachment& a) {
                 return a._semantic == semantic;
             });
-        if (existingBinding != _pimpl->_semanticAttachments.end()) {
-            if (existingBinding->_resource == resource)
+        if (binding != _pimpl->_semanticAttachments.end()) {
+            if (binding->_resource == resource)
                 return;
 
-		    if (existingBinding->_resource)
-                _pimpl->_srvPool.Erase(*existingBinding->_resource);
+            assert(!binding->_lockCount);
+
+		    if (binding->_resource)
+                _pimpl->_srvPool.Erase(*binding->_resource);
         } else {
             Pimpl::SemanticAttachment newAttach;
             newAttach._semantic = semantic;
-            existingBinding = _pimpl->_semanticAttachments.insert(
+
+            // Find an unused slot if we can
+            binding = std::find_if(
+                _pimpl->_semanticAttachments.begin(),
                 _pimpl->_semanticAttachments.end(),
-                newAttach);
+                [semantic](const Pimpl::SemanticAttachment& a) {
+                    return a._semantic == 0 && a._lockCount == 0;
+                });
+            if (binding != _pimpl->_semanticAttachments.end()) {
+                *binding = newAttach;
+            } else {
+                binding = _pimpl->_semanticAttachments.insert(_pimpl->_semanticAttachments.end(), newAttach);
+            }
         }
 
-        existingBinding->_desc = resource->GetDesc();
-		assert(existingBinding->_desc._textureDesc._format != Format::Unknown);
-        existingBinding->_resource = resource;
-        existingBinding->_pendingCompleteInitialization = false;
+        binding->_desc = resource->GetDesc();
+		assert(binding->_desc._textureDesc._format != Format::Unknown);
+        binding->_resource = resource;
+        binding->_pendingCompleteInitialization = false;
     }
 
     void AttachmentPool::Unbind(const IResource& resource)
     {
         for (auto& binding:_pimpl->_semanticAttachments) {
             if (binding._resource.get() == &resource) {
-                _pimpl->_srvPool.Erase(*binding._resource);
-                binding._resource = nullptr;
+                if (binding._lockCount == 0) {
+                    _pimpl->_srvPool.Erase(*binding._resource);
+                    binding._resource = nullptr;
+                }
+                binding._semantic = 0;
             }
         }
     }
@@ -873,8 +888,13 @@ namespace RenderCore { namespace Techniques
             [semantic](const Pimpl::SemanticAttachment& a) {
                 return a._semantic == semantic;
             });
-        if (existingBinding != _pimpl->_semanticAttachments.end())
-            _pimpl->_semanticAttachments.erase(existingBinding);
+        if (existingBinding != _pimpl->_semanticAttachments.end()) {
+            if (existingBinding->_lockCount == 0) {
+                _pimpl->_srvPool.Erase(*existingBinding->_resource);
+                existingBinding->_resource = nullptr;
+            }
+            existingBinding->_semantic = 0;
+        }
     }
 
     void AttachmentPool::UnbindAll()
@@ -922,8 +942,13 @@ namespace RenderCore { namespace Techniques
             if (a & (1u<<31u)) {
                 auto semanticAttachIdx = a & ~(1u<<31u);
                 assert(semanticAttachIdx<_pimpl->_semanticAttachments.size());
-                assert(_pimpl->_semanticAttachments[semanticAttachIdx]._lockCount >= 1);
-                --_pimpl->_semanticAttachments[semanticAttachIdx]._lockCount;
+                auto& binding = _pimpl->_semanticAttachments[semanticAttachIdx];
+                assert(binding._lockCount >= 1);
+                --binding._lockCount;
+                if (!binding._lockCount && !binding._semantic) {
+                    _pimpl->_srvPool.Erase(*binding._resource);
+                    binding._resource = nullptr;
+                }
             } else {
                 assert(a<_pimpl->_attachments.size());
                 assert(_pimpl->_attachments[a]._lockCount >= 1);
@@ -1155,6 +1180,7 @@ namespace RenderCore { namespace Techniques
         // Usually this function is called as a final step when converting a number of fragments
         // into a final FrameBufferDesc, so it makes sense to move the subpasses from the input
         std::vector<SubpassDesc> subpasses;
+        subpasses.reserve(fragment._subpasses.size());
         for (const auto& sp:fragment._subpasses) subpasses.push_back(sp);
         return FrameBufferDesc { std::move(fbAttachments), std::move(subpasses), props };
     }
@@ -1237,7 +1263,9 @@ namespace RenderCore { namespace Techniques
     public:
         AttachmentName _name = ~0u;
 
-        TextureDesc _textureDesc;
+        Format _format = Format::Unknown;
+        TextureSamples _samples = TextureSamples::Create();
+
         uint64_t _shouldReceiveDataForSemantic = 0;         // when looking for an attachment to write the data for this semantic, prefer this attachment
         uint64_t _containsDataForSemantic = 0;              // the data for this semantic is already written to this attachment
 
@@ -1258,7 +1286,8 @@ namespace RenderCore { namespace Techniques
 
     WorkingAttachment::WorkingAttachment(const PreregisteredAttachment& attachment)
     {
-        _textureDesc = attachment._desc._textureDesc;
+        _format = attachment._desc._textureDesc._format;
+        _samples = attachment._desc._textureDesc._samples;
         _state = attachment._state;
         if (_state == PreregisteredAttachment::State::Initialized
             || _state == PreregisteredAttachment::State::Initialized_StencilUninitialized
@@ -1268,22 +1297,17 @@ namespace RenderCore { namespace Techniques
         _firstAccessInitialLayout = attachment._layoutFlags;
     }
 
-    static TextureDesc MakeTextureDesc(
-        const FrameBufferDescFragment::Attachment& attachment,
-        const FrameBufferProperties& props)
+    static TextureSamples GetSamples(const FrameBufferDescFragment::Attachment& attachment, const FrameBufferProperties& props)
     {
-        auto samples = (attachment._desc._flags & AttachmentDesc::Flags::Multisampled) ? props._samples : TextureSamples::Create();
-        return TextureDesc::Plain2D(
-            (unsigned)props._outputWidth, (unsigned)props._outputHeight,
-            attachment._desc._format, 1, 0u,
-            samples);
+        return (attachment._desc._flags & AttachmentDesc::Flags::Multisampled) ? props._samples : TextureSamples::Create();
     }
 
     WorkingAttachment::WorkingAttachment(
         const FrameBufferDescFragment::Attachment& attachment,
         const FrameBufferProperties& props)
     {
-        _textureDesc = MakeTextureDesc(attachment, props);
+        _samples = GetSamples(attachment, props);
+        _format = attachment._desc._format;
     }
 
     static bool FormatCompatible(Format lhs, Format rhs)
@@ -1293,21 +1317,12 @@ namespace RenderCore { namespace Techniques
                 rhsTypeless = AsTypelessFormat(rhs);
         return lhsTypeless == rhsTypeless;
     }
-
-    static bool IsCompatible(const TextureDesc& testAttachment, const TextureDesc& request)
-    {
-        return
-            ( (FormatCompatible(testAttachment._format, request._format)) || (testAttachment._format == Format::Unknown) || (request._format == Format::Unknown) )
-            && GetArrayCount(testAttachment._arrayCount) == GetArrayCount(request._arrayCount)
-			&& testAttachment._width == request._width
-            && testAttachment._height == request._height
-            && testAttachment._samples == request._samples
-            ;
-    }
     
     static bool IsCompatible(const WorkingAttachment& testAttachment, const FrameBufferDescFragment::Attachment& request, const FrameBufferProperties& fbProps)
     {
-        return IsCompatible(testAttachment._textureDesc, MakeTextureDesc(request, fbProps));
+        return 
+            ( (FormatCompatible(testAttachment._format, request._desc._format)) || (testAttachment._format == Format::Unknown) || (request._desc._format == Format::Unknown) )
+            && (testAttachment._samples == GetSamples(request, fbProps));
     }
 
     static AttachmentName NextName(IteratorRange<const WorkingAttachment*> attachments0, IteratorRange<const WorkingAttachment*> attachments1)
@@ -1358,7 +1373,7 @@ namespace RenderCore { namespace Techniques
     {
         str << "WorkingAttachment {"
             << attachment._name << ", "
-            << "{" << attachment._textureDesc << "}, "
+            << "{" << AsString(attachment._format) << ", " << attachment._samples._sampleCount << "}, "
             << std::hex << "Contains: " << AttachmentSemantic{attachment._containsDataForSemantic} << ", "
             << "ShouldReceive: " << AttachmentSemantic{attachment._shouldReceiveDataForSemantic} << ", "
             << "FirstAccess: {" << AttachmentSemantic{attachment._firstAccessSemantic} << ", 0x" << attachment._firstAccessInitialLayout << ", " << AsString(attachment._firstAccessLoad) << "}, "
@@ -1395,7 +1410,10 @@ namespace RenderCore { namespace Techniques
     {
         // Prefer "typeless" formats when creating the actual attachments
         // This ensures that we can have complete freedom when we create views
-        TextureDesc tDesc = MakeTextureDesc(attachmentDesc, props);
+        TextureDesc tDesc = TextureDesc::Plain2D(
+            (unsigned)props._outputWidth, (unsigned)props._outputHeight,
+            attachmentDesc._desc._format, 1, 0u,
+            GetSamples(attachmentDesc, props));
         auto bindFlags = usageBindFlags | attachmentDesc._desc._initialLayout | attachmentDesc._desc._finalLayout; 
 
         PreregisteredAttachment result;
@@ -1405,12 +1423,6 @@ namespace RenderCore { namespace Techniques
         result._state = PreregisteredAttachment::State::Uninitialized;
         result._layoutFlags = attachmentDesc._desc._finalLayout ? attachmentDesc._desc._finalLayout : usageBindFlags;
         return result;
-    }
-
-    static bool IsCompatible(const PreregisteredAttachment& testAttachment, const FrameBufferDescFragment::Attachment& request, const FrameBufferProperties& fbProps)
-    {
-        assert(testAttachment._desc._type == ResourceDesc::Type::Texture);
-        return IsCompatible(testAttachment._desc._textureDesc, MakeTextureDesc(request, fbProps));
     }
 
     auto FragmentStitchingContext::TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment) -> StitchResult
@@ -1592,7 +1604,7 @@ namespace RenderCore { namespace Techniques
 	{
 		FrameBufferDescFragment::SubpassDesc result;
 		#if defined(_DEBUG)
-			result.SetName(result._name);
+			result.SetName(input._name);
 		#endif
 		for (auto remapped:input.GetOutputs()) {
 			result.AppendOutput(remapFunction(remapped._resourceName), remapped._window);
@@ -1660,9 +1672,9 @@ namespace RenderCore { namespace Techniques
             }
             for (const auto& a:workingAttachments) {
                 if (a._shouldReceiveDataForSemantic)
-                    defaultSemanticFormats[a._shouldReceiveDataForSemantic] = a._textureDesc._format;
+                    defaultSemanticFormats[a._shouldReceiveDataForSemantic] = a._format;
                 if (a._containsDataForSemantic)
-                    defaultSemanticFormats[a._containsDataForSemantic] = a._textureDesc._format;
+                    defaultSemanticFormats[a._containsDataForSemantic] = a._format;
             }
 
             #if defined(_DEBUG)
@@ -1860,22 +1872,6 @@ namespace RenderCore { namespace Techniques
                 auto newSubpass = RemapSubpassDesc(
 					f->_subpasses[p],
 					std::bind(&Remap, std::ref(attachmentRemapping), std::placeholders::_1));
-
-				// DavidJ -- in some interesting cases, a single attachment can be used mutliple times in the same subpass
-				//		but I think this should only happen if different "aspects" of the resource are used each time
-				//		for exampling, binding the stencil aspect of a DepthStencil buffer in the DepthStencil binding,
-				//		and then binding the depth aspect as in input binding
-                #if 0 // defined(_DEBUG)
-                    std::vector<AttachmentName> uniqueAttachments;
-                    for (auto&a:newSubpass._output) uniqueAttachments.push_back(a._resourceName);
-                    uniqueAttachments.push_back(newSubpass._depthStencil._resourceName);
-                    for (auto&a:newSubpass._input) uniqueAttachments.push_back(a._resourceName);
-                    for (auto&a:newSubpass._preserve) uniqueAttachments.push_back(a._resourceName);
-                    for (auto&a:newSubpass._resolve) uniqueAttachments.push_back(a._resourceName);
-                    std::sort(uniqueAttachments.begin(), uniqueAttachments.end());
-                    assert(std::unique(uniqueAttachments.begin(), uniqueAttachments.end()) == uniqueAttachments.end()); // make sure the same attachment isn't used more than once
-                #endif
-
                 result.AddSubpass(std::move(newSubpass));
             }
 
@@ -1905,8 +1901,8 @@ namespace RenderCore { namespace Techniques
             // list -- so we must ensure that we insert in order, and without gaps
             assert(a._name == result._attachments.size());
             FrameBufferDescFragment::Attachment r { a._firstAccessSemantic, a._containsDataForSemantic };
-            r._desc._format = a._textureDesc._format;
-            r._desc._flags = (a._textureDesc._samples == fbProps._samples) ? AttachmentDesc::Flags::Multisampled : 0;
+            r._desc._format = a._format;
+            r._desc._flags = (a._samples._sampleCount > 1) ? AttachmentDesc::Flags::Multisampled : 0u;
             r._desc._initialLayout = a._firstAccessInitialLayout;
             r._desc._finalLayout = a._lastAccessFinalLayout;
             r._desc._loadFromPreviousPhase = a._firstAccessLoad;
