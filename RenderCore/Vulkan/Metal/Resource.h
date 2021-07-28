@@ -57,10 +57,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		const VulkanSharedPtr<VkDeviceMemory>& ShareDeviceMemory() const { return _mem; }
 
 		Resource(
-			const ObjectFactory& factory, const Desc& desc,
+			ObjectFactory& factory, const Desc& desc,
 			const SubResourceInitData& initData = SubResourceInitData{});
 		Resource(
-			const ObjectFactory& factory, const Desc& desc,
+			ObjectFactory& factory, const Desc& desc,
 			const std::function<SubResourceInitData(SubResourceId)>&);
 		Resource(VkImage image, const Desc& desc);
 		Resource();
@@ -225,7 +225,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		using ResourceInitializer = std::function<SubResourceInitData(SubResourceId)>;
 		std::shared_ptr<Resource> CreateResource(
-			const ObjectFactory& factory,
+			ObjectFactory& factory,
 			const ResourceDesc& desc, 
 			const ResourceInitializer& init = ResourceInitializer());
 

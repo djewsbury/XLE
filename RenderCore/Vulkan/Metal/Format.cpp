@@ -236,7 +236,7 @@ namespace RenderCore { namespace Metal_Vulkan
         BindFormatTypeless(Format::R32G32_TYPELESS, VK_FORMAT_R32G32_SFLOAT);
         BindFormatTypeless(Format::R8G8B8A8_TYPELESS, VK_FORMAT_R8G8B8A8_UNORM);
         BindFormatTypeless(Format::R16G16_TYPELESS, VK_FORMAT_R16G16_SFLOAT);
-        BindFormatTypeless(Format::R32_TYPELESS, VK_FORMAT_D32_SFLOAT); // or VK_FORMAT_R32_SFLOAT?
+        BindFormatTypeless(Format::R32_TYPELESS, VK_FORMAT_R32_SFLOAT);
         BindFormatTypeless(Format::R8G8_TYPELESS, VK_FORMAT_R8G8_UNORM);
         BindFormatTypeless(Format::R16_TYPELESS, VK_FORMAT_R16_SFLOAT);
         BindFormatTypeless(Format::R8_TYPELESS, VK_FORMAT_R8_UNORM);

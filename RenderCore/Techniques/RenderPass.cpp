@@ -364,24 +364,41 @@ namespace RenderCore { namespace Techniques
 
 	void RenderPassInstance::NextSubpass()
     {
-		if (_attachedContext) {
-			assert(_frameBuffer);
+		if (_trueRenderPass) {
+			assert(_frameBuffer && _attachedContext);
 			_attachedContext->BeginNextSubpass(*_frameBuffer);
 		}
+        #if defined(_DEBUG)
+            if (_attachedContext) {
+                _attachedContext->EndLabel();
+                _attachedContext->BeginLabel(_layout.GetSubpasses()[_currentSubpassIndex+1]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[_currentSubpassIndex+1]._name.c_str());
+            }
+        #endif
         ++_currentSubpassIndex;
     }
 
     void RenderPassInstance::End()
     {
-		if (_attachedContext) {
+		if (_trueRenderPass) {
+            assert(_attachedContext);
             _attachedContext->EndRenderPass();
+            #if defined(_DEBUG)
+                if (_attachedContext)
+                    _attachedContext->EndLabel();
+            #endif
 			_attachedContext = nullptr;
-		}
+            _trueRenderPass = false;
+		} else {
+            #if defined(_DEBUG)
+                if (_attachedContext)
+                    _attachedContext->EndLabel();
+            #endif
+        }
     }
     
     unsigned RenderPassInstance::GetCurrentSubpassIndex() const
     {
-		if (_attachedContext)
+		if (_attachedContext && _trueRenderPass)
 			assert(_currentSubpassIndex == _attachedContext->GetCurrentSubpassIndex());
 		return _currentSubpassIndex;
     }
@@ -502,6 +519,11 @@ namespace RenderCore { namespace Techniques
         _layout = *fb._completedDesc;
         // todo -- we might need to pass offset & extent parameters to BeginRenderPass
         // this could be derived from _attachmentPool->GetFrameBufferProperties()?
+        _trueRenderPass = true;
+
+        #if defined(_DEBUG)
+            _attachedContext->BeginLabel(_layout.GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[0]._name.c_str());
+        #endif
         _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
     }
 
@@ -513,6 +535,7 @@ namespace RenderCore { namespace Techniques
     {
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
+        _trueRenderPass = false;
 
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         if (stitchedFragment._pipelineType == PipelineType::Graphics) {
@@ -531,6 +554,11 @@ namespace RenderCore { namespace Techniques
             // clear not supported in this mode
             for (const auto& a:_layout.GetAttachments())
                 assert(!HasClear(a._loadFromPreviousPhase));
+
+            _attachedContext = Metal::DeviceContext::Get(context).get();
+            #if defined(_DEBUG)
+                _attachedContext->BeginLabel(_layout.GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[0]._name.c_str());
+            #endif
         }
 
         // Update the parsing context with the changes to attachments
@@ -566,6 +594,7 @@ namespace RenderCore { namespace Techniques
     {
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
+        _trueRenderPass = false;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
         *this = RenderPassInstance { context, parsingContext, stitchResult, beginInfo };
@@ -583,6 +612,7 @@ namespace RenderCore { namespace Techniques
 		// This is used with compute pipelines sometimes -- since in Vulkan, those have some similarities with
 		// graphics pipelines, but are incompatible with the vulkan render passes
 		_attachedContext = nullptr;
+        _trueRenderPass = false;
 		_attachmentPoolReservation = attachmentPool.Reserve(resolvedAttachmentDescs);
 		_attachmentPool = &attachmentPool;
         assert(!_attachmentPoolReservation.HasPendingCompleteInitialization());
@@ -590,9 +620,7 @@ namespace RenderCore { namespace Techniques
     
     RenderPassInstance::~RenderPassInstance() 
     {
-		if (_attachedContext) {
-			End();
-		}
+        End();
     }
 
     RenderPassInstance::RenderPassInstance(RenderPassInstance&& moveFrom) never_throws
@@ -604,18 +632,17 @@ namespace RenderCore { namespace Techniques
     , _viewedAttachments(std::move(moveFrom._viewedAttachments))
     , _viewedAttachmentsMap(std::move(moveFrom._viewedAttachmentsMap))
     , _currentSubpassIndex(moveFrom._currentSubpassIndex)
+    , _trueRenderPass(moveFrom._trueRenderPass)
     {
         moveFrom._attachedContext = nullptr;
         moveFrom._attachmentPool = nullptr;
         moveFrom._currentSubpassIndex = 0;
+        moveFrom._trueRenderPass = false;
     }
 
     RenderPassInstance& RenderPassInstance::operator=(RenderPassInstance&& moveFrom) never_throws
     {
-		if (_attachedContext) {
-			End();
-		}
-
+        End();
         _frameBuffer = std::move(moveFrom._frameBuffer);
         _attachedContext = moveFrom._attachedContext;
         _attachmentPool = moveFrom._attachmentPool;
@@ -627,6 +654,8 @@ namespace RenderCore { namespace Techniques
         _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
         _currentSubpassIndex = moveFrom._currentSubpassIndex;
         moveFrom._currentSubpassIndex = 0;
+        _trueRenderPass = moveFrom._trueRenderPass;
+        moveFrom._trueRenderPass = false;
         return *this;
     }
 
@@ -634,6 +663,7 @@ namespace RenderCore { namespace Techniques
     {
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
+        _trueRenderPass = false;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

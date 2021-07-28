@@ -1075,6 +1075,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
+	void DeviceContext::BeginLabel(const char* label, const VectorPattern<float,4>& color)
+	{
+		#if defined(_DEBUG)
+			VkDebugUtilsLabelEXT labelStruct =
+			{
+				VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 	// sType
+				NULL,                                    	// pNext
+				label,                                   	// pLabelName
+				{ color[0], color[1], color[2], color[3] }	// color
+			};
+			GetFactory().GetExtensionFunctions()._beginLabel(_sharedState->_commandList.GetUnderlying().get(), &labelStruct);
+		#endif
+	}
+
+	void DeviceContext::EndLabel()
+	{
+		#if defined(_DEBUG)
+			GetFactory().GetExtensionFunctions()._endLabel(_sharedState->_commandList.GetUnderlying().get());
+		#endif
+	}
+
 	CommandList& DeviceContext::GetActiveCommandList()
 	{
 		assert(_sharedState->_commandList.GetUnderlying());

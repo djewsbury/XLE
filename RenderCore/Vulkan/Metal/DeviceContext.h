@@ -311,6 +311,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		void ClearUInt(const IResourceView& unorderedAccess, const VectorPattern<unsigned,4>& clearColour);
 		void ClearFloat(const IResourceView& unorderedAccess, const VectorPattern<float,4>& clearColour);
 
+		void BeginLabel(const char*, const VectorPattern<float,4>& color = {1,1,1,1});
+		void EndLabel();
+
 		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
 
 		static std::shared_ptr<DeviceContext> Get(IThreadContext& threadContext);

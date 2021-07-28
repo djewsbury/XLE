@@ -9,6 +9,7 @@
 #include "Format.h"
 #include "DeviceContext.h"
 #include "TextureView.h"
+#include "ExtensionFunctions.h"
 #include "../IDeviceVulkan.h"
 #include "../../ResourceUtils.h"
 #include "../../Format.h"
@@ -16,6 +17,7 @@
 #include "../../../Utility/BitUtils.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/StringFormat.h"
+#include "../../../Utility/Threading/Mutex.h"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -398,7 +400,7 @@ namespace RenderCore { namespace Metal_Vulkan
     }
 
 	Resource::Resource(
-		const ObjectFactory& factory, const Desc& desc,
+		ObjectFactory& factory, const Desc& desc,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
 	: _desc(desc)
 	, _guid(s_nextResourceGUID++)
@@ -431,20 +433,31 @@ namespace RenderCore { namespace Metal_Vulkan
 			_underlyingBuffer = factory.CreateBuffer(buf_info);
 
 			vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
+
+			#if defined(_DEBUG)
+				if (factory.GetExtensionFunctions()._setObjectName && desc._name[0]) {
+					const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
+						VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
+						NULL,                                               // pNext
+						VK_OBJECT_TYPE_BUFFER,                              // objectType
+						(uint64_t)_underlyingBuffer.get(),                  // object
+						desc._name
+					};
+					factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
+				}
+			#endif
+
 		} else {
 			if (desc._type != Desc::Type::Texture)
 				Throw(::Exceptions::BasicLabel("Invalid desc passed to buffer constructor"));
 
 			const auto& tDesc = desc._textureDesc;
-			const auto vkFormat = AsVkFormat(tDesc._format);
-
-			assert(vkFormat != VK_FORMAT_UNDEFINED);
 
 			VkImageCreateInfo image_create_info = {};
 			image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 			image_create_info.pNext = nullptr;
 			image_create_info.imageType = AsImageType(tDesc._dimensionality);
-			image_create_info.format = (VkFormat)vkFormat;
+			image_create_info.format = (VkFormat)AsVkFormat(tDesc._format);
 			image_create_info.extent.width = tDesc._width;
 			image_create_info.extent.height = tDesc._height;
 			image_create_info.extent.depth = tDesc._depth;
@@ -456,6 +469,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			image_create_info.flags = 0;
 
+			assert(image_create_info.format != VK_FORMAT_UNDEFINED);
 			if (tDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
 				image_create_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 				assert(image_create_info.arrayLayers == 6u);		// arrays of cubemaps not supported currently
@@ -466,7 +480,7 @@ namespace RenderCore { namespace Metal_Vulkan
             // only really need to do this when moving between SRGB and Linear formats
             // (though we can also to bitwise casts between unsigned and signed and float
             // and int formats like this)
-            if (HasLinearAndSRGBFormats(tDesc._format) && GetComponentType(tDesc._format) == FormatComponentType::Typeless)
+            if (GetComponentType(tDesc._format) == FormatComponentType::Typeless)
                 image_create_info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
 			// The tiling, initialLayout and usage flags depend on the bind flags and cpu/gpu usage
@@ -482,16 +496,17 @@ namespace RenderCore { namespace Metal_Vulkan
                 // For depth/stencil textures, if the device doesn't support optimal tiling, they switch back to linear
                 // Maybe this is unnecessary, because the device could just define "optimal" to mean linear in this case.
                 // But the vulkan samples do something similar (though they prefer to use linear mode when it's available...?)
-                const auto formatProps = factory.GetFormatProperties(vkFormat);
+				auto depthFormat = AsVkFormat(AsDepthStencilFormat(tDesc._format));
+                const auto formatProps = factory.GetFormatProperties(depthFormat);
                 if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
                     image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
                     if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
-                        Throw(Exceptions::BasicLabel("Format (%i) can't be used for a depth stencil", unsigned(vkFormat)));
+                        Throw(Exceptions::BasicLabel("Format (%i) can't be used for a depth stencil", unsigned(image_create_info.format)));
                 }
             }
 
 			if (image_create_info.tiling == VK_IMAGE_TILING_LINEAR && (image_create_info.usage & VK_IMAGE_USAGE_SAMPLED_BIT)) {
-				const auto formatProps = factory.GetFormatProperties(vkFormat);
+				const auto formatProps = factory.GetFormatProperties(image_create_info.format);
 				const bool canSampleLinearTexture =
 					!!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
 				if (!canSampleLinearTexture)
@@ -540,6 +555,19 @@ namespace RenderCore { namespace Metal_Vulkan
 						res._steadyStateLayout, res._steadyStateAccessMask, res._steadyStateAssociatedStageMask);
 					helper.MakeResourceVisible(res.GetGUID());
 				};
+
+			#if defined(_DEBUG)
+				if (factory.GetExtensionFunctions()._setObjectName && desc._name[0]) {
+					const VkDebugUtilsObjectNameInfoEXT imageNameInfo {
+						VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT, // sType
+						NULL,                                               // pNext
+						(_underlyingImage != nullptr) ? VK_OBJECT_TYPE_IMAGE : VK_OBJECT_TYPE_BUFFER,							// objectType
+						(_underlyingImage != nullptr) ? (uint64_t)_underlyingImage.get() : (uint64_t)_underlyingBuffer.get(),	// object
+						desc._name
+					};
+					factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
+				}
+			#endif
 		}
 
         const auto hostVisibleReqs = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -706,7 +734,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	Resource::Resource(
-		const ObjectFactory& factory, const Desc& desc,
+		ObjectFactory& factory, const Desc& desc,
 		const SubResourceInitData& initData)
 	: Resource(factory, desc, AsResInitializer(initData))
 	{}
@@ -760,7 +788,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 
 		std::shared_ptr<Resource> CreateResource(
-			const ObjectFactory& factory,
+			ObjectFactory& factory,
 			const ResourceDesc& desc,
 			const ResourceInitializer& initData)
 		{

@@ -49,7 +49,7 @@ namespace RenderCore { namespace ImplVulkan
 			, VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 		#endif
         #if defined(ENABLE_DEBUG_EXTENSIONS)
-            , VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+            , VK_EXT_DEBUG_UTILS_EXTENSION_NAME
         #endif
 		, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME		// (this extension now rolled into Vulkan 1.1, so technically deprecated)
 	};
@@ -121,7 +121,7 @@ namespace RenderCore { namespace ImplVulkan
 			// "VK_LAYER_NV_optimus",
 
 			"VK_LAYER_KHRONOS_validation"
-	    };
+		};
 
         static std::vector<VkLayerProperties> EnumerateLayers()
 	    {
@@ -145,33 +145,47 @@ namespace RenderCore { namespace ImplVulkan
 		    }
 	    }
 
-        static VkDebugReportCallbackEXT msg_callback;
+        static VkDebugUtilsMessengerEXT msg_callback;
 		static bool s_debugInitialized = false;
-        static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( VkFlags msgFlags, VkDebugReportObjectTypeEXT objType, uint64_t srcObject, size_t location, int32_t msgCode, const char *pLayerPrefix, const char *pMsg, void *pUserData )
+        static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback( 
+			VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
+			VkDebugUtilsMessageTypeFlagsEXT                  messageTypes,
+			const VkDebugUtilsMessengerCallbackDataEXT*      pCallbackData,
+			void*                                            pUserData)
         {
-	        (void)msgFlags; (void)objType; (void)srcObject; (void)location; (void)pUserData; (void)msgCode;
-            Log(Verbose) << pLayerPrefix << ": " << pMsg << std::endl;
+			if (!Verbose.IsEnabled()) return false;
+			const auto* pMsg = pCallbackData->pMessage;
+			if (XlFindString(pMsg, "layout")) return false;
+            Log(Verbose) << pCallbackData->pMessageIdName << ": " << pMsg << std::endl;
 	        return false;
         }
     
         static void debug_init(VkInstance instance)
         {
 			assert(!s_debugInitialized);
-            VkDebugReportCallbackCreateInfoEXT debug_callback_info = {};
-            debug_callback_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
-            debug_callback_info.pfnCallback = debug_callback;
-            // debug_callback_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_INFORMATION_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-            debug_callback_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+
+			VkDebugUtilsMessengerCreateInfoEXT callback1 = {
+				VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,  // sType
+				NULL,                                                     // pNext
+				0,                                                        // flags
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |           // messageSeverity
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+				VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |             // messageType
+				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+				debug_callback,                                           // pfnUserCallback
+				NULL                                                      // pUserData
+			};
 	
-	        auto proc = ((PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr( instance, "vkCreateDebugReportCallbackEXT" ));
-            proc( instance, &debug_callback_info, Metal_Vulkan::g_allocationCallbacks, &msg_callback );
+	        auto proc = ((PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr( instance, "vkCreateDebugUtilsMessengerEXT" ));
+			assert(proc);
+            proc( instance, &callback1, Metal_Vulkan::g_allocationCallbacks, &msg_callback );
 			s_debugInitialized = true;
         }
     
         static void debug_destroy(VkInstance instance)
         {
 			assert(s_debugInitialized);
-	        ((PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr( instance, "vkDestroyDebugReportCallbackEXT" ))( instance, msg_callback, 0 );
+	        ((PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr( instance, "vkDestroyDebugUtilsMessengerEXT" ))( instance, msg_callback, 0 );
 			s_debugInitialized = false;
         }
     #else
