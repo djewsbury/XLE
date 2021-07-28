@@ -78,8 +78,11 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthNormalVelocity(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
+	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal };
+
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		PreDepthType preDepthType);
 
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.

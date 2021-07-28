@@ -6,7 +6,7 @@
 #include "../Math/TextureAlgorithm.hlsl"		// for SystemInputs
 #include "../../Objects/IllumShader/PerPixel.h"
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
+#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 GBufferEncoded deferred(VSOUT geo)
@@ -40,13 +40,13 @@ GBufferEncoded deferred(VSOUT geo)
 #endif
 void depthonly() {}
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
+#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
-DepthNormalMotionEncoded depthNormalMotion(VSOUT geo)
+DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 {
 	DoAlphaTest(geo, GetAlphaThreshold());
-	GBufferValues result = IllumShader_PerPixel(geo);
+	GBufferValues sample = IllumShader_PerPixel(geo);
 
 	float3 prevPos;
 	#if (VSOUT_HAS_PREV_POSITION==1)
@@ -59,5 +59,26 @@ DepthNormalMotionEncoded depthNormalMotion(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthNormalMotion(result, int2(prevPos.xy));
+	return EncodeDepthMotionNormal(sample, int2(prevPos.xy));
+}
+
+#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+	[earlydepthstencil]
+#endif
+DepthMotionEncoded depthMotion(VSOUT geo)
+{
+	DoAlphaTest(geo, GetAlphaThreshold());
+
+	float3 prevPos;
+	#if (VSOUT_HAS_PREV_POSITION==1)
+		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
+		prevPos.x = prevPos.x * 0.5 + 0.5;
+		prevPos.y = prevPos.y * 0.5 + 0.5;
+		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
+		prevPos.xyz -= geo.position.xyz;
+		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
+	#else
+		prevPos = 0.0.xxx;
+	#endif
+	return EncodeDepthMotion(int2(prevPos.xy));
 }

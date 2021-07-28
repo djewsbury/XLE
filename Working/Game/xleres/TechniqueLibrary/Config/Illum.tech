@@ -120,20 +120,40 @@ RayTest_EarlyRejection=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-DepthNormalVelocity_NoPatches=~
-	Inherit=~; Deferred
+DepthMotionNormal_NoPatches=~
+	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthNormalMotion
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthMotionNormal
 
-DepthNormalVelocity_PerPixel=~
-	Inherit=~; Deferred
+DepthMotionNormal_PerPixel=~
+	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionNormal
 
-DepthNormalVelocity_PerPixelAndEarlyRejection=~
-	Inherit=~; Deferred
+DepthMotionNormal_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionNormalWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+DepthMotion_NoPatches=~
+	Inherit=~; DepthOnly
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthMotion
+
+DepthMotion_PerPixel=~
+	Inherit=~; DepthOnly
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotion
+
+DepthMotion_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	Selectors=~
+		VSOUT_HAS_PREV_POSITION=1
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionWithEarlyRejection

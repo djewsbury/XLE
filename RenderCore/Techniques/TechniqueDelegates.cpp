@@ -500,7 +500,7 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class TechniqueDelegate_DepthNormalVelocity : public ITechniqueDelegate
+	class TechniqueDelegate_PreDepth : public ITechniqueDelegate
 	{
 	public:
 		struct TechniqueFileHelper
@@ -515,12 +515,24 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
+			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, PreDepthType preDepthType)
 			: _techniqueSet(techniqueSet)
 			{
-				const auto psNoPatchesHash = Hash64("DepthNormalVelocity_NoPatches");
-				const auto psPerPixelHash = Hash64("DepthNormalVelocity_PerPixel");
-				const auto perPixelAndEarlyRejectionHash = Hash64("DepthNormalVelocity_PerPixelAndEarlyRejection");
+				uint64_t psNoPatchesHash, psPerPixelHash, perPixelAndEarlyRejectionHash;
+				if (preDepthType == PreDepthType::DepthMotionNormal) {
+					psNoPatchesHash = Hash64("DepthMotionNormal_NoPatches");
+					psPerPixelHash = Hash64("DepthMotionNormal_PerPixel");
+					perPixelAndEarlyRejectionHash = Hash64("DepthMotionNormal_PerPixelAndEarlyRejection");
+				} else if (preDepthType == PreDepthType::DepthMotion) {
+					psNoPatchesHash = Hash64("DepthMotion_NoPatches");
+					psPerPixelHash = Hash64("DepthMotion_PerPixel");
+					perPixelAndEarlyRejectionHash = Hash64("DepthMotion_PerPixelAndEarlyRejection");
+				} else {
+					assert(preDepthType == PreDepthType::DepthOnly);
+					psNoPatchesHash = Hash64("DepthOnly_NoPatches");
+					psPerPixelHash = Hash64("DepthOnly_NoPatches");
+					perPixelAndEarlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
+				}
 				auto vsNoPatchesHash = Hash64("VS_NoPatches");
 				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
 				auto* psNoPatchesSrc = _techniqueSet->FindEntry(psNoPatchesHash);
@@ -591,11 +603,14 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		TechniqueDelegate_DepthNormalVelocity(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+		TechniqueDelegate_PreDepth(
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			PreDepthType preDepthType)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
+				*_techniqueFileHelper,
+				[preDepthType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, preDepthType); });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
@@ -603,12 +618,14 @@ namespace RenderCore { namespace Techniques
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
+		PreDepthType _preDepthType;
 	};
 
-	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthNormalVelocity(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		PreDepthType preDepthType)
 	{
-		return std::make_shared<TechniqueDelegate_DepthNormalVelocity>(techniqueSet);
+		return std::make_shared<TechniqueDelegate_PreDepth>(techniqueSet, preDepthType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
