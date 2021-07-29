@@ -27,6 +27,10 @@ is what I tend to do:
 * you may want to setup the cmder scripts so that start-ssh-agent is called every time 
 * you also need to setup the path to git in settings.json for vscode ("git.path": "C:\\tools\\Cmder\\vendor\\git-for-windows\\bin\\git.exe")
 
+There are some symlinks in the git repo. For these to work on windows, you may need to do the following:
+* set the core.symlinks git configuration option to true
+* enable symlinks from a non-elevated user either through the local group policy editor or by enabling "developer mode" in system settings
+* (there is more documentation amount symlinks with git on windows online)
 
 For RenderCore you'll need a little more
 * To get the OpenGLES target running, you'll need an implementation of OpenGLES for windows. Use google's project angle: https://github.com/google/angle/blob/master/doc/DevSetup.md
