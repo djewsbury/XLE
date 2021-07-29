@@ -128,10 +128,12 @@ namespace RenderCore { namespace LightingEngine
 			for (unsigned c=0; c<_outputs._lightCount; ++c)
 				_outputs._lightOrdering[c] = intermediateLights[c]._srcIdx;
 
-			Metal::ResourceMap map(
-				metalContext, *_tileableLightBuffer[_pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
-				0, sizeof(IntermediateLight)*_outputs._lightCount);
-			std::memcpy(map.GetData().begin(), intermediateLights, sizeof(IntermediateLight)*_outputs._lightCount);
+			if (_outputs._lightCount) {
+				Metal::ResourceMap map(
+					metalContext, *_tileableLightBuffer[_pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
+					0, sizeof(IntermediateLight)*_outputs._lightCount);
+				std::memcpy(map.GetData().begin(), intermediateLights, sizeof(IntermediateLight)*_outputs._lightCount);
+			}
 		}
 
 		auto encoder = metalContext.BeginGraphicsEncoder(_prepareBitFieldLayout);

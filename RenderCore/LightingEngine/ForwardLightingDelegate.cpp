@@ -204,7 +204,7 @@ namespace RenderCore { namespace LightingEngine
 					0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 				std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 			}
-			{
+			if (tilerOutputs._lightCount) {
 				Metal::ResourceMap map(
 					*_device, *uniforms._lightList,
 					Metal::ResourceMap::Mode::WriteDiscardPrevious, 
