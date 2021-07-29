@@ -56,3 +56,15 @@
 
 #define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"
 #define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"
+
+#define SSR_CLASSIFY_TILES_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-classify-tiles.compute.hlsl"
+#define SSR_INTERSECT_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-intersect.compute.hlsl"
+#define SSR_RESOLVE_SPATIAL_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-resolve-spatial.compute.hlsl"
+#define SSR_RESOLVE_TEMPORAL_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-resolve-temporal.compute.hlsl"
+#define SSR_REFLECTIONS_BLUR_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-reflections-blur.compute.hlsl"
+#define SSR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/ssr.pipeline"
+
+#define HIERARCHICAL_DEPTHS_HLSL "xleres/TechniqueLibrary/LightingEngine/hierarchical-depths.compute.hlsl"
+
+#define TILED_LIGHTING_PREPARE_HLSL "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pixel.hlsl"
+#define TILED_LIGHTING_PREPARE_PIPELINE "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pipeline"
