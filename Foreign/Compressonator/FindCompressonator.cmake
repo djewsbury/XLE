@@ -1,0 +1,53 @@
+
+set(XLE_COMPRESSONATOR_DIR "" CACHE PATH "AMD Compressonator artifacts directory")
+
+macro(find_compressonator)
+
+	if (NOT INTERNAL_LAST_XLE_COMPRESSONATOR_DIR STREQUAL XLE_COMPRESSONATOR_DIR)
+		message("Detected change in Compressonator configuration, searching again")
+		set(INTERNAL_FOUND_COMPRESSONATOR_LIB)
+		set(INTERNAL_FOUND_COMRPESSONATOR_INCLUDE_DIR)
+		set(INTERNAL_LAST_XLE_COMPRESSONATOR_DIR ${XLE_COMPRESSONATOR_DIR} CACHE STRING INTERNAL FORCE)
+	endif ()
+
+	if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+		message(FATAL_ERROR "find_compressonator has only be configured for 64 bit outputs")
+	endif ()
+
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		find_library(
+			INTERNAL_FOUND_COMPRESSONATOR_LIB
+			NAMES Compressonator_MDd.lib
+			HINTS ${XLE_COMPRESSONATOR_DIR}
+			PATH_SUFFIXES lib/VS2017/x64)
+	else ()
+		find_library(
+			INTERNAL_FOUND_COMPRESSONATOR_LIB
+			NAMES Compressonator_MD.lib
+			HINTS ${XLE_COMPRESSONATOR_DIR}
+			PATH_SUFFIXES lib/VS2017/x64)
+	endif ()
+
+	find_path(
+		INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR Compressonator.h
+		HINTS ${XLE_COMPRESSONATOR_DIR}
+		PATH_SUFFIXES include)
+
+	if (INTERNAL_FOUND_COMPRESSONATOR_LIB STREQUAL INTERNAL_FOUND_COMPRESSONATOR_LIB-NOTFOUND
+		OR INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR STREQUAL INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR-NOTFOUND)
+
+		message("INTERNAL_FOUND_COMPRESSONATOR_LIB: ${INTERNAL_FOUND_COMPRESSONATOR_LIB}")
+		message("INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR: ${INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR}")
+
+		# See readme.md for more information about how to get Compressonator
+		message(FATAL_ERROR "Could not find Compressonator libraries and headers. Consider setting the XLE_COMPRESSONATOR_DIR cmake cache variable to the correct artifacts location.")
+	endif ()
+
+	mark_as_advanced(INTERNAL_FOUND_COMPRESSONATOR_LIB)
+	mark_as_advanced(INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR)
+
+	add_library(compressonator IMPORTED STATIC GLOBAL)
+	set_target_properties(compressonator PROPERTIES IMPORTED_LOCATION ${INTERNAL_FOUND_COMPRESSONATOR_LIB})
+	set_target_properties(compressonator PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR})
+
+endmacro ()

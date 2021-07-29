@@ -39,6 +39,8 @@ For RenderCore you'll need a little more
 
 * download dxcompiler from https://github.com/microsoft/DirectXShaderCompiler/releases (last used April 2021 release). You may need to set the XLE_DXCOMPILER_DIR cmake cache dir to the base dir where this is extracted
 
+* Download AMD compressonator from the github releases page (https://github.com/GPUOpen-Tools/compressonator/releases/tag/V4.1.5083) (last used V4.1.5083). Set the XLE_COMPRESSONATOR_DIR cmake cache dir to the base dir where this is extracted
+
 Some optional changes that make things a little bit nicer:
 * set cmake build directory to ${workspaceFolder}/build/${buildType}  ("cmake.buildDirectory": "${workspaceFolder}/build/${buildType}")
 * "choco install ccls" and install ccls vscode extension. also consider setting the following in settings.json:
