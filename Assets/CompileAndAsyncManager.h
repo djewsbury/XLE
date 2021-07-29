@@ -10,31 +10,13 @@
 
 namespace Assets
 {
-    class DependencyValidation; class DependentFileState; 
     class IntermediatesStore;
 	class IIntermediateCompilers;
-    class ArchiveCache;
     class IFileSystem;
-
-    class IPollingAsyncProcess
-    {
-    public:
-        struct Result { enum Enum { KeepPolling, Finish }; };
-        virtual Result::Enum Update() = 0;
-
-        IPollingAsyncProcess();
-        virtual ~IPollingAsyncProcess();
-    };
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 
     class CompileAndAsyncManager
     {
     public:
-        void Update();
-
-        void Add(const std::shared_ptr<IPollingAsyncProcess>& pollingProcess);
-
 		IIntermediateCompilers& GetIntermediateCompilers();
 
         const std::shared_ptr<IntermediatesStore>&	GetIntermediateStore();

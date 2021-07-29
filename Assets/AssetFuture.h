@@ -545,6 +545,9 @@ namespace Assets
 		_frameBarrierCallbackMarker = std::make_shared<CallbackMarker>();
 		_frameBarrierCallbackMarker->_parent = this;
 		std::weak_ptr<CallbackMarker> weakMarker = _frameBarrierCallbackMarker;
+		// Note that if we're in a background thread, then the callback can be called before we
+		// even assign "_frameBarrierCallbackMarker->_markerId". However, we avoid problems because
+		// we're inside of the mutex lock here
 		_frameBarrierCallbackMarker->_markerId = Internal::RegisterFrameBarrierCallback(
 			[weakMarker]() {
 				auto l = weakMarker.lock();

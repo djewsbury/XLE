@@ -7,6 +7,7 @@
 #include "AssetFuture.h"
 #include "AssetUtils.h"
 #include "AssetTraits.h"		// just for ConstructFinalAssetObject
+#include "../Utility/Threading/Mutex.h"
 #include <tuple>
 #include <utility>
 
@@ -40,6 +41,16 @@ namespace Assets
 			}
 		}
 
+		template<size_t I = 0, typename... Tp>
+			bool AnyForegroundPendingAssets(const std::tuple<std::shared_ptr<Future<Tp>>...>& futures)
+		{
+			if (std::get<I>(futures)->GetAssetState() != AssetState::Pending)
+				return true;
+			if constexpr(I+1 != sizeof...(Tp))
+				return AnyForegroundPendingAssets<I+1>(futures);
+			return false;
+		}
+
 		// Thanks to https://stackoverflow.com/questions/687490/how-do-i-expand-a-tuple-into-variadic-template-functions-arguments for this 
 		// pattern. Using std::make_index_sequence to expand out a sequence of integers in a parameter pack, and then using this to
 		// index the tuple
@@ -52,6 +63,12 @@ namespace Assets
 			using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
 			return ApplyConstructFinalAssetObject_impl<Ty>(std::forward<Tuple>(t), Indices());
 		}
+	}
+
+	namespace Internal
+	{
+		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
+		void DeregisterFrameBarrierCallback(unsigned);
 	}
 
 	template<typename... AssetTypes>
@@ -171,6 +188,28 @@ namespace Assets
 					}
 					return true;
 						
+				});
+		}
+
+		void Then(std::function<void(std::shared_ptr<Future<AssetTypes>>...)>&& continuationFunction)
+		{
+			struct LockHelper
+			{
+				Threading::Mutex _lock;
+				unsigned _callbackId = 0u;
+			};
+			auto lockHelper = std::make_shared<LockHelper>();
+			// We need a lock here because the frame barrier callback can be trigger before lockHelper->_callbackId is assigned
+			ScopedLock(lockHelper->_lock);
+			lockHelper->_callbackId = Internal::RegisterFrameBarrierCallback(
+				[subFutures{std::move(_subFutures)}, continuation=std::move(continuationFunction), lockHelper]() {
+					// Note that we use "GetAssetState()" here, not CheckStatusBkgrnd(). So we wait until the foreground
+					// state of the sub futures has been changed
+					if (Internal::AnyForegroundPendingAssets(subFutures))
+						return;
+					std::apply(continuation, std::move(subFutures));
+					ScopedLock(lockHelper->_lock);
+					Internal::DeregisterFrameBarrierCallback(lockHelper->_callbackId);
 				});
 		}
 
