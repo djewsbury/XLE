@@ -32,7 +32,25 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(LightingTechniqueIterator& iterator);
 
-		static constexpr unsigned s_gridDims = 16u;
+		void SetLightScene(std::shared_ptr<Internal::StandardLightScene> lightScene);
+		Internal::StandardLightScene& GetLightScene() { return *_lightScene; }
+
+		struct Outputs
+		{
+			std::vector<unsigned> _lightOrdering;
+			std::vector<unsigned> _lightDepthTable;
+			unsigned _lightCount = 0;
+			std::shared_ptr<IResourceView> _tileableLightBufferUAV;
+		};
+		Outputs _outputs;
+
+		struct Configuration
+		{
+			unsigned _maxLightsPerView = 4192u;
+			unsigned _depthLookupGradiations = 1024u;
+			uint64_t GetHash(uint64_t = DefaultSeed64) const;
+		};
+		Configuration GetConfiguration() const { return _config; }
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		RenderStepFragmentInterface CreateInitFragment(const FrameBufferProperties& fbProps);
@@ -44,12 +62,14 @@ namespace RenderCore { namespace LightingEngine
 		RasterizationLightTileOperator(
 			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
 			std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
-			std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout);
+			std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
+			const Configuration& config);
 		~RasterizationLightTileOperator();
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<RasterizationLightTileOperator>& future,
-			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool);
+			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+			const Configuration& config);
 
 		static void Visualize(
 			RenderCore::IThreadContext& threadContext, 
@@ -61,13 +81,21 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelinePool;
 		::Assets::DependencyValidation _depVal;
 		UInt2 _lightTileBufferSize = UInt2{0,0};
-		unsigned _depthLookupTableGradiations;
 
 		std::shared_ptr<RenderCore::IResourceView> _metricsBufferUAV;
 		std::shared_ptr<RenderCore::IResourceView> _metricsBufferSRV;
 		std::shared_ptr<Metal::GraphicsPipeline> _prepareBitFieldPipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _prepareBitFieldLayout;
 
+		std::shared_ptr<RenderCore::IResource> _tileableLightBuffer[2];
+		std::shared_ptr<RenderCore::IResourceView> _tileableLightBufferUAV[2];
+		unsigned _pingPongCounter = 0u;
+
+		Metal::BoundUniforms _prepareBitFieldBoundUniforms;
+
 		LightStencilingGeometry _stencilingGeo;
+
+		std::shared_ptr<Internal::StandardLightScene> _lightScene;
+		Configuration _config;
 	};
 }}

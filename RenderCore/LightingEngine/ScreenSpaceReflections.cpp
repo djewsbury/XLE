@@ -320,6 +320,9 @@ namespace RenderCore { namespace LightingEngine
 		_res->CompleteInitialization(metalContext);
 	}
 
+	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView>)
+	{}
+
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
 		std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
 		std::shared_ptr<Techniques::IComputeShaderOperator> prepareIndirectArgs,
@@ -399,8 +402,8 @@ namespace RenderCore { namespace LightingEngine
 
 		usi.BindResourceView(17, Hash64("g_intersect_args"));			
 
-		usi.BindResourceView(18, Hash64("GBufferMotion"));
-		usi.BindResourceView(19, Hash64("DownsampleDepths"));
+		usi.BindResourceView(18, Hash64("DownsampleDepths"));
+		usi.BindResourceView(19, Hash64("GBufferMotion"));
 		usi.BindResourceView(20, Hash64("GBufferNormal"));
 
 		usi.BindResourceView(21, Hash64("BN_Sobol"));

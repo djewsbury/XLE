@@ -6,7 +6,7 @@
 #include "../Math/TextureAlgorithm.hlsl"		// for SystemInputs
 #include "../../Objects/IllumShader/PerPixel.h"
 
-#include "../../Forward/ResolveLitColor.hlsl"       // this variable is in a separate shader file because this include brings in so much stuff
+#include "../../Forward/ForwardPlusLighting.hlsl"       // this variable is in a separate shader file because this include brings in so much stuff
 
 #if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
 	[earlydepthstencil]
@@ -23,8 +23,9 @@ float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
 	#endif
 
 	float4 result = float4(
-		ResolveLitColor(
+		CalculateIllumination(
 			sample, directionToEye, VSOUT_GetWorldPosition(geo),
+			NDCDepthToLinear0To1(geo.position.z),
 			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys))), 1.f);
 
 	#if VSOUT_HAS_FOG_COLOR == 1

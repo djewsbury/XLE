@@ -52,13 +52,4 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
                 Float3(0.f, 0.f, 0.f), 0, 
                 Float3(0.f, 0.f, 0.f), 0 };
     }
-
-    CB_BasicEnvironment MakeBasicEnvironmentUniforms(const EnvironmentalLightingDesc& env)
-    {
-        CB_BasicEnvironment result;
-        result._ambient = MakeAmbientUniforms(env);
-        result._rangeFog = MakeRangeFogUniforms(env);
-        result._volumeFog = MakeBlankVolumeFogDesc();
-        return result;
-    }
 }}}

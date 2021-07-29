@@ -61,7 +61,7 @@ DepthWeightedOutput main_depth_weighted_oi(VSOUT geo, SystemInputs sys)
     #endif
 
     float4 result = float4(
-        ResolveLitColor(
+        CalculateIllumination(
             sample, directionToEye, VSOUT_GetWorldPosition(geo),
             LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys))), 1.f);
 

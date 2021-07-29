@@ -5,6 +5,7 @@
 #include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/StringUtils.h"
 #include <cstdint>
 
 #pragma once
@@ -44,27 +45,6 @@ namespace RenderCore { namespace LightingEngine
 			}
 	};
 
-	class ILightBase
-	{
-	public:
-		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
-		virtual ~ILightBase();
-	};
-
-	class ILightSourceFactory
-	{
-	public:
-		virtual std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId) = 0;
-		virtual ~ILightSourceFactory();
-	};
-	
-	class IShadowProjectionFactory
-	{
-	public:
-		virtual std::unique_ptr<ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId) = 0;
-		virtual ~IShadowProjectionFactory();
-	};
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class IPositionalLightSource
@@ -92,6 +72,19 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetCutoffRange(float cutoff) = 0;
 		virtual float GetCutoffRange() const = 0;
 		virtual ~IFiniteLightSource();
+	};
+
+	class IDistantIBLSource
+	{
+	public:
+		virtual void SetEquirectangularSource(StringSection<> input) = 0;
+		virtual ~IDistantIBLSource();
+	};
+
+	class ISSAmbientOcclusion
+	{
+	public:
+		virtual ~ISSAmbientOcclusion();
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

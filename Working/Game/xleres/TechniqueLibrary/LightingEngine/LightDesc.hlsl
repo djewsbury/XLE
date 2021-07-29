@@ -36,8 +36,8 @@ struct LightDesc
     float3	Position; 		float	CutoffRange;
 	float3	Brightness; 	float	SourceRadiusX;
 	float3	OrientationX; 	float	SourceRadiusY;
-	float3	OrientationY; 	float	DiffuseWideningMin;
-	float3	OrientationZ; 	float	DiffuseWideningMax;
+	float3	OrientationY; 	uint 	Shape; 			// float	DiffuseWideningMin;
+	float3	OrientationZ; 	uint	Dummy;			// float	DiffuseWideningMax;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

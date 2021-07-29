@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ShadowPreparer.h"
+#include "StandardLightScene.h"			// for ILightBase
 #include "../Techniques/TechniqueUtils.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Vector.h"
@@ -145,7 +146,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	};
 
 	/// <summary>Defines the projected shadows for a single light<summary>
-	class ShadowProjectionDesc : public ILightBase, public IShadowPreparer, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
+	class ShadowProjectionDesc : public Internal::ILightBase, public IShadowPreparer, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
 	{
 	public:
 		using Projections = MultiProjection<MaxShadowTexturesPerLight>;

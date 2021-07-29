@@ -32,7 +32,9 @@ namespace RenderCore { namespace LightingEngine
 		LightStencilingGeometry() = default;
 	};
 
-    class LightResolveOperators : public ILightSourceFactory
+	namespace Internal { class ILightBase; }
+
+    class LightResolveOperators
 	{
 	public:
 		struct Pipeline
@@ -51,22 +53,22 @@ namespace RenderCore { namespace LightingEngine
         bool _debuggingOn = false;
 		LightStencilingGeometry _stencilingGeometry;
 
-		std::unique_ptr<ILightBase> CreateLightSource(ILightScene::LightOperatorId);
+		std::unique_ptr<Internal::ILightBase> CreateLightSource(ILightScene::LightOperatorId);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
 	};
 
 	class IPreparedShadowResult;
-	class StandardLightScene;
 	class ShadowOperatorDesc;
+	namespace Internal { class StandardLightScene; }
 
     void ResolveLights(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
-		StandardLightScene& lightScene,
+		Internal::StandardLightScene& lightScene,
 		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };

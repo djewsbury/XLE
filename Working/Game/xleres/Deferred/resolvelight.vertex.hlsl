@@ -63,7 +63,13 @@ void main(float3 iPosition : POSITION, out float4 oPosition : SV_Position, out f
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-StructuredBuffer<LightDesc> CombinedLightBuffer : register (t1, space1);
+struct TileableLightDesc
+{
+	float3 Position;
+	float CutoffRange;
+	float LinearizedDepthMin, LinearizedDepthMax;
+};
+StructuredBuffer<TileableLightDesc> CombinedLightBuffer : register (t1, space1);
 
 void PrepareMany(
 	float3 iPosition : POSITION,
@@ -75,7 +81,7 @@ void PrepareMany(
 
     // Depending on the light shape, transform the input position into "worldSpace"
     {// Sphere
-		LightDesc lightDesc = CombinedLightBuffer[instanceIdx];
+		TileableLightDesc lightDesc = CombinedLightBuffer[instanceIdx];
         // Orienting towards the camera is unessential, but may help with some consistency around the edges
         float3 cameraRight = float3(CameraBasis[0].x, CameraBasis[1].x, CameraBasis[2].x);
         float3 cameraUp = float3(CameraBasis[0].y, CameraBasis[1].y, CameraBasis[2].y);

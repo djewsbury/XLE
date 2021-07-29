@@ -80,13 +80,15 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IPreparedShadowResult();
 	};
 
+	namespace Internal { class ILightBase; }
+
 	class ICompiledShadowPreparer
 	{
 	public:
 		virtual Techniques::RenderPassInstance Begin(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
-			ILightBase& projection,
+			Internal::ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::AttachmentPool& shadowGenAttachmentPool) = 0;
 		virtual void End(
@@ -108,7 +110,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
-	class ShadowPreparationOperators : public IShadowProjectionFactory
+	class ShadowPreparationOperators
 	{
 	public:
 		struct Operator
@@ -118,7 +120,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		std::vector<Operator> _operators;
 
-		std::unique_ptr<ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId);
+		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId);
 	};
 	::Assets::PtrToFuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 

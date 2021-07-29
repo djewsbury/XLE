@@ -36,7 +36,7 @@ float3 DirectionalLightResolve_Diffuse_NdotL(
 
 	float rawDiffuse = CalculateDiffuse(
 		sample.worldSpaceNormal, directionToEye, negativeLightDirection,
-		DiffuseParameters_Roughness(GetRoughness(sample), light.DiffuseWideningMin, light.DiffuseWideningMax));
+		DiffuseParameters_Roughness(GetRoughness(sample), 0.5f, 2.5f));			// light.DiffuseWideningMin, light.DiffuseWideningMax));
 
     float metal = GetMetallicness(sample);
 	float result = rawDiffuse * (1.0f - metal);

@@ -206,7 +206,7 @@ X(Deferred/resolveutil.hlsl, __LINE__)
 X(Deferred/standardlighttypes.hlsl, __LINE__)
 X(Deferred/tiled.compute.hlsl, __LINE__)
 
-X(Forward/ResolveLitColor.hlsl, __LINE__)
+X(Forward/ForwardPlusLighting.hlsl, __LINE__)
 
 X(Objects/Example/ConvToPBR.tech, __LINE__)
 X(Objects/Example/ProcWood/WoodGnarlGrainStain.graph, __LINE__)

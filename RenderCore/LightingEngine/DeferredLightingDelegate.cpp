@@ -36,7 +36,24 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightResolveOperators;
+	class DeferredLightScene : public Internal::StandardLightScene
+	{
+	public:
+		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
+		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
+
+		virtual LightSourceId CreateLightSource(LightOperatorId opId) override
+		{
+			auto desc = _lightResolveOperators->CreateLightSource(opId);
+			return AddLightSource(opId, std::move(desc));
+		}
+
+		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
+		{
+			auto desc = _shadowPreparationOperators->CreateShadowProjection(opId);
+			return AddShadowProjection(opId, associatedLight, std::move(desc));
+		}
+	};
 
 	class DeferredLightingCaptures
 	{
@@ -46,7 +63,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
-		std::shared_ptr<StandardLightScene> _lightScene;
+		std::shared_ptr<DeferredLightScene> _lightScene;
 		std::shared_ptr<Techniques::PipelinePool> _pipelineCollection;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
@@ -208,7 +225,7 @@ namespace RenderCore { namespace LightingEngine
 	
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
-		ILightBase& shadowDesc,
+		Internal::ILightBase& shadowDesc,
 		ICompiledShadowPreparer& preparer,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
@@ -322,8 +339,8 @@ namespace RenderCore { namespace LightingEngine
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<ShadowPreparationOperators> shadowPreparationOperators) {
 
-				auto lightScene = std::make_shared<StandardLightScene>();
-				lightScene->_shadowProjectionFactory = shadowPreparationOperators;
+				auto lightScene = std::make_shared<DeferredLightScene>();
+				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
 
 				Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
 				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
@@ -401,9 +418,9 @@ namespace RenderCore { namespace LightingEngine
 
 				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture(
 					thatFuture,
-					[lightingTechnique, captures, lightScene, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
+					[lightingTechnique, captures, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
 						captures->_lightResolveOperators = resolveOperators;
-						lightScene->_lightSourceFactory = resolveOperators;
+						captures->_lightScene->_lightResolveOperators = resolveOperators;
 						lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
 						return lightingTechnique;
 					});

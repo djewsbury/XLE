@@ -14,6 +14,7 @@
 namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; }
 namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; }
+namespace RenderCore { namespace Assets { class TextureCompilationRequest; }}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -64,6 +65,9 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToFuture(
 			::Assets::FuturePtr<DeferredShaderResource>&,
 			StringSection<> initializer);
+        static void ConstructToFuture(
+			::Assets::FuturePtr<DeferredShaderResource>&,
+			const Assets::TextureCompilationRequest& compileRequest);
     private:
 		std::shared_ptr<IResourceView> _srv;
         std::string _initializer;

@@ -36,6 +36,8 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(LightingEngine::LightingTechniqueIterator& iterator);
 
+		void SetSpecularIBL(std::shared_ptr<IResourceView>);
+
 		LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
 

@@ -191,7 +191,6 @@ namespace RenderCore { namespace Techniques
 
 		_subFrameEvents->_onFrameBarrier.Bind(
 			[]() {
-				::Assets::Services::GetAsyncMan().Update();
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
 			});
 

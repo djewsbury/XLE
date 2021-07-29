@@ -26,6 +26,7 @@ namespace SceneEngine
         RenderCore::LightingEngine::ILightScene& lightScene) const
     {
         auto lightOperators = GetLightResolveOperators();
+        lightScene.Clear();
 
         RenderCore::LightingEngine::ILightScene::LightSourceId lightIndexToId[_envSettings->_lights.size()];
 
@@ -65,6 +66,14 @@ namespace SceneEngine
             auto shadowId = RenderCore::LightingEngine::CreateShadowCascades(
                 lightScene, operatorId, lightIndexToId[shadow._lightIdx],
                 mainSceneCameraDesc, shadow._shadowFrustumSettings);
+        }
+
+        // Create the "ambient/environment light"
+        auto ambientLight = lightScene.CreateLightSource((unsigned)lightOperators.size());
+        auto* distantIBLSource = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(ambientLight);
+        if (distantIBLSource) {
+            if (GetEnvSettings()._environmentalLightingDesc._skyTextureType == RenderCore::LightingEngine::SkyTextureType::Equirectangular)
+                distantIBLSource->SetEquirectangularSource(GetEnvSettings()._environmentalLightingDesc._skyTexture);
         }
     }
 

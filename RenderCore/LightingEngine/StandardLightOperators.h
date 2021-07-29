@@ -27,4 +27,9 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t Hash(uint64_t seed = DefaultSeed64) const;
 	};
 
+	class AmbientLightOperatorDesc
+	{
+	public:
+	};
+
 }}

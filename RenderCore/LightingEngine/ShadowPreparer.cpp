@@ -42,7 +42,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance Begin(
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
-			ILightBase& projection,
+			Internal::ILightBase& projection,
 			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::AttachmentPool& shadowGenAttachmentPool) override;
 
@@ -119,7 +119,7 @@ namespace RenderCore { namespace LightingEngine
 	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
 
 	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
-		ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
+		Internal::ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
 	{
 		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
 		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
@@ -143,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 	Techniques::RenderPassInstance DMShadowPreparer::Begin(
 		IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext,
-		ILightBase& projectionBase,
+		Internal::ILightBase& projectionBase,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
@@ -326,7 +326,7 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::unique_ptr<ILightBase> ShadowPreparationOperators::CreateShadowProjection(ILightScene::ShadowOperatorId opId)
+	std::unique_ptr<Internal::ILightBase> ShadowPreparationOperators::CreateShadowProjection(ILightScene::ShadowOperatorId opId)
 	{
 		assert(opId <= _operators.size());
 		auto result = std::make_unique<Internal::ShadowProjectionDesc>();

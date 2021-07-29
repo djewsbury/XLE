@@ -25,6 +25,8 @@
 
 namespace RenderCore { namespace LightingEngine
 {
+	static constexpr unsigned s_gridDims = 16u;
+
 	static float PowerForHalfRadius(float halfRadius, float powerFraction)
 	{
 		const float attenuationScalar = 1.f;
@@ -71,53 +73,41 @@ namespace RenderCore { namespace LightingEngine
 		return z2/CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 	}
 
+	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; };
+
 	void RasterizationLightTileOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
 	{
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
 
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("TiledLightBitField"));
-		usi.BindResourceView(1, Utility::Hash64("CombinedLightBuffer"));
-		usi.BindResourceView(2, Utility::Hash64("DownsampleDepths"));
-		usi.BindImmediateData(0, Utility::Hash64("GlobalTransform"));
-
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+		_pingPongCounter = (_pingPongCounter+1)%2;
 
 		auto& projDesc = iterator._parsingContext->GetProjectionDesc();
 		auto clipSpaceType = Techniques::GetDefaultClipSpaceType();
 		AccurateFrustumTester frustumTester(projDesc._worldToProjection, clipSpaceType);
 
-		const unsigned tileLightCount = 512;
-		std::shared_ptr<IResourceView> lightBufferResView;
-		unsigned depthLookupTable[_depthLookupTableGradiations];
 		{
-			struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; Float3 _brightness; };
-			IntermediateLight intermediateLights[tileLightCount];
+			IntermediateLight intermediateLights[_lightScene->_tileableLights.size()];
 			IntermediateLight* intLight = intermediateLights;
 			auto zRow = Float4{projDesc._worldToProjection(2,0), projDesc._worldToProjection(2,1), projDesc._worldToProjection(2,2), projDesc._worldToProjection(2,3)};
 			float zRowMag = Magnitude(Truncate(zRow));
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
-			static Float3 baseLightPosition = Float3(0.f, 0.f, 0.f);
-			static float startingAngle = 0.f;
-			for (unsigned c=0; c<tileLightCount; ++c) {
-				const float X = startingAngle + c / float(tileLightCount) * gPI * 2.f;
-				const float Y = 3.7397f * startingAngle + .7234f * c / float(tileLightCount) * gPI * 2.f;
-				const float Z = 13.8267f * startingAngle + 0.27234f * c / float(tileLightCount) * gPI * 2.f;
-				const float cutoffRadius = 20.f + 10.f * XlSin(Z);
-				Float3 position = baseLightPosition + Float3(50.f * XlCos(X), 50.f * XlSin(Y), XlCos(Z));
-				if (frustumTester.TestSphere(position, cutoffRadius) == AABBIntersection::Culled) continue;
+			for (auto light=_lightScene->_tileableLights.begin(); light!=_lightScene->_tileableLights.end(); ++light) {
+				auto& lightDesc = *(Internal::StandardLightDesc*)light->_desc.get();
+				if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == AABBIntersection::Culled) continue;
+				
+				float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+				float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+				zMin -= lightDesc._cutoffRange * zRowMag;
 
-				auto power = PowerForHalfRadius(0.5f*cutoffRadius, 0.05f);
-				auto brightness = power * Float3{.65f + .35f * XlSin(Y), .65f + .35f * XlCos(Y), .65f + .35f * XlCos(X)};
-
-				float zMin = Dot(Float4{position, 1}, zRow);
-				float zMax = zMin + cutoffRadius * zRowMag;
-				zMin -= cutoffRadius * zRowMag;
-
-				*intLight++ = IntermediateLight{position, cutoffRadius, zMin/farClip, zMax/farClip, brightness};
+				*intLight++ = IntermediateLight {
+					lightDesc._position, lightDesc._cutoffRange, 
+					zMin/farClip, zMax/farClip, 
+					unsigned(light-_lightScene->_tileableLights.begin()) };
 			}
 			assert((intLight-intermediateLights) < (1u<<16u));
+			_outputs._lightCount = unsigned(intLight-intermediateLights);
 
 			// sort by distance to camera of closest point to camera
 			std::sort(intermediateLights, intLight, [](const IntermediateLight& lhs, IntermediateLight& rhs) { return lhs._linearizedDepthMin < rhs._linearizedDepthMin; });
@@ -125,53 +115,25 @@ namespace RenderCore { namespace LightingEngine
 			// split up depth space in ndc depth space; 
 			// const float ndcDepthMin = clipSpaceType == ClipSpaceType::StraddlingZero ? -1.f : 0.f, ndcDepthMax = 1.0f;
 			auto* i = intermediateLights;
-			for (unsigned c=0; c<_depthLookupTableGradiations; ++c) {
-				float min = LinearInterpolate(0.f, 1.f, c/float(_depthLookupTableGradiations));
-				float max = LinearInterpolate(0.f, 1.f, (c+1)/float(_depthLookupTableGradiations));
+			for (unsigned c=0; c<_config._depthLookupGradiations; ++c) {
+				float min = LinearInterpolate(0.f, 1.f, c/float(_config._depthLookupGradiations));
+				float max = LinearInterpolate(0.f, 1.f, (c+1)/float(_config._depthLookupGradiations));
 				while (i != intLight && i->_linearizedDepthMax < min) ++i;
 				auto endi = i;
 				while (endi != intLight && endi->_linearizedDepthMin < max) ++endi;
-				depthLookupTable[c] = (unsigned(endi-intermediateLights) << 16u) | unsigned(i-intermediateLights);
+				_outputs._lightDepthTable[c] = (unsigned(endi-intermediateLights) << 16u) | unsigned(i-intermediateLights);
 			}
 
-			auto finalLightCount = intLight - intermediateLights;
-			if (finalLightCount) {
-				auto mappedStorage = metalContext.MapTemporaryStorage(finalLightCount * sizeof(Internal::CB_Light), BindFlag::UnorderedAccess);
-				auto lightBufferResource = mappedStorage.GetResource();
-				auto beginAndEnd = mappedStorage.GetBeginAndEndInResource();
-				auto* dstLight = (Internal::CB_Light*)mappedStorage.GetData().begin();
-				auto* beginLights = dstLight;
-				i = intermediateLights;
-				while (i!=intLight) {
-					auto localToWorld = AsFloat4x4(ScaleTranslation{
-						Float3{i->_cutoffRadius, i->_cutoffRadius, i->_cutoffRadius}, 
-						i->_position});
+			// Record the ordering of the lists
+			for (unsigned c=0; c<_outputs._lightCount; ++c)
+				_outputs._lightOrdering[c] = intermediateLights[c]._srcIdx;
 
-					StandardLightDesc lightDesc{0};
-					lightDesc.SetLocalToWorld(localToWorld);
-					lightDesc.SetCutoffRange(i->_cutoffRadius);
-					lightDesc.SetBrightness(i->_brightness);
-					*dstLight++ = Internal::MakeLightUniforms(lightDesc);
-					++i;
-				}
-
-				lightBufferResView = lightBufferResource->CreateBufferView(BindFlag::UnorderedAccess, (unsigned)beginAndEnd.first, unsigned(beginAndEnd.second-beginAndEnd.first));
-			} else {
-				// when there are no lights, just write a dummy empty light
-				auto mappedStorage = metalContext.MapTemporaryStorage(sizeof(Internal::CB_Light), BindFlag::UnorderedAccess);
-				auto lightBufferResource = mappedStorage.GetResource();
-				auto beginAndEnd = mappedStorage.GetBeginAndEndInResource();
-				auto* dstLight = (Internal::CB_Light*)mappedStorage.GetData().begin();
-				*dstLight = {};
-				lightBufferResView = lightBufferResource->CreateBufferView(BindFlag::UnorderedAccess, (unsigned)beginAndEnd.first, unsigned(beginAndEnd.second-beginAndEnd.first));
-			}
-
-			/*s_lastLightBufferResView = lightBufferResView;
-			s_lastLightDepthLookupTable.resize(_depthLookupTableGradiations*sizeof(unsigned));
-			std::memcpy(s_lastLightDepthLookupTable.data(), depthLookupTable, _depthLookupTableGradiations*sizeof(unsigned));*/
+			Metal::ResourceMap map(
+				metalContext, *_tileableLightBuffer[_pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
+				0, sizeof(IntermediateLight)*_outputs._lightCount);
+			std::memcpy(map.GetData().begin(), intermediateLights, sizeof(IntermediateLight)*_outputs._lightCount);
 		}
 
-		Metal::BoundUniforms boundUniforms(*_prepareBitFieldPipeline, usi);
 		auto encoder = metalContext.BeginGraphicsEncoder(_prepareBitFieldLayout);
 		ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
 		ScissorRect scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
@@ -180,20 +142,22 @@ namespace RenderCore { namespace LightingEngine
 		// boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(descSets));
 
 		UniformsStream us;
-		const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), lightBufferResView.get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
+		const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
 		us._resourceViews = MakeIteratorRange(resView);
 
 		auto globalUniforms = Techniques::BuildGlobalTransformConstants(iterator._parsingContext->GetProjectionDesc());
 		UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms) };
 		us._immediateData = MakeIteratorRange(immData);
 
-		boundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+		_prepareBitFieldBoundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
 
 		VertexBufferView vbvs[] = {
 			VertexBufferView { _stencilingGeo._lowDetailHemiSphereVB.get() }
 		};
 		encoder.Bind(MakeIteratorRange(vbvs), IndexBufferView{ _stencilingGeo._lowDetailHemiSphereIB.get(), Format::R16_UINT });
-		encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, tileLightCount);
+		encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, _outputs._lightCount);
+
+		_outputs._tileableLightBufferUAV = _tileableLightBufferUAV[_pingPongCounter];
 	}
 
 	RenderCore::LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -278,18 +242,40 @@ namespace RenderCore { namespace LightingEngine
 			stitchingContext.DefineAttachment(a);
 	}
 
+	void RasterizationLightTileOperator::SetLightScene(std::shared_ptr<Internal::StandardLightScene> lightScene)
+	{
+		_lightScene = std::move(lightScene);
+	}
 
 	RasterizationLightTileOperator::RasterizationLightTileOperator(
 		std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
 		std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
-		std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout)
+		std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
+		const Configuration& config)
 	: _pipelinePool(std::move(pipelinePool))
 	, _prepareBitFieldPipeline(std::move(prepareBitFieldPipeline))
 	, _prepareBitFieldLayout(std::move(prepareBitFieldLayout))
 	, _stencilingGeo(*_pipelinePool->GetDevice())
+	, _config(config)
 	{
 		_depVal = ::Assets::GetDepValSys().Make();
 		_depVal.RegisterDependency(_prepareBitFieldPipeline->GetDependencyValidation());
+
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, Utility::Hash64("TiledLightBitField"));
+		usi.BindResourceView(1, Utility::Hash64("CombinedLightBuffer"));
+		usi.BindResourceView(2, Utility::Hash64("DownsampleDepths"));
+		usi.BindImmediateData(0, Utility::Hash64("GlobalTransform"));
+		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
+
+		auto tileableLightBufferDesc = CreateDesc(
+			BindFlag::UnorderedAccess, CPUAccess::Write, GPUAccess::Read|GPUAccess::Write,
+			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView),
+			"tileable-lights");
+		for (unsigned c=0; c<2; ++c) {
+			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc);
+			_tileableLightBufferUAV[c] = _tileableLightBuffer[c]->CreateBufferView(BindFlag::UnorderedAccess);
+		}
 
 		auto metricsBufferDesc = CreateDesc(
 			BindFlag::UnorderedAccess|BindFlag::ShaderResource, 0, GPUAccess::Read|GPUAccess::Write,
@@ -299,14 +285,18 @@ namespace RenderCore { namespace LightingEngine
 		_metricsBufferUAV = buffer->CreateBufferView(BindFlag::UnorderedAccess);
 		_metricsBufferSRV = buffer->CreateBufferView(BindFlag::ShaderResource);
 
-		_depthLookupTableGradiations = 1024;
+		_outputs._lightOrdering.resize(_config._maxLightsPerView);
+		_outputs._lightDepthTable.resize(_config._depthLookupGradiations);
+		_outputs._lightCount = 0;
+		_outputs._tileableLightBufferUAV = nullptr;
 	}
 
 	RasterizationLightTileOperator::~RasterizationLightTileOperator() {}
 
 	void RasterizationLightTileOperator::ConstructToFuture(
 		::Assets::FuturePtr<RasterizationLightTileOperator>& future,
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool)
+		std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+		const Configuration& config)
 	{
 		Techniques::GraphicsPipelineDesc pipelineDesc;
 		pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":PrepareMany";
@@ -338,9 +328,16 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(futurePipeline).ThenConstructToFuture(
 			future,
-			[pipelinePool, pipelineLayout=pipelineLayout.GetPipelineLayout()](auto pipeline) {
-				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline), std::move(pipelineLayout));
+			[pipelinePool, pipelineLayout=pipelineLayout.GetPipelineLayout(), config](auto pipeline) {
+				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline), std::move(pipelineLayout), config);
 			});
+	}
+
+	uint64_t RasterizationLightTileOperator::Configuration::GetHash(uint64_t seed) const
+	{
+		return HashCombine(
+			(uint64_t(_maxLightsPerView) << 32ull) | uint64_t(_depthLookupGradiations),
+			seed);
 	}
 
 	void RasterizationLightTileOperator::Visualize(

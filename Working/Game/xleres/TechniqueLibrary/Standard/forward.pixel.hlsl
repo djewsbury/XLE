@@ -20,7 +20,7 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	#endif
 
 	float4 result = float4(
-		ResolveLitColor(
+		CalculateIllumination(
 			sample, directionToEye, VSOUT_GetWorldPosition(geo),
 			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys))), 1.f);
 

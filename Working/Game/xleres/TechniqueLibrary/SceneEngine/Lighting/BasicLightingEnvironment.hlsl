@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if 0
+
 #if !defined(BASIC_LIGHTING_ENVIRONMENT_H)
 #define BASIC_LIGHTING_ENVIRONMENT_H
 
@@ -25,5 +27,7 @@ cbuffer BasicLightingEnvironment BIND_SEQ_B3
     VolumeFogDesc BasicVolumeFog;
     LightDesc BasicLight[BASIC_LIGHT_COUNT];
 }
+
+#endif
 
 #endif

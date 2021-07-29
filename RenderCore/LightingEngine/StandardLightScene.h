@@ -9,8 +9,15 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
 
-namespace RenderCore { namespace LightingEngine
-{	
+namespace RenderCore { namespace LightingEngine { namespace Internal
+{
+	class ILightBase
+	{
+	public:
+		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightBase();
+	};
+
 	class StandardLightScene : public ILightScene
 	{
 	public:
@@ -20,7 +27,7 @@ namespace RenderCore { namespace LightingEngine
 			LightOperatorId _operatorId;
 			std::unique_ptr<ILightBase> _desc;
 		};
-		std::vector<Light> _lights;
+		std::vector<Light> _tileableLights;
 		struct ShadowProjection
 		{
 			ShadowProjectionId _id;
@@ -30,22 +37,29 @@ namespace RenderCore { namespace LightingEngine
 		};
 		std::vector<ShadowProjection> _shadowProjections;
 
-		std::shared_ptr<ILightSourceFactory> _lightSourceFactory;
-		std::shared_ptr<IShadowProjectionFactory> _shadowProjectionFactory;
-
 		LightSourceId _nextLightSource = 0;
 		ShadowProjectionId _nextShadow = 0;
 
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
-		virtual LightSourceId CreateLightSource(LightOperatorId op) override;
 		virtual void DestroyLightSource(LightSourceId) override;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) override;
-		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) override;
 		virtual void DestroyShadowProjection(ShadowProjectionId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
 		StandardLightScene();
 		~StandardLightScene();
+
+	protected:
+		LightSourceId AddLightSource(
+			LightOperatorId operatorId,
+			std::unique_ptr<ILightBase> desc);
+
+		ShadowProjectionId AddShadowProjection(
+			LightOperatorId operatorId,
+			LightSourceId associatedLight,
+			std::unique_ptr<ILightBase> desc);
+
+		void ReserveLightSourceIds(unsigned idCount); 
 	};
 
 	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
@@ -128,6 +142,11 @@ namespace RenderCore { namespace LightingEngine
 			_diffuseWideningMax = 2.5f;
 		}
 	};
+}}}
+
+
+namespace RenderCore { namespace LightingEngine
+{
 
 	////////////  temp ----->
 	enum class SkyTextureType { HemiCube, Cube, Equirectangular, HemiEquirectangular };

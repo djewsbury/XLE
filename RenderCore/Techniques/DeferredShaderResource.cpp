@@ -281,6 +281,18 @@ namespace RenderCore { namespace Techniques
     }
 
     void DeferredShaderResource::ConstructToFuture(
+        ::Assets::FuturePtr<DeferredShaderResource>& future,
+        const Assets::TextureCompilationRequest& compileRequest)
+    {
+        auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(compileRequest);
+        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
+            future,
+            [originalRequest=compileRequest._srcFile](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
+                ConstructToFutureArtifact(thatFuture, *containerActual, originalRequest);
+            });
+    }
+
+    void DeferredShaderResource::ConstructToFuture(
 		::Assets::FuturePtr<DeferredShaderResource>& future,
 		StringSection<> initializer)
     {

@@ -14,10 +14,12 @@ namespace RenderCore { namespace LightingEngine
 {
 	class ShadowOperatorDesc;
 	class LightSourceOperatorDesc;
+	class AmbientLightOperatorDesc;
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 
@@ -28,6 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
 }}

@@ -6,7 +6,7 @@
 #include "LightScene.h"
 #include "../../Core/Exceptions.h"
 
-namespace RenderCore { namespace LightingEngine
+namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	void* StandardLightDesc::QueryInterface(uint64_t interfaceTypeCode)
 	{
@@ -26,28 +26,27 @@ namespace RenderCore { namespace LightingEngine
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
 		auto i = std::find_if(
-			_lights.begin(), _lights.end(),
+			_tileableLights.begin(), _tileableLights.end(),
 			[sourceId](const auto& c) { return c._id == sourceId; });
-		if (i == _lights.end())
+		if (i == _tileableLights.end())
 			return nullptr;
 		return i->_desc->QueryInterface(interfaceTypeCode);
 	}
 
-	auto StandardLightScene::CreateLightSource(LightOperatorId op) -> LightSourceId
+	auto StandardLightScene::AddLightSource(LightOperatorId operatorId, std::unique_ptr<ILightBase> desc) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
-		auto desc = _lightSourceFactory->CreateLightSource(op);	
-		_lights.push_back({result, op, std::move(desc)});
+		_tileableLights.push_back({result, operatorId, std::move(desc)});
 		return result;
 	}
 
 	void StandardLightScene::DestroyLightSource(LightSourceId sourceId)
 	{
 		auto i = std::find_if(
-			_lights.begin(), _lights.end(),
+			_tileableLights.begin(), _tileableLights.end(),
 			[sourceId](const auto& c) { return c._id == sourceId; });
-		if (i != _lights.end()) {
-			_lights.erase(i);
+		if (i != _tileableLights.end()) {
+			_tileableLights.erase(i);
 
 			// Also destroy a shadow projection associated with this light, if it exists
 			auto i = std::find_if(
@@ -68,13 +67,14 @@ namespace RenderCore { namespace LightingEngine
 			return nullptr;
 		return i->_desc->QueryInterface(interfaceTypeCode);
 	}
-
-	auto StandardLightScene::CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) -> ShadowProjectionId
+	
+	auto StandardLightScene::AddShadowProjection(
+		LightOperatorId operatorId,
+		LightSourceId associatedLight,
+		std::unique_ptr<ILightBase> desc) -> ShadowProjectionId
 	{
-		assert(_shadowProjectionFactory);
 		auto result = _nextShadow++;
-		auto desc = _shadowProjectionFactory->CreateShadowProjection(op);	
-		_shadowProjections.push_back({result, op, associatedLight, std::move(desc)});
+		_shadowProjections.push_back({result, operatorId, associatedLight, std::move(desc)});
 		return result;
 	}
 
@@ -91,8 +91,13 @@ namespace RenderCore { namespace LightingEngine
 
 	void StandardLightScene::Clear()
 	{
-		_lights.clear();
+		_tileableLights.clear();
 		_shadowProjections.clear();
+	}
+
+	void StandardLightScene::ReserveLightSourceIds(unsigned idCount)
+	{
+		_nextLightSource += idCount;
 	}
 
 	void* StandardLightScene::QueryInterface(uint64_t typeCode)
@@ -107,6 +112,11 @@ namespace RenderCore { namespace LightingEngine
 	StandardLightScene::~StandardLightScene()
 	{}
 
+	ILightBase::~ILightBase() {}
+}}}
+
+namespace RenderCore { namespace LightingEngine
+{
 	uint64_t LightSourceOperatorDesc::Hash(uint64_t seed) const
 	{
 		uint64_t h = 
@@ -114,16 +124,14 @@ namespace RenderCore { namespace LightingEngine
 		return HashCombine(h, seed);
 	}
 
-
 	ILightScene::~ILightScene() {}
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}
 	IFiniteLightSource::~IFiniteLightSource() {}
+	IDistantIBLSource::~IDistantIBLSource() {}
+	ISSAmbientOcclusion::~ISSAmbientOcclusion() {}
 	IShadowPreparer::~IShadowPreparer() {}
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}
 	INearShadowProjection::~INearShadowProjection() {}
-	ILightBase::~ILightBase() {}
-	ILightSourceFactory::~ILightSourceFactory() {}
-	IShadowProjectionFactory::~IShadowProjectionFactory() {}
 }}

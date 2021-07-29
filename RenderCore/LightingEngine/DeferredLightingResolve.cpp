@@ -33,12 +33,12 @@ static Int2 GetCursorPos();
 
 namespace RenderCore { namespace LightingEngine
 {
-	std::unique_ptr<ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
+	std::unique_ptr<Internal::ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
-		StandardLightDesc::Flags::BitField flags = 0;
+		Internal::StandardLightDesc::Flags::BitField flags = 0;
 		if (_pipelines[opId]._stencilingGeoShape != LightSourceShape::Directional && !(_pipelines[opId]._flags & LightSourceOperatorDesc::Flags::NeverStencil))
-			flags |= StandardLightDesc::Flags::SupportFiniteRange;
-		return std::make_unique<StandardLightDesc>(flags);
+			flags |= Internal::StandardLightDesc::Flags::SupportFiniteRange;
+		return std::make_unique<Internal::StandardLightDesc>(flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -383,7 +383,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
-		StandardLightScene& lightScene,
+		Internal::StandardLightScene& lightScene,
 		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
@@ -435,13 +435,13 @@ namespace RenderCore { namespace LightingEngine
 		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
-		auto lightCount = lightScene._lights.size();
+		auto lightCount = lightScene._tileableLights.size();
 		auto shadowIterator = preparedShadows.begin();
 		for (unsigned l=0; l<lightCount; ++l) {
-			const auto& i = lightScene._lights[l];
+			const auto& i = lightScene._tileableLights[l];
 
-			assert(i._desc->QueryInterface(typeid(StandardLightDesc).hash_code()) == i._desc.get());
-			auto& standardLightDesc = *(StandardLightDesc*)i._desc.get();
+			assert(i._desc->QueryInterface(typeid(Internal::StandardLightDesc).hash_code()) == i._desc.get());
+			auto& standardLightDesc = *(Internal::StandardLightDesc*)i._desc.get();
 
 			auto lightShape = lightResolveOperators._pipelines[i._operatorId]._stencilingGeoShape;
 			if (lightShape == LightSourceShape::Sphere) {
@@ -460,8 +460,8 @@ namespace RenderCore { namespace LightingEngine
 			const LightResolveOperators::Pipeline* pipeline;
 			assert(i._operatorId < lightResolveOperators._pipelines.size());
 
-			while (shadowIterator != preparedShadows.end() && shadowIterator->first < lightScene._lights[l]._id) ++shadowIterator;
-			if (shadowIterator != preparedShadows.end() && shadowIterator->first == lightScene._lights[l]._id) {
+			while (shadowIterator != preparedShadows.end() && shadowIterator->first < lightScene._tileableLights[l]._id) ++shadowIterator;
+			if (shadowIterator != preparedShadows.end() && shadowIterator->first == lightScene._tileableLights[l]._id) {
 				IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
 
@@ -482,7 +482,7 @@ namespace RenderCore { namespace LightingEngine
 				// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
 				// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
 				// generated for a light that doesn't exist
-				assert(shadowIterator == preparedShadows.end() || shadowIterator->first > lightScene._lights[l]._id);
+				assert(shadowIterator == preparedShadows.end() || shadowIterator->first > lightScene._tileableLights[l]._id);
 				pipeline = &lightResolveOperators._pipelines[i._operatorId];
 			}
 
