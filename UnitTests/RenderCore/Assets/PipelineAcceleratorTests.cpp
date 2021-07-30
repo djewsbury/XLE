@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "TechniqueTestsHelper.h"
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../ReusableDataFiles.h"
@@ -189,16 +190,12 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto testHelper = MakeTestHelper();
-
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
+		TechniqueTestApparatus testApparatus(*testHelper);
 
 		auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 		auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
-		auto mainPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, testHelper->_pipelineLayout);
+		auto mainPool = testApparatus._pipelineAccelerators;
 		mainPool->SetGlobalSelector("GLOBAL_SEL", 55);
 		auto cfgId = mainPool->CreateSequencerConfig(
 			techniqueDelegate,

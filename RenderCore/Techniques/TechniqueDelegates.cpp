@@ -243,7 +243,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		std::string GetPipelineLayout()
+		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
@@ -362,7 +362,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		std::string GetPipelineLayout()
+		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
@@ -477,7 +477,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		std::string GetPipelineLayout()
+		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
@@ -625,7 +625,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		std::string GetPipelineLayout()
+		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsMain";
 		}
@@ -734,7 +734,7 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		std::string GetPipelineLayout()
+		std::string GetPipelineLayout() override
 		{
 			return MAIN_PIPELINE ":GraphicsMain";
 		}

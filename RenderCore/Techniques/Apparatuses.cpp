@@ -67,6 +67,15 @@ namespace RenderCore { namespace Techniques
 		_pipelineLayoutFile = pipelineLayoutFileFuture->Actualize();
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 
+		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
+		descSetLayoutFuture->StallWhilePending();
+		auto descSetLayoutContainer = descSetLayoutFuture->Actualize();
+		auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");
+		if (i == descSetLayoutContainer->_descriptorSets.end())
+			Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
+		_sequencerDescSetLayout = i->second;
+		_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
+
 		const std::string pipelineLayoutName = "GraphicsMain";
 		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_pipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
 		_compiledPipelineLayout = device->CreatePipelineLayout(pipelineInit);
@@ -76,11 +85,10 @@ namespace RenderCore { namespace Techniques
 			device,
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
 			poolFlags);
-		// FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer")
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
-		_graphicsPipelinePool = std::make_shared<PipelinePool>(_device, _commonResources);
+		_graphicsPipelinePool = std::make_shared<PipelinePool>(_device);
 
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);
@@ -118,15 +126,7 @@ namespace RenderCore { namespace Techniques
 		_mainDrawingApparatus = std::move(mainDrawingApparatus);
 		_depValPtr.RegisterDependency(_mainDrawingApparatus->GetDependencyValidation());
 		
-		auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(IMMEDIATE_PIPELINE);
-		pipelineLayoutFuture->StallWhilePending(); 
-		_pipelineLayoutFile = pipelineLayoutFuture->Actualize();
-		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
-
-		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(
-			_mainDrawingApparatus->_device, 
-			RenderCore::Techniques::FindLayout(*_pipelineLayoutFile, "ImmediateDrawables", "Material"));
-
+		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_mainDrawingApparatus->_device);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 	}
 	

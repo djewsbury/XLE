@@ -368,7 +368,7 @@ namespace UnitTests
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
-			auto pipelinePool = std::make_shared<Techniques::PipelinePool>(testHelper->_device, std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device));
+			auto pipelinePool = std::make_shared<Techniques::PipelinePool>(testHelper->_device);
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				const auto& camera = cameras[c];

@@ -57,8 +57,7 @@ namespace RenderCore { namespace Techniques
 		static const auto materialDescSetName = Hash64("Material");
 		
 		auto sequencerDescriptorSet = uniformsHelper.CreateDescriptorSet(
-			*pipelineAccelerators.GetDevice(), parserContext,
-			*pipelineAccelerators.GetSequencerDescriptorSetLayout().GetLayout());
+			*pipelineAccelerators.GetDevice(), parserContext);
 
 		UniformsStreamInterface sequencerUSI = uniformsHelper.GetLooseUniformsStreamInterface();
 		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);

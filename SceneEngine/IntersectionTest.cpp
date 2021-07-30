@@ -157,6 +157,7 @@ namespace SceneEngine
         RenderCore::Techniques::TechniqueContext techniqueContext;
         techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
         techniqueContext._commonResources = drawingApparatus._commonResources;
+        techniqueContext._sequencerDescSetLayout = drawingApparatus._sequencerDescSetLayout;
         return techniqueContext;
     }
 

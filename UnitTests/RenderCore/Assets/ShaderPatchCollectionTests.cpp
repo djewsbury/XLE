@@ -2,12 +2,14 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "TechniqueTestsHelper.h"
 #include "../ReusableDataFiles.h"
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -197,31 +199,6 @@ namespace UnitTests
 		}
 	};
 
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeMaterialDescriptorSetLayout()
-	{
-		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		layout->_slots = {
-
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UnorderedAccessBuffer }
-
-		};
-
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 1 };
-	}
-
 	TEST_CASE( "ShaderPatchCollection", "[rendercore_techniques]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -229,7 +206,9 @@ namespace UnitTests
 		auto mnt1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		RenderCore::Techniques::DescriptorSetLayoutAndBinding matDescSetLayout = MakeMaterialDescriptorSetLayout();
+
+		RenderCore::Assets::PredefinedPipelineLayoutFile pipelineLayoutFile(TechniqueTestApparatus::UnitTestPipelineLayout, {}, {});
+		auto matDescSetLayout = RenderCore::Techniques::FindLayout(pipelineLayoutFile, "GraphicsMain", "Material");
 
 		SECTION( "DeserializeShaderPatchCollection" )
 		{

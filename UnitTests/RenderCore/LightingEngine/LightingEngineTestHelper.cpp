@@ -64,11 +64,12 @@ namespace UnitTests
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
 
-		_pipelinePool = std::make_shared<Techniques::PipelinePool>(_metalTestHelper->_device, _commonResources);
+		_pipelinePool = std::make_shared<Techniques::PipelinePool>(_metalTestHelper->_device);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
 		_techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device);
+		_techniqueContext->_sequencerDescSetLayout = MakeSequencerDescriptorSetLayout().GetLayout();
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 	}
@@ -109,17 +110,17 @@ namespace UnitTests
 				float   MetalMin = 0.f;
 				float   MetalMax = 1.f;
 			};
-			UniformBuffer cb1;						// 1
-			UniformBuffer cb2;						// 2
+			UniformBuffer b1;						// 1
+			UniformBuffer b2;						// 2
 
-			SampledTexture tex0;					// 3
-			SampledTexture tex1;					// 4
-			SampledTexture tex2;					// 5
-			SampledTexture tex3;					// 6
-			SampledTexture tex4;					// 7
-			SampledTexture tex5;					// 8
-			SampledTexture tex6;					// 9
-			SampledTexture tex7;					// 10
+			SampledTexture t3;						// 3
+			SampledTexture t4;						// 4
+			SampledTexture t5;						// 5
+			SampledTexture t6;						// 6
+			SampledTexture t7;						// 7
+			SampledTexture t8;						// 8
+			SampledTexture t9;						// 9
+			SampledTexture t10;						// 10
 
 			UnorderedAccessBuffer uab0;				// 11
 			Sampler sampler0;						// 12

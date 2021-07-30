@@ -50,19 +50,17 @@ namespace UnitTests
 {
 	static const char* s_sequencerDescSetLayout = R"(
 		ConstantBuffer GlobalTransform;
-		ConstantBuffer cb0;
-		ConstantBuffer cb1;
-		ConstantBuffer cb2;
-		ConstantBuffer cb3;
-		ConstantBuffer cb4;
+		ConstantBuffer b1;
+		ConstantBuffer b2;
+		ConstantBuffer b3;
+		ConstantBuffer b4;
+		ConstantBuffer b5;
 
-		SampledTexture tex0;
-		SampledTexture tex1;
-		SampledTexture tex2;
-		SampledTexture tex3;
-		SampledTexture tex4;
-		SampledTexture tex5;
-		SampledTexture tex6;
+		SampledTexture t6;
+		SampledTexture t7;
+		SampledTexture t8;
+		SampledTexture t9;
+		SampledTexture t10;
 
 		Sampler DefaultSampler;
 		Sampler ClampingSampler;
@@ -82,6 +80,7 @@ namespace UnitTests
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
 		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
+		techniqueServices->SetCommonResources(std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device));
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
 		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
 
@@ -96,12 +95,12 @@ namespace UnitTests
 		auto sequencerDescriptorSetLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
-		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(testHelper->_device, {});
+		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(testHelper->_device);
 
 		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-		techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
-		Techniques::CommonResourceBox commonResources { *testHelper->_device };
+		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
 		techniqueContext->_systemUniformsDelegate = std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device);
+		techniqueContext->_sequencerDescSetLayout = sequencerDescriptorSetLayout;
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(

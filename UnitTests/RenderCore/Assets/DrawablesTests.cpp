@@ -232,9 +232,7 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-				techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
-				Techniques::ParsingContext parsingContext{*techniqueContext};
+				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
 				parsingContext.AddShaderResourceDelegate(globalDelegate);
 				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
 				if (prepare) {
@@ -295,9 +293,7 @@ namespace UnitTests
 			for (unsigned c=0; c<32; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
-					auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-					techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);
-					Techniques::ParsingContext parsingContext{*techniqueContext};
+					Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
 					parsingContext.AddShaderResourceDelegate(globalDelegate);
 					
 					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
@@ -426,6 +422,7 @@ namespace UnitTests
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto testHelper = MakeTestHelper();
+		TechniqueTestApparatus testApparatus(*testHelper);
 
 		auto del0 = std::make_shared<ShaderResourceDel>(*testHelper->_device, "del0", 6);
 		auto del1 = std::make_shared<ShaderResourceDel>(*testHelper->_device, "del1", 3);
@@ -433,8 +430,7 @@ namespace UnitTests
 		auto udel0 = std::make_shared<UniformDel>();
 		auto udel1 = std::make_shared<UniformDel>();
 		
-		TechniqueContext techContext;
-		ParsingContext parsingContext(techContext);
+		ParsingContext parsingContext(*testApparatus._techniqueContext);
 		parsingContext.AddShaderResourceDelegate(del0);
 		parsingContext.AddShaderResourceDelegate(del1);
 		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
@@ -443,9 +439,7 @@ namespace UnitTests
 		parsingContext.AddUniformDelegate(Hash64("LocalTransform"), udel0);
 		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 		
-		auto matDescSet = MakeMaterialDescriptorSetLayout();
-		auto seqDescSet = MakeSequencerDescriptorSetLayout();
-		auto pipelineAccelerators = CreatePipelineAcceleratorPool(testHelper->_device, matDescSet);
+		auto pipelineAccelerators = testApparatus._pipelineAccelerators;
 		// testHelper->_pipelineLayout, seqDescSet
 		
 		// When multiple delegate bind to the same slot, we should only query the one
@@ -457,8 +451,7 @@ namespace UnitTests
 		SequencerUniformsHelper helper0{parsingContext, MakeIteratorRange(shaderResDelegates), MakeIteratorRange(uniformBufferDelegates)};
 		auto descSet0 = helper0.CreateDescriptorSet(
 			*testHelper->_device,
-			parsingContext,
-			*seqDescSet.GetLayout());
+			parsingContext);
 		REQUIRE(del2->_resViewQueryCount == 1);
 		REQUIRE(del1->_resViewQueryCount == 0);
 		REQUIRE(del0->_resViewQueryCount == 0);
@@ -474,8 +467,7 @@ namespace UnitTests
 		SequencerUniformsHelper helper1{parsingContext};
 		auto descSet1 = helper1.CreateDescriptorSet(
 			*testHelper->_device,
-			parsingContext,
-			*seqDescSet.GetLayout());
+			parsingContext);
 		REQUIRE(del2->_resViewQueryCount == 1);
 		REQUIRE(del1->_resViewQueryCount == 1);
 		REQUIRE(del0->_resViewQueryCount == 0);

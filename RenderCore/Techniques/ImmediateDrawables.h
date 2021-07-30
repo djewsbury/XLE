@@ -74,10 +74,6 @@ namespace RenderCore { namespace Techniques
 		virtual ~IImmediateDrawables();
 	};
 
-	namespace Internal { const DescriptorSetLayoutAndBinding& GetDefaultDescriptorSetLayoutAndBinding(); }
-
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(
-		const std::shared_ptr<IDevice>&,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(const std::shared_ptr<IDevice>&);
 }}
 

@@ -47,7 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
 		_lightingOperatorLayout = _device->CreatePipelineLayout(pipelineInit);
 
-		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device, drawingApparatus->_commonResources);
+		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device);
 	}
 
 	LightingEngineApparatus::~LightingEngineApparatus() {}

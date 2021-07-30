@@ -19,7 +19,7 @@ namespace RenderCore
 	class LegacyRegisterBindingDesc;
 	class IShaderSource;
 
-	namespace Assets { class PredefinedPipelineLayoutFile; }
+	namespace Assets { class PredefinedPipelineLayoutFile; class PredefinedDescriptorSetLayout; }
 }
 
 namespace RenderOverlays { class FontRenderingManager; }
@@ -64,15 +64,15 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegateDeferred;
 
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
+
 		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<PipelinePool> _graphicsPipelinePool;
 
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
-
-		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
-
-		std::shared_ptr<PipelinePool> _graphicsPipelinePool;
+		std::shared_ptr<CommonResourceBox> _commonResources;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
@@ -92,8 +92,6 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<DrawingApparatus> _mainDrawingApparatus;
 		std::shared_ptr<IImmediateDrawables> _immediateDrawables;
-
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 

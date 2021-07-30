@@ -127,7 +127,7 @@ namespace UnitTests
 			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device, std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper._device));
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device);
 		}
 	};
 
@@ -299,14 +299,7 @@ namespace UnitTests
 
 		ImmediateDrawingHelper(MetalTestHelper& metalHelper)
 		{
-			auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(IMMEDIATE_PIPELINE);
-			pipelineLayoutFuture->StallWhilePending();
-			auto pipelineLayoutFile = pipelineLayoutFuture->Actualize();
-			const std::string pipelineLayoutName = "ImmediateDrawables";
-			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(
-				metalHelper._device, 
-				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Material"));
-
+			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(metalHelper._device);
 			// _fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*metalHelper._device);
 		}
 	};
@@ -520,6 +513,11 @@ namespace UnitTests
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 				auto shadowProjectionId = LightingEngine::CreateShadowCascades(lightScene, 0, lightId, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
 
+				auto generalPipelineFuture = ::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, GENERAL_OPERATOR_PIPELINE ":GraphicsMain");
+				generalPipelineFuture->StallWhilePending();
+				REQUIRE(generalPipelineFuture->GetAssetState() == ::Assets::AssetState::Ready);
+				auto generalPipeline = generalPipelineFuture->Actualize();
+
 				// draw once from the "scene camera"
 				{
 					{
@@ -528,7 +526,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
 
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -559,7 +557,7 @@ namespace UnitTests
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, testApparatus._pipelineAcceleratorPool->GetPipelineLayout());
+					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
 
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, shadowProjectionId, sceneCamera);

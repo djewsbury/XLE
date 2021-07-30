@@ -159,7 +159,7 @@ namespace UnitTests
 			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device, std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper._device));
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device);
 		}
 	};
 

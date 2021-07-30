@@ -273,8 +273,7 @@ namespace RenderCore { namespace Techniques
 	
 	std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> SequencerUniformsHelper::CreateDescriptorSet(
 		IDevice& device,
-		ParsingContext& parsingContext,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& descSetLayout)
+		ParsingContext& parsingContext)
 	{
 		// Create a temporary descriptor set, with per-sequencer bindings
 		// We need to look for something providing data for this:
@@ -285,6 +284,9 @@ namespace RenderCore { namespace Techniques
 		// calculate how the various delegates map onto the descriptor set layout. It might be
 		// worth considering caching this result, because there should actually only be a finite
 		// number of different configurations in most use cases
+
+		assert(parsingContext.GetTechniqueContext()._sequencerDescSetLayout);
+		const auto& descSetLayout = *parsingContext.GetTechniqueContext()._sequencerDescSetLayout;
 		
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> bindTypesAndIdx;
 		bindTypesAndIdx.reserve(descSetLayout._slots.size());

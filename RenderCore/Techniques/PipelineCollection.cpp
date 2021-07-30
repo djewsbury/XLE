@@ -252,9 +252,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	static uint64_t s_nextGraphicsPipelinePoolGUID = 1;
-	PipelinePool::PipelinePool(std::shared_ptr<IDevice> device, std::shared_ptr<CommonResourceBox> commonResources)
+	PipelinePool::PipelinePool(std::shared_ptr<IDevice> device)
 	: _device(std::move(device))
-	, _commonResources(std::move(commonResources))
 	, _guid(s_nextGraphicsPipelinePoolGUID++)
 	{
 		_sharedPools = std::make_shared<SharedPools>();

@@ -307,12 +307,13 @@ namespace RenderCore { namespace Techniques
 			return &_workingPkt;
 		}
 
-		ImmediateDrawables(
-			const std::shared_ptr<IDevice>& device,
-			const DescriptorSetLayoutAndBinding& matDescSetLayout)
+		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
 		{
-			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, matDescSetLayout, 0);
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
+			auto pipelineLayout = ::Assets::MakeAsset<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
+			pipelineLayout->StallWhilePending();
+			auto matDescSetLayout = FindLayout(*pipelineLayout->Actualize(), "Material");
+			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, matDescSetLayout, 0);
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
@@ -372,11 +373,9 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(
-		const std::shared_ptr<IDevice>& device,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout)
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(const std::shared_ptr<IDevice>& device)
 	{
-		return std::make_shared<ImmediateDrawables>(device, matDescSetLayout);
+		return std::make_shared<ImmediateDrawables>(device);
 	}
 
 	void IImmediateDrawables::ExecuteDraws(IThreadContext& threadContext, ParsingContext& parsingContext, const RenderPassInstance& rpi)

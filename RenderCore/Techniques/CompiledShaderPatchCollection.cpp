@@ -212,6 +212,18 @@ namespace RenderCore { namespace Techniques
 		return DescriptorSetLayoutAndBinding { i->_descSet, (unsigned)std::distance(pipeline->second->_descriptorSets.begin(), i) };
 	}
 
+	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayout& pipeline, const std::string& descriptorSetName)
+	{
+		auto i = std::find_if(pipeline._descriptorSets.begin(), pipeline._descriptorSets.end(),
+			[descriptorSetName](const auto& c) {
+				return c._name == descriptorSetName;
+			});
+		if (i == pipeline._descriptorSets.end())
+			return {};
+		
+		return DescriptorSetLayoutAndBinding { i->_descSet, (unsigned)std::distance(pipeline._descriptorSets.begin(), i) };
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64<'Inst', 'shdr'>::Value;

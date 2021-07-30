@@ -1,0 +1,96 @@
+// Distributed under the MIT License (See
+// accompanying file "LICENSE" or the website
+// http://www.opensource.org/licenses/mit-license.php)
+
+#include "TechniqueTestsHelper.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/Techniques.h"
+#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
+
+namespace UnitTests
+{
+	TechniqueTestApparatus::TechniqueTestApparatus(MetalTestHelper& testHelper)
+	: _futureSetter(std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2)))
+	{
+		using namespace RenderCore;
+
+		_techniqueServices = std::make_shared<Techniques::Services>(testHelper._device);
+		_bufferUploads = BufferUploads::CreateManager(*testHelper._device);
+		_techniqueServices->SetBufferUploads(_bufferUploads);
+		_commonResources = std::make_shared<Techniques::CommonResourceBox>(*testHelper._device);
+		_techniqueServices->SetCommonResources(_commonResources);
+		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
+
+		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		_filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
+		_shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper._shaderSource, compilers);
+		_shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper._shaderSource, compilers);
+
+        RenderCore::Assets::PredefinedPipelineLayoutFile layoutFile { UnitTestPipelineLayout, {}, {} };
+        _materialDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Material");
+        _sequencerDescSetLayout = RenderCore::Techniques::FindLayout(layoutFile, "GraphicsMain", "Sequencer");
+
+		_pipelineAccelerators = Techniques::CreatePipelineAcceleratorPool(
+			testHelper._device, _materialDescSetLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+
+		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
+		_techniqueContext->_commonResources = _commonResources;
+		_techniqueContext->_sequencerDescSetLayout = _sequencerDescSetLayout.GetLayout();
+	}
+
+	TechniqueTestApparatus::~TechniqueTestApparatus()
+	{
+	}
+
+	const char TechniqueTestApparatus::UnitTestPipelineLayout[] = R"--(
+		
+		DescriptorSet Material
+		{
+			UniformBuffer b0;
+			UniformBuffer b1;
+			UniformBuffer b2;
+
+			SampledTexture t3;
+			SampledTexture t4;
+			SampledTexture t5;
+			SampledTexture t6;
+			SampledTexture t7;
+			SampledTexture t8;
+			SampledTexture t9;
+			SampledTexture t10;
+
+			UnorderedAccessBuffer u11;
+			Sampler s12;
+		};
+
+		DescriptorSet Sequencer
+		{
+			UniformBuffer GlobalTransform;
+			UniformBuffer LocalTransform;
+			UniformBuffer SeqBuffer0;
+			UniformBuffer b3;
+			UniformBuffer b4;
+			UniformBuffer b5;
+
+			SampledTexture SeqTex0;
+			SampledTexture t7;
+			SampledTexture t8;
+			SampledTexture t9;
+			SampledTexture t10;
+
+			Sampler SeqSampler0;
+			Sampler s12;
+			Sampler s13;
+			Sampler s14;
+		};
+
+		PipelineLayout GraphicsMain
+		{
+			DescriptorSet Sequencer;
+			DescriptorSet Material;
+		};
+
+	)--";
+}
+

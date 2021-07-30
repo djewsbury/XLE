@@ -16,7 +16,7 @@
 #include <unordered_map>
 
 namespace RenderCore { class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedCBLayout; class PredefinedDescriptorSetLayout; class PredefinedPipelineLayoutFile; }}
+namespace RenderCore { namespace Assets { class ShaderPatchCollection; class PredefinedCBLayout; class PredefinedDescriptorSetLayout; class PredefinedPipelineLayoutFile; class PredefinedPipelineLayout; }}
 namespace Utility { class ParameterBox; }
 namespace ShaderSourceParser { class InstantiationRequest; class GenerateFunctionOptions; class NodeGraphSignature; }
 
@@ -43,7 +43,8 @@ namespace RenderCore { namespace Techniques
 		uint64_t _hash;
 	};
 
-	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayoutFile&, const std::string&, const std::string&);
+	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayoutFile&, const std::string& pipelineLayoutName, const std::string& descSetName);
+	DescriptorSetLayoutAndBinding FindLayout(const RenderCore::Assets::PredefinedPipelineLayout& file, const std::string& descriptorSetName);
 
 	/// <summary>Compiled and optimized version of RenderCore::Assets::ShaderPatchCollection</summary>
 	/// A RenderCore::Assets::ShaderPatchCollection contains references to shader patches used by a material,

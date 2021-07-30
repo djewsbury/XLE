@@ -34,6 +34,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::ShaderLanguage shaderLanguage)
 	: _predefinedLayout(std::move(predefinedLayout))
 	{
+		assert(Services::GetCommonResources());
 		auto& commonResources = *Services::GetCommonResources();
 		auto initializer = _predefinedLayout->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
 		_pipelineLayout = device->CreatePipelineLayout(initializer);

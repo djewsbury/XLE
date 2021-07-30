@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "TechniqueTestsHelper.h"
 #include "../ReusableDataFiles.h"
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
@@ -17,6 +18,7 @@
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Format.h"
@@ -284,6 +286,12 @@ namespace UnitTests
 					#endif
 				}
 			)--")),
+
+		// ---------------------------- unit-test.pipeline ----------------------------
+		std::make_pair(
+			"unit-test.pipeline",
+			::Assets::AsBlob(TechniqueTestApparatus::UnitTestPipelineLayout)),
+
 	};
 
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
@@ -322,6 +330,11 @@ namespace UnitTests
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
 			result->SetAsset(std::move(desc), {});
 			return result;
+		}
+
+		std::string GetPipelineLayout() override
+		{
+			return "ut-data/unit-test.pipeline:MainGraphics";
 		}
 	};
 
@@ -381,9 +394,9 @@ namespace UnitTests
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayout(cfg);
+			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayout(*cfg);
 			pipelineLayoutAsset->StallWhilePending();
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize());
+			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize()->GetPipelineLayout());
 
 			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(globalTransform) };
 			UniformsStream uniformsStream;
@@ -420,30 +433,6 @@ namespace UnitTests
 		return result;
 	}
 
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeMaterialDescriptorSetLayout()
-	{
-		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		layout->_slots = {
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UnorderedAccessBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler }
-		};
-
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 1 };
-	}
-
 	TEST_CASE( "TechniqueDelegates-LegacyTechnique", "[rendercore_techniques]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -456,6 +445,7 @@ namespace UnitTests
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		auto testHelper = MakeTestHelper();
+		TechniqueTestApparatus testApparatus(*testHelper);
 
 		SECTION("Retrieve minimal legacy technique")
 		{
@@ -465,7 +455,7 @@ namespace UnitTests
 			)--";
 			InputStreamFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, MakeMaterialDescriptorSetLayout());
+			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, testApparatus._materialDescSetLayout);
 
 			{
 				auto delegate = RenderCore::Techniques::CreateTechniqueDelegateLegacy(
@@ -475,7 +465,7 @@ namespace UnitTests
 					RenderCore::DepthStencilDesc{});
 
 				RenderCore::Assets::RenderStateSet stateSet;
-				auto pipelineDescFuture = delegate->Resolve(
+				auto pipelineDescFuture = delegate->GetPipelineDesc(
 					compiledPatchCollection->GetInterface(),
 					stateSet);
 				pipelineDescFuture->StallWhilePending();
@@ -499,11 +489,7 @@ namespace UnitTests
 				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM),
 				"temporary-out");
 
-			auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-			auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
-			auto pipelinePool = Techniques::CreatePipelineAcceleratorPool(
-				testHelper->_device,
-				testHelper->_pipelineLayout);
+			auto pipelinePool = testApparatus._pipelineAccelerators;
 
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 

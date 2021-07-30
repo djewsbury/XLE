@@ -136,8 +136,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& GetLooseUniformsStreamInterface() const;
 		std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> CreateDescriptorSet(
 			IDevice& device,
-			ParsingContext& parsingContext,
-			const RenderCore::Assets::PredefinedDescriptorSetLayout& descSetLayout);
+			ParsingContext& parsingContext);
 
 		SequencerUniformsHelper(
 			ParsingContext& parsingContext,

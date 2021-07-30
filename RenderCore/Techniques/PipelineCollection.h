@@ -52,10 +52,9 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& selectors);
 
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
-		const std::shared_ptr<CommonResourceBox>& GetCommonResources() { return _commonResources; }
 		uint64_t GetGUID() const { return _guid; }
 
-		PipelinePool(std::shared_ptr<IDevice> device, std::shared_ptr<CommonResourceBox> commonResources);
+		PipelinePool(std::shared_ptr<IDevice> device);
 		~PipelinePool();
 	private:
 		std::shared_ptr<IDevice> _device;
@@ -65,7 +64,6 @@ namespace RenderCore { namespace Techniques
 
 		class SharedPools;
 		std::shared_ptr<SharedPools> _sharedPools;
-		std::shared_ptr<CommonResourceBox> _commonResources;
 		uint64_t _guid = ~0ull;
 
 		void ConstructToFuture(

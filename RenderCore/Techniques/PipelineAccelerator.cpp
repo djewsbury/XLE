@@ -894,6 +894,7 @@ namespace RenderCore { namespace Techniques
 		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
 		_matDescSetLayout = matDescSetLayout;
+		assert(_matDescSetLayout.GetLayout());
 
 #if 0
 		auto pipelineLayoutDesc = _pipelineLayout->GetInitializer();
