@@ -9,6 +9,7 @@
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
 #include "PipelineBuilderUtil.h"
+#include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -36,6 +37,7 @@ namespace RenderCore { namespace Techniques
 		SequencerConfigId _cfgId = ~0ull;
 
 		std::shared_ptr<ITechniqueDelegate> _delegate;
+		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> _pipelineLayout;
 		ParameterBox _sequencerSelectors;
 
 		FrameBufferDesc _fbDesc;
@@ -79,7 +81,6 @@ namespace RenderCore { namespace Techniques
 		Pipeline CreatePipelineForSequencerState(
 			const SequencerConfig& cfg,
 			const ParameterBox& globalSelectors,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			const DescriptorSetLayoutAndBinding& matDescSetLayout,
 			const std::shared_ptr<SharedPools>& sharedPools);
 
@@ -130,7 +131,6 @@ namespace RenderCore { namespace Techniques
 	auto PipelineAccelerator::CreatePipelineForSequencerState(
 		const SequencerConfig& cfg,
 		const ParameterBox& globalSelectors,
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
 		const std::shared_ptr<SharedPools>& sharedPools) -> Pipeline
 	{
@@ -153,11 +153,12 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the 
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
+		::Assets::WhenAll(patchCollectionFuture, cfg._pipelineLayout).ThenConstructToFuture(
 			*result._future,
-			[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis](
+			[sharedPools, copyGlobalSelectors, cfg, weakThis](
 				::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
-				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) {
+				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
+				std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayoutAsset) {
 
 				auto containingPipelineAccelerator = weakThis.lock();
 				if (!containingPipelineAccelerator)
@@ -167,6 +168,7 @@ namespace RenderCore { namespace Techniques
 				// will complete to the pipeline desc + automatic shader filtering rules
 				auto pipelineDescFuture = cfg._delegate->Resolve(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
 				auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture);
+				auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
 				
 				::Assets::WhenAll(resolvedTechnique, pipelineDescFuture).ThenConstructToFuture(
 					resultFuture,
@@ -204,6 +206,10 @@ namespace RenderCore { namespace Techniques
 										pipelineDescWithFiltering->_preconfiguration.get());
 								}
 						}
+
+						// todo -- we could consider hashing all of the creation parameters at this point and looking up in a
+						//			cache of recently build pipelines. Everything has been filtered down by this point, so there
+						//			might be some duplicates 
 
 						auto configurationDepVal = ::Assets::GetDepValSys().Make();
 						if (pipelineDesc->GetDependencyValidation())
@@ -406,7 +412,8 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
-			const std::shared_ptr<ITechniqueDelegate>& delegate,
+			std::shared_ptr<ITechniqueDelegate> delegate,
+			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) override;
@@ -424,26 +431,29 @@ namespace RenderCore { namespace Techniques
 		void			RebuildAllOutOfDatePipelines() override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
-		const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const override;
-		
-		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
-		const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const override;
 
-		PipelineAcceleratorPool(const std::shared_ptr<IDevice>& device, const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout, PipelineAcceleratorPoolFlags::BitField flags, const DescriptorSetLayoutAndBinding& matDescSetLayout, const DescriptorSetLayoutAndBinding& sequencerDescSetLayout);
+		// const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const override;
+		// const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
+		// const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const override;
+
+		PipelineAcceleratorPool(
+			const std::shared_ptr<IDevice>& device,
+			const DescriptorSetLayoutAndBinding& matDescSetLayout, 
+			PipelineAcceleratorPoolFlags::BitField flags);
 		~PipelineAcceleratorPool();
 		PipelineAcceleratorPool(const PipelineAcceleratorPool&) = delete;
 		PipelineAcceleratorPool& operator=(const PipelineAcceleratorPool&) = delete;
 
 	protected:
 		ParameterBox _globalSelectors;
-		std::vector<std::pair<uint64_t, std::weak_ptr<SequencerConfig>>> _sequencerConfigById;
+		std::vector<std::weak_ptr<SequencerConfig>> _sequencerConfigById;
 		std::vector<std::pair<uint64_t, std::weak_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::vector<std::pair<uint64_t, std::weak_ptr<DescriptorSetAccelerator>>> _descriptorSetAccelerators;
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _compiledSamplerStates;
 
 		SequencerConfig MakeSequencerConfig(
-			/*out*/ uint64_t& hash,
-			const std::shared_ptr<ITechniqueDelegate>& delegate,
+			std::shared_ptr<ITechniqueDelegate> delegate,
+			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex);
@@ -453,9 +463,7 @@ namespace RenderCore { namespace Techniques
 
 		const std::shared_ptr<ISampler>& GetMetalSampler(const SamplerDesc& desc);
 
-		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
-		DescriptorSetLayoutAndBinding _sequencerDescSetLayout;
 		std::shared_ptr<SharedPools> _sharedPools;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 	};
@@ -505,8 +513,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
-		/*out*/ uint64_t& hash,
-		const std::shared_ptr<ITechniqueDelegate>& delegate,
+		std::shared_ptr<ITechniqueDelegate> delegate,
+		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIndex)
@@ -516,7 +524,8 @@ namespace RenderCore { namespace Techniques
 		assert(!fbDesc.GetSubpasses().empty());
 
 		SequencerConfig cfg;
-		cfg._delegate = delegate;
+		cfg._delegate = std::move(delegate);
+		cfg._pipelineLayout = std::move(pipelineLayout);
 		cfg._sequencerSelectors = sequencerSelectors;
 
 		cfg._fbDesc = fbDesc;
@@ -536,13 +545,6 @@ namespace RenderCore { namespace Techniques
 		}
 
 		cfg._fbRelevanceValue = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(cfg._fbDesc, cfg._subpassIdx);
-
-		hash = HashCombine(sequencerSelectors.GetHash(), sequencerSelectors.GetParameterNamesHash());
-		hash = HashCombine(cfg._fbRelevanceValue, hash);
-
-		// todo -- we must take into account the delegate itself; it must impact the hash
-		hash = HashCombine(uint64_t(delegate.get()), hash);
-
 		return cfg;
 	}
 
@@ -720,59 +722,27 @@ namespace RenderCore { namespace Techniques
 	}
 
 	auto PipelineAcceleratorPool::CreateSequencerConfig(
-		const std::shared_ptr<ITechniqueDelegate>& delegate,
+		std::shared_ptr<ITechniqueDelegate> delegate,
+		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIndex) -> std::shared_ptr<SequencerConfig>
 	{
-		uint64_t hash = 0;
-		auto cfg = MakeSequencerConfig(hash, delegate, sequencerSelectors, fbDesc, subpassIndex);
-
-		// Look for an existing configuration with the same settings
-		//	-- todo, not checking the delegate here!
-		for (auto i=_sequencerConfigById.begin(); i!=_sequencerConfigById.end(); ++i) {
-			if (i->first == hash) {
-				auto cfgId = SequencerConfigId(i - _sequencerConfigById.begin()) | (SequencerConfigId(_guid) << 32ull);
-				
-				auto result = i->second.lock();
-
-				// The configuration may have expired. In this case, we should just create it again, and reset
-				// our pointer. Note that we only even hold a weak pointer, so if the caller doesn't hold
-				// onto the result, it's just going to expire once more
-				if (!result) {
-					result = std::make_shared<SequencerConfig>(std::move(cfg));
-					result->_cfgId = cfgId;
-					i->second = result;
-
-					// If a pipeline accelerator was added while this sequencer config was expired, the pipeline
-					// accelerator would not have been configured. We have to check for this case and construct
-					// as necessary -- 
-					for (auto& accelerator:_pipelineAccelerators) {
-						auto a = accelerator.second.lock();
-						if (a) {
-							auto& pipeline = a->PipelineForCfgId(cfgId);
-							if (!pipeline._future || (pipeline._future->GetAssetState() != ::Assets::AssetState::Pending && pipeline._future->GetDependencyValidation().GetValidationIndex() != 0)) {
-								pipeline = a->CreatePipelineForSequencerState(*result, _globalSelectors, _pipelineLayout, _matDescSetLayout, _sharedPools);
-							}
-						}
-					}
-				}
-
-				return result;
-			}
-		}
+		auto cfg = MakeSequencerConfig(
+			std::move(delegate), std::move(pipelineLayout),
+			sequencerSelectors, fbDesc, subpassIndex);
 
 		auto cfgId = SequencerConfigId(_sequencerConfigById.size()) | (SequencerConfigId(_guid) << 32ull);
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
 		result->_cfgId = cfgId;
 
-		_sequencerConfigById.emplace_back(std::make_pair(hash, result));		// (note; only holding onto a weak pointer here)
+		_sequencerConfigById.emplace_back(result);		// (note; only holding onto a weak pointer here)
 
 		// trigger creation of pipeline states for all accelerators
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
 			if (a)
-				a->PipelineForCfgId(cfgId) = a->CreatePipelineForSequencerState(*result, _globalSelectors, _pipelineLayout, _matDescSetLayout, _sharedPools);
+				a->PipelineForCfgId(cfgId) = a->CreatePipelineForSequencerState(*result, _globalSelectors, _matDescSetLayout, _sharedPools);
 		}
 
 		return result;
@@ -782,9 +752,9 @@ namespace RenderCore { namespace Techniques
 	{
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
-			auto l = _sequencerConfigById[c].second.lock();
+			auto l = _sequencerConfigById[c].lock();
 			if (l) 
-				pipeline.PipelineForCfgId(cfgId) = pipeline.CreatePipelineForSequencerState(*l, _globalSelectors, _pipelineLayout, _matDescSetLayout, _sharedPools);
+				pipeline.PipelineForCfgId(cfgId) = pipeline.CreatePipelineForSequencerState(*l, _globalSelectors, _matDescSetLayout, _sharedPools);
 		}
 	}
 
@@ -804,10 +774,8 @@ namespace RenderCore { namespace Techniques
 		// This allows us to support hotreloading when files change, etc
 		std::vector<std::shared_ptr<SequencerConfig>> lockedSequencerConfigs;
 		lockedSequencerConfigs.reserve(_sequencerConfigById.size());
-		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
-			auto l = _sequencerConfigById[c].second.lock();
-			lockedSequencerConfigs.emplace_back(std::move(l));
-		}
+		for (auto&c:_sequencerConfigById)
+			lockedSequencerConfigs.emplace_back(c.lock());
 					
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
@@ -819,7 +787,7 @@ namespace RenderCore { namespace Techniques
 					auto& p = a->_finalPipelines[c];
 					if (p._future->GetAssetState() != ::Assets::AssetState::Pending && p._future->GetDependencyValidation().GetValidationIndex() != 0) {
 						// It's out of date -- let's rebuild and reassign it
-						p = a->CreatePipelineForSequencerState(*lockedSequencerConfigs[c], _globalSelectors, _pipelineLayout, _matDescSetLayout, _sharedPools);
+						p = a->CreatePipelineForSequencerState(*lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _sharedPools);
 					}
 				}
 			}
@@ -851,10 +819,10 @@ namespace RenderCore { namespace Techniques
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }
-	const std::shared_ptr<ICompiledPipelineLayout>& PipelineAcceleratorPool::GetPipelineLayout() const { return _pipelineLayout; }
 
-	const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
-	const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetSequencerDescriptorSetLayout() const { return _sequencerDescSetLayout; }
+	// const std::shared_ptr<ICompiledPipelineLayout>& PipelineAcceleratorPool::GetPipelineLayout() const { return _pipelineLayout; }
+	// const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
+	// const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetSequencerDescriptorSetLayout() const { return _sequencerDescSetLayout; }
 
 	static unsigned s_nextPipelineAcceleratorPoolGUID = 1;
 
@@ -903,21 +871,18 @@ namespace RenderCore { namespace Techniques
 
 	PipelineAcceleratorPool::PipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device,
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		PipelineAcceleratorPoolFlags::BitField flags, 
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		const DescriptorSetLayoutAndBinding& sequencerDescSetLayout)
-	: _matDescSetLayout(matDescSetLayout)
-	, _sequencerDescSetLayout(sequencerDescSetLayout)
+		PipelineAcceleratorPoolFlags::BitField flags)
 	{
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = device;
-		_pipelineLayout = pipelineLayout;
 		_flags = flags;
 		_sharedPools = std::make_shared<SharedPools>();
 		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
+		_matDescSetLayout = matDescSetLayout;
 
+#if 0
 		auto pipelineLayoutDesc = _pipelineLayout->GetInitializer();
 		if (_matDescSetLayout.GetLayout()) {
 			// The _matDescSetLayout must agree with what we find the pipeline layout
@@ -934,6 +899,7 @@ namespace RenderCore { namespace Techniques
 			// Even when there's no explicitly provided material desc layout, we can extract what we need from the pipeline layout
 			_sequencerDescSetLayout = ExtractDescriptorSetLayoutAndBinding(pipelineLayoutDesc, "Sequencer");
 		}
+#endif
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}
@@ -941,12 +907,10 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>& device, 
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		PipelineAcceleratorPoolFlags::BitField flags,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		const DescriptorSetLayoutAndBinding& sequencerDescSetLayout)
+		PipelineAcceleratorPoolFlags::BitField flags)
 	{
-		return std::make_shared<PipelineAcceleratorPool>(device, pipelineLayout, flags, matDescSetLayout, sequencerDescSetLayout);
+		return std::make_shared<PipelineAcceleratorPool>(device, matDescSetLayout, flags);
 	}
 
 	namespace Internal

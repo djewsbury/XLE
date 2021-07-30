@@ -16,6 +16,8 @@ namespace RenderCore
 	class UniformsStream;
 	class UniformsStreamInterface;
 	class IDescriptorSet;
+
+	namespace Assets { class PredefinedPipelineLayout; }
 }
 
 namespace RenderCore { namespace Techniques
@@ -83,12 +85,12 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const { return _pipelineLayout; }
+		const std::shared_ptr<Assets::PredefinedPipelineLayout>& GetPredefinedPipelineLayout() const { return _predefinedLayout; }
 		const ::Assets::DependencyValidation GetDependencyValidation() const;
 
 		CompiledPipelineLayoutAsset(
 			std::shared_ptr<IDevice> device,
-			std::shared_ptr<Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-			std::string section,
+			std::shared_ptr<Assets::PredefinedPipelineLayout> predefinedLayout,
 			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
 
 		static void ConstructToFuture(
@@ -99,6 +101,6 @@ namespace RenderCore { namespace Techniques
 
 	protected:
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<Assets::PredefinedPipelineLayoutFile> _containingFile;
+		std::shared_ptr<Assets::PredefinedPipelineLayout> _predefinedLayout;
 	};
 }}

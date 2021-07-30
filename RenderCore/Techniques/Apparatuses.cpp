@@ -67,19 +67,15 @@ namespace RenderCore { namespace Techniques
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 
 		const std::string pipelineLayoutName = "GraphicsMain";
-		auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
-		if (i == _pipelineLayoutFile->_pipelineLayouts.end())
-			Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
+		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_pipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(_shaderCompiler->GetShaderLanguage(), &_commonResources->_samplerPool);
 		_compiledPipelineLayout = device->CreatePipelineLayout(pipelineInit);
 
 		PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
 		_pipelineAccelerators = CreatePipelineAcceleratorPool(
 			device,
-			_compiledPipelineLayout,
-			poolFlags,
 			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
-			FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
+			poolFlags);
+		// FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer")
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
@@ -127,10 +123,7 @@ namespace RenderCore { namespace Techniques
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 
 		const std::string pipelineLayoutName = "ImmediateDrawables";
-		auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
-		if (i == _pipelineLayoutFile->_pipelineLayouts.end())
-			Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-		auto pipelineInit = i->second->MakePipelineLayoutInitializer(_mainDrawingApparatus->_shaderCompiler->GetShaderLanguage(), &_mainDrawingApparatus->_commonResources->_samplerPool);
+		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_pipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(_mainDrawingApparatus->_shaderCompiler->GetShaderLanguage(), &_mainDrawingApparatus->_commonResources->_samplerPool);
 		_compiledPipelineLayout = _mainDrawingApparatus->_device->CreatePipelineLayout(pipelineInit);
 
 		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(

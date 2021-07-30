@@ -485,6 +485,7 @@ namespace ShaderSourceParser
 
 	std::string GenerateDescriptorVariables(
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet, 
+        unsigned descriptorSetSlotIdx,
 		IteratorRange<const GraphLanguage::NodeGraphSignature::Parameter*> captures)
 	{
 		std::stringstream result;
@@ -505,7 +506,7 @@ namespace ShaderSourceParser
 					}
 				});
 			if (cap != captures.end()) {
-    			result << cap->_type << " " << i->_name << " BIND_MAT_T" << descriptorIdx << ";" << std::endl;
+    			result << cap->_type << " " << i->_name << " : register(t" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
             }
 		}
 
@@ -526,7 +527,7 @@ namespace ShaderSourceParser
 					}
 				});
 			if (cap != captures.end()) {
-                result << cap->_type << " " << i->_name << " BIND_MAT_S" << descriptorIdx << ";" << std::endl;
+                result << cap->_type << " " << i->_name << " : register(s" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
             }
 		}
 
@@ -534,7 +535,7 @@ namespace ShaderSourceParser
             if (cb->_type != RenderCore::DescriptorType::UniformBuffer || cb->_name.empty())
                 continue;
 
-			result << "cbuffer " << cb->_name << " BIND_MAT_B" << std::distance(descriptorSet._slots.begin(), cb) << std::endl;
+			result << "cbuffer " << cb->_name << " : register (b" << std::distance(descriptorSet._slots.begin(), cb)  << ", space" << descriptorSetSlotIdx << ")" << std::endl;
             result << "{" << std::endl;
 
             if (cb->_cbIdx != ~0u) {

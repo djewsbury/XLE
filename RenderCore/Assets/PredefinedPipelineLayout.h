@@ -6,6 +6,7 @@
 
 #include "../Types.h"       // (for PipelineType)
 #include "../../Assets/DepVal.h"
+#include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
 #include <unordered_map>
 #include <memory>
@@ -44,8 +45,6 @@ namespace RenderCore { namespace Assets
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _csPushConstants;
-
-            PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
         };
         std::unordered_map<std::string, std::shared_ptr<PipelineLayout>> _pipelineLayouts;
 
@@ -65,6 +64,35 @@ namespace RenderCore { namespace Assets
 
         std::shared_ptr<PipelineLayout> ParsePipelineLayout(Utility::ConditionalProcessingTokenizer&);
         void Parse(Utility::ConditionalProcessingTokenizer&);
+    };
+
+    class PredefinedPipelineLayout
+    {
+    public:
+        struct DescSetReference
+        {
+            std::string _name;
+            std::shared_ptr<PredefinedDescriptorSetLayout> _descSet;
+        };
+        std::vector<DescSetReference> _descriptorSets;
+        std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _vsPushConstants;
+        std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
+        std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
+        std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _csPushConstants;
+        PipelineType _pipelineType;
+
+        PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
+        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+        PredefinedPipelineLayout(
+            const PredefinedPipelineLayoutFile& srcFile,
+            std::string name);
+
+        static void ConstructToFuture(
+            ::Assets::FuturePtr<PredefinedPipelineLayout>& future,
+            StringSection<::Assets::ResChar> src);
+    protected:
+        ::Assets::DependencyValidation _depVal;
     };
 
 }}

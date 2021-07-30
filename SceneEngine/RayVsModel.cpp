@@ -25,6 +25,7 @@
 #include "../RenderCore/Techniques/DrawablesInternal.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/CommonUtils.h"
+#include "../RenderCore/Techniques/PipelineOperators.h"
 #include "../Assets/Assets.h"
 #include "../Assets/DepVal.h"
 #include "../Math/Transformations.h"
@@ -246,6 +247,7 @@ namespace SceneEngine
 		FrameBufferDesc _fbDesc;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _rayTestTechniqueDelegate;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _frustumTechniqueDelegate;
+		::Assets::PtrToFuturePtr<RenderCore::Techniques::CompiledPipelineLayoutAsset> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -253,7 +255,7 @@ namespace SceneEngine
 		struct Desc {};
 		ModelIntersectionTechniqueBox(const Desc& desc)
 		{
-			auto& device = RenderCore::Techniques::Services::GetDevice();
+			auto device = RenderCore::Techniques::Services::GetDevicePtr();
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			_rayTestTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 0);
 			_frustumTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 1);
@@ -262,6 +264,8 @@ namespace SceneEngine
 			subpasses.emplace_back(SubpassDesc{});
 			_fbDesc = FrameBufferDesc { {}, std::move(subpasses) };
 			_depVal = techniqueSetFile->GetDependencyValidation();
+			
+			_pipelineLayout = ::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain");
 		}
 	};
 
@@ -299,15 +303,15 @@ namespace SceneEngine
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
 		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(
-			pipelineAcceleratorPool.GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
+			box._pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
 
 		if (testType == TestType::FrustumTest) {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				box._frustumTechniqueDelegate,
+				box._frustumTechniqueDelegate, box._pipelineLayout,
 				{}, box._fbDesc);
 		} else {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				box._rayTestTechniqueDelegate,
+				box._rayTestTechniqueDelegate, box._pipelineLayout,
 				{}, box._fbDesc);
 		}
 

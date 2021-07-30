@@ -26,37 +26,17 @@ namespace Assets
 
 namespace RenderCore { namespace Techniques
 {
-	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _containingFile->GetDependencyValidation(); };
+	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _predefinedLayout->GetDependencyValidation(); };
 
 	CompiledPipelineLayoutAsset::CompiledPipelineLayoutAsset(
 		std::shared_ptr<RenderCore::IDevice> device,
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts,
-		std::string section,
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> predefinedLayout,
 		RenderCore::ShaderLanguage shaderLanguage)
-	: _containingFile(std::move(predefinedLayouts))
+	: _predefinedLayout(std::move(predefinedLayout))
 	{
 		auto& commonResources = *Services::GetCommonResources();
-		if (!section.empty()) {
-			for (const auto& l:_containingFile->_pipelineLayouts)
-				if (l.first == section) {
-					auto initializer = l.second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
-					_pipelineLayout = device->CreatePipelineLayout(initializer);
-					break;
-				}
-			if (!_pipelineLayout)
-				Throw(::Assets::Exceptions::ConstructionError(
-					::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-					_containingFile->GetDependencyValidation(),
-					"Could not find section (%s) in given pipeline layout file", section.c_str()));
-		} else {
-			if (_containingFile->_pipelineLayouts.empty())
-				Throw(::Assets::Exceptions::ConstructionError(
-					::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-					_containingFile->GetDependencyValidation(),
-					"No pipeline layouts in pipeline layout file"));
-			auto initializer = _containingFile->_pipelineLayouts.begin()->second->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
-			_pipelineLayout = device->CreatePipelineLayout(initializer);
-		}
+		auto initializer = _predefinedLayout->MakePipelineLayoutInitializer(shaderLanguage, &commonResources._samplerPool);
+		_pipelineLayout = device->CreatePipelineLayout(initializer);
 	}
 
 	void CompiledPipelineLayoutAsset::ConstructToFuture(
@@ -66,12 +46,11 @@ namespace RenderCore { namespace Techniques
 		RenderCore::ShaderLanguage shaderLanguage)
 	{
 		using namespace RenderCore;
-		auto splitter = MakeFileNameSplitter(srcFile);
-		auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(splitter.AllExceptParameters());
+		auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
 		::Assets::WhenAll(src).ThenConstructToFuture(
 			future,
-			[device, shaderLanguage, section=splitter.Parameters().AsString()](std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> predefinedLayouts) {
-				return std::make_shared<CompiledPipelineLayoutAsset>(device, std::move(predefinedLayouts), section, shaderLanguage);
+			[device, shaderLanguage](auto predefinedLayout) {
+				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, shaderLanguage);
 			});
 	}
 

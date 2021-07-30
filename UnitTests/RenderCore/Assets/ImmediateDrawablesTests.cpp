@@ -35,6 +35,7 @@
 #include "../../../OSServices/Log.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../Utility/StringFormat.h"
+#include "../../../xleres/FileList.h"
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include "catch2/catch_test_macros.hpp"
@@ -95,7 +96,8 @@ namespace UnitTests
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(
-			testHelper->_device, testHelper->_pipelineLayout,
+			testHelper->_device,
+			::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, IMMEDIATE_PIPELINE ":ImmediateDrawables"),
 			RenderCore::Techniques::Internal::GetDefaultDescriptorSetLayoutAndBinding(),
 			RenderCore::Techniques::DescriptorSetLayoutAndBinding { sequencerDescriptorSetLayout, 0 });
 

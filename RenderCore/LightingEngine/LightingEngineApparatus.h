@@ -51,8 +51,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelinePool> _lightingOperatorCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
-		::Assets::DependencyValidation _depValPtr;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		::Assets::DependencyValidation _depVal;
 
 		LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus>);
 		~LightingEngineApparatus();

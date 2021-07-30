@@ -245,7 +245,7 @@ namespace ShaderSourceParser
 					*result._descriptorSet, 
 					*generateOptions._pipelineLayoutMaterialDescriptorSet);
 
-			auto fragment = GenerateDescriptorVariables(*result._descriptorSet, MakeIteratorRange(mergedCaptures));
+			auto fragment = GenerateDescriptorVariables(*result._descriptorSet, generateOptions._materialDescriptorSetIndex, MakeIteratorRange(mergedCaptures));
 			if (!fragment.empty())
 				result._sourceFragments.push_back(fragment);
 

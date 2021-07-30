@@ -236,9 +236,8 @@ namespace UnitTests
 		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 
 		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
-			testHelper->_device, testHelper->_pipelineLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo,
-			MakeMaterialDescriptorSetLayout(),
-			MakeSequencerDescriptorSetLayout());
+			testHelper->_device, MakeMaterialDescriptorSetLayout(), Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
+			// testHelper->_pipelineLayout, MakeSequencerDescriptorSetLayout());
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
@@ -517,12 +516,8 @@ namespace UnitTests
 		
 		auto matDescSet = MakeMaterialDescriptorSetLayout();
 		auto seqDescSet = MakeSequencerDescriptorSetLayout();
-		auto pipelineAccelerators = CreatePipelineAcceleratorPool(
-			testHelper->_device,
-			testHelper->_pipelineLayout,
-			0,
-			matDescSet,
-			seqDescSet);
+		auto pipelineAccelerators = CreatePipelineAcceleratorPool(testHelper->_device, matDescSet);
+		// testHelper->_pipelineLayout, seqDescSet
 		
 		// When multiple delegate bind to the same slot, we should only query the one
 		// with the highest priority. Delegates in the SequencerContext override the

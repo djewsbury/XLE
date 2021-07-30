@@ -122,7 +122,9 @@ namespace RenderCore { namespace LightingEngine
 					_steps.emplace_back(std::move(drawStep));
 
 					drawStep._type = Step::Type::ExecuteDrawables;
-					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(sb._techniqueDelegate, sb._sequencerSelectors, _fbDescs[beginStep._fbDescIdx]._fbDesc, c);
+					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(
+						sb._techniqueDelegate, sb._sequencerSelectors, 
+						_fbDescs[beginStep._fbDescIdx]._fbDesc, c);
 					drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
 					_steps.emplace_back(std::move(drawStep));
 				} else if (sb._type == SubpassExtension::Type::ExecuteSky) {

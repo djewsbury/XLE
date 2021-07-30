@@ -9,12 +9,14 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
+#include "../../Assets/Assets.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PreprocessorInterpreter.h"
 #include "../../Utility/Streams/ConditionalPreprocessingTokenizer.h"
+#include "../../Utility/Streams/PathUtils.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -165,13 +167,13 @@ namespace RenderCore { namespace Assets
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile() {}
 	PredefinedPipelineLayoutFile::~PredefinedPipelineLayoutFile() {}
 
-	PipelineLayoutInitializer PredefinedPipelineLayoutFile::PipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
+	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
 	{
 		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[_descriptorSets.size()];
 		for (size_t c=0; c<_descriptorSets.size(); ++c) {
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
 			descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature(samplerPool);
-			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
+			descriptorSetBindings[c]._pipelineType = _pipelineType;
 		}
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
@@ -211,6 +213,53 @@ namespace RenderCore { namespace Assets
 		return PipelineLayoutInitializer {
 			MakeIteratorRange(descriptorSetBindings, &descriptorSetBindings[_descriptorSets.size()]),
 			MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount])};
+	}
+
+	PredefinedPipelineLayout::PredefinedPipelineLayout(
+		const PredefinedPipelineLayoutFile& srcFile,
+		std::string name)
+	{
+		auto i = srcFile._pipelineLayouts.find(name);
+		if (i == srcFile._pipelineLayouts.end())
+			Throw(::Assets::Exceptions::ConstructionError(
+				::Assets::Exceptions::ConstructionError::Reason::MissingFile,
+				srcFile.GetDependencyValidation(),
+				"No pipeline layout entry with the name (%s)", name.c_str()));
+
+		_pipelineType = PipelineType::Graphics;
+		if (!i->second->_descriptorSets.empty()) {
+			_pipelineType = i->second->_descriptorSets[0]._pipelineType;
+			_descriptorSets.reserve(i->second->_descriptorSets.size());
+			for (const auto& d:i->second->_descriptorSets) {
+				if (d._pipelineType != _pipelineType)
+					Throw(::Assets::Exceptions::ConstructionError(
+						::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
+						srcFile.GetDependencyValidation(),
+						"Mixing multiple pipeline types (compute/graphics) in pipeline layout"));
+				_descriptorSets.push_back({d._name, d._descSet});
+			}
+		}
+		_vsPushConstants = i->second->_vsPushConstants;
+		_psPushConstants = i->second->_psPushConstants;
+		_gsPushConstants = i->second->_gsPushConstants;
+		_csPushConstants = i->second->_csPushConstants;
+		_depVal = srcFile.GetDependencyValidation();
+	}
+
+	void PredefinedPipelineLayout::ConstructToFuture(
+		::Assets::FuturePtr<PredefinedPipelineLayout>& future,
+		StringSection<::Assets::ResChar> src)
+	{
+		auto split = MakeFileNameSplitter(src);
+		if (split.Parameters().IsEmpty())
+			Throw(std::runtime_error("Missing pipeline layout name when loading pipeline layout (expecting <filename>:<layout name>). For request: " + src.AsString()));
+		auto fileFuture = ::Assets::MakeAsset<PredefinedPipelineLayoutFile>(split.AllExceptParameters());
+		::Assets::WhenAll(fileFuture).ThenConstructToFuture(
+			future,
+			[layoutName=split.Parameters().AsString()](auto file) {
+				return std::make_shared<PredefinedPipelineLayout>(*file, layoutName);
+			});
+		
 	}
 
 }}

@@ -21,7 +21,8 @@ namespace RenderCore { namespace Assets { class PredefinedCBLayout; class Predef
 namespace ShaderSourceParser
 {
 	std::string GenerateDescriptorVariables(
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet, 
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet,
+		unsigned descriptorSetSlotIdx,
 		IteratorRange<const GraphLanguage::NodeGraphSignature::Parameter*> captures);
 
     class PreviewOptions

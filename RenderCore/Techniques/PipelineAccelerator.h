@@ -19,7 +19,7 @@ namespace RenderCore
 	class MiniInputElementDesc;
 }
 
-namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; } }
+namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
 namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class IDescriptorSet; }
 
 namespace RenderCore { namespace Techniques
@@ -31,6 +31,7 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate;
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
+	class CompiledPipelineLayoutAsset;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -62,7 +63,8 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {}) = 0;
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
-			const std::shared_ptr<ITechniqueDelegate>& delegate,
+			std::shared_ptr<ITechniqueDelegate> delegate,
+			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) = 0;
@@ -79,13 +81,12 @@ namespace RenderCore { namespace Techniques
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
 
-		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
-		virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;
-
 		virtual void	RebuildAllOutOfDatePipelines() = 0;
-
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
-		virtual const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const = 0;
+
+		// virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
+		// virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;
+		// virtual const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const = 0;
 
 		virtual ~IPipelineAcceleratorPool();
 
@@ -103,7 +104,7 @@ namespace RenderCore { namespace Techniques
         SetGlobalSelector(name, MakeOpaqueIteratorRange(value), insertType);
 	}
 
-	namespace Internal { const DescriptorSetLayoutAndBinding& GetDefaultDescriptorSetLayoutAndBinding(); }
+	// namespace Internal { const DescriptorSetLayoutAndBinding& GetDefaultDescriptorSetLayoutAndBinding(); }
 
 	namespace PipelineAcceleratorPoolFlags
 	{
@@ -113,9 +114,10 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IPipelineAcceleratorPool> CreatePipelineAcceleratorPool(
 		const std::shared_ptr<IDevice>&,
-		const std::shared_ptr<ICompiledPipelineLayout>&,
-		PipelineAcceleratorPoolFlags::BitField flags = 0,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding(),
-		const DescriptorSetLayoutAndBinding& sequencerDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
+		const DescriptorSetLayoutAndBinding& matDescSetLayout,
+		PipelineAcceleratorPoolFlags::BitField flags = 0);
+
+		// const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding(),
+		// const DescriptorSetLayoutAndBinding& sequencerDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
 }}
 
