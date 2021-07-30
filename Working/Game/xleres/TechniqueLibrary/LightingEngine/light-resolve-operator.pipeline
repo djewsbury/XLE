@@ -44,12 +44,12 @@ DescriptorSet SharedDescriptors
 
 DescriptorSet ShadowTemplate
 {
-	UniformBuffer cb0;					// 0
-	UniformBuffer cb1;					// 1
-	UniformBuffer cb2;					// 2
-	SampledTexture tex0;				// 3
-	SampledTexture tex1;				// 4
-	SampledTexture tex2;				// 5
+	UniformBuffer b0;					// 0
+	UniformBuffer b1;					// 1
+	UniformBuffer b2;					// 2
+	SampledTexture t3;					// 3
+	SampledTexture t4;					// 4
+	SampledTexture t5;					// 5
 };
 
 DescriptorSet DMShadow
@@ -76,6 +76,6 @@ PipelineLayout LightingOperator
 {
 	DescriptorSet PerLightDescriptors;
 	DescriptorSet ShadowTemplate;
-	DescriptorSet SharedDescriptors;
 	DescriptorSet Numeric;
+	DescriptorSet SharedDescriptors;
 };

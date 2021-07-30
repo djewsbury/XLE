@@ -7,7 +7,7 @@
 #include "../../Math/EdgeDetection.hlsl"
 #include "../../Framework/Binding.hlsl"
 
-cbuffer Settings BIND_NUMERIC_B0
+cbuffer Settings BIND_NUMERIC_B3
 {
 	float3 OutlineColour;
 }
@@ -45,7 +45,7 @@ float4 main(float4 pos : SV_Position) : SV_Target0
 	return float4(alpha * OutlineColour, alpha);
 }
 
-cbuffer ShadowHighlightSettings BIND_NUMERIC_B0
+cbuffer ShadowHighlightSettings BIND_NUMERIC_B3
 {
 	float4 ShadowColor;
 }

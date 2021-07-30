@@ -126,7 +126,7 @@ namespace RenderOverlays
             MakeOpaqueIteratorRange(settings)
         };
         auto numericUniforms = encoder.BeginNumericUniformsInterface();
-        numericUniforms.BindConstantBuffers(0, cbData);
+        numericUniforms.BindConstantBuffers(3, cbData);
         if (inputAttachmentMode) {
             if (shaders) {
                 IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get() };

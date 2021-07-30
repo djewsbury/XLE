@@ -484,11 +484,6 @@ namespace UnitTests
 			{DescriptorType::Sampler}
 		};
 
-		RenderCore::DescriptorSetSignature drawSet {
-			{DescriptorType::UniformBuffer},
-			{DescriptorType::SampledTexture}
-		};
-
 		RenderCore::DescriptorSetSignature numericSet {
 			{DescriptorType::SampledTexture},				// 0
 			{DescriptorType::SampledTexture},				// 1
@@ -503,7 +498,6 @@ namespace UnitTests
 		RenderCore::PipelineLayoutInitializer desc;
 		desc.AppendDescriptorSet("Sequencer", sequencerSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Material", materialSet, RenderCore::PipelineType::Graphics);
-		desc.AppendDescriptorSet("Draw", drawSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Numeric", numericSet, RenderCore::PipelineType::Graphics);
 		return device.CreatePipelineLayout(desc);
 	}
@@ -517,43 +511,10 @@ namespace UnitTests
 		auto result = std::make_shared<LegacyRegisterBindingDesc>();
 		result->AppendEntry(
 			RegisterType::ShaderResource, RegisterQualifier::None,
-			Entry{16, 23, Hash64("Sequencer"), 0, 6, 13});
-		result->AppendEntry(
-			RegisterType::Sampler, RegisterQualifier::None,
-			Entry{0, 4, Hash64("Sequencer"), 0, 13, 17});
+			Entry{0, 3, Hash64("Numeric"), 2, 0, 3});
 		result->AppendEntry(
 			RegisterType::ConstantBuffer, RegisterQualifier::None,
-			Entry{7, 13, Hash64("Sequencer"), 0, 0, 6});
-
-		result->AppendEntry(
-			RegisterType::ShaderResource, RegisterQualifier::None,
-			Entry{0, 3, Hash64("Numeric"), 3, 0, 3});
-		result->AppendEntry(
-			RegisterType::ConstantBuffer, RegisterQualifier::None,
-			Entry{0, 2, Hash64("Numeric"), 3, 3, 5});
-		result->AppendEntry(
-			RegisterType::Sampler, RegisterQualifier::None,
-			Entry{16, 17, Hash64("Numeric"), 3, 22, 23});
-
-		result->AppendEntry(
-			RegisterType::ShaderResource, RegisterQualifier::None,
-			Entry{23, 31, Hash64("Material"), 1, 3, 11});
-		result->AppendEntry(
-			RegisterType::ConstantBuffer, RegisterQualifier::None,
-			Entry{4, 7, Hash64("Material"), 1, 0, 3});
-		result->AppendEntry(
-			RegisterType::Sampler, RegisterQualifier::None,
-			Entry{7, 8, Hash64("Material"), 1, 12, 13});
-
-		result->AppendEntry(
-			RegisterType::ShaderResource, RegisterQualifier::None,
-			Entry{15, 16, Hash64("Draw"), 2, 1, 2});
-		result->AppendEntry(
-			RegisterType::ConstantBuffer, RegisterQualifier::None,
-			Entry{13, 14, Hash64("Draw"), 2, 0, 1});
-		result->AppendEntry(
-			RegisterType::Sampler, RegisterQualifier::None,
-			Entry{8, 10, Hash64("Draw"), 2, 2, 4});
+			Entry{3, 4, Hash64("Numeric"), 2, 3, 4});
 		return result;
 	}
 }

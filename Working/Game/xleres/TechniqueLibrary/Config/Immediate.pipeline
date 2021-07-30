@@ -1,17 +1,6 @@
 #include "numeric.pipeline"
 #include "sequencer.pipeline"
 
-DescriptorSet Draw
-{
-	UniformBuffer LocalTransform				// 0
-	{
-		float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-	};
-
-	SampledTexture tex0;						// 1
-};
-
 DescriptorSet Material
 {
 	UniformBuffer cb0;							// 0
@@ -35,6 +24,5 @@ PipelineLayout ImmediateDrawables
 {
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
-	DescriptorSet Draw;
 	DescriptorSet Numeric;
 };

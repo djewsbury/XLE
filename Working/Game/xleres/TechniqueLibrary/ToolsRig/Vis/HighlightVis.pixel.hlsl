@@ -7,7 +7,7 @@
 #include "../../Math/EdgeDetection.hlsl"
 #include "../../Utility/DistinctColors.hlsl"
 
-cbuffer Settings BIND_NUMERIC_B0
+cbuffer Settings BIND_NUMERIC_B3
 {
 	float3 OutlineColour;
 	uint HighlightedMarker;

@@ -27,7 +27,7 @@ float4x4 	SysUniform_GetCameraBasis() { return CameraBasis; }
 bool 		SysUniform_IsOrthogonalProjection() { return FarClip < 0; }
 float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 
-cbuffer LocalTransform BIND_DRAW_B0
+cbuffer LocalTransform BIND_NUMERIC_B3
 {
 	row_major float3x4 LocalToWorld;
 	float3 LocalSpaceView;

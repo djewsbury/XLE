@@ -25,7 +25,7 @@ cbuffer RayDefinition BIND_SEQ_B4
  	row_major float4x4 IntersectionFrustum;
 }
 
-cbuffer DrawCallProperties BIND_DRAW_B1
+cbuffer DrawCallProperties BIND_NUMERIC_B4
 {
 	uint2 MaterialGuid;
 	uint CurrentDrawCallIndex;

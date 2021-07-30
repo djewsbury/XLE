@@ -1,19 +1,6 @@
 #include "numeric.pipeline"
 #include "sequencer.pipeline"
 
-DescriptorSet Draw
-{
-	UniformBuffer LocalTransform			// 0
-	{
-		float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-	};
-
-	UniformBuffer DrawCallProperties;		// 1
-
-	SampledTexture t2;						// 2
-};
-
 DescriptorSet Material
 {
 	UniformBuffer BasicMaterialConstants	// 0
@@ -29,26 +16,25 @@ DescriptorSet Material
 		float   MetalMin = 0.f;
 		float   MetalMax = 1.f;
 	};
-	UniformBuffer cb1;						// 1
-	UniformBuffer cb2;						// 2
+	UniformBuffer b1;						// 1
+	UniformBuffer b2;						// 2
 
 	SampledTexture DiffuseTexture;			// 3
 	SampledTexture NormalsTexture;			// 4
 	SampledTexture ParametersTexture;		// 5
 	SampledTexture SpecularColorTexture;	// 6
-	SampledTexture tex4;					// 7
-	SampledTexture tex5;					// 8
-	SampledTexture tex6;					// 9
-	SampledTexture tex7;					// 10
+	SampledTexture t7;						// 7
+	SampledTexture t8;						// 8
+	SampledTexture t9;						// 9
+	SampledTexture t10;						// 10
 
-	UnorderedAccessBuffer uab0;				// 11
-	Sampler sampler0;						// 12
+	UnorderedAccessBuffer u11;				// 11
+	Sampler s12;							// 12
 };
 
 PipelineLayout GraphicsMain
 {
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
-	DescriptorSet Draw;
 	DescriptorSet Numeric;
 };

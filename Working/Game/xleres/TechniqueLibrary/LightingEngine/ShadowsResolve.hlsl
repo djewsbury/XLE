@@ -19,8 +19,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-Texture2DArray 	ShadowTextures BIND_SHADOW_T0;
-TextureCube 	ShadowCube BIND_SHADOW_T0;
+Texture2DArray 	ShadowTextures BIND_SHADOW_T3;
+TextureCube 	ShadowCube BIND_SHADOW_T3;
 Texture2D		NoiseTexture BIND_SHARED_LIGHTING_T1;
 
 #if !defined(SHADOW_FILTER_MODEL)
