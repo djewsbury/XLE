@@ -17,8 +17,10 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
+#include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/BufferView.h"
+#include "../../RenderCore/IThreadContext.h"
 #include "../../Assets/Assets.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
@@ -38,6 +40,11 @@ namespace RenderOverlays
             pipelineLayout,
             vs, ps, definesTable);
 	}
+
+    static std::shared_ptr<ICompiledPipelineLayout> GetMainPipelineLayout(std::shared_ptr<IDevice> device)
+    {
+        return ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout();
+    }
 
     HighlightByStencilSettings::HighlightByStencilSettings()
     {
@@ -109,7 +116,7 @@ namespace RenderOverlays
         _validationCallback.RegisterDependency(_drawHighlight->GetDependencyValidation());
         _validationCallback.RegisterDependency(_drawShadow->GetDependencyValidation());
         _validationCallback.RegisterDependency(distinctColors->GetDependencyValidation());
-    }
+    }    
 
     static void ExecuteHighlightByStencil(
         Metal::DeviceContext& metalContext,
@@ -179,7 +186,6 @@ namespace RenderOverlays
     void ExecuteHighlightByStencil(
         IThreadContext& threadContext,
         Techniques::ParsingContext& parsingContext,
-        std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted)
     {
@@ -200,6 +206,7 @@ namespace RenderOverlays
         if (!stencilSrv) return;
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
+        auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
         ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted);
     }
@@ -225,10 +232,10 @@ namespace RenderOverlays
 
     BinaryHighlight::BinaryHighlight(
         IThreadContext& threadContext, 
-        std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout,
 		Techniques::ParsingContext& parsingContext)
     {
         using namespace RenderCore;
+        auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
         _pimpl = std::make_unique<Pimpl>(threadContext, std::move(pipelineLayout));
 
 		Techniques::FrameBufferDescFragment fbDescFrag;

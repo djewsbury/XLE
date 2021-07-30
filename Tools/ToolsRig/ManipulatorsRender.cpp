@@ -16,9 +16,11 @@
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Format.h"
+#include "../../RenderCore/IThreadContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/Transformations.h"
@@ -108,7 +110,6 @@ namespace ToolsRig
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight(
                 threadContext,
-                pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
@@ -134,7 +135,6 @@ namespace ToolsRig
 		CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight(
                 threadContext,
-                pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
@@ -164,7 +164,6 @@ namespace ToolsRig
         CATCH_ASSETS_BEGIN
             RenderOverlays::BinaryHighlight highlight(
                 threadContext,
-                pipelineAccelerators.GetPipelineLayout(),
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
 				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
@@ -239,7 +238,7 @@ namespace ToolsRig
             DrawAutoFullscreenImmediately(
                 threadContext,
                 *::Assets::MakeAsset<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
-                    pipelineAccelerators.GetPipelineLayout(),
+                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(threadContext.GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     "xleres/ui/terrainmanipulators.hlsl:ps_circlehighlight:ps_*"),
                 usi, UniformsStream{MakeIteratorRange(resources), MakeIteratorRange(cbs._immediateDatas)},
@@ -296,7 +295,7 @@ namespace ToolsRig
             DrawAutoFullscreenImmediately(
                 threadContext,
                 *::Assets::MakeAsset<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
-                    pipelineAccelerators.GetPipelineLayout(),
+                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(threadContext.GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     (type == RectangleHighlightType::Tool)
                         ? "xleres/ui/terrainmanipulators.hlsl:ps_rectanglehighlight:ps_*"

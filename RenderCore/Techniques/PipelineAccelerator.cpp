@@ -436,9 +436,6 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>& GetDevice() const override;
 		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
 
-		// const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const override;
-		// const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const override;
-
 		PipelineAcceleratorPool(
 			const std::shared_ptr<IDevice>& device,
 			const DescriptorSetLayoutAndBinding& matDescSetLayout, 
@@ -464,8 +461,7 @@ namespace RenderCore { namespace Techniques
 		void RebuildAllPipelines(unsigned poolGuid);
 		void RebuildAllPipelines(unsigned poolGuid, PipelineAccelerator& pipeline);
 
-		const std::shared_ptr<ISampler>& GetMetalSampler(const SamplerDesc& desc);
-
+		SamplerPool _samplerPool;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
 		std::shared_ptr<SharedPools> _sharedPools;
 		PipelineAcceleratorPoolFlags::BitField _flags;
@@ -681,7 +677,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
 		metalSamplers.reserve(samplerBindings.size());
 		for (const auto&c:samplerBindings)
-			metalSamplers.push_back(std::make_pair(c.first, GetMetalSampler(c.second)));
+			metalSamplers.push_back(std::make_pair(c.first, _samplerPool.GetSampler(c.second)));
 
 		if (shaderPatches) {
 			auto patchCollectionFuture = ::Assets::MakeAsset<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
@@ -862,23 +858,8 @@ namespace RenderCore { namespace Techniques
 		RebuildAllPipelines(_guid);
 	}
 
-	const std::shared_ptr<ISampler>& PipelineAcceleratorPool::GetMetalSampler(const SamplerDesc& desc)
-	{
-		auto hash = desc.Hash();
-		auto i = LowerBound(_compiledSamplerStates, hash);
-		if (i != _compiledSamplerStates.end() && i->first == hash)
-			return i->second;
-
-		auto result = _device->CreateSampler(desc);
-		i = _compiledSamplerStates.insert(i, std::make_pair(hash, result));
-		return i->second;
-	}
-
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }
 	const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
-
-	// const std::shared_ptr<ICompiledPipelineLayout>& PipelineAcceleratorPool::GetPipelineLayout() const { return _pipelineLayout; }
-	// const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetSequencerDescriptorSetLayout() const { return _sequencerDescSetLayout; }
 
 	static unsigned s_nextPipelineAcceleratorPoolGUID = 1;
 
@@ -929,6 +910,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>& device,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags)
+	: _samplerPool(*device)
 	{
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = device;
@@ -938,25 +920,6 @@ namespace RenderCore { namespace Techniques
 		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
 		_matDescSetLayout = matDescSetLayout;
 		assert(_matDescSetLayout.GetLayout());
-
-#if 0
-		auto pipelineLayoutDesc = _pipelineLayout->GetInitializer();
-		if (_matDescSetLayout.GetLayout()) {
-			// The _matDescSetLayout must agree with what we find the pipeline layout
-			CheckDescSetLayout(_matDescSetLayout, pipelineLayoutDesc, "material descriptor set");
-		} else {
-			// Even when there's no explicitly provided material desc layout, we can extract what we need from the pipeline layout
-			_matDescSetLayout = ExtractDescriptorSetLayoutAndBinding(pipelineLayoutDesc, "Material");
-		}
-
-		if (_sequencerDescSetLayout.GetLayout()) {
-			// The _matDescSetLayout must agree with what we find the pipeline layout
-			CheckDescSetLayout(_sequencerDescSetLayout, pipelineLayoutDesc, "sequencer descriptor set");
-		} else {
-			// Even when there's no explicitly provided material desc layout, we can extract what we need from the pipeline layout
-			_sequencerDescSetLayout = ExtractDescriptorSetLayoutAndBinding(pipelineLayoutDesc, "Sequencer");
-		}
-#endif
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}

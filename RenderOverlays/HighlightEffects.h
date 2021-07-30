@@ -26,7 +26,6 @@ namespace RenderOverlays
     void ExecuteHighlightByStencil(
         RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parsingContext,
-        std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout,
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted);
 
@@ -53,7 +52,6 @@ namespace RenderOverlays
         
         BinaryHighlight(
             RenderCore::IThreadContext& threadContext,
-            std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout,
             RenderCore::Techniques::ParsingContext& parsingContext);
         ~BinaryHighlight();
     protected:
