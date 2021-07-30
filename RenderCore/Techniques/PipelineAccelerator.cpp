@@ -449,12 +449,13 @@ namespace RenderCore { namespace Techniques
 
 	protected:
 		ParameterBox _globalSelectors;
-		std::vector<std::weak_ptr<SequencerConfig>> _sequencerConfigById;
+		std::vector<std::pair<uint64_t, std::weak_ptr<SequencerConfig>>> _sequencerConfigById;
 		std::vector<std::pair<uint64_t, std::weak_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::vector<std::pair<uint64_t, std::weak_ptr<DescriptorSetAccelerator>>> _descriptorSetAccelerators;
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _compiledSamplerStates;
 
 		SequencerConfig MakeSequencerConfig(
+			/*out*/ uint64_t& hash,
 			std::shared_ptr<ITechniqueDelegate> delegate,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
@@ -528,6 +529,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
+		/*out*/ uint64_t& hash,
 		std::shared_ptr<ITechniqueDelegate> delegate,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
@@ -539,7 +541,6 @@ namespace RenderCore { namespace Techniques
 
 		SequencerConfig cfg;
 		cfg._delegate = std::move(delegate);
-		cfg._pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, cfg._delegate->GetPipelineLayout());
 		cfg._sequencerSelectors = sequencerSelectors;
 
 		cfg._fbDesc = fbDesc;
@@ -559,6 +560,13 @@ namespace RenderCore { namespace Techniques
 		}
 
 		cfg._fbRelevanceValue = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(cfg._fbDesc, cfg._subpassIdx);
+
+		hash = HashCombine(sequencerSelectors.GetHash(), sequencerSelectors.GetParameterNamesHash());
+		hash = HashCombine(cfg._fbRelevanceValue, hash);
+
+		// todo -- we must take into account the delegate itself; it must impact the hash
+		hash = HashCombine(uint64_t(delegate.get()), hash);
+
 		return cfg;
 	}
 
@@ -741,15 +749,50 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIndex) -> std::shared_ptr<SequencerConfig>
 	{
-		auto cfg = MakeSequencerConfig(
-			std::move(delegate),
-			sequencerSelectors, fbDesc, subpassIndex);
+		uint64_t hash = 0;
+		auto cfg = MakeSequencerConfig(hash, delegate, sequencerSelectors, fbDesc, subpassIndex);
+
+		// Look for an existing configuration with the same settings
+		//	-- todo, not checking the delegate here!
+		for (auto i=_sequencerConfigById.begin(); i!=_sequencerConfigById.end(); ++i) {
+			if (i->first == hash) {
+				auto cfgId = SequencerConfigId(i - _sequencerConfigById.begin()) | (SequencerConfigId(_guid) << 32ull);
+				
+				auto result = i->second.lock();
+
+				// The configuration may have expired. In this case, we should just create it again, and reset
+				// our pointer. Note that we only even hold a weak pointer, so if the caller doesn't hold
+				// onto the result, it's just going to expire once more
+				if (!result) {
+					result = std::make_shared<SequencerConfig>(std::move(cfg));
+					result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
+					result->_cfgId = cfgId;
+					i->second = result;
+
+					// If a pipeline accelerator was added while this sequencer config was expired, the pipeline
+					// accelerator would not have been configured. We have to check for this case and construct
+					// as necessary -- 
+					for (auto& accelerator:_pipelineAccelerators) {
+						auto a = accelerator.second.lock();
+						if (a) {
+							auto& pipeline = a->PipelineForCfgId(cfgId);
+							if (!pipeline._future || (pipeline._future->GetAssetState() != ::Assets::AssetState::Pending && pipeline._future->GetDependencyValidation().GetValidationIndex() != 0)) {
+								pipeline = a->CreatePipelineForSequencerState(*result, _globalSelectors, _matDescSetLayout, _sharedPools);
+							}
+						}
+					}
+				}
+
+				return result;
+			}
+		}
 
 		auto cfgId = SequencerConfigId(_sequencerConfigById.size()) | (SequencerConfigId(_guid) << 32ull);
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
+		result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
 		result->_cfgId = cfgId;
 
-		_sequencerConfigById.emplace_back(result);		// (note; only holding onto a weak pointer here)
+		_sequencerConfigById.emplace_back(std::make_pair(hash, result));		// (note; only holding onto a weak pointer here)
 
 		// trigger creation of pipeline states for all accelerators
 		for (auto& accelerator:_pipelineAccelerators) {
@@ -765,7 +808,7 @@ namespace RenderCore { namespace Techniques
 	{
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
-			auto l = _sequencerConfigById[c].lock();
+			auto l = _sequencerConfigById[c].second.lock();
 			if (l) 
 				pipeline.PipelineForCfgId(cfgId) = pipeline.CreatePipelineForSequencerState(*l, _globalSelectors, _matDescSetLayout, _sharedPools);
 		}
@@ -788,7 +831,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<SequencerConfig>> lockedSequencerConfigs;
 		lockedSequencerConfigs.reserve(_sequencerConfigById.size());
 		for (auto&c:_sequencerConfigById)
-			lockedSequencerConfigs.emplace_back(c.lock());
+			lockedSequencerConfigs.emplace_back(c.second.lock());
 					
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
