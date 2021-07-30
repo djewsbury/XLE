@@ -166,13 +166,12 @@ namespace RenderCore { namespace Techniques
 
 				// we will actually begin a "GraphicsPipelineDescWithFilteringRules" future here, which
 				// will complete to the pipeline desc + automatic shader filtering rules
-				auto pipelineDescFuture = cfg._delegate->Resolve(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
+				auto pipelineDescFuture = cfg._delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
 				auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture);
-				auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
 				
 				::Assets::WhenAll(resolvedTechnique, pipelineDescFuture).ThenConstructToFuture(
 					resultFuture,
-					[sharedPools, pipelineLayout, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
+					[sharedPools, pipelineLayoutAsset, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
 						::Assets::FuturePtr<IPipelineAcceleratorPool::Pipeline>& resultFuture,
 						std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering,
 						std::shared_ptr<GraphicsPipelineDesc> pipelineDesc) {
@@ -221,11 +220,13 @@ namespace RenderCore { namespace Techniques
 								configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_automaticFiltering[c]->GetDependencyValidation());
 						if (pipelineDescWithFiltering->_preconfiguration)
 							configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
+						configurationDepVal.RegisterDependency(pipelineLayoutAsset->GetDependencyValidation());
 
 						StreamOutputInitializers so;
 						so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 						so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
 
+						auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
 						auto shaderProgram = Internal::MakeShaderProgram(*pipelineDesc, pipelineLayout, compiledPatchCollection, MakeIteratorRange(filteredSelectors), so);
 						std::string vsd, psd, gsd;
 						#if defined(_DEBUG)
@@ -413,7 +414,6 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			std::shared_ptr<ITechniqueDelegate> delegate,
-			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) override;
@@ -424,6 +424,9 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 		const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 
+		const ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset>& GetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const override;
+		std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const override;
+
 		void			SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		void			RemoveGlobalSelector(StringSection<> name) override;
@@ -431,9 +434,9 @@ namespace RenderCore { namespace Techniques
 		void			RebuildAllOutOfDatePipelines() override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
+		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
 
 		// const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const override;
-		// const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
 		// const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const override;
 
 		PipelineAcceleratorPool(
@@ -453,7 +456,6 @@ namespace RenderCore { namespace Techniques
 
 		SequencerConfig MakeSequencerConfig(
 			std::shared_ptr<ITechniqueDelegate> delegate,
-			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex);
@@ -512,9 +514,21 @@ namespace RenderCore { namespace Techniques
 		return accelerator._descriptorSet->TryActualize();
 	}
 
+	const ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset>& PipelineAcceleratorPool::GetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const
+	{
+		return sequencerConfig._pipelineLayout;
+	}
+
+	std::shared_ptr<ICompiledPipelineLayout> PipelineAcceleratorPool::TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const
+	{
+		auto actual = sequencerConfig._pipelineLayout->TryActualize();
+		if (actual)
+			return (*actual)->GetPipelineLayout();
+		return nullptr;
+	}
+
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
 		std::shared_ptr<ITechniqueDelegate> delegate,
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIndex)
@@ -525,7 +539,7 @@ namespace RenderCore { namespace Techniques
 
 		SequencerConfig cfg;
 		cfg._delegate = std::move(delegate);
-		cfg._pipelineLayout = std::move(pipelineLayout);
+		cfg._pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, cfg._delegate->GetPipelineLayout());
 		cfg._sequencerSelectors = sequencerSelectors;
 
 		cfg._fbDesc = fbDesc;
@@ -723,13 +737,12 @@ namespace RenderCore { namespace Techniques
 
 	auto PipelineAcceleratorPool::CreateSequencerConfig(
 		std::shared_ptr<ITechniqueDelegate> delegate,
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIndex) -> std::shared_ptr<SequencerConfig>
 	{
 		auto cfg = MakeSequencerConfig(
-			std::move(delegate), std::move(pipelineLayout),
+			std::move(delegate),
 			sequencerSelectors, fbDesc, subpassIndex);
 
 		auto cfgId = SequencerConfigId(_sequencerConfigById.size()) | (SequencerConfigId(_guid) << 32ull);
@@ -819,9 +832,9 @@ namespace RenderCore { namespace Techniques
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }
+	const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
 
 	// const std::shared_ptr<ICompiledPipelineLayout>& PipelineAcceleratorPool::GetPipelineLayout() const { return _pipelineLayout; }
-	// const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetMaterialDescriptorSetLayout() const { return _matDescSetLayout; }
 	// const DescriptorSetLayoutAndBinding& PipelineAcceleratorPool::GetSequencerDescriptorSetLayout() const { return _sequencerDescSetLayout; }
 
 	static unsigned s_nextPipelineAcceleratorPoolGUID = 1;

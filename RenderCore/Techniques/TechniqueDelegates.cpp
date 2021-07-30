@@ -27,9 +27,11 @@ namespace RenderCore { namespace Techniques
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
+
+		std::string GetPipelineLayout() override;
 
 		TechniqueDelegate_Legacy(
 			unsigned techniqueIndex,
@@ -56,7 +58,7 @@ namespace RenderCore { namespace Techniques
 		nascentDesc->_selectorPreconfigurationFile = entry._preconfigurationFileName;
 	}
 
-	auto TechniqueDelegate_Legacy::Resolve(
+	auto TechniqueDelegate_Legacy::GetPipelineDesc(
 		const CompiledShaderPatchCollection::Interface& shaderPatches,
 		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::PtrToFuturePtr<GraphicsPipelineDesc>
 	{
@@ -88,6 +90,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		return result;
+	}
+
+	std::string TechniqueDelegate_Legacy::GetPipelineLayout()
+	{
+		return MAIN_PIPELINE ":GraphicsMain";
 	}
 
 	TechniqueDelegate_Legacy::TechniqueDelegate_Legacy(
@@ -180,7 +187,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -234,6 +241,11 @@ namespace RenderCore { namespace Techniques
 				});
 			
 			return result;
+		}
+
+		std::string GetPipelineLayout()
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		TechniqueDelegate_Deferred(
@@ -294,7 +306,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -348,6 +360,11 @@ namespace RenderCore { namespace Techniques
 					return nascentDesc;
 				});
 			return result;
+		}
+
+		std::string GetPipelineLayout()
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		TechniqueDelegate_Forward(
@@ -417,7 +434,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -458,6 +475,11 @@ namespace RenderCore { namespace Techniques
 					return nascentDesc;
 				});
 			return result;
+		}
+
+		std::string GetPipelineLayout()
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		TechniqueDelegate_DepthOnly(
@@ -552,7 +574,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -601,6 +623,11 @@ namespace RenderCore { namespace Techniques
 					return nascentDesc;
 				});
 			return result;
+		}
+
+		std::string GetPipelineLayout()
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		TechniqueDelegate_PreDepth(
@@ -666,7 +693,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -705,6 +732,11 @@ namespace RenderCore { namespace Techniques
 					return nascentDesc;
 				});			
 			return result;
+		}
+
+		std::string GetPipelineLayout()
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		TechniqueDelegate_RayTest(

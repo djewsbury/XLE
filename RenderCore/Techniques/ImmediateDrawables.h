@@ -78,8 +78,6 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(
 		const std::shared_ptr<IDevice>&,
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset>,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding(),
-		const DescriptorSetLayoutAndBinding& sequencerDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
+		const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
 }}
 

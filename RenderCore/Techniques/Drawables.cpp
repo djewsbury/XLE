@@ -168,7 +168,9 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt)
 	{
 		auto& metalContext = *Metal::DeviceContext::Get(context);
-		auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
+		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
+		if (!pipelineLayout) return;
+		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
 		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
 	}
 
@@ -180,7 +182,9 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt)
 	{
 		auto& metalContext = *Metal::DeviceContext::Get(context);
-		auto encoder = metalContext.BeginGraphicsEncoder(pipelineAccelerators.GetPipelineLayout());
+		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
+		if (!pipelineLayout) return;
+		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
 		SequencerUniformsHelper uniformsHelper { parserContext };
 		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
 	}

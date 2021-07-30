@@ -19,7 +19,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RenderStepFragmentInterface::AddSubpass(
 		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
-		const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& techniqueDelegate,
+		std::shared_ptr<Techniques::ITechniqueDelegate> techniqueDelegate,
 		Techniques::BatchFilter batchFilter,
 		ParameterBox&& sequencerSelectors,
 		std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegate)
@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		_subpassExtensions.emplace_back(
 			SubpassExtension {
 				SubpassExtension::Type::ExecuteDrawables,
-				techniqueDelegate, std::move(sequencerSelectors), batchFilter,
+				std::move(techniqueDelegate), std::move(sequencerSelectors), batchFilter,
 				std::move(shaderResourceDelegate)
 			});
 	}

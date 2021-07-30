@@ -17,10 +17,11 @@ namespace RenderCore
 	class FrameBufferDesc;
 	class InputElementDesc;
 	class MiniInputElementDesc;
+	class ICompiledPipelineLayout;
 }
 
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
-namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class IDescriptorSet; }
+namespace RenderCore { class IDevice; class IDescriptorSet; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -64,7 +65,6 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			std::shared_ptr<ITechniqueDelegate> delegate,
-			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) = 0;
@@ -77,6 +77,9 @@ namespace RenderCore { namespace Techniques
 		virtual const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 
+		virtual const ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset>& GetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
+
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
 		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
@@ -84,7 +87,7 @@ namespace RenderCore { namespace Techniques
 		virtual void	RebuildAllOutOfDatePipelines() = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 
-		// virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
+		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
 		// virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;
 		// virtual const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const = 0;
 

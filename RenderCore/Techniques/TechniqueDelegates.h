@@ -13,6 +13,7 @@
 
 namespace RenderCore { class StreamOutputInitializers; class IDevice; }
 namespace ShaderSourceParser { class SelectorFilteringRules; }
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; }}
 
 namespace RenderCore { namespace Techniques
 {
@@ -40,10 +41,10 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		using GraphicsPipelineDesc = Techniques::GraphicsPipelineDesc;
-		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
-
+		virtual std::string GetPipelineLayout() = 0;
 		virtual ~ITechniqueDelegate();
 	};
 

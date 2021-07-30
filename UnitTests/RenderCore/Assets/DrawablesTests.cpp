@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "TechniqueTestsHelper.h"
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../ReusableDataFiles.h"
@@ -9,7 +10,6 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
-#include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
@@ -20,24 +20,19 @@
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/Format.h"
-#include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetSetManager.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Math/MathSerialization.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../ConsoleRig/Console.h"
 #include "../../../OSServices/Log.h"
-#include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../Utility/StringFormat.h"
-#include "thousandeyes/futures/then.h"
-#include "thousandeyes/futures/DefaultExecutor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <regex>
@@ -157,58 +152,6 @@ namespace UnitTests
 		RenderCore::ResourceDesc _targetDesc;
 	};
 
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeMaterialDescriptorSetLayout()
-	{
-		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		layout->_slots = {
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UnorderedAccessBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler }
-		};
-
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 1 };
-	}
-
-	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeSequencerDescriptorSetLayout()
-	{
-		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		layout->_slots = {
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"GlobalTransform"}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"LocalTransform"}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"SeqBuffer0"}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"SeqTex0"}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"SeqSampler0"}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler }
-		};
-
-		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 0 };
-	}
-
 	static unsigned s_sphereVertexCount = 0;
 
 	TEST_CASE( "Drawables-RenderImages", "[rendercore_techniques]" )
@@ -221,23 +164,9 @@ namespace UnitTests
 
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
-		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
-		techniqueServices->SetBufferUploads(bufferUploads);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
-
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
-
+		TechniqueTestApparatus techniqueTestApparatus(*testHelper);
+		auto pipelineAcceleratorPool = techniqueTestApparatus._pipelineAccelerators;
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
-
-		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
-			testHelper->_device, MakeMaterialDescriptorSetLayout(), Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-			// testHelper->_pipelineLayout, MakeSequencerDescriptorSetLayout());
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
@@ -386,7 +315,7 @@ namespace UnitTests
 							pkt);
 
 					if (parsingContext._requiredBufferUploadsCommandList)
-						bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
 				std::this_thread::sleep_for(16ms);

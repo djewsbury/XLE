@@ -124,10 +124,7 @@ namespace UnitTests
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";
-			auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
-			if (i == _pipelineLayoutFile->_pipelineLayouts.end())
-				Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-			auto pipelineInit = i->second->MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
+			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
 			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device, std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper._device));
@@ -305,19 +302,10 @@ namespace UnitTests
 			auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(IMMEDIATE_PIPELINE);
 			pipelineLayoutFuture->StallWhilePending();
 			auto pipelineLayoutFile = pipelineLayoutFuture->Actualize();
-
 			const std::string pipelineLayoutName = "ImmediateDrawables";
-			auto i = pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
-			if (i == pipelineLayoutFile->_pipelineLayouts.end())
-				Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-			auto pipelineInit = i->second->MakePipelineLayoutInitializer(metalHelper._shaderCompiler->GetShaderLanguage());
-			auto compiledPipelineLayout = metalHelper._device->CreatePipelineLayout(pipelineInit);
-
 			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(
 				metalHelper._device, 
-				compiledPipelineLayout,
-				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Material"),
-				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
+				RenderCore::Techniques::FindLayout(*pipelineLayoutFile, pipelineLayoutName, "Material"));
 
 			// _fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*metalHelper._device);
 		}

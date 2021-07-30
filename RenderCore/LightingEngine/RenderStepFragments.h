@@ -32,7 +32,7 @@ namespace RenderCore { namespace LightingEngine
             const AttachmentDesc& request);
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
-			const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& techniqueDelegate = nullptr,
+			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,
 			Techniques::BatchFilter batchFilter = Techniques::BatchFilter::Max,
 			ParameterBox&& sequencerSelectors = {},
 			std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegates = {});

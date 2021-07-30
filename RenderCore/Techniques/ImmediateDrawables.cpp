@@ -30,9 +30,9 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
-			const RenderCore::Assets::RenderStateSet& renderStates)
+			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			unsigned dsMode = 0;
 			// We're re-purposing the _writeMask flag for depth test and write
@@ -46,6 +46,11 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 			return _pipelineDescFuture[dsMode];
+		}
+
+		virtual std::string GetPipelineLayout() override
+		{
+			return IMMEDIATE_PIPELINE ":ImmediateDrawables";
 		}
 
 		ImmediateRendererTechniqueDelegate() 
@@ -263,7 +268,7 @@ namespace RenderCore { namespace Techniques
 			auto i = LowerBound(_sequencerConfigs, hash);
 			if (i==_sequencerConfigs.end() || i->first != hash) {
 				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
-					_techniqueDelegate, _pipelineLayout, ParameterBox{},
+					_techniqueDelegate, ParameterBox{},
 					fbDesc, subpassIndex);
 				_sequencerConfigs.insert(i, std::make_pair(hash, result));
 				return result;
@@ -304,10 +309,7 @@ namespace RenderCore { namespace Techniques
 
 		ImmediateDrawables(
 			const std::shared_ptr<IDevice>& device,
-			::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
-			const DescriptorSetLayoutAndBinding& matDescSetLayout,
-			const DescriptorSetLayoutAndBinding& sequencerDescSetLayout)
-		: _pipelineLayout(std::move(pipelineLayout))
+			const DescriptorSetLayoutAndBinding& matDescSetLayout)
 		{
 			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, matDescSetLayout, 0);
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
@@ -322,7 +324,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		std::vector<std::pair<uint64_t, std::shared_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::shared_ptr<ITechniqueDelegate> _techniqueDelegate;
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> _pipelineLayout;
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
@@ -373,11 +374,9 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(
 		const std::shared_ptr<IDevice>& device,
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> pipelineLayout,
-		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		const DescriptorSetLayoutAndBinding& sequencerDescSetLayout)
+		const DescriptorSetLayoutAndBinding& matDescSetLayout)
 	{
-		return std::make_shared<ImmediateDrawables>(device, std::move(pipelineLayout), matDescSetLayout, sequencerDescSetLayout);
+		return std::make_shared<ImmediateDrawables>(device, matDescSetLayout);
 	}
 
 	void IImmediateDrawables::ExecuteDraws(IThreadContext& threadContext, ParsingContext& parsingContext, const RenderPassInstance& rpi)

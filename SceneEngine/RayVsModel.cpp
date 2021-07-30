@@ -247,7 +247,6 @@ namespace SceneEngine
 		FrameBufferDesc _fbDesc;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _rayTestTechniqueDelegate;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _frustumTechniqueDelegate;
-		::Assets::PtrToFuturePtr<RenderCore::Techniques::CompiledPipelineLayoutAsset> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -264,8 +263,6 @@ namespace SceneEngine
 			subpasses.emplace_back(SubpassDesc{});
 			_fbDesc = FrameBufferDesc { {}, std::move(subpasses) };
 			_depVal = techniqueSetFile->GetDependencyValidation();
-			
-			_pipelineLayout = ::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain");
 		}
 	};
 
@@ -302,19 +299,20 @@ namespace SceneEngine
 			{} };
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
-		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(
-			box._pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
-
 		if (testType == TestType::FrustumTest) {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				box._frustumTechniqueDelegate, box._pipelineLayout,
+				box._frustumTechniqueDelegate,
 				{}, box._fbDesc);
 		} else {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				box._rayTestTechniqueDelegate, box._pipelineLayout,
+				box._rayTestTechniqueDelegate,
 				{}, box._fbDesc);
 		}
 
+		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayout(*_pimpl->_sequencerConfig);
+		pipelineLayout->StallWhilePending();
+
+		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
 		_pimpl->_testType = testType;
 		_pimpl->_pipelineAccelerators = &pipelineAcceleratorPool;
     }

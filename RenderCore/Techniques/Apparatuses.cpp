@@ -17,6 +17,7 @@
 #include "SystemUniformsDelegate.h"
 #include "Drawables.h"
 #include "PipelineCollection.h"
+#include "PipelineOperators.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
@@ -122,15 +123,9 @@ namespace RenderCore { namespace Techniques
 		_pipelineLayoutFile = pipelineLayoutFuture->Actualize();
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 
-		const std::string pipelineLayoutName = "ImmediateDrawables";
-		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_pipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(_mainDrawingApparatus->_shaderCompiler->GetShaderLanguage(), &_mainDrawingApparatus->_commonResources->_samplerPool);
-		_compiledPipelineLayout = _mainDrawingApparatus->_device->CreatePipelineLayout(pipelineInit);
-
 		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(
 			_mainDrawingApparatus->_device, 
-			_compiledPipelineLayout,
-			RenderCore::Techniques::FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Material"),
-			RenderCore::Techniques::FindLayout(*_pipelineLayoutFile, pipelineLayoutName, "Sequencer"));
+			RenderCore::Techniques::FindLayout(*_pipelineLayoutFile, "ImmediateDrawables", "Material"));
 
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 	}

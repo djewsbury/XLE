@@ -131,7 +131,7 @@ namespace UnitTests
 		REQUIRE(pipelineLayout._gsPushConstants.first == "gspush");
 
 		// Attempt to build an actual ICompiledPipelineLayout from the configuration we loaded
-		auto pipelineLayoutInitializer = pipelineLayout.MakePipelineLayoutInitializer(RenderCore::ShaderLanguage::HLSL);
+		auto pipelineLayoutInitializer = RenderCore::Assets::PredefinedPipelineLayout{*layoutFile, "GraphicsMain"}.MakePipelineLayoutInitializer(RenderCore::ShaderLanguage::HLSL);
 		auto testHelper = MakeTestHelper();
 		auto compiledLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer);
 		REQUIRE(compiledLayout != nullptr);

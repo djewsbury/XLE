@@ -77,10 +77,7 @@ namespace UnitTests
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";
-			auto i = _pipelineLayoutFile->_pipelineLayouts.find(pipelineLayoutName);
-			if (i == _pipelineLayoutFile->_pipelineLayouts.end())
-				Throw(std::runtime_error("Did not find pipeline layout with the name " + pipelineLayoutName + " in the given pipeline layout file"));
-			auto pipelineInit = i->second->MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
+			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
 			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device, std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper._device));

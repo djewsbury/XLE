@@ -65,9 +65,9 @@ namespace UnitTests
 	class SimpleTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-			const RenderCore::Assets::RenderStateSet& renderStates)
+			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;
 			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -82,6 +82,11 @@ namespace UnitTests
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("unit-test-delegate");
 			result->SetAsset(std::move(templateDesc), {});
 			return result;
+		}
+
+		std::string GetPipelineLayout() override
+		{
+			return MAIN_PIPELINE ":GraphicsMain";
 		}
 
 		SimpleTechniqueDelegate() 
@@ -171,7 +176,7 @@ namespace UnitTests
 		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
 		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
 
-		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, testHelper->_pipelineLayout, 0, MakeMaterialDescriptorSetLayout(), MakeSequencerDescriptorSetLayout());
+		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, MakeSequencerDescriptorSetLayout());
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(

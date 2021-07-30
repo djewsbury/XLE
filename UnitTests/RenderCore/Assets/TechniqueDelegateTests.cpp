@@ -289,7 +289,7 @@ namespace UnitTests
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
@@ -381,7 +381,9 @@ namespace UnitTests
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelinePool->GetPipelineLayout());
+			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayout(cfg);
+			pipelineLayoutAsset->StallWhilePending();
+			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize());
 
 			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(globalTransform) };
 			UniformsStream uniformsStream;
@@ -473,7 +475,6 @@ namespace UnitTests
 					RenderCore::DepthStencilDesc{});
 
 				RenderCore::Assets::RenderStateSet stateSet;
-
 				auto pipelineDescFuture = delegate->Resolve(
 					compiledPatchCollection->GetInterface(),
 					stateSet);

@@ -59,9 +59,7 @@ namespace UnitTests
 		_compilerRegistrations.push_back(RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers));
 
 		_pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(
-			_metalTestHelper->_device, _metalTestHelper->_pipelineLayout, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo,
-			MakeMaterialDescriptorSetLayout(),
-			MakeSequencerDescriptorSetLayout());
+			_metalTestHelper->_device, MakeMaterialDescriptorSetLayout(), Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);

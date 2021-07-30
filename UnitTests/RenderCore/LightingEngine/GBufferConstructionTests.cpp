@@ -77,9 +77,9 @@ namespace UnitTests
 	class WriteWorldCoordsDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> Resolve(
+		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
-			const RenderCore::Assets::RenderStateSet& renderStates)
+			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;
 			auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -96,7 +96,9 @@ namespace UnitTests
 			result->SetAsset(std::move(pipelineDesc), nullptr);
 			return result;
 		}
-	}; 
+
+		virtual std::string GetPipelineLayout() override { return MAIN_PIPELINE ":GraphicsMain"; }
+	};
 
 	static UInt2 s_testResolution { 2048, 2048 };
 	static RenderCore::Format s_depthStencilFormat = RenderCore::Format::D24_UNORM_S8_UINT;

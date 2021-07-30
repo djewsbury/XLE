@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"
 #include "../../../BufferUploads/IBufferUploads.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -95,11 +96,7 @@ namespace UnitTests
 		auto sequencerDescriptorSetLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
-		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(
-			testHelper->_device,
-			::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, IMMEDIATE_PIPELINE ":ImmediateDrawables"),
-			RenderCore::Techniques::Internal::GetDefaultDescriptorSetLayoutAndBinding(),
-			RenderCore::Techniques::DescriptorSetLayoutAndBinding { sequencerDescriptorSetLayout, 0 });
+		auto immediateDrawables = RenderCore::Techniques::CreateImmediateDrawables(testHelper->_device, {});
 
 		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*testHelper->_device);

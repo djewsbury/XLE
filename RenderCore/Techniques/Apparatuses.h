@@ -94,7 +94,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IImmediateDrawables> _immediateDrawables;
 
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
-		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 
