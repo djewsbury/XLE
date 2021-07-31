@@ -433,7 +433,7 @@ namespace RenderCore { namespace LightingEngine
             result.reserve(intersectionPts.size());
             for (auto& pt:intersectionPts)
                 result.push_back(Truncate(clipToWorld * pt));
-            return {result, intersectionPts[0][2]};
+            return {std::move(result), intersectionPts[0][2]};
         }
 
         return {{}, depthRangeCovered};
@@ -694,7 +694,8 @@ namespace RenderCore { namespace LightingEngine
             Float3 focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
 #endif
 
-            Float3 focusPositionInOrtho = camPositionInOrtho + (Dot(closestUncoveredPart.first[0], camForwardInOrtho) + 0.5f * newProjectionDimsXY) * camForwardInOrtho;
+            Float3 closestUncoveredPartInOrtho = TransformPoint(worldToLightView, closestUncoveredPart.first[0]);
+            Float3 focusPositionInOrtho = camPositionInOrtho + (Dot(closestUncoveredPartInOrtho, camForwardInOrtho) + 0.5f * newProjectionDimsXY) * camForwardInOrtho;
 
             IOrthoShadowProjections::OrthoSubProjection result;
             result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
