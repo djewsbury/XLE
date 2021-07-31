@@ -24,10 +24,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct Light
 		{
 			LightSourceId _id;
-			LightOperatorId _operatorId;
 			std::unique_ptr<ILightBase> _desc;
 		};
-		std::vector<Light> _tileableLights;
+		struct LightSet
+		{
+			LightOperatorId _operatorId;
+			ShadowOperatorId _shadowOperatorId;
+			std::vector<Light> _lights;
+		};
+		std::vector<LightSet> _lightSets;
+
 		struct ShadowProjection
 		{
 			ShadowProjectionId _id;
@@ -55,11 +61,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::unique_ptr<ILightBase> desc);
 
 		ShadowProjectionId AddShadowProjection(
-			LightOperatorId operatorId,
+			ShadowOperatorId shadowOperatorId,
 			LightSourceId associatedLight,
 			std::unique_ptr<ILightBase> desc);
 
 		void ReserveLightSourceIds(unsigned idCount); 
+		LightSet& GetLightSet(LightOperatorId, ShadowOperatorId);
 	};
 
 	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource

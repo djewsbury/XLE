@@ -45,7 +45,7 @@ namespace SceneEngine
 
                 auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
                 if (positional) {
-                    Float4x4 temp = AsFloat4x4(RotationY(_time));
+                    Float4x4 temp = AsFloat4x4(RotationY(2.f * gPI * c/float(tileLightCount) + _time));
                     Combine_IntoLHS(temp, RotationX(2.f * gPI * c/float(tileLightCount)));
                     Combine_IntoLHS(temp, RotationY(2.f * gPI * c/float(tileLightCount)));
                     positional->SetLocalToWorld(AsFloat4x4(ScaleTranslation { Float3(0.1f, 0.1f, 1.0f), TransformPoint(temp, Float3(0,0,swirlingRadius)) }));

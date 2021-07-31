@@ -87,25 +87,42 @@ namespace RenderCore { namespace LightingEngine
 		AccurateFrustumTester frustumTester(projDesc._worldToProjection, clipSpaceType);
 
 		{
-			IntermediateLight intermediateLights[_lightScene->_tileableLights.size()];
-			IntermediateLight* intLight = intermediateLights;
+			IntermediateLight intermediateLights[_config._maxLightsPerView];
+			IntermediateLight* intLight = intermediateLights, *intLightEnd = &intermediateLights[_config._maxLightsPerView];
 			auto zRow = Float4{projDesc._worldToProjection(2,0), projDesc._worldToProjection(2,1), projDesc._worldToProjection(2,2), projDesc._worldToProjection(2,3)};
 			float zRowMag = Magnitude(Truncate(zRow));
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
-			for (auto light=_lightScene->_tileableLights.begin(); light!=_lightScene->_tileableLights.end(); ++light) {
-				auto& lightDesc = *(Internal::StandardLightDesc*)light->_desc.get();
-				if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == AABBIntersection::Culled) continue;
-				
-				float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
-				float zMax = zMin + lightDesc._cutoffRange * zRowMag;
-				zMin -= lightDesc._cutoffRange * zRowMag;
+			unsigned lightSetIdx = 0;
+			for (auto& lightSet:_lightScene->_lightSets) {
+				// For now, don't tile shadowed lights. Ideally we want to tile everything except the "dominant" light
+				// (if it exists) -- because that will have cascaded shadows
+				if (lightSet._shadowOperatorId != ~0u) {
+					++lightSetIdx;
+					continue;
+				}
 
-				*intLight++ = IntermediateLight {
-					lightDesc._position, lightDesc._cutoffRange, 
-					zMin/farClip, zMax/farClip, 
-					unsigned(light-_lightScene->_tileableLights.begin()) };
+				for (auto light=lightSet._lights.begin(); light!=lightSet._lights.end(); ++light) {
+					auto& lightDesc = *(Internal::StandardLightDesc*)light->_desc.get();
+					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == AABBIntersection::Culled) continue;
+					
+					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+					zMin -= lightDesc._cutoffRange * zRowMag;
+
+					if (intLight < intLightEnd) {
+						auto lightIdx = unsigned(light-lightSet._lights.begin());
+						assert(lightIdx < 0xffff);
+
+						*intLight++ = IntermediateLight {
+							lightDesc._position, lightDesc._cutoffRange,
+							zMin/farClip, zMax/farClip,
+							(lightSetIdx << 16) | lightIdx };
+					}
+				}
+				++lightSetIdx;
 			}
+
 			assert((intLight-intermediateLights) < (1u<<16u));
 			_outputs._lightCount = unsigned(intLight-intermediateLights);
 

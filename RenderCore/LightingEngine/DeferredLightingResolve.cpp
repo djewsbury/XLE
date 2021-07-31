@@ -108,6 +108,7 @@ namespace RenderCore { namespace LightingEngine
 		selectors.SetParameter("LIGHT_SHAPE", unsigned(desc._shape));
 		selectors.SetParameter("DIFFUSE_METHOD", unsigned(desc._diffuseModel));
 		selectors.SetParameter("HAS_SCREENSPACE_AO", unsigned(hasScreenSpaceAO));
+		selectors.SetParameter("LIGHT_RESOLVE_SHADER", 1);
 		shadowResolveParam.WriteShaderSelectors(selectors);
 
 		auto stencilRefValue = 0;
@@ -153,22 +154,13 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToFuture(
 			*result,
 			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
-				SamplerDesc shadowComparisonSamplerDesc { FilterMode::ComparisonBilinear, AddressMode::Border, AddressMode::Border, CompareOp::LessEqual };
-				SamplerDesc shadowDepthSamplerDesc { FilterMode::Bilinear, AddressMode::Border, AddressMode::Border };
-				auto shadowComparisonSampler = device->CreateSampler(shadowComparisonSamplerDesc);
-				auto shadowDepthSampler = device->CreateSampler(shadowDepthSamplerDesc);
-
 				DescriptorSetInitializer::BindTypeAndIdx bindTypes[4];
 				bindTypes[0] = { DescriptorSetInitializer::BindType::Empty };
 				bindTypes[1] = { DescriptorSetInitializer::BindType::ResourceView, 0 };
-				bindTypes[2] = { DescriptorSetInitializer::BindType::Sampler, 0 };
-				bindTypes[3] = { DescriptorSetInitializer::BindType::Sampler, 1 };
 				IResourceView* srv[1] { balancedNoise->GetShaderResource().get() };
-				ISampler* samplers[2] { shadowComparisonSampler.get(), shadowDepthSampler.get() };
 				DescriptorSetInitializer inits;
 				inits._slotBindings = MakeIteratorRange(bindTypes);
 				inits._bindItems._resourceViews = MakeIteratorRange(srv);
-				inits._bindItems._samplers = MakeIteratorRange(samplers);
 				inits._signature = &descSetLayout;
 				return device->CreateDescriptorSet(inits);
 			});
@@ -435,81 +427,88 @@ namespace RenderCore { namespace LightingEngine
 		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
-		auto lightCount = lightScene._tileableLights.size();
-		auto shadowIterator = preparedShadows.begin();
-		for (unsigned l=0; l<lightCount; ++l) {
-			const auto& i = lightScene._tileableLights[l];
-
-			assert(i._desc->QueryInterface(typeid(Internal::StandardLightDesc).hash_code()) == i._desc.get());
-			auto& standardLightDesc = *(Internal::StandardLightDesc*)i._desc.get();
-
-			auto lightShape = lightResolveOperators._pipelines[i._operatorId]._stencilingGeoShape;
-			if (lightShape == LightSourceShape::Sphere) {
-				// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
-				// do an accurate culling check for them here... 
-				auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._cutoffRange);
-				if (cullResult == AABBIntersection::Culled)
-					continue;
-			}
-
-			auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, lightResolveOperators._operatorDescs[i._operatorId]);
-			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
-			float debuggingDummy[4] = {};
-			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);
-
+		for (const auto&set:lightScene._lightSets) {
+			auto lightShape = lightResolveOperators._pipelines[set._operatorId]._stencilingGeoShape;
+			auto shadowOperatorId = set._shadowOperatorId;
+			auto lightOperatorId = set._operatorId;
+		
 			const LightResolveOperators::Pipeline* pipeline;
-			assert(i._operatorId < lightResolveOperators._pipelines.size());
-
-			while (shadowIterator != preparedShadows.end() && shadowIterator->first < lightScene._tileableLights[l]._id) ++shadowIterator;
-			if (shadowIterator != preparedShadows.end() && shadowIterator->first == lightScene._tileableLights[l]._id) {
-				IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
-				boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
-
-				auto shadowOperatorId = shadowIterator->second->GetShadowOperatorId();
+			if (shadowOperatorId != ~0u) {
 				auto q = std::find_if(
 					lightResolveOperators._operatorToPipelineMap.begin(), lightResolveOperators._operatorToPipelineMap.end(),
-					[operatorId=i._operatorId, shadowOperatorId](const auto& c) {
-						return std::get<0>(c) == operatorId && std::get<1>(c) == shadowOperatorId;
+					[lightOperatorId, shadowOperatorId](const auto& c) {
+						return std::get<0>(c) == lightOperatorId && std::get<1>(c) == shadowOperatorId;
 					});
 				if (q != lightResolveOperators._operatorToPipelineMap.end()) {
 					pipeline = &lightResolveOperators._pipelines[std::get<2>(*q)];
 				} else {
 					assert(0);		// couldn't find the mapping for this light operator and shadow operator pair
-					pipeline = &lightResolveOperators._pipelines[i._operatorId];
+					pipeline = &lightResolveOperators._pipelines[lightOperatorId];
 				}
-				++shadowIterator;
 			} else {
-				// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
-				// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
-				// generated for a light that doesn't exist
-				assert(shadowIterator == preparedShadows.end() || shadowIterator->first > lightScene._tileableLights[l]._id);
-				pipeline = &lightResolveOperators._pipelines[i._operatorId];
+				pipeline = &lightResolveOperators._pipelines[lightOperatorId];
 			}
 
-			UniformsStream uniformsStream;
-			uniformsStream._immediateData = MakeIteratorRange(cbvs);
-			uniformsStream._resourceViews = MakeIteratorRange(srvs);
-			boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+			auto shadowIterator = preparedShadows.begin();
+			for (unsigned l=0; l<set._lights.size(); ++l) {
+				const auto& i = set._lights[l];
 
-			if ((pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) || pipeline->_stencilingGeoShape == LightSourceShape::Directional) {
-				encoder.Draw(*pipeline->_pipeline, 4);
-			} else {
-				if (pipeline->_stencilingGeoShape == LightSourceShape::Sphere) {
-					// We need to calculate the correct min and max depth of sphere projected into clip space
-					// Here the smallest and largest depth value aren't necessarily at the points that are closest and furtherest
-					// from the camera; but rather by the pointer intersected by the camera forward direction through the center
-					// (at least assuming the entire sphere is onscreen)
-					// I suppose we could reduce this depth range when we know that the center point is onscreen
-					Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
-					Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
-					float d0 = extremePoint0[2] / std::abs(extremePoint0[3]), d1 = extremePoint1[2] / std::abs(extremePoint1[3]);
-					encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
+				assert(i._desc->QueryInterface(typeid(Internal::StandardLightDesc).hash_code()) == i._desc.get());
+				auto& standardLightDesc = *(Internal::StandardLightDesc*)i._desc.get();
 
-					// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,
-					// though, but in that case we can flatten the front of the sphere to the near clip plane
-					encoder.Draw(*pipeline->_pipeline, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.second, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.first);
+				if (lightShape == LightSourceShape::Sphere) {
+					// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
+					// do an accurate culling check for them here... 
+					auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._cutoffRange);
+					if (cullResult == AABBIntersection::Culled)
+						continue;
+				}
+
+				auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, lightResolveOperators._operatorDescs[set._operatorId]);
+				cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
+				float debuggingDummy[4] = {};
+				cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);
+
+				
+				assert(set._operatorId < lightResolveOperators._pipelines.size());
+
+				while (shadowIterator != preparedShadows.end() && shadowIterator->first < i._id) ++shadowIterator;
+				if (shadowIterator != preparedShadows.end() && shadowIterator->first == i._id) {
+					IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
+					boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
+					++shadowIterator;
 				} else {
-					assert(0);
+					// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
+					// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
+					// generated for a light that doesn't exist
+					assert(shadowIterator == preparedShadows.end() || shadowIterator->first > i._id);
+				}
+
+				UniformsStream uniformsStream;
+				uniformsStream._immediateData = MakeIteratorRange(cbvs);
+				uniformsStream._resourceViews = MakeIteratorRange(srvs);
+				boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+
+				if ((pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) || pipeline->_stencilingGeoShape == LightSourceShape::Directional) {
+					encoder.Draw(*pipeline->_pipeline, 4);
+				} else {
+					if (pipeline->_stencilingGeoShape == LightSourceShape::Sphere) {
+						// We need to calculate the correct min and max depth of sphere projected into clip space
+						// Here the smallest and largest depth value aren't necessarily at the points that are closest and furtherest
+						// from the camera; but rather by the pointer intersected by the camera forward direction through the center
+						// (at least assuming the entire sphere is onscreen)
+						// I suppose we could reduce this depth range when we know that the center point is onscreen
+						Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
+						Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
+						float d0 = extremePoint0[2] / std::abs(extremePoint0[3]), d1 = extremePoint1[2] / std::abs(extremePoint1[3]);
+						encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
+
+						// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,
+						// though, but in that case we can flatten the front of the sphere to the near clip plane
+						encoder.Draw(*pipeline->_pipeline, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.second, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.first);
+					} else {
+						assert(0);
+					}
 				}
 			}
 		}

@@ -90,6 +90,10 @@ namespace RenderCore { namespace LightingEngine
 
 		AmbientLight _ambientLight;
 		bool _ambientLightEnabled = false;
+		AmbientLightOperatorDesc _ambientLightOperator;
+
+		LightOperatorId _dominantLightOperatorId = ~0u;
+		ShadowOperatorId _dominantLightShadowOperator = ~0u;
 
 		BufferUploads::CommandListID _completionCommandListID = 0;
 
@@ -122,6 +126,20 @@ namespace RenderCore { namespace LightingEngine
 				_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
 			}
 			_pingPongCounter = 0;
+
+			// Default to using the first light operator & first shadow operator for the dominant light
+			if (!_positionalLightOperators.empty()) _dominantLightOperatorId = 0;
+			if (!_shadowPreparationOperators->_operators.empty()) _dominantLightShadowOperator = 0;
+
+			_usi.BindResourceView(0, Utility::Hash64("LightDepthTable"));
+			_usi.BindResourceView(1, Utility::Hash64("LightList"));
+			_usi.BindResourceView(2, Utility::Hash64("EnvironmentProps"));
+			_usi.BindResourceView(3, Utility::Hash64("TiledLightBitField"));
+			_usi.BindResourceView(4, Utility::Hash64("DiffuseIBLCB"));
+			if (_dominantLightShadowOperator != ~0u) {
+				// resources for dominant shadow cascade
+				_usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
+			}
 		}
 
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
@@ -197,6 +215,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			/////////////////
 			_pingPongCounter = (_pingPongCounter+1)%dimof(_uniforms);
+
 			auto& uniforms = _uniforms[_pingPongCounter];
 			auto& tilerOutputs = _lightTiler->_outputs;
 			{
@@ -213,12 +232,12 @@ namespace RenderCore { namespace LightingEngine
 					0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount);
 				auto* i = (Internal::CB_Light*)map.GetData().begin();
 				auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
-				auto& lightScene = *(ForwardPlusLightScene*)&_lightTiler->GetLightScene();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-					auto op = lightScene._tileableLights[*idx]._operatorId;
+					auto set = *idx >> 16, light = (*idx)&0xffff;
+					auto op = _lightSets[set]._operatorId;
 					*i = MakeLightUniforms(
-						*(Internal::StandardLightDesc*)lightScene._tileableLights[*idx]._desc.get(),
-						lightScene._positionalLightOperators[op]);
+						*(Internal::StandardLightDesc*)_lightSets[set]._lights[light]._desc.get(),
+						_positionalLightOperators[op]);
 				}
 			}
 
@@ -227,6 +246,18 @@ namespace RenderCore { namespace LightingEngine
 					*_device, *uniforms._propertyCB,
 					Metal::ResourceMap::Mode::WriteDiscardPrevious);
 				auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
+				i->_dominantLight = {};
+
+				if (_dominantLightOperatorId != ~0u) {
+					auto& dominantLightSet = GetLightSet(_dominantLightOperatorId, _dominantLightShadowOperator);
+					if (dominantLightSet._lights.size() > 1)
+						Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
+					if (!dominantLightSet._lights.empty())
+						i->_dominantLight = Internal::MakeLightUniforms(
+							*checked_cast<Internal::StandardLightDesc*>(dominantLightSet._lights[0]._desc.get()),
+							_positionalLightOperators[_dominantLightOperatorId]);
+				}
+
 				i->_lightCount = tilerOutputs._lightCount;
 			}
 
@@ -275,19 +306,23 @@ namespace RenderCore { namespace LightingEngine
 			mainSubpass.SetName("MainForward");
 
 			ParameterBox box;
+			if (_dominantLightOperatorId != ~0u) {
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)_positionalLightOperators[_dominantLightOperatorId]._shape);
+				if (_dominantLightShadowOperator != ~0u) {
+					auto resolveParam = Internal::MakeShadowResolveParam(_shadowPreparationOperators->_operators[_dominantLightShadowOperator]._desc);
+					resolveParam.WriteShaderSelectors(box);
+				}
+			}
+
 			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box));
 			return result;
 		}
 
 		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)
+		: _ambientLightOperator(ambientLightOperator)
 		{
 			// We'll maintain the first few ids for system lights (ambient surrounds, etc)
 			ReserveLightSourceIds(32);
-			_usi.BindResourceView(0, Utility::Hash64("LightDepthTable"));
-			_usi.BindResourceView(1, Utility::Hash64("LightList"));
-			_usi.BindResourceView(2, Utility::Hash64("EnvironmentProps"));
-			_usi.BindResourceView(3, Utility::Hash64("TiledLightBitField"));
-			_usi.BindResourceView(4, Utility::Hash64("DiffuseIBLCB"));
 		}
 
 	private:

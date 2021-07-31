@@ -1,4 +1,5 @@
 #include "../Config/numeric.pipeline"
+#include "../Config/shadow-template.pipeline"
 
 DescriptorSet PerLightDescriptors
 {
@@ -38,18 +39,19 @@ DescriptorSet SharedDescriptors
 {
 	UniformBuffer cb0;						// 0
 	SampledTexture NoiseTexture;			// 1
-	Sampler ShadowSampler;					// 2
-	Sampler ShadowDepthSampler;				// 3
-};
-
-DescriptorSet ShadowTemplate
-{
-	UniformBuffer b0;					// 0
-	UniformBuffer b1;					// 1
-	UniformBuffer b2;					// 2
-	SampledTexture t3;					// 3
-	SampledTexture t4;					// 4
-	SampledTexture t5;					// 5
+	Sampler ShadowSampler					// 2
+	{
+		Filter = ComparisonBilinear,
+		AddressU = Border,
+		AddressV = Border,
+		Comparison = LessEqual
+	};
+	Sampler ShadowDepthSampler				// 3
+	{
+		Filter = Bilinear,
+		AddressU = Border,
+		AddressV = Border
+	};
 };
 
 DescriptorSet DMShadow

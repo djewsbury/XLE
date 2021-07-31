@@ -53,6 +53,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	struct CB_EnvironmentProps
 	{
+		CB_Light _dominantLight;
 		unsigned _lightCount = 0u;
 		unsigned _dummy[3];
 	};

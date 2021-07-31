@@ -60,18 +60,36 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define BIND_SHADOW_B0 : register(b0, space1)
-#define BIND_SHADOW_B1 : register(b1, space1)
-#define BIND_SHADOW_B2 : register(b2, space1)
+#if defined(LIGHT_RESOLVE_SHADER)
+    // Light operator for deferred
+    #define BIND_SHADOW_B0 : register(b0, space1)
+    #define BIND_SHADOW_B1 : register(b1, space1)
+    #define BIND_SHADOW_B2 : register(b2, space1)
 
-#define BIND_SHADOW_T3 : register(t3, space1)
-#define BIND_SHADOW_T4 : register(t4, space1)
-#define BIND_SHADOW_T5 : register(t5, space1)
+    #define BIND_SHADOW_T3 : register(t3, space1)
+    #define BIND_SHADOW_T4 : register(t4, space1)
+    #define BIND_SHADOW_T5 : register(t5, space1)
 
-#define BIND_SHARED_LIGHTING_B0 : register(b0, space3)
-#define BIND_SHARED_LIGHTING_T1 : register(t1, space3)
+    #define BIND_SHARED_LIGHTING_B0 : register(b0, space3)
+    #define BIND_SHARED_LIGHTING_T1 : register(t1, space3)
 
-#define BIND_SHARED_LIGHTING_S2 : register(s2, space3)
-#define BIND_SHARED_LIGHTING_S3 : register(s3, space3)
+    #define BIND_SHARED_LIGHTING_S2 : register(s2, space3)
+    #define BIND_SHARED_LIGHTING_S3 : register(s3, space3)
+#else
+    // Forward plus style lighting
+    #define BIND_SHADOW_B0 : register(b0, space4)
+    #define BIND_SHADOW_B1 : register(b1, space4)
+    #define BIND_SHADOW_B2 : register(b2, space4)
+
+    #define BIND_SHADOW_T3 : register(t3, space4)
+    #define BIND_SHADOW_T4 : register(t4, space4)
+    #define BIND_SHADOW_T5 : register(t5, space4)
+
+    // Here, BIND_SHARED_LIGHTING_* map onto the pipeline in forward.pipeline
+    #define BIND_SHARED_LIGHTING_T1 : register(t4, space3)
+    #define BIND_SHARED_LIGHTING_S2 : register(s5, space3)
+    #define BIND_SHARED_LIGHTING_S3 : register(s6, space3)
+#endif
+
 
 #endif

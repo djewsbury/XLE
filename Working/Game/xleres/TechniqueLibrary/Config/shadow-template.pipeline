@@ -1,0 +1,11 @@
+
+DescriptorSet ShadowTemplate
+{
+	UniformBuffer b0;					// 0
+	UniformBuffer b1;					// 1
+	UniformBuffer b2;					// 2
+	SampledTexture t3;					// 3
+	SampledTexture t4;					// 4
+	SampledTexture t5;					// 5
+};
+

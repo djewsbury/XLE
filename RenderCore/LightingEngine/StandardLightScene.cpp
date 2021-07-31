@@ -25,37 +25,45 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
-		auto i = std::find_if(
-			_tileableLights.begin(), _tileableLights.end(),
-			[sourceId](const auto& c) { return c._id == sourceId; });
-		if (i == _tileableLights.end())
-			return nullptr;
-		return i->_desc->QueryInterface(interfaceTypeCode);
+		for (auto&set:_lightSets) {
+			auto i = std::find_if(
+				set._lights.begin(), set._lights.end(),
+				[sourceId](const auto& c) { return c._id == sourceId; });
+			if (i != set._lights.end())
+				return i->_desc->QueryInterface(interfaceTypeCode);
+		}
+		return nullptr;
 	}
 
 	auto StandardLightScene::AddLightSource(LightOperatorId operatorId, std::unique_ptr<ILightBase> desc) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
-		_tileableLights.push_back({result, operatorId, std::move(desc)});
+		GetLightSet(operatorId, ~0u)._lights.push_back({result, std::move(desc)});
 		return result;
 	}
 
 	void StandardLightScene::DestroyLightSource(LightSourceId sourceId)
 	{
-		auto i = std::find_if(
-			_tileableLights.begin(), _tileableLights.end(),
-			[sourceId](const auto& c) { return c._id == sourceId; });
-		if (i != _tileableLights.end()) {
-			_tileableLights.erase(i);
-
-			// Also destroy a shadow projection associated with this light, if it exists
+		for (auto&set:_lightSets) {
 			auto i = std::find_if(
-				_shadowProjections.begin(), _shadowProjections.end(),
-				[sourceId](const auto& c) { return c._lightId == sourceId; });
-			if (i != _shadowProjections.end())
-				_shadowProjections.erase(i);
-		} else
-			Throw(std::runtime_error("Invalid light source id: " + std::to_string(sourceId)));
+				set._lights.begin(), set._lights.end(),
+				[sourceId](const auto& c) { return c._id == sourceId; });
+			if (i != set._lights.end()) {
+				set._lights.erase(i);
+
+				// Also destroy a shadow projection associated with this light, if it exists
+				if (set._shadowOperatorId != ~0u) {
+					auto i = std::find_if(
+						_shadowProjections.begin(), _shadowProjections.end(),
+						[sourceId](const auto& c) { return c._lightId == sourceId; });
+					if (i != _shadowProjections.end())
+						_shadowProjections.erase(i);
+				}
+				return;
+			}				
+		}
+
+		Throw(std::runtime_error("Invalid light source id: " + std::to_string(sourceId)));
 	}
 
 	void* StandardLightScene::TryGetShadowProjectionInterface(ShadowProjectionId preparerId, uint64_t interfaceTypeCode)
@@ -69,12 +77,34 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 	
 	auto StandardLightScene::AddShadowProjection(
-		LightOperatorId operatorId,
+		ShadowOperatorId shadowOperatorId,
 		LightSourceId associatedLight,
 		std::unique_ptr<ILightBase> desc) -> ShadowProjectionId
 	{
 		auto result = _nextShadow++;
-		_shadowProjections.push_back({result, operatorId, associatedLight, std::move(desc)});
+		_shadowProjections.push_back({result, shadowOperatorId, associatedLight, std::move(desc)});
+
+		for (auto&set:_lightSets) {
+			if (set._shadowOperatorId != ~0u) {
+				#if defined(_DEBUG)
+					auto i = std::find_if(
+						set._lights.begin(), set._lights.end(),
+						[associatedLight](const auto& c) { return c._id == associatedLight; });
+					assert(i == set._lights.end());		// if you hit this it means we're associating a shadow projection with a light that already has a shadow projection
+				#endif
+				continue;
+			}
+			auto i = std::find_if(
+				set._lights.begin(), set._lights.end(),
+				[associatedLight](const auto& c) { return c._id == associatedLight; });
+			if (i != set._lights.end()) {
+				auto l = std::move(*i);
+				set._lights.erase(i);
+				GetLightSet(set._operatorId, shadowOperatorId)._lights.push_back(std::move(l));
+				break;
+			}
+		}
+
 		return result;
 	}
 
@@ -84,14 +114,38 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_shadowProjections.begin(), _shadowProjections.end(),
 			[preparerId](const auto& c) { return c._id == preparerId; });
 		if (i != _shadowProjections.end()) {
+			auto associatedLight = i->_lightId;
+
+			for (auto&set:_lightSets) {
+				if (set._shadowOperatorId != i->_operatorId) continue;
+				auto i = std::find_if(
+					set._lights.begin(), set._lights.end(),
+					[associatedLight](const auto& c) { return c._id == associatedLight; });
+				if (i != set._lights.end()) {
+					auto l = std::move(*i);
+					set._lights.erase(i);
+					GetLightSet(set._operatorId, ~0u)._lights.push_back(std::move(l));
+				}
+			}
+
 			_shadowProjections.erase(i);
 		} else
 			Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
 	}
 
+	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> LightSet&
+	{
+		for (auto&s:_lightSets)
+			if (s._operatorId == lightOperator && s._shadowOperatorId == shadowOperator)
+				return s;
+		_lightSets.push_back(LightSet{lightOperator, shadowOperator});
+		return *(_lightSets.end()-1);
+	}
+
 	void StandardLightScene::Clear()
 	{
-		_tileableLights.clear();
+		for (auto& set:_lightSets)
+			set._lights.clear();
 		_shadowProjections.clear();
 	}
 
