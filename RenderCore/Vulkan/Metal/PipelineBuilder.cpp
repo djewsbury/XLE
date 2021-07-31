@@ -12,6 +12,7 @@
 #include "PipelineLayout.h"
 #include "../../Format.h"
 #include "../../../Utility/MemoryUtils.h"
+#include "../../../Utility/ArithmeticUtils.h"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -232,16 +233,38 @@ namespace RenderCore { namespace Metal_Vulkan
 	void 		GraphicsPipelineBuilder::SetRenderPassConfiguration(const FrameBufferDesc& fbDesc, unsigned subPass)
 	{
 		const auto& samples = fbDesc.GetProperties()._samples;
-		_renderPassConfigurationHash = HashCombine(fbDesc.GetSubpasses()[subPass].CalculateHash(), (samples._samplingQuality << 8) | samples._sampleCount);
+		_renderPassConfigurationHash = CalculateFrameBufferRelevance(fbDesc, subPass);
 		_currentRenderPass = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc);
 		_currentTextureSamples = fbDesc.GetProperties()._samples;
 		_currentSubpassIndex = subPass;
 	}
 
+	uint64_t MergeHash(AttachmentViewDesc viewDesc, const FrameBufferDesc& fbDesc, uint64_t seed)
+	{
+		if (viewDesc._resourceName == ~0u) return seed;
+		auto& attachment = fbDesc.GetAttachments()[viewDesc._resourceName];
+		auto result = HashCombine(viewDesc._window.GetHash(), seed);
+		result = HashCombine(uint64_t(attachment._format), seed);
+		if (attachment._flags & AttachmentDesc::Flags::Multisampled)
+			result = rotr64(result, fbDesc.GetProperties()._samples._sampleCount);
+		return result;
+	}
+
 	uint64_t GraphicsPipelineBuilder::CalculateFrameBufferRelevance(const FrameBufferDesc& fbDesc, unsigned subPass)
 	{
-		const auto& samples = fbDesc.GetProperties()._samples;
-		return HashCombine(fbDesc.GetSubpasses()[subPass].CalculateHash(), (samples._samplingQuality << 8) | samples._sampleCount);
+		// See section 8.2 in the Vulkan spec for more information about render pass compatibility
+		// We need to take into account many of the properties of the FB, but not all of them
+		// in particular, we don't need to consider layouts so much, nor load/store flags
+		uint64_t hash = rotr64(DefaultSeed64, subPass);
+		auto& sb = fbDesc.GetSubpasses()[subPass];
+		for (auto& v:sb.GetOutputs()) hash = MergeHash(v, fbDesc, hash);
+		hash = MergeHash(sb.GetDepthStencil(), fbDesc, hash);
+		for (auto& v:sb.GetInputs()) hash = MergeHash(v, fbDesc, hash);
+		if (fbDesc.GetSubpasses().size() != 1) {		// as per Vulkan spec, we can ignore resolve attachments but only if there's just a single subpass
+			for (auto& v:sb.GetResolveOutputs()) hash = MergeHash(v, fbDesc, hash);
+			hash = MergeHash(sb.GetResolveDepthStencil(), fbDesc, hash);
+		}
+		return hash;
 	}
 
 	GraphicsPipelineBuilder::GraphicsPipelineBuilder()

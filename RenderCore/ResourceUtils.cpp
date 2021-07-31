@@ -326,14 +326,42 @@ namespace RenderCore
         return str << "{ mip: " << subr._mip << ", arrayLayer: " << subr._arrayLayer << " }";
     }
 
-    static uint64_t CalculateHash(const TextureViewDesc& viewDesc)
+    static uint64_t MaskBits(unsigned bitCount) { return (1ull << uint64_t(bitCount)) - 1ull; }
+
+    uint64_t TextureViewDesc::GetHash() const
 	{
-		return Hash64(&viewDesc, PtrAdd(&viewDesc, sizeof(TextureViewDesc)));
+        assert((uint64_t(_format._aspect) & MaskBits(3)) == uint64_t(_format._aspect));
+        assert((uint64_t(_format._explicitFormat) & MaskBits(12)) == uint64_t(_format._explicitFormat));
+        assert((uint64_t(_mipRange._min) & MaskBits(5)) == uint64_t(_mipRange._min));
+        assert((uint64_t(_arrayLayerRange._min) & MaskBits(8)) == uint64_t(_arrayLayerRange._min));
+        assert((uint64_t(_dimensionality) & MaskBits(3)) == uint64_t(_dimensionality));
+        assert((uint64_t(_flags) & MaskBits(6)) == uint64_t(_flags));
+
+		auto result =
+                 uint64_t(_format._aspect)
+            |   (uint64_t(_format._explicitFormat) << 3ull)
+            |   (uint64_t(_mipRange._min) << 15ull)
+            |   (uint64_t(_arrayLayerRange._min) << 25ull)
+            |   (uint64_t(_dimensionality) << 41ull)
+            |   (uint64_t(_flags) << 44ull)
+            ;
+
+        if (_mipRange._count != Unlimited) {
+            assert((uint64_t(_mipRange._count) & MaskBits(5)) == uint64_t(_mipRange._count));
+            result |= (uint64_t(_mipRange._count) << 20ull);
+        }
+
+        if (_arrayLayerRange._count != Unlimited) {
+            assert((uint64_t(_arrayLayerRange._count) & MaskBits(8)) == uint64_t(_arrayLayerRange._count));
+            result |= (uint64_t(_arrayLayerRange._count) << 33ull);
+        }
+
+        return result;
 	}
 
 	const std::shared_ptr<IResourceView>& ViewPool::GetTextureView(const std::shared_ptr<IResource>& resource, BindFlag::Enum usage, const TextureViewDesc& viewDesc)
 	{
-		uint64_t hash = HashCombine(resource->GetGUID(), CalculateHash(viewDesc) + usage);
+		uint64_t hash = HashCombine(resource->GetGUID(), viewDesc.GetHash() + usage);
 		auto i = LowerBound(_views, hash);
 		if (i != _views.end() && i->first == hash)
 			return i->second._view;

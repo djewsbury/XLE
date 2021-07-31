@@ -221,6 +221,8 @@ namespace RenderCore
         SubResourceRange            _arrayLayerRange = All;
         TextureDesc::Dimensionality _dimensionality = TextureDesc::Dimensionality::Undefined;
 		Flags::BitField				_flags = 0;
+
+        uint64_t GetHash() const;
     };
 
     Format ResolveFormat(Format baseFormat, TextureViewDesc::FormatFilter filter, BindFlag::Enum usage);

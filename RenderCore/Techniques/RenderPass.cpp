@@ -245,7 +245,7 @@ namespace RenderCore { namespace Techniques
             std::vector<AttachmentName> _poolAttachmentsRemapping;
             FrameBufferDesc _completedDesc;
         };
-        Entry _entries[10];
+        Entry _entries[24];
         unsigned _currentTickId = 0;
 
         void IncreaseTickId();
@@ -254,7 +254,7 @@ namespace RenderCore { namespace Techniques
     void FrameBufferPool::IncreaseTickId()
     {
         // look for old FBs, and evict; then just increase the tick id
-        const unsigned evictionRange = 10;
+        const unsigned evictionRange = 2*dimof(_entries);
         for (auto&e:_entries)
             if ((e._tickId + evictionRange) < _currentTickId) {
                 e._fb.reset();
@@ -323,9 +323,9 @@ namespace RenderCore { namespace Techniques
 
         // Can't find it; we're just going to overwrite the oldest entry with a new one
         assert(earliestEntry < dimof(_entries));
-//        if (_pimpl->_entries[earliestEntry]._fb) {
-//            Log(Warning) << "Overwriting tail in FrameBufferPool(). There may be too many different framebuffers required from the same pool" << std::endl;
-//        }
+        // if ((_currentTickId - tickIdOfEarliestEntry) < 2*dimof(_entries)) {
+        //      Log(Warning) << "Creating frame buffers frequently, consider increasing depth of framebuffer pool" << std::endl;
+        // }
 
         NamedAttachmentsWrapper namedAttachments(attachmentPool, poolAttachments.GetResourceIds());
         assert(adjustedDesc.GetSubpasses().size());
