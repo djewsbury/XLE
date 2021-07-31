@@ -84,6 +84,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
+		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<IResourceView> _diffuseIBLCB;
 		std::shared_ptr<IDevice> _device;
 
@@ -131,7 +132,7 @@ namespace RenderCore { namespace LightingEngine
 				_ambientLightEnabled = true;
 				return 0;
 			}
-			auto desc = std::make_unique<Internal::StandardLightDesc>(0);
+			auto desc = std::make_unique<Internal::StandardLightDesc>(Internal::StandardLightDesc::Flags::SupportFiniteRange);
 			return AddLightSource(opId, std::move(desc));
 		}
 
@@ -151,6 +152,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			_ambientLightEnabled = false;
 			_ssrOperator->SetSpecularIBL(nullptr);
+			Internal::StandardLightScene::Clear();
 		}
 
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
@@ -211,9 +213,12 @@ namespace RenderCore { namespace LightingEngine
 					0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount);
 				auto* i = (Internal::CB_Light*)map.GetData().begin();
 				auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
-				auto& lightScene = _lightTiler->GetLightScene();
+				auto& lightScene = *(ForwardPlusLightScene*)&_lightTiler->GetLightScene();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-					*i = MakeLightUniforms(*(Internal::StandardLightDesc*)lightScene._tileableLights[*idx]._desc.get());
+					auto op = lightScene._tileableLights[*idx]._operatorId;
+					*i = MakeLightUniforms(
+						*(Internal::StandardLightDesc*)lightScene._tileableLights[*idx]._desc.get(),
+						lightScene._positionalLightOperators[op]);
 				}
 			}
 
@@ -238,7 +243,7 @@ namespace RenderCore { namespace LightingEngine
 			dst[0] = uniforms._lightDepthTableUAV.get();
 			dst[1] = uniforms._lightListUAV.get();
 			dst[2] = uniforms._propertyCBView.get();
-			dst[3] = _lightTiler->_outputs._tileableLightBufferUAV.get();
+			dst[3] = _lightTiler->_outputs._tiledLightBitFieldSRV.get();
 			dst[4] = _diffuseIBLCB.get();
 		}
 
@@ -473,8 +478,6 @@ namespace RenderCore { namespace LightingEngine
 			preregisteredAttachments, fbProps);
 	}
 
-
-
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -504,9 +507,10 @@ namespace RenderCore { namespace LightingEngine
 				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
 				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
 				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
-				lightScene->_ssrOperator = ssr;
 				lightScene->_device = device;
+				lightScene->_ssrOperator = ssr;
 				lightScene->_lightTiler = lightTiler;
+				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
 				lightScene->FinalizeConfiguration();
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();
@@ -530,6 +534,11 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						// iterator._parsingContext->AddShaderResourceDelegate(captures->_uniformsDelegate);
+						auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
+						PreregisterAttachments(stitchingContext);
+						captures->_lightScene->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
+						captures->_lightScene->_lightTiler->PreregisterAttachments(stitchingContext);
+						captures->_lightScene->_ssrOperator->PreregisterAttachments(stitchingContext);
 					});
 
 				// Prepare shadows

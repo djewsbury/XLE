@@ -73,7 +73,7 @@ namespace RenderCore { namespace LightingEngine
 		return z2/CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 	}
 
-	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; };
+	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
 
 	void RasterizationLightTileOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
 	{
@@ -159,7 +159,7 @@ namespace RenderCore { namespace LightingEngine
 		encoder.Bind(MakeIteratorRange(vbvs), IndexBufferView{ _stencilingGeo._lowDetailHemiSphereIB.get(), Format::R16_UINT });
 		encoder.DrawIndexedInstances(*_prepareBitFieldPipeline, _stencilingGeo._lowDetailHemiSphereIndexCount, _outputs._lightCount);
 
-		_outputs._tileableLightBufferUAV = _tileableLightBufferUAV[_pingPongCounter];
+		_outputs._tiledLightBitFieldSRV = iterator._rpi.GetNonFrameBufferAttachmentView(2);
 	}
 
 	RenderCore::LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -167,11 +167,13 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Graphics};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField), BindFlag::UnorderedAccess);
+		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		TextureViewDesc depthBufferView;
 		depthBufferView._mipRange._min = IntegerLog2(s_gridDims);
 		depthBufferView._mipRange._count = 1;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource, depthBufferView);
+		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::ShaderResource);
 		spDesc.SetName("rasterization-light-tiler");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -221,8 +223,7 @@ namespace RenderCore { namespace LightingEngine
 	void RasterizationLightTileOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
-		const unsigned maxLightsPerFrame = 1024;
-		unsigned planesRequired = maxLightsPerFrame/32;
+		unsigned planesRequired = _config._maxLightsPerView/32;
 		_lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
@@ -290,7 +291,7 @@ namespace RenderCore { namespace LightingEngine
 		_outputs._lightOrdering.resize(_config._maxLightsPerView);
 		_outputs._lightDepthTable.resize(_config._depthLookupGradiations);
 		_outputs._lightCount = 0;
-		_outputs._tileableLightBufferUAV = nullptr;
+		_outputs._tiledLightBitFieldSRV = nullptr;
 	}
 
 	RasterizationLightTileOperator::~RasterizationLightTileOperator() {}

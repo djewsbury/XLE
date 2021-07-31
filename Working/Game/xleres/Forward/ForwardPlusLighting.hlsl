@@ -11,14 +11,14 @@
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 
-cbuffer EnvironmentProps
+cbuffer EnvironmentProps : register (b0, space3)
 {
 	uint LightCount;
 };
 
-StructuredBuffer<LightDesc> LightList : register (t1, space1);
-StructuredBuffer<uint> LightDepthTable : register(t3, space1);
-RWTexture3D<uint> TiledLightBitField : register(u0, space1);
+StructuredBuffer<LightDesc> LightList : register (t1, space3);
+StructuredBuffer<uint> LightDepthTable : register(t2, space3);
+Texture3D<uint> TiledLightBitField : register(t3, space3);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -73,7 +73,7 @@ float3 CalculateIllumination(
 			// minIdx = WaveActiveMin(minIdx);
 			// maxIdx = WaveActiveMax(maxIdx);
 			for (uint planeIdx=minIdx/32; planeIdx<=maxIdx/32; ++planeIdx) {
-				uint bitField = TiledLightBitField[uint3(tileCoord.xy, planeIdx)];
+				uint bitField = TiledLightBitField.Load(uint4(tileCoord.xy, planeIdx, 0));
 				// bitField = WaveActiveBitOr(bitField);
 				while (bitField != 0) {
 					uint bitIdx = firstbitlow(bitField);

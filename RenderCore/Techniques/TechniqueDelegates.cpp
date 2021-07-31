@@ -364,7 +364,7 @@ namespace RenderCore { namespace Techniques
 
 		std::string GetPipelineLayout() override
 		{
-			return MAIN_PIPELINE ":GraphicsMain";
+			return MAIN_PIPELINE ":GraphicsForwardPlus";
 		}
 
 		TechniqueDelegate_Forward(

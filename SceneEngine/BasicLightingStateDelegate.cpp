@@ -20,6 +20,62 @@
  
 namespace SceneEngine
 {
+    static float PowerForHalfRadius(float halfRadius, float powerFraction)
+	{
+		const float attenuationScalar = 1.f;
+		return (attenuationScalar*(halfRadius*halfRadius)+1.f) * (1.0f / (1.f-powerFraction));
+	}
+
+    class SwirlingPointLights
+    {
+    public:
+        RenderCore::LightingEngine::LightSourceOperatorDesc _operator;
+        void WriteLights(RenderCore::LightingEngine::ILightScene& lightScene, unsigned opId)
+        {
+            static float cutoffRadius = 7.5f;
+            static float swirlingRadius = 15.0f;
+            float startingAngle = 0.f + _time;
+            const auto tileLightCount = 32u;
+            for (unsigned c=0; c<tileLightCount; ++c) {
+                auto lightId = lightScene.CreateLightSource(opId);
+
+                const float X = startingAngle + c / float(tileLightCount) * gPI * 2.f;
+				const float Y = 3.7397f * startingAngle + .7234f * c / float(tileLightCount) * gPI * 2.f;
+				// const float Z = 13.8267f * startingAngle + 0.27234f * c / float(tileLightCount) * gPI * 2.f;
+
+                auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
+                if (positional) {
+                    Float4x4 temp = AsFloat4x4(RotationY(_time));
+                    Combine_IntoLHS(temp, RotationX(2.f * gPI * c/float(tileLightCount)));
+                    Combine_IntoLHS(temp, RotationY(2.f * gPI * c/float(tileLightCount)));
+                    positional->SetLocalToWorld(AsFloat4x4(ScaleTranslation { Float3(0.1f, 0.1f, 1.0f), TransformPoint(temp, Float3(0,0,swirlingRadius)) }));
+                }
+
+                auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
+                if (emittance) {
+                    auto power = PowerForHalfRadius(0.5f*cutoffRadius, 0.05f);
+                    auto brightness = power * Float3{.65f + .35f * XlSin(Y), .65f + .35f * XlCos(Y), .65f + .35f * XlCos(X)};
+                    emittance->SetBrightness(brightness);
+                }
+
+                auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(lightId);
+                if (finite) {
+                    finite->SetCutoffBrightness(0.05f);
+                }
+            }
+            _time += 1.0f/60.f;
+        }
+
+        SwirlingPointLights()
+        {
+            _operator._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
+            _time = 0.f;
+        }
+        float _time;
+    };
+
+    static SwirlingPointLights s_swirlingLights;
+    static unsigned s_swirlingLightsOp = ~0u;
 
     void BasicLightingStateDelegate::ConfigureLightScene(
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
@@ -59,7 +115,7 @@ namespace SceneEngine
             }
         }
 
-        auto shadowOperators = GetLightResolveOperators();
+        s_swirlingLights.WriteLights(lightScene, s_swirlingLightsOp);
 
         for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
             unsigned operatorId = 0;
@@ -86,6 +142,14 @@ namespace SceneEngine
             auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
             if (i == result.end())
                 result.push_back(opDesc);
+        }
+
+        {
+            auto h = s_swirlingLights._operator.Hash();
+            auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
+            s_swirlingLightsOp = (unsigned)std::distance(result.begin(), i);
+            if (i == result.end())
+                result.push_back(s_swirlingLights._operator);
         }
         return result;
     }

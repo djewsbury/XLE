@@ -1,0 +1,9 @@
+
+DescriptorSet ForwardLighting
+{
+	UniformBuffer EnvironmentProps;
+	UnorderedAccessBuffer LightList;
+	UnorderedAccessBuffer LightDepthTable;
+	SampledTexture TiledLightBitField;
+};
+

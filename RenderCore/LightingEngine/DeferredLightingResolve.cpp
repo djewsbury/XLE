@@ -452,7 +452,7 @@ namespace RenderCore { namespace LightingEngine
 					continue;
 			}
 
-			auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc);
+			auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, lightResolveOperators._operatorDescs[i._operatorId]);
 			cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 			float debuggingDummy[4] = {};
 			cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

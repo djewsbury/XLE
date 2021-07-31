@@ -40,13 +40,13 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<unsigned> _lightOrdering;
 			std::vector<unsigned> _lightDepthTable;
 			unsigned _lightCount = 0;
-			std::shared_ptr<IResourceView> _tileableLightBufferUAV;
+			std::shared_ptr<IResourceView> _tiledLightBitFieldSRV;
 		};
 		Outputs _outputs;
 
 		struct Configuration
 		{
-			unsigned _maxLightsPerView = 4192u;
+			unsigned _maxLightsPerView = 256u;
 			unsigned _depthLookupGradiations = 1024u;
 			uint64_t GetHash(uint64_t = DefaultSeed64) const;
 		};

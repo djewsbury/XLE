@@ -4,6 +4,7 @@
 
 #include "LightUniforms.h"
 #include "StandardLightScene.h"
+#include "StandardLightOperators.h"
 #include "../../Math/Transformations.h"
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -23,15 +24,20 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
         return CB_RangeFog { Float3(0.f, 0.f, 0.f), 0 };
     }
 
-    CB_Light MakeLightUniforms(const StandardLightDesc& light)
+    static unsigned AsLightShapeId(LightSourceShape shape)
+    {
+        return unsigned(shape);
+    }
+
+    CB_Light MakeLightUniforms(const StandardLightDesc& light, const LightSourceOperatorDesc& operatorDesc)
     {
         return CB_Light 
             {
                 light._position, light._cutoffRange, 
                 light._brightness, light._radii[0],
                 ExtractRight(light._orientation), light._radii[1],
-                ExtractForward(light._orientation), light._diffuseWideningMin, 
-                ExtractUp(light._orientation), light._diffuseWideningMax
+                ExtractForward(light._orientation), AsLightShapeId(operatorDesc._shape), 
+                ExtractUp(light._orientation), 0
             };
     }
 
@@ -41,8 +47,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
             {   Float3(0.f, 0.f, 0.f), 0.f, 
                 Float3(0.f, 0.f, 0.f), 0.f,
                 Float3(0.f, 0.f, 0.f), 0.f,
-                Float3(0.f, 0.f, 0.f), 0.f,
-                Float3(0.f, 0.f, 0.f), 0.f };
+                Float3(0.f, 0.f, 0.f), 0,
+                Float3(0.f, 0.f, 0.f), 0 };
     }
 
     CB_VolumeFog MakeBlankVolumeFogDesc()

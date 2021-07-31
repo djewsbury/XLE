@@ -68,6 +68,7 @@ struct TileableLightDesc
 	float3 Position;
 	float CutoffRange;
 	float LinearizedDepthMin, LinearizedDepthMax;
+	uint Dummy0, Dummy1;
 };
 StructuredBuffer<TileableLightDesc> CombinedLightBuffer : register (t1, space1);
 

@@ -47,6 +47,8 @@ uint LaneIndexWithKey(uint key)
 	}
 }
 
+#if 0
+
 #include "xleres/Deferred/resolveutil.hlsl"
 #include "xleres/TechniqueLibrary/Math/TextureAlgorithm.hlsl"
 #include "xleres/TechniqueLibrary/LightingEngine/LightDesc.hlsl"
@@ -187,3 +189,5 @@ float4 visualize(
 
 	return float4(lightQuantity, 1);
 }
+
+#endif

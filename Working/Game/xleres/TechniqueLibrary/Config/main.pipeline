@@ -1,5 +1,6 @@
 #include "numeric.pipeline"
 #include "sequencer.pipeline"
+#include "forward.pipeline"
 
 DescriptorSet Material
 {
@@ -37,4 +38,12 @@ PipelineLayout GraphicsMain
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
 	DescriptorSet Numeric;
+};
+
+PipelineLayout GraphicsForwardPlus
+{
+	DescriptorSet Sequencer;
+	DescriptorSet Material;
+	DescriptorSet Numeric;
+	DescriptorSet ForwardLighting;
 };
