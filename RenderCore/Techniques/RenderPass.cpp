@@ -172,7 +172,10 @@ namespace RenderCore { namespace Techniques
     class NamedAttachmentsWrapper : public INamedAttachments
     {
     public:
-		virtual IResourcePtr GetResource(AttachmentName resName, const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const override;
+		virtual std::shared_ptr<IResourceView> GetResourceView(
+            AttachmentName resName,
+            BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
+            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const override;
 
         NamedAttachmentsWrapper(
             AttachmentPool& pool,
@@ -183,20 +186,24 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const AttachmentName*> _poolMapping;
     };
 
-    IResourcePtr NamedAttachmentsWrapper::GetResource(AttachmentName resName, const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const
+    std::shared_ptr<IResourceView> NamedAttachmentsWrapper::GetResourceView(
+        AttachmentName resName,
+        BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
+        const AttachmentDesc& requestDesc, const FrameBufferProperties& props) const
     {
         assert(resName < _poolMapping.size());
-        auto result = _pool->GetResource(_poolMapping[resName]);
+        auto view = _pool->GetView(_poolMapping[resName], bindFlag, viewDesc);
 
         #if defined(_DEBUG)
+            auto* resource = view->GetResource().get();
             // Validate that the "desc" for the returned resource matches what the caller was requesting
-            auto resultDesc = result->GetDesc();
+            auto resultDesc = resource->GetDesc();
             assert(requestDesc._format == Format(0) || AsTypelessFormat(requestDesc._format) == AsTypelessFormat(resultDesc._textureDesc._format));
             assert((requestDesc._finalLayout & resultDesc._bindFlags) == requestDesc._finalLayout);     // if you hit this it means that the final layout type was not one of the bind flags that the resource was initially created with
             assert((requestDesc._initialLayout & resultDesc._bindFlags) == requestDesc._initialLayout);
         #endif
 
-        return result;
+        return view;
     }
 
     NamedAttachmentsWrapper::NamedAttachmentsWrapper(
@@ -757,8 +764,11 @@ namespace RenderCore { namespace Techniques
             attach = &_pimpl->_attachments[attachName];
         }
         assert(attach);
+        if (!attach->_resource)
+            _pimpl->BuildAttachment(attachName);
 		assert(attach->_resource);
-		auto defaultAspect = TextureViewDesc::Aspect::ColorLinear;
+        return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, window);
+		/*auto defaultAspect = TextureViewDesc::Aspect::ColorLinear;
 		auto formatComponents = GetComponents(attach->_desc._textureDesc._format);
 		if (formatComponents == FormatComponents::Depth || formatComponents == FormatComponents::DepthStencil) {
 			defaultAspect = TextureViewDesc::Aspect::Depth;	// can only choose depth or stencil -- so DepthStencil defaults to Depth
@@ -766,7 +776,7 @@ namespace RenderCore { namespace Techniques
 			defaultAspect = TextureViewDesc::Aspect::Stencil;
 		}
 		auto completeView = CompleteTextureViewDesc(window, defaultAspect);
-		return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, completeView);
+		return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, completeView);*/
     }
 
     static unsigned GetArrayCount(unsigned arrayCount) { return (arrayCount == 0) ? 1 : arrayCount; }

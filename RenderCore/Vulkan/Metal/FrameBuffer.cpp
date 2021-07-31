@@ -611,7 +611,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			i = i2;
 		}
 
-		ViewPool viewPool;
         VkImageView rawViews[16];
 		unsigned rawViewCount = 0;
 		_clearValuesOrdering.reserve(uniqueAttachments.size());
@@ -620,8 +619,9 @@ namespace RenderCore { namespace Metal_Vulkan
         for (const auto&a:uniqueAttachments) {
 			// Note that we can't support TextureViewDesc properly here, because we don't support 
 			// the same resource being used with more than one view
-			auto resource = namedResources.GetResource(a.first, fbAttachments[a.first], fbDesc.GetProperties());
-			auto rtv = viewPool.GetTextureView(resource, AsBindFlag(a.second), TextureViewDesc{});
+			auto rtv = namedResources.GetResourceView(
+				a.first, AsBindFlag(a.second), TextureViewDesc{},
+				fbAttachments[a.first], fbDesc.GetProperties());
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
 
 			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
@@ -629,8 +629,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				defaultClearValue = MakeClearValue(1.0f, 0);
 			_clearValuesOrdering.push_back({a.first, defaultClearValue});
 
+			BuildMaxDims(maxDims, rtv->GetResource()->GetDesc());
 			_retainedViews.push_back(std::move(rtv));
-			BuildMaxDims(maxDims, resource->GetDesc());
         }
 
 		if (rawViewCount == 0 && maxDims._width == 0 && maxDims._height == 0) {
