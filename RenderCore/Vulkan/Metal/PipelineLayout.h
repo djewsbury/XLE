@@ -31,7 +31,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-	static const unsigned s_maxDescriptorSetCount = 4;
+	static const unsigned s_maxDescriptorSetCount = 6;
 	static const unsigned s_maxPushConstantBuffers = 4;
 
 	class CompiledPipelineLayout : public ICompiledPipelineLayout

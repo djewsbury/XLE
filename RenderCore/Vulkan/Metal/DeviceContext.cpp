@@ -1141,8 +1141,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
 		const ObjectFactory&    factory, 
 		GlobalPools&            globalPools)
-	: _graphicsDescriptors(factory, globalPools, 4)
-	, _computeDescriptors(factory, globalPools, 4)
+	: _graphicsDescriptors(factory, globalPools, s_maxDescriptorSetCount)
+	, _computeDescriptors(factory, globalPools, s_maxDescriptorSetCount)
 	, _globalPools(&globalPools)	
 	{
 		_renderPass = nullptr;
