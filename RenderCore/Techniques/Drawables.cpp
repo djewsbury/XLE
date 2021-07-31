@@ -63,6 +63,8 @@ namespace RenderCore { namespace Techniques
 		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
 		sequencerUSI.BindFixedDescriptorSet(0, sequencerDescSetName, &sequencerDescriptorSet.second);
 		sequencerUSI.BindFixedDescriptorSet(1, materialDescSetName, &matDescSetLayout);
+		if (parserContext._extraSequencerDescriptorSet.second)
+			sequencerUSI.BindFixedDescriptorSet(2, parserContext._extraSequencerDescriptorSet.first);
 
 		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
 			const auto& drawable = *(Drawable*)d.get();
@@ -113,9 +115,10 @@ namespace RenderCore { namespace Techniques
 				sequencerUSI,
 				drawable._looseUniformsInterface ? *drawable._looseUniformsInterface : UniformsStreamInterface{});
 
-			const IDescriptorSet* descriptorSets[2];
+			const IDescriptorSet* descriptorSets[3];
 			descriptorSets[0] = sequencerDescriptorSet.first.get();
 			descriptorSets[1] = matDescSet;
+			descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
 			boundUniforms.ApplyDescriptorSets(
 				metalContext, encoder,
 				MakeIteratorRange(descriptorSets), 0);

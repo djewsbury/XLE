@@ -154,6 +154,7 @@ namespace RenderCore { namespace LightingEngine
 				if (gbufferType == GBufferType::PositionNormalParameters)
 					subpass.AppendOutput(parameter);
 				subpass.SetDepthStencil(msDepth);
+				subpass.SetName("write-gbuffer");
 
 				auto srDelegate = std::make_shared<BuildGBufferResourceDelegate>(*deferredShaderResource);
 
@@ -190,6 +191,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc subpasses[2];
 		subpasses[0].AppendOutput(lightResolveTarget);
 		subpasses[0].SetDepthStencil(depthTarget);
+		subpasses[0].SetName("sky");
 
 			// In the second subpass, the depth buffer is bound as stencil-only (so we can read the depth values as shader inputs)
 		subpasses[1].AppendOutput(lightResolveTarget);
@@ -201,6 +203,7 @@ namespace RenderCore { namespace LightingEngine
 		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Retain, gbufferStore));
 		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Retain, gbufferStore));
 		subpasses[1].AppendInput(depthTarget, justDepthWindow);
+		subpasses[1].SetName("light-resolve");
 
 		// fragment.AddSubpasses(MakeIteratorRange(subpasses), std::move(fn));
 		fragment.AddSkySubpass(std::move(subpasses[0]));
@@ -219,6 +222,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 		subpass.AppendOutput(ldrOutput);
 		subpass.AppendInput(hdrInput);
+		subpass.SetName("tonemap");
 		fragment.AddSubpass(std::move(subpass), std::move(fn));
 		return fragment;
 	}
@@ -313,19 +317,15 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<Techniques::PipelinePool>& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
-		const std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>& lightingOperatorsPipelineLayoutFile,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps,
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
-		auto shadowDescSet = lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
-		if (shadowDescSet == lightingOperatorsPipelineLayoutFile->_descriptorSets.end())
-			Throw(std::runtime_error("Could not find DMShadow descriptor set layout in the pipeline layout file"));
-
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
-		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet->second);
+		auto shadowPreparationOperators = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
@@ -443,7 +443,7 @@ namespace RenderCore { namespace LightingEngine
 			apparatus->_sharedDelegates,
 			apparatus->_lightingOperatorCollection,
 			apparatus->_lightingOperatorLayout,
-			apparatus->_lightingOperatorsPipelineLayoutFile,
+			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, preregisteredAttachments,
 			fbProps, flags);		
 	}

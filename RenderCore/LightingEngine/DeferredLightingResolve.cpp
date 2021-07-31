@@ -258,6 +258,7 @@ namespace RenderCore { namespace LightingEngine
 		auto finalResult = std::make_shared<LightResolveOperators>();
 		finalResult->_pipelineLayout = lightingOperatorLayout;
 		finalResult->_debuggingOn = false;
+		finalResult->_operatorDescs = {resolveOperators.begin(), resolveOperators.end()};
 
 		const RenderCore::DescriptorSetSignature* sig = nullptr;
 		auto layoutInitializer = finalResult->_pipelineLayout->GetInitializer();

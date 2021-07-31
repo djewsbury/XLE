@@ -77,16 +77,20 @@ namespace RenderCore { namespace LightingEngine
 		return res->CreateBufferView(BindFlag::ConstantBuffer);
 	}
 
+	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
+
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public Techniques::IShaderResourceDelegate, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
-		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<IResourceView> _diffuseIBLCB;
 		std::shared_ptr<IDevice> _device;
+
+		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
+		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
 
 		AmbientLight _ambientLight;
 		bool _ambientLightEnabled = false;
@@ -136,10 +140,6 @@ namespace RenderCore { namespace LightingEngine
 			_usi.BindResourceView(2, Utility::Hash64("EnvironmentProps"));
 			_usi.BindResourceView(3, Utility::Hash64("TiledLightBitField"));
 			_usi.BindResourceView(4, Utility::Hash64("DiffuseIBLCB"));
-			if (_dominantLightShadowOperator != ~0u) {
-				// resources for dominant shadow cascade
-				_usi.BindFixedDescriptorSet(0, Utility::Hash64("ShadowTemplate"));
-			}
 		}
 
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
@@ -264,6 +264,11 @@ namespace RenderCore { namespace LightingEngine
 			if (_completionCommandListID)
 				parsingContext.RequireCommandList(_completionCommandListID);
 			parsingContext.AddShaderResourceDelegate(shared_from_this());
+
+			if (_dominantLightShadowOperator != ~0u) {
+				assert(!parsingContext._extraSequencerDescriptorSet.second);
+				parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[0].second->GetDescriptorSet().get()};
+			}
 		}
 
 		const UniformsStreamInterface& GetInterface() override { return _usi; }
@@ -334,8 +339,6 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardLightingCaptures
 	{
 	public:
-		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
-		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
@@ -404,14 +407,14 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator)
 	{
-		if (_shadowPreparationOperators->_operators.empty()) return;
+		if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
 
-		_preparedShadows.reserve(_lightScene->_shadowProjections.size());
+		_lightScene->_preparedShadows.reserve(_lightScene->_shadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 
 		for (unsigned c=0; c<_lightScene->_shadowProjections.size(); ++c) {
 			auto shadowOperatorId = _lightScene->_shadowProjections[c]._operatorId;
-			auto& shadowPreparer = *_shadowPreparationOperators->_operators[shadowOperatorId]._preparer;
-			_preparedShadows.push_back(std::make_pair(
+			auto& shadowPreparer = *_lightScene->_shadowPreparationOperators->_operators[shadowOperatorId]._preparer;
+			_lightScene->_preparedShadows.push_back(std::make_pair(
 				_lightScene->_shadowProjections[c]._lightId,
 				SetupShadowPrepare(iterator, *_lightScene->_shadowProjections[c]._desc, shadowPreparer, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
 
@@ -509,6 +512,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		return CreateForwardLightingTechnique(
 			apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
+			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, ambientLightOperator,
 			preregisteredAttachments, fbProps);
 	}
@@ -518,13 +522,14 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		const FrameBufferProperties& fbProps)
 	{
-		auto shadowPreparationOperatorsFuture = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, nullptr);
+		auto shadowPreparationOperatorsFuture = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet);
 
 		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
 		RasterizationLightTileOperator::Configuration tilingConfig;
@@ -552,7 +557,6 @@ namespace RenderCore { namespace LightingEngine
 				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
 				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 				captures->_lightScene = lightScene;
-				captures->_shadowPreparationOperators = shadowPreparationOperators;
 				// captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
 
 				lightTiler->SetLightScene(lightScene);
@@ -613,7 +617,9 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_lightScene);
+						iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
 						// iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_uniformsDelegate);
+						captures->_lightScene->_preparedShadows.clear();
 					});
 
 				lightingTechnique->CompleteConstruction();

@@ -47,6 +47,11 @@ namespace RenderCore { namespace LightingEngine
 		auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout(*_lightingOperatorsPipelineLayoutFile, pipelineLayoutName).MakePipelineLayoutInitializer(drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
 		_lightingOperatorLayout = _device->CreatePipelineLayout(pipelineInit);
 
+		auto i = _lightingOperatorsPipelineLayoutFile->_descriptorSets.find("DMShadow");
+		if (i == _lightingOperatorsPipelineLayoutFile->_descriptorSets.end())
+			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
+		_dmShadowDescSetTemplate = i->second;
+
 		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device);
 	}
 

@@ -13,7 +13,7 @@
 
 namespace Assets { namespace Exceptions { class RetrievalError; }}
 namespace Utility { class ParameterBox; }
-namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; }
+namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; class IDescriptorSet; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace Techniques 
@@ -61,6 +61,8 @@ namespace RenderCore { namespace Techniques
         auto GetShaderResourceDelegates() const { return MakeIteratorRange(_shaderResourceDelegates); }
 
         SystemUniformsDelegate& GetSystemUniformsDelegate() const;
+
+        std::pair<uint64_t, const IDescriptorSet*> _extraSequencerDescriptorSet = {0ull, nullptr};
 
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
         void RequireCommandList(BufferUploads::CommandListID);

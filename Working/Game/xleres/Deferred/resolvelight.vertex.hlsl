@@ -6,7 +6,7 @@
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
-cbuffer IndividualLightBuffer BIND_NUMERIC_B3
+cbuffer LightBuffer BIND_SEQ_B1
 {
 	LightDesc IndividualLight;
 }

@@ -50,6 +50,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 		std::shared_ptr<Techniques::PipelinePool> _lightingOperatorCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
