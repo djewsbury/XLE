@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
     class IShaderResourceDelegate;
     class SystemUniformsDelegate;
     class FragmentStitchingContext;
+    class RenderPassInstance;
         
     /// <summary>Manages critical shader state</summary>
     /// Certain system variables are bound to the shaders, and managed by higher
@@ -63,6 +64,7 @@ namespace RenderCore { namespace Techniques
         SystemUniformsDelegate& GetSystemUniformsDelegate() const;
 
         std::pair<uint64_t, const IDescriptorSet*> _extraSequencerDescriptorSet = {0ull, nullptr};
+        RenderPassInstance* _rpi = nullptr;
 
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
         void RequireCommandList(BufferUploads::CommandListID);

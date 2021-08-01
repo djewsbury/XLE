@@ -309,6 +309,7 @@ namespace RenderCore { namespace Techniques
         AttachmentPool::Reservation _attachmentPoolReservation;
 		FrameBufferDesc _layout;
         unsigned _currentSubpassIndex = 0;
+        ParsingContext* _attachedParsingContext = nullptr;
         bool _trueRenderPass = false;
 
         std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;

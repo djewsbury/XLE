@@ -401,6 +401,12 @@ namespace RenderCore { namespace Techniques
                     _attachedContext->EndLabel();
             #endif
         }
+
+        if (_attachedParsingContext) {
+            assert(_attachedParsingContext->_rpi == this);
+            _attachedParsingContext->_rpi = nullptr;
+            _attachedParsingContext = nullptr;
+        }
     }
     
     unsigned RenderPassInstance::GetCurrentSubpassIndex() const
@@ -532,6 +538,7 @@ namespace RenderCore { namespace Techniques
             _attachedContext->BeginLabel(_layout.GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[0]._name.c_str());
         #endif
         _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
+        _attachedParsingContext = nullptr;
     }
 
     RenderPassInstance::RenderPassInstance(
@@ -568,6 +575,10 @@ namespace RenderCore { namespace Techniques
             #endif
         }
 
+        assert(!parsingContext._rpi);
+        parsingContext._rpi = this;
+        _attachedParsingContext = &parsingContext;
+
         // Update the parsing context with the changes to attachments
         stitchContext.UpdateAttachments(stitchedFragment);
         for (unsigned aIdx=0; aIdx<stitchedFragment._attachmentTransforms.size(); ++aIdx) {
@@ -602,6 +613,7 @@ namespace RenderCore { namespace Techniques
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
         _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
         *this = RenderPassInstance { context, parsingContext, stitchResult, beginInfo };
@@ -620,6 +632,7 @@ namespace RenderCore { namespace Techniques
 		// graphics pipelines, but are incompatible with the vulkan render passes
 		_attachedContext = nullptr;
         _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
 		_attachmentPoolReservation = attachmentPool.Reserve(resolvedAttachmentDescs);
 		_attachmentPool = &attachmentPool;
         assert(!_attachmentPoolReservation.HasPendingCompleteInitialization());
@@ -645,6 +658,13 @@ namespace RenderCore { namespace Techniques
         moveFrom._attachmentPool = nullptr;
         moveFrom._currentSubpassIndex = 0;
         moveFrom._trueRenderPass = false;
+
+        if (moveFrom._attachedParsingContext) {
+            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
+            moveFrom._attachedParsingContext->_rpi = this;
+            _attachedParsingContext = moveFrom._attachedParsingContext;
+            moveFrom._attachedParsingContext = nullptr;
+        }
     }
 
     RenderPassInstance& RenderPassInstance::operator=(RenderPassInstance&& moveFrom) never_throws
@@ -663,6 +683,13 @@ namespace RenderCore { namespace Techniques
         moveFrom._currentSubpassIndex = 0;
         _trueRenderPass = moveFrom._trueRenderPass;
         moveFrom._trueRenderPass = false;
+
+        if (moveFrom._attachedParsingContext) {
+            assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
+            moveFrom._attachedParsingContext->_rpi = this;
+            _attachedParsingContext = moveFrom._attachedParsingContext;
+            moveFrom._attachedParsingContext = nullptr;
+        }
         return *this;
     }
 
@@ -671,6 +698,7 @@ namespace RenderCore { namespace Techniques
         _attachedContext = nullptr;
         _attachmentPool = nullptr;
         _trueRenderPass = false;
+        _attachedParsingContext = nullptr;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
