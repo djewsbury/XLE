@@ -6,16 +6,18 @@ DescriptorSet ForwardLighting
 	UnorderedAccessBuffer LightDepthTable;			// 2
 	SampledTexture TiledLightBitField;				// 3
 
-	SampledTexture NoiseTexture;					// 4
+	SampledTexture SSR;								// 4
 
-	Sampler ShadowSampler							// 5
+	SampledTexture NoiseTexture;					// 5
+
+	Sampler ShadowSampler							// 6
 	{
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
 		Comparison = LessEqual
 	};
-	Sampler ShadowDepthSampler						// 6
+	Sampler ShadowDepthSampler						// 7
 	{
 		Filter = Bilinear,
 		AddressU = Border,

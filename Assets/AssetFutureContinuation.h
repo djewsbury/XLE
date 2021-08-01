@@ -44,7 +44,7 @@ namespace Assets
 		template<size_t I = 0, typename... Tp>
 			bool AnyForegroundPendingAssets(const std::tuple<std::shared_ptr<Future<Tp>>...>& futures)
 		{
-			if (std::get<I>(futures)->GetAssetState() != AssetState::Pending)
+			if (std::get<I>(futures)->GetAssetState() == AssetState::Pending)
 				return true;
 			if constexpr(I+1 != sizeof...(Tp))
 				return AnyForegroundPendingAssets<I+1>(futures);

@@ -56,6 +56,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		CB_Light _dominantLight;
 		unsigned _lightCount = 0u;
 		unsigned _dummy[3];
+		Float4 _diffuseSHCoefficients[25];
 	};
 
 	CB_Ambient MakeAmbientUniforms(const EnvironmentalLightingDesc& desc);

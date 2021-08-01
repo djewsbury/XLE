@@ -30,6 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
+		std::shared_ptr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
 		std::shared_ptr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
 
 		template<typename... Args>

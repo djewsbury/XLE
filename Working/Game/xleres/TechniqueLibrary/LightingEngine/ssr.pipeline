@@ -47,23 +47,26 @@ DescriptorSet IntersectDS
 
 	UniformBuffer FrameIdBuffer;					// 8
 
-	Sampler TrilinearClampTransparentBlack			// 9
+	UniformTexelBuffer BN_Sobol;					// 9
+	UniformTexelBuffer BN_Ranking;					// 10
+	UniformTexelBuffer BN_Scrambling;				// 11
+
+	SampledTexture GBufferMotion;					// 12
+	SampledTexture LastFrameLit;					// 13
+
+	Sampler TrilinearClampTransparentBlack			// 14
 	{
 		Filter = Trilinear,
 		AddressU = Clamp,
 		AddressV = Clamp
 	};
 
-	Sampler SkyCubeSampler							// 10
+	Sampler SkyCubeSampler							// 15
 	{
 		Filter = Bilinear,
 		AddressU = Wrap,
 		AddressV = Wrap
 	};
-
-	UniformTexelBuffer BN_Sobol;			// 11
-	UniformTexelBuffer BN_Ranking;			// 12
-	UniformTexelBuffer BN_Scrambling;		// 13
 };
 
 PipelineLayout Intersect

@@ -103,7 +103,7 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture(
 			*result,
-			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](std::shared_ptr<Techniques::DeferredShaderResource> deferredShaderResource) {
+			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](std::shared_ptr<Techniques::DeferredShaderResource> normalsFitting) {
 
 				// This render pass will include just rendering to the gbuffer and doing the initial
 				// lighting resolve.
@@ -156,7 +156,7 @@ namespace RenderCore { namespace LightingEngine
 				subpass.SetDepthStencil(msDepth);
 				subpass.SetName("write-gbuffer");
 
-				auto srDelegate = std::make_shared<BuildGBufferResourceDelegate>(*deferredShaderResource);
+				auto srDelegate = std::make_shared<BuildGBufferResourceDelegate>(*normalsFitting);
 
 				ParameterBox box;
 				box.SetParameter("GBUFFER_TYPE", (unsigned)gbufferType);

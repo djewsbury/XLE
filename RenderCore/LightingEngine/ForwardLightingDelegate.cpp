@@ -65,17 +65,29 @@ namespace RenderCore { namespace LightingEngine
 			request2._srcFile = _sourceImage;
 			request2._format = Format::BC6H_UF16;
 			request2._faceDim = 256;
-			_ambientRawCubemap = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request);
+			_ambientRawCubemap = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request2);
 		}
 	};
 
-	static std::shared_ptr<IResourceView> CreateDiffuseIBLCB(IDevice& device, const SHCoefficients& shCoefficients)
+	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
-		auto res = device.CreateResource(
-			CreateDesc(BindFlag::ConstantBuffer, 0, 0, LinearBufferDesc::Create(sizeof(Float4)*shCoefficients.GetCoefficients().size(), sizeof(Float4)), "sh-coefficients"),
-			SubResourceInitData { shCoefficients.GetCoefficients() });
-		return res->CreateBufferView(BindFlag::ConstantBuffer);
-	}
+	public:
+		virtual const UniformsStreamInterface& GetInterface() { return _interf; }
+
+        virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
+		{
+			assert(bindingFlags == 1<<0);
+			dst[0] = _normalsFitting.get();
+		}
+
+		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
+		{
+			_interf.BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			_normalsFitting = normalsFittingResource.GetShaderResource();
+		}
+		UniformsStreamInterface _interf;
+		std::shared_ptr<IResourceView> _normalsFitting;
+	};
 
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 
@@ -86,7 +98,6 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
-		std::shared_ptr<IResourceView> _diffuseIBLCB;
 		std::shared_ptr<IDevice> _device;
 
 		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
@@ -98,6 +109,8 @@ namespace RenderCore { namespace LightingEngine
 
 		LightOperatorId _dominantLightOperatorId = ~0u;
 		ShadowOperatorId _dominantLightShadowOperator = ~0u;
+
+		Float4 _diffuseSHCoefficients[25];
 
 		BufferUploads::CommandListID _completionCommandListID = 0;
 
@@ -139,7 +152,7 @@ namespace RenderCore { namespace LightingEngine
 			_usi.BindResourceView(1, Utility::Hash64("LightList"));
 			_usi.BindResourceView(2, Utility::Hash64("EnvironmentProps"));
 			_usi.BindResourceView(3, Utility::Hash64("TiledLightBitField"));
-			_usi.BindResourceView(4, Utility::Hash64("DiffuseIBLCB"));
+			_usi.BindResourceView(4, Utility::Hash64("SSR"));
 		}
 
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
@@ -160,7 +173,6 @@ namespace RenderCore { namespace LightingEngine
 				if (!_ambientLightEnabled)
 					Throw(std::runtime_error("Attempting to destroy the ambient light source, but it has not been created"));
 				_ambientLightEnabled = false;
-				_ssrOperator->SetSpecularIBL(nullptr);
 			} else {
 				Internal::StandardLightScene::DestroyLightSource(sourceId);
 			}
@@ -169,7 +181,6 @@ namespace RenderCore { namespace LightingEngine
 		virtual void Clear() override
 		{
 			_ambientLightEnabled = false;
-			_ssrOperator->SetSpecularIBL(nullptr);
 			Internal::StandardLightScene::Clear();
 		}
 
@@ -192,6 +203,7 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual void SetEquirectangularSource(StringSection<> input) override
 		{
+			if (XlEqString(input, _ambientLight._sourceImage)) return;
 			_ambientLight.SetEquirectangularSource(input);
 			auto weakThis = weak_from_this();
 			::Assets::WhenAll(_ambientLight._specularIBL, _ambientLight._diffuseIBL, _ambientLight._ambientRawCubemap).Then(
@@ -201,11 +213,13 @@ namespace RenderCore { namespace LightingEngine
 					if (specularIBLFuture->GetAssetState() != ::Assets::AssetState::Ready
 						|| diffuseIBLFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 						l->_ssrOperator->SetSpecularIBL(nullptr);
-						l->_diffuseIBLCB = nullptr;
+						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 					} else {
 						auto ambientRawCubemap = ambientRawCubemapFuture->Actualize();
 						l->_ssrOperator->SetSpecularIBL(ambientRawCubemap->GetShaderResource());
-						l->_diffuseIBLCB = CreateDiffuseIBLCB(*l->_device, *diffuseIBLFuture->Actualize());
+						auto actualDiffuse = diffuseIBLFuture->Actualize();
+						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
+						std::memcpy(l->_diffuseSHCoefficients, actualDiffuse->GetCoefficients().begin(), sizeof(Float4*)*std::min(actualDiffuse->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
 						l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
 					}
 				});
@@ -259,16 +273,27 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				i->_lightCount = tilerOutputs._lightCount;
+				std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 			}
 
 			if (_completionCommandListID)
 				parsingContext.RequireCommandList(_completionCommandListID);
-			parsingContext.AddShaderResourceDelegate(shared_from_this());
+			// parsingContext.AddShaderResourceDelegate(shared_from_this());
 
 			if (_dominantLightShadowOperator != ~0u) {
 				assert(!parsingContext._extraSequencerDescriptorSet.second);
 				parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[0].second->GetDescriptorSet().get()};
 			}
+		}
+
+		void SetupProjection(Techniques::ParsingContext& parsingContext)
+		{
+			if (_hasPrevProjection) {
+				parsingContext.GetPrevProjectionDesc() = _prevProjDesc;
+				parsingContext.GetEnablePrevProjectionDesc() = true;
+			}
+			_prevProjDesc = parsingContext.GetProjectionDesc();
+			_hasPrevProjection = true;
 		}
 
 		const UniformsStreamInterface& GetInterface() override { return _usi; }
@@ -280,21 +305,39 @@ namespace RenderCore { namespace LightingEngine
 			dst[1] = uniforms._lightListUAV.get();
 			dst[2] = uniforms._propertyCBView.get();
 			dst[3] = _lightTiler->_outputs._tiledLightBitFieldSRV.get();
-			dst[4] = _diffuseIBLCB.get();
+			if (bindingFlags & (1ull<<4ull)) {
+				assert(context._rpi);
+				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+			}
 		}
 
-		RenderStepFragmentInterface CreatePreDepthFragment(
-			std::shared_ptr<Techniques::ITechniqueDelegate> depthOnlyDelegate)
+		RenderStepFragmentInterface CreateDepthMotionFragment(
+			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate)
 		{
 			RenderStepFragmentInterface result { PipelineType::Graphics };
-			auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear);
-			auto motion = result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear);
-
 			Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
-			preDepthSubpass.AppendOutput(motion);
-			preDepthSubpass.SetDepthStencil(depth);
+			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
+			preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
 			preDepthSubpass.SetName("PreDepth");
-			result.AddSubpass(std::move(preDepthSubpass), depthOnlyDelegate, Techniques::BatchFilter::General);
+			result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFilter::General);
+			return result;
+		}
+
+		RenderStepFragmentInterface CreateDepthMotionNormalFragment(
+			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalDelegate)
+		{
+			RenderStepFragmentInterface result { PipelineType::Graphics };
+			Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
+			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
+			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
+			preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
+			preDepthSubpass.SetName("PreDepth");
+
+			auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
+			normalsFittingTexture->StallWhilePending();
+			auto srDelegate = std::make_shared<BuildGBufferResourceDelegate>(*normalsFittingTexture->Actualize());
+
+			result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFilter::General, {}, std::move(srDelegate));
 			return result;
 		}
 
@@ -308,6 +351,12 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
 			mainSubpass.AppendOutput(lightResolve);
 			mainSubpass.SetDepthStencil(depth);
+
+			const bool hasSSR = true;
+			if (hasSSR) {
+				auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections"), LoadStore::Retain, LoadStore::DontCare);
+				mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
+			}
 			mainSubpass.SetName("MainForward");
 
 			ParameterBox box;
@@ -319,7 +368,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box));
+			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), shared_from_this());
 			return result;
 		}
 
@@ -328,10 +377,13 @@ namespace RenderCore { namespace LightingEngine
 		{
 			// We'll maintain the first few ids for system lights (ambient surrounds, etc)
 			ReserveLightSourceIds(32);
+			std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
 		}
 
 	private:
 		UniformsStreamInterface _usi;
+		bool _hasPrevProjection = false;
+		Techniques::ProjectionDesc _prevProjDesc;
 	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -578,6 +630,7 @@ namespace RenderCore { namespace LightingEngine
 						captures->_lightScene->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
 						captures->_lightScene->_lightTiler->PreregisterAttachments(stitchingContext);
 						captures->_lightScene->_ssrOperator->PreregisterAttachments(stitchingContext);
+						captures->_lightScene->SetupProjection(*iterator._parsingContext);
 					});
 
 				// Prepare shadows
@@ -587,7 +640,8 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Pre depth
-				lightingTechnique->CreateStep_RunFragments(lightScene->CreatePreDepthFragment(techDelBox->_depthMotionDelegate));
+				// lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
+				lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
 
 				// Build hierarchical depths
 				lightingTechnique->CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(fbProps));
@@ -596,6 +650,9 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateInitFragment(fbProps));
 				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateFragment(fbProps));
 
+				// Calculate SSRs
+				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(fbProps));
+
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						captures->_lightScene->ConfigureParsingContext(*iterator._parsingContext);
@@ -603,9 +660,6 @@ namespace RenderCore { namespace LightingEngine
 
 				// Draw main scene
 				lightingTechnique->CreateStep_RunFragments(lightScene->CreateForwardSceneFragment(techDelBox->_forwardIllumDelegate_DisableDepthWrite));
-
-				// Calculate SSRs
-				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(fbProps));
 
 				// Post processing
 				auto toneMapFragment = CreateToneMapFragment(
@@ -616,7 +670,7 @@ namespace RenderCore { namespace LightingEngine
 
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
-						iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_lightScene);
+						// iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_lightScene);
 						iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
 						// iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_uniformsDelegate);
 						captures->_lightScene->_preparedShadows.clear();

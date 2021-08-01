@@ -18,6 +18,8 @@
 #define IMMEDIATE_PIPELINE "xleres/TechniqueLibrary/Config/immediate.pipeline"
 #define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"
 #define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"
+#define SHADOW_TEMPLATE_DS "xleres/TechniqueLibrary/Config/shadow-template.pipeline"
+#define SEQUENCER_DS "xleres/TechniqueLibrary/Config/sequencer.pipeline"
 
 #define ROOT_SIGNATURE_CFG "xleres/TechniqueLibrary/System/RootSignature.cfg"
 #define ROOT_SIGNATURE_COMPUTE_CFG "xleres/TechniqueLibrary/System/RootSignatureCS.cfg"

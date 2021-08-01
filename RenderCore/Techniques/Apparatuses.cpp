@@ -18,6 +18,7 @@
 #include "Drawables.h"
 #include "PipelineCollection.h"
 #include "PipelineOperators.h"
+#include "../Assets/TextureCompiler.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
@@ -169,6 +170,8 @@ namespace RenderCore { namespace Techniques
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
+
+		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
 
 		_subFrameEvents = std::make_shared<SubFrameEvents>();
 		

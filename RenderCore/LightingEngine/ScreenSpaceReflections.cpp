@@ -121,11 +121,13 @@ namespace RenderCore { namespace LightingEngine
 			_tileTemporalVarianceMaskSRV = _tileTemporalVarianceMask->CreateBufferView(BindFlag::ShaderResource);
 
 			for (unsigned c=0; c<2; ++c) {
+				StringMeld<256> meld;
+				meld << "ssr-tile-temporal-denoise[" << c << "]";
 				_temporalDenoiseResult[c] = device.CreateResource(
 					CreateDesc(
 						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc | BindFlag::TransferDst,
 						0, 0, TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R11G11B10_FLOAT),
-						"ssr-tile-temporal-variance"
+						meld.AsStringSection()
 					));
 				_temporalDenoiseResultUAV[c] = _temporalDenoiseResult[c]->CreateTextureView(BindFlag::UnorderedAccess);
 				_temporalDenoiseResultSRV[c] = _temporalDenoiseResult[c]->CreateTextureView(BindFlag::ShaderResource);
@@ -141,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
-		IResourceView* srvs[25];
+		IResourceView* srvs[26];
 		srvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();			// g_denoised_reflections
 		srvs[1] = _res->_temporalDenoiseResultUAV[_pingPongCounter&1].get();		// g_intersection_result
 		srvs[2] = _res->_temporalDenoiseResultSRV[_pingPongCounter&1].get();		// g_intersection_result_read
@@ -164,12 +166,13 @@ namespace RenderCore { namespace LightingEngine
 		srvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(2).get();			// HierarchicalDepths
 		srvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(3).get();			// GBufferMotion
 		srvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(4).get();			// GBufferNormal
+		srvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(5).get();			// LastFrameLit
 
-		srvs[21] = _blueNoiseRes->_sobolBufferView.get();
-		srvs[22] = _blueNoiseRes->_rankingTileBufferView.get();
-		srvs[23] = _blueNoiseRes->_scramblingTileBufferView.get();
+		srvs[22] = _blueNoiseRes->_sobolBufferView.get();
+		srvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
+		srvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		// srvs[21] = _skyCubeSRV.get();
+		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : srvs[18];
 
 		struct ExtendedTransforms
 		{
@@ -281,6 +284,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -320,8 +324,10 @@ namespace RenderCore { namespace LightingEngine
 		_res->CompleteInitialization(metalContext);
 	}
 
-	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView>)
-	{}
+	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
+	{
+		_skyCubeSRV = inputView;
+	}
 
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
 		std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
@@ -405,12 +411,13 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(18, Hash64("DownsampleDepths"));
 		usi.BindResourceView(19, Hash64("GBufferMotion"));
 		usi.BindResourceView(20, Hash64("GBufferNormal"));
+		usi.BindResourceView(21, Hash64("LastFrameLit"));
 
-		usi.BindResourceView(21, Hash64("BN_Sobol"));
-		usi.BindResourceView(22, Hash64("BN_Ranking"));
-		usi.BindResourceView(23, Hash64("BN_Scrambling"));
+		usi.BindResourceView(22, Hash64("BN_Sobol"));
+		usi.BindResourceView(23, Hash64("BN_Ranking"));
+		usi.BindResourceView(24, Hash64("BN_Scrambling"));
 
-		// usi.BindResourceView(24, Hash64("SkyCube"));
+		usi.BindResourceView(25, Hash64("SkyCube"));
 
 		usi.BindImmediateData(0, Hash64("ExtendedTransforms"));
 		usi.BindImmediateData(1, Hash64("FrameIdBuffer"));
@@ -458,7 +465,6 @@ namespace RenderCore { namespace LightingEngine
 			SSR_PIPELINE ":ReflectionsBlur",
 			usi);
 
-		// auto skyCube = ::Assets::MakeAsset<Techniques::DeferredShaderResource>("rawos/shaderlab/test-process0.texture");
 		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur).ThenConstructToFuture(
 			future, 
 			[dev=pipelinePool->GetDevice()](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur) { 

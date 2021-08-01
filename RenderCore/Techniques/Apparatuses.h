@@ -111,6 +111,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::vector<::Assets::CompilerRegistration> _modelCompilers;
 		::Assets::CompilerRegistration _materialCompilerRegistration;
+		::Assets::CompilerRegistration _textureCompilerRegistration;
 
 		class ContinuationExecutor;
 		std::unique_ptr<ContinuationExecutor> _continuationExecutor;

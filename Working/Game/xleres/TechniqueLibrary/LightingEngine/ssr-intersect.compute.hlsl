@@ -29,6 +29,8 @@ THE SOFTWARE.
 Texture2D GBufferNormal             : register(t0, space1);
 Texture2D<float> DownsampleDepths   : register(t1, space1);     // g_depth_buffer_hierarchy
 TextureCube SkyCube                 : register(t2, space1);     // g_environment_map
+Texture2D<int2> GBufferMotion       : register(t12, space1);
+Texture2D LastFrameLit              : register(t13, space1);
 
 cbuffer ExtendedTransforms          : register(b3, space1)
 {
@@ -54,16 +56,12 @@ RWTexture2D<float3> g_intersection_result       : register(u6, space1);
 RWTexture2D<float> g_ray_lengths                : register(u7, space1);
 
 // Samplers / fixed resources
-// [[vk::binding(5, 1)]] Buffer<uint> g_sobol_buffer                                           : register(t5);
-// [[vk::binding(6, 1)]] Buffer<uint> g_ranking_tile_buffer                                    : register(t6);
-// [[vk::binding(7, 1)]] Buffer<uint> g_scrambling_tile_buffer                                 : register(t7);
+SamplerState TrilinearClampTransparentBlack     : register(s14, space1);
+SamplerState SkyCubeSampler                     : register(s15, space1);
 
-SamplerState TrilinearClampTransparentBlack     : register(s9, space1);
-SamplerState SkyCubeSampler                     : register(s10, space1);
-
-Buffer<uint> BN_Sobol : register(t11, space1);
-Buffer<uint> BN_Ranking : register(t12, space1);
-Buffer<uint> BN_Scrambling : register(t13, space1);
+Buffer<uint> BN_Sobol : register(t9, space1);
+Buffer<uint> BN_Ranking : register(t10, space1);
+Buffer<uint> BN_Scrambling : register(t11, space1);
 
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "xleres/TechniqueLibrary/Framework/SystemUniforms.hlsl"
@@ -204,8 +202,9 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     float3 V = -view_direction;
     float VdotH = abs(dot(V, H));
 
-    float3 L= 2.f * dot(V, H) * H - V;
+    float3 L = 2.f * dot(V, H) * H - V;
 
+    // todo -- this needs a lot of optimization
     precise float D = TrowReitzD(NdotH, alphad);
     weight = (4.f * VdotH) / (D * NdotH);
     weight *= ReferenceSpecularGGX(normal, V, L, H, roughness, 0.1f, false);
@@ -239,7 +238,9 @@ float3 SampleEnvironmentMap(float3 direction)
 
 float3 LoadLitScene(uint2 coord)
 {
-    return float3(coord.xy/float2(1920,1080), 0);
+    // no protections for occclusions / disocclusions here
+    int2 motion = GBufferMotion.Load(uint3(coord.xy, 0)).rg;
+    return LastFrameLit.Load(uint3(coord+motion, 0)).rgb;
 }
 
 bool IsMirrorReflection(float roughness) {
@@ -300,27 +301,6 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
         float3 view_space_reflected_direction = SampleReflectionVector(view_space_ray_direction, view_space_surface_normal, roughness, coords, weight);
         float3 screen_space_ray_direction = ProjectDirection(view_space_ray, view_space_reflected_direction, screen_uv_space_ray_origin, ViewToProj);
         float3 world_space_reflected_direction = mul(ViewToWorld, float4(view_space_reflected_direction, 0)).xyz;
-
-        if (0) {
-            float w0 = (1.0f - uv.x) * (1.0f - uv.y);
-            float w1 = (1.0f - uv.x) * uv.y;
-            float w2 = uv.x * (1.0f - uv.y);
-            float w3 = uv.x * uv.y;
-            float3 viewFrustumVector = 
-                  w0 * SysUniform_GetFrustumCorners(0).xyz
-                + w1 * SysUniform_GetFrustumCorners(1).xyz
-                + w2 * SysUniform_GetFrustumCorners(2).xyz
-                + w3 * SysUniform_GetFrustumCorners(3).xyz;
-            float3 worldSpacePosition = WorldPositionFromLinear0To1Depth(viewFrustumVector, NDCDepthToLinear0To1(z));
-            float3 viewDirection = normalize(SysUniform_GetWorldSpaceView() - worldSpacePosition);
-            float3 R = 2.f * dot(viewDirection, world_space_normal) * world_space_normal - viewDirection;   // reflection vector
-            view_space_reflected_direction = mul(WorldToView, float4(R, 0)).xyz;
-            // view_space_ray = mul(WorldToView, float4(worldSpacePosition, 1)).xyz;
-            screen_space_ray_direction = ProjectDirection(view_space_ray, view_space_reflected_direction, screen_uv_space_ray_origin, ViewToProj);
-            
-            // world_space_reflected_direction = mul(ViewToWorld, float4(view_space_reflected_direction, 0)).xyz;
-            world_space_reflected_direction = R;
-        }
         
         //====SSSR====
         bool valid_hit = false;

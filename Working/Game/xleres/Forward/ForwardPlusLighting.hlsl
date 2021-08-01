@@ -10,19 +10,41 @@
 // #include "../TechniqueLibrary/SceneEngine/Lighting/AmbientResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 
 cbuffer EnvironmentProps : register (b0, space3)
 {
 	LightDesc DominantLight;
 	uint LightCount;
+	float4 DiffuseSHCoefficients[25];			// todo -- require premultiplied coefficients instead of reference coefficients
 };
 
 StructuredBuffer<LightDesc> LightList : register (t1, space3);
 StructuredBuffer<uint> LightDepthTable : register(t2, space3);
 Texture3D<uint> TiledLightBitField : register(t3, space3);
 
+Texture2D SSR : register(t4, space3);
+
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
+
+float3 CalculateSkyReflectionFresnel(GBufferValues sample, float3 viewDirection)
+{
+	float3 F0 = lerp(SpecularParameterToF0(sample.material.specular).xxx, sample.diffuseAlbedo, sample.material.metal);
+    return SchlickFresnelF0(viewDirection, sample.worldSpaceNormal, F0);
+}
+
+float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
+{
+	float3 diffuseSHRef = 0;
+	for (uint c=0; c<25; ++c)
+		diffuseSHRef += ResolveSH_Reference(DiffuseSHCoefficients[c].rgb, c, sample.worldSpaceNormal);
+	float metal = sample.material.metal;
+	float3 fresenl = CalculateSkyReflectionFresnel(sample, directionToEye);
+	return 
+		diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb
+		+ fresenl * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+}
 
 float3 CalculateIllumination(
 	GBufferValues sample, float3 directionToEye,
@@ -94,9 +116,7 @@ float3 CalculateIllumination(
 		}
 	#endif
 
-	/*result += LightResolve_Ambient(
-		sample, directionToEye, BasicAmbient, screenDest,
-		AmbientResolveHelpers_Default());*/
+	result += LightResolve_Ambient(sample, directionToEye, screenDest);
 
 	return result;
 }

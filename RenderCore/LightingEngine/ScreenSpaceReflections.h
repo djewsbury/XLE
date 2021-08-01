@@ -71,6 +71,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _rayCounterBufferSRV;
 		std::shared_ptr<IResourceView> _indirectArgsBufferUAV;
 		std::shared_ptr<IResource> _indirectArgsBuffer;
+		std::shared_ptr<IResourceView> _skyCubeSRV;
 
 		class ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;

@@ -253,8 +253,8 @@ GBufferValues GetSystemStruct_GBufferValues()
 
 struct DepthMotionNormalEncoded
 {
-    float3 normalBuffer     : SV_Target0;
-    int2 velocityBuffer     : SV_Target1;
+    int2 motionBuffer       : SV_Target0;
+    float3 normalBuffer     : SV_Target1;
 };
 
 DepthMotionNormalEncoded EncodeDepthMotionNormal(GBufferValues values, int2 motion)
@@ -265,19 +265,19 @@ DepthMotionNormalEncoded EncodeDepthMotionNormal(GBufferValues values, int2 moti
         //
     DepthMotionNormalEncoded result;
     result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz).xyz;
-    result.velocityBuffer = motion;
+    result.motionBuffer = motion;
     return result;
 }
 
 struct DepthMotionEncoded
 {
-    int2 velocityBuffer     : SV_Target0;
+    int2 motionBuffer     : SV_Target0;
 };
 
 DepthMotionEncoded EncodeDepthMotion(int2 motion)
 {
     DepthMotionEncoded result;
-    result.velocityBuffer = motion;
+    result.motionBuffer = motion;
     return result;
 }
 
