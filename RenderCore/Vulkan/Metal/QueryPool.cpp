@@ -44,8 +44,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 				assert(_nextFree == b._queryStart);
 				assert(_allocatedCount >= 0 && _allocatedCount <= _queryCount);
-				_nextFree = (b._queryStart + b._queryCount)%_queryCount;
-				if (_nextFree == _queryCount) _nextFree = 0;
+				if (b._queryCount)
+					_nextFree = (b._queryStart + b._queryCount)%_queryCount;
 				b._frameId = FrameId_Invalid;
 				b._pendingReset = false;
 				b._queryStart = b._queryCount = 0;

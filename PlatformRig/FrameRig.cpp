@@ -249,6 +249,8 @@ namespace PlatformRig
                 RenderCore::Metal::Internal::ImageLayout::ColorAttachmentOptimal, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                 RenderCore::Metal::Internal::ImageLayout::PresentSrc, 0, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 
+            context->GetAnnotator().Frame_End();        // calling Frame_End() can prevent creating a new command list immediately after the Present() call (which ends the previous command list)
+
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
 				context->Present(presChain);
@@ -256,8 +258,6 @@ namespace PlatformRig
 
             if (_subFrameEvents)
                 _subFrameEvents->_onPostPresent.Invoke(*context);
-
-            context->GetAnnotator().Frame_End();
 
 		} CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
@@ -550,11 +550,13 @@ namespace PlatformRig
 
                         DrawRectangle(&context, rect, menuBkgrnd);
 
+                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
+                        context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 
                             AsPixelCoords(iconRect._topLeft),
                             AsPixelCoords(iconRect._bottomRight),
-                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd)->GetShaderResource());
+                            texture->GetShaderResource());
                         DrawText(
                             &context, rect, 0.f,
                             &tabHeader, tabHeaderColor, TextAlignment::Bottom,
@@ -563,11 +565,13 @@ namespace PlatformRig
                     } else {
 
                         rect = Rect(pt - Coord2(iconSize[0], 0), pt + Coord2(0, iconSize[1]));
+                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
+                        context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 
                             AsPixelCoords(rect._topLeft),
                             AsPixelCoords(rect._bottomRight),
-                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd)->GetShaderResource());
+                            texture->GetShaderResource());
 
                     }
 
@@ -594,11 +598,13 @@ namespace PlatformRig
                             Rect(rect._topLeft - Coord2(2 + margin + smallIconSize[0],2), rect._bottomRight + Coord2(2,2)), 
                             interfaceState.HasMouseOver(i->_hashCode) ? menuBkgrndHigh : menuBkgrnd);
 
+                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd);
+                        context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 
                             AsPixelCoords(Coord2(rect._topLeft - Coord2(smallIconSize[0] + margin, 0))),
                             AsPixelCoords(Coord2(rect._topLeft[0]-margin, rect._bottomRight[1])),
-                            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd)->GetShaderResource());
+                            texture->GetShaderResource());
                         DrawText(
                             &context, rect, 0.f,
                             &tabHeader, tabHeaderColor, TextAlignment::Left,

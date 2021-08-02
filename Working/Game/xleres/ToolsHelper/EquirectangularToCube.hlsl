@@ -419,7 +419,8 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
 		float4 color;
-		PanelEAC(
+		// PanelEAC(
+		Panel(
 			color,
 			pixelId.xy, 0.0.xx, textureDims.xy,
 			CubeMapFaces[pixelId.z],

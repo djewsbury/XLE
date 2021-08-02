@@ -61,6 +61,8 @@ namespace RenderOverlays
             ColorB col, TextAlignment alignment, StringSection<char> text) override;
 
         RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() override { return *_immediateDrawables; }
+        BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const override;
+        void RequireCommandList(BufferUploads::CommandListID) override;
 
         void CaptureState() override;
         void ReleaseState() override;
@@ -84,6 +86,7 @@ namespace RenderOverlays
         std::shared_ptr<Font> _defaultFont;
         OverlayState _currentState;
         std::shared_ptr<RenderCore::UniformsStreamInterface> _texturedUSI;
+        BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
 
         class DrawCall;
         IteratorRange<void*>    BeginDrawCall(const DrawCall& drawCall);

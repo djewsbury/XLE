@@ -1404,11 +1404,13 @@ namespace ToolsRig
                 Coord2 iconTopLeft(buttonsArea._topLeft + Coord2(buttonsRectPadding + c * (iconSize[0] + iconPadding), buttonsRectVertPad));
                 Rect iconRect(iconTopLeft, iconTopLeft + iconSize);
 
+                auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(icons[c]);
+                context.RequireCommandList(texture->GetCompletionCommandList());
                 context.DrawTexturedQuad(
                     ProjectionMode::P2D, 
                     AsPixelCoords(iconRect._topLeft),
                     AsPixelCoords(iconRect._bottomRight),
-                    ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(icons[c])->GetShaderResource());
+                    texture->GetShaderResource());
                 if (iconIds[c]) {
                     interactables.Register(Interactables::Widget(iconRect, iconIds[c]));
                 }

@@ -140,7 +140,7 @@ namespace RenderCore { namespace Techniques
 			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 				auto pixelCount = mipDesc._width * mipDesc._height * std::max(1u, (unsigned)targetDesc._arrayCount);
 				auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
-				auto passesPerPixel = 8u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
+				auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
 				auto dispatchCount = passesPerPixel*pixelCount;
 				auto dispatchesPerCommit = std::min(32768u, pixelCount);
 				for (unsigned d=0; d<dispatchCount; ++d) {

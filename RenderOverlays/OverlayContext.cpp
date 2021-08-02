@@ -282,6 +282,16 @@ namespace RenderOverlays
 		_currentState = state;
 	}
 
+	BufferUploads::CommandListID ImmediateOverlayContext::GetRequiredBufferUploadsCommandList() const
+	{ 
+		return _requiredBufferUploadsCommandList;
+	}
+
+	void ImmediateOverlayContext::RequireCommandList(BufferUploads::CommandListID cmdList)
+	{
+		_requiredBufferUploadsCommandList = std::max(_requiredBufferUploadsCommandList, cmdList);
+	}
+
 	static RenderCore::Techniques::ImmediateDrawableMaterial AsMaterial(const OverlayState& state)
 	{
 		RenderCore::Techniques::ImmediateDrawableMaterial result;
@@ -468,6 +478,7 @@ namespace RenderOverlays
 	{
 		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
 		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
+		_requiredBufferUploadsCommandList = 0;
 	}
 
 	ImmediateOverlayContext::ImmediateOverlayContext(
@@ -481,6 +492,7 @@ namespace RenderOverlays
 			_defaultFont = ConsoleRig::FindCachedBox2<DefaultFontBox>()._font;
 		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
 		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
+		_requiredBufferUploadsCommandList = 0;
 	}
 
 	ImmediateOverlayContext::~ImmediateOverlayContext()

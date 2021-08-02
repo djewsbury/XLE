@@ -13,6 +13,7 @@
 
 namespace RenderCore { class IResourceView; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
+namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderOverlays
 {
@@ -102,6 +103,8 @@ namespace RenderOverlays
         virtual void    SetState        (const OverlayState& state) = 0;
 
         virtual RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() = 0;
+        virtual BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const = 0;
+        virtual void RequireCommandList(BufferUploads::CommandListID) = 0;
 
         virtual ~IOverlayContext();
     };

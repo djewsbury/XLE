@@ -1011,9 +1011,6 @@ namespace RenderCore { namespace Metal_Vulkan
             auto dstAspectMask = AsImageAspectMask(dstDesc._textureDesc._format);
 
             VkBufferImageCopy copyOps[8];
-
-			assert(dstDesc._textureDesc._dimensionality != TextureDesc::Dimensionality::CubeMap);		// cubemap support may be a problem here, due to wierdness around the "arrayCount" variable
-
             auto arrayCount = std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount);
 		    auto mips = std::max(1u, (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount));
             unsigned width = srcDesc._textureDesc._width, height = srcDesc._textureDesc._height, depth = srcDesc._textureDesc._depth;
@@ -1079,9 +1076,6 @@ namespace RenderCore { namespace Metal_Vulkan
             auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
 
             VkBufferImageCopy copyOps[8];
-
-			assert(dstDesc._textureDesc._dimensionality != TextureDesc::Dimensionality::CubeMap);		// cubemap support may be a problem here, due to wierdness around the "arrayCount" variable
-
             auto arrayCount = std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount);
 		    auto mips = std::max(1u, (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount));
             unsigned width = srcDesc._textureDesc._width, height = srcDesc._textureDesc._height, depth = srcDesc._textureDesc._depth;
@@ -1150,8 +1144,6 @@ namespace RenderCore { namespace Metal_Vulkan
         // the images. Otherwise, we will use a default arrangement of subresources.
         ResourceMap map(device, mem);
         unsigned bytesUploaded = 0;
-
-		assert(desc._dimensionality != TextureDesc::Dimensionality::CubeMap);		// cubemap support may be a problem here, due to wierdness around the "arrayCount" variable
 
 		auto mipCount = std::max(1u, unsigned(desc._mipCount));
 		auto arrayCount = std::max(1u, unsigned(desc._arrayCount));

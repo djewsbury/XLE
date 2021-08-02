@@ -94,7 +94,7 @@ float3 LoadLitScene(uint2 coord, uint2 bufferDims, inout float confidence)
         return 0;
     }
     float3 result = LastFrameLit.Load(uint3(coord, 0)).rgb;
-    if (any(isnan(result) || !isfinite(result))) {      // todo -- we might be getting nans here because we can read from uninitialized parts of "LastFrameLit" 
+    if (any(!isfinite(result))) {   // todo -- some values may be capping out and considered infinite here...? 
         confidence = 0;
         return 0;
     }

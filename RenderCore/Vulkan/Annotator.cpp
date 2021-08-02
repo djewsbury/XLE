@@ -35,8 +35,6 @@ namespace RenderCore { namespace ImplVulkan
 		void    Frame_End() override;
 		void	FlushFinishedQueries(Metal::DeviceContext& context);
 
-		std::pair<uint64, uint64> CalculateSynchronisation(Metal::DeviceContext& context);
-
 		unsigned	AddEventListener(const EventListener& callback) override;
 		void		RemoveEventListener(unsigned id) override;
 
@@ -229,32 +227,6 @@ namespace RenderCore { namespace ImplVulkan
 				}
 			}
 		}
-	}
-
-	std::pair<uint64, uint64> AnnotatorImpl::CalculateSynchronisation(Metal::DeviceContext& context)
-	{
-		//
-		//      Calculate 2 time values (one for CPU, one for GPU) that approximately
-		//      match.
-		//
-		std::pair<uint64, uint64> result(0, 0);
-		#if 0
-			unsigned disjointQueryIndex = AllocateQuery(_disjointQueryPool.begin(), _disjointQueryPool.end());
-			unsigned queryIndex = AllocateQuery(_queryPool.begin(), _queryPool.end());
-			if (disjointQueryIndex > _disjointQueryPool.size() || queryIndex > _queryPool.size()) {
-				// X2LogAlways("Warning -- Ran out of queries while calculating synchronisation.");
-				return result;
-			}
-
-			Query& d3dDisjoint = _disjointQueryPool[disjointQueryIndex];
-			Query& d3dQuery = _queryPool[queryIndex];
-
-			result = Metal::GPUProfiler::CalculateSynchronisation(context, d3dQuery, d3dDisjoint);
-
-			_queryPool[queryIndex]._isAllocated = false;
-			_disjointQueryPool[disjointQueryIndex]._isAllocated = false;
-		#endif
-		return result;
 	}
 
 	unsigned AnnotatorImpl::AddEventListener(const EventListener& callback)

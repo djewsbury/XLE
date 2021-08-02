@@ -46,6 +46,7 @@ namespace PlatformRig
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });
 
                 auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
+                parserContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
                 _immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
             } CATCH (...) {
                 _immediateDrawables->AbandonDraws();

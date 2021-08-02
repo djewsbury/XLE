@@ -172,7 +172,7 @@ namespace RenderCore { namespace LightingEngine
 		srvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
 		srvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : srvs[18];
+		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : _dummyCube.get();
 
 		struct ExtendedTransforms
 		{
@@ -322,6 +322,20 @@ namespace RenderCore { namespace LightingEngine
 			checked_cast<Metal::Resource*>(_rayCounterBufferUAV->GetResource().get())->GetBuffer(), 
 			0, VK_WHOLE_SIZE, 0);
 		_res->CompleteInitialization(metalContext);
+
+		// ensure the dummy cube is initialized
+		Metal::CompleteInitialization(metalContext, {_dummyCube->GetResource().get()});
+
+		auto stagingDesc = CreateDesc(BindFlag::TransferSrc, CPUAccess::Write, 0, TextureDesc::PlainCube(32, 32, Format::R8G8B8A8_SNORM, 6), "dummy-cube");
+		std::vector<uint8_t> dummyData(32*32*4, 0);
+		auto stagingTexture = threadContext.GetDevice()->CreateResource(
+			stagingDesc,
+			[&dummyData, stagingDesc](SubResourceId sr) {
+				auto srDesc = GetSubResourceOffset(stagingDesc._textureDesc, sr._mip, sr._arrayLayer);
+				return SubResourceInitData{MakeIteratorRange(dummyData.begin(), dummyData.begin()+srDesc._size), srDesc._pitches};
+			});
+		auto bltEncoder = metalContext.BeginBlitEncoder();
+		bltEncoder.Copy(*_dummyCube->GetResource(), *stagingTexture);
 	}
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
@@ -375,6 +389,10 @@ namespace RenderCore { namespace LightingEngine
 				"ssr-indirect-args"
 			));
 		_indirectArgsBufferUAV = _indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+		auto dummyCubeTexture = _device->CreateResource(
+			CreateDesc(BindFlag::TransferDst|BindFlag::ShaderResource, 0, 0, TextureDesc::PlainCube(32, 32, Format::R8G8B8A8_SNORM, 6), "dummy-cube"));
+		_dummyCube = dummyCubeTexture->CreateTextureView();
 	}
 
 	ScreenSpaceReflectionsOperator::~ScreenSpaceReflectionsOperator() {}

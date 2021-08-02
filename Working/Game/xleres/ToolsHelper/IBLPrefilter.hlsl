@@ -112,10 +112,10 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         int log2dim = firstbithigh(textureDims.x);
         float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
 
-        const uint PassSampleCount = 256;
+        const uint samplesPerPassCount = 1024;
         EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = GenerateFilteredSpecular(
             cubeMapDirection, roughness,
-            PassSampleCount, groupThreadId.x + passOfThisPixel*64, passesPerPixel*64);
+            samplesPerPassCount, groupThreadId.x + passOfThisPixel*64, passesPerPixel*64);
 
         //////////////////////////////////
         // Sync, and then combine together the results from all of the samples

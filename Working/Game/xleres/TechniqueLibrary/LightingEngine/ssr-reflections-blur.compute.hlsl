@@ -102,6 +102,6 @@ bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness
 	// the blurring should be coming from the distribution of rays in the "intersect" shader; and 
 	// we then to a very similar filter in "resolve-spatial". This filter is also not super cheap; so
 	// we might actually be better off with just more rays earlier or more samples in "resolve-spatial"
-	FFX_DNSR_Reflections_Blur(dispatch_thread_id, group_thread_id, screen_dimensions);
-	// g_denoised_reflections[dispatch_thread_id] = g_temporally_denoised_reflections_read[dispatch_thread_id];
+	// FFX_DNSR_Reflections_Blur(dispatch_thread_id, group_thread_id, screen_dimensions);
+	g_denoised_reflections[dispatch_thread_id] = g_temporally_denoised_reflections_read[dispatch_thread_id];
 }

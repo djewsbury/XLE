@@ -162,7 +162,8 @@ namespace SceneEngine
         // encoder.Bind(MakeIteratorRange(blends));
 
         auto& debuggingShader = *Techniques::CreateFullViewportOperator(
-            pipelinePool, 
+            pipelinePool,
+            Techniques::FullViewportOperatorSubType::DisableDepth,
             "xleres/Deferred/debugging.pixel.hlsl:DepthsDebuggingTexture", {},
             "xleres/Deferred/tiled.pipeline:ComputeMain",
             rpi,

@@ -382,7 +382,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
 	{
-		Log(Verbose) << "DrawInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
 		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		vkCmdBindPipeline(
@@ -391,25 +390,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			pipeline.get());
 		DEBUG_ONLY(LogPipeline(pipeline));
 
-		VkDrawIndirectCommand indirectCommands[] {
-			VkDrawIndirectCommand { vertexCount, instanceCount, startVertexLocation, 0 }
-		};
-		Resource temporaryBuffer(
-			GetObjectFactory(),
-			CreateDesc(
-				BindFlag::DrawIndirectArgs, 0, GPUAccess::Read,
-				LinearBufferDesc::Create(sizeof(indirectCommands)),
-				"temp-DrawInstances-buffer"),
-			SubResourceInitData{MakeIteratorRange(indirectCommands)});
-		vkCmdDrawIndirect(
+		vkCmdDraw(
 			_sharedState->_commandList.GetUnderlying().get(),
-			temporaryBuffer.GetBuffer(),
-			0, 1, sizeof(VkDrawIndirectCommand));
+			vertexCount, instanceCount,
+			startVertexLocation, 0);
 	}
 
 	void GraphicsEncoder_Optimized::DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
 	{
-		Log(Verbose) << "DrawIndexedInstances is very inefficient on Vulkan. Prefer pre-building buffers and vkCmdDrawIndirect" << std::endl;
 		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		vkCmdBindPipeline(
@@ -418,20 +406,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			pipeline.get());
 		DEBUG_ONLY(LogPipeline(pipeline));
 
-		VkDrawIndexedIndirectCommand indirectCommands[] {
-			VkDrawIndexedIndirectCommand { indexCount, instanceCount, startIndexLocation, 0, 0 }
-		};
-		Resource temporaryBuffer(
-			GetObjectFactory(),
-			CreateDesc(
-				BindFlag::DrawIndirectArgs, 0, GPUAccess::Read,
-				LinearBufferDesc::Create(sizeof(indirectCommands)),
-				"temp-DrawInstances-buffer"),
-			SubResourceInitData{MakeIteratorRange(indirectCommands)});
-		vkCmdDrawIndexedIndirect(
+		vkCmdDrawIndexed(
 			_sharedState->_commandList.GetUnderlying().get(),
-			temporaryBuffer.GetBuffer(),
-			0, 1, sizeof(VkDrawIndexedIndirectCommand));
+			indexCount, instanceCount,
+			startIndexLocation, 0,
+			0);
 	}
 
 	void GraphicsEncoder_Optimized::DrawAuto(const GraphicsPipeline& pipeline)

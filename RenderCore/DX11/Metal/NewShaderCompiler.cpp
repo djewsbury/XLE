@@ -194,7 +194,7 @@ namespace RenderCore { namespace Metal_DX11
 					//      with the current device
 					//
 				if (inputShaderModel[length-1] == '*') {
-					const char* bestShaderModel = "5_0";
+					const char* bestShaderModel = "6_0";
 				
 					if (destination != inputShaderModel.begin()) 
 						XlCopyString(destination, destinationCount, inputShaderModel);
