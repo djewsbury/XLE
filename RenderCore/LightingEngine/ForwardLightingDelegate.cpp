@@ -521,20 +521,10 @@ namespace RenderCore { namespace LightingEngine
 
 	static ::Assets::PtrToFuturePtr<SkyOperator> CreateSkyOperator(
 		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
-		Techniques::FragmentStitchingContext& stitchingContext,
+		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
 	{
-		// We have to create a fbdesc to ensure we get the right pipeline type for the sky shader
-		// the load operations can't be "Retain" here, because the attachments are not considered initialized
-		// in the stitching context yet (and so won't be matched)
-		Techniques::FrameBufferDescFragment frag;
-		Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
-		skySubpass.AppendOutput(frag.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare, LoadStore::DontCare));
-		skySubpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::DontCare, LoadStore::DontCare));
-		frag.AddSubpass(std::move(skySubpass));
-		auto fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&frag, &frag+1));
-		auto skyOperator = ::Assets::MakeFuture<std::shared_ptr<SkyOperator>>(desc, pipelinePool, Techniques::FrameBufferTarget{&fbDesc._fbDesc, 0});
-		return skyOperator;
+		return ::Assets::MakeFuture<std::shared_ptr<SkyOperator>>(desc, pipelinePool, fbTarget);
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
@@ -611,14 +601,13 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		PreregisterAttachments(stitchingContext);
 
-		auto skyOpFuture = CreateSkyOperator(pipelinePool, stitchingContext, SkyOperatorDesc { SkyTextureType::Equirectangular });
-
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
-		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture, skyOpFuture).ThenConstructToFuture(
+		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
 			*result,
-			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator]
-			(auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr, auto skyOp) {
+			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator, pipelinePool]
+			(	::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
+				auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
 
 				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
 				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
@@ -627,14 +616,12 @@ namespace RenderCore { namespace LightingEngine
 				lightScene->_ssrOperator = ssr;
 				lightScene->_lightTiler = lightTiler;
 				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
-				lightScene->_skyOperator = skyOp;
 				lightScene->FinalizeConfiguration();
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();
 				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
 				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 				captures->_lightScene = lightScene;
-				// captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
 
 				lightTiler->SetLightScene(lightScene);
 				
@@ -644,6 +631,11 @@ namespace RenderCore { namespace LightingEngine
 				ssr->PreregisterAttachments(stitchingContext);
 
 				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
+
+				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
+				lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(lightTiler->GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(ssr->GetDependencyValidation());
 
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
@@ -682,7 +674,7 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Draw main scene
-				lightingTechnique->CreateStep_RunFragments(lightScene->CreateForwardSceneFragment(techDelBox->_forwardIllumDelegate_DisableDepthWrite));
+				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(lightScene->CreateForwardSceneFragment(techDelBox->_forwardIllumDelegate_DisableDepthWrite));
 
 				// Post processing
 				auto toneMapFragment = CreateToneMapFragment(
@@ -699,12 +691,16 @@ namespace RenderCore { namespace LightingEngine
 
 				lightingTechnique->CompleteConstruction();
 
-				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-				lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(lightTiler->GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(ssr->GetDependencyValidation());
-					
-				return lightingTechnique;
+				// Any final operators that depend on the resolved frame buffer:
+				auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
+				auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
+				::Assets::WhenAll(skyOpFuture).ThenConstructToFuture(
+					thatFuture,
+					[captures, lightingTechnique](auto skyOp) {
+						captures->_lightScene->_skyOperator = skyOp;
+						lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
+						return lightingTechnique;
+					});
 			});
 		return result;
 	}
