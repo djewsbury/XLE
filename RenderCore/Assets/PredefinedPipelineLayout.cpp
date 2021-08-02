@@ -215,6 +215,14 @@ namespace RenderCore { namespace Assets
 			MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount])};
 	}
 
+	const PredefinedDescriptorSetLayout* PredefinedPipelineLayout::FindDescriptorSet(StringSection<> name) const
+	{
+		for (const auto& d:_descriptorSets)
+			if (XlEqString(name, d._name))
+				return d._descSet.get();
+		return nullptr;
+	}
+
 	PredefinedPipelineLayout::PredefinedPipelineLayout(
 		const PredefinedPipelineLayoutFile& srcFile,
 		std::string name)

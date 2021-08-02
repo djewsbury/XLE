@@ -4,18 +4,17 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../Lighting/LightingAlgorithm.hlsl"
+#include "../../LightingEngine/LightingAlgorithm.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/CommonResources.hlsl"
-#include "../../Framework/MainGeometry.hlsl"
-#include "../../Framework/Surface.hlsl"
+#include "../../Framework/VSOUT.hlsl"
 #include "../../Utility/Colour.hlsl"
 #include "../../Framework/Binding.hlsl"
 
 #if SKY_PROJECTION==1
-	Texture2D ReflectionBox[3]	BIND_NUMERIC_T0;
+	Texture2D ReflectionBox[3]	BIND_MAT_T3;
 #elif SKY_PROJECTION==5
-	TextureCube ReflectionCube	BIND_NUMERIC_T0;
+	TextureCube ReflectionCube	BIND_MAT_T3;
 #endif
 
 float3 CalculateBaseSkyColor(float2 texCoord, float3 viewFrustumVector)
@@ -79,53 +78,21 @@ float3 CalculateBaseSkyColor(float2 texCoord, float3 viewFrustumVector)
 	#endif
 }
 
-cbuffer SkySettings BIND_MAT_B0 { float SkyBrightness; }
-
-[earlydepthstencil]
-float4 CalculateColour0(float2 texCoord, float3 viewFrustumVector, float3 worldSpacePosition)
+float4 CalculateColour0(float2 texCoord, float3 viewFrustumVector)
 {
-	float3 color = SkyBrightness * CalculateBaseSkyColor(texCoord, viewFrustumVector);
-
-	// #if (BLEND_FOG==1)
-	//	float4 fog = CalculateDistantFog(worldSpacePosition, NegativeDominantLightDirection);
-	//	color = lerp(fog.rgb, color, fog.a);
-	// #endif
-
-	return float4(LightingScale * color, 1.f);
+	return float4(CalculateBaseSkyColor(texCoord, viewFrustumVector), 1);
 }
 
 	//////////////////////////////////
 
 [earlydepthstencil]
-float4 main(float4 position : SV_Position, float2 oTexCoord : TEXCOORD0, float3 viewFrustumVector : VIEWFRUSTUMVECTOR) : SV_Target0
+float4 main(float4 position : SV_Position, float2 texCoord : TEXCOORD0, float3 viewFrustumVector : VIEWFRUSTUMVECTOR) : SV_Target0
 {
-	return CalculateColour0(oTexCoord, viewFrustumVector, SysUniform_GetWorldSpaceView() + 10000.f * viewFrustumVector);
+	return CalculateColour0(texCoord, viewFrustumVector);
 }
 
 [earlydepthstencil]
 float4 ps_HalfCube(VSOUT geo) : SV_Target0
 {
-	return CalculateColour0(VSOUT_GetTexCoord0(geo), normalize(VSOUT_GetWorldPosition(geo) - SysUniform_GetWorldSpaceView()), VSOUT_GetWorldPosition(geo));
-}
-
-	//////////////////////////////////
-
-VSOUT vs_main(VSIN input)
-{
-	VSOUT output;
-	float3 localPosition = VSIN_GetLocalPosition(input);
-	float3 worldPosition = float3(50.f * localPosition.xy + SysUniform_GetWorldSpaceView().xy, 2.f * 50.f * localPosition.z);
-	output.position		 = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
-
-	output.position.z	 = 1.0f * output.position.w;		// push to infinity
-
-	#if VSOUT_HAS_TEXCOORD>=1
-		output.texCoord = VSIN_GetTexCoord0(input);
-	#endif
-
-	#if VSOUT_HAS_WORLD_POSITION==1
-		output.worldPosition = worldPosition.xyz;
-	#endif
-
-	return output;
+	return CalculateColour0(VSOUT_GetTexCoord0(geo), normalize(VSOUT_GetWorldPosition(geo) - SysUniform_GetWorldSpaceView()));
 }

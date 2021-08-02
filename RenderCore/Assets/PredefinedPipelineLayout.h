@@ -84,6 +84,8 @@ namespace RenderCore { namespace Assets
         PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
+        const PredefinedDescriptorSetLayout* FindDescriptorSet(StringSection<>) const;
+
         PredefinedPipelineLayout(
             const PredefinedPipelineLayoutFile& srcFile,
             std::string name);

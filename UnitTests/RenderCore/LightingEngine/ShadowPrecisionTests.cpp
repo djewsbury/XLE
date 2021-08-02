@@ -380,7 +380,7 @@ namespace UnitTests
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
 		auto op = CreateFullViewportOperator(
-			pipelinePool, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, rpi, usi);
+			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
 		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);

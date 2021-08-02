@@ -11,6 +11,7 @@
 #include "StandardLightScene.h"
 #include "HierarchicalDepths.h"
 #include "ScreenSpaceReflections.h"
+#include "SkyOperator.h"
 #include "LightTiler.h"
 #include "SHCoefficients.h"
 #include "../Techniques/ParsingContext.h"
@@ -64,7 +65,8 @@ namespace RenderCore { namespace LightingEngine
 			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
 			request2._srcFile = _sourceImage;
 			request2._format = Format::BC6H_UF16;
-			request2._faceDim = 256;
+			request2._faceDim = 1024;
+			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
 			_ambientRawCubemap = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request2);
 		}
 	};
@@ -98,6 +100,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
+		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<IDevice> _device;
 
 		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
@@ -213,10 +216,17 @@ namespace RenderCore { namespace LightingEngine
 					if (specularIBLFuture->GetAssetState() != ::Assets::AssetState::Ready
 						|| diffuseIBLFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 						l->_ssrOperator->SetSpecularIBL(nullptr);
+						l->_skyOperator->SetResource(nullptr);
 						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 					} else {
 						auto ambientRawCubemap = ambientRawCubemapFuture->Actualize();
-						l->_ssrOperator->SetSpecularIBL(ambientRawCubemap->GetShaderResource());
+						{
+							TextureViewDesc adjustedViewDesc;
+							adjustedViewDesc._mipRange._min = 2;
+							auto adjustedView = ambientRawCubemap->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
+							l->_ssrOperator->SetSpecularIBL(adjustedView);
+						}
+						l->_skyOperator->SetResource(ambientRawCubemap->GetShaderResource());
 						auto actualDiffuse = diffuseIBLFuture->Actualize();
 						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 						std::memcpy(l->_diffuseSHCoefficients, actualDiffuse->GetCoefficients().begin(), sizeof(Float4*)*std::min(actualDiffuse->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
@@ -347,8 +357,24 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate)
 		{
 			RenderStepFragmentInterface result { PipelineType::Graphics };
-			auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Clear);
+			auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare);
 			auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth);
+			
+			Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
+			skySubpass.AppendOutput(lightResolve);
+			skySubpass.SetDepthStencil(depth);
+			skySubpass.SetName("Sky");
+			const bool drawIBLAsSky = true;
+			if (drawIBLAsSky) {
+				result.AddSubpass(
+					std::move(skySubpass),
+					[weakThis = weak_from_this()](LightingTechniqueIterator& iterator) {
+						auto l = weakThis.lock();
+						if (l) l->_skyOperator->Execute(iterator);
+					});
+			} else {
+				result.AddSkySubpass(std::move(skySubpass));
+			}
 
 			Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
 			mainSubpass.AppendOutput(lightResolve);
@@ -493,6 +519,24 @@ namespace RenderCore { namespace LightingEngine
 		return fragment;
 	}
 
+	static ::Assets::PtrToFuturePtr<SkyOperator> CreateSkyOperator(
+		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
+		Techniques::FragmentStitchingContext& stitchingContext,
+		const SkyOperatorDesc& desc)
+	{
+		// We have to create a fbdesc to ensure we get the right pipeline type for the sky shader
+		// the load operations can't be "Retain" here, because the attachments are not considered initialized
+		// in the stitching context yet (and so won't be matched)
+		Techniques::FrameBufferDescFragment frag;
+		Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
+		skySubpass.AppendOutput(frag.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare, LoadStore::DontCare));
+		skySubpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::DontCare, LoadStore::DontCare));
+		frag.AddSubpass(std::move(skySubpass));
+		auto fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&frag, &frag+1));
+		auto skyOperator = ::Assets::MakeFuture<std::shared_ptr<SkyOperator>>(desc, pipelinePool, Techniques::FrameBufferTarget{&fbDesc._fbDesc, 0});
+		return skyOperator;
+	}
+
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
@@ -554,7 +598,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
+		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
 		auto shadowPreparationOperatorsFuture = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet);
@@ -563,14 +607,18 @@ namespace RenderCore { namespace LightingEngine
 		RasterizationLightTileOperator::Configuration tilingConfig;
 		auto lightTilerFuture = ::Assets::MakeFuture<std::shared_ptr<RasterizationLightTileOperator>>(pipelinePool, tilingConfig);
 		auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool);
+		
+		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
+		PreregisterAttachments(stitchingContext);
+
+		auto skyOpFuture = CreateSkyOperator(pipelinePool, stitchingContext, SkyOperatorDesc { SkyTextureType::Equirectangular });
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
-		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
+		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture, skyOpFuture).ThenConstructToFuture(
 			*result,
-			[device, techDelBox, preregisteredAttachments=std::move(preregisteredAttachments), fbProps, pipelineAccelerators, positionalLightOperators, ambientLightOperator]
-			(auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
+			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator]
+			(auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr, auto skyOp) {
 
 				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
 				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
@@ -579,6 +627,7 @@ namespace RenderCore { namespace LightingEngine
 				lightScene->_ssrOperator = ssr;
 				lightScene->_lightTiler = lightTiler;
 				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
+				lightScene->_skyOperator = skyOp;
 				lightScene->FinalizeConfiguration();
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();
@@ -588,9 +637,8 @@ namespace RenderCore { namespace LightingEngine
 				// captures->_uniformsDelegate = std::make_shared<ForwardLightingCaptures::UniformsDelegate>(*captures.get());
 
 				lightTiler->SetLightScene(lightScene);
-
-				Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
-				PreregisterAttachments(stitchingContext);
+				
+				auto stitchingContext = stitchingContextCap;
 				hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
 				lightTiler->PreregisterAttachments(stitchingContext);
 				ssr->PreregisterAttachments(stitchingContext);
@@ -619,14 +667,14 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
 
 				// Build hierarchical depths
-				lightingTechnique->CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(fbProps));
+				lightingTechnique->CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
 
 				// Light tiling & configure lighting descriptors
-				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateInitFragment(fbProps));
-				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateFragment(fbProps));
+				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateInitFragment(stitchingContext._workingProps));
+				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateFragment(stitchingContext._workingProps));
 
 				// Calculate SSRs
-				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(fbProps));
+				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(stitchingContext._workingProps));
 
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {

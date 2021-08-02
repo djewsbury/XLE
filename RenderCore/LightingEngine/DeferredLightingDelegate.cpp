@@ -487,7 +487,7 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox selectors;
 		Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors(selectors);
 
-		auto op = Techniques::CreateFullViewportOperator(pool, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
+		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
 		Techniques::SequencerUniformsHelper uniformsHelper{ parsingContext };

@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual void Draw(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IShaderOperator();
 	};
@@ -45,14 +46,19 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(unsigned countX, unsigned countY, unsigned countZ, IteratorRange<const void*> pushConstants = {}) = 0;
 		virtual void DispatchIndirect(const IResource& indirectArgsBuffer, unsigned offset = 0, IteratorRange<const void*> pushConstants = {}) = 0;
 		
+		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const = 0;
+		
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IComputeShaderOperator();
 	};
 
 	class RenderPassInstance;
 
+	enum class FullViewportOperatorSubType { DisableDepth, MaxDepth };
+
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelinePool>& pool,
+		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
@@ -61,6 +67,7 @@ namespace RenderCore { namespace Techniques
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelinePool>& pool,
+		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,

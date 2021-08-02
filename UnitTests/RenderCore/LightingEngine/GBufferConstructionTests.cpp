@@ -256,7 +256,7 @@ namespace UnitTests
 		RenderCore::UniformsStream& us)
 	{
 		// Very simple stand-in tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, pixelShader, {}, pipelineLayout, rpi, usi);
+		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
 		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);

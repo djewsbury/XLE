@@ -5,6 +5,7 @@
 #include "DescriptorSetAccelerator.h"
 #include "DeferredShaderResource.h"
 #include "TechniqueUtils.h"
+#include "CommonResources.h"
 #include "Services.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
@@ -205,6 +206,52 @@ namespace RenderCore { namespace Techniques
 				thatFuture.SetAsset(std::move(actualized), {});
 				return false;
 			});
+	}
+
+
+	std::shared_ptr<IDescriptorSet> ConstructDescriptorSet(
+		IDevice& device,
+		const Assets::PredefinedDescriptorSetLayout& layout,
+		const UniformsStreamInterface& usi,
+		const UniformsStream& us)
+	{
+		assert(usi._immediateDataBindings.empty());		// imm data bindings not supported here
+		DescriptorSetInitializer::BindTypeAndIdx bindTypesAndIdx[layout._slots.size()];
+
+		auto* bind = bindTypesAndIdx;
+		for (const auto& slot:layout._slots) {
+			auto hash = Hash64(slot._name);
+
+			auto i = std::find(usi._resourceViewBindings.begin(), usi._resourceViewBindings.end(), hash);
+			if (i != usi._resourceViewBindings.end()) {
+				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
+					DescriptorSetInitializer::BindType::ResourceView,
+					(unsigned)std::distance(usi._resourceViewBindings.begin(), i)};
+				continue;
+			}
+
+			i = std::find(usi._samplerBindings.begin(), usi._samplerBindings.end(), hash);
+			if (i != usi._samplerBindings.end()) {
+				*bind++ = DescriptorSetInitializer::BindTypeAndIdx{
+					DescriptorSetInitializer::BindType::Sampler,
+					(unsigned)std::distance(usi._samplerBindings.begin(), i)};
+				continue;
+			}
+
+			*bind++ = DescriptorSetInitializer::BindTypeAndIdx{DescriptorSetInitializer::BindType::Empty, 0};
+		}
+
+		// awkwardly we need to construct a descriptor set signature here
+		auto& commonRes = *Services::GetCommonResources();
+		auto sig = layout.MakeDescriptorSetSignature(&commonRes._samplerPool);
+
+		DescriptorSetInitializer initializer;
+		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx, &bindTypesAndIdx[layout._slots.size()]);
+		initializer._bindItems._resourceViews = us._resourceViews;
+		initializer._bindItems._samplers = us._samplers;
+		initializer._signature = &sig;
+
+		return device.CreateDescriptorSet(initializer);
 	}
 
 

@@ -46,6 +46,21 @@ namespace RenderCore
 		template<typename T0, typename T1, typename T2, typename T3> ImmediateDataStream(const T0& b0, const T1& b1, const T2& b2, const T3& b3);
 	};
 
+	class ResourceViewStream
+	{
+	public:
+		std::vector<const IResourceView*> _resourceViews;
+		operator UniformsStream()
+		{
+			return UniformsStream { _resourceViews, {}, {} };
+		}
+
+		ResourceViewStream(const IResourceView&);
+		ResourceViewStream(const IResourceView&, const IResourceView&);
+		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&);
+		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&);
+	};
+
 	class ConstantBufferElementDesc
 	{
 	public:

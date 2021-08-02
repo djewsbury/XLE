@@ -130,7 +130,10 @@ namespace Assets
 		inline uint64_t BuildParamHash() { return 0; }
 
 		T1(Type) static auto IsStreamable(int) -> decltype(std::declval<std::ostream&>() << std::declval<const Type&>(), std::true_type{});
-		T1(Type)  static auto IsStreamable(...) -> std::false_type;
+		T1(Type) static auto IsStreamable(...) -> std::false_type;
+
+		T1(Type) static auto IsHashable(int) -> decltype(HashParam_Single(std::declval<const Type&>()), std::true_type{});
+		T1(Type) static auto IsHashable(...) -> std::false_type;
 
 		template<typename Type>
 			static decltype(std::declval<std::ostream&>() << std::declval<const Type&>())
@@ -152,15 +155,15 @@ namespace Assets
 			}
 
 		template<typename Type>
-			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value, std::ostream>& StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
+			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && decltype(IsHashable<Type>(0))::value, std::ostream>& StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
 			{
 				return str << HashParam_Single(value);
 			}
 
 		template<typename Type>
-			std::ostream& StreamWithHashFallback(std::ostream& str, const std::shared_ptr<Type>& value, bool allowFilesystemCharacters)
+			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && !decltype(IsHashable<Type>(0))::value, std::ostream>&  StreamWithHashFallback(std::ostream& str, const std::shared_ptr<Type>& value, bool allowFilesystemCharacters)
 			{
-				return str << HashParam_Single(value);
+				return str;
 			}
 
 		template <typename Object>
@@ -174,7 +177,7 @@ namespace Assets
 			std::basic_string<char> AsString(P0 p0, Params... initialisers)
 		{
 			std::basic_stringstream<char> result;
-			result << p0;
+			StreamWithHashFallback(result, p0, true);
 			int dummy[] = { 0, (StreamDashSeparated(result, initialisers, false), 0)... };
 			(void)dummy;
 			return result.str();

@@ -254,6 +254,7 @@ namespace UnitTests
 			UniformsStream us;
 			auto op = Techniques::CreateFullViewportOperator(
 				testApparatus._pipelinePool,
+				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, testApparatus._metalTestHelper->_pipelineLayout,
 				rpi, usi);
@@ -286,6 +287,7 @@ namespace UnitTests
 
 		auto op = Techniques::CreateFullViewportOperator(
 			testApparatus._pipelinePool,
+			Techniques::FullViewportOperatorSubType::DisableDepth,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, testApparatus._metalTestHelper->_pipelineLayout,
 			rpi, usi);

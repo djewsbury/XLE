@@ -28,6 +28,19 @@ namespace RenderCore
 	: _immediateDatas({b0, b1, b2, b3})
 	{}
 
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0)
+	: _resourceViews({&r0})
+	{}
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1)
+	: _resourceViews({&r0, &r1})
+	{}
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1, const IResourceView& r2)
+	: _resourceViews({&r0, &r1, &r2})
+	{}
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1, const IResourceView& r2, const IResourceView& r3)
+	: _resourceViews({&r0, &r1, &r2, &r3})
+	{}
+
 	void UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
 	{
 		if (_resourceViewBindings.size() <= slot)

@@ -37,3 +37,30 @@ PipelineLayout GraphicsMain
 	DescriptorSet AODS;
 	DescriptorSet LightingEngine;
 };
+
+////////////////////////////////////////////////////////
+
+DescriptorSet Material
+{
+	UniformBuffer b0;						// 0
+	UniformBuffer b1;						// 1
+	UniformBuffer b2;						// 2
+
+	SampledTexture t3;						// 3
+	SampledTexture t4;						// 4
+	SampledTexture t5;						// 5
+	SampledTexture t7;						// 6
+	SampledTexture t7;						// 7
+	SampledTexture t8;						// 8
+	SampledTexture t9;						// 9
+	SampledTexture t10;						// 10
+
+	UnorderedAccessBuffer u11;				// 11
+	Sampler s12;							// 12
+};
+
+PipelineLayout GraphicsWithMaterial
+{
+	DescriptorSet Sequencer;
+	DescriptorSet Material;
+};

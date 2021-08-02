@@ -56,4 +56,10 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		bool generateBindingInfo = false);
 
+	std::shared_ptr<IDescriptorSet> ConstructDescriptorSet(
+		IDevice& device,
+		const Assets::PredefinedDescriptorSetLayout& layout,
+		const UniformsStreamInterface& usi,
+		const UniformsStream& us);
+
 }}
