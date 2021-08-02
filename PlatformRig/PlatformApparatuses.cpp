@@ -85,8 +85,9 @@ namespace PlatformRig
 			std::make_shared<PlatformRig::Overlays::HierarchicalProfilerDisplay>(&cpuProfiler),
 			"[Profiler] CPU Profiler");
 
-		debugSys.Register(std::make_shared<PlatformRig::Overlays::InvalidAssetDisplay>(), "[Assets] Invalid asset display");
-		debugSys.SwitchToScreen("[Assets] Invalid asset display");
+		debugSys.Register(std::make_shared<PlatformRig::Overlays::InvalidAssetDisplay>(), "[Console] Invalid asset display");
+		debugSys.SwitchToScreen("[Console] Invalid asset display");
+		// debugSys.SwitchToScreen("[Profiler] GPU Profiler");
 	}
 
 }

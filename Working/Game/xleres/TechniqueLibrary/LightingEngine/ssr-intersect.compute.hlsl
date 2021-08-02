@@ -79,6 +79,28 @@ float FFX_SSSR_LoadDepth(int2 pixel_coordinate, int mip)
     return DownsampleDepths.Load(int3(pixel_coordinate, mip));
 }
 
+float3 SampleEnvironmentMap(float3 direction)
+{
+    return SkyCube.SampleLevel(SkyCubeSampler, direction, 0).xyz;
+}
+
+float3 LoadLitScene(uint2 coord, uint2 bufferDims, inout float confidence)
+{
+    // no protections for occclusions / disocclusions here
+    int2 motion = GBufferMotion.Load(uint3(coord.xy, 0)).rg;
+    coord.xy += motion;
+    [flatten] if (any(coord.xy >= bufferDims.xy)) {
+        confidence = 0;
+        return 0;
+    }
+    float3 result = LastFrameLit.Load(uint3(coord, 0)).rgb;
+    if (any(isnan(result) || !isfinite(result))) {      // todo -- we might be getting nans here because we can read from uninitialized parts of "LastFrameLit" 
+        confidence = 0;
+        return 0;
+    }
+    return result;
+}
+
 float3 FFX_SSSR_ScreenSpaceToViewSpace(float3 screen_space_position)
 {
     #if !defined(VULKAN)
@@ -177,7 +199,7 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     float scale = 0.01f + 0.035f * SampleRandomNumber(dispatch_thread_id.x, dispatch_thread_id.y, FrameId%8, 1);
     float2 variance = float2(cos(theta)*scale, sin(theta)*scale);
     normal = normalize(normal + float3(variance.x, variance.y, 0));
-#else
+#elif 1
     float2 xi = float2(
         SampleRandomNumber(dispatch_thread_id.x, dispatch_thread_id.y, FrameId%8, 0),
         SampleRandomNumber(dispatch_thread_id.x, dispatch_thread_id.y, FrameId%8, 1));
@@ -231,20 +253,9 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     return mul(reflected_direction_tbn, inv_tbn_transform);*/
 }
 
-float3 SampleEnvironmentMap(float3 direction)
+bool IsMirrorReflection(float roughness) 
 {
-    return SkyCube.SampleLevel(SkyCubeSampler, direction, 0).xyz;
-}
-
-float3 LoadLitScene(uint2 coord)
-{
-    // no protections for occclusions / disocclusions here
-    int2 motion = GBufferMotion.Load(uint3(coord.xy, 0)).rg;
-    return LastFrameLit.Load(uint3(coord+motion, 0)).rgb;
-}
-
-bool IsMirrorReflection(float roughness) {
-    return roughness < 0.0001;
+    return false; // roughness < 0.0001;
 }
 
 #include "xleres/Foreign/ffx-sssr/ffx_sssr.h"
@@ -315,7 +326,7 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
         
         if (confidence > 0) {
             // Found an intersection with the depth buffer -> We can lookup the color from lit scene.
-            reflection_radiance = LoadLitScene(screen_size * hit.xy);
+            reflection_radiance = LoadLitScene(screen_size * hit.xy, screen_size, confidence);
         }
 
         // Sample environment map.

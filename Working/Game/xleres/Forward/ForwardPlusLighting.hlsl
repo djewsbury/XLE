@@ -16,6 +16,7 @@ cbuffer EnvironmentProps : register (b0, space3)
 {
 	LightDesc DominantLight;
 	uint LightCount;
+	bool EnableSSR;
 	float4 DiffuseSHCoefficients[25];			// todo -- require premultiplied coefficients instead of reference coefficients
 };
 
@@ -40,10 +41,11 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 	for (uint c=0; c<25; ++c)
 		diffuseSHRef += ResolveSH_Reference(DiffuseSHCoefficients[c].rgb, c, sample.worldSpaceNormal);
 	float metal = sample.material.metal;
-	float3 fresenl = CalculateSkyReflectionFresnel(sample, directionToEye);
+	float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
+	fresnel *= float(EnableSSR); 
 	return 
 		diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb
-		+ fresenl * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+		+ fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
 }
 
 float3 CalculateIllumination(

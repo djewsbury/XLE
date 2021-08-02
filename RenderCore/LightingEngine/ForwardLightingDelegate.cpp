@@ -227,10 +227,12 @@ namespace RenderCore { namespace LightingEngine
 
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 		{
-			/////////////////
-			_pingPongCounter = (_pingPongCounter+1)%dimof(_uniforms);
+			bool lastFrameBuffersPrimed =  _pingPongCounter != 0;
 
-			auto& uniforms = _uniforms[_pingPongCounter];
+			/////////////////
+			++_pingPongCounter;
+
+			auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 			auto& tilerOutputs = _lightTiler->_outputs;
 			{
 				Metal::ResourceMap map(
@@ -273,12 +275,12 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				i->_lightCount = tilerOutputs._lightCount;
+				i->_enableSSR = lastFrameBuffersPrimed;
 				std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 			}
 
 			if (_completionCommandListID)
 				parsingContext.RequireCommandList(_completionCommandListID);
-			// parsingContext.AddShaderResourceDelegate(shared_from_this());
 
 			if (_dominantLightShadowOperator != ~0u) {
 				assert(!parsingContext._extraSequencerDescriptorSet.second);
@@ -300,7 +302,7 @@ namespace RenderCore { namespace LightingEngine
 		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
 			assert(dst.size() >= 4);
-			auto& uniforms = _uniforms[_pingPongCounter];
+			auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 			dst[0] = uniforms._lightDepthTableUAV.get();
 			dst[1] = uniforms._lightListUAV.get();
 			dst[2] = uniforms._propertyCBView.get();
@@ -394,32 +396,6 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
-
-		/*class UniformsDelegate : public Techniques::IShaderResourceDelegate
-		{
-		public:
-			virtual const UniformsStreamInterface& GetInterface() override { return _interface; }
-			void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
-			{
-				assert(idx==0);
-				assert(dst.size() == sizeof(Internal::CB_BasicEnvironment));
-				*(Internal::CB_BasicEnvironment*)dst.begin() = Internal::MakeBasicEnvironmentUniforms(EnvironmentalLightingDesc{});
-			}
-
-			size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
-			{
-				assert(idx==0);
-				return sizeof(Internal::CB_BasicEnvironment);
-			}
-		
-			UniformsDelegate(ForwardLightingCaptures& captures) : _captures(&captures)
-			{
-				_interface.BindImmediateData(0, Utility::Hash64("BasicLightingEnvironment"), {});
-			}
-			UniformsStreamInterface _interface;
-			ForwardLightingCaptures* _captures;
-		};
-		std::shared_ptr<UniformsDelegate> _uniformsDelegate;*/
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
 		void DoToneMap(LightingTechniqueIterator& iterator);
@@ -524,28 +500,28 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
 				CreateDesc(
-					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::UnorderedAccess | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::D24_UNORM_S8_UINT),
 					"main-depth")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::InputAttachment | BindFlag::UnorderedAccess, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::InputAttachment | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
 					"color-hdr")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::UnorderedAccess, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
 					"gbuffer-normal")
 			},
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::UnorderedAccess, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8_SINT),
 					"gbuffer-motion")
 			}
@@ -624,7 +600,6 @@ namespace RenderCore { namespace LightingEngine
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
-						// iterator._parsingContext->AddShaderResourceDelegate(captures->_uniformsDelegate);
 						auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
 						PreregisterAttachments(stitchingContext);
 						captures->_lightScene->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
@@ -670,9 +645,7 @@ namespace RenderCore { namespace LightingEngine
 
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
-						// iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_lightScene);
 						iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
-						// iterator._parsingContext->RemoveShaderResourceDelegate(*captures->_uniformsDelegate);
 						captures->_lightScene->_preparedShadows.clear();
 					});
 

@@ -55,7 +55,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		CB_Light _dominantLight;
 		unsigned _lightCount = 0u;
-		unsigned _dummy[3];
+		bool _enableSSR = true;
+		unsigned _dummy[2];
 		Float4 _diffuseSHCoefficients[25];
 	};
 

@@ -33,7 +33,6 @@ Texture2D<min16float3> g_intersection_result_read         : register(t2, space1)
 StructuredBuffer<uint> g_tile_meta_data_mask_read         : register(t3, space1);
 RWTexture2D<float3> g_spatially_denoised_reflections      : register(u4, space1);
 
-#define g_samples_per_quad 4
 static const float g_depth_sigma = 0.02f;
 
 groupshared uint g_shared_0[16][16];
@@ -86,7 +85,7 @@ void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radianc
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 {
-    return (DownsampleDepths.Load(uint3(pixel_coordinate, 0))==1) ? 1.0f : 0.15f;
+    return 0.15f; // (DownsampleDepths.Load(uint3(pixel_coordinate, 0))==1) ? 1.0f : 0.15f;
 }
 
 min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
@@ -115,7 +114,7 @@ uint FFX_DNSR_Reflections_LoadTileMetaDataMask(uint index)
 }
 
 bool FFX_DNSR_Reflections_IsGlossyReflection(float roughness) { return roughness < 0.5f; }
-bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness < 0.0001; }
+bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return false; /*roughness < 0.0001;*/ }
 
 #include "xleres/Foreign/ffx-reflection-dnsr/ffx_denoiser_reflections_resolve_spatial.h"
 
@@ -127,5 +126,5 @@ bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness
 
     uint2 group_thread_id = FFX_DNSR_Reflections_RemapLane8x8(group_index);
     uint2 dispatch_thread_id = group_id * 8 + group_thread_id;
-    FFX_DNSR_Reflections_ResolveSpatial((int2)dispatch_thread_id, (int2)group_thread_id, g_samples_per_quad, screen_dimensions);
+    FFX_DNSR_Reflections_ResolveSpatial((int2)dispatch_thread_id, (int2)group_thread_id, screen_dimensions);
 }
