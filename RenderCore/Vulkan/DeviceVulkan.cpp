@@ -859,10 +859,6 @@ namespace RenderCore { namespace ImplVulkan
 	}
 
 	VkInstance Device::GetVulkanInstance() { return _instance.get(); }
-    VkQueue Device::GetRenderingQueue()
-    {
-        return GetQueue(_underlying.get(), _physDev._renderingQueueFamily, 0);
-    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -955,25 +951,9 @@ namespace RenderCore { namespace ImplVulkan
 	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue)
 	{
 		if (_activeImageIndex > unsigned(_images.size())) return;
-
 		auto& sync = _presentSyncs[_activePresentSync];
-		const VkSwapchainKHR swapChains[] = { _swapChain.get() };
-		uint32_t imageIndices[] = { _activeImageIndex };
 		const VkSemaphore waitSema_2[] = { sync._onCommandBufferComplete.get() };
-
-		VkPresentInfoKHR present;
-		present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		present.pNext = NULL;
-		present.swapchainCount = dimof(swapChains);
-		present.pSwapchains = swapChains;
-		present.pImageIndices = imageIndices;
-		present.pWaitSemaphores = waitSema_2;
-		present.waitSemaphoreCount = dimof(waitSema_2);
-		present.pResults = NULL;
-
-		auto res = vkQueuePresentKHR(queue.GetUnderlying(), &present);
-		if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failure while queuing present"));
+		queue.Present(_swapChain.get(), _activeImageIndex, MakeIteratorRange(waitSema_2));
 		_activeImageIndex = ~0x0u;
 	}
 

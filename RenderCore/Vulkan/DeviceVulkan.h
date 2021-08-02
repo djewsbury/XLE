@@ -195,7 +195,6 @@ namespace RenderCore { namespace ImplVulkan
 
         virtual void*   QueryInterface(size_t guid) override;
 		VkInstance	    GetVulkanInstance() override;
-        VkQueue         GetRenderingQueue() override;
 
         Device();
         ~Device();

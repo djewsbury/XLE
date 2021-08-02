@@ -39,7 +39,6 @@ namespace RenderCore
 	public:
 		virtual VkInstance	GetVulkanInstance() = 0;
 		virtual VkDevice	GetUnderlyingDevice() = 0;
-		virtual VkQueue     GetRenderingQueue() = 0;
 		virtual Metal_Vulkan::GlobalPools& GetGlobalPools() = 0;
 		virtual std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler(
 			const VulkanCompilerConfiguration&) = 0;

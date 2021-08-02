@@ -15,7 +15,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	class SubmissionQueue
 	{
 	public:
-		VkQueue GetUnderlying()     { return _underlying; }
 		const std::shared_ptr<Metal_Vulkan::FenceBasedTracker>& GetTracker() { return _gpuTracker; }
 
 		IAsyncTracker::Marker Submit(
@@ -24,6 +23,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const VkSemaphore*> waitBeforeBegin,
 			IteratorRange<const VkPipelineStageFlags*> waitBeforeBeginStages);
 		void WaitForFence(IAsyncTracker::Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});
+
+		void Present(
+			VkSwapchainKHR swapChain, unsigned imageIndex, 
+			IteratorRange<const VkSemaphore*> waitBeforePresent);
 
 		SubmissionQueue(
 			ObjectFactory& factory,

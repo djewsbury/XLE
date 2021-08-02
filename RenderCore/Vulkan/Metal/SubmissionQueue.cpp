@@ -45,6 +45,29 @@ namespace RenderCore { namespace Metal_Vulkan
         _gpuTracker->WaitForFence(marker, timeout);
     }
 
+	void SubmissionQueue::Present(
+		VkSwapchainKHR swapChain, unsigned imageIndex, 
+		IteratorRange<const VkSemaphore*> waitBeforePresent)
+	{
+		const VkSwapchainKHR swapChains[] = { swapChain };
+		uint32_t imageIndices[] = { imageIndex };
+
+		VkPresentInfoKHR present;
+		present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		present.pNext = NULL;
+		present.swapchainCount = dimof(swapChains);
+		present.pSwapchains = swapChains;
+		present.pImageIndices = imageIndices;
+		present.pWaitSemaphores = waitBeforePresent.begin();
+		present.waitSemaphoreCount = waitBeforePresent.size();
+		present.pResults = NULL;
+
+		ScopedLock(_queueLock);
+		auto res = vkQueuePresentKHR(_underlying, &present);
+		if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while queuing present"));
+	}
+
     SubmissionQueue::SubmissionQueue(
         ObjectFactory& factory,
 		VkQueue queue)
