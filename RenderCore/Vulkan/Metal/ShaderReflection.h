@@ -11,8 +11,14 @@
 #include "../../../Utility/IteratorUtils.h"
 #include <iostream>
 
+namespace RenderCore { class StreamOutputInitializers; }
+
 namespace RenderCore { namespace Metal_Vulkan
 {
+    std::vector<uint32_t> PatchUpStreamOutput(
+        IteratorRange<const void*> byteCode,
+        const StreamOutputInitializers& soInit);
+        
     class SPIRVReflection
     {
     public:

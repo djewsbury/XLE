@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShaderReflection.h"
+#include "../../Types.h"
 
 #define HAS_SPIRV_HEADERS
 #if defined(HAS_SPIRV_HEADERS)
@@ -12,6 +13,7 @@
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/StringFormat.h"
+#include "../../../Utility/FastParseValue.h"
 
 // Vulkan SDK includes -- 
 #pragma push_macro("new")
@@ -23,6 +25,118 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+
+    struct ShaderSemantic { StringSection<> _name; unsigned _index = 0; };
+    static ShaderSemantic MakeShaderSemantic(StringSection<> input)
+    {
+        auto name = input;
+
+        // Our shader path prepends "in_" infront of the semantic name
+        // when generating a variable name. Remove it before we make a hash.
+        // Alternatively, the HLSL -> spirv compiler prepends "in.var.", and we should remove that
+        if (XlBeginsWith(name, MakeStringSection("in_")))
+            name._start += 3;
+        else if (XlBeginsWith(name, MakeStringSection("in.var.")))
+            name._start += 7;
+        else if (XlBeginsWith(name, MakeStringSection("out.var.")))
+            name._start += 8;
+        while (!name.IsEmpty() && isdigit(*(name._end-1)))
+            --name._end;
+
+        unsigned index = 0;
+        if (name.end() != input.end())
+            FastParseValue(MakeStringSection(name.end(), input.end()), index);
+        return {name, index};
+    }
+
+    std::vector<uint32_t> PatchUpStreamOutput(
+        IteratorRange<const void*> byteCode,
+        const StreamOutputInitializers& soInit)
+    {
+        using namespace spv;
+        std::vector<uint32_t> byteCode2 {(const uint32_t*)byteCode.begin(), (const uint32_t*)byteCode.end()};
+
+        auto elements = NormalizeInputAssembly(soInit._outputElements);
+        struct VariableBinding
+        {
+            uint32_t _variable;
+            InputElementDesc* _eleDesc;
+            bool _hasBeenDecorated;
+        };
+        std::vector<VariableBinding> bindings;
+
+        bool wroteExecuteMode = false;
+        auto bci = byteCode2.begin() + 5;
+        while (bci < byteCode2.end()) {
+            unsigned int firstWord = *bci;
+            unsigned wordCount = firstWord >> WordCountShift;
+            Op opCode = (Op)(firstWord & OpCodeMask);
+            auto paramStart = bci+1;
+            bci += wordCount;
+
+            if (opCode == OpName) {
+                // Lookup the name in the list of vertex outputs we're expecting
+                if (XlBeginsWith(MakeStringSection((const char*)&paramStart[1]), "out.var.")) {
+                    auto sem = MakeShaderSemantic(MakeStringSection((const char*)&paramStart[1]));
+                    for (auto e=elements.begin(); e!=elements.end(); ++e) {
+                        if (XlEqString(sem._name, e->_semanticName) && sem._index == e->_semanticIndex) {
+                            bindings.push_back({paramStart[0], AsPointer(e), false});
+                        }
+                    }
+                }
+            } /*else if (opCode == OpEmitVertex) {
+                // To change OpEmitVertex to emit a vertex to a specific stream:
+                assert(wordCount == 1);
+                *(paramStart-1) = OpEmitStreamVertex | (2u<<WordCountShift);
+                bci = 1+byteCode2.insert(bci, 5);       // 5 here must be a constant "int" type with the stream index
+            } */else if (opCode == OpCapability) {
+                assert(wordCount == 2);
+                bci = 1+byteCode2.insert(bci, OpCapability | (2u<<WordCountShift));
+                bci = 1+byteCode2.insert(bci, CapabilityTransformFeedback);
+                // bci = 1+byteCode2.insert(bci, OpCapability | (2u<<WordCountShift));
+                // bci = 1+byteCode2.insert(bci, CapabilityGeometryStreams);
+            } else if (opCode == OpExecutionMode && !wroteExecuteMode) {
+                bci -= wordCount;
+                auto entry = bci[1];
+                bci = 1+byteCode2.insert(bci, OpExecutionMode | (3u<<WordCountShift));
+                bci = 1+byteCode2.insert(bci, entry);
+                bci = 1+byteCode2.insert(bci, ExecutionModeXfb);
+                wroteExecuteMode = true;
+            } else if (opCode == OpDecorate) {
+                for (auto& b:bindings) {
+                    if (b._variable != paramStart[0] || b._hasBeenDecorated) continue;
+
+                    auto varToDecorate = paramStart[0];
+                    bci = 1+byteCode2.insert(bci, OpDecorate | (4u<<WordCountShift));
+                    bci = 1+byteCode2.insert(bci, varToDecorate);
+                    bci = 1+byteCode2.insert(bci, DecorationXfbBuffer);
+                    bci = 1+byteCode2.insert(bci, b._eleDesc->_inputSlot);
+
+                    bci = 1+byteCode2.insert(bci, OpDecorate | (4u<<WordCountShift));
+                    bci = 1+byteCode2.insert(bci, varToDecorate);
+                    bci = 1+byteCode2.insert(bci, DecorationXfbStride);
+                    assert(b._eleDesc->_inputSlot < soInit._outputBufferStrides.size());
+                    bci = 1+byteCode2.insert(bci, soInit._outputBufferStrides[b._eleDesc->_inputSlot]);
+
+                    bci = 1+byteCode2.insert(bci, OpDecorate | (4u<<WordCountShift));
+                    bci = 1+byteCode2.insert(bci, varToDecorate);
+                    bci = 1+byteCode2.insert(bci, DecorationOffset);
+                    assert(b._eleDesc->_alignedByteOffset != ~0u);
+                    bci = 1+byteCode2.insert(bci, b._eleDesc->_alignedByteOffset);
+
+                    /*  If there are multiple streams, you can configure them here:
+                    bci = 1+byteCode2.insert(bci, OpDecorate | (4u<<WordCountShift));
+                    bci = 1+byteCode2.insert(bci, varToDecorate);
+                    bci = 1+byteCode2.insert(bci, DecorationStream);
+                    bci = 1+byteCode2.insert(bci, 0);*/
+
+                    b._hasBeenDecorated = true;
+                }
+            }
+        }
+
+        return byteCode2;
+    }
 
     template<typename Id>
         void FillInBinding(
@@ -318,26 +432,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
             if (nameStart == nameEnd) continue;
 
-            // Our shader path prepends "in_" infront of the semantic name
-            // when generating a variable name. Remove it before we make a hash.
-            // Alternatively, the HLSL -> spirv compiler prepends "in.var.", and we should remove that
-            if (XlBeginsWith(n->second, MakeStringSection("in_")))
-                nameStart += 3;
-            else if (XlBeginsWith(n->second, MakeStringSection("in.var.")))
-                nameStart += 7;
-            while (nameEnd-1 > nameStart && isdigit(*(nameEnd-1)))
-                --nameEnd;
-
-            unsigned index = 0;
-            if (nameEnd != n->second.end()) {
-                char temp[8];   // have to copy to get the null terminator! Awkward, need a int parser than works on a StringSection
-                XlCopyString(temp, MakeStringSection(nameEnd, n->second.end()));
-                index = atoi(temp);
-            }
+            auto sem = MakeShaderSemantic({nameStart, nameEnd});
 
             _inputInterfaceQuickLookup.push_back(
                 std::make_pair(
-                    Hash64(nameStart, nameEnd) + index,
+                    Hash64(sem._name) + sem._index,
                     InputInterfaceElement{v->second._type, b->second._location}));
         }
 

@@ -15,6 +15,8 @@
 #include "../../../Utility/StringUtils.h"
 #include "../../../Utility/StringFormat.h"
 
+#include "ShaderReflection.h"
+
 #pragma warning(disable:4702)
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -23,6 +25,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	static CompiledShaderByteCode s_null;
 
+	std::vector<uint32_t> AppendSODecorations(IteratorRange<const void*> byteCode);
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +77,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (gs.GetStage() != ShaderStage::Null) {
 			assert(gs.GetStage() == ShaderStage::Geometry);
 			auto byteCode = gs.GetByteCode();
-            _modules[(unsigned)ShaderStage::Geometry] = factory.CreateShaderModule(byteCode);
+			if (!so._outputElements.empty()) {
+				auto decorated = PatchUpStreamOutput(byteCode, so);
+				_modules[(unsigned)ShaderStage::Geometry] = factory.CreateShaderModule(decorated);
+			} else {
+				_modules[(unsigned)ShaderStage::Geometry] = factory.CreateShaderModule(byteCode);
+			}
 			_compiledCode[(unsigned)ShaderStage::Geometry] = gs;
 			assert(_modules[(unsigned)ShaderStage::Geometry]);
 			_validationCallback.RegisterDependency(gs.GetDependencyValidation());
