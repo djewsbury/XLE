@@ -85,8 +85,8 @@ float4 HighlightByStencil(float4 position : SV_Position, float2 texCoord : TEXCO
 
 float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
-	uint2 basePos = uint2(position.xy);
-	uint testMarker = Marker(int2(basePos));
+	int2 basePos = int2(position.xy);
+	uint testMarker = Marker(basePos);
 
 	if (testMarker != DummyMarker) discard;
 
@@ -94,7 +94,7 @@ float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOOR
 	[unroll] for (int y=0; y<5; ++y) {
 		[unroll] for (int x=0; x<5; ++x) {
 			uint marker = Marker(int2(basePos) + 2 * int2(x-2, y-2));
-			float value = (marker == testMarker);
+			float value = (marker == testMarker) * 2.0 - 1.0;
 			dhdp.x += SharrHoriz5x5[x][y] * value;
 			dhdp.y += SharrVert5x5[x][y] * value;
 		}

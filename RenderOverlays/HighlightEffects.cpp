@@ -127,7 +127,7 @@ namespace RenderOverlays
     {
         assert(stencilSrv);
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
-        const bool inputAttachmentMode = true;
+        const bool inputAttachmentMode = false;
 
         UniformsStream::ImmediateData cbData[] = {
             MakeOpaqueIteratorRange(settings)
@@ -172,14 +172,18 @@ namespace RenderOverlays
             encoder.Draw(4);
         }
 
-        auto outlineShader = LoadShaderProgram(
-            encoder.GetPipelineLayout(),
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
-            params.AsStringSection())->TryActualize();
-        if (outlineShader) {                
-            encoder.Bind(**outlineShader);
-            encoder.Draw(4);
+        // Note that the outline version doesn't work with inputAttachmentMode, because 
+        // we need to read from several surrounding pixels
+        if (!inputAttachmentMode) {
+            auto outlineShader = LoadShaderProgram(
+                encoder.GetPipelineLayout(),
+                BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+                HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
+                params.AsStringSection())->TryActualize();
+            if (outlineShader) {                
+                encoder.Bind(**outlineShader);
+                encoder.Draw(4);
+            }
         }
     }
 

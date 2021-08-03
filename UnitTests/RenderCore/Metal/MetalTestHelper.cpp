@@ -147,9 +147,11 @@ namespace UnitTests
 		RenderCore::ResourceDesc _originalMainTargetDesc;
 		std::shared_ptr<RenderCore::Metal::FrameBuffer> _fb;
 		RenderCore::FrameBufferDesc _fbDesc;
+		mutable RenderCore::ViewPool _srvPool;
 
-		RenderCore::IResourcePtr GetResource(
+		std::shared_ptr<RenderCore::IResourceView> GetResourceView(
 			RenderCore::AttachmentName resName, 
+			RenderCore::BindFlag::Enum bindFlag, RenderCore::TextureViewDesc viewDesc,
 			const RenderCore::AttachmentDesc& requestDesc,
 			const RenderCore::FrameBufferProperties& props) const override
 		{
@@ -157,7 +159,7 @@ namespace UnitTests
 			// the "requestDesc" is passed in here so that we can validate it. We're expecting
 			// it to match up to the desc that was provided in the FrameBufferDesc
 			assert(requestDesc._format == _originalMainTargetDesc._textureDesc._format);
-			return _mainTarget;
+			return _srvPool.GetTextureView(_mainTarget, bindFlag, viewDesc);
 		}
 	};
 
@@ -515,6 +517,10 @@ namespace UnitTests
 		result->AppendEntry(
 			RegisterType::ConstantBuffer, RegisterQualifier::None,
 			Entry{3, 4, Hash64("Numeric"), 2, 3, 4});
+
+		result->AppendEntry(
+			RegisterType::Sampler, RegisterQualifier::None,
+			Entry{16, 17, Hash64("Numeric"), 3, 4, 5});				// HLSL dummy sampler
 		return result;
 	}
 }

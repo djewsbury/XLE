@@ -53,13 +53,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint64_t							_slotsFilled = 0;
 			uint64_t							_allSlotsMask = 0;
 			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+			unsigned							_bindSlot = 0;
 
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				DescriptorSetDebugInfo _description;
 			#endif
 
-			DescSet(const std::shared_ptr<CompiledDescriptorSetLayout>& layout)
-			: _builder(layout->GetDescriptorSlots()), _layout(layout)
+			DescSet(const std::shared_ptr<CompiledDescriptorSetLayout>& layout, unsigned bindSlot)
+			: _builder(layout->GetDescriptorSlots()), _layout(layout), _bindSlot(bindSlot)
 			{
 				#if defined(VULKAN_VERBOSE_DEBUG)
 					_description._descriptorSetInfo = "NumericUniformsInterface";
@@ -77,8 +78,10 @@ namespace RenderCore { namespace Metal_Vulkan
 					_description._descriptorSetInfo = "NumericUniformsInterface";
 				#endif
 
-				// bind dummies in every slot
-				_builder.BindDummyDescriptors(globalPools, _allSlotsMask);
+				// Skip avoid binding dummys by default. This cuts down on the overhead
+				// of setting up descriptor sets; but it's a bit dangerous because the
+				// GPU can halt if it attempts to read from an uninitialized descriptor
+				// _builder.BindDummyDescriptors(globalPools, _allSlotsMask);
 			}
 		};
 		std::vector<DescSet> _descSet;
@@ -89,8 +92,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		Pimpl(const CompiledPipelineLayout& layout)
 		{
 			_descSet.reserve(layout.GetDescriptorSetCount());
-			for (unsigned c=0; c<layout.GetDescriptorSetCount(); ++c)
-				_descSet.emplace_back(layout.GetDescriptorSetLayout(c));
+		}
+
+		unsigned LookupDescriptorSet(const CompiledPipelineLayout& pipelineLayout, uint64_t bindingName)
+		{
+			auto bindingNames = pipelineLayout.GetDescriptorSetBindingNames();
+			for (unsigned c=0; c<bindingNames.size(); ++c)
+				if (bindingNames[c] == bindingName) {
+					for (unsigned d=0; d<_descSet.size(); ++d)
+						if (_descSet[d]._bindSlot == c)
+							return d;
+					_descSet.emplace_back(pipelineLayout.GetDescriptorSetLayout(c), c);
+					return (unsigned)_descSet.size()-1;
+				}
+			return ~0u;
 		}
     };
 
@@ -264,7 +279,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				d._activeDescSet = std::move(newSets[0]);
 
 				encoder.BindDescriptorSet(
-					dIdx, d._activeDescSet.get()
+					d._bindSlot, d._activeDescSet.get()
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{d._description}));
 			}
 		}
@@ -284,15 +299,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _pimpl->_hasChanges;
 	}
 
-	static unsigned LookupDescriptorSet(const CompiledPipelineLayout& pipelineLayout, uint64_t bindingName)
-	{
-		auto bindingNames = pipelineLayout.GetDescriptorSetBindingNames();
-		for (unsigned c=0; c<bindingNames.size(); ++c)
-			if (bindingNames[c] == bindingName)
-				return c;
-		return ~0u;
-	}
-
     NumericUniformsInterface::NumericUniformsInterface(
         const ObjectFactory& factory,
 		const ICompiledPipelineLayout& ipipelineLayout,
@@ -307,14 +313,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pimpl->_cmdListAttachedStorage = &cmdListAttachedStorage;
 		_pimpl->_hasChanges = false;
         
-        Reset();
-
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::Sampler)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_samplerRegisters[b]._descSetIndex = descSet;
 					_pimpl->_samplerRegisters[b]._slotIndex = b-e._begin+e._targetBegin;
 				}
@@ -324,9 +327,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::ConstantBuffer)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_constantBufferRegisters[b]._descSetIndex = descSet;
 					_pimpl->_constantBufferRegisters[b]._slotIndex = b-e._begin+e._targetBegin;
 				}
@@ -336,9 +338,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::ShaderResource)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_srvRegisters[b]._descSetIndex = descSet;
 					_pimpl->_srvRegisters[b]._slotIndex = b-e._begin+e._targetBegin;
 				}
@@ -348,9 +349,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::UnorderedAccess)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_uavRegisters[b]._descSetIndex = descSet;
 					_pimpl->_uavRegisters[b]._slotIndex = b-e._begin+e._targetBegin;
 				}
@@ -360,9 +360,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::ShaderResource, LegacyRegisterBindingDesc::RegisterQualifier::Buffer)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_srvRegisters_boundToBuffer[b]._descSetIndex = descSet;
 					_pimpl->_srvRegisters_boundToBuffer[b]._slotIndex = b-e._begin+e._targetBegin;
 				}
@@ -372,9 +371,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto&e:bindings.GetEntries(LegacyRegisterBindingDesc::RegisterType::UnorderedAccess, LegacyRegisterBindingDesc::RegisterQualifier::Buffer)) {
 			assert(e._end <= Pimpl::s_maxBindings);
 			for (unsigned b=e._begin; b!=e._end; ++b) {
-				auto descSet = LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
+				auto descSet = _pimpl->LookupDescriptorSet(pipelineLayout, e._targetDescriptorSetBindingName);
 				if (descSet != ~0u) {
-					assert(descSet == e._targetDescriptorSetIdx);
 					_pimpl->_uavRegisters_boundToBuffer[b]._descSetIndex = descSet;
 					_pimpl->_uavRegisters_boundToBuffer[b]._slotIndex = b-e._begin+e._targetBegin;
 				}

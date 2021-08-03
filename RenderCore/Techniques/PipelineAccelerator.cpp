@@ -561,7 +561,7 @@ namespace RenderCore { namespace Techniques
 		hash = HashCombine(cfg._fbRelevanceValue, hash);
 
 		// todo -- we must take into account the delegate itself; it must impact the hash
-		hash = HashCombine(uint64_t(delegate.get()), hash);
+		hash = HashCombine(uint64_t(cfg._delegate.get()), hash);
 
 		return cfg;
 	}
