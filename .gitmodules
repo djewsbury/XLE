@@ -30,7 +30,7 @@
 	url = git@github.com:catchorg/Catch2
 [submodule "Foreign/incbin"]
 	path = Foreign/incbin
-	url = git@github.com:graphitemaster/incbin.git
+	url = git@github.com:djewsbury/incbin.git
 [submodule "Foreign/stb"]
 	path = Foreign/stb
 	url = git@github.com:nothings/stb
