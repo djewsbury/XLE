@@ -70,3 +70,6 @@
 
 #define TILED_LIGHTING_PREPARE_HLSL "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pixel.hlsl"
 #define TILED_LIGHTING_PREPARE_PIPELINE "xleres/TechniqueLibrary/LightingEngine/tiledlighting-prepare.pipeline"
+
+#define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
+
