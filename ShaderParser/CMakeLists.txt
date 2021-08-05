@@ -50,7 +50,7 @@ add_library(ShaderParser STATIC ${Src} ${Headers} ${GeneratedGrammarFiles})
 xle_configure_library(ShaderParser)
 
 target_include_directories(ShaderParser PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(ShaderParser PUBLIC RenderCoreAssets tiny-process-library)
+target_link_libraries(ShaderParser PUBLIC RenderCoreAssets)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	target_compile_options(ShaderParser PRIVATE $<$<COMPILE_LANGUAGE:C>:-std=c11>)

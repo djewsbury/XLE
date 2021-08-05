@@ -27,7 +27,6 @@ add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../ColladaConversion ColladaConversion
 
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign ForeignMisc)
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/freetype freetype)
-add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/tiny-process-library tiny-process-library)
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign/Catch2 catch2)
 
 if (WIN32)
