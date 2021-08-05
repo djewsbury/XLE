@@ -6,6 +6,7 @@
 
 #include "../Assets/MaterialScaffold.h"		// used by DrawableMaterial below
 #include "../IDevice.h"
+#include "../../Math/Matrix.h"
 #include "../../Utility/VariantUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include <vector>
@@ -77,6 +78,34 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<DrawableGeo>				_geo;
 		std::shared_ptr<UniformsStreamInterface>  	_looseUniformsInterface;
         ExecuteDrawableFn*							_drawFn;
+	};
+
+	class DrawableInputAssembly
+	{
+	public:
+		IteratorRange<const InputElementDesc*> GetInputElements() const { return MakeIteratorRange(_inputElements); }
+		IteratorRange<const unsigned*> GetStrides() const { return MakeIteratorRange(_strides); }
+		Topology GetTopology() const { return _topology; }
+		uint64_t GetHash() const { return _hash; }
+
+		DrawableInputAssembly(
+			IteratorRange<const InputElementDesc*> inputElements,
+			Topology topology);
+	private:
+		std::vector<InputElementDesc> _inputElements;
+		std::vector<unsigned> _strides;
+		uint64_t _hash;
+		Topology _topology;
+	};
+
+	class GeometryProcable
+	{
+	public:
+		std::shared_ptr<DrawableGeo> _geo;
+		std::shared_ptr<DrawableInputAssembly> _inputAssembly;
+		Float4x4 _localToWorld;
+		unsigned _indexCount = 0;
+		unsigned _startIndexLocation = 0;
 	};
 
 	class DrawablesPacket

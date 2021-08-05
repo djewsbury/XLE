@@ -20,6 +20,7 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
 #include "../../Assets/AsyncMarkerGroup.h"
+#include "../../Utility/ArithmeticUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -336,5 +337,14 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	DrawableInputAssembly::DrawableInputAssembly(
+		IteratorRange<const InputElementDesc*> inputElements,
+		Topology topology)
+	{
+		_inputElements = NormalizeInputAssembly(inputElements);
+		_strides = CalculateVertexStrides(_inputElements);
+		_topology = topology;
+		_hash = rotl64(HashInputAssembly(MakeIteratorRange(_inputElements), DefaultSeed64), (unsigned)_topology);
+	}
 
 }}

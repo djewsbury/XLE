@@ -56,6 +56,10 @@ namespace RenderCore { namespace Techniques
 			const Float4x4& localToWorld,
 			const std::shared_ptr<IPreDrawDelegate>& delegate) const;
 
+		void BuildGeometryProcables(
+			IteratorRange<DrawablesPacket** const> pkts,
+			const Float4x4& localToWorld = Identity<Float4x4>()) const;
+
 		void GenerateDeformBuffer(IThreadContext& context);
 		unsigned DeformOperationCount() const;
 		IDeformOperation& DeformOperation(unsigned idx);
@@ -120,6 +124,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
 			std::shared_ptr<DescriptorSetAccelerator> _descriptorSetAccelerator;
 			unsigned _batchFilter;
+			unsigned _iaIdx;
 		};
 
 		std::vector<GeoCall> _geoCalls;
@@ -136,7 +141,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<IResource> _dynVB;
 
-		std::vector<std::shared_ptr<IUniformBufferDelegate>> _extraUniformBufferDelegates;
+		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableIAs;
 
 		std::string _modelScaffoldName;
 		std::string _materialScaffoldName;

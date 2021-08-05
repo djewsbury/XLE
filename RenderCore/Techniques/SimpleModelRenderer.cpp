@@ -56,7 +56,6 @@ namespace RenderCore { namespace Techniques
 		Float4x4 _objectToWorld;
 		uint64_t _materialGuid;
 		unsigned _drawCallIdx;
-		std::vector<std::shared_ptr<IUniformBufferDelegate>> _extraUniformBufferDelegates;
 	};
 
 	struct DrawCallProperties
@@ -77,12 +76,6 @@ namespace RenderCore { namespace Techniques
 				drawable._objectToWorld, 
 				ExtractTranslation(parserContext.GetProjectionDesc()._cameraToWorld));
 			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
-			assert(drawable._extraUniformBufferDelegates.empty());
-			/*
-			assert(dimof(cbvs) >= 2 + drawable._extraUniformBufferDelegates.size());
-			for (unsigned c=0; c<drawable._extraUniformBufferDelegates.size(); ++c)
-				if (bindingField & ((c+2)<<1))
-					cbvs[c+2] = drawable._extraUniformBufferDelegates[c]->WriteBuffer(parserContext, nullptr);*/
 			drawFnContext.ApplyLooseUniforms(ImmediateDataStream{localTransform, drawCallProps});
 		}
 
@@ -130,7 +123,6 @@ namespace RenderCore { namespace Techniques
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-				drawable._extraUniformBufferDelegates = _extraUniformBufferDelegates;
                 drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
 
 				++drawCallCounter;
@@ -166,7 +158,6 @@ namespace RenderCore { namespace Techniques
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-				drawable._extraUniformBufferDelegates = _extraUniformBufferDelegates;
 				drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
 
 				++drawCallCounter;
@@ -280,6 +271,74 @@ namespace RenderCore { namespace Techniques
 				drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
 
 				++drawCallCounter;
+            }
+
+			geoCallIterator += geoCall._materialCount;
+        }
+	}
+
+	void SimpleModelRenderer::BuildGeometryProcables(
+		IteratorRange<Techniques::DrawablesPacket** const> pkts,
+		const Float4x4& localToWorld) const
+	{
+		GeometryProcable* drawables[dimof(_drawablesCount)];
+		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
+			if (!_drawablesCount[c]) {
+				drawables[c] = nullptr;
+				continue;
+			}
+			if (!pkts[c])
+				Throw(::Exceptions::BasicLabel("Drawables packet not provided for batch filter %i", c));
+			drawables[c] = pkts[c]->_drawables.Allocate<GeometryProcable>(_drawablesCount[c]);
+		}
+
+		const auto& cmdStream = _modelScaffold->CommandStream();
+        const auto& immData = _modelScaffold->ImmutableData();
+		auto geoCallIterator = _geoCalls.begin();
+        for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
+            const auto& geoCall = cmdStream.GetGeoCall(c);
+            auto& rawGeo = immData._geos[geoCall._geoId];
+
+			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
+            assert(machineOutput < _baseTransformCount);
+			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+
+            for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
+                const auto& drawCall = rawGeo._drawCalls[d];
+				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
+
+				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
+				drawable._geo = _geos[geoCall._geoId];
+				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
+				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._indexCount = drawCall._indexCount;
+				drawable._startIndexLocation = drawCall._firstIndex;
+				assert(drawCall._firstVertex == 0);
+            }
+
+			geoCallIterator += geoCall._materialCount;
+        }
+
+		geoCallIterator = _boundSkinnedControllerGeoCalls.begin();
+		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
+            const auto& geoCall = cmdStream.GetSkinCall(c);
+            auto& rawGeo = immData._boundSkinnedControllers[geoCall._geoId];
+
+			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
+            assert(machineOutput < _baseTransformCount);
+			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+
+            for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
+                const auto& drawCall = rawGeo._drawCalls[d];
+				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
+
+				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
+				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
+				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
+				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._indexCount = drawCall._indexCount;
+				drawable._startIndexLocation = drawCall._firstIndex;
+				assert(drawCall._firstVertex == 0);
             }
 
 			geoCallIterator += geoCall._materialCount;
@@ -776,7 +835,9 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 			std::vector<std::string> _descriptorSetResources;
 		};
-		std::vector<std::pair<uint64_t, WorkingMaterial>> drawableMaterials;
+		std::vector<std::pair<uint64_t, WorkingMaterial>> _drawableMaterials;
+
+		std::vector<std::shared_ptr<DrawableInputAssembly>> _ias;
 
 		template<typename RawGeoType>
 			GeoCall MakeGeoCall(
@@ -792,8 +853,8 @@ namespace RenderCore { namespace Techniques
 				mat = &defaultMaterial;
 			}
 
-			auto i = LowerBound(drawableMaterials, materialGuid);
-			if (i != drawableMaterials.end() && i->first == materialGuid) {
+			auto i = LowerBound(_drawableMaterials, materialGuid);
+			if (i != _drawableMaterials.end() && i->first == materialGuid) {
 				resultGeoCall._descriptorSetAccelerator = i->second._descriptorSetAccelerator;
 			} else {
 				auto patchCollection = _materialScaffold->GetShaderPatchCollection(mat->_patchCollection);
@@ -811,7 +872,7 @@ namespace RenderCore { namespace Techniques
 				for (const auto&r:mat->_bindings)
 					resourceNames.push_back(r.Name().AsString());
 
-				i = drawableMaterials.insert(i, std::make_pair(materialGuid, WorkingMaterial{patchCollection, resultGeoCall._descriptorSetAccelerator, std::move(resourceNames)}));
+				i = _drawableMaterials.insert(i, std::make_pair(materialGuid, WorkingMaterial{patchCollection, resultGeoCall._descriptorSetAccelerator, std::move(resourceNames)}));
 			}
 
 			// Figure out the topology from from the rawGeo. We can't mix topology across the one geo call; all draw calls
@@ -853,6 +914,15 @@ namespace RenderCore { namespace Techniques
                     resultGeoCall._batchFilter = (unsigned)BatchFilter::General;
                 }
             }
+
+			auto ia = std::make_shared<DrawableInputAssembly>(MakeIteratorRange(inputElements), topology);
+			auto w = std::find_if(_ias.begin(), _ias.end(), [hash=ia->GetHash()](const auto& q) { return q->GetHash() == hash; });
+			if (w == _ias.end()) {
+				resultGeoCall._iaIdx = (unsigned)_ias.size();
+				_ias.push_back(ia);
+			} else {
+				resultGeoCall._iaIdx = (unsigned)std::distance(_ias.begin(), w);
+			}
 
 			return resultGeoCall;
 		}
@@ -984,6 +1054,8 @@ namespace RenderCore { namespace Techniques
 				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, deform));
 			}
 		}
+
+		_drawableIAs = std::move(geoCallBuilder._ias);
 
 		// Create the dynamic VB and assign it to all of the slots it needs to go to
 		if (postDeformVBIterator) {
