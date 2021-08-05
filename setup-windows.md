@@ -38,17 +38,27 @@ For RenderCore you'll need a little more
 * After the first cmake configure, you should get an error message saying GLES could not be found. There's no default location for windows, you must configure it manually
 * set the cmake cache variables XLE_OPENGLES_INCLUDE_DIR & XLE_OPENGLES_LIBRARY_DIR
 * install java jre (choco install javaruntime)
-
 * install vulkan sdk: https://vulkan.lunarg.com/sdk/home. You'll also need the "Additional SDK components" (unzip into the same SDK directory, this the debug libs). Debug libs are required to against debug XLE components because of the iterator debugging functionality in the MSVC standard library
-
 * download dxcompiler from https://github.com/microsoft/DirectXShaderCompiler/releases (last used April 2021 release). You may need to set the XLE_DXCOMPILER_DIR cmake cache dir to the base dir where this is extracted
-
 * Download AMD compressonator from the github releases page (https://github.com/GPUOpen-Tools/compressonator/releases/tag/V4.1.5083) (last used V4.1.5083). Set the XLE_COMPRESSONATOR_DIR cmake cache dir to the base dir where this is extracted
 
 Some optional changes that make things a little bit nicer:
 * set cmake build directory to ${workspaceFolder}/build/${buildType}  ("cmake.buildDirectory": "${workspaceFolder}/build/${buildType}")
+* in launch configuration set working directory (ie, launch.json -- "cwd": "${workspaceFolder}/Working")
+* also use Microsoft debugger; launch.json -- "type": "cppvsdbg"
 * "choco install ccls" and install ccls vscode extension. also consider setting the following in settings.json:
     - "C_Cpp.autocomplete": "Disabled",
     - "C_Cpp.formatting": "Disabled",
     - "C_Cpp.errorSquiggles": "Disabled",
     - "C_Cpp.intelliSenseEngine": "Disabled"
+
+Temporary fixup in some submodules:
+* in some submodules, there are some small changes I either haven't figured out entirely or just haven't got around to uploading to a fork:
+* in Foreign/freetype/CMakeLists.txt, remove the file "ftver.rc"
+* in Foreign/DirectXTex/DirectXTex/Shaders/CompileShaders.cmd, you may need to add a line that sets the MSVC environment variables, ie:
+    call "D:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\Tools\VsDevCmd.bat"
+    (this wouldn't be required if compiling via VSStudio, but is via cmdline, or vscode)
+
+There's some options for configurability in the cmake cache variables (such as what GFXAPIs to compile in, etc). You can search for "XLE_" in the cmake cache variables UI in vscode to get a list of them. Recommended settings are just:
+* XLE_VULKAN_ENABLE ON
+* XLE_DXCOMPILER_DIR & XLE_COMPRESSONATOR_DIR set appropriately (see above)
