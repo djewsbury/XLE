@@ -19,8 +19,8 @@ float2 CalculateDHDXY(int2 coord)
                 int2 c = coord + int2(x,y) - int2(2,2);
                 if (CoordIsValid(c)) {
                     float heightDiff = GetHeight(c) - centerHeight;
-                    dhdp.x += SharrHoriz5x5[x][y] * heightDiff;
-                    dhdp.y += SharrVert5x5[x][y] * heightDiff;
+                    dhdp.x += ScharrHoriz5x5[x][y] * heightDiff;
+                    dhdp.y += ScharrVert5x5[x][y] * heightDiff;
                 }
             }
         }
@@ -30,8 +30,8 @@ float2 CalculateDHDXY(int2 coord)
                 int2 c = coord + int2(x,y) - int2(1,1);
                 if (CoordIsValid(c)) {
                     float heightDiff = GetHeight(c) - centerHeight;
-                    dhdp.x += SharrHoriz3x3[x][y] * heightDiff;
-                    dhdp.y += SharrVert3x3[x][y] * heightDiff;
+                    dhdp.x += ScharrHoriz3x3[x][y] * heightDiff;
+                    dhdp.y += ScharrVert3x3[x][y] * heightDiff;
                 }
             }
         }

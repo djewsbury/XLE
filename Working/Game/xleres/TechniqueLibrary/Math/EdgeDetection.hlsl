@@ -7,41 +7,97 @@
 #if !defined(EDGE_DETECTION_H)
 #define EDGE_DETECTION_H
 
-static const float SharrConstant = 1.f/60.f;
+static const float ScharrConstant = 60.f;
 
-static const float SharrHoriz5x5[5][5] =
+static const float ScharrHoriz5x5[5][5] =
 {
-    { -1.f * SharrConstant, -1.f * SharrConstant,  0.f,  1.f * SharrConstant,  1.f * SharrConstant },
-    { -2.f * SharrConstant, -2.f * SharrConstant,  0.f,  2.f * SharrConstant,  2.f * SharrConstant },
-    { -3.f * SharrConstant, -6.f * SharrConstant,  0.f,  6.f * SharrConstant,  3.f * SharrConstant },
-    { -2.f * SharrConstant, -2.f * SharrConstant,  0.f,  2.f * SharrConstant,  2.f * SharrConstant },
-    { -1.f * SharrConstant, -1.f * SharrConstant,  0.f,  1.f * SharrConstant,  1.f * SharrConstant }
+	{ -1.f / ScharrConstant, -1.f / ScharrConstant,  0.f,  1.f / ScharrConstant,  1.f / ScharrConstant },
+	{ -2.f / ScharrConstant, -2.f / ScharrConstant,  0.f,  2.f / ScharrConstant,  2.f / ScharrConstant },
+	{ -3.f / ScharrConstant, -6.f / ScharrConstant,  0.f,  6.f / ScharrConstant,  3.f / ScharrConstant },
+	{ -2.f / ScharrConstant, -2.f / ScharrConstant,  0.f,  2.f / ScharrConstant,  2.f / ScharrConstant },
+	{ -1.f / ScharrConstant, -1.f / ScharrConstant,  0.f,  1.f / ScharrConstant,  1.f / ScharrConstant }
 };
 
-static const float SharrVert5x5[5][5] =
+static const float ScharrVert5x5[5][5] =
 {
-    { -1.f * SharrConstant, -2.f * SharrConstant, -3.f * SharrConstant, -2.f * SharrConstant, -1.f * SharrConstant },
-    { -1.f * SharrConstant, -2.f * SharrConstant, -6.f * SharrConstant, -2.f * SharrConstant, -1.f * SharrConstant },
-    {  0.f * SharrConstant,  0.f * SharrConstant,  0.f * SharrConstant,  0.f * SharrConstant,  0.f * SharrConstant },
-    {  1.f * SharrConstant,  2.f * SharrConstant,  6.f * SharrConstant,  2.f * SharrConstant,  1.f * SharrConstant },
-    {  1.f * SharrConstant,  2.f * SharrConstant,  3.f * SharrConstant,  2.f * SharrConstant,  1.f * SharrConstant }
+	{ -1.f / ScharrConstant, -2.f / ScharrConstant, -3.f / ScharrConstant, -2.f / ScharrConstant, -1.f / ScharrConstant },
+	{ -1.f / ScharrConstant, -2.f / ScharrConstant, -6.f / ScharrConstant, -2.f / ScharrConstant, -1.f / ScharrConstant },
+	{  0.f / ScharrConstant,  0.f / ScharrConstant,  0.f / ScharrConstant,  0.f / ScharrConstant,  0.f / ScharrConstant },
+	{  1.f / ScharrConstant,  2.f / ScharrConstant,  6.f / ScharrConstant,  2.f / ScharrConstant,  1.f / ScharrConstant },
+	{  1.f / ScharrConstant,  2.f / ScharrConstant,  3.f / ScharrConstant,  2.f / ScharrConstant,  1.f / ScharrConstant }
 };
 
-static const float SharrConstant3x3 = 1.f/32.f;
+static const float ScharrConstant3x3 = 32.f;
 
-static const float SharrHoriz3x3[3][3] =
+static const float ScharrHoriz3x3[3][3] =
 {
-    {  -3.f * SharrConstant3x3, 0.f,  3.f * SharrConstant3x3 },
-    { -10.f * SharrConstant3x3, 0.f, 10.f * SharrConstant3x3 },
-    {  -3.f * SharrConstant3x3, 0.f,  3.f * SharrConstant3x3 }
+	{  -3.f / ScharrConstant3x3, 0.f,  3.f / ScharrConstant3x3 },
+	{ -10.f / ScharrConstant3x3, 0.f, 10.f / ScharrConstant3x3 },
+	{  -3.f / ScharrConstant3x3, 0.f,  3.f / ScharrConstant3x3 }
 };
 
-static const float SharrVert3x3[3][3] =
+static const float ScharrVert3x3[3][3] =
 {
-    {  -3.f * SharrConstant3x3, -10.f * SharrConstant3x3,  -3.f * SharrConstant3x3 },
-    { 0.f, 0.f, 0.f },
-    {   3.f * SharrConstant3x3,  10.f * SharrConstant3x3,   3.f * SharrConstant3x3 }
+	{  -3.f / ScharrConstant3x3, -10.f / ScharrConstant3x3,  -3.f / ScharrConstant3x3 },
+	{ 0.f, 0.f, 0.f },
+	{   3.f / ScharrConstant3x3,  10.f / ScharrConstant3x3,   3.f / ScharrConstant3x3 }
 };
 
+static const float Scharr3DConstant3x3 = 1024.f;
+
+static const float Scharr3DX3x3[3][3][3]=
+{
+	{
+		{    9.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3,    9.0 / Scharr3DConstant3x3 },
+		{   30.0 / Scharr3DConstant3x3,  100.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3 },
+		{    9.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3,    9.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{   -9.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+		{  -30.0 / Scharr3DConstant3x3, -100.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+		{   -9.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+	},
+};
+static const float Scharr3DY3x3[3][3][3]=
+{
+	{
+		{    9.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3,    9.0 / Scharr3DConstant3x3 },
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+		{   -9.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{   30.0 / Scharr3DConstant3x3,  100.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3 },
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+		{  -30.0 / Scharr3DConstant3x3, -100.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{    9.0 / Scharr3DConstant3x3,   30.0 / Scharr3DConstant3x3,    9.0 / Scharr3DConstant3x3 },
+		{    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3 },
+		{   -9.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+	},
+};
+static const float Scharr3DZ3x3[3][3][3]=
+{
+	{
+		{    9.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+		{   30.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+		{    9.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{   30.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+		{  100.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3, -100.0 / Scharr3DConstant3x3 },
+		{   30.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+	},
+	{
+		{    9.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+		{   30.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,  -30.0 / Scharr3DConstant3x3 },
+		{    9.0 / Scharr3DConstant3x3,    0.0 / Scharr3DConstant3x3,   -9.0 / Scharr3DConstant3x3 },
+	},
+};
 
 #endif

@@ -95,8 +95,8 @@ float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOOR
 		[unroll] for (int x=0; x<5; ++x) {
 			uint marker = Marker(int2(basePos) + 2 * int2(x-2, y-2));
 			float value = (marker == testMarker) * 2.0 - 1.0;
-			dhdp.x += SharrHoriz5x5[x][y] * value;
-			dhdp.y += SharrVert5x5[x][y] * value;
+			dhdp.x += ScharrHoriz5x5[x][y] * value;
+			dhdp.y += ScharrVert5x5[x][y] * value;
 		}
 	}
 

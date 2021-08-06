@@ -27,8 +27,8 @@ float2 ScreenSpaceDerivatives(IShape2D shape, DebuggingShapesCoords coords, Shap
             DebuggingShapesCoords offsetCoords = coords;
             offsetCoords.texCoord += texCoordOffset;
             float t = shape.Calculate(offsetCoords, shapeDesc)._fill;
-            dhdp.x += SharrHoriz5x5[x][y] * t;
-            dhdp.y += SharrVert5x5[x][y] * t;
+            dhdp.x += ScharrHoriz5x5[x][y] * t;
+            dhdp.y += ScharrVert5x5[x][y] * t;
         }
     }
     return dhdp;

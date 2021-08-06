@@ -336,18 +336,18 @@ namespace SceneEngine
 
         namespace Internal
         {
-            static const float SharrConstant3x3 = 1.f/32.f;
-            static const float SharrHoriz3x3[3][3] =
+            static const float ScharrConstant3x3 = 1.f/32.f;
+            static const float ScharrHoriz3x3[3][3] =
             {
-                {  -3.f * SharrConstant3x3, 0.f,  3.f * SharrConstant3x3 },
-                { -10.f * SharrConstant3x3, 0.f, 10.f * SharrConstant3x3 },
-                {  -3.f * SharrConstant3x3, 0.f,  3.f * SharrConstant3x3 },
+                {  -3.f * ScharrConstant3x3, 0.f,  3.f * ScharrConstant3x3 },
+                { -10.f * ScharrConstant3x3, 0.f, 10.f * ScharrConstant3x3 },
+                {  -3.f * ScharrConstant3x3, 0.f,  3.f * ScharrConstant3x3 },
             };
-            static const float SharrVert3x3[3][3] =
+            static const float ScharrVert3x3[3][3] =
             {
-                {  -3.f * SharrConstant3x3, -10.f * SharrConstant3x3,  -3.f * SharrConstant3x3 },
+                {  -3.f * ScharrConstant3x3, -10.f * ScharrConstant3x3,  -3.f * ScharrConstant3x3 },
                 { 0.f, 0.f, 0.f },
-                {   3.f * SharrConstant3x3,  10.f * SharrConstant3x3,   3.f * SharrConstant3x3 },
+                {   3.f * ScharrConstant3x3,  10.f * ScharrConstant3x3,   3.f * ScharrConstant3x3 },
             };
         }
 
@@ -361,8 +361,8 @@ namespace SceneEngine
                     Int2 c = Int2(coord) + Int2(x-1, y-1);
                     if (c[0] >= 0 && c[1] >= 0 && c[0] < (int)surface.GetWidth() && c[1] < (int)surface.GetHeight()) {
                         float heightDiff = *(Element*)surface.GetDataFast(c) - centerHeight;
-                        dhdxy[0] += Internal::SharrHoriz3x3[x][y] * heightDiff;
-                        dhdxy[1] +=  Internal::SharrVert3x3[x][y] * heightDiff;
+                        dhdxy[0] += Internal::ScharrHoriz3x3[x][y] * heightDiff;
+                        dhdxy[1] +=  Internal::ScharrVert3x3[x][y] * heightDiff;
                     }
                 }
             }

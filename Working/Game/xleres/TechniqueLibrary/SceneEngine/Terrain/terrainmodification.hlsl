@@ -98,8 +98,8 @@ float2 CalculateDHDXY(uint2 surfaceSpaceCoord)
 				&&	coords.y >= int(SurfaceMins.y) && coords.y <= int(SurfaceMaxs.y)) {
 
 				float heightDiff = InputSurface[coords - SurfaceMins] - centerHeight;
-				dhdp.x += SharrHoriz5x5[x][y] * heightDiff;
-				dhdp.y += SharrVert5x5[x][y] * heightDiff;
+				dhdp.x += ScharrHoriz5x5[x][y] * heightDiff;
+				dhdp.y += ScharrVert5x5[x][y] * heightDiff;
 			}
 		}
 	}
