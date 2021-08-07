@@ -858,8 +858,8 @@ namespace RenderCore { namespace Techniques
 				resultGeoCall._descriptorSetAccelerator = i->second._descriptorSetAccelerator;
 			} else {
 				auto patchCollection = _materialScaffold->GetShaderPatchCollection(mat->_patchCollection);
-				assert(patchCollection);
-				_depVals.insert(patchCollection->GetDependencyValidation());
+				if (patchCollection)
+					_depVals.insert(patchCollection->GetDependencyValidation());
 
 				IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings {};
 				resultGeoCall._descriptorSetAccelerator = acceleratorPool.CreateDescriptorSetAccelerator(

@@ -394,15 +394,14 @@ namespace RenderCore { namespace Assets
             //  Get associated "raw" material information. This is should contain the material information attached
             //  to the geometry export (eg, .dae file).
 
-        if (!blob || blob->size() == 0)
-            Throw(::Exceptions::BasicLabel("Missing or empty file"));
+        if (blob && !blob->empty()) {
+            InputStreamFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
 
-        InputStreamFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
-
-        StringSection<> keyName;
-        while (formatter.TryKeyedItem(keyName)) {
-            _configurations.push_back(keyName.AsString());
-            SkipValueOrElement(formatter);
+            StringSection<> keyName;
+            while (formatter.TryKeyedItem(keyName)) {
+                _configurations.push_back(keyName.AsString());
+                SkipValueOrElement(formatter);
+            }
         }
 
         _validationCallback = depVal;
