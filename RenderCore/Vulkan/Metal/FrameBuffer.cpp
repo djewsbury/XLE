@@ -93,7 +93,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	namespace Internal
 	{
-		namespace AttachmentUsageType
+		namespace AttachmentResourceUsageType
 		{
 			enum Flags
 			{
@@ -140,7 +140,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			dst._aspect = src._aspect;
 	}
 
-	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlags, Internal::AttachmentUsageType::BitField usage)
+	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlags, Internal::AttachmentResourceUsageType::BitField usage)
 	{
 		if (bindFlags == BindFlag::ShaderResource) {
 			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -169,10 +169,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		} else if (bindFlags != 0) {
 			return VK_IMAGE_LAYOUT_GENERAL;
 		} else {
-			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentUsageType::DepthStencil));
-			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentUsageType::Output));
-			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentUsageType::Input));
-			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentUsageType::HintGeneral));
+			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentResourceUsageType::DepthStencil));
+			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentResourceUsageType::Output));
+			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentResourceUsageType::Input));
+			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentResourceUsageType::HintGeneral));
 			if (hintGeneral) {
 				return VK_IMAGE_LAYOUT_GENERAL;
 			} else if (isDepthStencil) {
@@ -195,7 +195,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
 
-	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, Internal::AttachmentUsageType::BitField usage, const TextureViewDesc& window)
+	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, Internal::AttachmentResourceUsageType::BitField usage, const TextureViewDesc& window)
 	{
 		return VkAttachmentReference2 {
 			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
@@ -205,125 +205,69 @@ namespace RenderCore { namespace Metal_Vulkan
 			GetAspectForTextureView(window)};
 	}
 
-	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
-        const Metal_Vulkan::ObjectFactory& factory,
-        const FrameBufferDesc& layout)
+	class RenderPassHelper 
 	{
-		const auto subpasses = layout.GetSubpasses();
-		auto samples = layout.GetProperties()._samples;
+	public:
+		// Attachment resources & views
+		// In FrameBufferDesc, each "attachment" is a different resource, which we assume never aliases/overlaps with any other resource
+		// & we can have "views" for that attachment in the subpasses
+		//
+		// In Vulkan renderpasses & frame buffers, each "attachment" has only one view. So if we have a single resource that's viewed
+		// in multiple different ways, we must declare it as a completely different attachment
+		//
+		// We need to distinguish between separate resources and multiple views on the same resource for things like image layouts
+		// (which are per-resource, not per-view)
+		//
+		// So let's just have a way to convert from one system to another & find a compressed set of attachment resources & views
 
-		struct AttachmentUsage
-		{
-			unsigned _subpassIdx = ~0u;
-			Internal::AttachmentUsageType::BitField _usage = 0;
-		};
-		struct WorkingAttachment
+		struct WorkingAttachmentResource
 		{
 			AttachmentDesc _desc;
-			AttachmentUsage _lastSubpassWrite;
-			AttachmentUsage _lastSubpassRead;
-			TextureViewDesc::FormatFilter _formatFilter;
-			Internal::AttachmentUsageType::BitField _attachmentUsage = 0;
+			Internal::AttachmentResourceUsageType::BitField _attachmentUsage = 0;
 		};
-		std::vector<std::pair<AttachmentName, WorkingAttachment>> workingAttachments;
-		workingAttachments.reserve(subpasses.size()*2);	// approximate
+		std::vector<std::pair<AttachmentName, WorkingAttachmentResource>> workingAttachments;
+
+		struct WorkingViewedAttachment
+		{
+			unsigned _mappedAttachmentIdx;
+			TextureViewDesc _view;
+			uint64_t _viewHash;
+		};
+		std::vector<WorkingViewedAttachment> workingViewedAttachments;
 
 		struct SubpassDependency
 		{
 			AttachmentName _resource;
-			AttachmentUsage _first;
-			AttachmentUsage _second;
+
+			unsigned _subpassFirst = ~0u;
+			Internal::AttachmentResourceUsageType::BitField _usageFirst = 0;
+
+			unsigned _subpassSecond = ~0u;
+			Internal::AttachmentResourceUsageType::BitField _usageSecond = 0;
 		};
 		std::vector<SubpassDependency> dependencies;
-		dependencies.reserve(subpasses.size()*2);	// approximate
 
-		auto attachmentCount = layout.GetAttachments().size();
-
-		////////////////////////////////////////////////////////////////////////////////////
-		// Build up the list of subpass dependencies and the set of unique attachments
-        for (unsigned spIdx=0; spIdx<subpasses.size(); spIdx++) {
-			const auto& spDesc = subpasses[spIdx];
-
-			Internal::AttachmentUsageType::BitField subpassAttachmentUsages[attachmentCount];
-			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
-
-			for (const auto& r:spDesc.GetOutputs()) 
-				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::Output;
-			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
-				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentUsageType::DepthStencil;
-			for (const auto& r:spDesc.GetInputs()) 
-				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentUsageType::Input;
-
-			//////////////////////////////////////////////////////////////////////////////////////////
-
-			for (unsigned attachmentName=0; attachmentName<attachmentCount; ++attachmentName) {
-				auto usage = subpassAttachmentUsages[attachmentName];
-				if (!usage) continue;
-
-				auto i = LowerBound(workingAttachments, attachmentName);
-				if (i == workingAttachments.end() || i->first != attachmentName) {
-					i = workingAttachments.insert(i, {attachmentName, WorkingAttachment{}});
-					assert(attachmentName < layout.GetAttachments().size());
-					i->second._desc = layout.GetAttachments()[attachmentName];
-
-					// If we're loading from general or storing to general, then we should encourage use of general
-					// within the render pass, also
-					if (HasRetain(i->second._desc._loadFromPreviousPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
-						i->second._attachmentUsage |= Internal::AttachmentUsageType::HintGeneral;
-					if (HasRetain(i->second._desc._storeToNextPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
-						i->second._attachmentUsage |= Internal::AttachmentUsageType::HintGeneral;
-				}
-
-				AttachmentUsage loadUsage { spIdx, usage };
-				AttachmentUsage storeUsage { spIdx, usage };
-
-				// If we're loading data from a previous phase, we've got to find it in
-				// the working attachments, and create a subpass dependency
-				// Otherwise, if there are any previous contents, they 
-				// will be destroyed.
-				// We do this even if there's not an explicit retain on the load step
-				//	-- we assume "retain" between subpasses, even if the views contradict that
-				//	(as per Vulkan, where LoadStore is only for the input/output of the entire render pass)
-				dependencies.push_back({attachmentName, i->second._lastSubpassWrite, loadUsage});
-
-				// We also need a dependency with the last subpass to read from this 
-				// attachment. We can't write to it until the reading is finished
-				if (usage & (Internal::AttachmentUsageType::Output | Internal::AttachmentUsageType::DepthStencil)) {
-					if (i->second._lastSubpassRead._subpassIdx != ~0u)
-						dependencies.push_back({attachmentName, i->second._lastSubpassRead, loadUsage});
-					i->second._lastSubpassWrite = storeUsage;
-				} else {
-					i->second._lastSubpassRead = loadUsage;
-				}
-
-				i->second._attachmentUsage |= usage;
-			}
-		}
-
-		////////////////////////////////////////////////////////////////////////////////////
-		// Build the VkAttachmentDescription objects
-		std::vector<VkAttachmentDescription2> attachmentDescs;
-        attachmentDescs.reserve(workingAttachments.size());
-        for (auto&a:workingAttachments) {
-            const auto& attachmentDesc = a.second._desc;
-
+		VkAttachmentDescription2 CreateAttachmentDescription(AttachmentName resName, const WorkingAttachmentResource& res, const TextureViewDesc& view)
+		{
+			const auto& attachmentDesc = res._desc;
+			
 			// We need to look through all of the places we use this attachment to finalize the
 			// format filter
-            auto formatFilter = a.second._formatFilter;
-			for (const auto& spDesc:subpasses) {
+            TextureViewDesc::FormatFilter formatFilter { Format::Unknown };
+			for (const auto& spDesc:_layout->GetSubpasses()) {
 				for (const auto& r:spDesc.GetOutputs())
-					if (r._resourceName == a.first)
+					if (r._resourceName == resName)
 						MergeFormatFilter(formatFilter, r._window._format);
-				if (spDesc.GetDepthStencil()._resourceName == a.first)
+				if (spDesc.GetDepthStencil()._resourceName == resName)
 					MergeFormatFilter(formatFilter, spDesc.GetDepthStencil()._window._format);
 				for (const auto& r:spDesc.GetInputs())
-					if (r._resourceName == a.first)
+					if (r._resourceName == resName)
 						MergeFormatFilter(formatFilter, r._window._format);
 			}
 
             BindFlag::Enum formatUsage = BindFlag::ShaderResource;
-            if (a.second._attachmentUsage & Internal::AttachmentUsageType::Output) formatUsage = BindFlag::RenderTarget;
-            if (a.second._attachmentUsage & Internal::AttachmentUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
+            if (res._attachmentUsage & Internal::AttachmentResourceUsageType::Output) formatUsage = BindFlag::RenderTarget;
+            if (res._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
             auto resolvedFormat = ResolveFormat(attachmentDesc._format, formatFilter, formatUsage);
 
 			LoadStore originalLoad = attachmentDesc._loadFromPreviousPhase;
@@ -348,28 +292,111 @@ namespace RenderCore { namespace Metal_Vulkan
 			// If the attachment desc has initial and/or final layout flags, those take precidence
 			// Otherwise 
 			if (HasRetain(attachmentDesc._loadFromPreviousPhase))
-				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, a.second._attachmentUsage);
+				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, res._attachmentUsage);
 
 			// Even if we don't have a "retain" on the store operation, we're still supposed to give the attachment
 			// a final layout. Using "undefined" here results in a validation warning
-			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, a.second._attachmentUsage);
+			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res._attachmentUsage);
 
             if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
-                desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(samples);
+                desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(_layout->GetProperties()._samples);
+			return desc;
+		}
 
-            attachmentDescs.push_back(desc);
-        }
+		static bool ViewsOverlap(const TextureViewDesc& lhs, const TextureViewDesc& rhs) 
+		{
+			// check array layers & mip levels to ensure they overlap
+			auto mipLevelOverlap = true, arrayLayerOverlap = true;
+			{
+				unsigned lhsMipEnd = (lhs._mipRange._count == TextureViewDesc::All._count) ? ~0u : (lhs._mipRange._min + lhs._mipRange._count);
+				unsigned rhsMipEnd = (rhs._mipRange._count == TextureViewDesc::All._count) ? ~0u : (rhs._mipRange._min + rhs._mipRange._count);
+				if ((rhsMipEnd <= lhs._mipRange._min) || (rhs._mipRange._min >= lhsMipEnd))
+					mipLevelOverlap = false;
+			}
 
+			{
+				unsigned lhsLayerEnd = (lhs._arrayLayerRange._count == TextureViewDesc::All._count) ? ~0u : (lhs._arrayLayerRange._min + lhs._arrayLayerRange._count);
+				unsigned rhsLayerEnd = (rhs._arrayLayerRange._count == TextureViewDesc::All._count) ? ~0u : (rhs._arrayLayerRange._min + rhs._arrayLayerRange._count);
+				if ((rhsLayerEnd <= lhs._arrayLayerRange._min) || (rhs._arrayLayerRange._min >= lhsLayerEnd))
+					arrayLayerOverlap = false;
+			}
+
+			return mipLevelOverlap && arrayLayerOverlap;
+		}
+
+		VkAttachmentReference2 CreateAttachmentReference(AttachmentName resourceName, const TextureViewDesc& view, Internal::AttachmentResourceUsageType::BitField subpassUsage, unsigned subpassIdx)
+		{
+			auto i = FindIf(workingAttachments, [resourceName](auto& i) { return i.first == resourceName; });
+			if (i == workingAttachments.end()) {
+				i = workingAttachments.insert(workingAttachments.end(), {resourceName, WorkingAttachmentResource{}});
+				assert(resourceName < _layout->GetAttachments().size());
+				i->second._desc = _layout->GetAttachments()[resourceName];
+
+				// If we're loading from general or storing to general, then we should encourage use of general
+				// within the render pass, also
+				if (HasRetain(i->second._desc._loadFromPreviousPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._initialLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
+				if (HasRetain(i->second._desc._storeToNextPhase) && LayoutFromBindFlagsAndUsage(i->second._desc._finalLayout, 0) == VK_IMAGE_LAYOUT_GENERAL)
+					i->second._attachmentUsage |= Internal::AttachmentResourceUsageType::HintGeneral;
+			}
+
+			i->second._attachmentUsage |= subpassUsage;
+			auto mappedAttachmentIdx = (unsigned)std::distance(workingAttachments.begin(), i);
+			uint64_t viewHash = view.GetHash();
+			auto i2 = FindIf(workingViewedAttachments, [viewHash, mappedAttachmentIdx](auto& i) { 
+				return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
+			if (i2 == workingViewedAttachments.end())
+				i2 = workingViewedAttachments.insert(workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash});
+
+			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
+			// We need to do this sometimes even when it seems like it shouldn't be required -- such as 2 subpasses that use the same depth/stencil buffer (otherwise we get validation errors)
+			for (int spCheckIdx=subpassIdx-1; spCheckIdx>=0; spCheckIdx--) {
+				const auto& spCheck = _layout->GetSubpasses()[spCheckIdx];
+				Internal::AttachmentResourceUsageType::BitField flags = 0;
+				for (const auto& a:spCheck.GetOutputs()) if (a._resourceName == resourceName && ViewsOverlap(a._window, view)) flags |= Internal::AttachmentResourceUsageType::Output;
+				for (const auto& a:spCheck.GetResolveOutputs()) if (a._resourceName == resourceName && ViewsOverlap(a._window, view)) flags |= Internal::AttachmentResourceUsageType::Output;		// resolve usage type?
+				if (spCheck.GetDepthStencil()._resourceName == resourceName && ViewsOverlap(spCheck.GetDepthStencil()._window, view)) flags |= Internal::AttachmentResourceUsageType::DepthStencil;
+				if (spCheck.GetResolveDepthStencil()._resourceName == resourceName && ViewsOverlap(spCheck.GetResolveDepthStencil()._window, view)) flags |= Internal::AttachmentResourceUsageType::Output;
+				for (const auto& a:spCheck.GetInputs()) if (a._resourceName == resourceName && ViewsOverlap(a._window, view)) flags |= Internal::AttachmentResourceUsageType::Input;
+				// todo -- for attachments registered as non-framebuffer-views, we can't check if a dependency is required
+				if (flags) {
+					dependencies.push_back({resourceName, (unsigned)spCheckIdx, flags, subpassIdx, subpassUsage});
+					// don't go back any further than the first subpass dependency for any given resource. If the resource
+					// is used by a previous subpass; then the subpass spCheckIdx will already have that dependency 
+					break;
+				}
+			}
+
+			return MakeAttachmentReference((uint32_t)std::distance(workingViewedAttachments.begin(), i2), subpassUsage, view);
+		}
+		
+		RenderPassHelper(const FrameBufferDesc& layout)
+		: _layout(&layout)
+		{
+			auto subpasses = layout.GetSubpasses();
+			workingAttachments.reserve(subpasses.size()*2);	// approximate
+			dependencies.reserve(subpasses.size()*2);	// approximate
+		}
+
+		const FrameBufferDesc* _layout;
+	};
+
+	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
+        const Metal_Vulkan::ObjectFactory& factory,
+        const FrameBufferDesc& layout)
+	{
+		const auto subpasses = layout.GetSubpasses();
+		auto samples = layout.GetProperties()._samples;
+		auto attachmentCount = layout.GetAttachments().size();
+		RenderPassHelper helper{layout};
 
 		////////////////////////////////////////////////////////////////////////////////////
-		// Build the actual VkSubpassDescription objects
-
+		// Build the VkSubpassDescription objects
 		std::vector<VkAttachmentReference2> attachReferences;
-        std::vector<uint32_t> preserveAttachments;
-
         std::vector<VkSubpassDescription2> subpassDesc;
         subpassDesc.reserve(subpasses.size());
-        for (auto&p:subpasses) {
+        for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
+			const auto& spDesc = subpasses[spIdx];
             VkSubpassDescription2 desc;
 			desc.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
 			desc.pNext = nullptr;
@@ -377,42 +404,43 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			desc.viewMask = 0;
 
+			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
+			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
+
+			for (const auto& r:spDesc.GetOutputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Output;
+			for (const auto& r:spDesc.GetInputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Input;
+			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
+			/*for (const auto& r:spDesc.GetResolveOutputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Output;
+			if (spDesc.GetResolveDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::Output;*/
+
             // Input attachments are going to be difficult, because they must be bound both
             // by the sub passes and by the descriptor set! (and they must be explicitly listed as
             // input attachments in the shader). Holy cow, the render pass, frame buffer, pipeline
             // layout, descriptor set and shader must all agree!
             auto beforeInputs = attachReferences.size();
-            for (auto& a:p.GetInputs()) {
-				auto resource = a._resourceName;
-				auto i = LowerBound(workingAttachments, resource);
-				assert(i != workingAttachments.end() && i->first == resource);
-				auto internalName = std::distance(workingAttachments.begin(), i);
-				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, a._window));
-            }
+            for (auto& a:spDesc.GetInputs())
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
             desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
             desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
 
             auto beforeOutputs = attachReferences.size();
-            for (auto& a:p.GetOutputs()) {
-				auto resource = a._resourceName;
-				auto i = LowerBound(workingAttachments, resource);
-				assert(i != workingAttachments.end() && i->first == resource);
-				auto internalName = std::distance(workingAttachments.begin(), i);
-				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, a._window));
-            }
+            for (auto& a:spDesc.GetOutputs())
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
             desc.pColorAttachments = (const VkAttachmentReference2*)(beforeOutputs+1);
             desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
             desc.pResolveAttachments = nullptr; // not supported
 			desc.pPreserveAttachments = nullptr;
 			desc.preserveAttachmentCount = 0;
 
-            if (p.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
-				auto resource = p.GetDepthStencil()._resourceName;
-				auto i = LowerBound(workingAttachments, resource);
-				assert(i != workingAttachments.end() && i->first == resource);
-				auto internalName = std::distance(workingAttachments.begin(), i);
+            if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
+				const auto& a = spDesc.GetDepthStencil();
 				desc.pDepthStencilAttachment = (const VkAttachmentReference2*)(attachReferences.size()+1);
-				attachReferences.push_back(MakeAttachmentReference((uint32_t)internalName, i->second._attachmentUsage, p.GetDepthStencil()._window));
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
@@ -432,12 +460,19 @@ namespace RenderCore { namespace Metal_Vulkan
                 p.pResolveAttachments = AsPointer(attachReferences.begin()) + size_t(p.pResolveAttachments)-1;
             if (p.pDepthStencilAttachment)
                 p.pDepthStencilAttachment = AsPointer(attachReferences.begin()) + size_t(p.pDepthStencilAttachment)-1;
-            if (p.pPreserveAttachments)
-                p.pPreserveAttachments = AsPointer(preserveAttachments.begin()) + size_t(p.pPreserveAttachments)-1;
         }
 
 		////////////////////////////////////////////////////////////////////////////////////
-		// Build the actual VkSubpassDependency objects
+		// Build the VkAttachmentDescription objects
+        std::vector<VkAttachmentDescription2> attachmentDescs;
+		attachmentDescs.reserve(helper.workingViewedAttachments.size());
+		for (const auto& a:helper.workingViewedAttachments) {
+			auto& res = helper.workingAttachments[a._mappedAttachmentIdx];
+			attachmentDescs.push_back(helper.CreateAttachmentDescription(res.first, res.second, a._view));
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build the VkSubpassDependency objects
 
         std::vector<VkSubpassDependency2> vkDeps;
 		for (unsigned c=0;c<unsigned(subpasses.size()); ++c) {
@@ -449,46 +484,46 @@ namespace RenderCore { namespace Metal_Vulkan
 			// with a standard form. We'll rely on those implicit dependencies, rather than 
 			// explicitly creating them here.
 
-			std::vector<SubpassDependency> terminatingDependencies;
-			for (const auto& d:dependencies)
-				if (d._second._subpassIdx == c && d._first._subpassIdx != ~0u)
+			std::vector<RenderPassHelper::SubpassDependency> terminatingDependencies;
+			for (const auto& d:helper.dependencies)
+				if (d._subpassSecond == c && d._subpassFirst != ~0u)
 					terminatingDependencies.push_back(d);
 
 			std::vector<VkSubpassDependency2> deps;
 			for (const auto& d:terminatingDependencies) {
 				auto i = std::find_if(
 					deps.begin(), deps.end(),
-					[&d](const VkSubpassDependency2& vkd) { return vkd.srcSubpass == d._first._subpassIdx; });
+					[&d](const VkSubpassDependency2& vkd) { return vkd.srcSubpass == d._subpassFirst; });
 				if (i == deps.end())
 					i = deps.insert(deps.end(), {
 						VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2, nullptr,
-						d._first._subpassIdx, c, 
+						d._subpassFirst, c, 
 						0, 0, 0, 0,	// mask and access flags set below
 						0, 0});
 
 				// note -- making assumptions about attachments usage here -- (in particular, ignoring shader resources bound to shaders other than the fragment shader)
-				if (d._first._usage & Internal::AttachmentUsageType::Output) {
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::Output) {
 					i->srcAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 				}
-				if (d._first._usage & Internal::AttachmentUsageType::DepthStencil) {
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::DepthStencil) {
 					i->srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._first._usage & Internal::AttachmentUsageType::Input) {
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::Input) {
 					i->srcAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
 
-				if (d._second._usage & Internal::AttachmentUsageType::Output) {
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::Output) {
 					i->dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 				}
-				if (d._second._usage & Internal::AttachmentUsageType::DepthStencil) {
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::DepthStencil) {
 					i->dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 				}
-				if (d._second._usage & Internal::AttachmentUsageType::Input) {
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::Input) {
 					i->dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 				}
@@ -539,24 +574,24 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned _layers = 0;
 	};
 
-	static void BuildMaxDims(MaxDims& result, const ResourceDesc& desc)
+	static void BuildMaxDims(MaxDims& result, const ResourceDesc& desc, const TextureViewDesc& view)
 	{
 		assert(desc._type == ResourceDesc::Type::Texture);
 		result._width = std::max(result._width, desc._textureDesc._width);
 		result._height = std::max(result._height, desc._textureDesc._height);
-		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
-			assert(desc._textureDesc._arrayCount == 6u);
-			result._layers = std::max(result._layers, 6u);
-		} else
-			result._layers = std::max(result._layers, (unsigned)desc._textureDesc._arrayCount);
+
+		unsigned layerCount = view._arrayLayerRange._count;
+		if (layerCount == TextureViewDesc::All._count)
+			layerCount = (unsigned)desc._textureDesc._arrayCount;
+		result._layers = std::max(result._layers, layerCount);
 	}
 
-	static BindFlag::Enum AsBindFlag(Internal::AttachmentUsageType::BitField usageType)
+	static BindFlag::Enum AsBindFlag(Internal::AttachmentResourceUsageType::BitField usageType)
 	{
-		if (usageType & Internal::AttachmentUsageType::Output)
+		if (usageType & Internal::AttachmentResourceUsageType::Output)
 			return BindFlag::RenderTarget;
 
-		if (usageType & Internal::AttachmentUsageType::DepthStencil)
+		if (usageType & Internal::AttachmentResourceUsageType::DepthStencil)
 			return BindFlag::DepthStencil;
 
 		return BindFlag::InputAttachment;
@@ -574,62 +609,56 @@ namespace RenderCore { namespace Metal_Vulkan
 		// same order as the attachments were defined in the VkRenderPass object.
 		auto subpasses = fbDesc.GetSubpasses();
 
-		std::vector<std::pair<AttachmentName, Internal::AttachmentUsageType::BitField>> attachments;
-		attachments.reserve(subpasses.size()*4);	// estimate
-		auto fbAttachments = fbDesc.GetAttachments();
-		for (unsigned c=0; c<(unsigned)subpasses.size(); ++c) {
-			const auto& spDesc = subpasses[c];
+		RenderPassHelper helper(fbDesc);
+		unsigned attachmentCount = fbDesc.GetAttachments().size();
 
-			for (const auto& r:spDesc.GetOutputs()) {
-				attachments.push_back({r._resourceName, Internal::AttachmentUsageType::Output});
-			}
+		// Duplicate the work from CreateRenderPass in order to prime RenderPassHelper
+		// This must create an identical array
+		for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
+			const auto& spDesc = subpasses[spIdx];
+			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
+			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
 
-			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
-				attachments.push_back({spDesc.GetDepthStencil()._resourceName, Internal::AttachmentUsageType::DepthStencil});
-			}
+			for (const auto& r:spDesc.GetOutputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Output;
+			for (const auto& r:spDesc.GetInputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Input;
+			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
 
-			for (const auto& r:spDesc.GetInputs()) {
-				// todo -- these srvs also need to be exposed to the caller, so they can be bound to
-				// the shader during the subpass
-				attachments.push_back({r._resourceName, Internal::AttachmentUsageType::Input});
-			}
+            for (auto& a:spDesc.GetInputs())
+				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
+            for (auto& a:spDesc.GetOutputs())
+				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
+
+            if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
+				const auto& a = spDesc.GetDepthStencil();
+				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
+            } 
         }
-
-		// Sort by AttachmentName, and combine multiple references to the same resource into a single view
-		std::sort(attachments.begin(), attachments.end(), CompareFirst<AttachmentName, Internal::AttachmentUsageType::BitField>());
-		std::vector<std::pair<AttachmentName, Internal::AttachmentUsageType::BitField>> uniqueAttachments;
-		uniqueAttachments.reserve(attachments.size());
-
-		for (auto i=attachments.begin(); i!=attachments.end();) {
-			auto i2 = i;
-			Internal::AttachmentUsageType::BitField mergedUsage = 0;
-			while (i2!=attachments.end() && i2->first == i->first) { 
-				mergedUsage |= i2->second;
-				++i2;
-			}
-			uniqueAttachments.push_back({i->first, mergedUsage});
-			i = i2;
-		}
 
         VkImageView rawViews[16];
 		unsigned rawViewCount = 0;
-		_clearValuesOrdering.reserve(uniqueAttachments.size());
+		_clearValuesOrdering.reserve(helper.workingViewedAttachments.size());
         MaxDims maxDims;
 
-        for (const auto&a:uniqueAttachments) {
+        for (const auto&a:helper.workingViewedAttachments) {
 			// Note that we can't support TextureViewDesc properly here, because we don't support 
 			// the same resource being used with more than one view
+			// Note that bind flags/usages are not particular important for texture views in Vulkan
+			// so we don't create unique views for each usage type
+			auto& res = helper.workingAttachments[a._mappedAttachmentIdx];
 			auto rtv = namedResources.GetResourceView(
-				a.first, AsBindFlag(a.second), TextureViewDesc{},
-				fbAttachments[a.first], fbDesc.GetProperties());
+				res.first, AsBindFlag(res.second._attachmentUsage), a._view,
+				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
 
 			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
-			if (a.second & Internal::AttachmentUsageType::DepthStencil)
+			if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil)
 				defaultClearValue = MakeClearValue(1.0f, 0);
-			_clearValuesOrdering.push_back({a.first, defaultClearValue});
+			_clearValuesOrdering.push_back({res.first, defaultClearValue});
 
-			BuildMaxDims(maxDims, rtv->GetResource()->GetDesc());
+			BuildMaxDims(maxDims, rtv->GetResource()->GetDesc(), a._view);
 			_retainedViews.push_back(std::move(rtv));
         }
 
