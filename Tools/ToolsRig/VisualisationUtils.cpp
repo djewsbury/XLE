@@ -16,6 +16,7 @@
 #include "../../RenderOverlays/Font.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
@@ -353,10 +354,12 @@ namespace ToolsRig
 				::Assets::FuturePtr<PreparedScene>& thatFuture, 
 				std::shared_ptr<SceneEngine::BasicLightingStateDelegate> envSettings) {
 
-				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+				RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
+				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 					lightingApparatus,
 					envSettings->GetLightResolveOperators(),
 					envSettings->GetShadowResolveOperators(),
+					ambientLightOperatorDesc,
 					targets, fbProps);
 				
 				thatFuture.SetPollingFunction(
@@ -731,7 +734,6 @@ namespace ToolsRig
 
                 ExecuteHighlightByStencil(
                     threadContext, parserContext, 
-					_pimpl->_pipelineAccelerators->GetPipelineLayout(),
                     settings, _pimpl->_settings._colourByMaterial==2);
             CATCH_ASSETS_END(parserContext)
         }
@@ -834,6 +836,7 @@ namespace ToolsRig
         RenderCore::Techniques::TechniqueContext techniqueContext;
         techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
 		techniqueContext._commonResources = drawingApparatus._commonResources;
+		techniqueContext._sequencerDescSetLayout = drawingApparatus._sequencerDescSetLayout;
         return techniqueContext;
     }
 
