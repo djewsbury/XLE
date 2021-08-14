@@ -12,6 +12,7 @@
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
+#include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/Assets.h"
@@ -38,6 +39,49 @@ namespace UnitTests
 			{
 				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
 				return BuildVSOUT(deformedVertex, input);
+			}
+
+			float4 ps_main(VSOUT geo) : SV_Target0
+			{
+				return float4(1,1,1,1);
+			}
+		)--")),
+
+		std::make_pair("amplifying_geo_shader.hlsl", ::Assets::AsBlob(R"--(
+			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+
+			VSOUT vs_main(VSIN input)
+			{
+				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				VSOUT result = BuildVSOUT(deformedVertex, input);
+				result.renderTargetIndex = 0;		// embued properly in the geometry shader
+				return result;
+			}
+
+			cbuffer MultiProbeProperties BIND_SEQ_B1
+			{
+				uint MultiProbeCount; uint4 Dummy[3];
+				row_major float4x4 MultiProbeViews[64];
+			}
+
+			[maxvertexcount(3*64)]
+				void gs_main(	triangle VSOUT input[3],
+								inout TriangleStream<VSOUT> outputStream)
+			{
+				// amplify out to up to 64 views
+				// coords from VS are actually in world coords, not projection space
+				for (uint c=0; c<MultiProbeCount; ++c) {
+					[unroll] for (uint q=0; q<3; ++q) {
+						VSOUT v = input[q];
+						v.position = mul(MultiProbeViews[c], v.position);
+						v.renderTargetIndex = c;
+						outputStream.Append(v);
+					}
+					outputStream.RestartStrip();
+				}
 			}
 
 			float4 ps_main(VSOUT geo) : SV_Target0
@@ -139,7 +183,7 @@ namespace UnitTests
 				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
 
 				++c;
-				if (c == s_probesToRender) break;
+				if (c == cameras.size()) break;
 				rpi.NextSubpass();
 			}
 		}
@@ -168,21 +212,156 @@ namespace UnitTests
 				sp.AppendOutput(0); sp.SetDepthStencil(1);
 				sp.SetName("prepare-probe");
 				FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
-				// auto techniqueSetFile = ::Assets::MakeFuture<std::shared_ptr<Techniques::TechniqueSetFile>>(ILLUM_TECH);
-				// auto techDel = Techniques::CreateTechniqueDelegate_ProbePrepare(techniqueSetFile);
 				auto techDel = std::make_shared<TechniqueDelegate>();
 				_cfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(techDel, ParameterBox{}, representativeFB, 0);
 			}
 		}
 
-		~SimpleRendering()
-		{
+	private:
+		RenderCore::Techniques::FrameBufferDescFragment _fragment;
+	};
 
+	// Amplifying geo shader -- one draw as input, with a geo shader that creates primitives for all of the different views
+	class AmplifyingGeoShader
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _cfg;
+		
+		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
+		{
+		public:
+			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				const RenderCore::Assets::RenderStateSet& renderStates)
+			{
+				using namespace RenderCore;
+				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/amplifying_geo_shader.hlsl:vs_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = "ut-data/amplifying_geo_shader.hlsl:gs_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/amplifying_geo_shader.hlsl:ps_main";
+				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
+				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
+				result->SetAsset(std::move(nascentDesc), {});
+				return result;
+			}
+
+			virtual std::string GetPipelineLayout()
+			{
+				return MAIN_PIPELINE ":GraphicsProbePrepare";
+			}
+		};
+
+		class ShaderResourceDelegate : public RenderCore::Techniques::IShaderResourceDelegate
+		{
+		public:
+			struct MultiProbeProperties
+			{
+				unsigned _probeCount; unsigned _dummy[15];
+				Float4x4 _worldToProjection[64];
+			};
+			MultiProbeProperties _multProbeProperties;
+
+			virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
+			{
+				REQUIRE(idx == 0);
+				REQUIRE(dst.size() == sizeof(MultiProbeProperties));
+				std::memcpy(dst.begin(), &_multProbeProperties, sizeof(_multProbeProperties));
+			}
+
+			virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
+			{
+				REQUIRE(idx == 0);
+				return sizeof(MultiProbeProperties);
+			}
+
+			ShaderResourceDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
+			{
+				_multProbeProperties._probeCount = cameras.size();
+				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiProbeProperties::_worldToProjection));
+				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
+					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
+					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
+				}
+				BindImmediateData(0, Hash64("MultiProbeProperties"));
+			}
+		};
+
+		void Execute(
+			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
+			const LightingEngineTestApparatus& testApparatus,
+			IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
+			ToolsRig::IDrawablesWriter& drawablesWriter)
+		{
+			using namespace RenderCore;
+			auto uniformDel = std::make_shared<ShaderResourceDelegate>(cameras, UInt2{64, 64});
+			parsingContext.AddShaderResourceDelegate(uniformDel);
+
+			auto& projDesc = parsingContext.GetProjectionDesc();
+			projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
+
+			{
+				Techniques::RenderPassInstance rpi{threadContext, parsingContext, _fragment};
+
+				RenderCore::Techniques::DrawablesPacket pkt;
+				drawablesWriter.WriteDrawables(pkt);
+
+				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
+				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+			}
+
+			parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+		}
+
+		AmplifyingGeoShader(const LightingEngineTestApparatus& testApparatus)
+		{
+			using namespace RenderCore;
+			_fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
+			_fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+			SubpassDesc sp;
+			sp.AppendOutput(0);
+			sp.SetDepthStencil(1);
+			_fragment.AddSubpass(std::move(sp));
+
+			{
+				std::vector<AttachmentDesc> attachments {
+					AttachmentDesc{ Format::B8G8R8A8_UNORM_SRGB, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource },
+					AttachmentDesc{ Format::D16_UNORM, 0, LoadStore::Clear, LoadStore::DontCare }
+				};
+				SubpassDesc sp;
+				sp.AppendOutput(0); sp.SetDepthStencil(1);
+				sp.SetName("prepare-probe");
+				FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
+				auto techDel = std::make_shared<TechniqueDelegate>();
+				_cfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(techDel, ParameterBox{}, representativeFB, 0);
+			}
 		}
 
 	private:
 		RenderCore::Techniques::FrameBufferDescFragment _fragment;
 	};
+
+	template<typename TestClass>
+		void RunTest(
+			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext, 
+			const LightingEngineTestApparatus& testApparatus, IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
+			ToolsRig::IDrawablesWriter& drawablesWriter)
+	{
+		TestClass tester(testApparatus);
+
+		{
+			RenderCore::Techniques::DrawablesPacket pkt;
+			drawablesWriter.WriteDrawables(pkt);
+			auto marker = RenderCore::Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *tester._cfg, pkt);
+			if (marker) {
+				marker->StallWhilePending();
+				REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
+			}
+		}
+		tester.Execute(threadContext, parsingContext, testApparatus, cameras, drawablesWriter);
+	}
 
 	TEST_CASE( "LightingEngine-MassProbeRender", "[rendercore_lighting_engine]" )
 	{
@@ -192,7 +371,6 @@ namespace UnitTests
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
-
 		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
@@ -214,28 +392,17 @@ namespace UnitTests
 			auto& camera = cameras[c];
 			camera._cameraToWorld = MakeCameraToWorld(forward, Float3{0.0f, 1.0f, 0.0f}, position);
 			camera._projection = Techniques::CameraDesc::Projection::Perspective;
-			camera._nearClip = 0.01f;
-			camera._farClip = 100.f;
+			camera._nearClip = 0.1f;
+			camera._farClip = 10.f;
 		}
 
 		testHelper->BeginFrameCapture();
-
-		{
-			SimpleRendering simple(testApparatus);
-
-			{
-				RenderCore::Techniques::DrawablesPacket pkt;
-				drawablesWriter->WriteDrawables(pkt);
-				auto marker = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *simple._cfg, pkt);
-				if (marker) {
-					marker->StallWhilePending();
-					REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
-				}
-			}
-			simple.Execute(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
-		}
-		
+		RunTest<AmplifyingGeoShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
 		testHelper->EndFrameCapture();
+
+		// test: lots of geo vs minimal geo
+		// test: fewer than 64 views
+		// test: extra attributes (tangent space, tex coord, etc)
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 	}
