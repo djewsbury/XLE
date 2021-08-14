@@ -181,18 +181,24 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		// shader profile
 		{
-			char profileStr[] = "?s_";
-			switch (stage) {
-			case ShaderStage::Vertex: profileStr[0] = 'v'; break;
-			case ShaderStage::Geometry: profileStr[0] = 'g'; break;
-			case ShaderStage::Pixel: profileStr[0] = 'p'; break;
-			case ShaderStage::Domain: profileStr[0] = 'd'; break;
-			case ShaderStage::Hull: profileStr[0] = 'h'; break;
-			case ShaderStage::Compute: profileStr[0] = 'c'; break;
-			default: assert(0); break;
-			}
-			if (!XlFindStringI(initializer, profileStr)) {
-				meld << ":" << profileStr << "*";
+			// Following MinimalShaderSource::MakeResId, the shader model comes after the second colon
+			const char* colon = XlFindChar(initializer, ':');
+			if (colon) colon = XlFindChar(MakeStringSection(colon+1, initializer.end()), ':');
+			if (!colon) {
+				char profileStr[] = "?s_*";
+				switch (stage) {
+				case ShaderStage::Vertex: profileStr[0] = 'v'; break;
+				case ShaderStage::Geometry: profileStr[0] = 'g'; break;
+				case ShaderStage::Pixel: profileStr[0] = 'p'; break;
+				case ShaderStage::Domain: profileStr[0] = 'd'; break;
+				case ShaderStage::Hull: profileStr[0] = 'h'; break;
+				case ShaderStage::Compute: profileStr[0] = 'c'; break;
+				default: assert(0); break;
+				}
+				meld << ":" << profileStr;
+			} else {
+				auto profileSection = MakeStringSection(colon+1, initializer.end());
+				assert(profileSection.size() > 3 && profileSection[1] == 's' && profileSection[2] == '_');
 			}
 		}
 
