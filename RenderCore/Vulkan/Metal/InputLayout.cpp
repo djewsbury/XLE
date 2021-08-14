@@ -310,7 +310,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<PushConstantBindingRules> _pushConstantsRules;
 			std::vector<FixedDescriptorSetBindingRules> _fixedDescriptorSetRules;
 
-			uint64_t _boundLooseUniformBuffers = 0;
+			uint64_t _boundLooseImmediateDatas = 0;
 			uint64_t _boundLooseResources = 0;
 			uint64_t _boundLooseSamplerStates = 0;
 		};
@@ -436,7 +436,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<uint32_t>* binds;
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
-				groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(inputUniformStreamIdx));
+				groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
 				groupRules._boundLooseResources |= (1ull << uint64_t(inputUniformStreamIdx));
@@ -483,7 +483,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<uint32_t>* binds;
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
-				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseUniformBuffers |= (1ull << uint64_t(streamIdx));
+				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(streamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseResources |= (1ull << uint64_t(streamIdx));
@@ -701,6 +701,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 					auto& pipelineRange = _pipelineLayout->GetPushConstantsRange(pipelineLayoutIdx);
 					_group[groupIdx]._pushConstantsRules.push_back({shaderStageMask, pipelineRange.offset, pipelineRange.size, inputSlot});
+					_group[groupIdx]._boundLooseImmediateDatas |= 1ull << uint64_t(inputSlot);
 				}
 			}
 		}
@@ -865,7 +866,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
-			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseUniformBuffers;
+			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
 		}
@@ -910,7 +911,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
-			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseUniformBuffers;
+			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
 		}
@@ -960,7 +961,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
-			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseUniformBuffers;
+			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
 		}
