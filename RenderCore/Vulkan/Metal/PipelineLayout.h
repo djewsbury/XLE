@@ -31,7 +31,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-	static const unsigned s_maxDescriptorSetCount = 6;
+	static const unsigned s_maxBoundDescriptorSetCount = 6;
 	static const unsigned s_maxPushConstantBuffers = 4;
 
 	class CompiledPipelineLayout : public ICompiledPipelineLayout
@@ -90,21 +90,21 @@ namespace RenderCore { namespace Metal_Vulkan
 	private:
 		VulkanUniquePtr<VkPipelineLayout> _pipelineLayout;
 
-		DescriptorSetLayoutPtr	_descriptorSetLayouts[s_maxDescriptorSetCount];
-		DescriptorSetPtr		_blankDescriptorSets[s_maxDescriptorSetCount];
+		DescriptorSetLayoutPtr	_descriptorSetLayouts[s_maxBoundDescriptorSetCount];
+		DescriptorSetPtr		_blankDescriptorSets[s_maxBoundDescriptorSetCount];
 		VkPushConstantRange		_pushConstantRanges[s_maxPushConstantBuffers];
 		unsigned				_descriptorSetCount;
 		unsigned 				_pushConstantBufferCount;
 
-		uint64_t				_descriptorSetBindingNames[s_maxDescriptorSetCount];
+		uint64_t				_descriptorSetBindingNames[s_maxBoundDescriptorSetCount];
 		uint64_t				_pushConstantBufferBindingNames[s_maxPushConstantBuffers];
 
 		uint64_t				_guid;
 		PipelineLayoutInitializer	_initializer;
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
-			DescriptorSetDebugInfo _blankDescriptorSetsDebugInfo[s_maxDescriptorSetCount];
-			std::string _descriptorSetStringNames[s_maxDescriptorSetCount];
+			DescriptorSetDebugInfo _blankDescriptorSetsDebugInfo[s_maxBoundDescriptorSetCount];
+			std::string _descriptorSetStringNames[s_maxBoundDescriptorSetCount];
 		#endif
 	};
 

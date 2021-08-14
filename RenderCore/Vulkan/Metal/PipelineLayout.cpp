@@ -32,9 +32,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (auto&c:_descriptorSetBindingNames) c = 0;
 		for (auto&c:_pushConstantBufferBindingNames) c = 0;
 
-		_descriptorSetCount = std::min((unsigned)descriptorSets.size(), s_maxDescriptorSetCount);
+		_descriptorSetCount = std::min((unsigned)descriptorSets.size(), s_maxBoundDescriptorSetCount);
 		_pushConstantBufferCount = std::min((unsigned)pushConstants.size(), s_maxPushConstantBuffers);
-		VkDescriptorSetLayout rawDescriptorSetLayouts[s_maxDescriptorSetCount];
+		VkDescriptorSetLayout rawDescriptorSetLayouts[s_maxBoundDescriptorSetCount];
 		for (unsigned c=0; c<_descriptorSetCount; ++c) {
 			_descriptorSetLayouts[c] = descriptorSets[c]._layout;
 			rawDescriptorSetLayouts[c] = _descriptorSetLayouts[c]->GetUnderlying();

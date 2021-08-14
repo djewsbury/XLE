@@ -67,71 +67,90 @@ namespace RenderCore { namespace Techniques
 		if (parserContext._extraSequencerDescriptorSet.second)
 			sequencerUSI.BindFixedDescriptorSet(2, parserContext._extraSequencerDescriptorSet.first);
 
-		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
-			const auto& drawable = *(Drawable*)d.get();
-			assert(drawable._pipeline);
-			auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
-			if (!pipeline)
-				continue;
+		DrawableGeo* currentGeo = nullptr;
+		PipelineAccelerator* currentPipelineAccelerator = nullptr;
+		IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
 
-			const IDescriptorSet* matDescSet = nullptr;
-			if (drawable._descriptorSet) {
-				auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-				if (!actualizedDescSet)
-					continue;
-				matDescSet = actualizedDescSet->GetDescriptorSet().get();
-				parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
-			}
+		Metal::CapturedStates capturedStates;
+		encoder.BeginStateCapture(capturedStates);
 
-			////////////////////////////////////////////////////////////////////////////// 
-		 
-			VertexBufferView vbv[4];
-			if (drawable._geo) {
-				for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
-					auto& stream = drawable._geo->_vertexStreams[c];
-					if (stream._resource) {
-						vbv[c]._resource = stream._resource.get();
-						vbv[c]._offset = stream._vbOffset;
-					} else {
-						vbv[c]._resource = temporaryVB._res;
-						vbv[c]._offset = stream._vbOffset + temporaryVB._begin;
-					}
+		TRY {
+			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
+				const auto& drawable = *(Drawable*)d.get();
+				assert(drawable._pipeline);
+				if (drawable._pipeline.get() != currentPipelineAccelerator) {
+					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
+					if (!pipeline)
+						continue;
+					currentPipeline = pipeline;
+					currentPipelineAccelerator = drawable._pipeline.get();
 				}
 
-				if (drawable._geo->_ibFormat != Format(0)) {
-					if (drawable._geo->_ib) {
-						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat});
-					} else {
-						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB._res, drawable._geo->_ibFormat, unsigned(drawable._geo->_dynIBBegin + temporaryIB._begin)});
-					}
-				} else {
-					encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
+				const IDescriptorSet* matDescSet = nullptr;
+				if (drawable._descriptorSet) {
+					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
+					if (!actualizedDescSet)
+						continue;
+					matDescSet = actualizedDescSet->GetDescriptorSet().get();
+					parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
 				}
+
+				////////////////////////////////////////////////////////////////////////////// 
+			
+				VertexBufferView vbv[4];
+				if (drawable._geo.get() != currentGeo && drawable._geo.get()) {
+					for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
+						auto& stream = drawable._geo->_vertexStreams[c];
+						if (stream._resource) {
+							vbv[c]._resource = stream._resource.get();
+							vbv[c]._offset = stream._vbOffset;
+						} else {
+							vbv[c]._resource = temporaryVB._res;
+							vbv[c]._offset = stream._vbOffset + temporaryVB._begin;
+						}
+					}
+
+					if (drawable._geo->_ibFormat != Format(0)) {
+						if (drawable._geo->_ib) {
+							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat});
+						} else {
+							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB._res, drawable._geo->_ibFormat, unsigned(drawable._geo->_dynIBBegin + temporaryIB._begin)});
+						}
+					} else {
+						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
+					}
+					currentGeo = drawable._geo.get();
+				}
+
+				//////////////////////////////////////////////////////////////////////////////
+
+				auto& boundUniforms = currentPipeline->_boundUniformsPool.Get(
+					*currentPipeline->_metalPipeline,
+					sequencerUSI,
+					drawable._looseUniformsInterface ? *drawable._looseUniformsInterface : UniformsStreamInterface{});
+
+				const IDescriptorSet* descriptorSets[3];
+				descriptorSets[0] = sequencerDescriptorSet.first.get();
+				descriptorSets[1] = matDescSet;
+				descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
+				boundUniforms.ApplyDescriptorSets(
+					metalContext, encoder,
+					MakeIteratorRange(descriptorSets), 0);
+				if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+					ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, boundUniforms, 0);
+				}
+
+				//////////////////////////////////////////////////////////////////////////////
+
+				RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), &boundUniforms };
+				drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
 			}
+		} CATCH (...) {
+			encoder.EndStateCapture();
+			throw;
+		} CATCH_END
 
-			//////////////////////////////////////////////////////////////////////////////
-
-			auto& boundUniforms = pipeline->_boundUniformsPool.Get(
-				*pipeline->_metalPipeline,
-				sequencerUSI,
-				drawable._looseUniformsInterface ? *drawable._looseUniformsInterface : UniformsStreamInterface{});
-
-			const IDescriptorSet* descriptorSets[3];
-			descriptorSets[0] = sequencerDescriptorSet.first.get();
-			descriptorSets[1] = matDescSet;
-			descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
-			boundUniforms.ApplyDescriptorSets(
-				metalContext, encoder,
-				MakeIteratorRange(descriptorSets), 0);
-			if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
-				ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, boundUniforms, 0);
-			}
-
-			//////////////////////////////////////////////////////////////////////////////
-
-			RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, pipeline->_metalPipeline.get(), &boundUniforms };
-			drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
-		}
+		encoder.EndStateCapture();
 	}
 
 	void Draw(

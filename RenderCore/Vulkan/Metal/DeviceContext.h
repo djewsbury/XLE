@@ -153,11 +153,22 @@ namespace RenderCore { namespace Metal_Vulkan
 	class VulkanEncoderSharedState;
 	class NumericUniformsInterface;
 
+	class CapturedStates
+    {
+    public:
+		const void* _currentPipeline = nullptr;
+		const void* _currentDescSet[s_maxBoundDescriptorSetCount] = {nullptr};
+	};
+
 	class SharedEncoder
 	{
 	public:
 		NumericUniformsInterface	BeginNumericUniformsInterface();
 		const std::shared_ptr<CompiledPipelineLayout>& GetPipelineLayout() { return _pipelineLayout; }
+
+		void BeginStateCapture(CapturedStates& capturedStates);
+		void EndStateCapture();
+		const CapturedStates* GetCapturedStates() const { return _capturedStates; }
 
 		// --------------- Vulkan specific interface --------------- 
 		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
@@ -177,6 +188,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
+		CapturedStates* _capturedStates;
 
 		friend class VulkanEncoderSharedState;
 	};
@@ -260,6 +272,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::shared_ptr<VulkanEncoderSharedState> sharedState,
 			Type type = Type::Normal);
 
+		void BindPipeline(const GraphicsPipeline& pipeline);
 		void LogPipeline(const GraphicsPipeline& pipeline);
 
 		friend class DeviceContext;
@@ -280,6 +293,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
 			std::shared_ptr<VulkanEncoderSharedState> sharedState);
 
+		void BindPipeline(const ComputePipeline& pipeline);
 		void LogPipeline(const ComputePipeline& pipeline);
 
 		friend class DeviceContext;

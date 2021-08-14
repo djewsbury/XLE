@@ -73,9 +73,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		class DescriptorCollection
 		{
 		public:
-			std::vector<VkDescriptorSet>		_descriptorSets;			// (can't use a smart pointer here because it's often bound to the descriptor set in NumericUniformsInterface, which we must share)
-			bool                                _hasSetsAwaitingFlush = false;
-
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				std::vector<DescriptorSetDebugInfo> _currentlyBoundDesc;
 			#endif
@@ -344,16 +341,31 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(0);      // not implemented
 	}
 
-	void GraphicsEncoder_Optimized::Draw(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned startVertexLocation)
+	inline void GraphicsEncoder_Optimized::BindPipeline(const GraphicsPipeline& pipeline)
 	{
 		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-		
+		if (_capturedStates) {
+			if (_capturedStates->_currentPipeline != &pipeline) {
+				vkCmdBindPipeline(
+					_sharedState->_commandList.GetUnderlying().get(),
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					pipeline.get());
+				DEBUG_ONLY(LogPipeline(pipeline));
+				_capturedStates->_currentPipeline = &pipeline;
+			}
+		} else {
+			vkCmdBindPipeline(
+				_sharedState->_commandList.GetUnderlying().get(),
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				pipeline.get());
+			DEBUG_ONLY(LogPipeline(pipeline));
+		}
+	}
+
+	void GraphicsEncoder_Optimized::Draw(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned startVertexLocation)
+	{
+		BindPipeline(pipeline);
 		assert(vertexCount);
 		vkCmdDraw(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -363,15 +375,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	
 	void GraphicsEncoder_Optimized::DrawIndexed(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned startIndexLocation)
 	{
-		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
-		assert(_sharedState->_commandList.GetUnderlying());
+		BindPipeline(pipeline);
 		assert(_sharedState->_ibBound);
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-
 		assert(indexCount);
 		vkCmdDrawIndexed(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -382,14 +387,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawInstances(const GraphicsPipeline& pipeline, unsigned vertexCount, unsigned instanceCount, unsigned startVertexLocation)
 	{
-		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
-		assert(_sharedState->_commandList.GetUnderlying());
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-
+		BindPipeline(pipeline);
 		vkCmdDraw(
 			_sharedState->_commandList.GetUnderlying().get(),
 			vertexCount, instanceCount,
@@ -398,14 +396,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void GraphicsEncoder_Optimized::DrawIndexedInstances(const GraphicsPipeline& pipeline, unsigned indexCount, unsigned instanceCount, unsigned startIndexLocation)
 	{
-		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
-		assert(_sharedState->_commandList.GetUnderlying());
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-
+		BindPipeline(pipeline);
 		vkCmdDrawIndexed(
 			_sharedState->_commandList.GetUnderlying().get(),
 			indexCount, instanceCount,
@@ -424,20 +415,28 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		auto encoderType = _sharedState->_currentEncoderType;
 		assert(encoderType != EncoderType::None);
+		assert(index < s_maxBoundDescriptorSetCount);
+		assert(index < GetDescriptorSetCount());
 		auto& collection = (encoderType == EncoderType::Compute) ? _sharedState->_computeDescriptors : _sharedState->_graphicsDescriptors;
-		if (index < (unsigned)collection._descriptorSets.size() && collection._descriptorSets[index] != set) {
-			collection._descriptorSets[index] = set;
-			assert(index < GetDescriptorSetCount());
+		if (_capturedStates) {
+			if (_capturedStates->_currentDescSet[index] != set)
+				_sharedState->_commandList.BindDescriptorSets(
+					(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+					GetUnderlyingPipelineLayout(),
+					index, 1, &set, 
+					0, nullptr);
+			_capturedStates->_currentDescSet[index] = set;
+		} else {
 			_sharedState->_commandList.BindDescriptorSets(
 				(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
 				GetUnderlyingPipelineLayout(),
-				index, 1, &collection._descriptorSets[index], 
+				index, 1, &set, 
 				0, nullptr);
-
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				collection._currentlyBoundDesc[index] = description;
-			#endif
 		}
+
+		#if defined(VULKAN_VERBOSE_DEBUG)
+			collection._currentlyBoundDesc[index] = description;
+		#endif
 	}
 
 	NumericUniformsInterface SharedEncoder::BeginNumericUniformsInterface()
@@ -475,12 +474,25 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _pipelineLayout->GetUnderlying();
 	}
 
+	void SharedEncoder::BeginStateCapture(CapturedStates& capturedStates)
+	{
+		assert(!_capturedStates);
+		_capturedStates = &capturedStates;
+	}
+	
+	void SharedEncoder::EndStateCapture()
+	{
+		assert(_capturedStates);
+		_capturedStates = nullptr;
+	}
+
 	SharedEncoder::SharedEncoder(
 		EncoderType encoderType,
 		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,
 		std::shared_ptr<VulkanEncoderSharedState> sharedState)
 	: _pipelineLayout(std::move(pipelineLayout))
 	, _sharedState(std::move(sharedState))
+	, _capturedStates(nullptr)
 	{
 		if (_sharedState) {
 			assert(_sharedState->_currentEncoder == nullptr && _sharedState->_currentEncoderType == EncoderType::None);
@@ -492,16 +504,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto* descCollection = (encoderType == EncoderType::Compute) ? &_sharedState->_computeDescriptors : &_sharedState->_graphicsDescriptors;
 			descCollection->ResetState(*_pipelineLayout);
 
-			// bind descriptor sets that are pending
-			// If we've been using the pipeline layout builder directly, then we
-			// must flush those changes down to the GraphicsPipelineBuilder
-			if (descCollection->_hasSetsAwaitingFlush) {
-				_sharedState->_commandList.BindDescriptorSets(
-					(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
-					GetUnderlyingPipelineLayout(),
-					0, GetDescriptorSetCount(), AsPointer(descCollection->_descriptorSets.begin()), 
-					0, nullptr);
-				descCollection->_hasSetsAwaitingFlush = false;
+			// Bind default blank descriptor sets for the layout
+			for (unsigned c=0; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
+				BindDescriptorSet(
+					c, _pipelineLayout->GetBlankDescriptorSet(c).get()
+					#if defined(VULKAN_VERBOSE_DEBUG)
+						, DescriptorSetDebugInfo{_pipelineLayout->GetBlankDescriptorSetDebugInfo(c)}
+					#endif
+				);
 			}
 		}
 	}
@@ -522,6 +532,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			_sharedState->_currentEncoder = this;
 		}
 		_pipelineLayout = std::move(moveFrom._pipelineLayout);
+		_capturedStates = std::move(moveFrom._capturedStates);
+		moveFrom._capturedStates = nullptr;
 	}
 
 	SharedEncoder& SharedEncoder::operator=(SharedEncoder&& moveFrom)
@@ -539,6 +551,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			_sharedState->_currentEncoder = this;
 		}
 		_pipelineLayout = std::move(moveFrom._pipelineLayout);
+		_capturedStates = std::move(moveFrom._capturedStates);
+		moveFrom._capturedStates = nullptr;
 		return *this;
 	}
 
@@ -674,15 +688,31 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+	inline void ComputeEncoder::BindPipeline(const ComputePipeline& pipeline)
+	{
+		if (_capturedStates) {
+			if (_capturedStates->_currentPipeline != &pipeline) {
+				assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+				vkCmdBindPipeline(
+					_sharedState->_commandList.GetUnderlying().get(),
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					pipeline.get());
+				DEBUG_ONLY(LogPipeline(pipeline));
+				_capturedStates->_currentPipeline = &pipeline;
+			}
+		} else {
+			assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+			vkCmdBindPipeline(
+				_sharedState->_commandList.GetUnderlying().get(),
+				VK_PIPELINE_BIND_POINT_COMPUTE,
+				pipeline.get());
+			DEBUG_ONLY(LogPipeline(pipeline));
+		}
+	}
+
 	void ComputeEncoder::Dispatch(const ComputePipeline& pipeline, unsigned countX, unsigned countY, unsigned countZ)
 	{
-		assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-
+		BindPipeline(pipeline);
 		assert(countX && countY && countZ);
 		vkCmdDispatch(
 			_sharedState->_commandList.GetUnderlying().get(),
@@ -691,13 +721,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void ComputeEncoder::DispatchIndirect(const ComputePipeline& pipeline, const IResource& res, unsigned offset)
 	{
-		assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
-		vkCmdBindPipeline(
-			_sharedState->_commandList.GetUnderlying().get(),
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			pipeline.get());
-		DEBUG_ONLY(LogPipeline(pipeline));
-
+		BindPipeline(pipeline);
 		vkCmdDispatchIndirect(
 			_sharedState->_commandList.GetUnderlying().get(),
 			checked_cast<const Resource*>(&res)->GetBuffer(),
@@ -1120,8 +1144,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
 		const ObjectFactory&    factory, 
 		GlobalPools&            globalPools)
-	: _graphicsDescriptors(factory, globalPools, s_maxDescriptorSetCount)
-	, _computeDescriptors(factory, globalPools, s_maxDescriptorSetCount)
+	: _graphicsDescriptors(factory, globalPools, s_maxBoundDescriptorSetCount)
+	, _computeDescriptors(factory, globalPools, s_maxBoundDescriptorSetCount)
 	, _globalPools(&globalPools)	
 	{
 		_renderPass = nullptr;
@@ -1138,14 +1162,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void VulkanEncoderSharedState::DescriptorCollection::ResetState(const CompiledPipelineLayout& layout)
 	{
-		_descriptorSets.resize(layout.GetDescriptorSetCount());
-		for (unsigned c=0; c<_descriptorSets.size(); ++c) {
-			_descriptorSets[c] = layout.GetBlankDescriptorSet(c).get();
-			#if defined(VULKAN_VERBOSE_DEBUG)
-				_currentlyBoundDesc[c] = layout.GetBlankDescriptorSetDebugInfo(c);
-			#endif
-		}
-		_hasSetsAwaitingFlush = true;
+		#if defined(VULKAN_VERBOSE_DEBUG)
+			_currentlyBoundDesc.resize(layout.GetDescriptorSetCount());
+		#endif
 	}
 
 	VulkanEncoderSharedState::DescriptorCollection::DescriptorCollection(
@@ -1154,11 +1173,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned				descriptorSetCount)
 	: _factory(&factory), _globalPools(&globalPools)
 	{
-		_descriptorSets.resize(descriptorSetCount, nullptr);
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			_currentlyBoundDesc.resize(descriptorSetCount);
 		#endif
-		_hasSetsAwaitingFlush = false;
 	}
 
 }}
