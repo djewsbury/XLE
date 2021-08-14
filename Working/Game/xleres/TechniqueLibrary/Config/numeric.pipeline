@@ -1,14 +1,9 @@
 DescriptorSet Numeric
 {
-	SampledTexture t0;				// 0
-	SampledTexture t1;				// 1
-	SubpassInput t2;				// 2
+	SampledTexture t0;					// 0
+	SampledTexture t1;					// 1
+	SubpassInput t2;					// 2
 
-	UniformBuffer LocalTransform			// 3
-	{
-		float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-	};
-
-	UniformBuffer DrawCallProperties;		// 4
+	UniformBuffer b3;					// 3
+	UniformBuffer DrawCallProperties;	// 4
 };

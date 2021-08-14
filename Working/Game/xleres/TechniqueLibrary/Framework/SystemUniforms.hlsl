@@ -27,14 +27,30 @@ float4x4 	SysUniform_GetCameraBasis() { return CameraBasis; }
 bool 		SysUniform_IsOrthogonalProjection() { return FarClip < 0; }
 float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 
-cbuffer LocalTransform BIND_NUMERIC_B3
-{
-	row_major float3x4 LocalToWorld;
-	float3 LocalSpaceView;
-}
+#if defined(VULKAN) && !defined(LOCAL_TRANSFORM_PUSH_CONSTANTS)
+	#define LOCAL_TRANSFORM_PUSH_CONSTANTS 1
+#endif
 
-float3x4 	SysUniform_GetLocalToWorld() { return LocalToWorld; }
-float3 		SysUniform_GetLocalSpaceView() { return LocalSpaceView; }
+#if LOCAL_TRANSFORM_PUSH_CONSTANTS
+	[[vk::push_constant]] struct LocalTransformStruct
+	{
+		row_major float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	} LocalTransform;
+
+	// note -- these are only available in the vertex shader due to the pipeline layout configuration
+	float3x4 	SysUniform_GetLocalToWorld() { return LocalTransform.LocalToWorld; }
+	float3 		SysUniform_GetLocalSpaceView() { return LocalTransform.LocalSpaceView; }
+#else
+	cbuffer LocalTransform BIND_NUMERIC_B3
+	{
+		row_major float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	}
+
+	float3x4 	SysUniform_GetLocalToWorld() { return LocalToWorld; }
+	float3 		SysUniform_GetLocalSpaceView() { return LocalSpaceView; }
+#endif
 
 cbuffer GlobalState BIND_SEQ_B2
 {

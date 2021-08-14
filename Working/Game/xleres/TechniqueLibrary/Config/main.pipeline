@@ -39,6 +39,12 @@ PipelineLayout GraphicsMain
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
 	DescriptorSet Numeric;
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	};
 };
 
 PipelineLayout GraphicsForwardPlus
@@ -48,6 +54,12 @@ PipelineLayout GraphicsForwardPlus
 	DescriptorSet Numeric;					// 2
 	DescriptorSet ForwardLighting;			// 3
 	DescriptorSet ShadowTemplate;			// 4
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	};
 };
 
 PipelineLayout GraphicsProbePrepare
@@ -56,4 +68,10 @@ PipelineLayout GraphicsProbePrepare
 	DescriptorSet Material;					// 1
 	DescriptorSet Numeric;					// 2
 	DescriptorSet ProbePrepareLighting;		// 3
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	};
 };
