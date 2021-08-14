@@ -7,6 +7,7 @@
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
@@ -15,6 +16,8 @@
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/AssetTraits.h"
+#include "../../../Assets/MountingTree.h"
+#include "../../../Assets/MemoryFile.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -24,6 +27,26 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
+	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
+		std::make_pair("simple.hlsl", ::Assets::AsBlob(R"--(
+			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+
+			VSOUT vs_main(VSIN input)
+			{
+				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				return BuildVSOUT(deformedVertex, input);
+			}
+
+			float4 ps_main(VSOUT geo) : SV_Target0
+			{
+				return float4(1,1,1,1);
+			}
+		)--"))
+	};
+
 	static const UInt2 s_testResolution { 64, 64 };
 	const unsigned s_probesToRender = 64;
 
@@ -65,11 +88,108 @@ namespace UnitTests
 		return parsingContext;
 	}
 
+	// Simpliest method -- we just create a massive render target with separate subpasses for each
+	// array layer and just draw each item normally
+	class SimpleRendering
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _cfg;
+		
+		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
+		{
+		public:
+			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				const RenderCore::Assets::RenderStateSet& renderStates)
+			{
+				using namespace RenderCore;
+				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
+				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
+				result->SetAsset(std::move(nascentDesc), {});
+				return result;
+			}
+
+			virtual std::string GetPipelineLayout()
+			{
+				return MAIN_PIPELINE ":GraphicsProbePrepare";
+			}
+		};
+
+		void Execute(
+			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
+			const LightingEngineTestApparatus& testApparatus,
+			IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
+			ToolsRig::IDrawablesWriter& drawablesWriter)
+		{
+			using namespace RenderCore;
+			Techniques::RenderPassInstance rpi{threadContext, parsingContext, _fragment};
+			for (unsigned c=0; ;) {
+				auto& projDesc = parsingContext.GetProjectionDesc();
+				projDesc = BuildProjectionDesc(cameras[c], s_testResolution);
+
+				RenderCore::Techniques::DrawablesPacket pkt;
+				drawablesWriter.WriteDrawables(pkt, projDesc._worldToProjection);
+
+				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
+				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+
+				++c;
+				if (c == s_probesToRender) break;
+				rpi.NextSubpass();
+			}
+		}
+
+		SimpleRendering(const LightingEngineTestApparatus& testApparatus)
+		{
+			using namespace RenderCore;
+			_fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
+			_fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+			for (unsigned c=0; c<s_probesToRender; ++c) {
+				TextureViewDesc viewDesc;
+				viewDesc._arrayLayerRange._min = c;
+				viewDesc._arrayLayerRange._count = 1;
+				SubpassDesc sp;
+				sp.AppendOutput(0, viewDesc);
+				sp.SetDepthStencil(1, viewDesc);
+				_fragment.AddSubpass(std::move(sp));
+			}
+
+			{
+				std::vector<AttachmentDesc> attachments {
+					AttachmentDesc{ Format::B8G8R8A8_UNORM_SRGB, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource },
+					AttachmentDesc{ Format::D16_UNORM, 0, LoadStore::Clear, LoadStore::DontCare }
+				};
+				SubpassDesc sp;
+				sp.AppendOutput(0); sp.SetDepthStencil(1);
+				sp.SetName("prepare-probe");
+				FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
+				// auto techniqueSetFile = ::Assets::MakeFuture<std::shared_ptr<Techniques::TechniqueSetFile>>(ILLUM_TECH);
+				// auto techDel = Techniques::CreateTechniqueDelegate_ProbePrepare(techniqueSetFile);
+				auto techDel = std::make_shared<TechniqueDelegate>();
+				_cfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(techDel, ParameterBox{}, representativeFB, 0);
+			}
+		}
+
+		~SimpleRendering()
+		{
+
+		}
+
+	private:
+		RenderCore::Techniques::FrameBufferDescFragment _fragment;
+	};
+
 	TEST_CASE( "LightingEngine-MassProbeRender", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
 		LightingEngineTestApparatus testApparatus;
 		auto testHelper = testApparatus._metalTestHelper.get();
+		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
@@ -98,68 +218,26 @@ namespace UnitTests
 			camera._farClip = 100.f;
 		}
 
-		// Simpliest method -- we just create a massive render target with separate subpasses for each
-		// array layer and just draw each item normally
-
-		Techniques::FrameBufferDescFragment fragment;
-		fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-		fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
-		for (unsigned c=0; c<s_probesToRender; ++c) {
-			TextureViewDesc viewDesc;
-			viewDesc._arrayLayerRange._min = c;
-			viewDesc._arrayLayerRange._count = 1;
-			SubpassDesc sp;
-			sp.AppendOutput(0, viewDesc);
-			sp.SetDepthStencil(1, viewDesc);
-			fragment.AddSubpass(std::move(sp));
-		}
-
-		std::shared_ptr<Techniques::SequencerConfig> cfg;
-		{
-			std::vector<AttachmentDesc> attachments {
-				AttachmentDesc{ Format::B8G8R8A8_UNORM_SRGB, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource },
-				AttachmentDesc{ Format::D16_UNORM, 0, LoadStore::Clear, LoadStore::DontCare }
-			};
-			SubpassDesc sp;
-			sp.AppendOutput(0); sp.SetDepthStencil(1);
-			sp.SetName("prepare-probe");
-			FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
-			auto techniqueSetFile = ::Assets::MakeFuture<std::shared_ptr<Techniques::TechniqueSetFile>>(ILLUM_TECH);
-			auto techDel = Techniques::CreateTechniqueDelegate_ProbePrepare(techniqueSetFile);
-			cfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(techDel, ParameterBox{}, representativeFB, 0);
-		}
-
-		{
-			RenderCore::Techniques::DrawablesPacket pkt;
-			drawablesWriter->WriteDrawables(pkt);
-			auto marker = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *cfg, pkt);
-			if (marker) {
-				marker->StallWhilePending();
-				REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
-			}
-		}
-
 		testHelper->BeginFrameCapture();
 
 		{
-			Techniques::RenderPassInstance rpi{*threadContext, parsingContext, fragment};
-			for (unsigned c=0; ;) {
-				auto& projDesc = parsingContext.GetProjectionDesc();
-				projDesc = BuildProjectionDesc(cameras[c], s_testResolution);
+			SimpleRendering simple(testApparatus);
 
+			{
 				RenderCore::Techniques::DrawablesPacket pkt;
-				drawablesWriter->WriteDrawables(pkt, projDesc._worldToProjection);
-
-				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-				Techniques::Draw(*threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *cfg, sequencerUniforms, pkt);
-
-				++c;
-				if (c == s_probesToRender) break;
-				rpi.NextSubpass();
+				drawablesWriter->WriteDrawables(pkt);
+				auto marker = Techniques::PrepareResources(*testApparatus._pipelineAcceleratorPool, *simple._cfg, pkt);
+				if (marker) {
+					marker->StallWhilePending();
+					REQUIRE(marker->GetAssetState() == ::Assets::AssetState::Ready);
+				}
 			}
+			simple.Execute(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
 		}
 		
 		testHelper->EndFrameCapture();
+
+		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
 	}
 }
 
