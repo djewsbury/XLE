@@ -11,6 +11,7 @@
 #include "../../RenderCore/UniformsStream.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Transformations.h"
+#include "../../Math/ProjectionMath.h"
 #include <memory>
 
 namespace ToolsRig
@@ -114,6 +115,18 @@ namespace ToolsRig
 			WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
 		}
 
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			const float radius = 1.0f;
+			auto cullingTest = TestAABB(
+				cullingVolume, Float3{-radius, -radius, -radius}, Float3{radius, radius, radius}, 
+				RenderCore::Techniques::GetDefaultClipSpaceType());
+			if (cullingTest != AABBIntersection::Culled)
+				WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
+		}
+
 		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
@@ -151,6 +164,13 @@ namespace ToolsRig
 				pkt,
 				_cubeGeo, _cubeVertexCount, 
 				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
+		}
+
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			WriteDrawables(pkt);		// no cullling support
 		}
 
 		ShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -209,6 +229,13 @@ namespace ToolsRig
 				baseTransform);
 		}
 
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			WriteDrawables(pkt);		// no cullling support
+		}
+
 		StonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
@@ -238,6 +265,13 @@ namespace ToolsRig
 				pkt,
 				_geo, _vertexCount, 
 				AsFloat4x4(srt));
+		}
+
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			WriteDrawables(pkt);		// no cullling support
 		}
 
 		FlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -275,6 +309,13 @@ namespace ToolsRig
 			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, pyramidTransform);
 		}
 
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			WriteDrawables(pkt);		// no cullling support
+		}
+
 		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
@@ -288,6 +329,19 @@ namespace ToolsRig
 		return std::make_shared<SharpContactDrawableWriter>(device, pipelineAcceleratorPool);
 	}
 
+	static std::pair<Float3, Float3> CreateSphereBoundingBox(const Float3& position, float radius)
+	{
+		assert(radius > 0);
+		return {	Float3(position) - Float3(radius, radius, radius),
+					Float3(position) + Float3(radius, radius, radius) };
+	}
+
+	static std::pair<Float3, Float3> CreateRotateableCubeBoundingBox(const Float3& position, float scale)
+	{
+		const float sqrt3 = std::sqrt(3.f);
+		return CreateSphereBoundingBox(position, scale*sqrt3);
+	}
+
 	class ShapeWorldDrawableWriter : public DrawablesWriterCommon
 	{
 	public:
@@ -299,6 +353,32 @@ namespace ToolsRig
 			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
 			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
 			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+		}
+
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume)
+		{
+			auto bb=_cubeBoundingBoxes.begin();
+			for (const auto& transform:_cubes) {
+				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
+					WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
+				++bb;
+			}
+
+			bb=_sphereBoundingBoxes.begin();
+			for (const auto& transform:_spheres) {
+				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
+					WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
+				++bb;
+			}
+
+			bb=_pyramidBoundingBoxes.begin();
+			for (const auto& transform:_pyramid) {
+				if (!CullAABB(cullingVolume, bb->first, bb->second, RenderCore::Techniques::GetDefaultClipSpaceType())) 
+					WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+				++bb;
+			}
 		}
 
 		ShapeWorldDrawableWriter(
@@ -325,21 +405,33 @@ namespace ToolsRig
 				auto type = std::uniform_int_distribution<>(0, 2)(rng);
 				if (type == 0) {
 					_cubes.push_back(transform);
+					_cubeBoundingBoxes.push_back(CreateRotateableCubeBoundingBox(position, scale));
 				} else if (type == 1) {
 					_spheres.push_back(transform);
-				} else
+					_sphereBoundingBoxes.push_back(CreateSphereBoundingBox(position, scale));
+				} else {
 					_pyramid.push_back(transform);
+					_pyramidBoundingBoxes.push_back(CreateRotateableCubeBoundingBox(position, scale));
+				}
 			}
 
 			// //// //// //// //// //// //// //
 			auto baseTransform = AsFloat4x4(Float3{1.0f, -2.0f, 1.0f});
-			Combine_IntoLHS(baseTransform, ArbitraryScale{Float3{(worldMaxs[0] - worldMins[0]) / 2.0f, 0.01f, (worldMaxs[1] - worldMins[1]) / 2.0f}});
+			auto baseScale = ArbitraryScale{Float3{(worldMaxs[0] - worldMins[0]) / 2.0f, 0.01f, (worldMaxs[1] - worldMins[1]) / 2.0f}};
+			Combine_IntoLHS(baseTransform, baseScale);
 			_cubes.push_back(baseTransform);
+			_cubeBoundingBoxes.push_back({
+				ExtractTranslation(baseTransform) - baseScale._scale,
+				ExtractTranslation(baseTransform) + baseScale._scale
+			});
 		}
 
 		std::vector<Float4x4> _cubes;
 		std::vector<Float4x4> _spheres;
 		std::vector<Float4x4> _pyramid;
+		std::vector<std::pair<Float3, Float3>> _cubeBoundingBoxes;
+		std::vector<std::pair<Float3, Float3>> _sphereBoundingBoxes;
+		std::vector<std::pair<Float3, Float3>> _pyramidBoundingBoxes;
 	};
 
 	std::shared_ptr<IDrawablesWriter> CreateShapeWorldDrawableWriter(

@@ -6,6 +6,7 @@
 
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../Math/Vector.h"
+#include "../../Math/Matrix.h"
 
 namespace ToolsRig
 {
@@ -13,6 +14,9 @@ namespace ToolsRig
 	{
 	public:
 		virtual void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt) = 0;
+		virtual void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolumn) = 0;
 		virtual ~IDrawablesWriter() = default;
 	};
 

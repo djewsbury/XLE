@@ -157,3 +157,20 @@ DepthMotion_PerPixelAndEarlyRejection=~
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
 	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ProbePrepare_NoPatches=~
+	Inherit=~; Forward_NoPatches
+	Selectors=~
+		PROBE_PREPARE=1
+
+ProbePrepare_PerPixel=~
+	Inherit=~; Forward_PerPixel
+	Selectors=~
+		PROBE_PREPARE=1
+
+ProbePrepare_PerPixelAndEarlyRejection=~
+	Inherit=~; Forward_PerPixelAndEarlyRejection
+	Selectors=~
+		PROBE_PREPARE=1

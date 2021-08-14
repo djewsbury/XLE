@@ -85,6 +85,9 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType);
 
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
+
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.
 	A default technique file is selected and the type of shader is picked via the technique

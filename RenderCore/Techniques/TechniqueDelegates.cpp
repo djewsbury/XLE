@@ -657,6 +657,122 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	class TechniqueDelegate_ProbePrepare : public ITechniqueDelegate
+	{
+	public:
+		struct TechniqueFileHelper
+		{
+		public:
+			std::shared_ptr<TechniqueSetFile> _techniqueSet;
+			TechniqueEntry _noPatches;
+			TechniqueEntry _perPixel;
+			TechniqueEntry _perPixelAndEarlyRejection;
+			TechniqueEntry _vsNoPatchesSrc;
+			TechniqueEntry _vsDeformVertexSrc;
+
+			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
+
+			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet)
+			: _techniqueSet(techniqueSet)
+			{
+				const auto noPatchesHash = Hash64("ProbePrepare_NoPatches");
+				const auto perPixelHash = Hash64("ProbePrepare_PerPixel");
+				const auto earlyRejectionHash = Hash64("ProbePrepare_PerPixelAndEarlyRejection");
+				auto vsNoPatchesHash = Hash64("VS_NoPatches");
+				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
+				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
+				auto* perPixelSrc = _techniqueSet->FindEntry(perPixelHash);
+				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
+				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
+				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
+				if (!noPatchesSrc || !perPixelSrc || !earlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
+					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
+				}
+
+				_noPatches = *noPatchesSrc;
+				_perPixel = *perPixelSrc;
+				_perPixelAndEarlyRejection = *earlyRejectionSrc;
+				_vsNoPatchesSrc = *vsNoPatchesSrc;
+				_vsDeformVertexSrc = *vsDeformVertexSrc;
+			}
+		};
+
+		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			const RenderCore::Assets::RenderStateSet& stateSet) override
+		{
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
+
+			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend) {
+				nascentDesc->_blend.push_back(AttachmentBlendDesc {
+					stateSet._forwardBlendOp != BlendOp::NoBlending,
+					stateSet._forwardBlendSrc, stateSet._forwardBlendDst, stateSet._forwardBlendOp });
+			} else {
+				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			}
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
+
+			auto illumType = CalculateIllumType(shaderPatches);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
+				*result,
+				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
+					std::vector<uint64_t> patchExpansions;
+					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
+					switch (illumType) {
+					case IllumType::PerPixel:
+						psTechEntry = &techniqueFileHelper->_perPixel;
+						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+						break;
+					case IllumType::PerPixelAndEarlyRejection:
+						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
+						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+						break;
+					default:
+						break;
+					}
+
+					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
+					if (hasDeformVertex) {
+						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
+						patchExpansions.push_back(s_deformVertex);
+					}
+
+					TechniqueEntry mergedTechEntry = *vsTechEntry;
+					mergedTechEntry.MergeIn(*psTechEntry);
+
+					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
+					return nascentDesc;
+				});
+			return result;
+		}
+
+		std::string GetPipelineLayout() override
+		{
+			return MAIN_PIPELINE ":GraphicsProbePrepare";
+		}
+
+		TechniqueDelegate_ProbePrepare(
+			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+		{
+			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+		}
+	private:
+		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+	};
+
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+	{
+		return std::make_shared<TechniqueDelegate_ProbePrepare>(techniqueSet);
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class TechniqueDelegate_RayTest : public ITechniqueDelegate
 	{
 	public:

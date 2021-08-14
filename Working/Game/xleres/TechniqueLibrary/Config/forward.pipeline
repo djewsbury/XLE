@@ -25,3 +25,8 @@ DescriptorSet ForwardLighting
 	};
 };
 
+DescriptorSet ProbePrepareLighting
+{
+	UniformBuffer EnvironmentProps;					// 0
+};
+

@@ -37,28 +37,32 @@ float3 CalculateSkyReflectionFresnel(GBufferValues sample, float3 viewDirection)
 
 float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
 {
+	float metal = sample.material.metal;
 	float3 diffuseSHRef = 0;
 	for (uint c=0; c<25; ++c)
 		diffuseSHRef += ResolveSH_Reference(DiffuseSHCoefficients[c].rgb, c, sample.worldSpaceNormal);
-	float metal = sample.material.metal;
-	float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
-	fresnel *= float(EnableSSR); 
-	return 
-		diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb
-		+ fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+	float3 result = diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb;
+
+	#if !defined(PROBE_PREPARE)
+		float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
+		fresnel *= float(EnableSSR); 
+		result += fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+	#endif
+
+	return result; 
 }
 
 float3 CalculateIllumination(
 	GBufferValues sample, float3 directionToEye,
 	float3 worldPosition, float linear0To1Depth,
-	LightScreenDest screenDest)
+	LightScreenDest screenDest, bool hasNormal)
 {
 	float3 result = 0.0.xxx;
 
 	LightSampleExtra sampleExtra;
 	sampleExtra.screenSpaceOcclusion = 1;
 
-	#if (VSOUT_HAS_NORMAL==1)
+	if (hasNormal) {
 
 			// Calculate the shadowing of light sources (where we can)
 
@@ -85,40 +89,41 @@ float3 CalculateIllumination(
 			}
 		#endif
 
-			// note -- 	This loop must be unrolled when using GGX specular...
-			//			This is because there are texture look-ups in the GGX
-			//			implementation, and those can cause won't function
-			//			correctly inside a dynamic loop
 
-		uint encodedDepthTable = LightDepthTable[linear0To1Depth*TiledLights_DepthGradiations];
-		uint minIdx = encodedDepthTable & 0xff;
-		uint maxIdx = encodedDepthTable >> 16;
+		#if !defined(PROBE_PREPARE)
 
-		uint3 tileCoord = uint3(screenDest.pixelCoords.xy/TiledLights_GridDims, 0);
+			uint encodedDepthTable = LightDepthTable[linear0To1Depth*TiledLights_DepthGradiations];
+			uint minIdx = encodedDepthTable & 0xff;
+			uint maxIdx = encodedDepthTable >> 16;
 
-		[branch] if (minIdx != maxIdx) {
-			// minIdx = WaveActiveMin(minIdx);
-			// maxIdx = WaveActiveMax(maxIdx);
-			for (uint planeIdx=minIdx/32; planeIdx<=maxIdx/32; ++planeIdx) {
-				uint bitField = TiledLightBitField.Load(uint4(tileCoord.xy, planeIdx, 0));
-				// bitField = WaveActiveBitOr(bitField);
-				while (bitField != 0) {
-					uint bitIdx = firstbitlow(bitField);
-					bitField ^= (1u << bitIdx);
+			uint3 tileCoord = uint3(screenDest.pixelCoords.xy/TiledLights_GridDims, 0);
 
-					LightDesc l = LightList[planeIdx*32+bitIdx];
-					float shadowing = 1.0f;
-					if (l.Shape == 0) {
-						result += shadowing * DirectionalLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
-					} else if (l.Shape == 1) {
-						result += shadowing * SphereLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
+			[branch] if (minIdx != maxIdx) {
+				// minIdx = WaveActiveMin(minIdx);
+				// maxIdx = WaveActiveMax(maxIdx);
+				for (uint planeIdx=minIdx/32; planeIdx<=maxIdx/32; ++planeIdx) {
+					uint bitField = TiledLightBitField.Load(uint4(tileCoord.xy, planeIdx, 0));
+					// bitField = WaveActiveBitOr(bitField);
+					while (bitField != 0) {
+						uint bitIdx = firstbitlow(bitField);
+						bitField ^= (1u << bitIdx);
+
+						LightDesc l = LightList[planeIdx*32+bitIdx];
+						float shadowing = 1.0f;
+						if (l.Shape == 0) {
+							result += shadowing * DirectionalLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
+						} else if (l.Shape == 1) {
+							result += shadowing * SphereLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
+						}
 					}
 				}
 			}
-		}
-	#endif
 
-	result += LightResolve_Ambient(sample, directionToEye, screenDest);
+		#endif
+	}
+
+	// result += LightResolve_Ambient(sample, directionToEye, screenDest);
+	result = sample.diffuseAlbedo;
 
 	return result;
 }

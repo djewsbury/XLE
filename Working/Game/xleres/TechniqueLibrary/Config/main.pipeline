@@ -49,3 +49,11 @@ PipelineLayout GraphicsForwardPlus
 	DescriptorSet ForwardLighting;			// 3
 	DescriptorSet ShadowTemplate;			// 4
 };
+
+PipelineLayout GraphicsProbePrepare
+{
+	DescriptorSet Sequencer;				// 0
+	DescriptorSet Material;					// 1
+	DescriptorSet Numeric;					// 2
+	DescriptorSet ProbePrepareLighting;		// 3
+};
