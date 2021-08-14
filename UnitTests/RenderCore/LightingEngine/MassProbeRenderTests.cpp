@@ -152,6 +152,67 @@ namespace UnitTests
 			{
 				return float4(1,1,1,1);
 			}
+		)--")),
+
+		std::make_pair("multiview_shader.hlsl", ::Assets::AsBlob(R"--(
+			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+
+			cbuffer MultiProbeProperties BIND_SEQ_B1
+			{
+				uint MultiProbeCount; uint4 Dummy[3];
+				row_major float4x4 MultiProbeViews[32];
+			}
+
+			VSOUT vs_main(VSIN input, in uint viewId : SV_ViewID)
+			{
+				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+
+				float3 worldPosition;
+				TangentFrame worldSpaceTangentFrame;
+
+				if (deformedVertex.coordinateSpace == 0) {
+					worldPosition = mul(SysUniform_GetLocalToWorld(), float4(deformedVertex.position,1)).xyz;
+					worldSpaceTangentFrame = AsTangentFrame(TransformLocalToWorld(deformedVertex.tangentFrame));
+				} else {
+					worldPosition = deformedVertex.position;
+					worldSpaceTangentFrame = AsTangentFrame(deformedVertex.tangentFrame);
+				}
+
+				VSOUT output;
+				output.position = mul(MultiProbeViews[viewId], float4(worldPosition,1));
+
+				#if VSOUT_HAS_TEXCOORD>=1
+					output.texCoord = VSIN_GetTexCoord0(input);
+				#endif
+
+				#if GEO_HAS_TEXTANGENT==1
+					#if VSOUT_HAS_TANGENT_FRAME==1
+						output.tangent = worldSpaceTangentFrame.tangent;
+						output.bitangent = worldSpaceTangentFrame.bitangent;
+					#endif
+
+					#if (VSOUT_HAS_NORMAL==1)
+						output.normal = worldSpaceTangentFrame.normal;
+					#endif
+				#else
+					#if (VSOUT_HAS_NORMAL==1)
+						output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
+					#endif
+				#endif
+
+				#if VSOUT_HAS_WORLD_POSITION==1
+					output.worldPosition = worldPosition;
+				#endif
+				return output;
+			}
+
+			float4 ps_main(VSOUT geo) : SV_Target0
+			{
+				return float4(1,1,1,1);
+			}
 		)--"))
 	};
 
@@ -198,7 +259,8 @@ namespace UnitTests
 
 	static std::shared_ptr<RenderCore::Techniques::SequencerConfig> CreateSequencerConfig(
 		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate)
+		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate,
+		bool multiView = false)
 	{
 		using namespace RenderCore;
 		std::vector<AttachmentDesc> attachments {
@@ -209,6 +271,7 @@ namespace UnitTests
 		sp.AppendOutput(0); sp.SetDepthStencil(1);
 		sp.SetName("prepare-probe");
 		FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
+		if (multiView) representativeFB._viewMask = ~0u;
 		return pipelineAccelerators.CreateSequencerConfig(techniqueDelegate, ParameterBox{}, representativeFB, 0);
 	}
 
@@ -403,7 +466,8 @@ namespace UnitTests
 		RenderCore::Techniques::FrameBufferDescFragment _fragment;
 	};
 
-	// Instance multi probe shader -- one draw as input, with an instancing draw call, and one instance per probe draw
+	// Instancing multi probe shader -- one instancing draw call per input, and one instance per probe draw. The vertex shader
+	// uses the instance id to select the probe view to use
 	class InstancingMultiProbeShader
 	{
 	public:
@@ -531,6 +595,139 @@ namespace UnitTests
 		RenderCore::Techniques::FrameBufferDescFragment _fragment;
 	};
 
+
+	// Multiview infrastructure -- use the multiview functionality built into the api to broadcast draws to multiple array layers 
+	class MultiviewInfrastructure
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _cfg;
+		
+		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
+		{
+		public:
+			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				const RenderCore::Assets::RenderStateSet& renderStates)
+			{
+				using namespace RenderCore;
+				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
+				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
+				result->SetAsset(std::move(nascentDesc), {});
+				return result;
+			}
+
+			virtual std::string GetPipelineLayout()
+			{
+				return MAIN_PIPELINE ":GraphicsProbePrepare";
+			}
+		};
+
+		class ShaderResourceDelegate : public RenderCore::Techniques::IShaderResourceDelegate
+		{
+		public:
+			struct MultiProbeProperties
+			{
+				unsigned _probeCount; unsigned _dummy[15];
+				Float4x4 _worldToProjection[32];
+			};
+			MultiProbeProperties _multProbeProperties;
+
+			virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
+			{
+				REQUIRE(idx == 0);
+				REQUIRE(dst.size() == sizeof(MultiProbeProperties));
+				std::memcpy(dst.begin(), &_multProbeProperties, sizeof(_multProbeProperties));
+			}
+
+			virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
+			{
+				REQUIRE(idx == 0);
+				return sizeof(MultiProbeProperties);
+			}
+
+			ShaderResourceDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
+			{
+				_multProbeProperties._probeCount = cameras.size();
+				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiProbeProperties::_worldToProjection));
+				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
+					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
+					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
+				}
+				BindImmediateData(0, Hash64("MultiProbeProperties"));
+			}
+		};
+
+		void Execute(
+			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
+			const LightingEngineTestApparatus& testApparatus,
+			IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras,
+			ToolsRig::IDrawablesWriter& drawablesWriter)
+		{
+			using namespace RenderCore;
+			const unsigned maxMultiview = 32;
+			RenderCore::Techniques::DrawablesPacket pkt;
+			drawablesWriter.WriteDrawables(pkt);
+
+			auto frag = _fragments.begin();
+			while (!cameras.empty()) {
+				auto batchCameras = cameras;
+				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxMultiview);
+
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				parsingContext.AddShaderResourceDelegate(uniformDel);
+
+				auto& projDesc = parsingContext.GetProjectionDesc();
+				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
+
+				{
+					Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
+					RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
+					Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+				}
+
+				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				cameras.first = batchCameras.second;
+				++frag;
+			}
+		}
+
+		MultiviewInfrastructure(const LightingEngineTestApparatus& testApparatus)
+		{
+			using namespace RenderCore;
+			const unsigned maxMultiview = 32;
+			std::pair<unsigned, unsigned> range{0,64};
+			while (range.second != range.first) {
+				auto batchRange = range;
+				batchRange.second = std::min(batchRange.second, batchRange.first+maxMultiview);
+
+				RenderCore::Techniques::FrameBufferDescFragment fragment;
+				fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
+				fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+				TextureViewDesc viewDesc;
+				viewDesc._arrayLayerRange._min = batchRange.first;
+				viewDesc._arrayLayerRange._count = batchRange.second-batchRange.first;
+				SubpassDesc sp;
+				sp.AppendOutput(0, viewDesc);
+				sp.SetDepthStencil(1, viewDesc);
+				fragment.AddSubpass(std::move(sp));
+				fragment._viewMask = ~0u;
+				_fragments.push_back(std::move(fragment));
+
+				range.first = batchRange.second;
+			}
+
+			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
+		}
+
+	private:
+		std::vector<RenderCore::Techniques::FrameBufferDescFragment> _fragments;
+	};
+
 	template<typename TestClass>
 		void RunTest(
 			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext, 
@@ -585,7 +782,7 @@ namespace UnitTests
 		}
 
 		testHelper->BeginFrameCapture();
-		RunTest<InstancingMultiProbeShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
+		RunTest<MultiviewInfrastructure>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
 		testHelper->EndFrameCapture();
 
 		// test: lots of geo vs minimal geo
