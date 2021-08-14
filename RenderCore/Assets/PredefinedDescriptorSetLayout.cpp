@@ -298,7 +298,7 @@ namespace RenderCore { namespace Assets
 				if (!filterMode)
 					Throw(FormatException(StringMeld<256>() << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
 				result._filter = filterMode.value();
-			} else if (XlEqString(next._value, "AddressU") || XlEqString(next._value, "AddressV")) {
+			} else if (XlEqString(next._value, "AddressU") || XlEqString(next._value, "AddressV") || XlEqString(next._value, "AddressW") ) {
 				auto prop = next._value;
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
 					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
@@ -307,7 +307,8 @@ namespace RenderCore { namespace Assets
 				if (!addressMode)
 					Throw(FormatException(StringMeld<256>() << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
 				if (XlEqString(prop, "AddressU")) result._addressU = addressMode.value();
-				else result._addressV = addressMode.value();
+				if (XlEqString(prop, "AddressV")) result._addressV = addressMode.value();
+				else result._addressW = addressMode.value();
 			} else if (XlEqString(next._value, "Comparison")) {
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
 					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));

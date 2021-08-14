@@ -464,7 +464,7 @@ namespace UnitTests
 		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Wrap, AddressMode::Wrap}));
 		// sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Clamp, AddressMode::Clamp}));
 		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp}));
-		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates}));
+		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates}));
 		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp}));
 
 		RenderCore::DescriptorSetSignature materialSet {

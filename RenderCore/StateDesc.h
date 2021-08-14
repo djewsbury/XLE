@@ -208,6 +208,7 @@ namespace RenderCore
         FilterMode _filter = FilterMode::Trilinear;
         AddressMode _addressU = AddressMode::Wrap;
         AddressMode _addressV = AddressMode::Wrap;
+        AddressMode _addressW = AddressMode::Wrap;
         CompareOp _comparison = CompareOp::Never;
         SamplerDescFlags::BitField _flags = 0;
 
