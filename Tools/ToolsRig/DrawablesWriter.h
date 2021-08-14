@@ -14,10 +14,27 @@ namespace ToolsRig
 	{
 	public:
 		virtual void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt) = 0;
+		virtual ~IDrawablesWriter() = default;
+	};
+
+	class IExtendedDrawablesWriter
+	{
+	public:
+		class CustomDrawDelegate
+		{
+		public:
+			virtual void OnDraw(
+				RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable,
+				unsigned vertexCount, const Float4x4& localToWorld) = 0;
+			virtual ~CustomDrawDelegate() = default;
+		};
 		virtual void WriteDrawables(
 			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolumn) = 0;
-		virtual ~IDrawablesWriter() = default;
+			const std::shared_ptr<CustomDrawDelegate>& customDraw) = 0;
+		virtual void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			const Float4x4& cullingVolume) = 0;
+		virtual ~IExtendedDrawablesWriter() = default; 
 	};
 
 	std::shared_ptr<IDrawablesWriter> CreateSphereDrawablesWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool);

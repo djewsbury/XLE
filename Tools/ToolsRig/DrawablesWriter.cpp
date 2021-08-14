@@ -86,6 +86,34 @@ namespace ToolsRig
 				};
 		}
 
+		void WriteDrawable(
+			RenderCore::Techniques::DrawablesPacket& pkt, 
+			std::shared_ptr<RenderCore::Techniques::DrawableGeo> geo,
+			size_t vertexCount,
+			const Float4x4& localToWorld,
+			const std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate>& customDrawDelegate)
+		{
+			struct CustomDrawable2 : public RenderCore::Techniques::Drawable 
+			{ 
+				unsigned _vertexCount; Float4x4 _localToWorld;
+				std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate> _customDrawDelegate;
+			};
+			auto* drawables = pkt._drawables.Allocate<CustomDrawable2>(1);
+			drawables[0]._pipeline = _pipelineAccelerator;
+			drawables[0]._descriptorSet = _descriptorSetAccelerator;
+			drawables[0]._geo = std::move(geo);
+			drawables[0]._vertexCount = vertexCount;
+			drawables[0]._looseUniformsInterface = _usi;
+			drawables[0]._localToWorld = localToWorld;
+			drawables[0]._customDrawDelegate = customDrawDelegate;
+			drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+				{
+					((CustomDrawable2&)drawable)._customDrawDelegate->OnDraw(
+						parsingContext, drawFnContext, drawable,
+						((CustomDrawable2&)drawable)._vertexCount, (((CustomDrawable2&)drawable)._localToWorld));
+				};
+		}
+
 		DrawablesWriterCommon(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
 			_usi = std::make_shared<RenderCore::UniformsStreamInterface>();
@@ -113,18 +141,6 @@ namespace ToolsRig
 		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
 		{
 			WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
-		}
-
-		void WriteDrawables(
-			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
-		{
-			const float radius = 1.0f;
-			auto cullingTest = TestAABB(
-				cullingVolume, Float3{-radius, -radius, -radius}, Float3{radius, radius, radius}, 
-				RenderCore::Techniques::GetDefaultClipSpaceType());
-			if (cullingTest != AABBIntersection::Culled)
-				WriteDrawable(pkt, _geo, _vertexCount, Identity<Float4x4>());
 		}
 
 		SphereDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -164,13 +180,6 @@ namespace ToolsRig
 				pkt,
 				_cubeGeo, _cubeVertexCount, 
 				AsFloat4x4(Float3{0.f, -1.0f - std::sqrt(8.0f)/2.0f, 0.f}));
-		}
-
-		void WriteDrawables(
-			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
-		{
-			WriteDrawables(pkt);		// no cullling support
 		}
 
 		ShapeStackDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -229,13 +238,6 @@ namespace ToolsRig
 				baseTransform);
 		}
 
-		void WriteDrawables(
-			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
-		{
-			WriteDrawables(pkt);		// no cullling support
-		}
-
 		StonehengeDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
@@ -265,13 +267,6 @@ namespace ToolsRig
 				pkt,
 				_geo, _vertexCount, 
 				AsFloat4x4(srt));
-		}
-
-		void WriteDrawables(
-			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
-		{
-			WriteDrawables(pkt);		// no cullling support
 		}
 
 		FlatPlaneDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
@@ -309,13 +304,6 @@ namespace ToolsRig
 			WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, pyramidTransform);
 		}
 
-		void WriteDrawables(
-			RenderCore::Techniques::DrawablesPacket& pkt,
-			const Float4x4& cullingVolume)
-		{
-			WriteDrawables(pkt);		// no cullling support
-		}
-
 		SharpContactDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		: DrawablesWriterCommon(device, pipelineAcceleratorPool)
 		{
@@ -342,7 +330,7 @@ namespace ToolsRig
 		return CreateSphereBoundingBox(position, scale*sqrt3);
 	}
 
-	class ShapeWorldDrawableWriter : public DrawablesWriterCommon
+	class ShapeWorldDrawableWriter : public DrawablesWriterCommon, public IExtendedDrawablesWriter
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo, _cubeGeo;
@@ -353,6 +341,13 @@ namespace ToolsRig
 			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform);
 			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform);
 			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform);
+		}
+
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, const std::shared_ptr<CustomDrawDelegate>& customDraw)
+		{
+			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw);
+			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw);
+			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform, customDraw);
 		}
 
 		void WriteDrawables(
