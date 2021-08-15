@@ -179,6 +179,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             IteratorRange<const unsigned*> originalMapping,
             float threshold);
 
+    std::shared_ptr<IVertexSourceData>
+        RemoveBitwiseIdenticals(
+            std::vector<unsigned>& outputMapping,
+            const IVertexSourceData& sourceStream,
+            IteratorRange<const unsigned*> originalMapping = {});
+
 	MeshDatabase RemoveDuplicates(
 		std::vector<unsigned>& outputMapping,
 		const MeshDatabase& input);

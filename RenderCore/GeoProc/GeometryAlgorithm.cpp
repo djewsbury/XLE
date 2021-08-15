@@ -41,6 +41,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         }
     }
 
+    static Float3 QuantizeUnitVector(Float3 input, float quantizeValue)
+    {
+        Float3 r;
+        r[0] = std::copysign(std::round(std::abs(input[0] * quantizeValue)) / quantizeValue, input[0]);
+        r[1] = std::copysign(std::round(std::abs(input[1] * quantizeValue)) / quantizeValue, input[1]);
+        r[2] = std::copysign(std::round(std::abs(input[2] * quantizeValue)) / quantizeValue, input[2]);
+        return r;
+    }
+    
+    static Float4 QuantizeUnitVector(Float4 input, float quantizeValue)
+    {
+        Float4 r;
+        r[0] = std::copysign(std::round(std::abs(input[0] * quantizeValue)) / quantizeValue, input[0]);
+        r[1] = std::copysign(std::round(std::abs(input[1] * quantizeValue)) / quantizeValue, input[1]);
+        r[2] = std::copysign(std::round(std::abs(input[2] * quantizeValue)) / quantizeValue, input[2]);
+        r[3] = std::copysign(std::round(std::abs(input[3] * quantizeValue)) / quantizeValue, input[3]);
+        return r;
+    }
+
     void GenerateNormalsAndTangents( 
         MeshDatabase& mesh, 
         unsigned normalMapTextureCoordinateSemanticIndex,
@@ -139,9 +158,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						auto st1 = UV1 - UV0;
 						auto st2 = UV2 - UV0;
 						float rr = (st1[0] * st2[1] + st2[0] * st1[1]);
-						if (Equivalent(rr, 0.f, 1e-10f)) { tri.tangent = tri.bitangent = Zero<Float3>(); }
-						else
-						{
+						if (Equivalent(rr, 0.f, 1e-10f)) { 
+                            tri.tangent = tri.bitangent = Zero<Float3>();
+                        } else {
 							float r = 1.f / rr;
 							Float3 sAxis( (st2[1] * Q1 - st1[1] * Q2) * r );
 							Float3 tAxis( (st1[0] * Q2 - st2[0] * Q1) * r );
@@ -201,7 +220,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			auto normalsData = CreateRawDataSource(AsPointer(normals.cbegin()), AsPointer(normals.cend()), Format::R32G32B32_FLOAT);
 			if (equivalenceThreshold != 0.0f) {
 				std::vector<unsigned> unifiedMapping;
-				normalsData = RenderCore::Assets::GeoProc::RemoveDuplicates(unifiedMapping, *normalsData, IteratorRange<const unsigned*>(), equivalenceThreshold);
+                Float3* begin = (Float3*)normalsData->GetData().begin(), *end = (Float3*)normalsData->GetData().end();
+                float quantValue = 1.f/equivalenceThreshold;
+                for (auto& f:MakeIteratorRange(begin, end))
+                    f = QuantizeUnitVector(f, quantValue);
+				normalsData = RenderCore::Assets::GeoProc::RemoveBitwiseIdenticals(unifiedMapping, *normalsData);
 				mesh.AddStream(normalsData, std::move(unifiedMapping), "NORMAL", 0);
 			} else {
 				mesh.AddStream(normalsData, std::vector<unsigned>(), "NORMAL", 0);
@@ -212,6 +235,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         if (tcElement != ~0u && !hasTangents) {
 
             unsigned normalsElement = mesh.FindElement("NORMAL");
+            bool atLeastOneGoodTangent = false;
 
                 //  normals and tangents will have fallen out of orthogonality by the blending above.
 			    //  we can re-orthogonalize using the Gram-Schmidt process -- we won't modify the normal, we'd rather lift the tangent and bitangent
@@ -228,24 +252,29 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 auto n = normals[c];
                 if (hasNormals) n = mesh.GetUnifiedElement<Float3>(c, normalsElement);
 
-                if (Normalize_Checked(&t3, Float3(t3 - n * Dot(n, t3)))) {
-                    // handinessValue = Dot( Cross( bitangents[c], t3 ), n ) < 0.f ? -1.f : 1.f;
-                    handinessValue = Dot( Cross( t3, n ), bitangents[c] ) < 0.f ? -1.f : 1.f;
-                } else {
+                if (Normalize_Checked(&t3, t3)) {
+                    handinessValue = Dot(Cross(bitangents[c], t3), n) < 0.f ? -1.f : 1.f;
+                    atLeastOneGoodTangent = true;
+                } else
                     t3 = Zero<Float3>();
-                }
-
+                
                 tangents[c] = Expand(t3, handinessValue);
             }
 
-			auto tangentsData = CreateRawDataSource(AsPointer(tangents.begin()), AsPointer(tangents.cend()), Format::R32G32B32A32_FLOAT);
-			if (equivalenceThreshold != 0.0f) {
-				std::vector<unsigned> unifiedMapping;
-				tangentsData = RenderCore::Assets::GeoProc::RemoveDuplicates(unifiedMapping, *tangentsData, IteratorRange<const unsigned*>(), equivalenceThreshold);
-				mesh.AddStream(tangentsData, std::move(unifiedMapping), "TEXTANGENT", 0);
-			} else {
-				mesh.AddStream(tangentsData, std::vector<unsigned>(), "TEXTANGENT", 0);
-			}
+            if (atLeastOneGoodTangent) {
+                auto tangentsData = CreateRawDataSource(AsPointer(tangents.begin()), AsPointer(tangents.cend()), Format::R32G32B32A32_FLOAT);
+                if (equivalenceThreshold != 0.0f) {
+                    Float4* begin = (Float4*)tangentsData->GetData().begin(), *end = (Float4*)tangentsData->GetData().end();
+                    float quantValue = 1.f/equivalenceThreshold;
+                    for (auto& f:MakeIteratorRange(begin, end))
+                        f = QuantizeUnitVector(f, quantValue);
+                    std::vector<unsigned> unifiedMapping;
+                    tangentsData = RenderCore::Assets::GeoProc::RemoveBitwiseIdenticals(unifiedMapping, *tangentsData);
+                    mesh.AddStream(tangentsData, std::move(unifiedMapping), "TEXTANGENT", 0);
+                } else {
+                    mesh.AddStream(tangentsData, std::vector<unsigned>(), "TEXTANGENT", 0);
+                }
+            }
 
         }
 

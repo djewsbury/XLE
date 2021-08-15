@@ -996,6 +996,68 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             sourceStream.GetFormat());
     }
 
+    std::shared_ptr<IVertexSourceData>
+        RemoveBitwiseIdenticals(
+            std::vector<unsigned>& outputMapping,
+            const IVertexSourceData& sourceStream,
+            IteratorRange<const unsigned*> originalMapping)
+    {
+        std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
+
+        const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
+        std::vector<uint8> finalVB;
+        finalVB.reserve(vertexSize * sourceStream.GetCount());
+        unsigned finalVBCount = 0;
+
+        auto srcStreamStart = sourceStream.GetData().begin();
+        auto srcStreamCount = sourceStream.GetCount();
+
+        auto quant = Float4(1e-5f, 1e-5f, 1e-5f, 1e-5f);
+        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
+        std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
+
+        auto q = quantizedSet0.begin();
+        while (q != quantizedSet0.end()) {
+            auto q2 = q+1;
+            while (q2 != quantizedSet0.end() && q2->first == q->first) ++q2;
+
+            for (auto c=q; c!=q2; ++c) {
+                if (oldOrderingToNewOrdering[c->second] != ~0u) continue;
+
+                auto vFirst = PtrAdd(srcStreamStart, c->second*vertexSize);
+                for (auto c2=c+1; c2!=q2; c2++)
+                    if (std::memcmp(vFirst, PtrAdd(srcStreamStart, c2->second*vertexSize), vertexSize) == 0)
+                        oldOrderingToNewOrdering[c2->second] = finalVBCount;
+
+                finalVB.insert(finalVB.end(), (const uint8*)vFirst, (const uint8*)PtrAdd(vFirst, vertexSize));
+                oldOrderingToNewOrdering[c->second] = finalVBCount;
+                ++finalVBCount;
+            }
+            
+            q = q2;
+        }
+
+        outputMapping.clear();
+        if (!originalMapping.empty()) {
+            outputMapping.reserve(originalMapping.size());
+            std::transform(
+                originalMapping.begin(), originalMapping.end(),
+                std::back_inserter(outputMapping),
+                [&oldOrderingToNewOrdering](const unsigned i) { return oldOrderingToNewOrdering[i]; });
+        } else {
+            outputMapping.insert(
+                outputMapping.end(),
+                oldOrderingToNewOrdering.cbegin(), oldOrderingToNewOrdering.cend());
+        }
+
+        finalVB.shrink_to_fit();
+
+            // finally, return the source data adapter
+        return std::make_shared<RawVertexSourceDataAdapter>(
+            std::move(finalVB), finalVBCount, vertexSize,  
+            sourceStream.GetFormat());
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	MeshDatabase RemoveDuplicates(
