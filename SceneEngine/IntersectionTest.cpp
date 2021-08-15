@@ -317,11 +317,11 @@ namespace SceneEngine
                         auto boundaryTest = TestAABB(
                             Combine(trans->GetObject(c)._localToWorld, worldToProjection),
                             boundary.first, boundary.second, RenderCore::Techniques::GetDefaultClipSpaceType());
-                        if (boundaryTest == AABBIntersection::Culled) continue; // (could happen because earlier tests were on the world space bounding box)
+                        if (boundaryTest == CullTestResult::Culled) continue; // (could happen because earlier tests were on the world space bounding box)
 
                         auto guid = trans->GetGuid(c);
                         
-                        bool isInside = boundaryTest == AABBIntersection::Within;
+                        bool isInside = boundaryTest == CullTestResult::Within;
                         if (!isInside) {
                             ModelIntersectionStateContext intersectionContext(
                                 ModelIntersectionStateContext::FrustumTest,

@@ -700,12 +700,12 @@ namespace SceneEngine
                             // once a parent node is entirely within the frustum, so to must be all children
                         if (n->_entirelyWithinFrustum) {
                             auto aabbTest = TestAABB_Aligned(localToProjection, Float3(0.f, 0.f, 0.f), Float3(1.f, 1.f, float(compressedHeightMask)), RenderCore::Techniques::GetDefaultClipSpaceType());
-                            if (aabbTest == AABBIntersection::Culled) { 
+                            if (aabbTest == CullTestResult::Culled) { 
                                 newNodes[c]._id._nodeId = ~unsigned(0x0);
                                 continue; 
                             }
 
-                            newNodes[c]._entirelyWithinFrustum = aabbTest == AABBIntersection::Within;
+                            newNodes[c]._entirelyWithinFrustum = aabbTest == CullTestResult::Within;
                         } else {
                             newNodes[c]._entirelyWithinFrustum = true;
                         }
@@ -905,7 +905,7 @@ namespace SceneEngine
             //      Note that we're just going to add in all of the non-culled nodes, first. We'll calculate the
             //      appropriate LOD levels later.
 
-        std::vector<AABBIntersection::Enum> cullResults;
+        std::vector<CullTestResult> cullResults;
         std::vector<float> screenSpaceEdgeLengths;
         cullResults.resize(field._nodeEnd - field._nodeBegin);
         screenSpaceEdgeLengths.resize(field._nodeEnd - field._nodeBegin, std::numeric_limits<float>::max());
@@ -919,11 +919,11 @@ namespace SceneEngine
             const unsigned expectedDataSize = sourceNode->_widthInElements*sourceNode->_widthInElements*2;
             if (sourceNode->_heightMapFileSize < expectedDataSize) {
                     // some nodes have "holes". We have to ignore them.
-                cullResults[n - field._nodeBegin] = AABBIntersection::Culled;
+                cullResults[n - field._nodeBegin] = CullTestResult::Culled;
             } else {
                 __declspec(align(16)) auto localToProjection = Combine(nodeToCell, cellToProjection);
                 cullResults[n - field._nodeBegin] = TestAABB_Aligned(localToProjection, Float3(0.f, 0.f, 0.f), Float3(1.f, 1.f, float(compressedHeightMask)), RenderCore::Techniques::GetDefaultClipSpaceType());
-                if (cullResults[n - field._nodeBegin] != AABBIntersection::Culled) {
+                if (cullResults[n - field._nodeBegin] != CullTestResult::Culled) {
                     screenSpaceEdgeLengths[n - field._nodeBegin] = CalculateScreenSpaceEdgeLength(
                         localToProjection, terrainContext._currentViewport.Width, terrainContext._currentViewport.Height);
                 }
@@ -932,7 +932,7 @@ namespace SceneEngine
 
         for (unsigned n=field._nodeBegin; n<field._nodeEnd; ++n) {
             auto cullTest = cullResults[n - field._nodeBegin];
-            if (cullTest == AABBIntersection::Culled) { continue; }
+            if (cullTest == CullTestResult::Culled) { continue; }
 
             typedef TerrainCollapseContext::NodeID NodeID;
             typedef TerrainCollapseContext::Node Node;
@@ -940,7 +940,7 @@ namespace SceneEngine
 
             NodeID nid(f, n, cellId);
             Node node(nid);
-            node._entirelyWithinFrustum = cullTest == AABBIntersection::Within;
+            node._entirelyWithinFrustum = cullTest == CullTestResult::Within;
             node._screenSpaceEdgeLength = screenSpaceEdgeLengths[n - field._nodeBegin];
 
                 //  We can calculate the neighbours within this cell. But neighbours
@@ -952,19 +952,19 @@ namespace SceneEngine
             auto rightEdge  = ToNodeIndex(field, baseXY + Int2( 1,  0));
             auto bottomEdge = ToNodeIndex(field, baseXY + Int2( 0,  1));
             auto leftEdge   = ToNodeIndex(field, baseXY + Int2(-1,  0));
-            if ((topEdge != ~unsigned(0x0)) && (cullResults[topEdge] != AABBIntersection::Culled)) {
+            if ((topEdge != ~unsigned(0x0)) && (cullResults[topEdge] != CullTestResult::Culled)) {
                 node._neighbours[Neighbours::TopEdgeLeft] = NodeID(f, topEdge+field._nodeBegin, cellId);
                 node._neighbours[Neighbours::TopEdgeRight] = NodeID(f, topEdge+field._nodeBegin, cellId);
             }
-            if ((rightEdge != ~unsigned(0x0)) && (cullResults[rightEdge] != AABBIntersection::Culled)) {
+            if ((rightEdge != ~unsigned(0x0)) && (cullResults[rightEdge] != CullTestResult::Culled)) {
                 node._neighbours[Neighbours::RightEdgeTop] = NodeID(f, rightEdge+field._nodeBegin, cellId);
                 node._neighbours[Neighbours::RightEdgeBottom] = NodeID(f, rightEdge+field._nodeBegin, cellId);
             }
-            if ((bottomEdge != ~unsigned(0x0)) && (cullResults[bottomEdge] != AABBIntersection::Culled)) {
+            if ((bottomEdge != ~unsigned(0x0)) && (cullResults[bottomEdge] != CullTestResult::Culled)) {
                 node._neighbours[Neighbours::BottomEdgeRight] = NodeID(f, bottomEdge+field._nodeBegin, cellId);
                 node._neighbours[Neighbours::BottomEdgeLeft] = NodeID(f, bottomEdge+field._nodeBegin, cellId);
             }
-            if ((leftEdge != ~unsigned(0x0)) && (cullResults[leftEdge] != AABBIntersection::Culled)) {
+            if ((leftEdge != ~unsigned(0x0)) && (cullResults[leftEdge] != CullTestResult::Culled)) {
                 node._neighbours[Neighbours::LeftEdgeBottom] = NodeID(f, leftEdge+field._nodeBegin, cellId);
                 node._neighbours[Neighbours::LeftEdgeTop] = NodeID(f, leftEdge+field._nodeBegin, cellId);
             }

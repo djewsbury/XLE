@@ -426,11 +426,11 @@ namespace SceneEngine
             auto& node = pimpl._nodes[nodeIndex];
             auto test = TestAABB_Aligned(cellToClipAligned, node._boundary.first, node._boundary.second, clipSpaceType);
             ++nodeAabbTestCount;
-            if (test == AABBIntersection::Culled) {
+            if (test == CullTestResult::Culled) {
                 continue;
             }
 
-            if (test == AABBIntersection::Within) {
+            if (test == CullTestResult::Within) {
 
                     //  this node and all children are "visible" without
                     //  any further culling tests

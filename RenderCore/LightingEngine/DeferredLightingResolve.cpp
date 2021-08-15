@@ -461,7 +461,7 @@ namespace RenderCore { namespace LightingEngine
 					// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to
 					// do an accurate culling check for them here... 
 					auto cullResult = frustumTester.TestSphere(standardLightDesc._position, standardLightDesc._cutoffRange);
-					if (cullResult == AABBIntersection::Culled)
+					if (cullResult == CullTestResult::Culled)
 						continue;
 				}
 

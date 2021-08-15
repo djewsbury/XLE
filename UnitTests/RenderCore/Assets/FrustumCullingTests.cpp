@@ -169,9 +169,9 @@ namespace UnitTests
 				};
 				auto status = frustumTester.TestSphere(center, radius);
 				switch (status) {
-				case AABBIntersection::Culled: drawable->_culledSpheres.push_back(Expand(center, radius)); break;
-				case AABBIntersection::Boundary: drawable->_boundarySpheres.push_back(Expand(center, radius)); break;
-				case AABBIntersection::Within: drawable->_insideSpheres.push_back(Expand(center, radius)); break;
+				case CullTestResult::Culled: drawable->_culledSpheres.push_back(Expand(center, radius)); break;
+				case CullTestResult::Boundary: drawable->_boundarySpheres.push_back(Expand(center, radius)); break;
+				case CullTestResult::Within: drawable->_insideSpheres.push_back(Expand(center, radius)); break;
 				default: assert(0); break;
 				}
 			}

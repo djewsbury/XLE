@@ -188,8 +188,8 @@ namespace SceneEngine
 
                 ++cellAabbTestCount;
                 auto test = TestAABB_Aligned(cellToClipAligned, payload._boundary.first, payload._boundary.second, clipSpaceType);
-                if (test != AABBIntersection::Culled) {
-                    if (test == AABBIntersection::Boundary && (objCellSpaceBoundingBoxes && objStride)) {
+                if (test != CullTestResult::Culled) {
+                    if (test == CullTestResult::Boundary && (objCellSpaceBoundingBoxes && objStride)) {
                         for (auto i:payload._objects) {
                             const auto& boundary = *PtrAdd(objCellSpaceBoundingBoxes, i*objStride);
                             ++payloadAabbTestCount;

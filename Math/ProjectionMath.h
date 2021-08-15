@@ -12,19 +12,16 @@
 
 namespace XLEMath
 {
-    namespace AABBIntersection {
-        enum Enum { Culled, Within, Boundary };
-    }
-    
-    namespace GeometricCoordinateSpace      { enum Enum { LeftHanded,       RightHanded };  }
+    enum class CullTestResult { Culled, Within, Boundary };    
+    enum class GeometricCoordinateSpace { LeftHanded, RightHanded };
     enum class ClipSpaceType { StraddlingZero,   Positive,   PositiveRightHanded };
 
-    AABBIntersection::Enum TestAABB(
+    CullTestResult TestAABB(
         const Float4x4& localToProjection, 
         const Float3& mins, const Float3& maxs,
         ClipSpaceType clipSpaceType);
 
-    AABBIntersection::Enum TestAABB_Aligned(
+    CullTestResult TestAABB_Aligned(
         const Float4x4& localToProjection, 
         const Float3& mins, const Float3& maxs,
         ClipSpaceType clipSpaceType);
@@ -35,7 +32,7 @@ namespace XLEMath
         ClipSpaceType clipSpaceType)
     {
         return TestAABB(localToProjection, mins, maxs, clipSpaceType)
-            == AABBIntersection::Culled;
+            == CullTestResult::Culled;
     }
 
     inline bool CullAABB_Aligned(
@@ -44,13 +41,13 @@ namespace XLEMath
         ClipSpaceType clipSpaceType)
     {
         return TestAABB_Aligned(localToProjection, mins, maxs, clipSpaceType)
-            == AABBIntersection::Culled;
+            == CullTestResult::Culled;
     }
 
     class AccurateFrustumTester
     {
     public:
-        AABBIntersection::Enum TestSphere(Float3 centerPoint, float radius);
+        CullTestResult TestSphere(Float3 centerPoint, float radius);
 
         AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType);
         ~AccurateFrustumTester();
@@ -64,9 +61,9 @@ namespace XLEMath
     class ArbitraryConvexVolumeTester
     {
     public:
-        AABBIntersection::Enum TestSphere(Float3 centerPoint, float radius);
+        CullTestResult TestSphere(Float3 centerPoint, float radius);
 
-        AABBIntersection::Enum TestAABB(
+        CullTestResult TestAABB(
             const Float3x4& aabbToLocalSpace, 
             Float3 mins, Float3 maxs);
 
@@ -110,7 +107,7 @@ namespace XLEMath
     Float4x4 PerspectiveProjection(
         float verticalFOV, float aspectRatio,
         float nearClipPlane, float farClipPlane,
-        GeometricCoordinateSpace::Enum coordinateSpace,
+        GeometricCoordinateSpace coordinateSpace,
         ClipSpaceType clipSpaceType);
 
     Float4x4 PerspectiveProjection(
@@ -121,7 +118,7 @@ namespace XLEMath
     Float4x4 OrthogonalProjection(
         float l, float t, float r, float b,
         float nearClipPlane, float farClipPlane,
-        GeometricCoordinateSpace::Enum coordinateSpace,
+        GeometricCoordinateSpace coordinateSpace,
         ClipSpaceType clipSpaceType);
 
     Float4x4 OrthogonalProjection(

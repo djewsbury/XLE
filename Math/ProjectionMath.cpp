@@ -145,7 +145,7 @@ namespace XLEMath
         orUpperLower = _mm_or_ps(orUpperLower, cmp1);   // L: 1, T: .33
     }
 
-    static AABBIntersection::Enum TestAABB_SSE(
+    static CullTestResult TestAABB_SSE(
         const float localToProjection[], 
         const Float3& mins, const Float3& maxs)
     {
@@ -336,9 +336,9 @@ namespace XLEMath
         _mm_store_ps((float*)orUpperLowerResult, orUpperLower);
         _mm_store_ps((float*)andResult, andUpper);
 
-        if (andResult[0])           { return AABBIntersection::Culled; }
-        if (orUpperLowerResult[0])  { return AABBIntersection::Boundary; }
-        return AABBIntersection::Within;
+        if (andResult[0])           { return CullTestResult::Culled; }
+        if (orUpperLowerResult[0])  { return CullTestResult::Boundary; }
+        return CullTestResult::Within;
     }
     
 #endif
@@ -348,7 +348,7 @@ namespace XLEMath
         return localToProjection * Expand(input, 1.f);
     }
 
-    static AABBIntersection::Enum TestAABB_Basic(const Float4x4& localToProjection, const Float3& mins, const Float3& maxs, ClipSpaceType clipSpaceType)
+    static CullTestResult TestAABB_Basic(const Float4x4& localToProjection, const Float3& mins, const Float3& maxs, ClipSpaceType clipSpaceType)
     {
             //  for the box to be culled, all points must be outside of the same bounding box
             //  plane... We can do this in clip space (assuming we can do a fast position transform on
@@ -414,15 +414,15 @@ namespace XLEMath
         }
         
         if (leftAnd | rightAnd | topAnd | bottomAnd | nearAnd | farAnd) {
-            return AABBIntersection::Culled;
+            return CullTestResult::Culled;
         }
         if (leftOr | rightOr | topOr | bottomOr | nearOr | farOr) {
-            return AABBIntersection::Boundary;
+            return CullTestResult::Boundary;
         }
-        return AABBIntersection::Within;
+        return CullTestResult::Within;
     }
 
-    AABBIntersection::Enum TestAABB(
+    CullTestResult TestAABB(
         const Float4x4& localToProjection, 
         const Float3& mins, const Float3& maxs,
         ClipSpaceType clipSpaceType)
@@ -430,7 +430,7 @@ namespace XLEMath
         return TestAABB_Basic(localToProjection, mins, maxs, clipSpaceType);
     }
 
-    AABBIntersection::Enum TestAABB_Aligned(
+    CullTestResult TestAABB_Aligned(
         const Float4x4& localToProjection, 
         const Float3& mins, const Float3& maxs,
         ClipSpaceType clipSpaceType)
@@ -446,7 +446,7 @@ namespace XLEMath
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo) { return (1<<faceOne) | (1<<faceTwo); }
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo, unsigned faceThree) { return (1<<faceOne) | (1<<faceTwo) | (1<<faceThree); }
 
-    AABBIntersection::Enum AccurateFrustumTester::TestSphere(Float3 centerPoint, float radius)
+    CullTestResult AccurateFrustumTester::TestSphere(Float3 centerPoint, float radius)
     {
         // This actually tests an axially aligned bounding box that just contains the sphere against the 
         // frustum. It's quick, but not completely accurate. But many cases can accurately be found to be
@@ -456,7 +456,7 @@ namespace XLEMath
             centerPoint - Float3{radius, radius, radius},
             centerPoint + Float3{radius, radius, radius},
             _clipSpaceType);
-        if (quickTest != AABBIntersection::Boundary) {
+        if (quickTest != CullTestResult::Boundary) {
             return quickTest;
         }
 
@@ -465,13 +465,13 @@ namespace XLEMath
         for (unsigned f=0; f<6; ++f) {
             auto distance = SignedDistance(centerPoint, _frustumPlanes[f]);
             if (__builtin_expect(distance >= radius, false)) {
-                return AABBIntersection::Culled;        // this should be rare given the quick test above
+                return CullTestResult::Culled;        // this should be rare given the quick test above
             }
             straddlingFlags |= (distance > -radius) << f;
             intersectionCenters[f] = centerPoint - distance * Truncate(_frustumPlanes[f]);
         }
         if (!straddlingFlags) {
-            return AABBIntersection::Within;
+            return CullTestResult::Within;
         }
 
         // Check each corner -- 
@@ -496,7 +496,7 @@ namespace XLEMath
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
             if (__builtin_expect(MagnitudeSquared(_frustumCorners[cIdx] - centerPoint) < radiusSq, true)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -525,7 +525,7 @@ namespace XLEMath
             withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face2]) < 0.f;
             withinCount += SignedDistance(intersectionCenter, _frustumPlanes[naFaces._face3]) < 0.f;
             if (withinCount == 4) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -559,7 +559,7 @@ namespace XLEMath
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
             if (RayVsSphere(_frustumCorners[e._cornerZero] - centerPoint, _frustumCorners[e._cornerOne] - centerPoint, radiusSq)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -568,7 +568,7 @@ namespace XLEMath
         //      . the sphere does not intersect with any edges
         //      . the sphere does not contain any corners
         // Therefore, we'll conclude that this sphere is outside of the frustum
-        return AABBIntersection::Culled;
+        return CullTestResult::Culled;
     }
 
     AccurateFrustumTester::AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType)
@@ -601,7 +601,7 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    AABBIntersection::Enum ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius)
+    CullTestResult ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius)
     {
         uint64_t straddlingFlags = 0;
         auto planeCount = (uint64_t)_planes.size();
@@ -609,13 +609,13 @@ namespace XLEMath
         for (uint64_t f=0; f<planeCount; ++f) {
             auto distance = SignedDistance(centerPoint, _planes[f]);
             if (__builtin_expect(distance >= radius, false)) {
-                return AABBIntersection::Culled;
+                return CullTestResult::Culled;
             }
             straddlingFlags |= uint64_t(distance > -radius) << f;
             intersectionCenters[f] = centerPoint - distance * Truncate(_planes[f]);
         }
         if (!straddlingFlags) {
-            return AABBIntersection::Within;
+            return CullTestResult::Within;
         }
 
         // Check each corner -- 
@@ -627,7 +627,7 @@ namespace XLEMath
             // the sphere is straddling all 3 edges of this corner. Check if it's
             // inside of the sphere
             if (__builtin_expect(MagnitudeSquared(_corners[cIdx] - centerPoint) < radiusSq, true)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -640,7 +640,7 @@ namespace XLEMath
             for (; qf<planeCount; ++qf)
                 if (qf != f && SignedDistance(intersectionCenter, _planes[qf]) > 0.f) break;
             if (qf == planeCount)
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
         }
 
         for (auto e:_edges) {
@@ -648,7 +648,7 @@ namespace XLEMath
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
             if (RayVsSphere(_corners[e._cornerZero] - centerPoint, _corners[e._cornerOne] - centerPoint, radiusSq)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -657,10 +657,10 @@ namespace XLEMath
         //      . the sphere does not intersect with any edges
         //      . the sphere does not contain any corners
         // Therefore, we'll conclude that this sphere is outside of the frustum
-        return AABBIntersection::Culled;
+        return CullTestResult::Culled;
     }
 
-    AABBIntersection::Enum ArbitraryConvexVolumeTester::TestAABB(
+    CullTestResult ArbitraryConvexVolumeTester::TestAABB(
         const Float3x4& aabbToLocalSpace, 
         Float3 mins, Float3 maxs)
     {
@@ -695,12 +695,12 @@ namespace XLEMath
                 outsideCount += SignedDistance(boxCornersLocalSpace[c], _planes[f]) > 0.f;
             
             if (outsideCount == dimof(boxCornersLocalSpace))
-                return AABBIntersection::Culled;
+                return CullTestResult::Culled;
 
             straddlingFlags |= uint64_t(outsideCount != 0) << f;
         }
         if (!straddlingFlags) {
-            return AABBIntersection::Within;
+            return CullTestResult::Within;
         }
 
         for (unsigned cIdx=0; cIdx<_cornerFaceBitMasks.size(); cIdx++) {
@@ -714,7 +714,7 @@ namespace XLEMath
                 & (aabbSpaceCorner[2] >= mins[2]) & (aabbSpaceCorner[2] <= maxs[2])
                 ;
             if (__builtin_expect(inside, true)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
@@ -750,7 +750,7 @@ namespace XLEMath
                 for (; qf!=faceEnd; ++qf)
                     if ((surroundingFaceMask & (1ull<<qf)) && SignedDistance(intr, _planes[qf]) > 0.f) break;
                 if (qf == faceEnd)
-                    return AABBIntersection::Boundary;
+                    return CullTestResult::Boundary;
             }
         }
 
@@ -761,11 +761,11 @@ namespace XLEMath
             Float3 aabbSpaceStart = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerZero]);
             Float3 aabbSpaceEnd = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerOne]);
             if (RayVsAABB({aabbSpaceStart, aabbSpaceEnd}, mins, maxs)) {
-                return AABBIntersection::Boundary;
+                return CullTestResult::Boundary;
             }
         }
 
-        return AABBIntersection::Culled;
+        return CullTestResult::Culled;
     }
 
     ArbitraryConvexVolumeTester::ArbitraryConvexVolumeTester(
@@ -804,7 +804,7 @@ namespace XLEMath
     Float4x4 PerspectiveProjection(
         float verticalFOV, float aspectRatio,
         float nearClipPlane, float farClipPlane,
-        GeometricCoordinateSpace::Enum coordinateSpace,
+        GeometricCoordinateSpace coordinateSpace,
         ClipSpaceType clipSpaceType )
     {
 
@@ -915,7 +915,7 @@ namespace XLEMath
     Float4x4 OrthogonalProjection(
         float l, float t, float r, float b,
         float nearClipPlane, float farClipPlane,
-        GeometricCoordinateSpace::Enum coordinateSpace,
+        GeometricCoordinateSpace coordinateSpace,
         ClipSpaceType clipSpaceType)
     {
         const float n = nearClipPlane;

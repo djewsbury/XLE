@@ -174,9 +174,9 @@ namespace UnitTests
 					auto result = frustumTester.TestSphere(obj._center, obj._radius);
 					RenderOverlays::ColorB col;
 					switch (result) {
-					case AABBIntersection::Culled: col = { 255, 100, 100 }; break;
-					case AABBIntersection::Boundary: col = { 100, 100, 255 }; break;
-					case AABBIntersection::Within: col = { 100, 255, 100 }; break;
+					case CullTestResult::Culled: col = { 255, 100, 100 }; break;
+					case CullTestResult::Boundary: col = { 100, 100, 255 }; break;
+					case CullTestResult::Within: col = { 100, 255, 100 }; break;
 					default: FAIL("Unknown frustum result"); break;
 					}
 
@@ -230,9 +230,9 @@ namespace UnitTests
 						auto result = frustumTester.TestSphere(obj._center, obj._radius);
 						RenderOverlays::ColorB col;
 						switch (result) {
-						case AABBIntersection::Culled: col = { 255, 100, 100 }; break;
-						case AABBIntersection::Boundary: col = { 100, 100, 255 }; break;
-						case AABBIntersection::Within: col = { 100, 255, 100 }; break;
+						case CullTestResult::Culled: col = { 255, 100, 100 }; break;
+						case CullTestResult::Boundary: col = { 100, 100, 255 }; break;
+						case CullTestResult::Within: col = { 100, 255, 100 }; break;
 						default: FAIL("Unknown frustum result"); break;
 						}
 
@@ -250,9 +250,9 @@ namespace UnitTests
 						auto result = frustumTester.TestAABB(localToWorld, mins, maxs);
 						RenderOverlays::ColorB col;
 						switch (result) {
-						case AABBIntersection::Culled: col = { 255, 100, 100 }; break;
-						case AABBIntersection::Boundary: col = { 100, 100, 255 }; break;
-						case AABBIntersection::Within: col = { 100, 255, 100 }; break;
+						case CullTestResult::Culled: col = { 255, 100, 100 }; break;
+						case CullTestResult::Boundary: col = { 100, 100, 255 }; break;
+						case CullTestResult::Within: col = { 100, 255, 100 }; break;
 						default: FAIL("Unknown frustum result"); break;
 						}
 
