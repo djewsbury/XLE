@@ -89,6 +89,8 @@ namespace RenderCore
         result = Hash64(&_depthStencil, &_depthStencil+1, result);
         // result = Hash64(AsPointer(_preserve.begin()), AsPointer(_preserve.end()), result);
         result = Hash64(&_resolveDepthStencil, &_resolveDepthStencil+1, result);
+        if (_viewInstancingMask)
+            result = HashCombine(result, _viewInstancingMask);
         return result;
     }
 

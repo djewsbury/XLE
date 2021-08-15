@@ -402,7 +402,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			desc.pNext = nullptr;
             desc.flags = 0;
             desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-			desc.viewMask = 0;
+			desc.viewMask = spDesc.GetViewInstanceMask();
 
 			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
 			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
@@ -611,11 +611,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		RenderPassHelper helper(fbDesc);
 		unsigned attachmentCount = fbDesc.GetAttachments().size();
+		bool isViewInstancingFrameBuffer = false;
 
 		// Duplicate the work from CreateRenderPass in order to prime RenderPassHelper
 		// This must create an identical array
 		for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
 			const auto& spDesc = subpasses[spIdx];
+			isViewInstancingFrameBuffer |= spDesc.GetViewInstanceMask() != 0;
 			Internal::AttachmentResourceUsageType::BitField subpassAttachmentUsages[attachmentCount];
 			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
 
@@ -679,6 +681,7 @@ namespace RenderCore { namespace Metal_Vulkan
         fb_info.width = maxDims._width;
         fb_info.height = maxDims._height;
         fb_info.layers = std::max(1u, maxDims._layers);
+		if (isViewInstancingFrameBuffer) fb_info.layers = 1;			// for multiview, this must always be one (array layers are used as "views")
         _underlying = factory.CreateFramebuffer(fb_info);
 		_subpassCount = (unsigned)fbDesc.GetSubpasses().size();
 

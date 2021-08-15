@@ -1693,6 +1693,7 @@ namespace RenderCore { namespace Techniques
 		}
         for (auto src:input.GetViews())
 			result.AppendNonFrameBufferAttachmentView(remapFunction(src._resourceName), src._usage, src._window);
+        result.SetViewInstanceMask(input.GetViewInstanceMask());
 		return result;
 	}
 

@@ -85,6 +85,7 @@ namespace RenderCore
         void SetDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
 		void AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& = {});
         void SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
+        void SetViewInstanceMask(uint64_t);
 
         uint64_t CalculateHash() const;
 
@@ -94,6 +95,7 @@ namespace RenderCore
 		IteratorRange<const AttachmentViewDesc*> GetResolveOutputs() const;
 		const AttachmentViewDesc& GetResolveDepthStencil() const;
         IteratorRange<const AttachmentViewDesc*> GetViews() const;
+        uint64_t GetViewInstanceMask() const;
 
 		#if defined(_DEBUG)
             mutable std::string _name = std::string();
@@ -116,6 +118,8 @@ namespace RenderCore
 
 		AttachmentViewDesc _depthStencil = Unused;
         AttachmentViewDesc _resolveDepthStencil = Unused;
+
+        uint32_t _viewInstancingMask = 0;
 
 		unsigned BufferSpaceUsed() const { return _outputAttachmentCount+_inputAttachmentCount+_resolveOutputAttachmentCount; }
     };
@@ -304,6 +308,16 @@ namespace RenderCore
 	{
 		_resolveDepthStencil = {attachment, viewDesc};
 	}
+
+    inline void SubpassDesc::SetViewInstanceMask(uint64_t mask)
+    {
+        _viewInstancingMask = mask;
+    }
+
+    inline uint64_t SubpassDesc::GetViewInstanceMask() const
+    {
+        return _viewInstancingMask;
+    }
 
 	inline IteratorRange<const AttachmentViewDesc*> SubpassDesc::GetOutputs() const
 	{
