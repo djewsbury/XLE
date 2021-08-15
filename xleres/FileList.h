@@ -37,6 +37,8 @@
 #define DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL "xleres/Deferred/resolvelight.vertex.hlsl"
 #define DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL "xleres/Deferred/resolvelight.pixel.hlsl"
 
+#define FORWARD_PIPELINE "xleres/TechniqueLibrary/Config/forward.pipeline"
+
 #define CASCADE_VIS_HLSL "xleres/Deferred/debugging/cascadevis.pixel.hlsl"
 #define HIGHLIGHT_VIS_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/HighlightVis.pixel.hlsl"
 #define OUTLINE_VIS_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/outlinehighlight.pixel.hlsl"
