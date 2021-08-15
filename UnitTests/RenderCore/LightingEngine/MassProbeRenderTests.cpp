@@ -14,12 +14,17 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
+#include "../../../RenderCore/Metal/DeviceContext.h"
+#include "../../../RenderCore/Metal/QueryPool.h"
+#include "../../../RenderCore/Metal/ObjectFactory.h"
+#include "../../../RenderCore/IThreadContext.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
+#include "../../../Utility/ArithmeticUtils.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -68,11 +73,11 @@ namespace UnitTests
 				row_major float4x4 MultiProbeViews[64];
 			}
 
-			[maxvertexcount(3*64)]
+			[maxvertexcount(3*32)]
 				void gs_main(	triangle VSOUT input[3],
 								inout TriangleStream<VSOUT> outputStream)
 			{
-				// amplify out to up to 64 views
+				// amplify out to up to 32 views
 				// coords from VS are actually in world coords, not projection space
 				for (uint c=0; c<MultiProbeCount; ++c) {
 					[unroll] for (uint q=0; q<3; ++q) {
@@ -92,6 +97,15 @@ namespace UnitTests
 		)--")),
 
 		std::make_pair("instancing_multiprobe_shader.hlsl", ::Assets::AsBlob(R"--(
+			#define LOCAL_TRANSFORM_HAS_VIEW_INDICES 1
+			#undef GEO_HAS_TEXCOORD
+			#undef GEO_HAS_NORMAL
+			#undef GEO_HAS_TEXTANGENT
+			#undef GEO_HAS_TEXBITANGENT
+			#undef VSOUT_HAS_TEXCOORD
+			#undef VSOUT_HAS_NORMAL
+			#undef VSOUT_HAS_TEXTANGENT
+			#undef VSOUT_HAS_TEXBITANGENT
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
@@ -119,42 +133,58 @@ namespace UnitTests
 				}
 
 				VSOUT output;
-				output.position = mul(MultiProbeViews[instanceId], float4(worldPosition,1));
+
+				uint viewIndex;
+				/*
+				if ((instanceId/4)%4 == 0) 			viewIndex = LocalTransform.ViewIndices[instanceId/16].x;
+				else if ((instanceId/4)%4 == 1) 	viewIndex = LocalTransform.ViewIndices[instanceId/16].y;
+				else if ((instanceId/4)%4 == 2) 	viewIndex = LocalTransform.ViewIndices[instanceId/16].z;
+				else 								viewIndex = LocalTransform.ViewIndices[instanceId/16].w;
+				viewIndex >>= (instanceId%4) * 8;
+				viewIndex &= 0xff;*/
+
+				// Find the position of the instanceId'th bit set
+				uint mask = LocalTransform.ViewMask;
+				while (instanceId) {
+					mask ^= 1 << firstbithigh(mask);
+					--instanceId;
+				}
+				viewIndex = firstbithigh(mask);
+
+				output.position = mul(MultiProbeViews[viewIndex], float4(worldPosition,1));
 
 				#if VSOUT_HAS_TEXCOORD>=1
 					output.texCoord = VSIN_GetTexCoord0(input);
 				#endif
 
-				#if GEO_HAS_TEXTANGENT==1
-					#if VSOUT_HAS_TANGENT_FRAME==1
-						output.tangent = worldSpaceTangentFrame.tangent;
-						output.bitangent = worldSpaceTangentFrame.bitangent;
-					#endif
-
-					#if (VSOUT_HAS_NORMAL==1)
-						output.normal = worldSpaceTangentFrame.normal;
-					#endif
-				#else
-					#if (VSOUT_HAS_NORMAL==1)
-						output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
-					#endif
+				#if (VSOUT_HAS_NORMAL==1)
+					output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
 				#endif
 
 				#if VSOUT_HAS_WORLD_POSITION==1
 					output.worldPosition = worldPosition;
 				#endif
 
-				output.renderTargetIndex = instanceId;
+				output.renderTargetIndex = viewIndex;
 				return output;
 			}
 
 			float4 ps_main(VSOUT geo) : SV_Target0
 			{
-				return float4(1,1,1,1);
+				// output normal & tex coord to ensure they get passed down as attributes, but still keep a minimal shader
+				return float4(VSOUT_GetVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
 			}
 		)--")),
 
 		std::make_pair("multiview_shader.hlsl", ::Assets::AsBlob(R"--(
+			#undef GEO_HAS_TEXCOORD
+			#undef GEO_HAS_NORMAL
+			#undef GEO_HAS_TEXTANGENT
+			#undef GEO_HAS_TEXBITANGENT
+			#undef VSOUT_HAS_TEXCOORD
+			#undef VSOUT_HAS_NORMAL
+			#undef VSOUT_HAS_TEXTANGENT
+			#undef VSOUT_HAS_TEXBITANGENT
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
@@ -355,6 +385,33 @@ namespace UnitTests
 		RenderCore::Techniques::FrameBufferDescFragment _fragment;
 	};
 
+	static std::vector<RenderCore::Techniques::FrameBufferDescFragment> MakeFragments(unsigned totalViews, unsigned maxViewsPerDraw, bool multiView = false)
+	{
+		using namespace RenderCore;
+		std::vector<RenderCore::Techniques::FrameBufferDescFragment> result;
+		std::pair<unsigned, unsigned> range{0,totalViews};
+		while (range.second != range.first) {
+			auto batchRange = range;
+			batchRange.second = std::min(batchRange.second, batchRange.first+maxViewsPerDraw);
+
+			Techniques::FrameBufferDescFragment fragment;
+			fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
+			fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+			TextureViewDesc viewDesc;
+			viewDesc._arrayLayerRange._min = batchRange.first;
+			viewDesc._arrayLayerRange._count = batchRange.second-batchRange.first;
+			SubpassDesc sp;
+			sp.AppendOutput(0, viewDesc);
+			sp.SetDepthStencil(1, viewDesc);
+			fragment.AddSubpass(std::move(sp));
+			if (multiView) fragment._viewMask = ~0u;
+			result.push_back(std::move(fragment));
+
+			range.first = batchRange.second;
+		}
+		return result;
+	}
+
 	// Amplifying geo shader -- one draw as input, with a geo shader that creates primitives for all of the different views
 	class AmplifyingGeoShader
 	{
@@ -423,6 +480,8 @@ namespace UnitTests
 			}
 		};
 
+		static constexpr unsigned maxPerBatch = 32;
+
 		void Execute(
 			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
 			const LightingEngineTestApparatus& testApparatus,
@@ -430,45 +489,47 @@ namespace UnitTests
 			ToolsRig::IDrawablesWriter& drawablesWriter)
 		{
 			using namespace RenderCore;
-			auto uniformDel = std::make_shared<ShaderResourceDelegate>(cameras, UInt2{64, 64});
-			parsingContext.AddShaderResourceDelegate(uniformDel);
+			
+			RenderCore::Techniques::DrawablesPacket pkt;
+			drawablesWriter.WriteDrawables(pkt);
 
-			auto& projDesc = parsingContext.GetProjectionDesc();
-			projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
+			auto frag = _fragments.begin();
+			while (!cameras.empty()) {
+				auto batchCameras = cameras;
+				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxPerBatch);
 
-			{
-				Techniques::RenderPassInstance rpi{threadContext, parsingContext, _fragment};
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				parsingContext.AddShaderResourceDelegate(uniformDel);
 
-				RenderCore::Techniques::DrawablesPacket pkt;
-				drawablesWriter.WriteDrawables(pkt);
+				auto& projDesc = parsingContext.GetProjectionDesc();
+				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
 
-				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+				{
+					Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
+					RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
+					Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+				}
+
+				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				cameras.first = batchCameras.second;
+				++frag;
 			}
-
-			parsingContext.RemoveShaderResourceDelegate(*uniformDel);
 		}
 
 		AmplifyingGeoShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			using namespace RenderCore;
-			_fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-			_fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
-			SubpassDesc sp;
-			sp.AppendOutput(0);
-			sp.SetDepthStencil(1);
-			_fragment.AddSubpass(std::move(sp));
-
+			_fragments = MakeFragments(64, 32);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
-		RenderCore::Techniques::FrameBufferDescFragment _fragment;
+		std::vector<RenderCore::Techniques::FrameBufferDescFragment> _fragments;
 	};
 
 	// Instancing multi probe shader -- one instancing draw call per input, and one instance per probe draw. The vertex shader
 	// uses the instance id to select the probe view to use
-	class InstancingMultiProbeShader
+	class VertexInstancingShader
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _cfg;
@@ -540,13 +601,77 @@ namespace UnitTests
 			virtual void OnDraw(
 				RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& executeContext,
 				const RenderCore::Techniques::Drawable& d,
-				unsigned vertexCount, const Float4x4& localToWorld) override
+				unsigned vertexCount, const Float4x4& localToWorld,
+				uint64_t viewMask) override
 			{
-				auto localTransform = RenderCore::Techniques::MakeLocalTransform(localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
-				executeContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
-				executeContext.DrawInstances(vertexCount, 64);
+				struct CustomConstants
+				{
+					Float3x4 _localToWorld;
+					Float3 _localSpaceView; unsigned _viewMask;
+					// uint8_t _viewIndices[64];
+				} constants;
+				constants._localToWorld = AsFloat3x4(localToWorld);
+				constants._viewMask = viewMask;
+				unsigned v=0;
+				while (viewMask) {
+					auto lz = xl_ctz8(viewMask);
+					// constants._viewIndices[v++] = lz;
+					v++;
+					viewMask ^= 1ull<<lz;
+				}
+				unsigned viewCount = v; 
+				if (!viewCount) return;
+
+				// for (; v<dimof(CustomConstants::_viewIndices); ++v) constants._viewIndices[v] = 0;
+				executeContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(constants));
+				executeContext.DrawInstances(vertexCount, viewCount);
 			}
 		};
+
+		class CullingDelegate : public ToolsRig::IExtendedDrawablesWriter::CullingDelegate
+		{
+		public:
+			std::vector<Float4x4> _cullingFrustums;
+			virtual void TestSphere(
+				/* out */ uint64_t& boundaryViewMask,
+				/* out */ uint64_t& withinViewMask,
+				uint64_t testViewMask,
+				Float3 center, float radius) const override
+			{
+				boundaryViewMask = withinViewMask = 0;
+				while (testViewMask) {
+					auto lz = xl_ctz8(testViewMask);
+					auto test = XLEMath::TestAABB(_worldToCullingFrustums[lz], center-Float3{radius, radius, radius}, center+Float3{radius, radius, radius}, RenderCore::Techniques::GetDefaultClipSpaceType());
+					withinViewMask |= (test == CullTestResult::Within)<<lz;
+					boundaryViewMask |= (test == CullTestResult::Boundary)<<lz;
+					testViewMask ^= 1ull<<lz;
+				}
+			}
+			virtual void TestAABB(
+				/* out */ uint64_t& boundaryViewMask,
+				/* out */ uint64_t& withinViewMask,
+				uint64_t testViewMask,
+				Float3 mins, Float3 maxs) const override
+			{
+				boundaryViewMask = withinViewMask = 0;
+				while (testViewMask) {
+					auto lz = xl_ctz8(testViewMask);
+					auto test = XLEMath::TestAABB(_worldToCullingFrustums[lz], mins, maxs, RenderCore::Techniques::GetDefaultClipSpaceType());
+					withinViewMask |= (test == CullTestResult::Within)<<lz;
+					boundaryViewMask |= (test == CullTestResult::Boundary)<<lz;
+					testViewMask ^= 1ull<<lz;
+				}
+			}
+			std::vector<Float4x4> _worldToCullingFrustums;
+			CullingDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
+			{
+				_worldToCullingFrustums.reserve(cameras.size());
+				for (const auto& c:cameras)
+					_worldToCullingFrustums.push_back(BuildProjectionDesc(c, viewportDims)._worldToProjection);
+			}
+		};
+
+		static constexpr unsigned maxViewsPerDraw = 32;
 
 		void Execute(
 			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
@@ -555,49 +680,49 @@ namespace UnitTests
 			ToolsRig::IDrawablesWriter& drawablesWriter)
 		{
 			using namespace RenderCore;
-			auto uniformDel = std::make_shared<ShaderResourceDelegate>(cameras, UInt2{64, 64});
-			parsingContext.AddShaderResourceDelegate(uniformDel);
-
 			auto& projDesc = parsingContext.GetProjectionDesc();
 			projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
 
 			auto drawDelegate = std::make_shared<CustomDrawDelegate>();
+			
 			auto* extWriter = dynamic_cast<ToolsRig::IExtendedDrawablesWriter*>(&drawablesWriter);
 			assert(extWriter);
 
-			{
-				Techniques::RenderPassInstance rpi{threadContext, parsingContext, _fragment};
+			auto frag = _fragments.begin();
+			while (!cameras.empty()) {
+				auto batchCameras = cameras;
+				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxViewsPerDraw);
 
+				CullingDelegate cullingDelegate(batchCameras, UInt2{64, 64});
 				RenderCore::Techniques::DrawablesPacket pkt;
-				extWriter->WriteDrawables(pkt, drawDelegate);
+				uint64_t testViewMask = (batchCameras.size() < 64) ? (1ull<<uint64_t(batchCameras.size()))-1 : ~0ull;
+				extWriter->WriteDrawables(pkt, cullingDelegate, testViewMask, drawDelegate);
 
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				parsingContext.AddShaderResourceDelegate(uniformDel);
+
+				Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
 				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
 				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
-			}
 
-			parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				cameras.first = batchCameras.second;
+				++frag;
+			}
 		}
 
-		InstancingMultiProbeShader(const LightingEngineTestApparatus& testApparatus)
+		VertexInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
-			using namespace RenderCore;
-			_fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-			_fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
-			SubpassDesc sp;
-			sp.AppendOutput(0);
-			sp.SetDepthStencil(1);
-			_fragment.AddSubpass(std::move(sp));
-
+			_fragments = MakeFragments(64, maxViewsPerDraw);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
-		RenderCore::Techniques::FrameBufferDescFragment _fragment;
+		std::vector<RenderCore::Techniques::FrameBufferDescFragment> _fragments;
 	};
 
-
-	// Multiview infrastructure -- use the multiview functionality built into the api to broadcast draws to multiple array layers 
-	class MultiviewInfrastructure
+	// View instancing shader (multiview in Vulkan parlance) -- use the multiview functionality built into the api to broadcast draws to multiple array layers 
+	class ViewInstancingShader
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _cfg;
@@ -696,31 +821,10 @@ namespace UnitTests
 			}
 		}
 
-		MultiviewInfrastructure(const LightingEngineTestApparatus& testApparatus)
+		ViewInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
-			using namespace RenderCore;
 			const unsigned maxMultiview = 32;
-			std::pair<unsigned, unsigned> range{0,64};
-			while (range.second != range.first) {
-				auto batchRange = range;
-				batchRange.second = std::min(batchRange.second, batchRange.first+maxMultiview);
-
-				RenderCore::Techniques::FrameBufferDescFragment fragment;
-				fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-				fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
-				TextureViewDesc viewDesc;
-				viewDesc._arrayLayerRange._min = batchRange.first;
-				viewDesc._arrayLayerRange._count = batchRange.second-batchRange.first;
-				SubpassDesc sp;
-				sp.AppendOutput(0, viewDesc);
-				sp.SetDepthStencil(1, viewDesc);
-				fragment.AddSubpass(std::move(sp));
-				fragment._viewMask = ~0u;
-				_fragments.push_back(std::move(fragment));
-
-				range.first = batchRange.second;
-			}
-
+			_fragments = MakeFragments(64, maxMultiview, true);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
 		}
 
@@ -782,7 +886,31 @@ namespace UnitTests
 		}
 
 		testHelper->BeginFrameCapture();
-		RunTest<MultiviewInfrastructure>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
+		{
+			Metal::TimeStampQueryPool queryPool(Metal::GetObjectFactory());
+			auto queryPoolFrameId = queryPool.BeginFrame(*Metal::DeviceContext::Get(*threadContext));
+
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+			const unsigned iterationCount = 512;
+			for (unsigned c=0; c<iterationCount; ++c)
+				RunTest<VertexInstancingShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
+			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
+
+			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
+			auto cpuTimeStart = std::chrono::steady_clock::now();
+			threadContext->CommitCommands();
+			for (;;) {
+				auto queryResults = queryPool.GetFrameResults(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
+				if (queryResults._resultsReady) {
+					REQUIRE(queryResults._resultsEnd != queryResults._resultsStart);
+					REQUIRE(queryResults._frequency != 0);
+					auto elapsed = *(queryResults._resultsStart+1) - *queryResults._resultsStart;
+					std::cout << "Mass probe rendering (per iteration): " << elapsed / float(queryResults._frequency) * 1000.0f / float(iterationCount) << "ms" << std::endl;
+					std::cout << "CPU time waiting for GPU (per iteration): " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - cpuTimeStart).count() / float(iterationCount) << "ms" << std::endl;
+					break;
+				}
+			}
+		}
 		testHelper->EndFrameCapture();
 
 		// test: lots of geo vs minimal geo

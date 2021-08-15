@@ -91,12 +91,15 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::Techniques::DrawableGeo> geo,
 			size_t vertexCount,
 			const Float4x4& localToWorld,
-			const std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate>& customDrawDelegate)
+			const std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate>& customDrawDelegate,
+			uint64_t viewMask = ~0ull)
 		{
 			struct CustomDrawable2 : public RenderCore::Techniques::Drawable 
 			{ 
-				unsigned _vertexCount; Float4x4 _localToWorld;
+				Float4x4 _localToWorld;
 				std::shared_ptr<IExtendedDrawablesWriter::CustomDrawDelegate> _customDrawDelegate;
+				uint64_t _viewMask;
+				unsigned _vertexCount; 
 			};
 			auto* drawables = pkt._drawables.Allocate<CustomDrawable2>(1);
 			drawables[0]._pipeline = _pipelineAccelerator;
@@ -106,11 +109,12 @@ namespace ToolsRig
 			drawables[0]._looseUniformsInterface = _usi;
 			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._customDrawDelegate = customDrawDelegate;
+			drawables[0]._viewMask = viewMask;
 			drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
 				{
 					((CustomDrawable2&)drawable)._customDrawDelegate->OnDraw(
 						parsingContext, drawFnContext, drawable,
-						((CustomDrawable2&)drawable)._vertexCount, (((CustomDrawable2&)drawable)._localToWorld));
+						((CustomDrawable2&)drawable)._vertexCount, ((CustomDrawable2&)drawable)._localToWorld, ((CustomDrawable2&)drawable)._viewMask);
 				};
 		}
 
@@ -348,6 +352,44 @@ namespace ToolsRig
 			for (const auto& transform:_cubes) WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw);
 			for (const auto& transform:_spheres) WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw);
 			for (const auto& transform:_pyramid) WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform, customDraw);
+		}
+
+		void WriteDrawables(
+			RenderCore::Techniques::DrawablesPacket& pkt,
+			CullingDelegate& cullingDelegate,
+			uint64_t viewMask,
+			const std::shared_ptr<CustomDrawDelegate>& customDraw)
+		{
+			auto bb=_cubeBoundingBoxes.begin();
+			for (const auto& transform:_cubes) {
+				uint64_t withinViewMask = 0, boundaryViewMask = 0;
+				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
+				boundaryViewMask |= withinViewMask;
+				if (boundaryViewMask)
+					WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw, boundaryViewMask);
+					// WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
+				++bb;
+			}
+			bb=_sphereBoundingBoxes.begin();
+			for (const auto& transform:_spheres) {
+				uint64_t withinViewMask = 0, boundaryViewMask = 0;
+				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
+				boundaryViewMask |= withinViewMask;
+				if (boundaryViewMask)
+					WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
+					// WriteDrawable(pkt, _cubeGeo, _cubeVertexCount, transform, customDraw, boundaryViewMask);
+				++bb;
+			}
+			bb=_pyramidBoundingBoxes.begin();
+			for (const auto& transform:_pyramid) {
+				uint64_t withinViewMask = 0, boundaryViewMask = 0;
+				cullingDelegate.TestAABB(boundaryViewMask, withinViewMask, viewMask, bb->first, bb->second);
+				boundaryViewMask |= withinViewMask;
+				if (boundaryViewMask)
+					WriteDrawable(pkt, _pyramidGeo, _pyramidVertexCount, transform, customDraw, boundaryViewMask);
+					// WriteDrawable(pkt, _sphereGeo, _sphereVertexCount, transform, customDraw, boundaryViewMask);
+				++bb;
+			}
 		}
 
 		void WriteDrawables(

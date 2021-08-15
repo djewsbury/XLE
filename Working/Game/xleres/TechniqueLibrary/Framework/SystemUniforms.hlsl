@@ -36,6 +36,10 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 	{
 		row_major float3x4 LocalToWorld;
 		float3 LocalSpaceView;
+		#if LOCAL_TRANSFORM_HAS_VIEW_INDICES
+			uint ViewMask;
+			// uint4 ViewIndices[4];
+		#endif
 	} LocalTransform;
 
 	// note -- these are only available in the vertex shader due to the pipeline layout configuration
@@ -46,6 +50,10 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 	{
 		row_major float3x4 LocalToWorld;
 		float3 LocalSpaceView;
+		#if LOCAL_TRANSFORM_HAS_VIEW_INDICES
+			uint ViewMask;
+			uint4 ViewIndices[16];
+		#endif
 	}
 
 	float3x4 	SysUniform_GetLocalToWorld() { return LocalToWorld; }
