@@ -44,11 +44,11 @@ namespace UnitTests
 
 		// Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
-		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(_metalTestHelper->_device);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
+		_techniqueServices = std::make_shared<Techniques::Services>(_metalTestHelper->_device);
+		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
 		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
-		techniqueServices->SetBufferUploads(_bufferUploads);
+		_techniqueServices->SetBufferUploads(_bufferUploads);
 
 		_futureExecutor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
 		_futureExecSetter = std::make_unique<thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter>(_futureExecutor);
@@ -63,6 +63,7 @@ namespace UnitTests
 
 		_sharedDelegates = std::make_shared<LightingEngine::SharedTechniqueDelegateBox>();
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
+		_techniqueServices->SetCommonResources(_commonResources);
 
 		_pipelinePool = std::make_shared<Techniques::PipelinePool>(_metalTestHelper->_device);
 
@@ -134,29 +135,49 @@ namespace UnitTests
 
 	static RenderCore::Techniques::DescriptorSetLayoutAndBinding MakeSequencerDescriptorSetLayout()
 	{
-		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		layout->_slots = {
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"GlobalTransform"}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"BasicLightingEnvironment"}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::UniformBuffer },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"ShadowProjection"}, RenderCore::DescriptorType::UniformBuffer },
-			
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{"NormalsFittingTexture"}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::SampledTexture },
+		const char* unitTestsSequencerDescSet = R"(
+			UniformBuffer GlobalTransform;				// 0
+			UniformBuffer MultiProbeProperties;			// 1
+			UniformBuffer b2;							// 2
+			UniformBuffer BasicLightingEnvironment;		// 3
+			UniformBuffer b4;							// 4
+			UniformBuffer ShadowProjection;				// 5
 
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler },
-			RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot { std::string{}, RenderCore::DescriptorType::Sampler }
-		};
+			SampledTexture tex0;						// 6
+			SampledTexture tex1;						// 7
+			SampledTexture tex2;						// 8
+			SampledTexture tex3;						// 9
+			SampledTexture NormalsFittingTexture;		// 10
 
+			Sampler DefaultSampler						// 11
+			{
+				Filter = Trilinear,
+				AddressU = Wrap,
+				AddressV = Wrap
+			};
+			Sampler ClampingSampler						// 12
+			{
+				Filter = Trilinear,
+				AddressU = Clamp,
+				AddressV = Clamp
+			};
+			Sampler AnisotropicSampler					// 13
+			{
+				Filter = Anisotropic,
+				AddressU = Wrap,
+				AddressV = Wrap
+			};
+			Sampler PointClampSampler					// 14
+			{
+				Filter = Point,
+				AddressU = Clamp,
+				AddressV = Clamp
+			};
+		)";
+
+		auto layout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
+			unitTestsSequencerDescSet, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}
+		);
 		return RenderCore::Techniques::DescriptorSetLayoutAndBinding { layout, 0 };
 	}
 

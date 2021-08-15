@@ -117,6 +117,7 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelineCollection;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
@@ -126,6 +127,11 @@ namespace UnitTests
 			const std::string pipelineLayoutName = "LightingOperator";
 			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
+
+			auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
+			if (i == _pipelineLayoutFile->_descriptorSets.end())
+				Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
+			_dmShadowDescSetTemplate = i->second;
 
 			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device);
 		}
@@ -215,7 +221,7 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -262,7 +268,7 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
@@ -497,14 +503,14 @@ namespace UnitTests
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
-					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._pipelineLayoutFile,
+					testApparatus._pipelineAcceleratorPool, testApparatus._sharedDelegates, pipelineLayout._pipelineCollection, pipelineLayout._pipelineLayout, pipelineLayout._dmShadowDescSetTemplate,
 					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
 					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
 				auto lightingTechnique = StallAndRequireReady(*lightingTechniqueFuture);
 				PumpBufferUploads(testApparatus);
 
-				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f}; 
+				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 				auto drawableWriter = ToolsRig::CreateShapeWorldDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool, worldMins, worldMaxs);
 				PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 
