@@ -903,7 +903,7 @@ namespace SceneEngine
         const ExecuteSceneContext& executeContext,
         const PlacementCellSet& cellSet,
         const PlacementGUID* begin, const PlacementGUID* end,
-        const std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate>& preDrawDelegate)
+        const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate)
     {
         static std::vector<unsigned> visibleObjects;
 

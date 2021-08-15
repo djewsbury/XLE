@@ -14,7 +14,7 @@
 #include <string>
 #include <functional>
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class IPreDrawDelegate; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
 namespace Assets { class DirectorySearchRules; }
 
@@ -102,7 +102,7 @@ namespace SceneEngine
             const ExecuteSceneContext& executeContext,
             const PlacementCellSet& cellSet,
             const PlacementGUID* begin, const PlacementGUID* end,
-			const std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate>& preDrawDelegate = nullptr);
+			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
 
             // -------------- Utilities --------------
         auto GetVisibleQuadTrees(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const

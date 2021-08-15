@@ -29,21 +29,19 @@ namespace ToolsRig
 	using RenderCore::Assets::SkeletonScaffold;
     using RenderCore::Assets::SkeletonMachine;
 	using RenderCore::Techniques::SimpleModelRenderer;
-	using RenderCore::Techniques::IPreDrawDelegate;
+	using RenderCore::Techniques::ICustomDrawDelegate;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class MaterialFilterDelegate : public RenderCore::Techniques::IPreDrawDelegate
+	class MaterialFilterDelegate : public RenderCore::Techniques::ICustomDrawDelegate
 	{
 	public:
-		virtual bool OnDraw( 
-			const RenderCore::Techniques::ExecuteDrawableContext&, RenderCore::Techniques::ParsingContext&,
-			const RenderCore::Techniques::Drawable&,
-			uint64_t materialGuid, unsigned drawCallIdx) override
+		virtual void OnDraw(
+			RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& executeContext,
+			const RenderCore::Techniques::Drawable& d) override
 		{
-			// Note that we're rejecting other draw calls very late in the pipeline here. But it
-			// helps avoid extra overhead in the more common cases
-			return materialGuid == _activeMaterial;
+			if (GetMaterialGuid(d) == _activeMaterial)
+				ExecuteStandardDraw(parsingContext, executeContext, d);
 		}
 
 		MaterialFilterDelegate(uint64_t activeMaterial) : _activeMaterial(activeMaterial) {}
@@ -128,7 +126,7 @@ namespace ToolsRig
 			return r->_renderer->GetModelScaffold()->GetStaticBoundingBox(); 
 		}
 
-		std::shared_ptr<IPreDrawDelegate> SetPreDrawDelegate(const std::shared_ptr<IPreDrawDelegate>& delegate) override
+		std::shared_ptr<ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<ICustomDrawDelegate>& delegate) override
 		{
 			auto oldDelegate = delegate;
 			std::swap(_preDrawDelegate, oldDelegate);
@@ -282,7 +280,7 @@ namespace ToolsRig
 			}
         }
 
-		std::shared_ptr<IPreDrawDelegate>			_preDrawDelegate;
+		std::shared_ptr<ICustomDrawDelegate>			_preDrawDelegate;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 		ModelVisSettings							_settings;
 		

@@ -19,7 +19,7 @@ namespace RenderCore { namespace Techniques {
 	class ITechniqueDelegate;
 	class IPipelineAcceleratorPool;
     class ImmediateDrawingApparatus;
-    class IPreDrawDelegate;
+    class ICustomDrawDelegate;
     class DrawingApparatus;
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
@@ -120,8 +120,8 @@ namespace ToolsRig
 	public:
 		virtual std::pair<Float3, Float3> GetBoundingBox() const = 0;
 
-		virtual std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate> SetPreDrawDelegate(
-			const std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate>&) = 0;
+		virtual std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> SetCustomDrawDelegate(
+			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>&) = 0;
 		virtual void RenderSkeleton(
 			RenderOverlays::IOverlayContext& overlayContext, 
 			RenderCore::Techniques::ParsingContext& parserContext, 

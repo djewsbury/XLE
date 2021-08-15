@@ -44,15 +44,15 @@ namespace ToolsRig
         const SceneEngine::PlacementGUID* filterEnd,
         uint64_t materialGuid)
     {
-		class PreDrawDelegate : public RenderCore::Techniques::IPreDrawDelegate
+		class PreDrawDelegate : public RenderCore::Techniques::ICustomDrawDelegate
 		{
 		public:
-			virtual bool OnDraw(
-				const RenderCore::Techniques::ExecuteDrawableContext&, RenderCore::Techniques::ParsingContext&,
-				const RenderCore::Techniques::Drawable&,
-				uint64_t materialGuid, unsigned drawCallIdx)
+			virtual void OnDraw(
+				RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& executeContext,
+				const RenderCore::Techniques::Drawable& d) override
 			{
-				return materialGuid == _materialGuid;
+				if (GetMaterialGuid(d) == _materialGuid)
+					ExecuteStandardDraw(parsingContext, executeContext, d);
 			}
 			uint64_t _materialGuid;
 			PreDrawDelegate(uint64_t materialGuid) : _materialGuid(materialGuid) {}

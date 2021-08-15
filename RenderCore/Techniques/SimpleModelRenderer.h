@@ -34,14 +34,17 @@ namespace RenderCore { namespace Techniques
 	class IDeformOperation;
 	class IUniformBufferDelegate;
 
-	class IPreDrawDelegate
+	class ICustomDrawDelegate
 	{
 	public:
-		virtual bool OnDraw(
-			const ExecuteDrawableContext&, ParsingContext&,
-			const Drawable&,
-			uint64_t materialGuid, unsigned drawCallIdx) = 0;
-		virtual ~IPreDrawDelegate();
+		virtual void OnDraw(ParsingContext&, const ExecuteDrawableContext&, const Drawable&) = 0;
+
+		static uint64_t GetMaterialGuid(const Drawable&);
+		static unsigned GetDrawCallIndex(const Drawable&);
+		static const Float4x4 GetLocalToWorld(const Drawable&);
+		static RenderCore::Assets::DrawCallDesc GetDrawCallDesc(const Drawable&);
+		static void ExecuteStandardDraw(ParsingContext&, const ExecuteDrawableContext&, const Drawable&);
+		virtual ~ICustomDrawDelegate();
 	};
 	
 	class SimpleModelRenderer
@@ -54,7 +57,7 @@ namespace RenderCore { namespace Techniques
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld,
-			const std::shared_ptr<IPreDrawDelegate>& delegate) const;
+			const std::shared_ptr<ICustomDrawDelegate>& delegate) const;
 
 		void BuildGeometryProcables(
 			IteratorRange<DrawablesPacket** const> pkts,

@@ -562,16 +562,16 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class StencilRefDelegate : public RenderCore::Techniques::IPreDrawDelegate
+	class StencilRefDelegate : public RenderCore::Techniques::ICustomDrawDelegate
 	{
 	public:
-		virtual bool OnDraw( 
-			const RenderCore::Techniques::ExecuteDrawableContext& drawContext, RenderCore::Techniques::ParsingContext&,
-			const RenderCore::Techniques::Drawable&,
-			uint64_t materialGuid, unsigned drawCallIdx) override
+		virtual void OnDraw(
+			RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& executeContext,
+			const RenderCore::Techniques::Drawable& d) override
 		{
-			drawContext.SetStencilRef(drawCallIdx+1, drawCallIdx+1);
-			return true;
+			auto drawCallIdx = GetDrawCallIndex(d);
+			executeContext.SetStencilRef(drawCallIdx+1, drawCallIdx+1);
+			ExecuteStandardDraw(parsingContext, executeContext, d);
 		}
 	};
 
@@ -588,7 +588,7 @@ namespace ToolsRig
 
 		std::shared_ptr<SceneEngine::IScene> _scene;
 
-		std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate> _stencilPrimeDelegate;
+		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
 
 		Pimpl()
 		{
@@ -703,9 +703,9 @@ namespace ToolsRig
 
 			if (doColorByMaterial) {
 				auto *visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
-				std::shared_ptr<RenderCore::Techniques::IPreDrawDelegate> oldDelegate;
+				std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> oldDelegate;
 				if (visContent)
-					oldDelegate = visContent->SetPreDrawDelegate(_pimpl->_stencilPrimeDelegate);
+					oldDelegate = visContent->SetCustomDrawDelegate(_pimpl->_stencilPrimeDelegate);
 				// Prime the stencil buffer with draw call indices
 				auto sequencerCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(primeStencilBuffer, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
@@ -714,7 +714,7 @@ namespace ToolsRig
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					*_pimpl->_scene);
 				if (visContent)
-					visContent->SetPreDrawDelegate(oldDelegate);
+					visContent->SetCustomDrawDelegate(oldDelegate);
 			}
 		}
 		

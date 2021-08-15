@@ -172,7 +172,7 @@ namespace RenderCore { namespace Techniques
 	class SimpleModelDrawable_Delegate : public SimpleModelDrawable
 	{
 	public:
-		std::shared_ptr<IPreDrawDelegate> _delegate;
+		std::shared_ptr<ICustomDrawDelegate> _delegate;
 	};
 
 	static void DrawFn_SimpleModelDelegate(
@@ -180,15 +180,23 @@ namespace RenderCore { namespace Techniques
 		const Techniques::ExecuteDrawableContext& drawFnContext,
         const SimpleModelDrawable_Delegate& drawable)
 	{
-		bool delegateResult = drawable._delegate->OnDraw(drawFnContext, parserContext, drawable, drawable._materialGuid, drawable._drawCallIdx);
-		if (delegateResult)
-			DrawFn_SimpleModelStatic(parserContext, drawFnContext, drawable);
+		assert(drawable._delegate);
+		drawable._delegate->OnDraw(parserContext, drawFnContext, drawable);
+	}
+
+	uint64_t ICustomDrawDelegate::GetMaterialGuid(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._materialGuid; }
+	unsigned ICustomDrawDelegate::GetDrawCallIndex(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCallIdx; }
+	const Float4x4 ICustomDrawDelegate::GetLocalToWorld(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._objectToWorld; }
+	RenderCore::Assets::DrawCallDesc ICustomDrawDelegate::GetDrawCallDesc(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCall; }
+	void ICustomDrawDelegate::ExecuteStandardDraw(ParsingContext& parsingContext, const ExecuteDrawableContext& drawFnContext, const Drawable& d)
+	{
+		DrawFn_SimpleModelStatic(parsingContext, drawFnContext, (const SimpleModelDrawable_Delegate&)d);
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<Techniques::DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
-		const std::shared_ptr<IPreDrawDelegate>& delegate) const
+		const std::shared_ptr<ICustomDrawDelegate>& delegate) const
 	{
 		if (!delegate) {
 			BuildDrawables(pkts, localToWorld);
@@ -1234,7 +1242,7 @@ namespace RenderCore { namespace Techniques
 			MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), ib._size)));
     }
 
-	IPreDrawDelegate::~IPreDrawDelegate() {}
+	ICustomDrawDelegate::~ICustomDrawDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
