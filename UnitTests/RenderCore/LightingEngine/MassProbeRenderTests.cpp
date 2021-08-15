@@ -218,19 +218,8 @@ namespace UnitTests
 					output.texCoord = VSIN_GetTexCoord0(input);
 				#endif
 
-				#if GEO_HAS_TEXTANGENT==1
-					#if VSOUT_HAS_TANGENT_FRAME==1
-						output.tangent = worldSpaceTangentFrame.tangent;
-						output.bitangent = worldSpaceTangentFrame.bitangent;
-					#endif
-
-					#if (VSOUT_HAS_NORMAL==1)
-						output.normal = worldSpaceTangentFrame.normal;
-					#endif
-				#else
-					#if (VSOUT_HAS_NORMAL==1)
-						output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
-					#endif
+				#if (VSOUT_HAS_NORMAL==1)
+					output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
 				#endif
 
 				#if VSOUT_HAS_WORLD_POSITION==1
@@ -241,12 +230,13 @@ namespace UnitTests
 
 			float4 ps_main(VSOUT geo) : SV_Target0
 			{
-				return float4(1,1,1,1);
+				// output normal & tex coord to ensure they get passed down as attributes, but still keep a minimal shader
+				return float4(VSOUT_GetVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
 			}
 		)--"))
 	};
 
-	static const UInt2 s_testResolution { 64, 64 };
+	static const UInt2 s_testResolution { 32, 32 };
 	const unsigned s_probesToRender = 64;
 
 	const uint64_t s_attachmentProbeTarget = 100;
@@ -300,8 +290,8 @@ namespace UnitTests
 		SubpassDesc sp;
 		sp.AppendOutput(0); sp.SetDepthStencil(1);
 		sp.SetName("prepare-probe");
+		if (multiView) sp.SetViewInstanceMask(~0u);
 		FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
-		if (multiView) representativeFB._viewMask = ~0u;
 		return pipelineAccelerators.CreateSequencerConfig(techniqueDelegate, ParameterBox{}, representativeFB, 0);
 	}
 
@@ -403,8 +393,8 @@ namespace UnitTests
 			SubpassDesc sp;
 			sp.AppendOutput(0, viewDesc);
 			sp.SetDepthStencil(1, viewDesc);
+			if (multiView) sp.SetViewInstanceMask(~0u);
 			fragment.AddSubpass(std::move(sp));
-			if (multiView) fragment._viewMask = ~0u;
 			result.push_back(std::move(fragment));
 
 			range.first = batchRange.second;
@@ -498,7 +488,7 @@ namespace UnitTests
 				auto batchCameras = cameras;
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxPerBatch);
 
-				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
 				parsingContext.AddShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
@@ -519,7 +509,7 @@ namespace UnitTests
 		AmplifyingGeoShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			using namespace RenderCore;
-			_fragments = MakeFragments(64, 32);
+			_fragments = MakeFragments(s_probesToRender, maxPerBatch);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
@@ -638,6 +628,10 @@ namespace UnitTests
 				uint64_t testViewMask,
 				Float3 center, float radius) const override
 			{
+				/*boundaryViewMask = 0;
+				withinViewMask = testViewMask;
+				return;*/
+
 				boundaryViewMask = withinViewMask = 0;
 				while (testViewMask) {
 					auto lz = xl_ctz8(testViewMask);
@@ -653,6 +647,10 @@ namespace UnitTests
 				uint64_t testViewMask,
 				Float3 mins, Float3 maxs) const override
 			{
+				/*boundaryViewMask = 0;
+				withinViewMask = testViewMask;
+				return;*/
+
 				boundaryViewMask = withinViewMask = 0;
 				while (testViewMask) {
 					auto lz = xl_ctz8(testViewMask);
@@ -693,12 +691,12 @@ namespace UnitTests
 				auto batchCameras = cameras;
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxViewsPerDraw);
 
-				CullingDelegate cullingDelegate(batchCameras, UInt2{64, 64});
+				CullingDelegate cullingDelegate(batchCameras, s_testResolution);
 				RenderCore::Techniques::DrawablesPacket pkt;
 				uint64_t testViewMask = (batchCameras.size() < 64) ? (1ull<<uint64_t(batchCameras.size()))-1 : ~0ull;
 				extWriter->WriteDrawables(pkt, cullingDelegate, testViewMask, drawDelegate);
 
-				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
 				parsingContext.AddShaderResourceDelegate(uniformDel);
 
 				Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
@@ -713,7 +711,7 @@ namespace UnitTests
 
 		VertexInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
-			_fragments = MakeFragments(64, maxViewsPerDraw);
+			_fragments = MakeFragments(s_probesToRender, maxViewsPerDraw);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
@@ -787,6 +785,8 @@ namespace UnitTests
 			}
 		};
 
+		static constexpr unsigned maxMultiview = 32;
+
 		void Execute(
 			RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parsingContext,
 			const LightingEngineTestApparatus& testApparatus,
@@ -794,7 +794,7 @@ namespace UnitTests
 			ToolsRig::IDrawablesWriter& drawablesWriter)
 		{
 			using namespace RenderCore;
-			const unsigned maxMultiview = 32;
+			
 			RenderCore::Techniques::DrawablesPacket pkt;
 			drawablesWriter.WriteDrawables(pkt);
 
@@ -803,7 +803,7 @@ namespace UnitTests
 				auto batchCameras = cameras;
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxMultiview);
 
-				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, UInt2{64, 64});
+				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
 				parsingContext.AddShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
@@ -823,8 +823,7 @@ namespace UnitTests
 
 		ViewInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
-			const unsigned maxMultiview = 32;
-			_fragments = MakeFragments(64, maxMultiview, true);
+			_fragments = MakeFragments(s_probesToRender, maxMultiview, true);
 			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
 		}
 
@@ -893,7 +892,7 @@ namespace UnitTests
 			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 			const unsigned iterationCount = 512;
 			for (unsigned c=0; c<iterationCount; ++c)
-				RunTest<VertexInstancingShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
+				RunTest<ViewInstancingShader>(*threadContext, parsingContext, testApparatus, MakeIteratorRange(cameras), *drawablesWriter);
 			queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 
 			queryPool.EndFrame(*Metal::DeviceContext::Get(*threadContext), queryPoolFrameId);
