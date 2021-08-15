@@ -105,7 +105,7 @@ float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float 
     H.z = cosTheta;
 
     // we're just building a tangent frame to give meaning to theta and phi...
-    float3 up = (abs(normal.x) < 0.5f) ? float3(1,0,0) : float3(0,1,0);
+    float3 up = (abs(normal.y) < 0.5f) ? float3(0,1,0) : float3(1,0,0);
     float3 tangentX = normalize(cross(up, normal));
     float3 tangentY = cross(normal, tangentX);
     return tangentX * H.x + tangentY * H.y + normal * H.z;
