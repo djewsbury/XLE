@@ -14,6 +14,7 @@ namespace RenderCore
 	class IResource;
 	class IResourceView;
 	class IDescriptorSet;
+	class IThreadContext;
 }
 
 namespace RenderCore { namespace Techniques
@@ -21,6 +22,8 @@ namespace RenderCore { namespace Techniques
 	class IShaderOperator;
 	class PipelinePool;
 	class FrameBufferTarget;
+	class ParsingContext;
+	class SequencerUniformsHelper;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -36,7 +39,11 @@ namespace RenderCore { namespace LightingEngine
 	class SkyOperator
 	{
 	public:
-		void Execute(LightingEngine::LightingTechniqueIterator& iterator);
+		void Execute(
+			IThreadContext& threadContext,
+			Techniques::ParsingContext& parsingContext,
+			Techniques::SequencerUniformsHelper& seqUniforms);
+		void Execute(LightingTechniqueIterator&);
 		void SetResource(std::shared_ptr<IResourceView>);
 
 		::Assets::DependencyValidation GetDependencyValidation() const;

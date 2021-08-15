@@ -14,19 +14,27 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	void SkyOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
+	void SkyOperator::Execute(
+		IThreadContext& threadContext,
+		Techniques::ParsingContext& parsingContext,
+		Techniques::SequencerUniformsHelper& seqUniforms)
 	{
 		if (!_descSet) return;
 
 		// todo -- don't reconstruct the SequencerUniformsHelper every time here!
 		const IDescriptorSet* descSets[] = { _descSet.get() };
-		Techniques::SequencerUniformsHelper seqUniforms(*iterator._parsingContext);
 		_shader->Draw(
-			*iterator._threadContext,
-			*iterator._parsingContext,
+			threadContext,
+			parsingContext,
 			seqUniforms,
 			{},
 			MakeIteratorRange(descSets));
+	}
+
+	void SkyOperator::Execute(LightingTechniqueIterator& iterator)
+	{
+		Techniques::SequencerUniformsHelper seqUniforms{*iterator._parsingContext};
+		Execute(*iterator._threadContext, *iterator._parsingContext, seqUniforms);
 	}
 
 	void SkyOperator::SetResource(std::shared_ptr<IResourceView> texture)
