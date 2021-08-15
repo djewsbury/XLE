@@ -31,14 +31,17 @@ namespace RenderCore { namespace Techniques
     class IShaderResourceDelegate
     {
     public:
-        virtual const UniformsStreamInterface& GetInterface() = 0;
-
         virtual void WriteResourceViews(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst);
         virtual void WriteSamplers(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst);
         virtual void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst);
         virtual size_t GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx);
-        
         virtual ~IShaderResourceDelegate();
+        
+        UniformsStreamInterface _interface;
+    protected:
+		void BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements = {});
+		void BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements = {});
+		void BindSampler(unsigned slot, uint64_t hashName);
     };
 
     XLE_DEPRECATED_ATTRIBUTE class IMaterialDelegate

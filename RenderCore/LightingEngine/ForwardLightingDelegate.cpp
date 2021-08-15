@@ -74,8 +74,6 @@ namespace RenderCore { namespace LightingEngine
 	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
-		virtual const UniformsStreamInterface& GetInterface() { return _interf; }
-
         virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
 		{
 			assert(bindingFlags == 1<<0);
@@ -84,10 +82,9 @@ namespace RenderCore { namespace LightingEngine
 
 		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
 		{
-			_interf.BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
 			_normalsFitting = normalsFittingResource.GetShaderResource();
 		}
-		UniformsStreamInterface _interf;
 		std::shared_ptr<IResourceView> _normalsFitting;
 	};
 
@@ -151,11 +148,11 @@ namespace RenderCore { namespace LightingEngine
 			if (!_positionalLightOperators.empty()) _dominantLightOperatorId = 0;
 			if (!_shadowPreparationOperators->_operators.empty()) _dominantLightShadowOperator = 0;
 
-			_usi.BindResourceView(0, Utility::Hash64("LightDepthTable"));
-			_usi.BindResourceView(1, Utility::Hash64("LightList"));
-			_usi.BindResourceView(2, Utility::Hash64("EnvironmentProps"));
-			_usi.BindResourceView(3, Utility::Hash64("TiledLightBitField"));
-			_usi.BindResourceView(4, Utility::Hash64("SSR"));
+			BindResourceView(0, Utility::Hash64("LightDepthTable"));
+			BindResourceView(1, Utility::Hash64("LightList"));
+			BindResourceView(2, Utility::Hash64("EnvironmentProps"));
+			BindResourceView(3, Utility::Hash64("TiledLightBitField"));
+			BindResourceView(4, Utility::Hash64("SSR"));
 		}
 
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
@@ -308,7 +305,6 @@ namespace RenderCore { namespace LightingEngine
 			_hasPrevProjection = true;
 		}
 
-		const UniformsStreamInterface& GetInterface() override { return _usi; }
 		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
 			assert(dst.size() >= 4);
@@ -409,7 +405,6 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 	private:
-		UniformsStreamInterface _usi;
 		bool _hasPrevProjection = false;
 		Techniques::ProjectionDesc _prevProjDesc;
 	};

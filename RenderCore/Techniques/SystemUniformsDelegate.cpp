@@ -41,8 +41,6 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	const UniformsStreamInterface& SystemUniformsDelegate::GetInterface() { return _interface; }
-
 	void SystemUniformsDelegate::WriteSamplers(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst)
 	{
 		for (unsigned c=0; c<dimof(_samplers); ++c)
@@ -54,9 +52,9 @@ namespace RenderCore { namespace Techniques
 
 	SystemUniformsDelegate::SystemUniformsDelegate(IDevice& device)
 	{
-		_interface.BindImmediateData(0, Hash64("GlobalTransform"));
-		_interface.BindImmediateData(1, Hash64("LocalTransform"));
-		_interface.BindImmediateData(2, Hash64("ReciprocalViewportDimensionsCB"));
+		BindImmediateData(0, Hash64("GlobalTransform"));
+		BindImmediateData(1, Hash64("LocalTransform"));
+		BindImmediateData(2, Hash64("ReciprocalViewportDimensionsCB"));
 
 		XlZeroMemory(_localTransformFallback);
 		_localTransformFallback._localToWorld = Identity<Float3x4>();

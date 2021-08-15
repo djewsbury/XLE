@@ -85,7 +85,7 @@ namespace RenderCore { namespace Techniques
 		ShaderResourceDelegateBinding newBinding;
 		newBinding._delegate = &del;
 
-		auto& usi = del.GetInterface();
+		auto& usi = del._interface;
 		newBinding._resourceInterfaceToUSI.reserve(usi._resourceViewBindings.size());
 		for (auto b:usi._resourceViewBindings) {
 			auto existing = std::find(_finalUSI._resourceViewBindings.begin(), _finalUSI._resourceViewBindings.end(), b);

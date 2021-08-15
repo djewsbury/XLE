@@ -225,6 +225,19 @@ namespace RenderCore { namespace Techniques
     void IShaderResourceDelegate::WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) { assert(0); }
     size_t IShaderResourceDelegate::GetImmediateDataSize(ParsingContext& context, const void* objectContext, unsigned idx) { return 0; }
 
+    void IShaderResourceDelegate::BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
+    {
+        _interface.BindResourceView(slot, hashName, cbElements);
+    }
+    void IShaderResourceDelegate::BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
+    {
+        _interface.BindImmediateData(slot, hashName, cbElements);
+    }
+    void IShaderResourceDelegate::BindSampler(unsigned slot, uint64_t hashName)
+    {
+        _interface.BindImmediateData(slot, hashName);
+    }
+
 	IUniformBufferDelegate::~IUniformBufferDelegate() {}
 	IShaderResourceDelegate::~IShaderResourceDelegate() {}
 	IMaterialDelegate::~IMaterialDelegate() {}

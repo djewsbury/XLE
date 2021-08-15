@@ -83,7 +83,6 @@ namespace RenderCore { namespace LightingEngine
 		class UniformDelegate : public Techniques::IShaderResourceDelegate
 		{
 		public:
-			virtual const UniformsStreamInterface& GetInterface() override { return _interface; }
 			void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 			{
 				switch (idx) {
@@ -109,9 +108,8 @@ namespace RenderCore { namespace LightingEngine
 		
 			UniformDelegate(DMShadowPreparer& preparer) : _preparer(&preparer)
 			{
-				_interface.BindImmediateData(0, Utility::Hash64("ShadowProjection"), {});
+				BindImmediateData(0, Utility::Hash64("ShadowProjection"), {});
 			}
-			UniformsStreamInterface _interface;
 			DMShadowPreparer* _preparer;
 		};
 	};

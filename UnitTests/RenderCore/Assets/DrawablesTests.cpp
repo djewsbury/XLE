@@ -116,9 +116,7 @@ namespace UnitTests
 	class UnitTestGlobalUniforms : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
-		const RenderCore::UniformsStreamInterface& GetInterface() { return _interface; }
-
-		void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
+		void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 		{
 			switch (idx) {
 			case 0:
@@ -130,7 +128,7 @@ namespace UnitTests
 			}
 		}
 
-		size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx)
+		size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 		{
 			switch (idx) {
 			case 0:
@@ -144,11 +142,10 @@ namespace UnitTests
 
 		UnitTestGlobalUniforms(const RenderCore::ResourceDesc& targetDesc) : _targetDesc(targetDesc)
 		{
-			_interface.BindImmediateData(0, Hash64("GlobalTransform"));
-			_interface.BindImmediateData(1, Hash64("LocalTransform"));
+			BindImmediateData(0, Hash64("GlobalTransform"));
+			BindImmediateData(1, Hash64("LocalTransform"));
 		}
 
-		RenderCore::UniformsStreamInterface _interface;
 		RenderCore::ResourceDesc _targetDesc;
 	};
 
@@ -332,16 +329,11 @@ namespace UnitTests
 	class ShaderResourceDel : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
-		virtual const UniformsStreamInterface& GetInterface() override
-		{
-			return _interf; 
-		}
-
         virtual void WriteResourceViews(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
 			++_resViewQueryCount;
 			REQUIRE(bindingFlags == 1ull<<uint64_t(_realTextureSlot));
-			REQUIRE(dst.size() == _interf._resourceViewBindings.size());
+			REQUIRE(dst.size() == _interface._resourceViewBindings.size());
 			dst[_realTextureSlot] = _textureResource.get();
 		}
 
@@ -349,7 +341,7 @@ namespace UnitTests
 		{
 			++_samplerQueryCount;
 			REQUIRE(bindingFlags == 1ull<<uint64_t(_realSamplerSlot));
-			REQUIRE(dst.size() == _interf._samplerBindings.size());
+			REQUIRE(dst.size() == _interface._samplerBindings.size());
 			dst[0] = _sampler.get();
 		}
 
@@ -370,15 +362,15 @@ namespace UnitTests
 		ShaderResourceDel(IDevice& dev, std::string name, unsigned dummySlots)
 		{
 			for (unsigned c=0; c<dummySlots; ++c)
-				_interf.BindResourceView(c, Hash64("slot-doesnt-exist-" + std::to_string(c)));
+				BindResourceView(c, Hash64("slot-doesnt-exist-" + std::to_string(c)));
 			_realTextureSlot = dummySlots;
-			_interf.BindResourceView(_realTextureSlot, Hash64("SeqTex0"));
+			BindResourceView(_realTextureSlot, Hash64("SeqTex0"));
 			_realSamplerSlot = 0;
-			_interf.BindSampler(_realSamplerSlot, Hash64("SeqSampler0"));
+			BindSampler(_realSamplerSlot, Hash64("SeqSampler0"));
 			for (unsigned c=0; c<dummySlots; ++c)
-				_interf.BindImmediateData(c, Hash64("imm-slot-doesnt-exist-" + std::to_string(c)));
+				BindImmediateData(c, Hash64("imm-slot-doesnt-exist-" + std::to_string(c)));
 			_realImmediateDataSlot = dummySlots;
-			_interf.BindImmediateData(_realImmediateDataSlot, Hash64("SeqBuffer0"));
+			BindImmediateData(_realImmediateDataSlot, Hash64("SeqBuffer0"));
 
 			std::vector<uint8_t> dummyData(32*32, 0);
 			auto textureResource = dev.CreateResource(
@@ -393,7 +385,6 @@ namespace UnitTests
 			_sampler = dev.CreateSampler(SamplerDesc{});
 		}
 
-		UniformsStreamInterface _interf;
 		std::shared_ptr<IResourceView> _textureResource;
 		std::shared_ptr<ISampler> _sampler;
 

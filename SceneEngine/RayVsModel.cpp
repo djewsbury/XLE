@@ -61,13 +61,10 @@ namespace SceneEngine
 		}
 		virtual size_t GetImmediateDataSize(Techniques::ParsingContext&, const void*, unsigned idx) override { assert(idx==0); return sizeof(_data); };
 
-		virtual const UniformsStreamInterface& GetInterface() override { return _usi; }
-
 		RayDefinitionUniformDelegate()
 		{
-			_usi.BindImmediateData(0, s_binding);
+			BindImmediateData(0, s_binding);
 		}
-		UniformsStreamInterface _usi;
 		static const uint64_t s_binding;
 	};
 	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("RayDefinition");

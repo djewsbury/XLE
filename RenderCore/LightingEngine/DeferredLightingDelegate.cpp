@@ -76,8 +76,6 @@ namespace RenderCore { namespace LightingEngine
 	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
-		virtual const UniformsStreamInterface& GetInterface() { return _interf; }
-
         virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
 		{
 			assert(bindingFlags == 1<<0);
@@ -86,10 +84,9 @@ namespace RenderCore { namespace LightingEngine
 
 		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
 		{
-			_interf.BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
 			_normalsFitting = normalsFittingResource.GetShaderResource();
 		}
-		UniformsStreamInterface _interf;
 		std::shared_ptr<IResourceView> _normalsFitting;
 	};
 

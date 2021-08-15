@@ -199,8 +199,6 @@ namespace UnitTests
 	class GBufferConstructionUnitTestGlobalUniforms : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
-		const RenderCore::UniformsStreamInterface& GetInterface() override { return _interface; }
-
 		void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 		{
 			switch (idx) {
@@ -233,9 +231,9 @@ namespace UnitTests
 
 		GBufferConstructionUnitTestGlobalUniforms()
 		{
-			_interface.BindImmediateData(0, Hash64("GlobalTransform"));
-			_interface.BindImmediateData(1, Hash64("LocalTransform"));
-			_interface.BindResourceView(0, Hash64("NormalsFittingTexture"));
+			BindImmediateData(0, Hash64("GlobalTransform"));
+			BindImmediateData(1, Hash64("LocalTransform"));
+			BindResourceView(0, Hash64("NormalsFittingTexture"));
 
 			auto normalsFittingTexture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 			_normalsFittingSRV = normalsFittingTexture->GetShaderResource();
