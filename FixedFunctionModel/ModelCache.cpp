@@ -27,9 +27,9 @@ namespace FixedFunctionModel
     public:
         std::map<uint64, BoundingBox> _boundingBoxes;
 
-        LRUCache<::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>>     _modelScaffolds;
-        LRUCache<::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>>  _materialScaffolds;
-        LRUCache<ModelRenderer>     _modelRenderers;
+        LRUCachePtr<::Assets::FuturePtr<RenderCore::Assets::ModelScaffold>>     _modelScaffolds;
+        LRUCachePtr<::Assets::FuturePtr<RenderCore::Assets::MaterialScaffold>>  _materialScaffolds;
+        LRUCachePtr<ModelRenderer>     _modelRenderers;
 
         std::unique_ptr<SharedStateSet> _sharedStateSet;
 
@@ -38,7 +38,7 @@ namespace FixedFunctionModel
         Pimpl(const ModelCache::Config& cfg);
         ~Pimpl();
 
-        LRUCache<::Assets::FuturePtr<RenderCore::Assets::ModelSupplementScaffold>>   _supplements;
+        LRUCachePtr<::Assets::FuturePtr<RenderCore::Assets::ModelSupplementScaffold>>   _supplements;
 
         std::vector<const RenderCore::Assets::ModelSupplementScaffold*> 
             LoadSupplementScaffolds(

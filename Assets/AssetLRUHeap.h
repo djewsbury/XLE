@@ -30,7 +30,7 @@ namespace Assets
 		AssetLRUHeap& operator=(const AssetLRUHeap&) = delete;
 	private:
 		mutable Threading::Mutex _lock;		
-		LRUCache<Future<AssetType>> _assets;
+		LRUCachePtr<Future<AssetType>> _assets;
 	};
 
 	template<typename AssetType>
@@ -43,14 +43,14 @@ namespace Assets
 		{
 			ScopedLock(_lock);
 
-			auto& existing = _assets.Get(hash);
+			auto existing = _assets.Get(hash);
 			if (existing)
-				if (!IsInvalidated(*existing))
-					return existing;
+				if (!IsInvalidated(**existing))
+					return *existing;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
 			newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
-			_assets.Insert(hash, newFuture);
+			_assets.Insert(hash, decltype(newFuture){newFuture});
 		}
 
 		// note -- call AutoConstructToFuture outside of the mutex lock, because this operation can be expensive
@@ -72,7 +72,7 @@ namespace Assets
     {
         ScopedLock(_lock);
 		auto heapSize = _assets.GetCacheSize();
-        _assets = LRUCache<Future<AssetType>> { heapSize };
+        _assets = LRUCachePtr<Future<AssetType>> { heapSize };
     }
 
 	template<typename AssetType>

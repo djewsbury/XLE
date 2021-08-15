@@ -33,7 +33,7 @@ namespace Assets
         AssetHeapLRU& operator=(const AssetHeapLRU&) = delete;
     private:
         mutable Threading::Mutex _lock;
-        LRUCache<PtrToFuture> _assets;
+        LRUCachePtr<PtrToFuture> _assets;
         std::vector<std::pair<uint64_t, PtrToFuture>> _shadowingAssets;
 
         #if defined(_DEBUG)
@@ -142,7 +142,7 @@ namespace Assets
     {
         ScopedLock(_lock);
         unsigned cacheSize = _assets.GetCacheSize();
-        _assets = LRUCache<Future<AssetType>>{cacheSize};
+        _assets = LRUCachePtr<Future<AssetType>>{cacheSize};
         _shadowingAssets.clear();
     }
 
@@ -150,7 +150,7 @@ namespace Assets
         void AssetHeapLRU<AssetType>::SetCacheSize(unsigned newCacheSize)
     {
         ScopedLock(_lock);
-        _assets = LRUCache<Future<AssetType>>{newCacheSize};
+        _assets = LRUCachePtr<Future<AssetType>>{newCacheSize};
     }
 
     template<typename AssetType>
@@ -170,7 +170,7 @@ namespace Assets
         #if defined(_DEBUG)
             for (const auto&r : _initializationRecords) {
                 auto record = r.second;
-                auto item = const_cast<LRUCache<Future<AssetType>>&>(_assets).Get(r.first);
+                auto item = const_cast<LRUCachePtr<Future<AssetType>>&>(_assets).Get(r.first);
                 if (item) {
                     record._state = item->GetAssetState();
                     record._depVal = item->GetDependencyValidation();

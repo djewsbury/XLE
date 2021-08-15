@@ -22,7 +22,7 @@ namespace RenderCore { namespace Techniques
         ::Assets::AssetLRUHeap<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
 
 		Threading::Mutex _modelRenderersLock;
-        LRUCache<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;
+        LRUCachePtr<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool>  _pipelineAcceleratorPool;
 
         uint32_t _reloadId;
@@ -51,16 +51,16 @@ namespace RenderCore { namespace Techniques
 		::Assets::PtrToFuturePtr<SimpleModelRenderer> newFuture;
 		{
 			ScopedLock(_pimpl->_modelRenderersLock);
-			auto& existing = _pimpl->_modelRenderers.Get(hash);
+			auto existing = _pimpl->_modelRenderers.Get(hash);
 			if (existing) {
-				if (!::Assets::IsInvalidated(*existing))
-					return existing;
+				if (!::Assets::IsInvalidated(**existing))
+					return *existing;
 				++_pimpl->_reloadId;
 			}
 
 			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
 			newFuture = std::make_shared<::Assets::FuturePtr<SimpleModelRenderer>>(stringInitializer);
-			_pimpl->_modelRenderers.Insert(hash, newFuture);
+			_pimpl->_modelRenderers.Insert(hash, decltype(newFuture){newFuture});
 		}
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);

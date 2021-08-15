@@ -227,7 +227,7 @@ namespace SceneEngine
 
                 // (simple cache for recently used terrain files -- so we don't have to continually re-load every frame)
                 //      -- \todo -- this cache should be in a manager object! todo many statics in functions!
-            static LRUCache<TerrainNodeHeightCollision> CollisionCache(8);
+            static LRUCachePtr<TerrainNodeHeightCollision> CollisionCache(8);
             auto collisionObject = CollisionCache.Get(cellHash);
             if (!collisionObject) {
                 char cellFilename[MaxPath];
@@ -288,7 +288,7 @@ namespace SceneEngine
 
                 // (simple cache for recently used terrain files -- so we don't have to continually re-load every frame)
                 //      -- \todo -- this cache should be in a manager object! todo many statics in functions!
-            static LRUCache<TerrainNodeHeightCollision> CollisionCache(8);
+            static LRUCachePtr<TerrainNodeHeightCollision> CollisionCache(8);
             auto collisionObject = CollisionCache.Get(cellHash);
             if (!collisionObject) {
                 char cellFilename[MaxPath];

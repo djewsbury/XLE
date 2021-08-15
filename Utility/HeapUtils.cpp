@@ -212,7 +212,10 @@ namespace Utility
             return ~unsigned(0x0);  // threading can cause false return here -- but that shouldn't be a major issue
         }
 
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
 
             //  Marker array is simple -- just a list of positions. It will alternate between
             //  allocated and unallocated
@@ -304,7 +307,10 @@ namespace Utility
     template <typename Marker>
         bool        SpanningHeap<Marker>::BlockAdjust_Internal(unsigned ptr, unsigned size, bool allocateOperation)
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         Marker internalOffset = MarkerHeap<Marker>::ToInternalSize(ptr);
         Marker internalSize = MarkerHeap<Marker>::ToInternalSize(MarkerHeap<Marker>::AlignSize(size));
         if (_markers.size()==2) {assert(_markers[0]==0 && _markers[1]!=0);}
@@ -407,21 +413,30 @@ namespace Utility
     template <typename Marker>
         unsigned    SpanningHeap<Marker>::CalculateAvailableSpace() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         return CalculateAvailableSpace_AlreadyLocked();
     }
 
     template <typename Marker>
         unsigned    SpanningHeap<Marker>::CalculateLargestFreeBlock() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         return CalculateLargestFreeBlock_AlreadyLocked();
     }
 
     template <typename Marker>
         unsigned    SpanningHeap<Marker>::CalculateAllocatedSpace() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         if (_markers.empty()) return 0;
 
         unsigned result = 0;
@@ -437,7 +452,10 @@ namespace Utility
     template <typename Marker>
         unsigned    SpanningHeap<Marker>::CalculateHeapSize() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         if (_markers.empty()) {
             return 0;
         }
@@ -447,7 +465,10 @@ namespace Utility
     template <typename Marker>
         unsigned        SpanningHeap<Marker>::AppendNewBlock(unsigned size)
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         if (!_markers.size()) {
             _markers.push_back(0);
             _markers.push_back(0);
@@ -472,23 +493,32 @@ namespace Utility
     }
     
     template <typename Marker>
-        uint64      SpanningHeap<Marker>::CalculateHash() const
+        uint64_t      SpanningHeap<Marker>::CalculateHash() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         return Hash64(AsPointer(_markers.begin()), AsPointer(_markers.end()));
     }
 
     template <typename Marker>
         bool        SpanningHeap<Marker>::IsEmpty() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         return _markers.size() <= 2;
     }
 
     template <typename Marker>
         std::vector<unsigned> SpanningHeap<Marker>::CalculateMetrics() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
         std::vector<unsigned> result;
         result.reserve(_markers.size());
         typename std::vector<Marker>::const_iterator i = _markers.begin();
@@ -527,7 +557,10 @@ namespace Utility
     template <typename Marker>
         std::vector<DefragStep> SpanningHeap<Marker>::CalculateDefragSteps() const
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
 
         std::vector<std::pair<Marker, Marker> > allocatedBlocks;
         allocatedBlocks.reserve(_markers.size()/2);
@@ -584,7 +617,10 @@ namespace Utility
     template <typename Marker>
         void        SpanningHeap<Marker>::PerformDefrag(const std::vector<DefragStep>& defrag)
     {
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
 
             //
             //      All of the spans in the heap have moved about we have to recalculate the
@@ -634,11 +670,14 @@ namespace Utility
     }
 
     template <typename Marker>
-        std::pair<std::unique_ptr<uint8[]>, size_t> SpanningHeap<Marker>::Flatten() const
+        std::pair<std::unique_ptr<uint8_t[]>, size_t> SpanningHeap<Marker>::Flatten() const
     {
         // return a "serialized" / flattened representation of this heap
         //  -- useful to write it out to disk, or store in a compact form
-        ScopedLock(_lock);
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
 
         if (_markers.size() >= 2) {
             for (auto i=_markers.cbegin()+1; i!=_markers.cend(); ++i) {
@@ -647,7 +686,7 @@ namespace Utility
         }
 
         size_t resultSize = sizeof(Marker) * _markers.size();
-        auto result = std::make_unique<uint8[]>(resultSize);
+        auto result = std::make_unique<uint8_t[]>(resultSize);
         XlCopyMemory(result.get(), AsPointer(_markers.begin()), resultSize);
         return std::make_pair(std::move(result), resultSize);
     }
@@ -663,7 +702,7 @@ namespace Utility
     }
 
     template <typename Marker>
-        SpanningHeap<Marker>::SpanningHeap(const uint8 flattened[], size_t flattenedSize)
+        SpanningHeap<Marker>::SpanningHeap(const uint8_t flattened[], size_t flattenedSize)
     {
         _largestFreeBlockValid = false;
         _largestFreeBlock = 0;
@@ -722,7 +761,7 @@ namespace Utility
         SpanningHeap<Marker>::~SpanningHeap()
     {}
 
-    template class SpanningHeap<uint16>;
-    template class SpanningHeap<uint32>;
+    template class SpanningHeap<uint16_t>;
+    template class SpanningHeap<uint32_t>;
 }
 

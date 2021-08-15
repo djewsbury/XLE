@@ -7,7 +7,6 @@
 #pragma once
 
 #include "IteratorUtils.h"
-#include "../Core/Types.h"
 #include "Threading/Mutex.h"
 #include <vector>
 #include <algorithm>
@@ -46,10 +45,10 @@ namespace Utility
     template<typename Type> class LRUCache
     {
     public:
-        LRUCacheInsertType Insert(uint64 hashName, std::shared_ptr<Type> object);
-        std::shared_ptr<Type>& Get(uint64 hashName);
+        LRUCacheInsertType Insert(uint64_t hashName, Type&& object);
+        const Type* Get(uint64_t hashName);
 
-        IteratorRange<const std::shared_ptr<Type>*> GetObjects() const { return MakeIteratorRange(_objects); }
+        IteratorRange<const Type*> GetObjects() const { return MakeIteratorRange(_objects); }
         unsigned GetCacheSize() const { return _cacheSize; }
 
         LRUCache(unsigned cacheSize);
@@ -58,48 +57,48 @@ namespace Utility
         LRUCache(LRUCache&& moveFrom) never_throws;
         LRUCache& operator=(LRUCache&& moveFrom) never_throws;
     protected:
-        std::vector<std::shared_ptr<Type>>   _objects;
-        std::vector<std::pair<uint64, unsigned>> _lookupTable;
+        std::vector<Type> _objects;
+        std::vector<std::pair<uint64_t, unsigned>> _lookupTable;
         LRUQueue _queue;
         unsigned _cacheSize;
     };
 
     template<typename Type>
-        LRUCacheInsertType LRUCache<Type>::Insert(uint64 hashName, std::shared_ptr<Type> object)
+        using LRUCachePtr = LRUCache<std::shared_ptr<Type>>;
+
+    template<typename Type>
+        LRUCacheInsertType LRUCache<Type>::Insert(uint64_t hashName, Type&& object)
     {
             // try to insert this object into the cache (if it's not already here)
-        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64, unsigned>());
+        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64_t, unsigned>());
         if (i != _lookupTable.cend() && i->first == hashName) {
                 // already here! But we should replace, this might be an update operation
-            _objects[i->second] = object;
+            _objects[i->second] = std::move(object);
             _queue.BringToFront(i->second);
             return LRUCacheInsertType::Update;
         }
 
         if (_objects.size() < _cacheSize) {
-            _objects.push_back(object);
+            _objects.push_back(std::move(object));
             _lookupTable.insert(i, std::make_pair(hashName, unsigned(_objects.size()-1)));
             _queue.BringToFront(unsigned(_objects.size()-1));
             return LRUCacheInsertType::Add;
         }
 
             // we need to evict an existing object.
-        // SelectedModel = nullptr;
-
         unsigned eviction = _queue.GetOldestValue();
         if (eviction == ~unsigned(0x0)) {
-            assert(0); 
             return LRUCacheInsertType::Fail;
         }
 
-        _objects[eviction] = object;
+        _objects[eviction] = std::move(object);
         auto oldLookup = std::find_if(_lookupTable.cbegin(), _lookupTable.cend(), 
-            [=](const std::pair<uint64, unsigned>& p) { return p.second == eviction; });
+            [=](const std::pair<uint64_t, unsigned>& p) { return p.second == eviction; });
         assert(oldLookup != _lookupTable.cend());
         _lookupTable.erase(oldLookup);
 
             // have to search again after the erase above
-        i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64, unsigned>());
+        i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64_t, unsigned>());
         _lookupTable.insert(i, std::make_pair(hashName, eviction));
 
         _queue.BringToFront(eviction);
@@ -107,16 +106,15 @@ namespace Utility
     }
 
     template<typename Type>
-        std::shared_ptr<Type>& LRUCache<Type>::Get(uint64 hashName)
+        const Type* LRUCache<Type>::Get(uint64_t hashName)
     {
             // find the given object, and move it to the front of the queue
-        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64, unsigned>());
+        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64_t, unsigned>());
         if (i != _lookupTable.cend() && i->first == hashName) {
             _queue.BringToFront(i->second);
-            return _objects[i->second];
+            return &_objects[i->second];
         }
-        static std::shared_ptr<Type> dummy;
-        return dummy;
+        return nullptr;
     }
 
     template<typename Type>
@@ -150,6 +148,104 @@ namespace Utility
         _queue = std::move(moveFrom._queue);
         _cacheSize = moveFrom._cacheSize;
         moveFrom._cacheSize = 0;
+        return *this;
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class IndexingLRUCache
+    {
+    public:
+        using Index = unsigned;
+        std::pair<LRUCacheInsertType, Index> Insert(uint64_t hashName);
+        Index Get(uint64_t hashName);
+
+        unsigned GetCacheSize() const { return _cacheSize; }
+
+        IndexingLRUCache(unsigned cacheSize);
+        ~IndexingLRUCache();
+
+        IndexingLRUCache(IndexingLRUCache&& moveFrom) never_throws;
+        IndexingLRUCache& operator=(IndexingLRUCache&& moveFrom) never_throws;
+    protected:
+        std::vector<std::pair<uint64_t, Index>> _lookupTable;
+        LRUQueue _queue;
+        unsigned _usedSlots;
+        unsigned _cacheSize;
+    };
+
+    inline auto IndexingLRUCache::Insert(uint64_t hashName) -> std::pair<LRUCacheInsertType, Index>
+    {
+        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64_t, unsigned>());
+        if (i != _lookupTable.cend() && i->first == hashName) {
+            _queue.BringToFront(i->second);
+            return {LRUCacheInsertType::Update, i->second};
+        }
+
+        if (_usedSlots < _cacheSize) {
+            ++_usedSlots;
+            _lookupTable.insert(i, std::make_pair(hashName, unsigned(_usedSlots-1)));
+            _queue.BringToFront(unsigned(_usedSlots-1));
+            return {LRUCacheInsertType::Add, unsigned(_usedSlots-1)};
+        }
+
+            // we need to evict an existing object.
+        unsigned eviction = _queue.GetOldestValue();
+        if (eviction == ~0u) {
+            return {LRUCacheInsertType::Fail, ~0u};
+        }
+
+        _lookupTable.insert(i, std::make_pair(hashName, eviction));
+
+        auto oldLookup = std::find_if(_lookupTable.cbegin(), _lookupTable.cend(), 
+            [=](const std::pair<uint64_t, unsigned>& p) { return p.second == eviction && p.first != hashName; });
+        assert(oldLookup != _lookupTable.cend());
+        _lookupTable.erase(oldLookup);
+
+        _queue.BringToFront(eviction);
+        return {LRUCacheInsertType::EvictAndReplace, eviction};
+    }
+
+    inline auto IndexingLRUCache::Get(uint64_t hashName) -> Index
+    {
+            // find the given object, and move it to the front of the queue
+        auto i = std::lower_bound(_lookupTable.cbegin(), _lookupTable.cend(), hashName, CompareFirst<uint64_t, unsigned>());
+        if (i != _lookupTable.cend() && i->first == hashName) {
+            _queue.BringToFront(i->second);
+            return i->second;
+        }
+        return ~0u;
+    }
+
+    inline IndexingLRUCache::IndexingLRUCache(unsigned cacheSize)
+    : _queue(cacheSize) 
+    , _cacheSize(cacheSize)
+    {
+        _lookupTable.reserve(cacheSize);
+        _usedSlots = 0;
+    }
+
+    inline IndexingLRUCache::~IndexingLRUCache()
+    {}
+
+    inline IndexingLRUCache::IndexingLRUCache(IndexingLRUCache&& moveFrom) never_throws
+    : _lookupTable(std::move(moveFrom._lookupTable))
+    , _queue(std::move(moveFrom._queue))
+    , _cacheSize(moveFrom._cacheSize)
+    , _usedSlots(moveFrom._usedSlots)
+    {
+        moveFrom._cacheSize = 0;
+        moveFrom._usedSlots = 0;
+    }
+
+    inline IndexingLRUCache& IndexingLRUCache::operator=(IndexingLRUCache&& moveFrom) never_throws
+    {
+        _lookupTable = std::move(moveFrom._lookupTable);
+        _queue = std::move(moveFrom._queue);
+        _cacheSize = moveFrom._cacheSize;
+        _usedSlots = moveFrom._usedSlots;
+        moveFrom._cacheSize = 0;
+        moveFrom._usedSlots = 0;
         return *this;
     }
 
@@ -191,7 +287,7 @@ namespace Utility
         unsigned            CalculateLargestFreeBlock() const;
         unsigned            CalculateAllocatedSpace() const;
         unsigned            CalculateHeapSize() const;
-        uint64              CalculateHash() const;
+        uint64_t              CalculateHash() const;
         bool                IsEmpty() const;
 
         unsigned            AppendNewBlock(unsigned size);
@@ -200,11 +296,11 @@ namespace Utility
         std::vector<DefragStep>     CalculateDefragSteps() const;
         void                        PerformDefrag(const std::vector<DefragStep>& defrag);
 
-        std::pair<std::unique_ptr<uint8[]>, size_t> Flatten() const;
+        std::pair<std::unique_ptr<uint8_t[]>, size_t> Flatten() const;
 
         SpanningHeap();
         SpanningHeap(unsigned size);
-        SpanningHeap(const uint8 flattened[], size_t flattenedSize);
+        SpanningHeap(const uint8_t flattened[], size_t flattenedSize);
         ~SpanningHeap();
 
         SpanningHeap(SpanningHeap&& moveFrom) never_throws;
@@ -213,9 +309,12 @@ namespace Utility
         const SpanningHeap& operator=(const SpanningHeap& cloneFrom);
     protected:
         std::vector<Marker>         _markers;
-        mutable Threading::Mutex    _lock;
         mutable bool                _largestFreeBlockValid;
         mutable Marker              _largestFreeBlock;
+
+        #if defined(_DEBUG)
+            mutable Threading::Mutex    _lock;
+        #endif
 
         Marker      CalculateLargestFreeBlock_Internal() const;
         bool        BlockAdjust_Internal(unsigned ptr, unsigned size, bool allocateOperation);
@@ -223,7 +322,7 @@ namespace Utility
         unsigned    CalculateLargestFreeBlock_AlreadyLocked() const;
     };
 
-    typedef SpanningHeap<uint16> SimpleSpanningHeap;
+    using SimpleSpanningHeap = SpanningHeap<uint16_t>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
