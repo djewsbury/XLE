@@ -413,6 +413,12 @@ namespace RenderCore { namespace ImplVulkan
 		transformFeedbackFeatures.geometryStreams = true;
 		transformFeedbackFeatures.transformFeedback = true;
 
+		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
+        multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+		multiViewFeatures.multiview = true;
+		multiViewFeatures.multiviewGeometryShader = true;
+        transformFeedbackFeatures.pNext = &multiViewFeatures;
+
 		VkPhysicalDeviceFeatures2KHR enabledFeatures2 = {};
 		enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
 		enabledFeatures2.pNext = &transformFeedbackFeatures;
@@ -561,7 +567,9 @@ namespace RenderCore { namespace ImplVulkan
     {
         if (!_underlying) {
 			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface);
-			LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
+			#if defined(OSSERVICES_ENABLE_LOG)
+				LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
+			#endif
 			_underlying = CreateUnderlyingDevice(_physDev);
 			auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
 			_objectFactory = Metal_Vulkan::ObjectFactory(_physDev._dev, _underlying, extensionFunctions);

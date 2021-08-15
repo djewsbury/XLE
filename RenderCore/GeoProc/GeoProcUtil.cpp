@@ -63,13 +63,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 #pragma clang diagnostic ignored "-Wswitch"     // (enumeration values not handled)
 
-    static Float4 AsFloat4(const void* rawData, Format nativeFormat)
+    Float4 AsFloat4(const void* rawData, unsigned nativeFormat)
     {   
             //
             //      todo -- this needs to move to the metal layer, so it can use
             //              platform specific formats
             //
-        switch (nativeFormat) {
+        switch ((Format)nativeFormat) {
         case Format::R32G32B32A32_FLOAT:    return *(const Float4*)rawData;
         case Format::R32G32B32_FLOAT:       return Float4(((const float*)rawData)[0], ((const float*)rawData)[1], ((const float*)rawData)[2], 0.f);
         case Format::R32G32_FLOAT:          return Float4(((const float*)rawData)[0], ((const float*)rawData)[1], 0.f, 1.f);
@@ -116,7 +116,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         assert(elementDesc._alignedByteOffset != ~unsigned(0x0));
         for (size_t c=0; c<vertexCount; ++c) {
             const void* v    = PtrAdd(vertexData, vertexStride*c + elementDesc._alignedByteOffset);
-            Float3 position  = Truncate(AsFloat4(v, elementDesc._nativeFormat));
+            Float3 position  = Truncate(AsFloat4(v, (unsigned)elementDesc._nativeFormat));
             assert(!std::isinf(position[0]) && !std::isinf(position[1]) && !std::isinf(position[2]));
             AddToBoundingBox(boundingBox, position, localToWorld);
         }

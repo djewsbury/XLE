@@ -1837,15 +1837,27 @@ namespace RenderCore { namespace Techniques
                         });
 
                     if (compat == workingAttachments.end() && interfaceAttachment.GetOutputSemanticBinding()) {
-                        // Look for a buffer with no assigned semantic. It will take on the semantic we
-                        // give it
+
+                        // Be a little more flexible by looking for a buffer with a compatible semantic, even if it means overwriting
+                        // data that's already there
                         compat = std::find_if(
                             workingAttachments.begin(), workingAttachments.end(),
                             [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
-                                return (workingAttachment._shouldReceiveDataForSemantic == 0)
-                                    && (workingAttachment._state == PreregisteredAttachment::State::Uninitialized)
+                                return (workingAttachment._shouldReceiveDataForSemantic == interfaceAttachment.GetOutputSemanticBinding()) || (workingAttachment._containsDataForSemantic == interfaceAttachment.GetOutputSemanticBinding())
                                     && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
                             });
+
+                        if (compat == workingAttachments.end()) {
+                            // Look for a buffer with no assigned semantic. It will take on the semantic we
+                            // give it
+                            compat = std::find_if(
+                                workingAttachments.begin(), workingAttachments.end(),
+                                [&interfaceAttachment, fbProps](const WorkingAttachment& workingAttachment) {
+                                    return (workingAttachment._shouldReceiveDataForSemantic == 0)
+                                        && (workingAttachment._state == PreregisteredAttachment::State::Uninitialized)
+                                        && IsCompatible(workingAttachment, interfaceAttachment, fbProps);
+                                });
+                        }
                     }
 
                     if (compat == workingAttachments.end() && interfaceAttachment._desc._format != Format::Unknown) {

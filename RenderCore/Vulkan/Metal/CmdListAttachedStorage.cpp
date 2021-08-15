@@ -5,6 +5,7 @@
 #include "CmdListAttachedStorage.h"
 #include "ObjectFactory.h"
 #include "DeviceContext.h"
+#include "TextureView.h"
 #include "IncludeVulkan.h"
 #include "../../BufferView.h"
 #include "../../../OSServices/Log.h"
@@ -400,6 +401,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	ConstantBufferView TemporaryStorageResourceMap::AsConstantBufferView()
 	{
 		return ConstantBufferView { _resource.get(), (unsigned)_beginAndEndInResource.first, (unsigned)_beginAndEndInResource.second };
+	}
+
+	std::shared_ptr<IResourceView> TemporaryStorageResourceMap::AsResourceView()
+	{
+		return std::make_shared<ResourceView>(
+			GetObjectFactory(),
+			_resource,
+			(unsigned)_beginAndEndInResource.first, (unsigned)(_beginAndEndInResource.second-_beginAndEndInResource.first));
 	}
 
 	TemporaryStorageResourceMap::TemporaryStorageResourceMap(

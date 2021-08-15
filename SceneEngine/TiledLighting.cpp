@@ -397,7 +397,7 @@ namespace SceneEngine
                 auto& tileLightingResources = GetTileLightingResources(*threadContext.GetDevice(), mainViewportWidth, mainViewportHeight, 16);
                 const bool isShadowsPass = false;
                 auto& pipelineLayoutAsset = *::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
-                    pool->GetDevice(), pool->GetCommonResources(), 
+                    pool->GetDevice(),
                     "xleres/Deferred/tiled.pipeline:BeamsDebugging");
                 auto& debuggingShader = *::Assets::Actualize<Metal::ShaderProgram>(
                     pipelineLayoutAsset.GetPipelineLayout(),

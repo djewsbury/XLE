@@ -450,11 +450,25 @@ namespace RenderCore { namespace Metal_Vulkan
         _memProps = std::make_unique<VkPhysicalDeviceMemoryProperties>(VkPhysicalDeviceMemoryProperties{});
         vkGetPhysicalDeviceMemoryProperties(physDev, _memProps.get());
 
+        VkPhysicalDeviceProperties2 physDevProps2 = {};
+        physDevProps2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        VkPhysicalDeviceMultiviewProperties multiViewProps = {};
+        multiViewProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES;
+        physDevProps2.pNext = &multiViewProps;
+        vkGetPhysicalDeviceProperties2(physDev, &physDevProps2);
+
+        VkPhysicalDeviceFeatures2 physDevFeatures2 = {};
+        physDevFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
+        multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+        physDevFeatures2.pNext = &multiViewFeatures;
+        vkGetPhysicalDeviceFeatures2(physDev, &physDevFeatures2);
+
         _physDevProperties = std::make_unique<VkPhysicalDeviceProperties>(VkPhysicalDeviceProperties{});
-        vkGetPhysicalDeviceProperties(physDev, _physDevProperties.get());
+        *_physDevProperties = physDevProps2.properties;
 
         _physDevFeatures = std::make_unique<VkPhysicalDeviceFeatures>(VkPhysicalDeviceFeatures{});
-        vkGetPhysicalDeviceFeatures(physDev, _physDevFeatures.get());
+        *_physDevFeatures = physDevFeatures2.features;
 
 		_immediateDestruction = CreateImmediateDestroyer(_device);
 		_destruction = _immediateDestruction;

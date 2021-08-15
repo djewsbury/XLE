@@ -23,5 +23,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                             const Float4x4& localToWorld);
     std::pair<Float3, Float3>   InvalidBoundingBox();
 
+    Float4 AsFloat4(const void* rawData, unsigned nativeFormat);
+
     Assets::VertexElement FindPositionElement(const Assets::VertexElement elements[], size_t elementCount);
 }}}

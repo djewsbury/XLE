@@ -46,6 +46,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VertexBufferView AsVertexBufferView();
 		IndexBufferView AsIndexBufferView(Format indexFormat);
 		ConstantBufferView AsConstantBufferView();
+		std::shared_ptr<IResourceView> AsResourceView();
 
 		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&) = delete;
 		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&) = delete;

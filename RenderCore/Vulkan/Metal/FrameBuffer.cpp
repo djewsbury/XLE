@@ -225,7 +225,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			AttachmentDesc _desc;
 			Internal::AttachmentResourceUsageType::BitField _attachmentUsage = 0;
 		};
-		std::vector<std::pair<AttachmentName, WorkingAttachmentResource>> workingAttachments;
+		std::vector<std::pair<AttachmentName, WorkingAttachmentResource>> _workingAttachments;
 
 		struct WorkingViewedAttachment
 		{
@@ -233,7 +233,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			TextureViewDesc _view;
 			uint64_t _viewHash;
 		};
-		std::vector<WorkingViewedAttachment> workingViewedAttachments;
+		std::vector<WorkingViewedAttachment> _workingViewedAttachments;
 
 		struct SubpassDependency
 		{
@@ -245,7 +245,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned _subpassSecond = ~0u;
 			Internal::AttachmentResourceUsageType::BitField _usageSecond = 0;
 		};
-		std::vector<SubpassDependency> dependencies;
+		std::vector<SubpassDependency> _dependencies;
 
 		VkAttachmentDescription2 CreateAttachmentDescription(AttachmentName resName, const WorkingAttachmentResource& res, const TextureViewDesc& view)
 		{
@@ -326,9 +326,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkAttachmentReference2 CreateAttachmentReference(AttachmentName resourceName, const TextureViewDesc& view, Internal::AttachmentResourceUsageType::BitField subpassUsage, unsigned subpassIdx)
 		{
-			auto i = FindIf(workingAttachments, [resourceName](auto& i) { return i.first == resourceName; });
-			if (i == workingAttachments.end()) {
-				i = workingAttachments.insert(workingAttachments.end(), {resourceName, WorkingAttachmentResource{}});
+			auto i = FindIf(_workingAttachments, [resourceName](auto& i) { return i.first == resourceName; });
+			if (i == _workingAttachments.end()) {
+				i = _workingAttachments.insert(_workingAttachments.end(), {resourceName, WorkingAttachmentResource{}});
 				assert(resourceName < _layout->GetAttachments().size());
 				i->second._desc = _layout->GetAttachments()[resourceName];
 
@@ -341,12 +341,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
 			i->second._attachmentUsage |= subpassUsage;
-			auto mappedAttachmentIdx = (unsigned)std::distance(workingAttachments.begin(), i);
+			auto mappedAttachmentIdx = (unsigned)std::distance(_workingAttachments.begin(), i);
 			uint64_t viewHash = view.GetHash();
-			auto i2 = FindIf(workingViewedAttachments, [viewHash, mappedAttachmentIdx](auto& i) { 
+			auto i2 = FindIf(_workingViewedAttachments, [viewHash, mappedAttachmentIdx](auto& i) { 
 				return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
-			if (i2 == workingViewedAttachments.end())
-				i2 = workingViewedAttachments.insert(workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash});
+			if (i2 == _workingViewedAttachments.end())
+				i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash});
 
 			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
 			// We need to do this sometimes even when it seems like it shouldn't be required -- such as 2 subpasses that use the same depth/stencil buffer (otherwise we get validation errors)
@@ -360,22 +360,22 @@ namespace RenderCore { namespace Metal_Vulkan
 				for (const auto& a:spCheck.GetInputs()) if (a._resourceName == resourceName && ViewsOverlap(a._window, view)) flags |= Internal::AttachmentResourceUsageType::Input;
 				// todo -- for attachments registered as non-framebuffer-views, we can't check if a dependency is required
 				if (flags) {
-					dependencies.push_back({resourceName, (unsigned)spCheckIdx, flags, subpassIdx, subpassUsage});
+					_dependencies.push_back({resourceName, (unsigned)spCheckIdx, flags, subpassIdx, subpassUsage});
 					// don't go back any further than the first subpass dependency for any given resource. If the resource
 					// is used by a previous subpass; then the subpass spCheckIdx will already have that dependency 
 					break;
 				}
 			}
 
-			return MakeAttachmentReference((uint32_t)std::distance(workingViewedAttachments.begin(), i2), subpassUsage, view);
+			return MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), subpassUsage, view);
 		}
 		
 		RenderPassHelper(const FrameBufferDesc& layout)
 		: _layout(&layout)
 		{
 			auto subpasses = layout.GetSubpasses();
-			workingAttachments.reserve(subpasses.size()*2);	// approximate
-			dependencies.reserve(subpasses.size()*2);	// approximate
+			_workingAttachments.reserve(subpasses.size()*2);	// approximate
+			_dependencies.reserve(subpasses.size()*2);	// approximate
 		}
 
 		const FrameBufferDesc* _layout;
@@ -465,9 +465,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the VkAttachmentDescription objects
         std::vector<VkAttachmentDescription2> attachmentDescs;
-		attachmentDescs.reserve(helper.workingViewedAttachments.size());
-		for (const auto& a:helper.workingViewedAttachments) {
-			auto& res = helper.workingAttachments[a._mappedAttachmentIdx];
+		attachmentDescs.reserve(helper._workingViewedAttachments.size());
+		for (const auto& a:helper._workingViewedAttachments) {
+			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
 			attachmentDescs.push_back(helper.CreateAttachmentDescription(res.first, res.second, a._view));
 		}
 
@@ -485,7 +485,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// explicitly creating them here.
 
 			std::vector<RenderPassHelper::SubpassDependency> terminatingDependencies;
-			for (const auto& d:helper.dependencies)
+			for (const auto& d:helper._dependencies)
 				if (d._subpassSecond == c && d._subpassFirst != ~0u)
 					terminatingDependencies.push_back(d);
 
@@ -639,17 +639,17 @@ namespace RenderCore { namespace Metal_Vulkan
             } 
         }
 
-        VkImageView rawViews[16];
+        VkImageView rawViews[helper._workingViewedAttachments.size()];
 		unsigned rawViewCount = 0;
-		_clearValuesOrdering.reserve(helper.workingViewedAttachments.size());
+		_clearValuesOrdering.reserve(helper._workingViewedAttachments.size());
         MaxDims maxDims;
 
-        for (const auto&a:helper.workingViewedAttachments) {
+        for (const auto&a:helper._workingViewedAttachments) {
 			// Note that we can't support TextureViewDesc properly here, because we don't support 
 			// the same resource being used with more than one view
 			// Note that bind flags/usages are not particular important for texture views in Vulkan
 			// so we don't create unique views for each usage type
-			auto& res = helper.workingAttachments[a._mappedAttachmentIdx];
+			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
 			auto rtv = namedResources.GetResourceView(
 				res.first, AsBindFlag(res.second._attachmentUsage), a._view,
 				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
