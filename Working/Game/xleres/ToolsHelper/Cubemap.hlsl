@@ -77,7 +77,7 @@ float CubeMapAreaElement(float x, float y)
     return atan2(x * y, sqrt(x * x + y * y + 1.f));
 }
 
-float CubeMapTexelSolidAngle(uint2 tc, uint2 dims)
+float CubeMapTexelSolidAngle(float2 faceCoordMin, float2 faceCoordMax)
 {
         // Based on the method from here:
         //      http://www.rorydriscoll.com/2012/01/15/cubemap-texel-solid-angle/
@@ -87,18 +87,8 @@ float CubeMapTexelSolidAngle(uint2 tc, uint2 dims)
         // the comments section for a number of altnerative derivations (including
         // an interesting formula for the ratio of the area of a texel and the area on
         // the equivalent sphere surface).
-
-    float2 reciprocalDims = 1.0f / float2(dims);
-
-        // scale up to [-1, 1] range (inclusive), offset by 0.5 to point to texel center.
-    float U = (2.0f * reciprocalDims.x * (float(tc.x) + 0.5f)) - 1.0f;
-    float V = (2.0f * reciprocalDims.y * (float(tc.y) + 0.5f)) - 1.0f;
-
-        // U and V are the -1..1 texture coordinate on the current face.
-        // Get projected area for this texel
-    float x0 = U - reciprocalDims.x;
-    float y0 = V - reciprocalDims.y;
-    float x1 = U + reciprocalDims.x;
-    float y1 = V + reciprocalDims.y;
-    return CubeMapAreaElement(x0, y0) - CubeMapAreaElement(x0, y1) - CubeMapAreaElement(x1, y0) + CubeMapAreaElement(x1, y1);
+    return CubeMapAreaElement(faceCoordMin.x, faceCoordMin.y) 
+	 	 - CubeMapAreaElement(faceCoordMin.x, faceCoordMax.y)
+		 - CubeMapAreaElement(faceCoordMax.x, faceCoordMin.y)
+		 + CubeMapAreaElement(faceCoordMax.x, faceCoordMax.y);
 }

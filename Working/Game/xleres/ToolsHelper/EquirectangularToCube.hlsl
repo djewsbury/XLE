@@ -34,22 +34,6 @@ void swap(inout float lhs, inout float rhs)
 float minX(float x, float y, float z, float w) { return min(min(min(x, y), z), w); }
 float maxX(float x, float y, float z, float w) { return max(max(max(x, y), z), w); }
 
-float CubeMapTexelSolidAngle(float2 faceCoordMin, float2 faceCoordMax)
-{
-        // Based on the method from here:
-        //      http://www.rorydriscoll.com/2012/01/15/cubemap-texel-solid-angle/
-        // We can calculate the solid angle of a single texel of the
-        // cube map (which represents its weight in an angular based system)
-        // On that page, Rory shows an algebraic derivation of this formula. See also
-        // the comments section for a number of altnerative derivations (including
-        // an interesting formula for the ratio of the area of a texel and the area on
-        // the equivalent sphere surface).
-    return CubeMapAreaElement(faceCoordMin.x, faceCoordMin.y) 
-	 	 - CubeMapAreaElement(faceCoordMin.x, faceCoordMax.y)
-		 - CubeMapAreaElement(faceCoordMax.x, faceCoordMin.y)
-		 + CubeMapAreaElement(faceCoordMax.x, faceCoordMax.y);
-}
-
 float4 LoadInput(float2 xy, int2 dims)
 {
 	return Input.Load(uint3((int(xy.x)+dims.x)%dims.x, (int(xy.y)+dims.y)%dims.y, 0));
