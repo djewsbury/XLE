@@ -206,11 +206,22 @@ namespace Assets
 		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal.first, storeRefCounts, hashCode);
 	}
 
-	static std::string MakeSafeName(StringSection<> input)
+	static std::string MakeSafeName(StringSection<> input, size_t sizeLimit = std::numeric_limits<size_t>::max())
 	{
 		auto result = input.AsString();
 		for (auto&b:result)
 			if (b == ':' || b == '*' || b == '/' || b == '\\') b = '-';
+		if (result.size() > sizeLimit) {
+			// shorten, but try to keep extension
+			auto splitter = MakeFileNameSplitter(result);
+			assert(splitter.ParametersWithDivider().IsEmpty());
+			if (!splitter.ExtensionWithPeriod().IsEmpty() && (splitter.ExtensionWithPeriod().size()+1) <= sizeLimit) {
+				auto extSize = splitter.ExtensionWithPeriod().size();
+				auto nonExtLength = sizeLimit - extSize;
+				result.erase(result.begin()+nonExtLength, result.end()-extSize);
+			} else
+				result.erase(result.begin()+sizeLimit, result.end());
+		}
 		return result;
 	}
 
@@ -242,6 +253,8 @@ namespace Assets
 			compileProductsFile._dependencies.push_back(adjustedDep);
 		}
 
+		// MakeProductsFileName limits the result to MaxPath-20
+		//	Those extra 20 characters allow for: "-<blockname>.metrics.s" so long as <blockname> does not exceed 9 characters 
 		auto productsName = MakeProductsFileName(archivableName);
 		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(productsName).DriveAndPath());
 		std::vector<std::pair<std::string, std::string>> renameOps;
@@ -253,42 +266,40 @@ namespace Assets
 			if (a._chunkTypeCode == ChunkType_Metrics) {
 				std::string metricsName;
 				if (!a._name.empty()) {
-					metricsName = productsName + "-" + MakeSafeName(a._name) + ".metrics";
+					metricsName = productsName + "-" + MakeSafeName(a._name, 9) + ".metrics";
 				} else 
 					metricsName = productsName + ".metrics";
-				auto outputFile = OpenFileInterface(*_filesystem, metricsName + ".staging", "wb", 0);
+				auto outputFile = OpenFileInterface(*_filesystem, metricsName + ".s", "wb", 0);
 				outputFile->Write((const void*)AsPointer(a._data->cbegin()), 1, a._data->size());
 				compileProductsFile._compileProducts.push_back({a._chunkTypeCode, metricsName});
-				renameOps.push_back({metricsName + ".staging", metricsName});
+				renameOps.push_back({metricsName + ".s", metricsName});
 			} else if (a._chunkTypeCode == ChunkType_Log) {
 				std::string metricsName;
 				if (!a._name.empty()) {
-					metricsName = productsName + "-" + MakeSafeName(a._name) + ".log";
+					metricsName = productsName + "-" + MakeSafeName(a._name, 9) + ".log";
 				} else 
 					metricsName = productsName + ".log";
-				auto outputFile = OpenFileInterface(*_filesystem, metricsName + ".staging", "wb", 0);
+				auto outputFile = OpenFileInterface(*_filesystem, metricsName + ".s", "wb", 0);
 				outputFile->Write((const void*)AsPointer(a._data->cbegin()), 1, a._data->size());
 				compileProductsFile._compileProducts.push_back({a._chunkTypeCode, metricsName});
-				renameOps.push_back({metricsName + ".staging", metricsName});
+				renameOps.push_back({metricsName + ".s", metricsName});
 			} else {
 				chunksInMainFile.push_back(a);
 			}
 
 		if (chunksInMainFile.size() == 1) {
 			auto& a = chunksInMainFile[0];
-			std::string mainArtifactName = productsName + "-" + MakeSafeName(a._name);
-			if (a._name.find('.') == std::string::npos)
-				mainArtifactName += ".artifact";
-			auto outputFile = OpenFileInterface(*_filesystem, mainArtifactName + ".staging", "wb", 0);
+			std::string mainArtifactName = productsName + "-" + MakeSafeName(a._name, 9);
+			auto outputFile = OpenFileInterface(*_filesystem, mainArtifactName + ".s", "wb", 0);
 			outputFile->Write((const void*)AsPointer(a._data->cbegin()), 1, a._data->size());
 			compileProductsFile._compileProducts.push_back({a._chunkTypeCode, mainArtifactName});
-			renameOps.push_back({mainArtifactName + ".staging", mainArtifactName});
+			renameOps.push_back({mainArtifactName + ".s", mainArtifactName});
 		} else if (!chunksInMainFile.empty()) {
 			auto mainBlobName = productsName + ".chunk";
-			auto outputFile = OpenFileInterface(*_filesystem, mainBlobName + ".staging", "wb", 0);
+			auto outputFile = OpenFileInterface(*_filesystem, mainBlobName + ".s", "wb", 0);
 			ChunkFile::BuildChunkFile(*outputFile, MakeIteratorRange(chunksInMainFile), _compilerVersionInfo);
 			compileProductsFile._compileProducts.push_back({ChunkType_Multi, mainBlobName});
-			renameOps.push_back({mainBlobName + ".staging", mainBlobName});
+			renameOps.push_back({mainBlobName + ".s", mainBlobName});
 		}
 
 		// note -- we can set compileProductsFile._basePath here, and then make the dependencies
@@ -301,11 +312,11 @@ namespace Assets
 		*/
 
 		{
-			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".staging", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
+			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
 			FileOutputStream stream(productsFile);
 			OutputStreamFormatter fmtter(stream);
 			fmtter << compileProductsFile;
-			renameOps.push_back({productsName + ".staging", productsName});
+			renameOps.push_back({productsName + ".s", productsName});
 		}
 
 #if defined(_DEBUG)
@@ -335,6 +346,17 @@ namespace Assets
 		result.reserve(result.size() + archivableName.size());
 		for (auto b:archivableName)
 			result.push_back((b != ':' && b != '*')?b:'-');
+
+		const auto graceChars = 20;		// allow some space for concatenations
+		if (result.size() > (MaxPath-graceChars)) {
+			// shorten by replacing part of the name with a hash
+			auto breakPoint = result.begin()+(MaxPath-graceChars-16);
+			if (std::find(breakPoint, result.end(), '/') != result.end() || std::find(breakPoint, result.end(), '\\') != result.end())
+				Throw(std::runtime_error("Loose file cache directory name is too long to shorten: " + result));
+			auto hash = Hash64(MakeStringSection(breakPoint, result.end()));
+			result.erase(breakPoint, result.end());
+			result += std::to_string(hash);
+		}
 		return result;
 	}
 
