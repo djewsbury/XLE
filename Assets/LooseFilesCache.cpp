@@ -10,6 +10,7 @@
 #include "ChunkFileContainer.h"
 #include "IArtifact.h"
 #include "DepVal.h"
+#include "BlockSerializer.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
@@ -383,6 +384,21 @@ namespace Assets
 		return nullptr;
 	}
 
+	static std::unique_ptr<uint8_t[], PODAlignedDeletor> TryLoadFileAsAlignedBuffer(IFileSystem&fs, StringSection<char> sourceFileName, size_t& res)
+	{
+		std::unique_ptr<IFileInterface> file;
+		if (TryOpen(file, fs, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
+			size_t size = file->GetSize();
+			if (size) {
+				uint8_t* mem = (uint8*)XlMemAlign(size, sizeof(uint64_t));
+				auto result = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
+				file->Read(result.get(), 1, size);
+				return result;
+			}
+		}
+		return nullptr;
+	}
+
 	class CompileProductsArtifactCollection : public IArtifactCollection
 	{
 	public:
@@ -415,6 +431,28 @@ namespace Assets
 							foundExactMatch = true;
 							break;
 						}
+				} else if (requests[r]._dataType == ArtifactRequest::DataType::BlockSerializer || requests[r]._dataType == ArtifactRequest::DataType::Raw) {
+					for (const auto&prod:_productsFile._compileProducts)
+						if (prod._type == requests[r]._chunkTypeCode) {
+							size_t size = 0;
+							auto fileData = TryLoadFileAsAlignedBuffer(*_filesystem, prod._intermediateArtifact, size);
+							if (requests[r]._dataType == ArtifactRequest::DataType::BlockSerializer)
+								Block_Initialize(fileData.get());
+							result[r] = {std::move(fileData), size, nullptr, nullptr};
+							foundExactMatch = true;
+							break;
+						}
+				} else if (requests[r]._dataType == ArtifactRequest::DataType::ReopenFunction) {
+					for (const auto&prod:_productsFile._compileProducts)
+						if (prod._type == requests[r]._chunkTypeCode) {
+							result[r]._reopenFunction = [fs=_filesystem, fn=prod._intermediateArtifact]() -> std::shared_ptr<IFileInterface> {
+								return OpenFileInterface(*fs, fn, "rb", 0);
+							};
+							foundExactMatch = true;
+							break;
+						}
+				} else {
+					assert(0);
 				}
 
 				if (!foundExactMatch) {
