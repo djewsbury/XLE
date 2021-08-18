@@ -25,4 +25,10 @@ PipelineLayout ImmediateDrawables
 	DescriptorSet Sequencer;
 	DescriptorSet Material;
 	DescriptorSet Numeric;
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+	};
 };
