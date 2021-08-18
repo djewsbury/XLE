@@ -239,8 +239,6 @@ namespace RenderCore { namespace LightingEngine
 		assert(compiledTechnique._isConstructionCompleted); 
 		_steps = compiledTechnique._steps;
 		_stepIterator = _steps.begin();
-
-		_pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 	}
 
 	static void Remove(std::vector<Techniques::PreregisteredAttachment>& prereg, uint64_t semantic)

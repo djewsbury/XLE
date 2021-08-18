@@ -825,9 +825,18 @@ namespace RenderCore { namespace Techniques
 		// trigger a rebuild of any that appear to be out of date.
 		// This allows us to support hotreloading when files change, etc
 		std::vector<std::shared_ptr<SequencerConfig>> lockedSequencerConfigs;
+		bool sequencerInvalidated[_sequencerConfigById.size()];
+		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) sequencerInvalidated[c] = false;
 		lockedSequencerConfigs.reserve(_sequencerConfigById.size());
-		for (auto&c:_sequencerConfigById)
-			lockedSequencerConfigs.emplace_back(c.second.lock());
+		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
+			auto cfg = _sequencerConfigById[c].second.lock();
+			if (cfg->_pipelineLayout->GetDependencyValidation().GetValidationIndex() != 0) {
+				// rebuild pipeline layout asset
+				cfg->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout());
+				sequencerInvalidated[c] = true;
+			}
+			lockedSequencerConfigs.emplace_back(std::move(cfg));
+		}
 					
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
@@ -837,7 +846,7 @@ namespace RenderCore { namespace Techniques
 						continue;
 
 					auto& p = a->_finalPipelines[c];
-					if (p._future->GetAssetState() != ::Assets::AssetState::Pending && p._future->GetDependencyValidation().GetValidationIndex() != 0) {
+					if (sequencerInvalidated[c] || (p._future->GetAssetState() != ::Assets::AssetState::Pending && p._future->GetDependencyValidation().GetValidationIndex() != 0)) {
 						// It's out of date -- let's rebuild and reassign it
 						p = a->CreatePipelineForSequencerState(*lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _sharedPools);
 					}

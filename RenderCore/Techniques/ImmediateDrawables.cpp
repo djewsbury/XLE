@@ -307,6 +307,11 @@ namespace RenderCore { namespace Techniques
 			return &_workingPkt;
 		}
 
+		virtual void OnFrameBarrier() override
+		{
+			_pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
+		}
+
 		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
 		{
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();

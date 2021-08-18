@@ -13,7 +13,6 @@
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
-#include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Init.h"
 #include "../../RenderCore/IDevice.h"
@@ -83,12 +82,11 @@ namespace Sample
             //  useful to create a debugging display to go along with any new feature. 
             //  It just provides a convenient architecture for visualizing important information.
         Log(Verbose) << "Setup tools and debugging" << std::endl;
-        PlatformRig::FrameRig frameRig(sampleGlobals._primaryResourcesApparatus->_subFrameEvents);
+        PlatformRig::FrameRig frameRig(sampleGlobals._frameRenderingApparatus->GetSubFrameEvents());
         auto debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
         PlatformRig::InitProfilerDisplays(*debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
         frameRig.SetDebugScreensOverlaySystem(debugOverlaysApparatus->_debugScreensOverlaySystem);
         frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
-
 
         Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
         sampleOverlay->OnStartup(sampleGlobals);

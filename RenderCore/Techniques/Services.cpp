@@ -5,6 +5,7 @@
 #include "Services.h"
 #include "SimpleModelDeform.h"
 #include "CommonResources.h"
+#include "SubFrameEvents.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include <vector>
@@ -69,6 +70,7 @@ namespace RenderCore { namespace Techniques
 		_pimpl = std::make_unique<Pimpl>();
 		_device = device;
 		_deformOpsFactory = std::make_shared<DeformOperationFactory>();
+		_subFrameEvents = std::make_shared<SubFrameEvents>();
 	}
 
 	Services::~Services()

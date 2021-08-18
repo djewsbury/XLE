@@ -71,6 +71,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;
+		virtual void OnFrameBarrier() = 0;
 		virtual ~IImmediateDrawables();
 	};
 

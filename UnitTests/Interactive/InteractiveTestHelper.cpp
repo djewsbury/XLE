@@ -108,7 +108,7 @@ namespace UnitTests
 			auto v = _device->GetDesc();
 			_windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE interactive unit test [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
-			_frameRig = std::make_shared<PlatformRig::FrameRig>(_primaryResourcesApparatus->_subFrameEvents);
+			_frameRig = std::make_shared<PlatformRig::FrameRig>(_frameRenderingApparatus->GetSubFrameEvents());
 			_windowApparatus->_windowHandler->_onResize.Bind(
 				[fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{_frameRenderingApparatus},
 				ps = std::weak_ptr<RenderCore::IPresentationChain>(_windowApparatus->_presentationChain), 

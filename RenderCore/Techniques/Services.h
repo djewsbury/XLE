@@ -20,6 +20,7 @@ namespace RenderCore { namespace Techniques
 {
 	class DeformOperationFactory;
 	class CommonResourceBox;
+	class SubFrameEvents;
 
 	class Services
 	{
@@ -29,6 +30,8 @@ namespace RenderCore { namespace Techniques
 		static RenderCore::IDevice& GetDevice() { return *GetInstance()._device; }
 		static std::shared_ptr<RenderCore::IDevice> GetDevicePtr() { return GetInstance()._device; }
 		static std::shared_ptr<CommonResourceBox> GetCommonResources() { return GetInstance()._commonResources; }
+		static SubFrameEvents& GetSubFrameEvents() { return *GetInstance()._subFrameEvents; }
+		static std::shared_ptr<SubFrameEvents> GetSubFrameEventsPtr() { return GetInstance()._subFrameEvents; }
 
 		/////////////////////////////
 		//   T E X T U R E   L O A D E R S
@@ -51,6 +54,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformOperationFactory> _deformOpsFactory;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<CommonResourceBox> _commonResources;
+		std::shared_ptr<SubFrameEvents> _subFrameEvents;
 
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

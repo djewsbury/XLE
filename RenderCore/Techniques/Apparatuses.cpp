@@ -60,8 +60,6 @@ namespace RenderCore { namespace Techniques
 		_graphShaderCompiler2Registration = RegisterInstantiateShaderGraphCompiler(_shaderSource, compilers);
 
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
-		auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>(ILLUM_TECH);
-		_techniqueDelegateDeferred = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 		auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();
@@ -94,11 +92,21 @@ namespace RenderCore { namespace Techniques
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);
 		_techniqueServices->SetCommonResources(_commonResources);
+
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
+			[pa=std::weak_ptr<IPipelineAcceleratorPool>{_pipelineAccelerators}]() {
+				auto l = pa.lock();
+				if (l) l->RebuildAllOutOfDatePipelines();
+			});
+
 		assert(_assetServices != nullptr);
 	}
 
 	DrawingApparatus::~DrawingApparatus()
 	{
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
 	}
 
 	std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const LegacyRegisterBindingDesc& legacyRegisterBinding)
@@ -129,10 +137,19 @@ namespace RenderCore { namespace Techniques
 		
 		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_mainDrawingApparatus->_device);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
+
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
+			[im=std::weak_ptr<IImmediateDrawables>{_immediateDrawables}]() {
+				auto l = im.lock();
+				if (l) l->OnFrameBarrier();
+			});
 	}
 	
 	ImmediateDrawingApparatus::~ImmediateDrawingApparatus()
 	{
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
@@ -172,15 +189,14 @@ namespace RenderCore { namespace Techniques
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
 
 		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
-
-		_subFrameEvents = std::make_shared<SubFrameEvents>();
 		
-		_subFrameEvents->_onPrePresent.Bind(
-			[](RenderCore::IThreadContext& context) {
-				RenderCore::Techniques::Services::GetBufferUploads().Update(context);
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		_prePresentBinding = subFrameEvents._onPrePresent.Bind(
+			[bu=_bufferUploads](RenderCore::IThreadContext& context) {
+				bu->Update(context);
 			});
 
-		_subFrameEvents->_onFrameBarrier.Bind(
+		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
 			[]() {
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
 			});
@@ -190,6 +206,9 @@ namespace RenderCore { namespace Techniques
 
 	PrimaryResourcesApparatus::~PrimaryResourcesApparatus()
 	{
+		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
+		subFrameEvents._onPrePresent.Unbind(_prePresentBinding);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
@@ -206,6 +225,11 @@ namespace RenderCore { namespace Techniques
 	FrameRenderingApparatus::~FrameRenderingApparatus()
 	{
 
+	}
+
+	std::shared_ptr<SubFrameEvents> FrameRenderingApparatus::GetSubFrameEvents()
+	{
+		return Services::GetSubFrameEventsPtr();
 	}
 
 }}

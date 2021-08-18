@@ -36,10 +36,10 @@ namespace RenderCore { namespace Techniques
 	class TechniqueContext;
 	class AttachmentPool;
 	class FrameBufferPool;
-	class SubFrameEvents;
 	class CommonResourceBox;
 	class SystemUniformsDelegate;
 	class PipelinePool;
+	class SubFrameEvents;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -61,8 +61,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _shaderCompilerRegistration;
 		::Assets::CompilerRegistration _graphShaderCompiler2Registration;
 
-		std::shared_ptr<ITechniqueDelegate> _techniqueDelegateDeferred;
-
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
 
@@ -73,6 +71,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 		std::shared_ptr<CommonResourceBox> _commonResources;
+
+		SignalDelegateId _frameBarrierBinding;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
@@ -95,9 +95,12 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 
+		SignalDelegateId _frameBarrierBinding;
+
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
 
+		ConsoleRig::AttachablePtr<Services> _techniqueServices;
 		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 
 		ImmediateDrawingApparatus(std::shared_ptr<DrawingApparatus>);
@@ -117,7 +120,8 @@ namespace RenderCore { namespace Techniques
 		std::unique_ptr<ContinuationExecutor> _continuationExecutor;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 
-		std::shared_ptr<SubFrameEvents> _subFrameEvents;
+		SignalDelegateId _prePresentBinding;
+		SignalDelegateId _frameBarrierBinding;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
@@ -137,6 +141,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
 		std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
+
+		std::shared_ptr<SubFrameEvents> GetSubFrameEvents();
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;
