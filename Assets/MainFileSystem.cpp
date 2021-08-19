@@ -332,7 +332,12 @@ namespace Assets
 
 	FileSystemWalker MainFileSystem::BeginWalk(StringSection<utf8> initialSubDirectory)
 	{
-		return GetPtrs().s_mainMountingTree->BeginWalk(initialSubDirectory);
+		auto& ptrs = GetPtrs();
+		if (ptrs.s_mainMountingTree->LooksLikeAbsolutePath(initialSubDirectory) && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
+			return ::Assets::BeginWalk(std::dynamic_pointer_cast<ISearchableFileSystem>(GetPtrs().s_defaultFileSystem), initialSubDirectory);
+		} else {
+			return GetPtrs().s_mainMountingTree->BeginWalk(initialSubDirectory);
+		}
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

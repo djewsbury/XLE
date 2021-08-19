@@ -55,6 +55,7 @@ namespace Assets
 		enum class AbsolutePathMode { MountingTree, RawOS };
 		void        SetAbsolutePathMode(AbsolutePathMode newMode);
 		AbsolutePathMode GetAbsolutePathMode();
+		bool 		LooksLikeAbsolutePath(StringSection<utf8> filename);
 
 		FileSystemWalker BeginWalk(StringSection<utf8> initialSubDirectory);
 

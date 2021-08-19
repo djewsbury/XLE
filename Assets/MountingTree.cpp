@@ -400,10 +400,17 @@ namespace Assets
 		return _pimpl->_absolutePathMode;
 	}
 
+	bool MountingTree::LooksLikeAbsolutePath(StringSection<utf8> filename)
+	{
+		bool isAbsolutePath = !filename.IsEmpty() && IsSeparator(filename[0]);
+		isAbsolutePath |= !MakeSplitPath(filename).GetDrive().IsEmpty();
+		return isAbsolutePath;
+	}
+
 	FileSystemWalker MountingTree::BeginWalk(StringSection<utf8> initialSubDirectory)
 	{
 		// Find each filesystem that matches the 
-		auto splitInitial = MakeSplitPath(initialSubDirectory);
+		auto splitInitial = MakeSplitPath(initialSubDirectory).Simplify();
 		std::vector<FileSystemWalker::StartingFS> result;
 		ScopedLock(_pimpl->_mountsLock);
 		for (const auto&mount:_pimpl->_mounts) {
