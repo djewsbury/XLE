@@ -159,11 +159,16 @@ namespace ToolsRig
 					*skeletonMachine, r->_animSetBinding,
 					MakeIteratorRange(animData._curves));
 
+				Float4x4 skeletonOutput[skeletonMachine->GetOutputMatrixCount()];
+				skeletonMachine->GenerateOutputTransforms(
+					MakeIteratorRange(skeletonOutput, &skeletonOutput[skeletonMachine->GetOutputMatrixCount()]),
+					&params);
+
 				RenderOverlays::RenderSkeleton(
 					overlayContext,
 					parserContext,
 					*skeletonMachine,
-					params,
+					MakeIteratorRange(skeletonOutput, &skeletonOutput[skeletonMachine->GetOutputMatrixCount()]),
 					Identity<Float4x4>(),
 					drawBoneNames);
 			} else {

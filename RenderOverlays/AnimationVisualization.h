@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include "../../Math/Matrix.h"
+#include "../Math/Matrix.h"
+#include "../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; } }
@@ -18,7 +19,7 @@ namespace RenderOverlays
         IOverlayContext& overlayContext, 
         RenderCore::Techniques::ParsingContext& parserContext, 
 		const RenderCore::Assets::SkeletonMachine& skeleton,
-		const RenderCore::Assets::TransformationParameterSet& params,
+		IteratorRange<const Float4x4*> outputMatrices,
 		const Float4x4& localToWorld,
 		bool drawBoneNames = false);
 

@@ -50,7 +50,7 @@ namespace RenderOverlays
         IOverlayContext& overlayContext, 
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Assets::SkeletonMachine& skeleton,
-		const RenderCore::Assets::TransformationParameterSet& params,
+		IteratorRange<const Float4x4*> outputMatrices,
 		const Float4x4& localToWorld, 
 		bool drawBoneNames)
     {
@@ -65,9 +65,6 @@ namespace RenderOverlays
 			vertexCount, MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::TriangleList).Cast<Vertex_PC*>();
 		size_t workingVertexIterator = 0;
-
-		std::vector<Float4x4> outputMatrices(outputMatrixCount);
-		skeleton.GenerateOutputTransforms(MakeIteratorRange(outputMatrices), &params);
 
 		// Draw a sprite for each output matrix location
 		auto cameraRight = Normalize(ExtractRight_Cam(parserContext.GetProjectionDesc()._cameraToWorld));
@@ -178,6 +175,9 @@ namespace RenderOverlays
 		const Float4x4& localToWorld,
 		bool drawBoneNames)
 	{
-		RenderSkeleton(context, parserContext, skeleton, skeleton.GetDefaultParameters(), localToWorld, drawBoneNames);
+		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
+		std::vector<Float4x4> outputMatrices(outputMatrixCount);
+		skeleton.GenerateOutputTransforms(MakeIteratorRange(outputMatrices), &skeleton.GetDefaultParameters());
+		RenderSkeleton(context, parserContext, skeleton, MakeIteratorRange(outputMatrices), localToWorld, drawBoneNames);
 	}
 }
