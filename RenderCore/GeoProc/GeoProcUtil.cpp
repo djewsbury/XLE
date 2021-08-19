@@ -56,7 +56,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return float(unormValue) / 32767.f;
     }
 
-    static float Float16AsFloat32(unsigned short input)
+    float Float16AsFloat32(unsigned short input)
     {
         return half_float::detail::half2float(input);
     }
