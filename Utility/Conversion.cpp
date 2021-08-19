@@ -98,7 +98,7 @@ namespace Conversion
             ||  !XlCompareStringI(input, "no")
             ||  !XlCompareStringI(input, "f")
             ||  !XlCompareStringI(input, "n")) {
-            return true;
+            return false;
         }
         auto asInt = Conversion::Convert<int>(input);
         return !!asInt;
