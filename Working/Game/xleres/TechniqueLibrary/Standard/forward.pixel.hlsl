@@ -4,7 +4,9 @@
 
 #include "../Framework/VSOUT.hlsl"
 #include "../Framework/gbuffer.hlsl"
-#include "../SceneEngine/Lighting/Forward.hlsl"
+#include "../Math/TextureAlgorithm.hlsl" // (for SystemInputs)
+#include "../Utility/Colour.hlsl"	// for LightingScale
+#include "../../Forward/ForwardPlusLighting.hlsl"
 #include "../../Nodes/Templates.pixel.sh"
 
 #if (VULKAN!=1)
@@ -22,7 +24,9 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	float4 result = float4(
 		CalculateIllumination(
 			sample, directionToEye, VSOUT_GetWorldPosition(geo),
-			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys))), 1.f);
+			NDCDepthToLinear0To1(geo.position.z),
+			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys)), 
+			VSOUT_HAS_NORMAL==1), 1.f);
 
 	#if VSOUT_HAS_FOG_COLOR == 1
 		result.rgb = geo.fogColor.rgb + result.rgb * geo.fogColor.a;
