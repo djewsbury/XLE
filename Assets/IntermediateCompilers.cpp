@@ -170,6 +170,10 @@ namespace Assets
 			deps = model->GetDependencies();
 			std::vector<std::pair<CompileRequestCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
 
+			#if defined(_DEBUG)
+				std::set<std::string> compileProductNamesWritten;
+			#endif
+
 			// ICompileOperations can have multiple "targets", and then those targets can have multiple
 			// chunks within them. Each target should generally maps onto a single "asset" 
 			// (with separate "state" values, etc). But an asset can be constructed from multiple chunks
@@ -224,7 +228,19 @@ namespace Assets
 
 					if (!storedInArchive) {
 						StringMeld<MaxPath> nameWithTargetCode;
-						nameWithTargetCode << initializers.ArchivableName() << "-" << std::hex << target._targetCode;
+						unsigned targetsWithThisCodeCount = 0;
+						for (auto& t:targets) if (t._targetCode == target._targetCode) targetsWithThisCodeCount++;
+						if (targetsWithThisCodeCount == 1) {
+							nameWithTargetCode << initializers.ArchivableName() << "-" << std::hex << target._targetCode;
+						} else
+							nameWithTargetCode << initializers.ArchivableName() << "-" << target._name << "-" << std::hex << target._targetCode;
+						#if defined(_DEBUG)
+							auto str = nameWithTargetCode.AsString();
+							// If you hit the following assert, it means that multiple targets from this compile operation would be written
+							// to the same output file. That probably means that there are mulitple targets with the name target code and name
+							assert(compileProductNamesWritten.find(str) == compileProductNamesWritten.end());		
+							compileProductNamesWritten.insert(str);				
+						#endif
 						artifactCollection = destinationStore->StoreCompileProducts(
 							nameWithTargetCode.AsStringSection(),
 							delegate._storeGroupId,
