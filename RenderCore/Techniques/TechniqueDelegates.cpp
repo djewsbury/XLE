@@ -332,16 +332,15 @@ namespace RenderCore { namespace Techniques
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
-					std::vector<uint64_t> patchExpansions;
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					switch (illumType) {
 					case IllumType::PerPixel:
 						psTechEntry = &techniqueFileHelper->_perPixel;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
 						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
@@ -350,7 +349,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
@@ -455,17 +454,16 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					std::vector<uint64_t> patchExpansions;
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
 						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
 					}
 
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
@@ -720,16 +718,15 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					std::vector<uint64_t> patchExpansions;
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					switch (illumType) {
 					case IllumType::PerPixel:
 						psTechEntry = &techniqueFileHelper->_perPixel;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
 						break;
 					case IllumType::PerPixelAndEarlyRejection:
 						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
 					default:
 						break;
@@ -738,7 +735,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
@@ -827,17 +824,16 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
 				*result,
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-					std::vector<uint64_t> patchExpansions;
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
 						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
-						patchExpansions.insert(patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
 					}
 
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
