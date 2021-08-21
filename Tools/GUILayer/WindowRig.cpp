@@ -10,6 +10,7 @@
 #include "../../PlatformRig/FrameRig.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
+#include "../../RenderCore/Techniques/Services.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../OSServices/WinAPI/IncludeWindows.h"
 
@@ -71,7 +72,6 @@ namespace GUILayer
 
     WindowRig::WindowRig(
         RenderCore::IDevice& device,
-        std::shared_ptr<RenderCore::Techniques::SubFrameEvents> subFrameEvents,
         const void* platformWindowHandle)
     {
         ::RECT clientRect;
@@ -81,7 +81,7 @@ namespace GUILayer
             platformWindowHandle,
 			RenderCore::PresentationChainDesc {
 				unsigned(clientRect.right - clientRect.left), unsigned(clientRect.bottom - clientRect.top)});
-        _frameRig = std::make_shared<PlatformRig::FrameRig>(subFrameEvents);
+        _frameRig = std::make_shared<PlatformRig::FrameRig>(RenderCore::Techniques::Services::GetSubFrameEventsPtr());
 
         _mainOverlaySystemSet = std::make_shared<PlatformRig::OverlaySystemSet>();
         _frameRig->SetMainOverlaySystem(_mainOverlaySystemSet);

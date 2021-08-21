@@ -46,7 +46,6 @@ namespace GUILayer
         property System::Drawing::Size ViewportSize { System::Drawing::Size get(); }
         property CameraDescWrapper^ Camera { CameraDescWrapper^ get(); }
         property EditorSceneManager^ SceneManager { EditorSceneManager^ get(); }
-        property TechniqueContextWrapper^ TechniqueContext { TechniqueContextWrapper^ get(); }
         property EngineDevice^ EngineDevice { GUILayer::EngineDevice^ get(); }
     };
 

@@ -18,6 +18,7 @@
 
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
@@ -99,10 +100,11 @@ namespace GUILayer
         lightingDelegate.PrepareEnvironmentalSettings(
 			clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings).c_str());
 
-		auto compiledTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+        RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperator;
+		auto compiledTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 			_lightingApparatus.GetNativePtr(),
             lightingDelegate.GetLightResolveOperators(),
-			lightingDelegate.GetShadowResolveOperators(),
+			lightingDelegate.GetShadowResolveOperators(), ambientLightOperator,
 			stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
         auto compiledTechnique = SceneEngine::StallAndActualize(*compiledTechniqueFuture);
 
@@ -111,7 +113,7 @@ namespace GUILayer
 
             {
 				auto lightingIterator = SceneEngine::BeginLightingTechnique(
-					threadContext, parserContext, *_pipelineAcceleratorPool.get(),
+					threadContext, parserContext,
 					lightingDelegate, *compiledTechnique);
 
 				for (;;) {

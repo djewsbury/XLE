@@ -99,7 +99,6 @@ namespace GUILayer
         static System::Collections::Generic::ICollection<HitRecord>^
             RayIntersection(
                 CameraDescWrapper^ camera,
-				TechniqueContextWrapper^ techniqueContext,
                 IntersectionTestSceneWrapper^ testScene,
                 Vector3 start, Vector3 end, unsigned filter)
         {
@@ -107,9 +106,7 @@ namespace GUILayer
             {
 				SceneEngine::IntersectionTestContext testContext {
 					*camera->_native, UInt2{0,0}, UInt2{0,0},
-					techniqueContext->_techniqueContext.GetNativePtr(),
-					EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool()
-				};
+					EngineDevice::GetInstance()->GetNative().GetDrawingApparatus() };
                 auto firstResult = testScene->_scene->FirstRayIntersection(
                     testContext, std::make_pair(AsFloat3(start), AsFloat3(end)), filter);
 
@@ -144,7 +141,6 @@ namespace GUILayer
         static System::Collections::Generic::ICollection<HitRecord>^
             FrustumIntersection(
 				CameraDescWrapper^ camera,
-				TechniqueContextWrapper^ techniqueContext,
                 IntersectionTestSceneWrapper^ testScene,
                 const float matrix[],
                 unsigned filter)
@@ -155,9 +151,7 @@ namespace GUILayer
 
                 SceneEngine::IntersectionTestContext testContext {
 					*camera->_native, UInt2{0,0}, UInt2{0,0},
-					techniqueContext->_techniqueContext.GetNativePtr(),
-					EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool()
-				};
+					EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()};
 				std::vector<SceneEngine::IntersectionTestResult> nativeResults;
                 testScene->_scene->FrustumIntersection(
                     nativeResults,

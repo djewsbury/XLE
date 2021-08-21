@@ -68,11 +68,6 @@ namespace GUILayer
         return _immediateDrawingApparatus->_immediateDrawables;
     }
 
-    const std::shared_ptr<RenderCore::Techniques::TechniqueContext>& NativeEngineDevice::GetTechniqueContext()
-    {
-        return _drawingApparatus->_techniqueContext;
-    }
-
     const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& NativeEngineDevice::GetDrawingApparatus()
     {
         return _drawingApparatus;
@@ -123,8 +118,6 @@ namespace GUILayer
         _immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(_drawingApparatus);
         _primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_renderDevice);
         _frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_renderDevice);
-        _drawingApparatus->_techniqueContext->_frameBufferPool = _frameRenderingApparatus->_frameBufferPool;
-        _drawingApparatus->_techniqueContext->_attachmentPool = _frameRenderingApparatus->_attachmentPool;
         _lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);
         _previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
 
@@ -146,7 +139,7 @@ namespace GUILayer
     NativeEngineDevice::~NativeEngineDevice()
     {
         RenderCore::Techniques::SetThreadContext(nullptr);
-		if (_messageFilter)
+		if (_messageFilter.get())
 			System::Windows::Forms::Application::RemoveMessageFilter(_messageFilter.get());
 		PlatformRig::SetOSRunLoop(nullptr);
         // ::Assets::Services::GetAssetSets().Clear();

@@ -830,7 +830,7 @@ namespace RenderCore { namespace Techniques
 		lockedSequencerConfigs.reserve(_sequencerConfigById.size());
 		for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 			auto cfg = _sequencerConfigById[c].second.lock();
-			if (cfg->_pipelineLayout->GetDependencyValidation().GetValidationIndex() != 0) {
+			if (cfg && cfg->_pipelineLayout->GetDependencyValidation().GetValidationIndex() != 0) {
 				// rebuild pipeline layout asset
 				cfg->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout());
 				sequencerInvalidated[c] = true;

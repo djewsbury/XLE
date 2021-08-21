@@ -145,11 +145,10 @@ namespace GUILayer
 
 	VisLayerController::VisLayerController()
 	{
-		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
+		auto drawingApparatus = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus();
 		auto immediateDrawables = EngineDevice::GetInstance()->GetNative().GetImmediateDrawables();
 		auto immediateDrawableApparatus = EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus();
 		auto lightingEngineApparatus = EngineDevice::GetInstance()->GetNative().GetLightingEngineApparatus();
-		auto techContext = EngineDevice::GetInstance()->GetNative().GetTechniqueContext();
 
 		_pimpl.reset(new VisLayerControllerPimpl());
 		_pimpl->_mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
@@ -166,7 +165,7 @@ namespace GUILayer
 		_pimpl->_visOverlay->Set(_pimpl->_animState);
 
 		{
-			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(_pimpl->_modelLayer->GetCamera(), techContext, pipelineAcceleratorPool);
+			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(_pimpl->_modelLayer->GetCamera(), drawingApparatus);
 			manipulators->Register(
 				ToolsRig::ManipulatorStack::CameraManipulator,
 				ToolsRig::CreateCameraManipulator(
@@ -177,7 +176,7 @@ namespace GUILayer
 
 		_pimpl->_trackingLayer = std::make_shared<ToolsRig::MouseOverTrackingOverlay>(
 			_pimpl->_mouseOver,
-			techContext, pipelineAcceleratorPool,
+			drawingApparatus,
 			_pimpl->_modelLayer->GetCamera());
 
 		auto engineDevice = EngineDevice::GetInstance();

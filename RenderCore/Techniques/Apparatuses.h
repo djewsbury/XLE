@@ -7,6 +7,7 @@
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/DepVal.h"
 #include "../../ConsoleRig/AttachablePtr.h"
+#include "../../Utility/FunctionUtils.h"		// SignalDelegateId
 #include <memory>
 
 namespace RenderCore

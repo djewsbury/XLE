@@ -138,6 +138,8 @@ namespace SceneEngine
         std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
         for (const auto& light:_envSettings->_lights) {
             RenderCore::LightingEngine::LightSourceOperatorDesc opDesc { light._shape, light._diffuseModel };
+            if (light._isDominantLight)
+                opDesc._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
             auto h = opDesc.Hash();
             auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
             if (i == result.end())
@@ -216,6 +218,7 @@ namespace SceneEngine
 
         _shape = RenderCore::LightingEngine::LightSourceShape::Directional;
         _diffuseModel = RenderCore::LightingEngine::DiffuseModel::Disney;
+        _isDominantLight = false;
     }
 
     LightDesc DefaultDominantLight()
@@ -539,6 +542,7 @@ namespace SceneEngine
 
                 _sunSourceShadowProj.push_back(
                     EnvironmentSettings::SunSourceShadowProj { unsigned(lightIndex), f->second });
+                _lights[lightIndex]._isDominantLight = true;
             }
         }
     }

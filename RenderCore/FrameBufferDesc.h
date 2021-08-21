@@ -85,7 +85,7 @@ namespace RenderCore
         void SetDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
 		void AppendResolveOutput(AttachmentName attachment, const TextureViewDesc& = {});
         void SetResolveDepthStencil(AttachmentName attachment, const TextureViewDesc& = {});
-        void SetViewInstanceMask(uint64_t);
+        void SetViewInstanceMask(uint32_t);
 
         uint64_t CalculateHash() const;
 
@@ -309,7 +309,7 @@ namespace RenderCore
 		_resolveDepthStencil = {attachment, viewDesc};
 	}
 
-    inline void SubpassDesc::SetViewInstanceMask(uint64_t mask)
+    inline void SubpassDesc::SetViewInstanceMask(uint32_t mask)
     {
         _viewInstancingMask = mask;
     }

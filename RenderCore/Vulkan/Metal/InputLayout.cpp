@@ -250,6 +250,9 @@ namespace RenderCore { namespace Metal_Vulkan
 				_attributes.begin(), _attributes.end(), 
 				[loc](const auto& c) { return c.location == loc; });
 			_allAttributesBound &= (existing != _attributes.end());
+
+			if (existing == _attributes.end())
+				Log(Warning) << "Did not find binding for shader input attribute (" << reflectionVariable._name << ")" << std::endl;
 		}
 	}
 

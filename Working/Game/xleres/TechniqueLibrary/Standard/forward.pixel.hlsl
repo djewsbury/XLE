@@ -21,12 +21,17 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 
+	#if VSOUT_HAS_NORMAL==1
+		const bool hasNormal = true;
+	#else
+		const bool hasNormal = false;
+	#endif
 	float4 result = float4(
 		CalculateIllumination(
 			sample, directionToEye, VSOUT_GetWorldPosition(geo),
 			NDCDepthToLinear0To1(geo.position.z),
 			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys)), 
-			VSOUT_HAS_NORMAL==1), 1.f);
+			hasNormal), 1.f);
 
 	#if VSOUT_HAS_FOG_COLOR == 1
 		result.rgb = geo.fogColor.rgb + result.rgb * geo.fogColor.a;

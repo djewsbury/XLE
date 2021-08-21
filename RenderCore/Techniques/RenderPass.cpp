@@ -1441,7 +1441,7 @@ namespace RenderCore { namespace Techniques
     {
         str << "WorkingAttachment {"
             << attachment._name << ", "
-            << "{" << AsString(attachment._format) << ", " << attachment._samples._sampleCount << "}, "
+            << "{" << AsString(attachment._format) << ", " << (unsigned)attachment._samples._sampleCount << "}, "
             << std::hex << "Contains: " << AttachmentSemantic{attachment._containsDataForSemantic} << ", "
             << "ShouldReceive: " << AttachmentSemantic{attachment._shouldReceiveDataForSemantic} << ", "
             << "FirstAccess: {" << AttachmentSemantic{attachment._firstAccessSemantic} << ", 0x" << attachment._firstAccessInitialLayout << ", " << AsString(attachment._firstAccessLoad) << "}, "

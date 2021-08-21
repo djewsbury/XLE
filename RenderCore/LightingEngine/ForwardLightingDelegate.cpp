@@ -108,7 +108,6 @@ namespace RenderCore { namespace LightingEngine
 		AmbientLightOperatorDesc _ambientLightOperator;
 
 		LightOperatorId _dominantLightOperatorId = ~0u;
-		ShadowOperatorId _dominantLightShadowOperator = ~0u;
 
 		Float4 _diffuseSHCoefficients[25];
 
@@ -145,8 +144,13 @@ namespace RenderCore { namespace LightingEngine
 			_pingPongCounter = 0;
 
 			// Default to using the first light operator & first shadow operator for the dominant light
-			if (!_positionalLightOperators.empty()) _dominantLightOperatorId = 0;
-			if (!_shadowPreparationOperators->_operators.empty()) _dominantLightShadowOperator = 0;
+			_dominantLightOperatorId = ~0u;
+			for (unsigned c=0; c<_positionalLightOperators.size(); ++c)
+				if (_positionalLightOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
+					if (_dominantLightOperatorId != ~0u)
+						Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
+					_dominantLightOperatorId = c;
+				}
 
 			BindResourceView(0, Utility::Hash64("LightDepthTable"));
 			BindResourceView(1, Utility::Hash64("LightList"));
@@ -238,6 +242,7 @@ namespace RenderCore { namespace LightingEngine
 
 			/////////////////
 			++_pingPongCounter;
+			LightSourceId dominantLightId = ~0u;
 
 			auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 			auto& tilerOutputs = _lightTiler->_outputs;
@@ -272,13 +277,18 @@ namespace RenderCore { namespace LightingEngine
 				i->_dominantLight = {};
 
 				if (_dominantLightOperatorId != ~0u) {
-					auto& dominantLightSet = GetLightSet(_dominantLightOperatorId, _dominantLightShadowOperator);
-					if (dominantLightSet._lights.size() > 1)
-						Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
-					if (!dominantLightSet._lights.empty())
+					auto dominantLightOperator = _lightSets.begin();
+					for (; dominantLightOperator!=_lightSets.end(); ++dominantLightOperator)
+						if (dominantLightOperator->_operatorId == _dominantLightOperatorId && !dominantLightOperator->_lights.empty())
+							break;
+					if (dominantLightOperator != _lightSets.end()) {
+						if (dominantLightOperator->_lights.size() > 1)
+							Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
 						i->_dominantLight = Internal::MakeLightUniforms(
-							*checked_cast<Internal::StandardLightDesc*>(dominantLightSet._lights[0]._desc.get()),
+							*checked_cast<Internal::StandardLightDesc*>(dominantLightOperator->_lights[0]._desc.get()),
 							_positionalLightOperators[_dominantLightOperatorId]);
+						dominantLightId = dominantLightOperator->_lights[0]._id;
+					}
 				}
 
 				i->_lightCount = tilerOutputs._lightCount;
@@ -289,9 +299,14 @@ namespace RenderCore { namespace LightingEngine
 			if (_completionCommandListID)
 				parsingContext.RequireCommandList(_completionCommandListID);
 
-			if (_dominantLightShadowOperator != ~0u) {
+			if (dominantLightId != ~0u) {
+				// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 				assert(!parsingContext._extraSequencerDescriptorSet.second);
-				parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[0].second->GetDescriptorSet().get()};
+				for (unsigned c=0; c<_shadowProjections.size(); ++c)
+					if (_shadowProjections[c]._lightId == dominantLightId) {
+						assert(_shadowProjections[c]._operatorId == 0);		// we require the shadow op used with the dominant light to be 0 currently
+						parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[c].second->GetDescriptorSet().get()};
+					}
 			}
 		}
 
@@ -386,8 +401,9 @@ namespace RenderCore { namespace LightingEngine
 			ParameterBox box;
 			if (_dominantLightOperatorId != ~0u) {
 				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)_positionalLightOperators[_dominantLightOperatorId]._shape);
-				if (_dominantLightShadowOperator != ~0u) {
-					auto resolveParam = Internal::MakeShadowResolveParam(_shadowPreparationOperators->_operators[_dominantLightShadowOperator]._desc);
+				if (!_shadowPreparationOperators->_operators.empty()) {
+					// assume the shadow operator that will be associated is index 0
+					auto resolveParam = Internal::MakeShadowResolveParam(_shadowPreparationOperators->_operators[0]._desc);
 					resolveParam.WriteShaderSelectors(box);
 				}
 			}

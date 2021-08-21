@@ -13,6 +13,7 @@
 #include "GUILayerUtil.h"
 #include "LevelEditorScene.h"       // for getting the intersection scene from the IViewContext
 #include "MarshalString.h"
+#include "EngineDevice.h"
 #include "NativeEngineDevice.h"
 #include "../ToolsRig/IManipulator.h"
 #include "../PlatformRig/InputListener.h"
@@ -134,7 +135,7 @@ namespace GUILayer
 		SceneEngine::IntersectionTestContext intersectionContext {
 			*cam->_native,
 			UInt2{0,0}, UInt2{(unsigned)vc->ViewportSize.Width, (unsigned)vc->ViewportSize.Height},
-			vc->TechniqueContext->_techniqueContext.GetNativePtr() };
+            vc->EngineDevice->GetNative().GetDrawingApparatus() };
 
         // Only way to get the intersection scene is via the SceneManager
         // But what if we don't want to use a SceneManager. Is there a better

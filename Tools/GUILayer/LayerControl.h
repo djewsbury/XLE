@@ -28,15 +28,13 @@ namespace GUILayer
         void AddDefaultCameraHandler(VisCameraSettings^);
         void AddSystem(IOverlaySystem^ overlay);
 
-        TechniqueContextWrapper^ GetTechniqueContext();
-
         LayerControl(System::Windows::Forms::Control^ control);
         ~LayerControl();
 
     protected:
         bool _activePaint;
 
-        virtual bool Render(RenderCore::IThreadContext&, IWindowRig&) override;
+        virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) override;
 		virtual void OnResize() override;
     };
 }

@@ -99,7 +99,7 @@ namespace GUILayer
         auto engineDevice = EngineDevice::GetInstance();
         auto* renderDevice = engineDevice->GetNative().GetRenderDevice().get();
         auto immediateContext = renderDevice->GetImmediateContext();
-        bool result = Render(*immediateContext.get(), *_pimpl->_windowRig.get());
+        bool result = Render(immediateContext, *_pimpl->_windowRig.get());
 
             // perform our delayed deletes now (in the main thread)
         DelayedDeleteQueue::FlushQueue();
@@ -282,7 +282,6 @@ namespace GUILayer
     {
         return std::make_unique<WindowRig>(
             *engineDevice->GetNative().GetRenderDevice(),
-            engineDevice->GetNative().GetPrimaryResourcesApparatus()->_subFrameEvents,
             nativeWindowHandle);
     }
 

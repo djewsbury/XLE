@@ -58,6 +58,7 @@ namespace SceneEngine
 
         RenderCore::LightingEngine::LightSourceShape _shape;
         RenderCore::LightingEngine::DiffuseModel _diffuseModel;
+        bool _isDominantLight;
 
         LightDesc();
     };

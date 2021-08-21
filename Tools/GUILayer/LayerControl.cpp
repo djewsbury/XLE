@@ -27,7 +27,7 @@ using namespace System;
 
 namespace GUILayer 
 {
-    bool LayerControl::Render(RenderCore::IThreadContext& threadContext, IWindowRig& windowRig)
+    bool LayerControl::Render(const std::shared_ptr<RenderCore::IThreadContext>& threadContext, IWindowRig& windowRig)
     {
             // Rare cases can recursively start rendering
             // (for example, if we attempt to call a Windows GUI function while in the middle of
@@ -49,10 +49,10 @@ namespace GUILayer
         TRY
         {
             auto& frameRig = windowRig.GetFrameRig();
-			RenderCore::Techniques::ParsingContext parserContext(*EngineDevice::GetInstance()->GetNative().GetTechniqueContext());
             auto frResult = frameRig.ExecuteFrame(
                 threadContext, *windowRig.GetPresentationChain(), 
-                parserContext, nullptr);
+                *EngineDevice::GetInstance()->GetNative().GetFrameRenderingApparatus(),
+                EngineDevice::GetInstance()->GetNative().GetDrawingApparatus().get());
 
             // return false if when we have pending resources (encourage another redraw)
             result = !frResult._hasPendingResources;
@@ -73,12 +73,6 @@ namespace GUILayer
 		// We must reset the framebuffer in order to dump references to the presentation chain on DX (because it's going to be resized along with the window)
 		EngineDevice::GetInstance()->GetNative().ResetFrameBufferPool();
 	}
-
-    TechniqueContextWrapper^ LayerControl::GetTechniqueContext()
-    {
-        auto native = GUILayer::EngineDevice::GetInstance()->GetNative().GetTechniqueContext();
-        return gcnew TechniqueContextWrapper { std::move(native) };
-    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     
@@ -124,8 +118,7 @@ namespace GUILayer
     {
             // create an input listener that feeds into a stack of manipulators
 		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
-        auto techContext = EngineDevice::GetInstance()->GetNative().GetTechniqueContext();
-        auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(settings->GetUnderlying(), techContext, pipelineAcceleratorPool);
+        auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(settings->GetUnderlying(), EngineDevice::GetInstance()->GetNative().GetDrawingApparatus());
         manipulators->Register(
             ToolsRig::ManipulatorStack::CameraManipulator,
             ToolsRig::CreateCameraManipulator(settings->GetUnderlying()));

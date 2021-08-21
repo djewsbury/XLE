@@ -130,6 +130,7 @@
 		  $(SolutionDir)\..\build\Debug\bin\CMake\DirectXTex.lib;
 		  $(SolutionDir)\..\build\Debug\freetype\freetyped.lib;
 		  $(SolutionDir)\..\build\Debug\lib64\libHLSLcc.lib;
+      C:\codelibrary\Compressonator_4.1.5083\lib\VS2017\x64\Compressonator_MDd.lib;
 		  $(VULKAN_SDK)\Lib\vulkan-1.lib;
 		  $(VULKAN_SDK)\Lib\glslangd.lib;
 		  $(VULKAN_SDK)\Lib\GenericCodeGend.lib;

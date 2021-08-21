@@ -19,7 +19,7 @@ namespace RenderCore { namespace LightingEngine
 
 		struct Flags
 		{
-			enum Enum { NeverStencil = 1<<0 };
+			enum Enum { DominantLight = 1<<0, NeverStencil = 1<<1 };
 			using BitField = unsigned;
 		};
 		Flags::BitField _flags = 0;

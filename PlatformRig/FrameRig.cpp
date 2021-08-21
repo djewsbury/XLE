@@ -287,7 +287,8 @@ namespace PlatformRig
     }
 
     auto FrameRig::ExecuteFrame(
-        WindowApparatus& windowApparatus,
+        std::shared_ptr<RenderCore::IThreadContext> context,
+        RenderCore::IPresentationChain& presChain,
         RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
         RenderCore::Techniques::DrawingApparatus* drawingApparatus) -> FrameResult
     {
@@ -301,9 +302,19 @@ namespace PlatformRig
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
         RenderCore::Techniques::ParsingContext parserContext(techniqueContext);
         return ExecuteFrame(
-            windowApparatus._immediateContext, *windowApparatus._presentationChain,
+            std::move(context), presChain,
             parserContext, 
             frameRenderingApparatus._frameCPUProfiler.get());
+    }
+
+    auto FrameRig::ExecuteFrame(
+        WindowApparatus& windowApparatus,
+        RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
+        RenderCore::Techniques::DrawingApparatus* drawingApparatus) -> FrameResult
+    {
+        return ExecuteFrame(
+            windowApparatus._immediateContext, *windowApparatus._presentationChain,
+            frameRenderingApparatus, drawingApparatus);
     }
 
     void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)

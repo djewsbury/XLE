@@ -39,7 +39,7 @@ namespace RenderOverlays
 		::Assets::DependencyValidation _depVal;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		class Desc {};
+		class Desc { uint64_t _dummy=0; };
 		SkeletonPreviewResourceBox(const Desc&)
 		{
 			_font = RenderOverlays::GetX2Font("Vera", 12);

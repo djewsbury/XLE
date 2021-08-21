@@ -441,10 +441,10 @@ namespace Utility
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !defined(_M_CEE)		// (due to mutex dependencies, must be excluded from CLR builds)
-
     using SignalDelegateId = unsigned;
     enum class SignalDelegateResult { Continue, Unbind };
+
+#if !defined(_M_CEE)		// (due to mutex dependencies, must be excluded from CLR builds)
 
     /// <summary>Bind multiple callbacks to an event</summary>
     ///

@@ -32,8 +32,7 @@
 // So disable when we can
 #if !((MAT_VCOLOR_IS_ANIM_PARAM!=0) && (GEO_HAS_COLOR!=0))
 	#undef GEO_HAS_NORMAL
-	#define GEO_HAS_NORMAL 1
+	#define GEO_HAS_NORMAL 0
 #endif
-
 
 #define SHADOW_GEN_SHADER 1

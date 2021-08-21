@@ -49,7 +49,7 @@ namespace GUILayer
         void Evnt_FocusChange(Object^, System::EventArgs ^e);
         void Evnt_Resize(Object^, System::EventArgs^ e);
 
-        virtual bool Render(RenderCore::IThreadContext&, IWindowRig&) = 0;
+        virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) = 0;
 		virtual void OnResize();
 
     private:

@@ -122,8 +122,7 @@ float3 CalculateIllumination(
 		#endif
 	}
 
-	// result += LightResolve_Ambient(sample, directionToEye, screenDest);
-	result = sample.diffuseAlbedo;
+	result += LightResolve_Ambient(sample, directionToEye, screenDest);
 
 	return result;
 }

@@ -7,7 +7,7 @@
 
 #include "../Math/SurfaceAlgorithm.hlsl"
 
-#if !defined(GEO_HAS_POSITION) && !defined(GEO_HAS_PIXELPOSITION)
+#if !defined(GEO_HAS_POSITION) && !defined(GEO_HAS_PIXELPOSITION) && !GEO_HAS_VERTEX_ID		// "vertex generator" shaders will set GEO_HAS_VERTEX_ID, but have no positions 
 	#define GEO_HAS_POSITION 1
 #endif
 
