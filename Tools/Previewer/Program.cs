@@ -44,7 +44,6 @@ namespace Previewer
             var engineDevice = new GUILayer.EngineDevice();
             GC.KeepAlive(engineDevice);
 
-            XLEBridgeUtils.Utils.AttachLibrary(engineDevice);
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
 
             // Enable metadata driven property editing for the DOM

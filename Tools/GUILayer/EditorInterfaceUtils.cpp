@@ -98,14 +98,14 @@ namespace GUILayer
 
         static System::Collections::Generic::ICollection<HitRecord>^
             RayIntersection(
-                CameraDescWrapper^ camera,
+                CameraDescWrapper^ camera, unsigned viewportWidth, unsigned viewportHeight,
                 IntersectionTestSceneWrapper^ testScene,
                 Vector3 start, Vector3 end, unsigned filter)
         {
             TRY
             {
 				SceneEngine::IntersectionTestContext testContext {
-					*camera->_native, UInt2{0,0}, UInt2{0,0},
+					*camera->_native, UInt2{0,0}, UInt2{viewportWidth,viewportHeight},
 					EngineDevice::GetInstance()->GetNative().GetDrawingApparatus() };
                 auto firstResult = testScene->_scene->FirstRayIntersection(
                     testContext, std::make_pair(AsFloat3(start), AsFloat3(end)), filter);

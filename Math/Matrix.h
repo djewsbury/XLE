@@ -96,6 +96,15 @@ namespace XLEMath
         return result;
     }
 
+    inline Float3x3 Truncate3x3(const Float3x4& input)
+    {
+        Float3x3 result;
+        for (unsigned i=0; i<3; i++)
+            for (unsigned j=0; j<3; j++)
+                result(i,j) = input(i,j);
+        return result;
+    }
+
     Float4x4        Expand(const Float3x3& rotationScalePart, const Float3& translationPart);
 
     inline const float* AsFloatArray(const Float4x4& m)    { return &m(0,0); }

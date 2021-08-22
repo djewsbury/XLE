@@ -362,14 +362,12 @@ namespace ConsoleRig
 						if (XlFindString(szModName, "XLEBridgeUtils")) {
 							realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(hMods[i], "RealCrossModuleGetInstance");
 							if (realGetInstance) break;
+						} else if (XlFindString(szModName, "GUILayerVulkan")) {
+							realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(hMods[i], "RealCrossModuleGetInstance");
+							if (realGetInstance) break;
 						}
 					}
 				}
-			}
-
-			if (!realGetInstance) {
-				auto fallbackModule = GetModuleHandleA("GUILayerVulkan");
-				realGetInstance = (RealCrossModuleGetInstanceFn)GetProcAddress(fallbackModule, "RealCrossModuleGetInstance");
 			}
 
 			if (!realGetInstance)

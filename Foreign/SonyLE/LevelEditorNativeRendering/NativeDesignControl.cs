@@ -81,7 +81,7 @@ namespace RenderingInterop
                 var frustum = XLEBridgeUtils.Utils.MakeFrustumMatrix(Utils.AsCameraDesc(Camera), rect, ClientSize);
                 hits = Picking.FrustumPick(
                     GameEngine.GetEngineDevice(),
-                    Adapter.SceneManager, Adapter.TechniqueContext, 
+                    Adapter.SceneManager,
                     frustum, Utils.AsCameraDesc(Camera), ClientSize, 
                     Picking.Flags.Objects | Picking.Flags.Helpers);
             }
@@ -90,7 +90,7 @@ namespace RenderingInterop
                 Ray3F rayW = GetWorldRay(CurrentMousePoint);
                 hits = Picking.RayPick(
                     GameEngine.GetEngineDevice(),
-                    Adapter.SceneManager, Adapter.TechniqueContext,
+                    Adapter.SceneManager,
                     rayW, Utils.AsCameraDesc(Camera), ClientSize,
                     Picking.Flags.Terrain | Picking.Flags.Objects | Picking.Flags.Helpers);
             }
@@ -199,7 +199,7 @@ namespace RenderingInterop
         {
             var ray = GetWorldRay(clientPt);
             var pick = Picking.RayPick(
-                GameEngine.GetEngineDevice(), Adapter.SceneManager, Adapter.TechniqueContext,
+                GameEngine.GetEngineDevice(), Adapter.SceneManager,
                 ray, Utils.AsCameraDesc(Camera), ClientSize, Picking.Flags.Terrain);
 
             if (pick != null && pick.Length > 0)
@@ -503,7 +503,6 @@ namespace RenderingInterop
         Size GUILayer.IViewContext.ViewportSize { get { return base.Size; } }
         GUILayer.CameraDescWrapper GUILayer.IViewContext.Camera { get { return Utils.AsCameraDesc(base.Camera); } }
         GUILayer.EditorSceneManager GUILayer.IViewContext.SceneManager { get { return Adapter.SceneManager; } }
-        GUILayer.TechniqueContextWrapper GUILayer.IViewContext.TechniqueContext { get { return Adapter.TechniqueContext; } }
         GUILayer.EngineDevice GUILayer.IViewContext.EngineDevice { get { return Adapter.EngineDevice; } }
 #endregion
     }

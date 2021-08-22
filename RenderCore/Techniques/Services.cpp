@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _id;
 		};
 		std::vector<TexturePlugin> _texturePlugins;
+		std::function<Assets::TextureLoaderSignature> _fallbackTextureLoader;
 		unsigned _nextTexturePluginId = 1;
 	};
 
@@ -47,11 +48,18 @@ namespace RenderCore { namespace Techniques
 			_pimpl->_texturePlugins.erase(i);
 	}
 
+	void Services::SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader)
+	{
+		_pimpl->_fallbackTextureLoader = std::move(loader);
+	}
+
 	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags)
 	{
 		for (const auto& plugin:_pimpl->_texturePlugins)
 			if (std::regex_match(identifier.begin(), identifier.end(), plugin._initializerMatcher))
 				return plugin._loader(identifier, flags);
+		if (_pimpl->_fallbackTextureLoader)
+			return _pimpl->_fallbackTextureLoader(identifier, flags);
 		return nullptr;
 	}
 

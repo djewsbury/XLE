@@ -79,11 +79,15 @@ namespace RenderCore { namespace Techniques
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
-	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, FlatColor };
-
+	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType);
+
+	enum class UtilityDelegateType { FlatColor };
+	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
+		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		UtilityDelegateType utilityType);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);

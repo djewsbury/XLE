@@ -776,6 +776,15 @@ namespace XLEMath
         _translation = ExtractTranslation(copyFrom);
     }
 
+    template<typename RotationType>
+        ScaleRotationTranslation<RotationType>::ScaleRotationTranslation(const Float3x4& copyFrom)
+    : ScaleRotationTranslation(AsFloat4x4(copyFrom))
+    {}
+    template<typename RotationType>
+        ScaleRotationTranslation<RotationType>::ScaleRotationTranslation(const Float3x4& copyFrom, bool& goodDecomposition)
+    : ScaleRotationTranslation(AsFloat4x4(copyFrom), goodDecomposition)
+    {}
+
     template class ScaleRotationTranslation<Quaternion>;
     template class ScaleRotationTranslation<Float3x3>;
 

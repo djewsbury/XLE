@@ -117,7 +117,7 @@ namespace XLEMath
     {
             //  Does this ray intersect the aabb? 
             //  transform the ray back into aabb space, and do tests against the edge planes of the bounding box
-
+        assert(IsOrthonormal(Truncate3x3(aabbToWorld)));
         auto ray = std::make_pair(
             TransformPointByOrthonormalInverse(aabbToWorld, worldSpaceRay.first), 
             TransformPointByOrthonormalInverse(aabbToWorld, worldSpaceRay.second));

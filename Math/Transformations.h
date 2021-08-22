@@ -98,6 +98,8 @@ namespace XLEMath
 
         explicit ScaleRotationTranslation(const Float4x4& copyFrom);
         ScaleRotationTranslation(const Float4x4& copyFrom, bool& goodDecomposition);
+        explicit ScaleRotationTranslation(const Float3x4& copyFrom);
+        ScaleRotationTranslation(const Float3x4& copyFrom, bool& goodDecomposition);
         ScaleRotationTranslation(Float3 scale, const RotationType& rotation, Float3 translation)
             : _rotation(rotation), _scale(scale), _translation(translation) {}
     };

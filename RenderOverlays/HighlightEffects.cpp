@@ -226,6 +226,7 @@ namespace RenderOverlays
         IThreadContext*                 _threadContext;
         std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
         Techniques::RenderPassInstance  _rpi;
+        Techniques::ParsingContext* _parsingContext = nullptr;
 
         Pimpl(IThreadContext& threadContext, std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout)
         : _threadContext(&threadContext), _pipelineLayout(std::move(pipelineLayout)) {}
@@ -244,26 +245,28 @@ namespace RenderOverlays
         using namespace RenderCore;
         auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
         _pimpl = std::make_unique<Pimpl>(threadContext, std::move(pipelineLayout));
+        _pimpl->_parsingContext = &parsingContext;
 
 		Techniques::FrameBufferDescFragment fbDescFrag;
 		auto n_offscreen = fbDescFrag.DefineAttachment(
-            0, AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, LoadStore::DontCare, 0, BindFlag::ShaderResource });
-		auto n_mainColor = fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+            0, AttachmentDesc { Format::R8G8B8A8_UNORM, 0u, LoadStore::Clear, s_inputAttachmentMode ? LoadStore::DontCare : LoadStore::Retain, 0, BindFlag::ShaderResource });
 		const bool doDepthTest = true;
         auto n_depth = doDepthTest ? fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) : ~0u;
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass0;
 		subpass0.AppendOutput(n_offscreen);
 		subpass0.SetDepthStencil(n_depth, TextureViewDesc{ TextureViewDesc::Aspect::DepthStencil });
+        subpass0.SetName("prepare-highlight");
 		fbDescFrag.AddSubpass(std::move(subpass0));
 
-		Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
-		subpass1.AppendOutput(n_mainColor);
-        if (s_inputAttachmentMode) {
+		if (s_inputAttachmentMode) {
+    		auto n_mainColor = fbDescFrag.DefineAttachment(RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+            Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
+    		subpass1.AppendOutput(n_mainColor);    
 		    subpass1.AppendInput(n_offscreen);
-        } else
-            subpass1.AppendNonFrameBufferAttachmentView(n_offscreen);
-		fbDescFrag.AddSubpass(std::move(subpass1));
+            subpass1.SetName("highlight");
+            fbDescFrag.AddSubpass(std::move(subpass1));
+        }
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
         _pimpl->_rpi = Techniques::RenderPassInstance(
@@ -273,11 +276,14 @@ namespace RenderOverlays
 
     void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
     {
-        _pimpl->_rpi.NextSubpass();
-        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
-        assert(srv);
+        assert(!s_inputAttachmentMode);
 
+        auto srv = _pimpl->_rpi.GetOutputAttachmentSRV(0, {});
+        assert(srv);
+        _pimpl->_rpi.End();
+        
         if (srv) {
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
 			static Float3 highlightColO(1.5f, 1.35f, .7f);
 			static unsigned overlayColO = 1;
 
@@ -290,30 +296,30 @@ namespace RenderOverlays
 			settings._outlineColor = outlineColor;
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 			ExecuteHighlightByStencil(
-				metalContext, encoder, srv, 
+				metalContext, encoder, srv.get(), 
 				settings, false, s_inputAttachmentMode);
 		}
-
-        _pimpl->_rpi.End();
     }
 
     void BinaryHighlight::FinishWithOutline(RenderCore::IThreadContext& threadContext, Float3 outlineColor)
     {
             //  now we can render these objects over the main image, 
             //  using some filtering
+        assert(!s_inputAttachmentMode);
 
-        _pimpl->_rpi.NextSubpass();
-        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
+        auto srv = _pimpl->_rpi.GetOutputAttachmentSRV(0, {});
         assert(srv);
+        _pimpl->_rpi.End();
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
 		if (srv && shaders) {
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 
 			struct Constants { Float3 _color; unsigned _dummy; } constants = { outlineColor, 0 };
 
-			IResourceView* rvs[] = { srv };
+			IResourceView* rvs[] = { srv.get() };
             UniformsStream::ImmediateData immd[] = { MakeOpaqueIteratorRange(constants) };
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);
@@ -331,20 +337,23 @@ namespace RenderOverlays
 
     void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
     {
-        _pimpl->_rpi.NextSubpass();
-        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
+        assert(!s_inputAttachmentMode);
+
+        auto srv = _pimpl->_rpi.GetOutputAttachmentSRV(0, {});
         assert(srv);
+        _pimpl->_rpi.End();
 
             //  now we can render these objects over the main image, 
             //  using some filtering
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
         if (srv && shaders) {
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 			struct Constants { Float4 _shadowColor; } constants = { shadowColor };
 
-            IResourceView* rvs[] = { srv };
+            IResourceView* rvs[] = { srv.get() };
             UniformsStream::ImmediateData immd[] = { MakeOpaqueIteratorRange(constants) };
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);

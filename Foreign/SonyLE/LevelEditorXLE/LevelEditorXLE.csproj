@@ -85,6 +85,7 @@
     <Compile Include="Services\Commands.cs" />
     <Compile Include="Services\CustomXml.cs" />
     <Compile Include="Services\Extensions.cs" />
+    <Compile Include="Services\GameLoopService.cs" />
     <Compile Include="Services\Patches.cs" />
     <Compile Include="Services\Resources.cs" />
     <Compile Include="Services\Startup.cs" />

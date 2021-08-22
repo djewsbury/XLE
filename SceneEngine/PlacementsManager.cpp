@@ -71,7 +71,9 @@ namespace SceneEngine
             unsigned    _modelFilenameOffset;       // note -- hash values should be stored with the filenames
             unsigned    _materialFilenameOffset;
             unsigned    _supplementsOffset;
-            uint64_t      _guid;
+            uint64_t    _guid;
+            Float3x3    _decomposedRotation;
+            Float3      _decomposedScale;
         };
         
         const ObjectReference*  GetObjectReferences() const;
@@ -1163,6 +1165,9 @@ namespace SceneEngine
         newReference._materialFilenameOffset = AddString(materialFilename);
         newReference._supplementsOffset = AddSupplements(supplements);
         newReference._guid = objectGuid;
+        ScaleRotationTranslationM decomposed(objectToCell);
+        newReference._decomposedRotation = decomposed._rotation;
+        newReference._decomposedScale = decomposed._scale;
 
             // Insert the new object in sorted order
             //  We're sorting by GUID, which is an arbitrary random number. So the final
@@ -1340,8 +1345,14 @@ namespace SceneEngine
             if (assetState != ::Assets::AssetState::Ready)
                 continue;
 
-            if (!RayVsAABB( cellSpaceRay, obj._localToCell, 
-                            localBoundingBox.first, localBoundingBox.second)) {
+            auto decomTranslation = ExtractTranslation(obj._localToCell);
+            std::pair<Float3, Float3> localRay { cellSpaceRay.first - decomTranslation, cellSpaceRay.second - decomTranslation };
+            localRay.first = Transpose(obj._decomposedRotation) * localRay.first;
+            localRay.second = Transpose(obj._decomposedRotation) * localRay.second;
+            localRay.first = Float3{localRay.first[0]/obj._decomposedScale[0], localRay.first[1]/obj._decomposedScale[1], localRay.first[2]/obj._decomposedScale[2]};
+            localRay.second = Float3{localRay.second[0]/obj._decomposedScale[0], localRay.second[1]/obj._decomposedScale[1], localRay.second[2]/obj._decomposedScale[2]};
+
+            if (!RayVsAABB(localRay, localBoundingBox.first, localBoundingBox.second)) {
                 continue;
             }
 
@@ -1997,6 +2008,9 @@ namespace SceneEngine
                 dst->_materialFilenameOffset = dynPlacements->AddString(MakeStringSection(materialFilename));
                 dst->_supplementsOffset = dynPlacements->AddSupplements(MakeIteratorRange(suppGuids));
                 dst->_cellSpaceBoundary = cellSpaceBoundary;
+                ScaleRotationTranslationM decomp(localToCell);
+                dst->_decomposedRotation = decomp._rotation;
+                dst->_decomposedScale = decomp._scale;
             } else {
                 dynPlacements->AddPlacement(
                     localToCell, cellSpaceBoundary, 

@@ -117,7 +117,7 @@ namespace LevelEditor
                 );
 
             TypeCatalog thisAssemCatalog = new TypeCatalog(
-                typeof(LevelEditor.GameLoopService),                
+                // typeof(LevelEditor.GameLoopService),                
                 typeof(LevelEditor.GameEditor),
                 typeof(LevelEditor.BookmarkLister),                                
                 typeof(LevelEditor.GameDocumentRegistry),                

@@ -39,6 +39,7 @@ namespace LevelEditorXLE
         public static TypeCatalog CreateTypeCatalog()
         {
             return new TypeCatalog(
+                typeof(LevelEditorXLE.GameLoopService),
                 typeof(Manipulators.XLEManipCtrlWin),
                 typeof(XLECamera),
                 typeof(XLEAssetService), 

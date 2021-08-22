@@ -123,10 +123,6 @@ namespace XLEBridgeUtils
             virtual GUILayer::EditorSceneManager^ get() { return _sceneManager; }
         }
 
-        property GUILayer::TechniqueContextWrapper^ TechniqueContext {
-            virtual GUILayer::TechniqueContextWrapper^ get() { return _layerControl->GetTechniqueContext(); }
-        }
-
         property GUILayer::EngineDevice^ EngineDevice { 
             virtual GUILayer::EngineDevice^ get() { return GUILayer::EngineDevice::GetInstance(); }
         }
@@ -226,7 +222,6 @@ namespace XLEBridgeUtils
         static array<HitRecord>^ FrustumPick(
             GUILayer::EngineDevice^ device,
             GUILayer::EditorSceneManager^ sceneManager,
-            GUILayer::TechniqueContextWrapper^ techniqueContext,
             Matrix4F^ pickingFrustum, 
             GUILayer::CameraDescWrapper^ camera,
             System::Drawing::Size viewportSize,
@@ -241,7 +236,7 @@ namespace XLEBridgeUtils
 
                 cli::pin_ptr<float> ptr = &pickingFrustum->M11;
                 results = GUILayer::EditorInterfaceUtils::FrustumIntersection(
-					camera, techniqueContext,
+					camera,
                     scene.get(), ptr, (uint)flags);
             }
 
@@ -276,7 +271,6 @@ namespace XLEBridgeUtils
         static array<HitRecord>^ RayPick(
             GUILayer::EngineDevice^ device,
             GUILayer::EditorSceneManager^ sceneManager,
-            GUILayer::TechniqueContextWrapper^ techniqueContext,
             Ray3F ray, GUILayer::CameraDescWrapper^ camera, 
             System::Drawing::Size viewportSize, Flags flags)
         {
@@ -290,7 +284,7 @@ namespace XLEBridgeUtils
                     sceneManager->GetIntersectionScene());
 
                 results = GUILayer::EditorInterfaceUtils::RayIntersection(
-					camera, techniqueContext,
+					camera, viewportSize.Width, viewportSize.Height,
                     scene.get(),
                     Utils::AsVector3(ray.Origin),
                     Utils::AsVector3(endPt), (uint)flags);
@@ -310,7 +304,6 @@ namespace XLEBridgeUtils
             return RayPick(
                 vc->EngineDevice,
                 sceneMan,
-                vc->TechniqueContext,
                 ray, vc->Camera, vc->ViewportSize, flags);
         }
 
@@ -324,7 +317,6 @@ namespace XLEBridgeUtils
             return FrustumPick(
                 vc->EngineDevice,
                 sceneMan,
-                vc->TechniqueContext,
                 pickingFrustum, vc->Camera, vc->ViewportSize, flags);
         }
     };

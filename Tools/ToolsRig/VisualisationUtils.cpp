@@ -313,6 +313,8 @@ namespace ToolsRig
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, RenderCore::LoadStore::Clear);
 			_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
+
+			StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 		}
 
 		/*if (!_envSettingsErrorMessage.empty()) {
@@ -653,7 +655,7 @@ namespace ToolsRig
 			mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
 			mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_StencilClear));		// ensure stencil is cleared (but ok to keep depth)
 			fbDesc.AddSubpass(std::move(mainPass));
-			Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
+			Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc };
 
 			static auto visWireframeDelegate =
 				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
@@ -693,10 +695,13 @@ namespace ToolsRig
 				auto* visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 				if (visContent) {
 					CATCH_ASSETS_BEGIN
+						rpi = {};		// awkwardly, we don't call RenderSkeleton during an rpi because it can render glyphs to a font texture
 						RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 						visContent->RenderSkeleton(
 							overlays, parserContext,
 							_pimpl->_settings._skeletonMode == 2);
+						rpi = Techniques::RenderPassInstance { threadContext, parserContext, fbDesc };
+						_pimpl->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
 					CATCH_ASSETS_END(parserContext)
 				}
 			}

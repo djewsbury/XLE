@@ -196,7 +196,7 @@ namespace XLEBridgeUtils
 			result.Filesystem = "IFileSystem";
 
 			// figure out what types we can compile this into
-			auto temp = naturalNameSplitter.FileAndExtension().Cast<char>();
+			auto temp = naturalNameSplitter.Extension();
 			auto types = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetTargetCodesForExtension(temp);
 			result.Types = 0u;
 			for (auto t:types) {

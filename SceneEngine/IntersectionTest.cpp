@@ -172,6 +172,7 @@ namespace SceneEngine
 		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
         auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
 		RenderCore::Techniques::ParsingContext parsingContext(techniqueContext);
+        parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
 
         if ((filter & Type::Terrain) && _terrainManager) {
             auto intersection = FindTerrainIntersection(

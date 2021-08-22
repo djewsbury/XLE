@@ -72,7 +72,7 @@ namespace LevelEditorXLE
                         // getting it from the view control)
                     var hit = XLEBridgeUtils.Picking.RayPick(
                         GUILayer.EngineDevice.GetInstance(),
-                        vc.SceneManager, vc.TechniqueContext,
+                        vc.SceneManager,
                         c.GetWorldRay(e.Location), XLEBridgeUtils.Utils.AsCameraDesc(Camera), c.ClientSize,
                         XLEBridgeUtils.Picking.Flags.AllWorldObjects);
                     if (hit != null && hit.Length > 0)

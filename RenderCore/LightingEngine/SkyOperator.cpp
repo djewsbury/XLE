@@ -7,6 +7,7 @@
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"
 #include "../Techniques/DescriptorSetAccelerator.h"
+#include "../Techniques/ParsingContext.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/AssetFutureContinuation.h"
@@ -19,7 +20,10 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		Techniques::SequencerUniformsHelper& seqUniforms)
 	{
-		if (!_descSet) return;
+		if (!_descSet) {
+			StringMeldAppend(parsingContext._stringHelpers->_pendingAssets, ArrayEnd(parsingContext._stringHelpers->_pendingAssets)) << "Sky resources\n";
+			return;
+		}
 
 		// todo -- don't reconstruct the SequencerUniformsHelper every time here!
 		const IDescriptorSet* descSets[] = { _descSet.get() };

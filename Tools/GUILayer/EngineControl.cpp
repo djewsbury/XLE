@@ -28,6 +28,26 @@ namespace GUILayer
 	static msclr::auto_gcroot<System::Collections::Generic::List<System::WeakReference^>^> s_regularAnimationControls
 		= gcnew System::Collections::Generic::List<System::WeakReference^>();
 
+	static void AddRegularAnimation(EngineControl^ ctrl)
+	{
+		for (int c=0; c<s_regularAnimationControls->Count;++c)
+			if (!s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl)
+				return;
+		s_regularAnimationControls->Add(gcnew System::WeakReference(ctrl));
+	}
+
+	static void RemoveRegularAnimation(EngineControl^ ctrl)
+	{
+		for (int c=0; c<s_regularAnimationControls->Count;) {
+			if (!s_regularAnimationControls.get()[c]->IsAlive 
+				|| s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl) {
+				s_regularAnimationControls->RemoveAt(c);
+			} else {
+				++c;
+			}
+		}
+	}
+
 	bool EngineControl::HasRegularAnimationControls()
 	{
 		for (int c=0; c<s_regularAnimationControls->Count;) {
@@ -52,28 +72,12 @@ namespace GUILayer
 		s_regularAnimationControls->CopyTo(renderables);
 		for each(auto r in renderables) {
 			auto target = (EngineControl^)r->Target;
-			if (target)
-				target->Render();
-		}
-	}
-
-	static void AddRegularAnimation(EngineControl^ ctrl)
-	{
-		for (int c=0; c<s_regularAnimationControls->Count;++c)
-			if (!s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl)
-				return;
-		s_regularAnimationControls->Add(gcnew System::WeakReference(ctrl));
-	}
-
-	static void RemoveRegularAnimation(EngineControl^ ctrl)
-	{
-		for (int c=0; c<s_regularAnimationControls->Count;) {
-			if (!s_regularAnimationControls.get()[c]->IsAlive 
-				|| s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl) {
-				s_regularAnimationControls->RemoveAt(c);
-			} else {
-				++c;
-			}
+			if (target) {
+				bool finishedRegular = target->Render();
+                // We need to remove the target when there are no more pending assets, otherwise it will continue rendering forever
+                if (finishedRegular)
+                    RemoveRegularAnimation(target);
+            }
 		}
 	}
 
