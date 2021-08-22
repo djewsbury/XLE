@@ -597,6 +597,7 @@ namespace Utility
 
             Internal::WorkingRelevanceTable relevanceTable;
             Internal::PreprocessorSubstitutions activeSubstitutions;
+            unsigned disablePushCount = 0;
 
             while (true) {
                 helper.SkipUntilNextPreproc();
@@ -605,79 +606,9 @@ namespace Utility
 
                 if (XlEqStringI(directive._value, "if")) {
 
-                    // the rest of the line should be some preprocessor condition expression
-                    helper.PreProc_SkipWhitespace();
-                    auto remainingLine = helper.ReadUntilEndOfLine();
-
-                    auto expr = Internal::AsExpressionTokenList(
-                        tokenDictionary, remainingLine._value, activeSubstitutions);
-
-                    auto exprRelevance = CalculatePreprocessorExpressionRevelance(
-                        tokenDictionary, expr);
-
-                    relevanceTable = Internal::MergeRelevanceTables(
-                        relevanceTable, {},
-                        exprRelevance, GetCurrentCondition(conditionsStack));
-
-                    conditionsStack.push_back({expr});
-
-                } else if (XlEqStringI(directive._value, "ifdef")) {
-
-                    auto symbol = helper.PreProc_GetNextToken();
-                    if (symbol._value.IsEmpty())
-                        Throw(FormatException("Expected token in #ifdef", directive._start));
-
-                    Internal::ExpressionTokenList expr;
-                    tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
-
-                    auto exprRelevance = CalculatePreprocessorExpressionRevelance(
-                        tokenDictionary, expr);
-
-                    relevanceTable = Internal::MergeRelevanceTables(
-                        relevanceTable, {},
-                        exprRelevance, GetCurrentCondition(conditionsStack));
-
-                    conditionsStack.push_back({expr});
-                    helper.ReadUntilEndOfLine();       // skip rest of line
-
-                } else if (XlEqStringI(directive._value, "ifndef")) {
-
-                    auto symbol = helper.PreProc_GetNextToken();
-                    if (symbol._value.IsEmpty())
-                        Throw(FormatException("Expected token in #ifndef", directive._start));
-
-                    Internal::ExpressionTokenList expr;
-                    tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
-                    expr = Internal::InvertExpression(expr);
-
-                    auto exprRelevance = CalculatePreprocessorExpressionRevelance(
-                        tokenDictionary, expr);
-
-                    relevanceTable = Internal::MergeRelevanceTables(
-                        relevanceTable, {},
-                        exprRelevance, GetCurrentCondition(conditionsStack));
-
-                    conditionsStack.push_back({expr});
-                    helper.ReadUntilEndOfLine();       // skip rest of line
-
-                } else if (XlEqStringI(directive._value, "elif") || XlEqStringI(directive._value, "else") || XlEqStringI(directive._value, "endif")) {
-
-                    if (conditionsStack.empty())
-                        Throw(FormatException(
-                            StringMeld<256>() << "endif/else/elif when there has been no if",
-                            directive._start));
-
-                    // Since we're at the same layer of nesting as the #if that we're trailing,
-                    // we wil actually modify the top condition on the stack, rather than pushing
-                    // and going to a deaper level
-                    auto prevCondition = *(conditionsStack.end()-1);
-                    conditionsStack.erase(conditionsStack.end()-1);
-
-                    // The "_negativeCond" must be false for this section to be used
-                    auto negCondition = Internal::AndExpression(prevCondition._positiveCond, prevCondition._negativeCond);
-
-                    if (XlEqStringI(directive._value, "elif")) {
-
+                    if (!disablePushCount) {
+                        // the rest of the line should be some preprocessor condition expression
+                        helper.PreProc_SkipWhitespace();
                         auto remainingLine = helper.ReadUntilEndOfLine();
 
                         auto expr = Internal::AsExpressionTokenList(
@@ -686,161 +617,276 @@ namespace Utility
                         auto exprRelevance = CalculatePreprocessorExpressionRevelance(
                             tokenDictionary, expr);
 
-                        auto conditions = Internal::AndNotExpression(GetCurrentCondition(conditionsStack), negCondition);
                         relevanceTable = Internal::MergeRelevanceTables(
                             relevanceTable, {},
-                            exprRelevance, conditions);
+                            exprRelevance, GetCurrentCondition(conditionsStack));
 
-                        conditionsStack.push_back({expr, negCondition});
-                    } else if (XlEqStringI(directive._value, "else")) {
-                        conditionsStack.push_back({{}, negCondition});
-                        helper.ReadUntilEndOfLine();       // skip rest of line
+                        conditionsStack.push_back({expr});
+                    } else {
+                        helper.ReadUntilEndOfLine();
+                    }
+
+                } else if (XlEqStringI(directive._value, "ifdef")) {
+
+                    if (!disablePushCount) {
+                        auto symbol = helper.PreProc_GetNextToken();
+                        if (symbol._value.IsEmpty())
+                            Throw(FormatException("Expected token in #ifdef", directive._start));
+
+                        Internal::ExpressionTokenList expr;
+                        tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
+
+                        auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                            tokenDictionary, expr);
+
+                        relevanceTable = Internal::MergeRelevanceTables(
+                            relevanceTable, {},
+                            exprRelevance, GetCurrentCondition(conditionsStack));
+
+                        conditionsStack.push_back({expr});
+                    }
+                    helper.ReadUntilEndOfLine();       // skip rest of line
+
+                } else if (XlEqStringI(directive._value, "ifndef")) {
+
+                    if (!disablePushCount) {
+                        auto symbol = helper.PreProc_GetNextToken();
+                        if (symbol._value.IsEmpty())
+                            Throw(FormatException("Expected token in #ifndef", directive._start));
+
+                        Internal::ExpressionTokenList expr;
+                        tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
+                        expr = Internal::InvertExpression(expr);
+
+                        auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                            tokenDictionary, expr);
+
+                        relevanceTable = Internal::MergeRelevanceTables(
+                            relevanceTable, {},
+                            exprRelevance, GetCurrentCondition(conditionsStack));
+
+                        conditionsStack.push_back({expr});
+                    }
+                    helper.ReadUntilEndOfLine();       // skip rest of line
+
+                } else if (XlEqStringI(directive._value, "elif") || XlEqStringI(directive._value, "else") || XlEqStringI(directive._value, "endif")) {
+
+                    if (!disablePushCount) {
+                        if (conditionsStack.empty())
+                            Throw(FormatException(
+                                StringMeld<256>() << "endif/else/elif when there has been no if",
+                                directive._start));
+
+                        // Since we're at the same layer of nesting as the #if that we're trailing,
+                        // we wil actually modify the top condition on the stack, rather than pushing
+                        // and going to a deaper level
+                        auto prevCondition = *(conditionsStack.end()-1);
+                        conditionsStack.erase(conditionsStack.end()-1);
+
+                        // The "_negativeCond" must be false for this section to be used
+                        auto negCondition = Internal::AndExpression(prevCondition._positiveCond, prevCondition._negativeCond);
+
+                        if (XlEqStringI(directive._value, "elif")) {
+
+                            auto remainingLine = helper.ReadUntilEndOfLine();
+
+                            auto expr = Internal::AsExpressionTokenList(
+                                tokenDictionary, remainingLine._value, activeSubstitutions);
+
+                            auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                                tokenDictionary, expr);
+
+                            auto conditions = Internal::AndNotExpression(GetCurrentCondition(conditionsStack), negCondition);
+                            relevanceTable = Internal::MergeRelevanceTables(
+                                relevanceTable, {},
+                                exprRelevance, conditions);
+
+                            conditionsStack.push_back({expr, negCondition});
+                        } else if (XlEqStringI(directive._value, "else")) {
+                            conditionsStack.push_back({{}, negCondition});
+                            helper.ReadUntilEndOfLine();       // skip rest of line
+                        }
+                    } else {
+                        helper.ReadUntilEndOfLine();
                     }
 
                 } else if (XlEqStringI(directive._value, "define") || XlEqStringI(directive._value, "undef")) {
 
-                    auto symbol = helper.PreProc_GetNextToken();
-                    if (symbol._value.IsEmpty())
-                        Throw(FormatException("Expected token in #define", directive._start));
+                    if (!disablePushCount) {
+                        auto symbol = helper.PreProc_GetNextToken();
+                        if (symbol._value.IsEmpty())
+                            Throw(FormatException("Expected token in #define", directive._start));
 
-                    auto remainingLine = helper.ReadUntilEndOfLine();
-                    bool foundNonWhitespaceChar = false;
-                    for (auto c:remainingLine._value)
-                        if (c!=' ' && c!='\t') {
-                            foundNonWhitespaceChar = true;
-                            break;
-                        }
+                        auto remainingLine = helper.ReadUntilEndOfLine();
+                        bool foundNonWhitespaceChar = false;
+                        for (auto c:remainingLine._value)
+                            if (c!=' ' && c!='\t') {
+                                foundNonWhitespaceChar = true;
+                                break;
+                            }
 
-                    auto definedCheck = tokenDictionary.TryGetToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value);
+                        auto definedCheck = tokenDictionary.TryGetToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value);
 
-                    bool unconditionalSet = true;
-                    bool gotNotDefinedCheck = false;
-                    for (auto condition=conditionsStack.rbegin(); condition!=conditionsStack.rend(); ++condition) {
-                        if (!condition->_negativeCond.empty() && !IsFalse(condition->_negativeCond)) {
-                            unconditionalSet = false;
-                            break;
-                        }
-                        // We're looking for "just true" or "just !defined(X)"
-                        if (!IsTrue(condition->_positiveCond)) {
-                            if (definedCheck.has_value() && IsNotDefinedCheck(tokenDictionary, condition->_positiveCond, definedCheck.value())) {
-                                // Note that "gotNotDefinedCheck" will not be set to true if there are any non-true condition closer to the top
-                                // of the stack
-                                gotNotDefinedCheck = true;
-                            } else {
+                        bool unconditionalSet = true;
+                        bool gotNotDefinedCheck = false;
+                        for (auto condition=conditionsStack.rbegin(); condition!=conditionsStack.rend(); ++condition) {
+                            if (!condition->_negativeCond.empty() && !IsFalse(condition->_negativeCond)) {
                                 unconditionalSet = false;
                                 break;
                             }
-                        }
-                    }
-
-                    // If we're defining something with no value, and there is a !defined() check for the same
-                    // variable on the conditions stack, and there are no conditionals later on the stack than
-                    // that check, then let's assume this is a header guard type pattern, and just wipe out
-                    // the condition on the stack
-                    // The header guard check needs to trigger even if there are conditions closer to the bottom
-                    // of the stack to handle strings that have already had #includes expanded. Ie, if we see
-                    // something like "#if <something>\n #include <something>\n #endif" then we might end up with
-                    // a header guard inside of some conditional check
-                    auto headerGuardDetection = !foundNonWhitespaceChar && XlEqStringI(directive._value, "define") && gotNotDefinedCheck;
-                    if (!headerGuardDetection) {
-
-                        Internal::PreprocessorSubstitutions::ConditionalSubstitutions subst;
-                        subst._symbol = symbol._value.AsString();
-                        subst._type = XlEqStringI(directive._value, "define") ? Internal::PreprocessorSubstitutions::Type::Define : Internal::PreprocessorSubstitutions::Type::Undefine;
-                        subst._condition = activeSubstitutions._dictionary.Translate(tokenDictionary, GetCurrentCondition(conditionsStack));
-                        bool expressionSubstitution = true;
-
-                        if (foundNonWhitespaceChar) {
-                            try {
-                                auto maybeTokenList = Internal::TryAsExpressionTokenList(activeSubstitutions._dictionary, remainingLine._value, activeSubstitutions);
-                                if (maybeTokenList.has_value()) {
-                                    subst._substitution = std::move(maybeTokenList.value());
-                                    expressionSubstitution = true;
+                            // We're looking for "just true" or "just !defined(X)"
+                            if (!IsTrue(condition->_positiveCond)) {
+                                if (definedCheck.has_value() && IsNotDefinedCheck(tokenDictionary, condition->_positiveCond, definedCheck.value())) {
+                                    // Note that "gotNotDefinedCheck" will not be set to true if there are any non-true condition closer to the top
+                                    // of the stack
+                                    gotNotDefinedCheck = true;
                                 } else {
+                                    unconditionalSet = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If we're defining something with no value, and there is a !defined() check for the same
+                        // variable on the conditions stack, and there are no conditionals later on the stack than
+                        // that check, then let's assume this is a header guard type pattern, and just wipe out
+                        // the condition on the stack
+                        // The header guard check needs to trigger even if there are conditions closer to the bottom
+                        // of the stack to handle strings that have already had #includes expanded. Ie, if we see
+                        // something like "#if <something>\n #include <something>\n #endif" then we might end up with
+                        // a header guard inside of some conditional check
+                        auto headerGuardDetection = !foundNonWhitespaceChar && XlEqStringI(directive._value, "define") && gotNotDefinedCheck;
+                        if (!headerGuardDetection) {
+
+                            Internal::PreprocessorSubstitutions::ConditionalSubstitutions subst;
+                            subst._symbol = symbol._value.AsString();
+                            subst._type = XlEqStringI(directive._value, "define") ? Internal::PreprocessorSubstitutions::Type::Define : Internal::PreprocessorSubstitutions::Type::Undefine;
+                            subst._condition = activeSubstitutions._dictionary.Translate(tokenDictionary, GetCurrentCondition(conditionsStack));
+                            bool expressionSubstitution = true;
+
+                            if (foundNonWhitespaceChar) {
+                                try {
+                                    auto maybeTokenList = Internal::TryAsExpressionTokenList(activeSubstitutions._dictionary, remainingLine._value, activeSubstitutions);
+                                    if (maybeTokenList.has_value()) {
+                                        subst._substitution = std::move(maybeTokenList.value());
+                                        expressionSubstitution = true;
+                                    } else {
+                                        expressionSubstitution = false;
+                                    }
+                                } catch (const std::exception& e) {
                                     expressionSubstitution = false;
                                 }
-                            } catch (const std::exception& e) {
-                                expressionSubstitution = false;
                             }
-                        }
 
-                        if (!expressionSubstitution) {
-                            #if defined(_DEBUG)
-                                std::cout << "Substitution for " << symbol._value << " is not an expression" << std::endl;
-                            #endif
-                        }
+                            if (!expressionSubstitution) {
+                                #if defined(_DEBUG)
+                                    std::cout << "Substitution for " << symbol._value << " is not an expression" << std::endl;
+                                #endif
+                            }
 
-                        if (expressionSubstitution) {
-                            #if defined(_DEBUG)
-                                if (XlEqStringI(directive._value, "define") && XlEndsWith(symbol._value, MakeStringSection("_H"))) {
-                                    std::cout << "Suspicious define for variable " << symbol._value << " found" << std::endl;
-                                }
-                            #endif
+                            if (expressionSubstitution) {
+                                #if defined(_DEBUG)
+                                    if (XlEqStringI(directive._value, "define") && XlEndsWith(symbol._value, MakeStringSection("_H"))) {
+                                        std::cout << "Suspicious define for variable " << symbol._value << " found" << std::endl;
+                                    }
+                                #endif
 
-                            if (!gotNotDefinedCheck) {
-                                activeSubstitutions._substitutions.push_back(subst);
-                            } else {
-                                if (subst._type == Internal::PreprocessorSubstitutions::Type::Define) {
-                                    subst._type = Internal::PreprocessorSubstitutions::Type::DefaultDefine;
+                                if (!gotNotDefinedCheck) {
                                     activeSubstitutions._substitutions.push_back(subst);
                                 } else {
-                                    // We should only get here for something like "#ifdef SYMBOL\n #undef SYMBOL" -- which doesn't make much sense
-                                    #if defined(_DEBUG)
-                                        std::cout << "Found unusual #undef construction for " << symbol._value << ". Ignoring." << std::endl;
-                                    #endif
+                                    if (subst._type == Internal::PreprocessorSubstitutions::Type::Define) {
+                                        subst._type = Internal::PreprocessorSubstitutions::Type::DefaultDefine;
+                                        activeSubstitutions._substitutions.push_back(subst);
+                                    } else {
+                                        // We should only get here for something like "#ifdef SYMBOL\n #undef SYMBOL" -- which doesn't make much sense
+                                        #if defined(_DEBUG)
+                                            std::cout << "Found unusual #undef construction for " << symbol._value << ". Ignoring." << std::endl;
+                                        #endif
+                                    }
                                 }
                             }
+
+                        } else {
+                            auto i = relevanceTable.find(definedCheck.value());
+                            if (i != relevanceTable.end())
+                                relevanceTable.erase(i);
+
+                            // Clear out the !defined() checks for this header guard, because we won't want them to appear in the
+                            // relevance conditions
+                            for (auto& condition:conditionsStack)
+                                if (condition._negativeCond.empty() && IsNotDefinedCheck(tokenDictionary, condition._positiveCond, definedCheck.value()))
+                                    condition._positiveCond = {1};
                         }
-
                     } else {
-                        auto i = relevanceTable.find(definedCheck.value());
-                        if (i != relevanceTable.end())
-                            relevanceTable.erase(i);
-
-                        // Clear out the !defined() checks for this header guard, because we won't want them to appear in the
-                        // relevance conditions
-                        for (auto& condition:conditionsStack)
-                            if (condition._negativeCond.empty() && IsNotDefinedCheck(tokenDictionary, condition._positiveCond, definedCheck.value()))
-                                condition._positiveCond = {1};
+                        helper.ReadUntilEndOfLine();
                     }
 
                 } else if (XlEqStringI(directive._value, "include")) {
 
-                    auto symbol = helper.PreProc_GetBrackettedToken();
-                    if (symbol._value.IsEmpty())
-                        Throw(FormatException("Expected file to include after #include directive", directive._start));
+                    if (!disablePushCount) {
+                        auto symbol = helper.PreProc_GetBrackettedToken();
+                        if (symbol._value.IsEmpty())
+                            Throw(FormatException("Expected file to include after #include directive", directive._start));
 
-                    if (!_includeHandler)
-                        Throw(FormatException("No include handler provided to handle #include directive", directive._start));
+                        if (!_includeHandler)
+                            Throw(FormatException("No include handler provided to handle #include directive", directive._start));
 
-                    // todo -- do we need any #pragma once type functionality to prevent infinite recursion
-                    // or just searching through too many files
-                    auto includedAnalysis = GeneratePreprocessorAnalysisFromFile(symbol._value, filenameForRelativeIncludeSearch);
+                        // todo -- do we need any #pragma once type functionality to prevent infinite recursion
+                        // or just searching through too many files
+                        auto includedAnalysis = GeneratePreprocessorAnalysisFromFile(symbol._value, filenameForRelativeIncludeSearch);
 
-                    // merge in the results we got from this included file
-                    std::map<Internal::Token, Internal::ExpressionTokenList> translatedRelevanceTable;
-                    for (const auto& relevance:includedAnalysis._relevanceTable) {
-                        translatedRelevanceTable.insert(std::make_pair(
-                            tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.first),
-                            tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.second)));
-                    }
-                    auto currentCondition = GetCurrentCondition(conditionsStack);
-                    relevanceTable = Internal::MergeRelevanceTables(
-                        relevanceTable, {},
-                        translatedRelevanceTable, currentCondition);
-
-                    if (!includedAnalysis._sideEffects._substitutions.empty()) {
-                        auto currentConditionInSideEffectDictionary = activeSubstitutions._dictionary.Translate(tokenDictionary, currentCondition);
-                        for (const auto& sideEffect:includedAnalysis._sideEffects._substitutions) {
-                            auto newSubst = sideEffect;
-                            newSubst._condition = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._condition);
-                            newSubst._condition = Internal::AndExpression(currentConditionInSideEffectDictionary, newSubst._condition);
-                            newSubst._substitution = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._substitution);
-                            activeSubstitutions._substitutions.push_back(newSubst);
+                        // merge in the results we got from this included file
+                        std::map<Internal::Token, Internal::ExpressionTokenList> translatedRelevanceTable;
+                        for (const auto& relevance:includedAnalysis._relevanceTable) {
+                            translatedRelevanceTable.insert(std::make_pair(
+                                tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.first),
+                                tokenDictionary.Translate(includedAnalysis._tokenDictionary, relevance.second)));
                         }
+                        auto currentCondition = GetCurrentCondition(conditionsStack);
+                        relevanceTable = Internal::MergeRelevanceTables(
+                            relevanceTable, {},
+                            translatedRelevanceTable, currentCondition);
+
+                        if (!includedAnalysis._sideEffects._substitutions.empty()) {
+                            auto currentConditionInSideEffectDictionary = activeSubstitutions._dictionary.Translate(tokenDictionary, currentCondition);
+                            for (const auto& sideEffect:includedAnalysis._sideEffects._substitutions) {
+                                auto newSubst = sideEffect;
+                                newSubst._condition = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._condition);
+                                newSubst._condition = Internal::AndExpression(currentConditionInSideEffectDictionary, newSubst._condition);
+                                newSubst._substitution = activeSubstitutions._dictionary.Translate(includedAnalysis._sideEffects._dictionary, newSubst._substitution);
+                                activeSubstitutions._substitutions.push_back(newSubst);
+                            }
+                        }
+                    } else {
+                        helper.ReadUntilEndOfLine();
                     }
 
-                } else if (XlEqStringI(directive._value, "line") || XlEqStringI(directive._value, "error") || XlEqStringI(directive._value, "pragma") || XlEqStringI(directive._value, "extension")) {
+                } else if (XlEqStringI(directive._value, "pragma")) {
+
+                    auto pragmaType = helper.PreProc_GetNextToken();
+                    if (XlEqString(pragmaType._value, "selector_filtering")) {
+
+                        auto token = helper.PreProc_GetNextToken();
+                        if (!XlEqString(token._value, "(")) Throw(FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
+                        token = helper.PreProc_GetNextToken();
+                        if (XlEqString(token._value, "push_disable")) {
+                            ++disablePushCount;
+                        } else if (XlEqString(token._value, "pop")) {
+                            if (disablePushCount == 0)
+                                Throw(FormatException("Unbalanced pushes/pops for selector_filtering pragma", directive._start));
+                            --disablePushCount;
+                        } else {
+                            Throw(FormatException("Expecting either push_disable or pop", directive._start));
+                        }
+                        token = helper.PreProc_GetNextToken();
+                        if (!XlEqString(token._value, ")")) Throw(FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
+                        helper.ReadUntilEndOfLine();
+
+                    } else {
+                        helper.ReadUntilEndOfLine();
+                    }
+
+                } else if (XlEqStringI(directive._value, "line") || XlEqStringI(directive._value, "error") || XlEqStringI(directive._value, "extension")) {
 
                     // These don't have any effects relevant to us. We can just go ahead and skip them
                     helper.ReadUntilEndOfLine();
@@ -853,6 +899,9 @@ namespace Utility
 
                 }
             }
+
+            if (disablePushCount != 0)
+                Throw(FormatException("Unbounded selector_filtering pragma", helper.GetLocation()));
 
             PreprocessorAnalysis result;
             result._tokenDictionary = std::move(tokenDictionary);
