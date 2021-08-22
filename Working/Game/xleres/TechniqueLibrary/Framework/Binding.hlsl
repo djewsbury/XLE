@@ -5,6 +5,8 @@
 #if !defined(BINDING_H)
 #define BINDING_H
 
+#pragma selector_filtering(push_disable)
+
 //
 // Simplified descriptor set arrangement:
 //      "sequencer" -- descriptors that change very infrequently, mostly constant across the entire frame
@@ -91,5 +93,6 @@
     #define BIND_SHARED_LIGHTING_S3 : register(s7, space3)
 #endif
 
+#pragma selector_filtering(pop)
 
 #endif

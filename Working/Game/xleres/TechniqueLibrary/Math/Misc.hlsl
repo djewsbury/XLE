@@ -7,6 +7,8 @@
 #if !defined(UTILITY_MISC_H)
 #define UTILITY_MISC_H
 
+#pragma selector_filtering(push_disable)
+
 #if !defined(LOOP_DIRECTIVE)
     #define LOOP_DIRECTIVE [loop]
 #endif
@@ -14,6 +16,8 @@
 #if !defined(BRANCH_DIRECTIVE)
     #define BRANCH_DIRECTIVE [branch]
 #endif
+
+#pragma selector_filtering(pop)
 
 float Sq(float x) { return x*x; }
 

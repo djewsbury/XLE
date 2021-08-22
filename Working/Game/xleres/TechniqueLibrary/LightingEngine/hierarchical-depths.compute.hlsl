@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-
+#pragma selector_filtering(push_disable)
 #define A_GPU
 #define A_HLSL
 #include "xleres/Foreign/ffx-spd/ffx_a.h"
@@ -97,3 +97,5 @@ float GetMipsCount(float2 imageSize)
 		AU1(mipsCount),
 		AU1(threadgroupCount));
 }
+
+#pragma selector_filtering(pop)
