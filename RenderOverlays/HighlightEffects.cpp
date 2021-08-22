@@ -128,6 +128,7 @@ namespace RenderOverlays
     {
         assert(stencilSrv);
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
+        if (!shaders) return;
 
         UniformsStream::ImmediateData cbData[] = {
             MakeOpaqueIteratorRange(settings)
@@ -135,13 +136,10 @@ namespace RenderOverlays
         auto numericUniforms = encoder.BeginNumericUniformsInterface();
         numericUniforms.BindConstantBuffers(3, cbData);
         if (inputAttachmentMode) {
-            if (shaders) {
-                IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get() };
-                numericUniforms.Bind(1, MakeIteratorRange(srvs));
-            }
-            numericUniforms.Bind(2, MakeIteratorRange(&stencilSrv, &stencilSrv+1));
+            IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get(), stencilSrv };
+            numericUniforms.Bind(1, MakeIteratorRange(srvs));
         } else {
-            IResourceView* srvs[] = { stencilSrv, shaders ? (*shaders)->_distinctColorsSRV.get() : nullptr };
+            IResourceView* srvs[] = { stencilSrv, (*shaders)->_distinctColorsSRV.get() };
             numericUniforms.Bind(0, MakeIteratorRange(srvs));
         }
         numericUniforms.Apply(metalContext, encoder);

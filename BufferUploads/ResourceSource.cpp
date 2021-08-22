@@ -908,6 +908,8 @@ namespace BufferUploads
             result._linearBufferDesc._sizeInBytes = RoundUpBufferSize(result._linearBufferDesc._sizeInBytes);
             result._cpuAccess = CPUAccess::Write;
         }
+        XlCopyString(result._name, "[stage]");
+        XlCatString(result._name, input._name);
         return result;
     }
 
