@@ -80,14 +80,17 @@ namespace RenderCore { namespace LightingEngine
 		{
 			assert(bindingFlags == 1<<0);
 			dst[0] = _normalsFitting.get();
+			context.RequireCommandList(_completionCmdList);
 		}
 
 		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
 		{
 			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
 			_normalsFitting = normalsFittingResource.GetShaderResource();
+			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
 		}
 		std::shared_ptr<IResourceView> _normalsFitting;
+		BufferUploads::CommandListID _completionCmdList;
 	};
 
 	static ::Assets::PtrToFuturePtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
