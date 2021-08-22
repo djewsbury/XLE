@@ -32,7 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(LightingTechniqueIterator& iterator);
 
-		void SetLightScene(std::shared_ptr<Internal::StandardLightScene> lightScene);
+		void SetLightScene(Internal::StandardLightScene& lightScene);
 		Internal::StandardLightScene& GetLightScene() { return *_lightScene; }
 
 		struct Outputs
@@ -95,7 +95,7 @@ namespace RenderCore { namespace LightingEngine
 
 		LightStencilingGeometry _stencilingGeo;
 
-		std::shared_ptr<Internal::StandardLightScene> _lightScene;
+		Internal::StandardLightScene* _lightScene;
 		Configuration _config;
 	};
 }}

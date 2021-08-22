@@ -262,9 +262,9 @@ namespace RenderCore { namespace LightingEngine
 			stitchingContext.DefineAttachment(a);
 	}
 
-	void RasterizationLightTileOperator::SetLightScene(std::shared_ptr<Internal::StandardLightScene> lightScene)
+	void RasterizationLightTileOperator::SetLightScene(Internal::StandardLightScene& lightScene)
 	{
-		_lightScene = std::move(lightScene);
+		_lightScene = &lightScene;
 	}
 
 	RasterizationLightTileOperator::RasterizationLightTileOperator(

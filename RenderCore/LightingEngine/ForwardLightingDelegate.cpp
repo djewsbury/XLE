@@ -93,7 +93,7 @@ namespace RenderCore { namespace LightingEngine
 
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 
-	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public Techniques::IShaderResourceDelegate, public std::enable_shared_from_this<ForwardPlusLightScene>
+	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
@@ -154,12 +154,6 @@ namespace RenderCore { namespace LightingEngine
 						Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
 					_dominantLightOperatorId = c;
 				}
-
-			BindResourceView(0, Utility::Hash64("LightDepthTable"));
-			BindResourceView(1, Utility::Hash64("LightList"));
-			BindResourceView(2, Utility::Hash64("EnvironmentProps"));
-			BindResourceView(3, Utility::Hash64("TiledLightBitField"));
-			BindResourceView(4, Utility::Hash64("SSR"));
 		}
 
 		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
@@ -323,19 +317,33 @@ namespace RenderCore { namespace LightingEngine
 			_hasPrevProjection = true;
 		}
 
-		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
+		class ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
 		{
-			assert(dst.size() >= 4);
-			auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
-			dst[0] = uniforms._lightDepthTableUAV.get();
-			dst[1] = uniforms._lightListUAV.get();
-			dst[2] = uniforms._propertyCBView.get();
-			dst[3] = _lightTiler->_outputs._tiledLightBitFieldSRV.get();
-			if (bindingFlags & (1ull<<4ull)) {
-				assert(context._rpi);
-				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+		public:
+			void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
+			{
+				assert(dst.size() >= 4);
+				auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_uniforms)];
+				dst[0] = uniforms._lightDepthTableUAV.get();
+				dst[1] = uniforms._lightListUAV.get();
+				dst[2] = uniforms._propertyCBView.get();
+				dst[3] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+				if (bindingFlags & (1ull<<4ull)) {
+					assert(context._rpi);
+					dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+				}
 			}
-		}
+			ForwardPlusLightScene* _lightScene = nullptr;
+			ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
+			{
+				_lightScene = &lightScene;
+				BindResourceView(0, Utility::Hash64("LightDepthTable"));
+				BindResourceView(1, Utility::Hash64("LightList"));
+				BindResourceView(2, Utility::Hash64("EnvironmentProps"));
+				BindResourceView(3, Utility::Hash64("TiledLightBitField"));
+				BindResourceView(4, Utility::Hash64("SSR"));
+			}
+		};
 
 		RenderStepFragmentInterface CreateDepthMotionFragment(
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate)
@@ -411,7 +419,8 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), shared_from_this());
+			auto srDelegate = std::make_shared<ShaderResourceDelegate>(*this);
+			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), srDelegate);
 			return result;
 		}
 
@@ -637,7 +646,7 @@ namespace RenderCore { namespace LightingEngine
 				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 				captures->_lightScene = lightScene;
 
-				lightTiler->SetLightScene(lightScene);
+				lightTiler->SetLightScene(*lightScene);
 				
 				auto stitchingContext = stitchingContextCap;
 				hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
