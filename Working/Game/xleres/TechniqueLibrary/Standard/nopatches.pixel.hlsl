@@ -82,3 +82,12 @@ DepthMotionEncoded depthMotion(VSOUT geo)
 	#endif
 	return EncodeDepthMotion(int2(prevPos.xy));
 }
+
+#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+	[earlydepthstencil]
+#endif
+float4 flatColor(VSOUT geo) : SV_Target0
+{
+	DoAlphaTest(geo, GetAlphaThreshold());
+	return VSOUT_GetColor0(geo);
+}

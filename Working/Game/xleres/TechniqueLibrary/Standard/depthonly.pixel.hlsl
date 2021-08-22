@@ -92,3 +92,9 @@ DepthMotionEncoded depthMotionWithEarlyRejection(VSOUT geo)
 	return EncodeDepthMotion(int2(prevPos.xy));
 }
 
+float4 flatColorEarlyRejection(VSOUT geo) : SV_Target0
+{
+    if (EarlyRejectionTest(geo))
+        discard;
+	return VSOUT_GetColor0(geo);
+}

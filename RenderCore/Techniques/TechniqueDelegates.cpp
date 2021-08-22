@@ -547,6 +547,10 @@ namespace RenderCore { namespace Techniques
 					psNoPatchesHash = Hash64("DepthMotion_NoPatches");
 					psPerPixelHash = Hash64("DepthMotion_PerPixel");
 					perPixelAndEarlyRejectionHash = Hash64("DepthMotion_PerPixelAndEarlyRejection");
+				} else if (preDepthType == PreDepthType::FlatColor) {
+					psNoPatchesHash = Hash64("FlatColor_NoPatches");
+					psPerPixelHash = Hash64("FlatColor_NoPatches");
+					perPixelAndEarlyRejectionHash = Hash64("FlatColor_PerPixelAndEarlyRejection");
 				} else {
 					assert(preDepthType == PreDepthType::DepthOnly);
 					psNoPatchesHash = Hash64("DepthOnly_NoPatches");
@@ -584,8 +588,11 @@ namespace RenderCore { namespace Techniques
 				cullDisable = !!stateSet._doubleSided;
 			nascentDesc->_rasterization = _rs[cullDisable];
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;
-			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
-			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			if (_preDepthType != PreDepthType::DepthOnly) {
+				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+				if (_preDepthType == PreDepthType::DepthMotionNormal)
+					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			}
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
@@ -631,6 +638,7 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_PreDepth(
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			PreDepthType preDepthType)
+		: _preDepthType(preDepthType)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(

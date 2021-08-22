@@ -93,7 +93,8 @@ namespace ToolsRig
 		TechniqueBox(const Desc&)
 		{
 			_techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
-			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Forward(_techniqueSetFile, RenderCore::Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_PreDepth(
+                _techniqueSetFile, RenderCore::Techniques::PreDepthType::FlatColor);
 		}
 	};
 

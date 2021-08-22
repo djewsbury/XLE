@@ -160,6 +160,16 @@ DepthMotion_PerPixelAndEarlyRejection=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+FlatColor_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:flatColor
+
+FlatColor_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:flatColorWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 ProbePrepare_NoPatches=~
 	Inherit=~; Forward_NoPatches
 	Selectors=~

@@ -123,11 +123,11 @@ namespace RenderOverlays
         Metal::GraphicsEncoder_ProgressivePipeline& encoder,
         IResourceView* stencilSrv,
         const HighlightByStencilSettings& settings,
-        bool onlyHighlighted)
+        bool onlyHighlighted,
+        bool inputAttachmentMode)
     {
         assert(stencilSrv);
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(encoder.GetPipelineLayout())->TryActualize();
-        const bool inputAttachmentMode = false;
 
         UniformsStream::ImmediateData cbData[] = {
             MakeOpaqueIteratorRange(settings)
@@ -187,6 +187,8 @@ namespace RenderOverlays
         }
     }
 
+    static const bool s_inputAttachmentMode = false;
+
     void ExecuteHighlightByStencil(
         IThreadContext& threadContext,
         Techniques::ParsingContext& parsingContext,
@@ -197,22 +199,25 @@ namespace RenderOverlays
 		Techniques::FrameBufferDescFragment::SubpassDesc mainPass;
 		mainPass.SetName("VisualisationOverlay");
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-		mainPass.AppendInput(
-            fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth),
-            TextureViewDesc{
-                {TextureViewDesc::Aspect::Stencil},
-                TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined,
-				TextureViewDesc::Flags::JustStencil});
+        TextureViewDesc stencilViewDesc{
+            {TextureViewDesc::Aspect::Stencil},
+            TextureViewDesc::All, TextureViewDesc::All, TextureDesc::Dimensionality::Undefined,
+            TextureViewDesc::Flags::JustStencil};
+        if (s_inputAttachmentMode) {
+            mainPass.AppendInput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), stencilViewDesc);
+        } else {
+            mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, stencilViewDesc);
+        }
         fbDesc.AddSubpass(std::move(mainPass));
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
 
-        auto stencilSrv = rpi.GetInputAttachmentView(0);
+        auto stencilSrv = s_inputAttachmentMode ? rpi.GetInputAttachmentView(0) : rpi.GetNonFrameBufferAttachmentView(0);
         if (!stencilSrv) return;
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
         auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
-        ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted);
+        ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -256,7 +261,10 @@ namespace RenderOverlays
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass1;
 		subpass1.AppendOutput(n_mainColor);
-		subpass1.AppendInput(n_offscreen);
+        if (s_inputAttachmentMode) {
+		    subpass1.AppendInput(n_offscreen);
+        } else
+            subpass1.AppendNonFrameBufferAttachmentView(n_offscreen);
 		fbDescFrag.AddSubpass(std::move(subpass1));
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
@@ -268,7 +276,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
+        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
         assert(srv);
 
         if (srv) {
@@ -285,7 +293,7 @@ namespace RenderOverlays
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 			ExecuteHighlightByStencil(
 				metalContext, encoder, srv, 
-				settings, false);
+				settings, false, s_inputAttachmentMode);
 		}
 
         _pimpl->_rpi.End();
@@ -297,7 +305,7 @@ namespace RenderOverlays
             //  using some filtering
 
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
+        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
         assert(srv);
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
@@ -326,7 +334,7 @@ namespace RenderOverlays
     void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
     {
         _pimpl->_rpi.NextSubpass();
-        auto* srv = _pimpl->_rpi.GetInputAttachmentView(0).get();
+        auto* srv = s_inputAttachmentMode ? _pimpl->_rpi.GetInputAttachmentView(0).get() : _pimpl->_rpi.GetNonFrameBufferAttachmentView(0).get();
         assert(srv);
 
             //  now we can render these objects over the main image, 
