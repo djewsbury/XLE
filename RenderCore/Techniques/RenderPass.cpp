@@ -1815,13 +1815,10 @@ namespace RenderCore { namespace Techniques
                         }
 
                         newState = WorkingAttachment { interfaceAttachment, fbProps };
-                        newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
                     } else {
                         // Remove from the working attachments and push back in it's new state
                         // If we're not writing to this attachment, it will lose it's semantic here
                         newState = *compat;
-                        if (newState._name == ~0u)
-                            newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
                         workingAttachments.erase(compat);
                     }
                 } else {
@@ -1907,7 +1904,6 @@ namespace RenderCore { namespace Techniques
                         }
 
                         newState = WorkingAttachment { interfaceAttachment, fbProps };
-                        newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
 
                         #if defined(_DEBUG)
                             debugInfo 
@@ -1917,8 +1913,6 @@ namespace RenderCore { namespace Techniques
                     } else {
                         // remove from the working attachments and push back in it's new state
                         newState = *compat;
-                        if (newState._name == ~0u)
-                            newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
                         workingAttachments.erase(compat);
                     }
                 }
@@ -1941,13 +1935,25 @@ namespace RenderCore { namespace Techniques
                 newState._lastAccessFinalLayout = interfaceAttachment._desc._finalLayout;
                 newWorkingAttachments.push_back(newState);
 
-                attachmentRemapping.push_back({interfaceAttachmentName, newState._name});
+                attachmentRemapping.push_back({interfaceAttachmentName, (unsigned)newWorkingAttachments.size()-1});
             }
 
             /////////////////////////////////////////////////////////////////////////////
 
                 // setup the subpasses & PassFragment
             std::sort(attachmentRemapping.begin(), attachmentRemapping.end(), CompareFirst<AttachmentName, AttachmentName>());
+
+            // assign names to all of the attachments we created in "newWorkingAttachments"
+            // But do this in the order of attachmentRemapping, so that we assign names in the order that they appeared in
+            // the input fragment (because we actually process them in a different order)
+            for (auto&mapping:attachmentRemapping) {
+                auto& newState = newWorkingAttachments[mapping.second];
+                if (newState._name == ~0u)
+                    newState._name = NextName(MakeIteratorRange(workingAttachments), MakeIteratorRange(newWorkingAttachments));
+                // attachmentRemapping morphs from <old attachment name> -> <index in newWorkingAttachments>
+                // to <old attachment name> -> <new attachment name>
+                mapping.second = newState._name;
+            }
 
             for (unsigned p=0; p<(unsigned)f->_subpasses.size(); ++p) {
                 auto newSubpass = RemapSubpassDesc(
