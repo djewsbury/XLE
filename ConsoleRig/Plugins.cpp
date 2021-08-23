@@ -87,8 +87,16 @@ namespace ConsoleRig
 
 	void PluginSet::DeinitializePlugins()
 	{
+		// This is called either explicitly via the global services, or during an atexit() function
+		// it should attempt to unload all plugins before we start running other atexit() functions
+		// (as a way to try to make the destruction process feel more predictable, and avoid destroying
+		// some global objects -- like GlobalServices -- from an attached dll)
 		for (auto& p:_pimpl->_plugins)
 			p->Deinitialize();
+		_pimpl->_plugins.clear();
+		for (auto&a:_pimpl->_pluginLibraries)
+			a.second->Detach();
+		_pimpl->_pluginLibraries.clear();
 	}
 
 	PluginSet::PluginSet()

@@ -161,7 +161,7 @@ namespace ConsoleRig
         std::unique_ptr<ThreadPool> _longTaskPool;
         std::shared_ptr<OSServices::PollingThread> _pollingThread;
 		StartupConfig _cfg;
-		std::unique_ptr<PluginSet> _pluginSet;
+		std::shared_ptr<PluginSet> _pluginSet;
 
         AttachablePtr<::Assets::IDependencyValidationSystem> _depValSys;
         std::shared_ptr<::Assets::IFileSystem> _defaultFilesystem;
@@ -223,9 +223,21 @@ namespace ConsoleRig
         CrossModule::GetInstance().Shutdown();
     }
 
+    static std::weak_ptr<PluginSet> s_pluginSetDoDeinit;
+    static void DeinitPluginSet()
+    {
+        auto pluginSet = s_pluginSetDoDeinit.lock();
+        if (pluginSet)
+            pluginSet->DeinitializePlugins();
+        s_pluginSetDoDeinit.reset();
+    }
+
 	void GlobalServices::LoadDefaultPlugins()
 	{
 		_pimpl->_pluginSet->LoadDefaultPlugins();
+        assert(!s_pluginSetDoDeinit.lock());        // if we needed multiples of these, we might need to make the static a vector
+        s_pluginSetDoDeinit = _pimpl->_pluginSet;
+        std::atexit(DeinitPluginSet);
 	}
 
 	void GlobalServices::UnloadDefaultPlugins()
