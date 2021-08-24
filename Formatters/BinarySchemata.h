@@ -62,7 +62,7 @@ namespace Formatters
 
 		const Alias& GetAlias(AliasId id) const { return _aliases[id].second; }
 		const BlockDefinition& GetBlockDefinition(BlockDefinitionId id) const { return _blockDefinitions[id].second; }
-		const BitFieldDefinition& GetBitField(BitFieldId id) const { return _bitFields[id].second; }
+		const BitFieldDefinition& GetBitFieldDecoder(BitFieldId id) const { return _bitFields[id].second; }
 		const ParameterBox& GetLiterals(LiteralsId id) const { return _literals[id].second; }
 
 		const std::string& GetAliasName(AliasId id) const { return _aliases[id].first; }

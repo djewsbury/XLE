@@ -889,6 +889,48 @@ namespace Formatters
 			Throw(std::runtime_error("Unexpected blob while looking for end array in binary formatter"));
 	}
 
+	static void SerializeValueWithDecoder(
+		std::ostream& str,
+		IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type,
+		const Formatters::BitFieldDefinition& def)
+	{
+		bool first = true;
+		uint64_t bits = 0;
+		if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(bits), ImpliedTyping::TypeOf<uint64_t>(), data, type)) {
+			str << "Could not interpret value (" << ImpliedTyping::AsString(data, type) << ") using bitfield decoder" << std::endl;
+		} else {
+			for (auto bitDef:def._bitRanges) {
+				auto mask = ((1<<bitDef._count)-1) << bitDef._min;
+				if (bits & mask) {
+					if (!first) str << " | "; else first = false;
+					str << bitDef._name;
+					if (bitDef._count != 1)
+						str << "(" << std::hex << (bits & mask) << bitDef._min << std::dec << ")";
+				}
+			}
+		}
+	}
+
+	static void SerializeValueWithDecoder(
+		std::ostream& str,
+		IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type,
+		const ParameterBox& enumLiterals)
+	{
+		uint64_t value = 0;
+		if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<uint64_t>(), data, type)) {
+			str << "Could not interpret value (" << ImpliedTyping::AsString(data, type) << ") using enum decoder" << std::endl;
+		} else {
+			for (auto&v:enumLiterals) {
+				uint64_t test = 0;
+				if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(test), ImpliedTyping::TypeOf<uint64_t>(), v.RawValue(), v.Type()) && value == test) {
+					str << v.Name();
+					return;
+				}
+			}
+		}
+		str << "Unknown enum value (" << value << ")" << std::endl; 
+	}
+
 	static std::ostream& SerializeValue(std::ostream& str, BinaryFormatter& formatter, StringSection<> name, unsigned indent = 0)
 	{
 		unsigned evaluatedTypeId;
@@ -905,7 +947,22 @@ namespace Formatters
 		} else if (formatter.TryValue(valueData, valueTypeDesc, evaluatedTypeId)) {
 			str << StreamIndent{indent};
 			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
-			str << " " << name << " = " << ImpliedTyping::AsString(valueData, valueTypeDesc);
+			str << " " << name << " = ";
+			bool serializedViaDecoder = false;
+			auto& evalType = formatter.GetEvaluationContext().GetEvaluatedTypeDesc(evaluatedTypeId);
+			if (evalType._alias != ~0u) {
+				auto& schemata = formatter.GetEvaluationContext().GetSchemata();
+				auto& alias = schemata.GetAlias(evalType._alias);
+				if (alias._bitFieldDecoder != ~0u) {
+					SerializeValueWithDecoder(str, valueData, valueTypeDesc, schemata.GetBitFieldDecoder(alias._bitFieldDecoder));
+					serializedViaDecoder = true;
+				} else if (alias._enumDecoder != ~0u) {
+					SerializeValueWithDecoder(str, valueData, valueTypeDesc, schemata.GetLiterals(alias._enumDecoder));
+					serializedViaDecoder = true;
+				}
+			}
+			if (!serializedViaDecoder)
+				str << ImpliedTyping::AsString(valueData, valueTypeDesc);
 			str << std::endl;
 		} else if (formatter.TryBeginArray(arrayCount, evaluatedTypeId)) {
 			str << StreamIndent{indent};
