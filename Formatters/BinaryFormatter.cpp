@@ -52,6 +52,7 @@ namespace Formatters
 			if (XlEqString(baseName, "float16")) return GetEvaluatedType(ImpliedTyping::TypeCat::UInt16);
 			if (XlEqString(baseName, "float32")) return GetEvaluatedType(ImpliedTyping::TypeCat::Float);
 			if (XlEqString(baseName, "float64")) return GetEvaluatedType(ImpliedTyping::TypeCat::Double);
+			if (XlEqString(baseName, "char")) return GetEvaluatedType(EvaluatedType{ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::UInt8, 1, ImpliedTyping::TypeHint::String}});
 		}
 
 		auto ai = _definitions->FindAlias(baseName);
@@ -316,7 +317,7 @@ namespace Formatters
 		return _globalState.GetParameter<int64_t>(hash);
 	}
 
-	EvaluationContext::EvaluationContext(BinarySchemata& schemata)
+	EvaluationContext::EvaluationContext(const BinarySchemata& schemata)
 	: _definitions(&schemata) {}
 	EvaluationContext::~EvaluationContext() {}
 

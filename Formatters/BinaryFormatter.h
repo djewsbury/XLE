@@ -112,12 +112,12 @@ namespace Formatters
 
 		const BinarySchemata& GetSchemata() const { return *_definitions; }
 
-		EvaluationContext(BinarySchemata& schemata);
+		EvaluationContext(const BinarySchemata& schemata);
 		~EvaluationContext();
 
 	private:
 		std::vector<EvaluatedType> _evaluatedTypes;
-		BinarySchemata* _definitions = nullptr;
+		const BinarySchemata* _definitions = nullptr;
 		ParameterBox _globalState;
 
 		struct CalculatedSizeState
