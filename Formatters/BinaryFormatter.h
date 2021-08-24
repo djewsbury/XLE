@@ -68,6 +68,11 @@ namespace Formatters
 	void SkipUntilEndBlock(BinaryFormatter&);
 	unsigned RequireBeginBlock(BinaryFormatter&);
 	void RequireEndBlock(BinaryFormatter&);
+	StringSection<> RequireKeyedItem(BinaryFormatter&);
+	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter&);
+	void RequireEndArray(BinaryFormatter&);
+	template<typename Type>
+		Type RequireValue(BinaryFormatter&);
 	std::ostream& SerializeBlock(std::ostream& str, BinaryFormatter& formatter, unsigned indent = 0);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -315,5 +320,21 @@ namespace Formatters
 	inline BinaryMemberToken BinaryMemberIterator::get() const { return BinaryMemberToken{_i, _containingRange, *_evalContext}; }
 	inline BinaryMemberToken BinaryMemberIterator::operator*() const { return get(); }
 
+	template<typename Type>
+		Type RequireValue(BinaryFormatter& formatter)
+	{
+		IteratorRange<const void*> data;
+		ImpliedTyping::TypeDesc typeDesc;
+		unsigned evaluatedTypeId;
+		if (!formatter.TryValue(data, typeDesc, evaluatedTypeId))
+			Throw(std::runtime_error("Unexpected blob while looking for value in binary formatter"));
+		Type result;
+		bool castSuccess = ImpliedTyping::Cast(
+			MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
+			data, typeDesc);
+		if (!castSuccess)
+			Throw(std::runtime_error("Could not convert value to the required type in binary formatter"));
+		return result;
+	}
 	
 }

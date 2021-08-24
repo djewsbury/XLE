@@ -867,6 +867,28 @@ namespace Formatters
 			Throw(std::runtime_error("Unexpected blob while looking for end block in binary formatter"));
 	}
 
+	StringSection<> RequireKeyedItem(BinaryFormatter& formatter)
+	{
+		StringSection<> result;
+		if (!formatter.TryKeyedItem(result))
+			Throw(std::runtime_error("Unexpected blob while looking for keyed item in binary formatter"));
+		return result;
+	}
+	
+	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter& formatter)
+	{
+		unsigned count = 0, typeId = ~0u;
+		if (!formatter.TryBeginArray(count, typeId))
+			Throw(std::runtime_error("Unexpected blob while looking for begin array in binary formatter"));
+		return {count, typeId};
+	}
+
+	void RequireEndArray(BinaryFormatter& formatter)
+	{
+		if (!formatter.TryEndArray())
+			Throw(std::runtime_error("Unexpected blob while looking for end array in binary formatter"));
+	}
+
 	static std::ostream& SerializeValue(std::ostream& str, BinaryFormatter& formatter, StringSection<> name, unsigned indent = 0)
 	{
 		unsigned evaluatedTypeId;
