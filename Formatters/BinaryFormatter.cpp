@@ -68,7 +68,8 @@ namespace Formatters
 		}
 
 		auto i = _definitions->FindBlockDefinition(baseName);
-		assert(i != BinarySchemata::BlockDefinitionId_Invalid);
+		if (i == BinarySchemata::BlockDefinitionId_Invalid)
+			Throw(std::runtime_error("Unknown type while looking up (" + baseName.AsString() + ")"));
 
 		auto result = (EvaluatedTypeToken)_evaluatedTypes.size();
 		EvaluatedType type;
@@ -338,6 +339,7 @@ namespace Formatters
 		newContext._parsingTemplateParams = {templateParams.begin(), templateParams.end()};
 		newContext._parsingTemplateParamsTypeField = templateParamsTypeField;
 		newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
+		newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(blockDefId);
 		_blockStack.push(std::move(newContext));
 	}
 
@@ -507,6 +509,7 @@ namespace Formatters
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
+			newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(evalType._blockDefinition);
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = type;
@@ -522,6 +525,7 @@ namespace Formatters
 			newContext._parsingTemplateParams = evalType._params;
 			newContext._parsingTemplateParamsTypeField = evalType._paramTypeField;
 			newContext._cmdsIterator = MakeIteratorRange(newContext._definition->_cmdList);
+			newContext._parsingBlockName = _evalContext->GetSchemata().GetBlockDefinitionName(evalType._blockDefinition);
 			_blockStack.push(std::move(newContext));
 
 			evaluatedTypeId = workingBlock._pendingArrayType;
