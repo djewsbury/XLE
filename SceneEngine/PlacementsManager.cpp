@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PlacementsManager.h"
+#include "Placements.h"
 #include "GenericQuadTree.h"
 #include "DynamicImposters.h"
 
@@ -55,56 +56,6 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-        // Note that "placements" that interface methods in Placements are actually
-        // very rarely called. So it should be fine to make those methods into virtual
-        // methods, and use an abstract base class.
-    class Placements
-    {
-    public:
-        typedef std::pair<Float3, Float3> BoundingBox;
-
-        class ObjectReference
-        {
-        public:
-            Float3x4    _localToCell;
-            BoundingBox _cellSpaceBoundary;
-            unsigned    _modelFilenameOffset;       // note -- hash values should be stored with the filenames
-            unsigned    _materialFilenameOffset;
-            unsigned    _supplementsOffset;
-            uint64_t    _guid;
-            Float3x3    _decomposedRotation;
-            Float3      _decomposedScale;
-        };
-        
-        const ObjectReference*  GetObjectReferences() const;
-        unsigned                GetObjectReferenceCount() const;
-        const void*             GetFilenamesBuffer() const;
-        const uint64_t*           GetSupplementsBuffer() const;
-
-        void Write(const Assets::ResChar destinationFile[]) const;
-        void LogDetails(const char title[]) const;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const	{ return _dependencyValidation; }
-		static const ::Assets::ArtifactRequest ChunkRequests[1];
-
-        Placements(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
-        Placements();
-        ~Placements();
-    protected:
-        std::vector<ObjectReference>    _objects;
-        std::vector<uint8>              _filenamesBuffer;
-        std::vector<uint64_t>             _supplementsBuffer;
-
-		::Assets::DependencyValidation				_dependencyValidation;
-        void ReplaceString(const char oldString[], const char newString[]);
-    };
-
-    auto            Placements::GetObjectReferences() const -> const ObjectReference*   { return AsPointer(_objects.begin()); }
-    unsigned        Placements::GetObjectReferenceCount() const                         { return unsigned(_objects.size()); }
-    const void*     Placements::GetFilenamesBuffer() const                              { return AsPointer(_filenamesBuffer.begin()); }
-    const uint64_t*   Placements::GetSupplementsBuffer() const                            { return AsPointer(_supplementsBuffer.begin()); }
-
-    static const uint64_t ChunkType_Placements = ConstHash64<'Plac','emen','ts'>::Value;
 
     class PlacementsHeader
     {
@@ -116,6 +67,24 @@ namespace SceneEngine
         unsigned _dummy;
     };
 
+    ::Assets::Blob Placements::Serialize() const
+    {
+        PlacementsHeader hdr;
+        hdr._version = 0;
+        hdr._objectRefCount = (unsigned)_objects.size();
+        hdr._filenamesBufferSize = unsigned(_filenamesBuffer.size());
+        hdr._supplementsBufferSize = unsigned(_supplementsBuffer.size() * sizeof(uint64_t));
+        hdr._dummy = 0;
+
+        auto result = std::make_shared<std::vector<uint8_t>>();
+        result->reserve(sizeof(hdr) + sizeof(ObjectReference)*hdr._objectRefCount + hdr._filenamesBufferSize + hdr._supplementsBufferSize);
+        result->insert(result->end(), (const uint8_t*)&hdr, (const uint8_t*)PtrAdd(&hdr, sizeof(hdr)));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_objects.begin()), (const uint8_t*)AsPointer(_objects.begin() + hdr._objectRefCount));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_filenamesBuffer.begin()), (const uint8_t*)AsPointer(_filenamesBuffer.begin() + hdr._filenamesBufferSize));
+        result->insert(result->end(), (const uint8_t*)AsPointer(_supplementsBuffer.begin()), (const uint8_t*)PtrAdd(AsPointer(_supplementsBuffer.begin()), hdr._supplementsBufferSize));
+        return result;
+    }
+
     void Placements::Write(const Assets::ResChar destinationFile[]) const
     {
         using namespace Assets::ChunkFile;
@@ -125,21 +94,16 @@ namespace SceneEngine
             1, libVersion._versionString, libVersion._buildDateString);
         fileWriter.BeginChunk(ChunkType_Placements, 0, "Placements");
 
+        auto blob = Serialize();
+
         PlacementsHeader hdr;
         hdr._version = 0;
         hdr._objectRefCount = (unsigned)_objects.size();
         hdr._filenamesBufferSize = unsigned(_filenamesBuffer.size());
         hdr._supplementsBufferSize = unsigned(_supplementsBuffer.size() * sizeof(uint64_t));
         hdr._dummy = 0;
-        auto writeResult0 = fileWriter.Write(&hdr, sizeof(hdr), 1);
-        auto writeResult1 = fileWriter.Write(AsPointer(_objects.begin()), sizeof(ObjectReference), hdr._objectRefCount);
-        auto writeResult2 = fileWriter.Write(AsPointer(_filenamesBuffer.begin()), 1, hdr._filenamesBufferSize);
-        auto writeResult3 = fileWriter.Write(AsPointer(_supplementsBuffer.begin()), 1, hdr._supplementsBufferSize);
-
-        if (    writeResult0 != 1
-            ||  writeResult1 != hdr._objectRefCount
-            ||  writeResult2 != hdr._filenamesBufferSize
-            ||  writeResult3 != hdr._supplementsBufferSize)
+        auto writeResult0 = fileWriter.Write(AsPointer(blob->begin()), 1, blob->size());
+        if (writeResult0 != blob->size())
             Throw(::Exceptions::BasicLabel("Failure in file write while saving placements"));
     }
 
@@ -203,7 +167,7 @@ namespace SceneEngine
                     // the new
 
                 auto length = XlStringSize(newString);
-                std::vector<uint8> replacementContent(sizeof(uint64_t) + (length + 1) * sizeof(ResChar), 0);
+                std::vector<uint8_t> replacementContent(sizeof(uint64_t) + (length + 1) * sizeof(ResChar), 0);
                 *(uint64_t*)AsPointer(replacementContent.begin()) = newHash;
 
                 XlCopyString(
@@ -275,8 +239,8 @@ namespace SceneEngine
         i = (const ObjectReference*)i + hdr._objectRefCount;
 
         _filenamesBuffer.insert(_filenamesBuffer.end(),
-            (const uint8*)i, (const uint8*)i + hdr._filenamesBufferSize);
-        i = (const uint8*)i + hdr._filenamesBufferSize;
+            (const uint8_t*)i, (const uint8_t*)i + hdr._filenamesBufferSize);
+        i = (const uint8_t*)i + hdr._filenamesBufferSize;
 
         _supplementsBuffer.insert(_supplementsBuffer.end(),
             (const uint64_t*)i, (const uint64_t*)PtrAdd(i, hdr._supplementsBufferSize));
@@ -1092,7 +1056,7 @@ namespace SceneEngine
         DynamicPlacements();
     };
 
-    static uint32 BuildGuid32()
+    static uint32_t BuildGuid32()
     {
         static std::mt19937 generator(std::random_device().operator()());
         return generator();
@@ -1111,7 +1075,7 @@ namespace SceneEngine
             if (h == stringHash) { result = (unsigned)(ptrdiff_t(i) - ptrdiff_t(start)); }
 
             i += sizeof(uint64_t);
-            i = (uint8*)std::find((const ResChar*)i, (const ResChar*)end, ResChar('\0'));
+            i = (uint8_t*)std::find((const ResChar*)i, (const ResChar*)end, ResChar('\0'));
             i += sizeof(ResChar);
         }
 
@@ -1731,11 +1695,11 @@ namespace SceneEngine
         return lhs.first < rhs.first;
     }
 
-    static uint32 EverySecondBit(uint64_t input)
+    static uint32_t EverySecondBit(uint64_t input)
     {
-        uint32 result = 0;
+        uint32_t result = 0;
         for (unsigned c=0; c<32; ++c) {
-            result |= uint32((input >> (uint64_t(c)*2ull)) & 0x1ull)<<c;
+            result |= uint32_t((input >> (uint64_t(c)*2ull)) & 0x1ull)<<c;
         }
         return result;
     }
@@ -1984,7 +1948,7 @@ namespace SceneEngine
         auto newIdTopPart = ObjectIdTopPart(newState._model, materialFilename);
         bool objectIdChanged = newIdTopPart != (guid.second & 0xffffffff00000000ull);
         if (objectIdChanged) {
-            auto id32 = uint32(guid.second);
+            auto id32 = uint32_t(guid.second);
             for (;;) {
                 guid.second = newIdTopPart | uint64_t(id32);
                 if (!dynPlacements->HasObject(guid.second)) { break; }
@@ -2091,11 +2055,11 @@ namespace SceneEngine
                     //  much less efficient, because we can't take advantage of the sorting.
                     //  Ideally we should avoid this path
                 for (;i != iend; ++i) {
-                    uint32 comparison = uint32(i->second);
+                    uint32_t comparison = uint32_t(i->second);
                     auto pend = &placements->GetObjectReferences()[placements->GetObjectReferenceCount()];
                     auto pIterator = std::find_if(
                         placements->GetObjectReferences(), pend,
-                        [=](const Placements::ObjectReference& obj) { return uint32(obj._guid) == comparison; });
+                        [=](const Placements::ObjectReference& obj) { return uint32_t(obj._guid) == comparison; });
                     if (pIterator!=pend) {
                         i->second = pIterator->_guid;       // set the recorded guid to the full guid
 
@@ -2214,7 +2178,7 @@ namespace SceneEngine
 
 				for (auto i3 = i; i3 < i2; ++i3) {
 					auto p = std::find_if(placements, &placements[count],
-						[=](const Placements::ObjectReference& obj) { return uint32(obj._guid) == uint32(i3->second); });
+						[=](const Placements::ObjectReference& obj) { return uint32_t(obj._guid) == uint32_t(i3->second); });
                     if (p != &placements[count])
                         i3->second = p->_guid;
 				}
@@ -2309,7 +2273,7 @@ namespace SceneEngine
 
         Throw(
             ::Exceptions::BasicLabel("Could not find cell with given id (0x%08x%08x). Saving cancelled",
-                uint32(cellId>>32), uint32(cellId)));
+                uint32_t(cellId>>32), uint32_t(cellId)));
     }
 
     std::string PlacementsEditor::GetMetricsString(uint64_t cellId) const
@@ -2414,5 +2378,15 @@ namespace SceneEngine
     {
     }
 
+    ::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*> placements)
+    {
+        DynamicPlacements plcmnts;
+        for (const auto&p:placements) {
+            plcmnts.AddPlacement(
+                p._localToCell, TransformBoundingBox(p._localToCell, p._resource._aabb),
+                p._resource._name, p._resource._material, {}, BuildGuid32());
+        }
+        return plcmnts.Serialize();
+    }
 }
 

@@ -240,6 +240,5 @@ namespace SceneEngine
 
         friend class Transaction;
     };
-
 }
 
