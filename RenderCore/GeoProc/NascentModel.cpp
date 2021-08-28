@@ -13,6 +13,7 @@
 #include "../Assets/ModelImmutableData.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
+#include "../../Utility/FastParseValue.h"
 #include "../../Core/Exceptions.h"
 #include <sstream>
 
@@ -325,9 +326,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::vector<uint64_t> materialGuid;
 			materialGuid.reserve(cmd.second._materialBindingSymbols.size());
 			for (const auto&mat:cmd.second._materialBindingSymbols) {
-				const char* end = nullptr;
-				auto guid = XlAtoUI64(mat.c_str(), &end, 16);
-				if (end != nullptr && *end == '\0') {
+				MaterialGuid guid = 0;
+				const char* parseEnd = FastParseValue(MakeStringSection(mat), guid);
+				if (parseEnd == AsPointer(mat.end())) {
 					materialGuid.push_back(guid);
 				} else
 					materialGuid.push_back(Hash64(mat));

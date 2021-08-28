@@ -16,6 +16,7 @@
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/FastParseValue.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -529,14 +530,14 @@ namespace RenderCore { namespace Assets
 		MergeInto(result, patchCollectionResult, src);
 	}
 
-	MaterialGuid MakeMaterialGuid(StringSection<utf8> name)
+	MaterialGuid MakeMaterialGuid(StringSection<> name)
 	{
 		//  If the material name is just a number, then we will use that
 		//  as the guid. Otherwise we hash the name.
-		const char* parseEnd = nullptr;
-		uint64 hashId = XlAtoI64((const char*)name.begin(), &parseEnd, 16);
-		if (!parseEnd || parseEnd != (const char*)name.end()) { hashId = Hash64(name.begin(), name.end()); }
-		return hashId;
+        MaterialGuid result = 0;
+		const char* parseEnd = FastParseValue(name, result);
+		if (parseEnd != name.end()) { result = Hash64(name.begin(), name.end()); }
+		return result;
 	}
 
 }}
