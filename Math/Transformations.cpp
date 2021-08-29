@@ -12,6 +12,128 @@
 namespace XLEMath
 {
 
+    Float4x4 Combine(const Float3x3& rotation, const Float4x4& transform)
+    {
+            //      But our "transform" is a geometric transform... We just want
+            //      to multiply the top-left 3x3 part of the 4x4 matrix by the
+            //      input 3x3 rotation matrix.
+
+        Float4x4 result;
+        const Float4x4& lhs = transform;
+		const Float3x3& rhs = rotation;
+        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0) ;
+        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1) ;
+        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2) ;
+        result(0,3) =                                                                  + lhs(0,3);
+
+        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0) ;
+        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1) ;
+        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2) ;
+        result(1,3) =                                                                  + lhs(1,3);
+
+        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0) ;
+        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1) ;
+        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2) ;
+        result(2,3) =                                                                  + lhs(2,3);
+
+        result(3,0) = lhs(3,0);
+        result(3,1) = lhs(3,1);
+        result(3,2) = lhs(3,2);
+        result(3,3) = lhs(3,3);
+
+        return result;
+    }
+
+	Float4x4 Combine(const Float4x4& transform, const Float3x3& rotation)
+    {
+        Float4x4 result;
+        const Float4x4& rhs          = transform;
+		const Float3x3& lhs = rotation;
+
+        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0);
+        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1);
+        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2);
+        result(0,3) = lhs(0,0) * rhs(0,3) + lhs(0,1) * rhs(1,3) + lhs(0,2) * rhs(2,3);
+        
+        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0);
+        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1);
+        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2);
+        result(1,3) = lhs(1,0) * rhs(0,3) + lhs(1,1) * rhs(1,3) + lhs(1,2) * rhs(2,3);
+        
+        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0);
+        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1);
+        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2);
+        result(2,3) = lhs(2,0) * rhs(0,3) + lhs(2,1) * rhs(1,3) + lhs(2,2) * rhs(2,3);
+        
+        result(3,0) = rhs(3,0);
+        result(3,1) = rhs(3,1);
+        result(3,2) = rhs(3,2);
+        result(3,3) = rhs(3,3);
+
+        return result;
+    }
+
+    Float3x4 Combine(const Float3x3& rotation, const Float3x4& transform)
+    {
+            //      But our "transform" is a geometric transform... We just want
+            //      to multiply the top-left 3x3 part of the 4x4 matrix by the
+            //      input 3x3 rotation matrix.
+
+        Float3x4 result;
+        const auto& lhs = transform;
+		const Float3x3& rhs = rotation;
+        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0) ;
+        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1) ;
+        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2) ;
+        result(0,3) =                                                                  + lhs(0,3);
+
+        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0) ;
+        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1) ;
+        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2) ;
+        result(1,3) =                                                                  + lhs(1,3);
+
+        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0) ;
+        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1) ;
+        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2) ;
+        result(2,3) =                                                                  + lhs(2,3);
+
+        result(3,0) = lhs(3,0);
+        result(3,1) = lhs(3,1);
+        result(3,2) = lhs(3,2);
+        result(3,3) = lhs(3,3);
+
+        return result;
+    }
+
+	Float3x4 Combine(const Float3x4& transform, const Float3x3& rotation)
+    {
+        Float3x4 result;
+        const auto& rhs = transform;
+		const Float3x3& lhs = rotation;
+
+        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0);
+        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1);
+        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2);
+        result(0,3) = lhs(0,0) * rhs(0,3) + lhs(0,1) * rhs(1,3) + lhs(0,2) * rhs(2,3);
+        
+        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0);
+        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1);
+        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2);
+        result(1,3) = lhs(1,0) * rhs(0,3) + lhs(1,1) * rhs(1,3) + lhs(1,2) * rhs(2,3);
+        
+        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0);
+        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1);
+        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2);
+        result(2,3) = lhs(2,0) * rhs(0,3) + lhs(2,1) * rhs(1,3) + lhs(2,2) * rhs(2,3);
+        
+        result(3,0) = rhs(3,0);
+        result(3,1) = rhs(3,1);
+        result(3,2) = rhs(3,2);
+        result(3,3) = rhs(3,3);
+
+        return result;
+    }
+
         //
         //      4x4 matrix transform (for reference)
         //
@@ -138,67 +260,6 @@ namespace XLEMath
         lhs(0,0) *= rhs[0]; lhs(1,0) *= rhs[0]; lhs(2,0) *= rhs[0];
         lhs(0,1) *= rhs[1]; lhs(1,1) *= rhs[1]; lhs(2,1) *= rhs[1];
         lhs(0,2) *= rhs[2]; lhs(1,2) *= rhs[2]; lhs(2,2) *= rhs[2];
-    }
-
-    Float4x4 Combine(const Float3x3& rotation, const Float4x4& transform)
-    {
-            //      But our "transform" is a geometric transform... We just want
-            //      to multiply the top-left 3x3 part of the 4x4 matrix by the
-            //      input 3x3 rotation matrix.
-
-        Float4x4 result;
-        const Float4x4& lhs = transform;
-		const Float3x3& rhs = rotation;
-        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0) ;
-        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1) ;
-        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2) ;
-        result(0,3) =                                                                  + lhs(0,3);
-
-        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0) ;
-        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1) ;
-        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2) ;
-        result(1,3) =                                                                  + lhs(1,3);
-
-        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0) ;
-        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1) ;
-        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2) ;
-        result(2,3) =                                                                  + lhs(2,3);
-
-        result(3,0) = lhs(3,0);
-        result(3,1) = lhs(3,1);
-        result(3,2) = lhs(3,2);
-        result(3,3) = lhs(3,3);
-
-        return result;
-    }
-
-	Float4x4 Combine(const Float4x4& transform, const Float3x3& rotation)
-    {
-        Float4x4 result;
-        const Float4x4& rhs          = transform;
-		const Float3x3& lhs = rotation;
-
-        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0) + lhs(0,2) * rhs(2,0);
-        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1) + lhs(0,2) * rhs(2,1);
-        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2) * rhs(2,2);
-        result(0,3) = lhs(0,0) * rhs(0,3) + lhs(0,1) * rhs(1,3) + lhs(0,2) * rhs(2,3);
-        
-        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0) + lhs(1,2) * rhs(2,0);
-        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1) + lhs(1,2) * rhs(2,1);
-        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2) * rhs(2,2);
-        result(1,3) = lhs(1,0) * rhs(0,3) + lhs(1,1) * rhs(1,3) + lhs(1,2) * rhs(2,3);
-        
-        result(2,0) = lhs(2,0) * rhs(0,0) + lhs(2,1) * rhs(1,0) + lhs(2,2) * rhs(2,0);
-        result(2,1) = lhs(2,0) * rhs(0,1) + lhs(2,1) * rhs(1,1) + lhs(2,2) * rhs(2,1);
-        result(2,2) = lhs(2,0) * rhs(0,2) + lhs(2,1) * rhs(1,2) + lhs(2,2) * rhs(2,2);
-        result(2,3) = lhs(2,0) * rhs(0,3) + lhs(2,1) * rhs(1,3) + lhs(2,2) * rhs(2,3);
-        
-        result(3,0) = rhs(3,0);
-        result(3,1) = rhs(3,1);
-        result(3,2) = rhs(3,2);
-        result(3,3) = rhs(3,3);
-
-        return result;
     }
 
     void Combine_IntoRHS(RotationX rotation, Float4x4& transform)
@@ -479,6 +540,351 @@ namespace XLEMath
         transform(2,0) *= scale._scale[2]; transform(2,1) *= scale._scale[2]; transform(2,2) *= scale._scale[2]; transform(2,3) *= scale._scale[2];
     }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    void Combine_IntoRHS(RotationX rotation, Float3x4& transform)
+    {
+            /*
+                Following the OpenGL standard for rotation around an axis
+                (also used by Collada).
+
+                From the OpenGL Red Book:
+
+                Multiplies the current matrix by a matrix that rotates an object (or the local coordinate system) in a 
+                counterclockwise direction about the ray from the origin through the point (x, y, z).
+
+                Holds true for right hand coordinate systems
+            */
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+            //      Almost all values in rhs are zero. So we can simplify the math.
+            //      (try to minimize how many elements we need to copy lhs into temporaries)
+        const float rhs11 = cosine, rhs12 = -sine;
+        const float rhs21 = sine,   rhs22 =  cosine;
+        // const float rhs00 = 1.f,    rhs33 = 1.f;
+        auto& lhs          = transform;
+
+        // lhs(0,0) = lhs(0,0);
+        const float lhs01 = lhs(0,1);
+        lhs(0,1) = lhs01 * rhs11 + lhs(0,2) * rhs21;
+        lhs(0,2) = lhs01 * rhs12 + lhs(0,2) * rhs22;
+        // lhs(0,3) = lhs(0,3);
+
+        // lhs(1,0) = lhs(1,0);
+        const float lhs11 = lhs(1,1);
+        lhs(1,1) = lhs11 * rhs11 + lhs(1,2) * rhs21;
+        lhs(1,2) = lhs11 * rhs12 + lhs(1,2) * rhs22;
+        // lhs(1,3) = lhs(1,3);
+
+        // lhs(2,0) = lhs(2,0);
+        const float lhs21 = lhs(2,1);
+        lhs(2,1) = lhs21 * rhs11 + lhs(2,2) * rhs21;
+        lhs(2,2) = lhs21 * rhs12 + lhs(2,2) * rhs22;
+        // lhs(2,3) = lhs(2,3);
+
+        // lhs(3,0) = lhs(3,0) * rhs33;
+        // lhs(3,1) = lhs(3,1) * rhs33;
+        // lhs(3,2) = lhs(3,2) * rhs33;
+        // lhs(3,3) = lhs(3,3) * rhs33;
+    }
+
+    void Combine_IntoRHS(RotationY rotation, Float3x4& transform)
+    {
+            /*
+                Following the OpenGL standard for rotation around an axis
+                (also used by Collada).
+
+                From the OpenGL Red Book:
+
+                Multiplies the current matrix by a matrix that rotates an object (or the local coordinate system) in a 
+                counterclockwise direction about the ray from the origin through the point (x, y, z).
+
+                Holds true for right hand coordinate systems
+            */
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+            //      Almost all values in rhs are zero. So we can simplify the math.
+            //      (try to minimize how many elements we need to copy lhs into temporaries)
+        const float rhs00 = cosine, rhs02 = sine;
+        const float rhs20 = -sine,  rhs22 = cosine;
+        // const float rhs11 = 1.f,    rhs33 = 1.f;
+        auto& lhs          = transform;
+
+        const float lhs00 = lhs(0,0);
+        lhs(0,0) = lhs00 * rhs00 + lhs(0,2) * rhs20;
+        // lhs(0,1) = lhs(0,1);
+        lhs(0,2) = lhs00 * rhs02 + lhs(0,2) * rhs22;
+        // lhs(0,3) = lhs(0,3);
+
+        const float lhs10 = lhs(1,0);
+        lhs(1,0) = lhs10 * rhs00 + lhs(1,2) * rhs20;
+        // lhs(1,1) = lhs(1,1);
+        lhs(1,2) = lhs10 * rhs02 + lhs(1,2) * rhs22;
+        // lhs(1,3) = lhs(1,3);
+
+        const float lhs20 = lhs(2,0);
+        lhs(2,0) = lhs20 * rhs00 + lhs(2,2) * rhs20;
+        // lhs(2,1) = lhs(2,1);
+        lhs(2,2) = lhs20 * rhs02 + lhs(2,2) * rhs22;
+        // lhs(2,3) = lhs(2,3);
+
+        // lhs(3,0) = lhs(3,0);
+        // lhs(3,1) = lhs(3,1);
+        // lhs(3,2) = lhs(3,2);
+        // lhs(3,3) = lhs(3,3);
+    }
+
+    void Combine_IntoRHS(RotationZ rotation, Float3x4& transform)
+    {
+            /*
+                Following the OpenGL standard for rotation around an axis
+                (also used by Collada).
+
+                From the OpenGL Red Book:
+
+                Multiplies the current matrix by a matrix that rotates an object (or the local coordinate system) in a 
+                counterclockwise direction about the ray from the origin through the point (x, y, z).
+
+                Holds true for right hand coordinate systems
+            */
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+            //      Almost all values in rhs are zero. So we can simplify the math.
+            //      (try to minimize how many elements we need to copy lhs into temporaries)
+        const float rhs00 = cosine, rhs01 = -sine;
+        const float rhs10 = sine,   rhs11 =  cosine;
+        // const float rhs22 = 1.f,    rhs33 = 1.f;
+        auto& lhs          = transform;
+
+        const float lhs00 = lhs(0,0);
+        lhs(0,0) = lhs00 * rhs00 + lhs(0,1) * rhs10;
+        lhs(0,1) = lhs00 * rhs01 + lhs(0,1) * rhs11;
+        // lhs(0,2) = lhs(0,2) * rhs22;
+        // lhs(0,3) = lhs(0,3) * rhs33;
+
+        const float lhs10 = lhs(1,0);
+        lhs(1,0) = lhs10 * rhs00 + lhs(1,1) * rhs10;
+        lhs(1,1) = lhs10 * rhs01 + lhs(1,1) * rhs11;
+        // lhs(1,2) = lhs(1,2) * rhs22;
+        // lhs(1,3) = lhs(1,3) * rhs33;
+
+        const float lhs20 = lhs(2,0);
+        lhs(2,0) = lhs20 * rhs00 + lhs(2,1) * rhs10;
+        lhs(2,1) = lhs20 * rhs01 + lhs(2,1) * rhs11;
+        // lhs(2,2) = lhs(2,2) * rhs22;
+        // lhs(2,3) = lhs(2,3) * rhs33;
+
+        // lhs(3,0) = lhs(3,0) * rhs33;
+        // lhs(3,1) = lhs(3,1) * rhs33;
+        // lhs(3,2) = lhs(3,2) * rhs33;
+        // lhs(3,3) = lhs(3,3) * rhs33;
+    }
+
+    void Combine_IntoLHS(Float3x4& transform, RotationX rotation)
+    {
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+        const float lhs11 = cosine, lhs12 = -sine;
+        const float lhs21 = sine,   lhs22 =  cosine;
+        // const float lhs00 = 1.f,    lhs33 = 1.f;
+        auto& rhs          = transform;
+
+        // rhs(0,0) = rhs(0,0);
+        // rhs(0,1) = rhs(0,1);
+        // rhs(0,2) = rhs(0,2);
+        // rhs(0,3) = rhs(0,3);
+        
+        const float rhs10 = rhs(1,0), rhs11 = rhs(1,1), rhs12 = rhs(1,2), rhs13 = rhs(1,3);
+        rhs(1,0) = lhs11 * rhs10 + lhs12 * rhs(2,0);
+        rhs(1,1) = lhs11 * rhs11 + lhs12 * rhs(2,1);
+        rhs(1,2) = lhs11 * rhs12 + lhs12 * rhs(2,2);
+        rhs(1,3) = lhs11 * rhs13 + lhs12 * rhs(2,3);
+        
+        rhs(2,0) = lhs21 * rhs10 + lhs22 * rhs(2,0);
+        rhs(2,1) = lhs21 * rhs11 + lhs22 * rhs(2,1);
+        rhs(2,2) = lhs21 * rhs12 + lhs22 * rhs(2,2);
+        rhs(2,3) = lhs21 * rhs13 + lhs22 * rhs(2,3);
+        
+        // rhs(3,0) = rhs(3,0);
+        // rhs(3,1) = rhs(3,1);
+        // rhs(3,2) = rhs(3,2);
+        // rhs(3,3) = rhs(3,3);
+    }
+
+    void Combine_IntoLHS(Float3x4& transform, RotationY rotation)
+    {
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+        const float lhs00 = cosine, lhs02 = sine;
+        const float lhs20 = -sine,  lhs22 = cosine;
+        // const float lhs11 = 1.f,    lhs33 = 1.f;
+        auto& rhs = transform;
+
+        const float rhs00 = rhs(0,0), rhs01 = rhs(0,1), rhs02 = rhs(0,2), rhs03 = rhs(0,3);
+        rhs(0,0) = lhs00 * rhs00 + lhs02 * rhs(2,0);
+        rhs(0,1) = lhs00 * rhs01 + lhs02 * rhs(2,1);
+        rhs(0,2) = lhs00 * rhs02 + lhs02 * rhs(2,2);
+        rhs(0,3) = lhs00 * rhs03 + lhs02 * rhs(2,3);
+        
+        // rhs(1,0) = rhs(1,0);
+        // rhs(1,1) = rhs(1,1);
+        // rhs(1,2) = rhs(1,2);
+        // rhs(1,3) = rhs(1,3);
+        
+        rhs(2,0) = lhs20 * rhs00 + lhs22 * rhs(2,0);
+        rhs(2,1) = lhs20 * rhs01 + lhs22 * rhs(2,1);
+        rhs(2,2) = lhs20 * rhs02 + lhs22 * rhs(2,2);
+        rhs(2,3) = lhs20 * rhs03 + lhs22 * rhs(2,3);
+        
+        // rhs(3,0) = rhs(3,0);
+        // rhs(3,1) = rhs(3,1);
+        // rhs(3,2) = rhs(3,2);
+        // rhs(3,3) = rhs(3,3);
+    }
+
+    void Combine_IntoLHS(Float3x4& transform, RotationZ rotation)
+    {
+        float sine, cosine;
+        std::tie(sine, cosine) = XlSinCos(rotation._angle);
+
+        const float lhs00 = cosine, lhs01 = -sine;
+        const float lhs10 = sine,   lhs11 =  cosine;
+        // const float lhs22 = 1.f,    lhs33 = 1.f;
+        auto& rhs          = transform;
+
+        const float rhs00 = rhs(0,0), rhs01 = rhs(0,1), rhs02 = rhs(0,2), rhs03 = rhs(0,3);
+        rhs(0,0) = lhs00 * rhs00 + lhs01 * rhs(1,0);
+        rhs(0,1) = lhs00 * rhs01 + lhs01 * rhs(1,1);
+        rhs(0,2) = lhs00 * rhs02 + lhs01 * rhs(1,2);
+        rhs(0,3) = lhs00 * rhs03 + lhs01 * rhs(1,3);
+        
+        rhs(1,0) = lhs10 * rhs00 + lhs11 * rhs(1,0);
+        rhs(1,1) = lhs10 * rhs01 + lhs11 * rhs(1,1);
+        rhs(1,2) = lhs10 * rhs02 + lhs11 * rhs(1,2);
+        rhs(1,3) = lhs10 * rhs03 + lhs11 * rhs(1,3);
+        
+        rhs(2,0) = rhs(2,0);
+        rhs(2,1) = rhs(2,1);
+        rhs(2,2) = rhs(2,2);
+        rhs(2,3) = rhs(2,3);
+        
+        rhs(3,0) = rhs(3,0);
+        rhs(3,1) = rhs(3,1);
+        rhs(3,2) = rhs(3,2);
+        rhs(3,3) = rhs(3,3);
+    }
+
+	void            Combine_IntoRHS(ArbitraryRotation rotation, Float3x4& transform)
+	{
+		// note -- inefficient implementation!
+		transform = Combine(MakeRotationMatrix(rotation._axis, rotation._angle), transform);
+	}
+	
+	void            Combine_IntoLHS(Float3x4& transform, ArbitraryRotation rotation)
+	{
+		// note -- inefficient implementation!
+		transform = Combine(transform, MakeRotationMatrix(rotation._axis, rotation._angle));
+	}
+
+	void            Combine_IntoRHS(Quaternion rotation, Float3x4& transform)
+	{
+		// note -- inefficient implementation!
+		transform = Combine(AsFloat3x3(rotation), transform);
+	}
+
+	void            Combine_IntoLHS(Float3x4& transform, Quaternion rotation)
+	{
+		// note -- inefficient implementation!
+		transform = Combine(transform, AsFloat3x3(rotation));
+	}
+
+    void Combine_IntoLHS(Float3x4& transform, const UniformScale& scale)
+    {
+        transform(0,0) *= scale._scale; transform(0,1) *= scale._scale; transform(0,2) *= scale._scale; transform(0,3) *= scale._scale;
+        transform(1,0) *= scale._scale; transform(1,1) *= scale._scale; transform(1,2) *= scale._scale; transform(1,3) *= scale._scale;
+        transform(2,0) *= scale._scale; transform(2,1) *= scale._scale; transform(2,2) *= scale._scale; transform(2,3) *= scale._scale;
+    }
+
+    void Combine_IntoLHS(Float3x4& transform, const ArbitraryScale& scale)
+    {
+        transform(0,0) *= scale._scale[0]; transform(0,1) *= scale._scale[0]; transform(0,2) *= scale._scale[0]; transform(0,3) *= scale._scale[0];
+        transform(1,0) *= scale._scale[1]; transform(1,1) *= scale._scale[1]; transform(1,2) *= scale._scale[1]; transform(1,3) *= scale._scale[1];
+        transform(2,0) *= scale._scale[2]; transform(2,1) *= scale._scale[2]; transform(2,2) *= scale._scale[2]; transform(2,3) *= scale._scale[2];
+    }
+
+    void Combine_IntoRHS(const Float3& translate, Float3x4& transform)
+    {
+        auto& lhs = transform;
+        // const float rhs00 = 1.f, rhs11 = 1.f, rhs22 = 1.f;
+        const float rhs33 = 1.f;
+        const float rhs03 = translate[0], rhs13 = translate[1], rhs23 = translate[2];
+
+        // lhs(0,0) = lhs(0,0) * rhs00;
+        // lhs(0,1) =                      lhs(0,1) * rhs11;
+        // lhs(0,2) =                                          lhs(0,2) * rhs22;
+        lhs(0,3) = lhs(0,0) * rhs03 +   lhs(0,1) * rhs13 +  lhs(0,2) * rhs23 +      lhs(0,3) * rhs33;
+
+        // lhs(1,0) = lhs(1,0) * rhs00;
+        // lhs(1,1) =                      lhs(1,1) * rhs11;
+        // lhs(1,2) =                                          lhs(1,2) * rhs22;
+        lhs(1,3) = lhs(1,0) * rhs03 +   lhs(1,1) * rhs13 +  lhs(1,2) * rhs23 +      lhs(1,3) * rhs33;
+
+        // lhs(2,0) = lhs(2,0) * rhs00;
+        // lhs(2,1) =                      lhs(2,1) * rhs11;
+        // lhs(2,2) =                                          lhs(2,2) * rhs22;
+        lhs(2,3) = lhs(2,0) * rhs03 +   lhs(2,1) * rhs13 +  lhs(2,2) * rhs23 +      lhs(2,3) * rhs33;
+
+        // lhs(3,0) = lhs(3,0) * rhs00;
+        // lhs(3,1) =                      lhs(3,1) * rhs11;
+        // lhs(3,2) =                                          lhs(3,2) * rhs22;
+        lhs(3,3) = lhs(3,0) * rhs03 +   lhs(3,1) * rhs13 +  lhs(3,2) * rhs23 +      lhs(3,3) * rhs33;
+    }
+
+    void Combine_IntoLHS(Float3x4& transform, const Float3& translate)
+    {
+        auto& rhs = transform;
+        // const float lhs00 = 1.f, lhs11 = 1.f, lhs22 = 1.f;
+        // const float lhs33 = 1.f;
+        const float lhs03 = translate[0], lhs13 = translate[1], lhs23 = translate[2];
+
+        rhs(0,0) = rhs(0,0) + lhs03 * rhs(3,0);
+        rhs(0,1) = rhs(0,1) + lhs03 * rhs(3,1);
+        rhs(0,2) = rhs(0,2) + lhs03 * rhs(3,2);
+        rhs(0,3) = rhs(0,3) + lhs03 * rhs(3,3);
+        
+        rhs(1,0) = rhs(1,0) + lhs13 * rhs(3,0);
+        rhs(1,1) = rhs(1,1) + lhs13 * rhs(3,1);
+        rhs(1,2) = rhs(1,2) + lhs13 * rhs(3,2);
+        rhs(1,3) = rhs(1,3) + lhs13 * rhs(3,3);
+        
+        rhs(2,0) = rhs(2,0) + lhs23 * rhs(3,0);
+        rhs(2,1) = rhs(2,1) + lhs23 * rhs(3,1);
+        rhs(2,2) = rhs(2,2) + lhs23 * rhs(3,2);
+        rhs(2,3) = rhs(2,3) + lhs23 * rhs(3,3);
+    }
+
+    void Combine_IntoRHS(const UniformScale& scale, Float3x4& transform)
+    {
+        transform(0,0) *= scale._scale; transform(0,1) *= scale._scale; transform(0,2) *= scale._scale;
+        transform(1,0) *= scale._scale; transform(1,1) *= scale._scale; transform(1,2) *= scale._scale;
+        transform(2,0) *= scale._scale; transform(2,1) *= scale._scale; transform(2,2) *= scale._scale;
+    }
+
+    void Combine_IntoRHS(const ArbitraryScale& scale, Float3x4& transform)
+    {
+        auto& lhs = transform;
+		const auto& rhs = scale._scale;
+        lhs(0,0) *= rhs[0]; lhs(1,0) *= rhs[0]; lhs(2,0) *= rhs[0];
+        lhs(0,1) *= rhs[1]; lhs(1,1) *= rhs[1]; lhs(2,1) *= rhs[1];
+        lhs(0,2) *= rhs[2]; lhs(1,2) *= rhs[2]; lhs(2,2) *= rhs[2];
+    }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     Float3          TransformPoint(const Float3x4& transform, Float3 pt)
     {
@@ -507,6 +913,7 @@ namespace XLEMath
 
     Float3          TransformPointByOrthonormalInverse(const Float3x4& transform, Float3 pt)
     {
+        assert(IsOrthonormal(Truncate3x3(transform)));
         float t[3];
         t[0] = transform(0,0) * -transform(0,3) + transform(1,0) * -transform(1,3) + transform(2,0) * -transform(2,3);
         t[1] = transform(0,1) * -transform(0,3) + transform(1,1) * -transform(1,3) + transform(2,1) * -transform(2,3);
@@ -521,6 +928,7 @@ namespace XLEMath
 
     Float3          TransformPointByOrthonormalInverse(const Float4x4& transform, Float3 pt)
     {
+        assert(IsOrthonormal(Truncate3x3(transform)));
         float t[3];
         t[0] = transform(0,0) * -transform(0,3) + transform(1,0) * -transform(1,3) + transform(2,0) * -transform(2,3);
         t[1] = transform(0,1) * -transform(0,3) + transform(1,1) * -transform(1,3) + transform(2,1) * -transform(2,3);

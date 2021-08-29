@@ -163,8 +163,28 @@ namespace XLEMath
 	void            Combine_IntoLHS(Float4x4& transform, ArbitraryRotation rotation);
     void            Combine_IntoLHS(Float4x4& transform, Quaternion rotation);
 
+    void            Combine_IntoRHS(const Float3& translate, Float3x4& transform);
+    void            Combine_IntoRHS(const UniformScale& scale, Float3x4& transform);
+    void            Combine_IntoRHS(const ArbitraryScale& scale, Float3x4& transform);
+    void            Combine_IntoRHS(RotationX rotation, Float3x4& transform);
+    void            Combine_IntoRHS(RotationY rotation, Float3x4& transform);
+    void            Combine_IntoRHS(RotationZ rotation, Float3x4& transform);
+	void            Combine_IntoRHS(ArbitraryRotation rotation, Float3x4& transform);
+	void            Combine_IntoRHS(Quaternion rotation, Float3x4& transform);
+
+    void            Combine_IntoLHS(Float3x4& transform, const Float3& translate);
+    void            Combine_IntoLHS(Float3x4& transform, const UniformScale& scale);
+    void            Combine_IntoLHS(Float3x4& transform, const ArbitraryScale& scale);
+    void            Combine_IntoLHS(Float3x4& transform, RotationX rotation);
+    void            Combine_IntoLHS(Float3x4& transform, RotationY rotation);
+    void            Combine_IntoLHS(Float3x4& transform, RotationZ rotation);
+	void            Combine_IntoLHS(Float3x4& transform, ArbitraryRotation rotation);
+    void            Combine_IntoLHS(Float3x4& transform, Quaternion rotation);
+
     Float4x4        Combine(const Float3x3& rotation, const Float4x4& transform);
 	Float4x4        Combine(const Float4x4& transform, const Float3x3& rotation);
+    Float3x4        Combine(const Float3x3& rotation, const Float3x4& transform);
+	Float3x4        Combine(const Float3x4& transform, const Float3x3& rotation);
 
         //
         //      Basic transformations
