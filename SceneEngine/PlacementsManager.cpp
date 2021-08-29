@@ -6,6 +6,7 @@
 
 #include "PlacementsManager.h"
 #include "Placements.h"
+#include "WorldPlacementsConfig.h"
 #include "GenericQuadTree.h"
 #include "DynamicImposters.h"
 
@@ -21,6 +22,7 @@
 #include "../Assets/DepVal.h"
 #include "../Assets/Assets.h"
 #include "../Assets/ChunkFile.h"
+#include "../Assets/AssetHeapLRU.h"
 
 #include "../RenderCore/RenderUtils.h"
 
@@ -272,64 +274,20 @@ namespace SceneEngine
 
     class GenericQuadTree;
 
-    class PlacementsCache
+    class PlacementsCache : protected ::Assets::AssetHeapLRU<Placements>
     {
     public:
-        class Item
-        {
-        public:
-            ::Assets::rstring _filename;
-            std::unique_ptr<Placements> _placements;
-
-            void Reload();
-
-            Item() {}
-            Item(Item&& moveFrom) : _filename(std::move(moveFrom._filename)), _placements(std::move(moveFrom._placements)) {}
-            Item& operator=(Item&& moveFrom) 
-            {
-                _filename = std::move(moveFrom._filename);
-                _placements = std::move(moveFrom._placements);
-                return *this;
-            }
-
-            Item& operator=(const Item&) = delete;
-            Item(const Item&) = delete;
-        };
-        Item* Get(uint64_t filenameHash, const ResChar filename[] = nullptr);
-
+        const Placements* GetPlacements(uint64_t filenameHash, StringSection<> filename);
         PlacementsCache();
         ~PlacementsCache();
-    protected:
-        std::vector<std::pair<uint64_t, std::unique_ptr<Item>>> _items;
     };
 
-    auto PlacementsCache::Get(uint64_t filenameHash, const ResChar filename[]) -> Item*
+    const Placements* PlacementsCache::GetPlacements(uint64_t filenameHash, StringSection<> filename)
     {
-        auto i = LowerBound(_items, filenameHash);
-        if (i != _items.end() && i->first == filenameHash) {
-            if (i->second->_placements->GetDependencyValidation().GetValidationIndex()!=0)
-                i->second->Reload();
-            return i->second.get();
-        } 
-
-            // When filename is null, we can only return an object that has been created before. 
-            // if it hasn't been created, we will return null
-        if (!filename) return nullptr;
-
-        auto newItem = std::make_unique<Item>();
-        newItem->_filename = filename;
-        newItem->Reload();
-        i = _items.emplace(i, std::make_pair(filenameHash, std::move(newItem)));
-        return i->second.get();
+        return ::Assets::AssetHeapLRU<Placements>::Get(filenameHash, filename)->TryActualize();
     }
 
-    void PlacementsCache::Item::Reload()
-    {
-        _placements.reset();
-        _placements = ::Assets::AutoConstructAsset<std::unique_ptr<Placements>>(MakeStringSection(_filename));
-    }
-
-    PlacementsCache::PlacementsCache() {}
+    PlacementsCache::PlacementsCache() : ::Assets::AssetHeapLRU<Placements>(128) {}
     PlacementsCache::~PlacementsCache() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -356,7 +314,7 @@ namespace SceneEngine
     class PlacementsRenderer::Pimpl
     {
     public:
-        Placements* CullCell(
+        const Placements* CullCell(
             std::vector<unsigned>& visiblePlacements,
             const SceneView& view,
             const PlacementCell& cell);
@@ -382,31 +340,10 @@ namespace SceneEngine
             std::shared_ptr<PlacementsModelCache> modelCache);
         ~Pimpl();
 
-        class CellRenderInfo
+        struct CellRenderInfo
         {
-        public:
-            PlacementsCache::Item* _placements;
+            const Placements* _placements;
             std::unique_ptr<GenericQuadTree> _quadTree;
-
-            CellRenderInfo() {}
-            CellRenderInfo(CellRenderInfo&& moveFrom) never_throws
-            : _placements(moveFrom._placements)
-            , _quadTree(std::move(moveFrom._quadTree))
-            {
-                moveFrom._placements = nullptr;
-            }
-
-            CellRenderInfo& operator=(CellRenderInfo&& moveFrom) never_throws
-            {
-                _placements = moveFrom._placements;
-                moveFrom._placements = nullptr;
-                _quadTree = std::move(moveFrom._quadTree);
-                return *this;
-            }
-
-        private:
-            CellRenderInfo(const CellRenderInfo&);
-            CellRenderInfo& operator=(const CellRenderInfo&);
         };
 
         std::vector<std::pair<uint64_t, CellRenderInfo>> _cells;
@@ -454,7 +391,7 @@ namespace SceneEngine
         return nullptr;
     }
 
-    Placements* PlacementsRenderer::Pimpl::CullCell(
+    const Placements* PlacementsRenderer::Pimpl::CullCell(
         std::vector<unsigned>& visibleObjects,
         const SceneView& view,
         const PlacementCell& cell)
@@ -479,33 +416,30 @@ namespace SceneEngine
         auto i2 = LowerBound(_cells, cell._filenameHash);
         if (i2 == _cells.end() || i2->first != cell._filenameHash) {
             CellRenderInfo newRenderInfo;
-            newRenderInfo._placements = _placementsCache->Get(cell._filenameHash, cell._filename);
+            newRenderInfo._placements = _placementsCache->GetPlacements(cell._filenameHash, cell._filename);
+            if (!newRenderInfo._placements) return nullptr;
             i2 = _cells.insert(i2, std::make_pair(cell._filenameHash, std::move(newRenderInfo)));
-        }
-
-            // check if we need to reload placements
-        if (i2->second._placements->_placements->GetDependencyValidation().GetValidationIndex() != 0) {
-            i2->second._placements->Reload();
-            i2->second._quadTree.reset();
         }
 
         if (!i2->second._quadTree) {
             const unsigned leafThreshold = 12;
             auto dataBlock = GenericQuadTree::BuildQuadTree(
-                &i2->second._placements->_placements->GetObjectReferences()->_cellSpaceBoundary,
+                &i2->second._placements->GetObjectReferences()->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference), 
-                i2->second._placements->_placements->GetObjectReferenceCount(),
+                i2->second._placements->GetObjectReferenceCount(),
                 leafThreshold);
+            ::Assets::Block_Initialize(dataBlock.first.get());
+            // ::Assets::Block_GetFirstObject(...) is handled inside of GenericQuadTree
             i2->second._quadTree = std::make_unique<GenericQuadTree>(std::move(dataBlock.first));
         }
 
         __declspec(align(16)) auto cellToCullSpace = Combine(cell._cellToWorld, view._projection._worldToProjection);
         CullCell(
             visibleObjects, cellToCullSpace, 
-            *i2->second._placements->_placements, 
+            *i2->second._placements, 
             i2->second._quadTree.get());
 
-        return i2->second._placements->_placements.get();
+        return i2->second._placements;
     }
 
     static SupplementRange AsSupplements(const uint64_t* supplementsBuffer, unsigned supplementsOffset)
@@ -668,6 +602,7 @@ namespace SceneEngine
         
         if (quadTree) {
             auto cullResults = quadTree->GetMaxResults();
+            assert(cullResults);
             visiblePlacements.resize(cullResults);
             GenericQuadTree::Metrics metrics;
 			assert(placementCount < (1<<28));
@@ -1010,29 +945,39 @@ namespace SceneEngine
             }
         }
     }
+
+    void PlacementCellSet::Add(StringSection<> placementsInitializer, const Float3x4& cellToWorld, std::pair<Float3, Float3> localSpaceAABB)
+    {
+        PlacementCell cell;
+        XlCopyString(cell._filename, placementsInitializer);
+        cell._filenameHash = Hash64(cell._filename);
+        cell._cellToWorld = cellToWorld;
+
+            // note -- we could shrink wrap this bounding box around the objects
+            //      inside. This might be necessary, actually, because some objects
+            //      may be straddling the edges of the area, so the cell bounding box
+            //      should be slightly larger.
+        std::tie(cell._aabbMin, cell._aabbMax) = TransformBoundingBox(cellToWorld, localSpaceAABB);
+
+        cell._captureMins = cell._captureMaxs = Float2{0,0};
+
+        _pimpl->_cells.push_back(cell);
+    }
     
-    PlacementCellSet::PlacementCellSet(const WorldPlacementsConfig& cfg, const Float3& worldOffset)
+    PlacementCellSet::PlacementCellSet()
     {
         _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_cells.reserve(cfg._cells.size());
-        for (auto c=cfg._cells.cbegin(); c!=cfg._cells.cend(); ++c) {
-            PlacementCell cell;
-            XlCopyString(cell._filename, c->_file);
-            cell._filenameHash = Hash64(cell._filename);
-            cell._cellToWorld = AsFloat3x4(worldOffset + c->_offset);
-
-                // note -- we could shrink wrap this bounding box around the objects
-                //      inside. This might be necessary, actually, because some objects
-                //      may be straddling the edges of the area, so the cell bounding box
-                //      should be slightly larger.
-            cell._aabbMin = c->_offset + c->_mins;
-            cell._aabbMax = c->_offset + c->_maxs;
-
-            _pimpl->_cells.push_back(cell);
-        }
     }
 
     PlacementCellSet::~PlacementCellSet() {}
+
+    void InitializeCellSet(
+        PlacementCellSet& cellSet,
+        const WorldPlacementsConfig& cfg, const Float3& worldOffset)
+    {
+        for (auto c=cfg._cells.cbegin(); c!=cfg._cells.cend(); ++c)
+            cellSet.Add(c->_file, AsFloat3x4(worldOffset+c->_offset), {worldOffset+c->_mins, worldOffset+c->_maxs});
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1214,8 +1159,7 @@ namespace SceneEngine
 
 		if (cell._filename[0] != '[') {		// used in the editor for dynamic placements
 			TRY {
-                auto* i = cache.Get(cell._filenameHash, cell._filename);
-				return i ? i->_placements.get() : nullptr;
+                return cache.GetPlacements(cell._filenameHash, cell._filename);
 			} CATCH (const std::exception& e) {
                 Log(Warning) << "Got invalid resource while loading placements file (" << cell._filename << "). Error: (" << e.what() << ")." << std::endl;
 			} CATCH_END
@@ -2378,13 +2322,39 @@ namespace SceneEngine
     {
     }
 
+    void WorldPlacementsConfig::ConstructToFuture(
+		::Assets::FuturePtr<WorldPlacementsConfig>& future,
+        StringSection<::Assets::ResChar> initializer)
+    {
+        auto splitName = MakeFileNameSplitter(initializer);
+		if (XlEqStringI(splitName.Extension(), "dat")) {
+			AutoConstructToFutureDirect(future, initializer);
+			return;
+		}
+
+		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(initializer.AsString());
+		::Assets::DefaultCompilerConstruction(
+			future, 
+            CompileProcessType_WorldPlacementsConfig,
+			initializer);
+    }
+
     ::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*> placements)
     {
         DynamicPlacements plcmnts;
         for (const auto&p:placements) {
+
+            uint64_t id, idTopPart = ObjectIdTopPart(p._resource._name, p._resource._material);
+            for (;;) {
+                auto id32 = BuildGuid32();
+                id = idTopPart | uint64_t(id32);
+                if (!plcmnts.HasObject(id)) { break; }
+            }
+
             plcmnts.AddPlacement(
                 p._localToCell, TransformBoundingBox(p._localToCell, p._resource._aabb),
-                p._resource._name, p._resource._material, {}, BuildGuid32());
+                p._resource._name, p._resource._material, {}, 
+                id);
         }
         return plcmnts.Serialize();
     }

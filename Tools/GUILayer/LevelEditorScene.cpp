@@ -114,8 +114,8 @@ namespace GUILayer
         // Placements scene aspects
         auto newModelCache = std::make_shared<RenderCore::Techniques::ModelCache>(pipelineAcceleratorPool);
         _placementsManager = std::make_shared<SceneEngine::PlacementsManager>(newModelCache);
-        _placementsCells = std::make_shared<SceneEngine::PlacementCellSet>(SceneEngine::WorldPlacementsConfig(), Float3(0.f, 0.f, 0.f));
-        _placementsCellsHidden = std::make_shared<SceneEngine::PlacementCellSet>(SceneEngine::WorldPlacementsConfig(), Float3(0.f, 0.f, 0.f));
+        _placementsCells = std::make_shared<SceneEngine::PlacementCellSet>();
+        _placementsCellsHidden = std::make_shared<SceneEngine::PlacementCellSet>();
         _placementsEditor = _placementsManager->CreateEditor(_placementsCells);
 		_placementsHidden = _placementsManager->CreateEditor(_placementsCellsHidden);
 #endif

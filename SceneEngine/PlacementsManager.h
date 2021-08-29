@@ -22,29 +22,6 @@ namespace SceneEngine
 {
 	using PlacementsModelCache = RenderCore::Techniques::ModelCache;
 
-    class WorldPlacementsConfig
-    {
-    public:
-        class Cell
-        {
-        public:
-            Float3 _offset;
-            Float3 _mins, _maxs;
-            ::Assets::ResChar _file[MaxPath];
-        };
-        std::vector<Cell> _cells;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-        WorldPlacementsConfig(
-            Utility::InputStreamFormatter<utf8>& formatter,
-            const ::Assets::DirectorySearchRules& searchRules,
-			const ::Assets::DependencyValidation& depVal);
-        WorldPlacementsConfig();
-
-	private:
-		::Assets::DependencyValidation _depVal;
-    };
 
     class PlacementsRenderer;
     class PlacementsIntersections;
@@ -57,9 +34,10 @@ namespace SceneEngine
     class PlacementCellSet
     {
     public:
-        PlacementCellSet(const WorldPlacementsConfig& cfg, const Float3& worldOffset);
-        ~PlacementCellSet();
+        void Add(StringSection<> placementsInitializer, const Float3x4& cellToWorld, std::pair<Float3, Float3> localSpaceAABB);
 
+        PlacementCellSet();
+        ~PlacementCellSet();
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
     };
