@@ -222,7 +222,11 @@ namespace Assets
 
 	template<
 		typename Future, 
-		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::Constructor_Formatter && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		typename std::enable_if_t<	Internal::AssetTraits<typename Future::PromisedType>::Constructor_Formatter 
+								&& !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType 
+								&& !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value
+								&& !std::is_same_v<std::decay_t<Internal::RemoveSmartPtrType<typename Future::PromisedType>>, ConfigFileContainer<>>
+								>* =nullptr>
 		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		const char* p = XlFindChar(initializer, ':');
@@ -256,7 +260,10 @@ namespace Assets
 
 	template<
 		typename Future,
-		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::Constructor_ChunkFileContainer && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		typename std::enable_if_t<	Internal::AssetTraits<typename Future::PromisedType>::Constructor_ChunkFileContainer 
+								&& !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType 
+								&& !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value
+								>* =nullptr>
 		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
@@ -269,7 +276,10 @@ namespace Assets
 
 	template<
 		typename Future,
-		typename std::enable_if_t<Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests && !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType && !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value>* =nullptr>
+		typename std::enable_if_t<	Internal::AssetTraits<typename Future::PromisedType>::HasChunkRequests 
+								&&  !Internal::AssetTraits<typename Future::PromisedType>::HasCompileProcessType 
+								&&  !Internal::HasConstructToFutureOverride<typename Future::PromisedType, StringSection<ResChar>>::value
+								>* =nullptr>
 		void AutoConstructToFuture(Future& future, StringSection<ResChar> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);

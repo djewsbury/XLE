@@ -60,7 +60,7 @@ namespace Assets
 
 			static const bool Constructor_Formatter = std::is_constructible<AssetType, InputStreamFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
-			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value;
+			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value && !std::is_same_v<AssetType, ChunkFileContainer>;
 			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, const DirectorySearchRules&, const DependencyValidation&>::value;
 
 			static const bool HasCompileProcessType = HasCompileProcessTypeHelper::value;
