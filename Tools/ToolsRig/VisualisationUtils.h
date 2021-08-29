@@ -27,7 +27,7 @@ namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
 namespace RenderOverlays { class IOverlayContext; }
 namespace RenderOverlays { namespace DebuggingDisplay { struct Rect; }}
 namespace OSServices { class OnChangeCallback; }
-namespace SceneEngine { class IScene; class IRenderStep; }
+namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }
 
 namespace ToolsRig
 {
@@ -77,6 +77,8 @@ namespace ToolsRig
 		VisEnvSettings();
 		VisEnvSettings(const std::string& envConfigFile);
 	};
+
+    Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(const VisEnvSettings& visSettings);
 
 	class VisOverlaySettings
 	{
@@ -141,8 +143,8 @@ namespace ToolsRig
     class ISimpleSceneLayer : public PlatformRig::IOverlaySystem
     {
     public:
-        virtual void Set(const VisEnvSettings& envSettings) = 0;
-		virtual void Set(const std::shared_ptr<SceneEngine::IScene>& scene) = 0;
+        virtual void Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
+		virtual void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) = 0;
         virtual std::shared_ptr<VisCameraSettings> GetCamera() = 0;
 		virtual void ResetCamera() = 0;
         virtual ~ISimpleSceneLayer() = default;
@@ -160,7 +162,7 @@ namespace ToolsRig
             RenderCore::Techniques::ParsingContext& parserContext) override;
 		virtual OverlayState GetOverlayState() const override;
 
-		void Set(const std::shared_ptr<SceneEngine::IScene>& scene);
+		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);
 		void Set(const std::shared_ptr<VisCameraSettings>&);
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
@@ -188,7 +190,7 @@ namespace ToolsRig
             RenderCore::IThreadContext& context, 
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
-		void Set(const std::shared_ptr<SceneEngine::IScene>& scene);
+		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);
 
 		MouseOverTrackingOverlay(
             const std::shared_ptr<VisMouseOver>& mouseOver,

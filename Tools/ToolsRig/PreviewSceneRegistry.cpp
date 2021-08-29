@@ -21,12 +21,11 @@ namespace ToolsRig
 			return result;
 		}
 
-		std::shared_ptr<SceneEngine::IScene> CreateScene(StringSection<> sceneName, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+		::Assets::PtrToFuturePtr<SceneEngine::IScene> CreateScene(StringSection<> sceneName, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
 		{
 			for (auto i=_registrySet.begin(); i!=_registrySet.end(); ++i) {
 				auto s = i->second->CreateScene(sceneName, pipelineAccelerators);
-				if (s)
-					return s;
+				if (s) return s;
 			}
 			return nullptr;
 		}

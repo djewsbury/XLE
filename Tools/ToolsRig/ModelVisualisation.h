@@ -37,10 +37,12 @@ namespace ToolsRig
 		std::string		_skeletonFileName;
 		uint64_t		_materialBindingFilter;
 
+        uint64_t GetHash() const;
+
 		ModelVisSettings();
 	};
 
-	std::shared_ptr<SceneEngine::IScene> MakeScene(
+	Assets::PtrToFuturePtr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ModelVisSettings& settings);
 }

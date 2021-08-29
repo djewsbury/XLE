@@ -101,7 +101,7 @@ namespace ToolsRig
 		}
 	};
 
-    class MaterialVisualizationScene : public SceneEngine::IScene, public IVisContent, public ::Assets::IAsyncMarker, public IPatchCollectionVisualizationScene
+    class MaterialVisualizationScene : public SceneEngine::IScene, public IVisContent, public IPatchCollectionVisualizationScene
     {
     public:
         virtual void ExecuteScene(
@@ -228,20 +228,6 @@ namespace ToolsRig
 		{
 			_pipelineAcceleratorPool = pipelineAcceleratorPool;
 			_material = material;
-		}
-
-		::Assets::AssetState GetAssetState() const override
-		{
-			if (!_pipelineFuture)
-				return ::Assets::AssetState::Ready;
-			return _pipelineFuture->GetAssetState();
-		}
-
-		std::optional<::Assets::AssetState>   StallWhilePending(std::chrono::milliseconds timeout) const override
-		{
-			if (!_pipelineFuture)
-				return ::Assets::AssetState::Ready;
-			return _pipelineFuture->StallWhilePending(timeout);
 		}
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const 

@@ -49,26 +49,128 @@ namespace ToolsRig
 		uint64_t _activeMaterial;
 	};
 
-	class ModelScene : public SceneEngine::IScene, public IVisContent, public ::Assets::IAsyncMarker
+	struct ModelSceneRendererState
+	{
+		std::shared_ptr<SimpleModelRenderer>		_renderer;
+		std::shared_ptr<ModelScaffold>				_modelScaffoldForEmbeddedSkeleton;
+		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
+		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
+		RenderCore::Assets::AnimationSetBinding		_animSetBinding;
+		::Assets::DependencyValidation				_depVal;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		const SkeletonMachine* GetSkeletonMachine() const
+		{
+			const SkeletonMachine* skeletonMachine = nullptr;
+			if (_skeletonScaffold) {
+				skeletonMachine = &_skeletonScaffold->GetTransformationMachine();
+			} else if (_modelScaffoldForEmbeddedSkeleton)
+				skeletonMachine = &_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
+			return skeletonMachine;
+		}
+
+		void BindAnimState(VisAnimationState& animState)
+		{
+			animState._animationList.clear();
+			if (_animationScaffold) {
+				for (const auto&anim:_animationScaffold->ImmutableData()._animationSet.GetAnimations()) {
+					auto name = _animationScaffold->ImmutableData()._animationSet.LookupStringName(anim.first);
+					if (!name.IsEmpty()) {
+						animState._animationList.push_back({name.AsString(), anim.second._beginTime, anim.second._endTime});
+					} else {
+						char buffer[64];
+						XlUI64toA(anim.first, buffer, dimof(buffer), 16);
+						animState._animationList.push_back({buffer, anim.second._beginTime, anim.second._endTime});
+					}
+				}
+			}
+			animState._changeEvent.Invoke();
+		}
+
+		static void ConstructToFuture(
+			::Assets::FuturePtr<ModelSceneRendererState>& future,
+			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const ModelVisSettings& settings)
+		{
+			auto rendererFuture = ::Assets::MakeAsset<SimpleModelRenderer>(pipelineAcceleratorPool, settings._modelName, settings._materialName, "skin");
+
+			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
+				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
+				auto skeletonFuture = ::Assets::MakeAsset<SkeletonScaffold>(settings._skeletonFileName);
+				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToFuture(
+					future, 
+					[](	std::shared_ptr<SimpleModelRenderer> renderer,
+						std::shared_ptr<AnimationSetScaffold> animationSet,
+						std::shared_ptr<SkeletonScaffold> skeleton) {
+						
+						RenderCore::Assets::AnimationSetBinding animBinding(
+							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
+							skeleton->GetTransformationMachine().GetInputInterface());
+
+						auto depVal = ::Assets::GetDepValSys().Make();
+						depVal.RegisterDependency(renderer->GetDependencyValidation());
+						depVal.RegisterDependency(animationSet->GetDependencyValidation());
+						depVal.RegisterDependency(skeleton->GetDependencyValidation());
+
+						return std::make_shared<ModelSceneRendererState>(
+							ModelSceneRendererState {
+								renderer,
+								nullptr, skeleton, animationSet,
+								std::move(animBinding), depVal,
+							});
+					});
+			} else if (!settings._animationFileName.empty()) {
+				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
+				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToFuture(
+					future, 
+					[](	std::shared_ptr<SimpleModelRenderer> renderer,
+						std::shared_ptr<AnimationSetScaffold> animationSet) {
+						
+						RenderCore::Assets::AnimationSetBinding animBinding(
+							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
+							renderer->GetModelScaffold()->EmbeddedSkeleton().GetInputInterface());
+
+						auto depVal = ::Assets::GetDepValSys().Make();
+						depVal.RegisterDependency(renderer->GetDependencyValidation());
+						depVal.RegisterDependency(animationSet->GetDependencyValidation());
+
+						return std::make_shared<ModelSceneRendererState>(
+							ModelSceneRendererState {
+								renderer,
+								renderer->GetModelScaffold(), nullptr, animationSet,
+								std::move(animBinding), depVal,
+							});
+					});
+			} else {
+				::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
+					future, 
+					[](std::shared_ptr<SimpleModelRenderer> renderer) {
+						return std::make_shared<ModelSceneRendererState>(
+							ModelSceneRendererState {
+								renderer,
+								renderer->GetModelScaffold(), nullptr, nullptr,
+								{}, renderer->GetDependencyValidation(),
+							});
+					});
+			}
+        }
+	};
+
+	class ModelScene : public SceneEngine::IScene, public IVisContent
     {
     public:
 		virtual void ExecuteScene(
             RenderCore::IThreadContext& threadContext,
 			const SceneEngine::ExecuteSceneContext& executeContext) const override
 		{
-			auto* r = TryActualize();
-			if (!r) {
-				Log(Warning) << "Trying to render invalid/pending scene: " << ::Assets::AsString(_rendererStateFuture->GetActualizationLog()) << std::endl;
-				return;
-			}
-
-			auto skeletonMachine = r->GetSkeletonMachine();
+			auto skeletonMachine = _actualized->GetSkeletonMachine();
 			assert(skeletonMachine);
 
 			std::vector<Float4x4> skeletonMachineOutput(skeletonMachine->GetOutputMatrixCount());
 
-			if (r->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
-				auto& animData = r->_animationScaffold->ImmutableData();
+			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
+				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
 				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
@@ -79,7 +181,7 @@ namespace ToolsRig
 
 				auto params = animData._animationSet.BuildTransformationParameterSet(
 					{time, animHash},
-					*skeletonMachine, r->_animSetBinding,
+					*skeletonMachine, _actualized->_animSetBinding,
 					MakeIteratorRange(animData._curves));
 
 				skeletonMachine->GenerateOutputTransforms(
@@ -91,39 +193,31 @@ namespace ToolsRig
 					&skeletonMachine->GetDefaultParameters());
 			}
 
-			for (unsigned c=0; c<r->_renderer->DeformOperationCount(); ++c) {
-				auto* skinDeformOp = dynamic_cast<RenderCore::Techniques::SkinDeformer*>(&r->_renderer->DeformOperation(c));
+			for (unsigned c=0; c<_actualized->_renderer->DeformOperationCount(); ++c) {
+				auto* skinDeformOp = dynamic_cast<RenderCore::Techniques::SkinDeformer*>(&_actualized->_renderer->DeformOperation(c));
 				if (!skinDeformOp) continue;
 				skinDeformOp->FeedInSkeletonMachineResults(
 					MakeIteratorRange(skeletonMachineOutput),
 					skeletonMachine->GetOutputInterface());
 			}
-			r->_renderer->GenerateDeformBuffer(threadContext);
+			_actualized->_renderer->GenerateDeformBuffer(threadContext);
 
 			RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
 			XlZeroMemory(pkts);
 			pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
-			r->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), _preDrawDelegate);
+			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), _preDrawDelegate);
 		}
 
 		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override
 		{
-			auto* r = TryActualize();
-			if (r) {
-				auto matName = r->_renderer->GetMaterialScaffold()->GetMaterialName(materialGuid).AsString();
-				if (matName.empty())
-					matName = r->_renderer->GetMaterialScaffoldName();
-				return { r->_renderer->GetModelScaffoldName(), matName };
-			} else {
-				return { {}, {} };
-			}
+			auto matName = _actualized->_renderer->GetMaterialScaffold()->GetMaterialName(materialGuid).AsString();
+			if (matName.empty())
+				matName = _actualized->_renderer->GetMaterialScaffoldName();
+			return { _actualized->_renderer->GetModelScaffoldName(), matName };
 		}
 		std::pair<Float3, Float3> GetBoundingBox() const override
 		{
-			auto* r = TryActualize();
-			if (!r)
-				return std::make_pair(Float3{0.f, 0.f, 0.f}, Float3{0.f, 0.f, 0.f});
-			return r->_renderer->GetModelScaffold()->GetStaticBoundingBox(); 
+			return _actualized->_renderer->GetModelScaffold()->GetStaticBoundingBox(); 
 		}
 
 		std::shared_ptr<ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<ICustomDrawDelegate>& delegate) override
@@ -138,13 +232,10 @@ namespace ToolsRig
 			RenderCore::Techniques::ParsingContext& parserContext, 
 			bool drawBoneNames) const override
 		{
-			auto* r = TryActualize();
-			if (!r) return;
+			auto skeletonMachine = _actualized->GetSkeletonMachine();
 
-			auto skeletonMachine = r->GetSkeletonMachine();
-
-			if (r->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
-				auto& animData = r->_animationScaffold->ImmutableData();
+			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
+				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
 				auto animHash = Hash64(_animationState->_activeAnimation);
 				auto foundAnimation = animData._animationSet.FindAnimation(animHash);
@@ -156,7 +247,7 @@ namespace ToolsRig
 
 				auto params = animData._animationSet.BuildTransformationParameterSet(
 					{time, animHash},
-					*skeletonMachine, r->_animSetBinding,
+					*skeletonMachine, _actualized->_animSetBinding,
 					MakeIteratorRange(animData._curves));
 
 				Float4x4 skeletonOutput[skeletonMachine->GetOutputMatrixCount()];
@@ -184,185 +275,59 @@ namespace ToolsRig
 		void BindAnimationState(const std::shared_ptr<VisAnimationState>& animState) override
 		{
 			_animationState = animState;
-			// If it previously actualized
 			if (_actualized)
 				_actualized->BindAnimState(*_animationState);
 		}
 
 		bool HasActiveAnimation() const override
 		{
-			auto* r = TryActualize();
-			if (!r) return false;
-			return r->_animationScaffold && _animationState && _animationState->_state == VisAnimationState::State::Playing;
-		}
-
-		::Assets::AssetState GetAssetState() const override
-		{
-			return _rendererStateFuture->GetAssetState();
-		}
-
-		std::optional<::Assets::AssetState> StallWhilePending(std::chrono::milliseconds timeout) const override
-		{
-			return _rendererStateFuture->StallWhilePending(timeout);
+			return _actualized->_animationScaffold && _animationState && _animationState->_state == VisAnimationState::State::Playing;
 		}
 
 		ModelScene(
-			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<ModelSceneRendererState> actualized,
 			const ModelVisSettings& settings)
-		: _pipelineAcceleratorPool(pipelineAcceleratorPool), _settings(settings)
+		: _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
+		, _actualized(std::move(actualized))
 		{
 			if (settings._materialBindingFilter)
 				_preDrawDelegate = std::make_shared<MaterialFilterDelegate>(settings._materialBindingFilter);
-
-			BuildRendererStateFuture();
 		}
 
 	protected:
-		void BuildRendererStateFuture() const
-		{
-			_rendererStateFuture = std::make_shared<::Assets::FuturePtr<RendererState>>("Model Scene Renderer");
-
-			auto rendererFuture = ::Assets::MakeAsset<SimpleModelRenderer>(_pipelineAcceleratorPool, _settings._modelName, _settings._materialName, "skin");
-
-			if (!_settings._animationFileName.empty() && !_settings._skeletonFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(_settings._animationFileName);
-				auto skeletonFuture = ::Assets::MakeAsset<SkeletonScaffold>(_settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToFuture(
-					*_rendererStateFuture, 
-					[](	std::shared_ptr<SimpleModelRenderer> renderer,
-						std::shared_ptr<AnimationSetScaffold> animationSet,
-						std::shared_ptr<SkeletonScaffold> skeleton) {
-						
-						RenderCore::Assets::AnimationSetBinding animBinding(
-							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							skeleton->GetTransformationMachine().GetInputInterface());
-
-						auto depVal = ::Assets::GetDepValSys().Make();
-						depVal.RegisterDependency(renderer->GetDependencyValidation());
-						depVal.RegisterDependency(animationSet->GetDependencyValidation());
-						depVal.RegisterDependency(skeleton->GetDependencyValidation());
-
-						return std::make_shared<RendererState>(
-							RendererState {
-								renderer,
-								nullptr, skeleton, animationSet,
-								std::move(animBinding), depVal,
-							});
-					});
-			} else if (!_settings._animationFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(_settings._animationFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToFuture(
-					*_rendererStateFuture, 
-					[](	std::shared_ptr<SimpleModelRenderer> renderer,
-						std::shared_ptr<AnimationSetScaffold> animationSet) {
-						
-						RenderCore::Assets::AnimationSetBinding animBinding(
-							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							renderer->GetModelScaffold()->EmbeddedSkeleton().GetInputInterface());
-
-						auto depVal = ::Assets::GetDepValSys().Make();
-						depVal.RegisterDependency(renderer->GetDependencyValidation());
-						depVal.RegisterDependency(animationSet->GetDependencyValidation());
-
-						return std::make_shared<RendererState>(
-							RendererState {
-								renderer,
-								renderer->GetModelScaffold(), nullptr, animationSet,
-								std::move(animBinding), depVal,
-							});
-					});
-			} else {
-				::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
-					*_rendererStateFuture, 
-					[](std::shared_ptr<SimpleModelRenderer> renderer) {
-						return std::make_shared<RendererState>(
-							RendererState {
-								renderer,
-								renderer->GetModelScaffold(), nullptr, nullptr,
-								{}, renderer->GetDependencyValidation(),
-							});
-					});
-			}
-        }
-
 		std::shared_ptr<ICustomDrawDelegate>			_preDrawDelegate;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-		ModelVisSettings							_settings;
-		
-		struct RendererState
-		{
-			std::shared_ptr<SimpleModelRenderer>		_renderer;
-			std::shared_ptr<ModelScaffold>				_modelScaffoldForEmbeddedSkeleton;
-			std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
-			std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
-			RenderCore::Assets::AnimationSetBinding		_animSetBinding;
-			::Assets::DependencyValidation							_depVal;
-
-			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-			const SkeletonMachine* GetSkeletonMachine() const
-			{
-				const SkeletonMachine* skeletonMachine = nullptr;
-				if (_skeletonScaffold) {
-					skeletonMachine = &_skeletonScaffold->GetTransformationMachine();
-				} else if (_modelScaffoldForEmbeddedSkeleton)
-					skeletonMachine = &_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
-				return skeletonMachine;
-			}
-
-			void BindAnimState(VisAnimationState& animState)
-			{
-				animState._animationList.clear();
-				if (_animationScaffold) {
-					for (const auto&anim:_animationScaffold->ImmutableData()._animationSet.GetAnimations()) {
-						auto name = _animationScaffold->ImmutableData()._animationSet.LookupStringName(anim.first);
-						if (!name.IsEmpty()) {
-							animState._animationList.push_back({name.AsString(), anim.second._beginTime, anim.second._endTime});
-						} else {
-							char buffer[64];
-							XlUI64toA(anim.first, buffer, dimof(buffer), 16);
-							animState._animationList.push_back({buffer, anim.second._beginTime, anim.second._endTime});
-						}
-					}
-				}
-				animState._changeEvent.Invoke();
-			}
-		};
-		mutable ::Assets::PtrToFuturePtr<RendererState> _rendererStateFuture;
-		mutable std::shared_ptr<RendererState> _actualized;
-
-		RendererState* TryActualize() const
-		{
-			if (_actualized && !_actualized->GetDependencyValidation().GetValidationIndex())
-				return _actualized.get();
-
-			if (_rendererStateFuture->GetAssetState() == ::Assets::AssetState::Pending)
-				return nullptr;
-
-			// Check if we need a reload -- 
-			if (_rendererStateFuture->GetDependencyValidation().GetValidationIndex()) {
-				_actualized = nullptr;
-				BuildRendererStateFuture();
-			}
-
-			auto* t = _rendererStateFuture->TryActualize();
-			_actualized = t ? *t : nullptr;
-			if (_actualized && _animationState) {
-				_actualized->BindAnimState(*_animationState);
-			}
-			return _actualized.get();
-		}
-
+		std::shared_ptr<ModelSceneRendererState>		_actualized;
 		std::shared_ptr<VisAnimationState>				_animationState;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::shared_ptr<SceneEngine::IScene> MakeScene(
+	Assets::PtrToFuturePtr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
-		return std::make_shared<ModelScene>(pipelineAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::MakeFuture<std::shared_ptr<ModelSceneRendererState>>(pipelineAcceleratorPool, settings);
+		auto result = std::make_shared<Assets::FuturePtr<SceneEngine::IScene>>();
+		::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
+			*result,
+			[pipelineAcceleratorPool, settings](auto renderer) {
+				return std::make_shared<ModelScene>(pipelineAcceleratorPool, renderer, settings);
+			});
+		return result;
+	}
+
+	uint64_t ModelVisSettings::GetHash() const
+	{
+		auto hash = Hash64(_modelName);
+		hash = Hash64(_materialName, hash);
+		hash = Hash64(_supplements, hash);
+		hash = HashCombine(_levelOfDetail, hash);
+		hash = Hash64(_animationFileName, hash);
+		hash = Hash64(_skeletonFileName, hash);
+		hash = HashCombine(_materialBindingFilter, hash);
+		return hash;
 	}
 
 	ModelVisSettings::ModelVisSettings()

@@ -88,7 +88,7 @@ namespace SceneEngine
 			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
 			StringSection<::Assets::ResChar> envSettingFileName);
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _envSettings->GetDependencyValidation(); }
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _envSettings->GetDependencyValidation(); }
 
     protected:
         const EnvironmentSettings&  GetEnvSettings() const;

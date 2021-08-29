@@ -11,6 +11,7 @@
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; enum class BatchFilter; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; }}
+namespace Assets { class DependencyValidation; }
 
 namespace SceneEngine
 {
@@ -79,6 +80,8 @@ namespace SceneEngine
 
         virtual auto        GetEnvironmentalLightingDesc() const -> EnvironmentalLightingDesc = 0;
         virtual auto        GetToneMapSettings() const -> ToneMapSettings = 0;
+
+        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
 		virtual ~ILightingStateDelegate() = default;
     };
