@@ -74,12 +74,23 @@ namespace Assets
 		template<typename AssetType>
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
 
+		template<typename AssetType, typename... Params>
+			static auto HasConstructToFutureOverride_Helper(int) -> decltype(
+				Internal::RemoveSmartPtrType<AssetType>::ConstructToFuture(std::declval<::Assets::Future<AssetType>&>(), std::declval<Params>()...), 
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToFutureOverride_Helper(...) -> std::false_type;
+
+		template<typename AssetType, typename... Params>
+			struct HasConstructToFutureOverride : decltype(HasConstructToFutureOverride_Helper<AssetType, Params...>(0)) {};
+
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
-		const ConfigFileContainer<InputStreamFormatter<utf8>>& GetConfigFileContainer(StringSection<ResChar> identifier);
-		const ChunkFileContainer& GetChunkFileContainer(StringSection<ResChar> identifier);
-		PtrToFuturePtr<ConfigFileContainer<InputStreamFormatter<utf8>>> GetConfigFileContainerFuture(StringSection<ResChar> identifier);
-		PtrToFuturePtr<ChunkFileContainer> GetChunkFileContainerFuture(StringSection<ResChar> identifier);
+		const ConfigFileContainer<InputStreamFormatter<utf8>>& GetConfigFileContainer(StringSection<> identifier);
+		const ChunkFileContainer& GetChunkFileContainer(StringSection<> identifier);
+		PtrToFuturePtr<ConfigFileContainer<InputStreamFormatter<utf8>>> GetConfigFileContainerFuture(StringSection<> identifier);
+		PtrToFuturePtr<ChunkFileContainer> GetChunkFileContainerFuture(StringSection<> identifier);
 
         template <typename... Params> uint64_t BuildParamHash(Params... initialisers);
 
@@ -114,7 +125,7 @@ namespace Assets
 	//			(InputStreamFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
-		AssetType AutoConstructAsset(StringSection<ResChar> initializer)
+		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
 		// See also AutoConstructToFuture<> variation of this function
@@ -151,7 +162,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			auto container = ConfigFileContainer<>(blob, depVal);
@@ -172,7 +183,7 @@ namespace Assets
 	//			(const ChunkFileContainer&)
 	//
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
-		AssetType AutoConstructAsset(StringSection<ResChar> initializer)
+		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// See also AutoConstructToFuture<> variation of this function
 		const auto& container = Internal::GetChunkFileContainer(initializer);
@@ -186,7 +197,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			return Internal::ConstructFinalAssetObject<AssetType>(ChunkFileContainer(blob, depVal, requestParameters));
@@ -202,7 +213,7 @@ namespace Assets
 	//			(IteratorRange<ArtifactRequestResult>, const DependencyValidation&)
 	//
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(StringSection<ResChar> initializer)
+		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// See also AutoConstructToFuture<> variation of this function
 		const auto& container = Internal::GetChunkFileContainer(initializer);
@@ -217,7 +228,7 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			auto chunks = ChunkFileContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
@@ -247,7 +258,7 @@ namespace Assets
 	//			(IFileInterface&, const DirectorySearchRules&, const DependencyValidation&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_FileSystem)>
-		AssetType AutoConstructAsset(StringSection<ResChar> initializer)
+		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		auto depVal = GetDepValSys().Make(initializer);
 		TRY { 
@@ -268,7 +279,7 @@ namespace Assets
 	//			(StringSection<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_TextFile)>
-		AssetType AutoConstructAsset(StringSection<ResChar> initializer)
+		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		auto depVal = GetDepValSys().Make(initializer);
 		TRY { 

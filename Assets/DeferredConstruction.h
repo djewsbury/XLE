@@ -38,18 +38,7 @@ namespace Assets
 			struct HasDirectAutoConstructAsset_ : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params...>(0)) {};
 
 		template<typename AssetType, typename... Params>
-			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<std::decay_t<RemoveSmartPtrType<AssetType>>, Params...>;
-
-		template<typename AssetType, typename... Params>
-			static auto HasConstructToFutureOverride_Helper(int) -> decltype(
-				Internal::RemoveSmartPtrType<AssetType>::ConstructToFuture(std::declval<::Assets::Future<AssetType>&>(), std::declval<Params>()...), 
-				std::true_type{});
-
-		template<typename...>
-			static auto HasConstructToFutureOverride_Helper(...) -> std::false_type;
-
-		template<typename AssetType, typename... Params>
-			struct HasConstructToFutureOverride : decltype(HasConstructToFutureOverride_Helper<AssetType, Params...>(0)) {};
+			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<AssetType, Params...>;
 	}
 	
 	// If we can construct an AssetType directly from the given parameters, then enable an implementation of
