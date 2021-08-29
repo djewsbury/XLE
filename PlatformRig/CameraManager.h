@@ -6,41 +6,32 @@
 
 #pragma once
 
-#include "InputListener.h"
+#include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../Math/Matrix.h"
 
 namespace RenderCore { namespace Techniques { class CameraDesc; } }
 
+namespace PlatformRig { class InputSnapshot; }
 namespace PlatformRig { namespace Camera
 {
-    class ICameraAttach
-    {
-    public:
-        virtual const Float4x4& GetLocalToWorld() const = 0;
-        virtual void SetLocalToWorld(const Float4x4& newTransform) = 0;
-    };
-
     class UnitCamManager;
-
-    class CameraInputHandler : public IInputListener
+    
+    class CameraInputHandler
     {
     public:
-        bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt);
-        void    Commit(float dt);
+        void Update(float dt, const InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld);
+        const RenderCore::Techniques::CameraDesc& GetCurrentState() const { return _camera; }
         
         CameraInputHandler(
-            std::shared_ptr<RenderCore::Techniques::CameraDesc> camera, 
-            std::shared_ptr<ICameraAttach> playerCharacter,
+            const RenderCore::Techniques::CameraDesc& initialState, 
             float charactersScale);
+        ~CameraInputHandler();
 
     protected:
-        std::shared_ptr<RenderCore::Techniques::CameraDesc> _camera;
-        std::shared_ptr<ICameraAttach> _playerCharacter;
+        RenderCore::Techniques::CameraDesc _camera;
         std::unique_ptr<UnitCamManager> _unitCamera;
         Float3 _orbitFocus;
-
-        InputSnapshot     _accumulatedState;
-        InputSnapshot     _prevAccumulatedState;
+        float _charactersScale;
     };
 }}
 

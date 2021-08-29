@@ -44,7 +44,7 @@ namespace PlatformRig { namespace Camera
         Float3 targetPos;
 
         Float3 camPosition;
-        Float4x4 camRotation;
+        Float3x4 camRotation;
 
         float unitYaw;
         float yaw;
@@ -57,7 +57,7 @@ namespace PlatformRig { namespace Camera
         float fov;
 
         UnitCamera() : actualDist(0), inertiaDist(0), pivotPos(0.f, 0.f, 0.f), zOffset(0),
-            targetPos(0.f, 0.f, 0.f), camPosition(0.f, 0.f, 0.f), camRotation(Identity<Float4x4>()), unitYaw(0), yaw(0), pitch(0), tiltPitch(0),
+            targetPos(0.f, 0.f, 0.f), camPosition(0.f, 0.f, 0.f), camRotation(Identity<Float3x4>()), unitYaw(0), yaw(0), pitch(0), tiltPitch(0),
             actualWheelDist(0), wheelDist(0), blockedDist(0), actualBlockedDist(0), rotateDamping(0), ratateDampingFrameID(0), fov(Fov) {}
 
         void CalcRotation();
@@ -106,7 +106,7 @@ namespace PlatformRig { namespace Camera
     class ClientUnit
     {
     public:
-        Float4x4 _localToWorld;
+        Float3x4 _localToWorld;
     };
 
     class UnitCamManager
@@ -115,10 +115,10 @@ namespace PlatformRig { namespace Camera
         class OutputCamera
         {
         public:
-            Float4x4    _cameraToWorld;
+            Float3x4    _cameraToWorld;
             float       _fov;
         };
-        void InitUnitCamera(ClientUnit* unit);
+        void InitUnitCamera();
         void AlignUnitToCamera(ClientUnit* unit, float yaw);
         OutputCamera UpdateUnitCamera(float dt, ClientUnit* myUnit, const InputSnapshot& snapShot);
 

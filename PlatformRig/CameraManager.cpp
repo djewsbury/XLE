@@ -6,6 +6,7 @@
 
 #include "CameraManager.h"
 #include "UnitCamera.h"
+#include "InputListener.h"
 #include "../RenderCore/RenderUtils.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../Math/Transformations.h"
@@ -173,85 +174,63 @@ namespace PlatformRig { namespace Camera
         camera._cameraToWorld = cameraToWorld;
     }
 
-    bool    CameraInputHandler::OnInputEvent(
-		const InputContext& context, 
-		const InputSnapshot& evnt)
+    void CameraInputHandler::Update(float dt, const InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld)
     {
-        _accumulatedState.Accumulate(evnt, _prevAccumulatedState);
-        return false;
-    }
-
-    void    CameraInputHandler::Commit(float dt)
-    {
-        // UpdateCamera_Orbit(*_camera, dt, _accumulatedState);
-
-        const KeyId shift = KeyId_Make("shift");
-        const KeyId tab = KeyId_Make("tab");
+        static const KeyId shift = KeyId_Make("shift");
+        static const KeyId tab = KeyId_Make("tab");
 
         static unsigned mode = 0;
-        if (_accumulatedState.IsPress(tab)) {
+        if (accumulatedInputState.IsPress(tab)) {
             mode = (mode+1)%2;
         }
 
         if (mode==0) {
             Camera::ClientUnit clientUnit;
-            clientUnit._localToWorld = _playerCharacter->GetLocalToWorld();
-            static bool isInitialised = false;
-            if (!isInitialised) {
-                _unitCamera->InitUnitCamera(&clientUnit);
-                isInitialised = true;
-            }
-            if (_accumulatedState.IsPress_RButton()) {
+            clientUnit._localToWorld = playerCharacterLocalToWorld;
+            /*if (accumulatedInputState.IsPress_RButton()) {
                 _unitCamera->AlignUnitToCamera(&clientUnit, _unitCamera->GetUnitCamera().yaw);
                 _playerCharacter->SetLocalToWorld(clientUnit._localToWorld);     // push this back into the character transform
-            }
+            }*/
 
-            if (!_accumulatedState.IsHeld(shift)) {
+            if (!accumulatedInputState.IsHeld(shift)) {
 
-                auto camResult = _unitCamera->UpdateUnitCamera(dt, &clientUnit, _accumulatedState);
+                auto camResult = _unitCamera->UpdateUnitCamera(dt, &clientUnit, accumulatedInputState);
                 assert(ExtractTranslation(camResult._cameraToWorld)[0] == ExtractTranslation(camResult._cameraToWorld)[0]);
                 assert(ExtractTranslation(camResult._cameraToWorld)[1] == ExtractTranslation(camResult._cameraToWorld)[1]);
                 assert(ExtractTranslation(camResult._cameraToWorld)[2] == ExtractTranslation(camResult._cameraToWorld)[2]);
-                _camera->_cameraToWorld = camResult._cameraToWorld;
-                _camera->_verticalFieldOfView = camResult._fov;
+                _camera._cameraToWorld = AsFloat4x4(camResult._cameraToWorld);
+                _camera._verticalFieldOfView = camResult._fov;
 
                     //  Convert from object-to-world transform into
                     //  camera-to-world transform
-                std::swap(_camera->_cameraToWorld(0,1), _camera->_cameraToWorld(0,2));
-                std::swap(_camera->_cameraToWorld(1,1), _camera->_cameraToWorld(1,2));
-                std::swap(_camera->_cameraToWorld(2,1), _camera->_cameraToWorld(2,2));
-                _camera->_cameraToWorld(0,2) = -_camera->_cameraToWorld(0,2);
-                _camera->_cameraToWorld(1,2) = -_camera->_cameraToWorld(1,2);
-                _camera->_cameraToWorld(2,2) = -_camera->_cameraToWorld(2,2);
+                std::swap(_camera._cameraToWorld(0,1), _camera._cameraToWorld(0,2));
+                std::swap(_camera._cameraToWorld(1,1), _camera._cameraToWorld(1,2));
+                std::swap(_camera._cameraToWorld(2,1), _camera._cameraToWorld(2,2));
+                _camera._cameraToWorld(0,2) = -_camera._cameraToWorld(0,2);
+                _camera._cameraToWorld(1,2) = -_camera._cameraToWorld(1,2);
+                _camera._cameraToWorld(2,2) = -_camera._cameraToWorld(2,2);
 
             }
         } else if (mode==1) {
-            UpdateCamera_Slew(*_camera, dt, _accumulatedState);
+            UpdateCamera_Slew(_camera, dt, accumulatedInputState);
         } else if (mode==2) {
             auto orbitFocus = _orbitFocus;
-            if (_playerCharacter) {
-                orbitFocus = TransformPoint(_playerCharacter->GetLocalToWorld(), orbitFocus);
-                UpdateCamera_Orbit(*_camera, dt, orbitFocus, _accumulatedState);
-                orbitFocus = TransformPoint(InvertOrthonormalTransform(_playerCharacter->GetLocalToWorld()), orbitFocus);
-            } else {
-                UpdateCamera_Orbit(*_camera, dt, _orbitFocus, _accumulatedState);
-            }
+            orbitFocus = TransformPoint(playerCharacterLocalToWorld, orbitFocus);
+            UpdateCamera_Orbit(_camera, dt, orbitFocus, accumulatedInputState);
         }
-
-        _prevAccumulatedState = _accumulatedState;
-        _accumulatedState.Reset();
     }
 
     CameraInputHandler::CameraInputHandler(
-        std::shared_ptr<RenderCore::Techniques::CameraDesc> camera, 
-        std::shared_ptr<ICameraAttach> playerCharacter,
+        const RenderCore::Techniques::CameraDesc& camera, 
         float charactersScale) 
-    : _camera(std::move(camera)) 
-    , _playerCharacter(std::move(playerCharacter))
+    : _camera(camera) 
     , _orbitFocus(0.f, 0.f, 0.f)
     {
         _unitCamera = std::make_unique<UnitCamManager>(charactersScale);
+        _unitCamera->InitUnitCamera();
     }
+
+    CameraInputHandler::~CameraInputHandler() {}
 
 
 }}

@@ -26,7 +26,7 @@ namespace PlatformRig { namespace Camera
         _frameId = 0;
     }
 
-    void UnitCamManager::InitUnitCamera(ClientUnit* unit)
+    void UnitCamManager::InitUnitCamera()
     {
         float dist = 10.f*UnitScaleFactor();
         _unitCam = UnitCamera();
@@ -53,7 +53,7 @@ namespace PlatformRig { namespace Camera
     
     void UnitCamManager::AlignUnitToCamera(ClientUnit* unit, float yaw)
     {
-        Float4x4 rotation = unit->_localToWorld;
+        auto rotation = unit->_localToWorld;
         Combine_IntoRHS(RotationZ(yaw), rotation);
         unit->_localToWorld = rotation;
 
@@ -386,7 +386,7 @@ namespace PlatformRig { namespace Camera
         return ExtractTranslation(unit._localToWorld) + Float3(0.f, 0.f, 125.f / 100.f * unitScaleFactor);
     }
 
-    static Float3 ObjectTransformToYawPitchRoll(const Float4x4& objectToWorld)
+    static Float3 ObjectTransformToYawPitchRoll(const Float3x4& objectToWorld)
     {
             //
             //      Convert an "object transform" to ypr
@@ -394,7 +394,7 @@ namespace PlatformRig { namespace Camera
             //      by objects (but not cameras)
             //
         static cml::EulerOrder eulerOrder = cml::euler_order_yxz;       
-        Float3 ypr = cml::matrix_to_euler<Float4x4, Float4x4::value_type>(objectToWorld, eulerOrder);
+        Float3 ypr = cml::matrix_to_euler<Float3x4, Float3x4::value_type>(objectToWorld, eulerOrder);
         return Float3(ypr[2], ypr[0], ypr[1]);
     }
 
@@ -489,7 +489,7 @@ namespace PlatformRig { namespace Camera
 
     void UnitCamera::CalcRotation() 
     { 
-        camRotation = Identity<Float4x4>();
+        camRotation = Identity<Float3x4>();
         Combine_IntoLHS(camRotation,    RotationX(pitch));
         Combine_IntoLHS(camRotation,    RotationZ(unitYaw+yaw));
     }
