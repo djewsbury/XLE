@@ -4,6 +4,7 @@
 
 #include "AttachablePtr.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
 #include <vector>
 #include <stdexcept>
@@ -25,6 +26,7 @@ namespace ConsoleRig
 		class InfraModuleManager::Pimpl
 		{
 		public:
+			Threading::RecursiveMutex _pointersAndTypesLock;
 			struct RegisteredPtr
 			{
 				IRegistrablePointer* _ptr = nullptr;
@@ -49,6 +51,7 @@ namespace ConsoleRig
 
 		void InfraModuleManager::PropagateChange(TypeKey id, const std::shared_ptr<void>& obj)
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
 			if (i2 == _pimpl->_registeredTypes.end() || i2->first != id)
 				return;
@@ -67,6 +70,7 @@ namespace ConsoleRig
 
 		auto InfraModuleManager::Register(TypeKey id, IRegistrablePointer* ptr, bool strong) -> RegisteredPointerId
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto result = _pimpl->_nextRegisteredPointerId++;
 			auto i = LowerBound(_pimpl->_registeredPointers, id);
 			_pimpl->_registeredPointers.insert(i, {id, Pimpl::RegisteredPtr{ptr, result, strong}});
@@ -85,6 +89,7 @@ namespace ConsoleRig
 
 		void InfraModuleManager::Deregister(RegisteredPointerId id)
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i = std::find_if(_pimpl->_registeredPointers.begin(), _pimpl->_registeredPointers.end(),
 				[id](auto c) { return c.second._id == id; });
 			assert(i != _pimpl->_registeredPointers.end());
@@ -115,6 +120,7 @@ namespace ConsoleRig
 
 		unsigned InfraModuleManager::GetStrongCount(TypeKey id)
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
 			if (i2 != _pimpl->_registeredTypes.end() && i2->first == id)
 				return i2->second._localStrongReferenceCounts;
@@ -126,6 +132,7 @@ namespace ConsoleRig
 			std::function<void(const std::shared_ptr<void>&)>&& attachModuleFn,
 			std::function<void(const std::shared_ptr<void>&)>&& detachModuleFn)
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
 			if (i2 == _pimpl->_registeredTypes.end() || i2->first != id)
 				i2 = _pimpl->_registeredTypes.insert(i2, {id, Pimpl::RegisteredType{0}});
@@ -142,6 +149,7 @@ namespace ConsoleRig
 		auto InfraModuleManager::Get(TypeKey id) -> std::shared_ptr<void>
 		{
 			auto cannonicalValue = CrossModule::GetInstance().Get(id);
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			auto i2 = LowerBound(_pimpl->_registeredTypes, id);
 			if (i2 == _pimpl->_registeredTypes.end() || i2->first != id)
 				i2 = _pimpl->_registeredTypes.insert(i2, {id, Pimpl::RegisteredType{0}});
@@ -164,6 +172,7 @@ namespace ConsoleRig
 
 		void InfraModuleManager::CrossModuleShuttingDown()
 		{
+			ScopedLock(_pimpl->_pointersAndTypesLock);
 			for (const auto&ptr:_pimpl->_registeredPointers)
 				ptr.second._ptr->ManagerShuttingDown(false);
 			if (_pimpl->_crossModuleRegistration != ~0u) {
@@ -186,6 +195,7 @@ namespace ConsoleRig
 
 		InfraModuleManager::~InfraModuleManager()
 		{
+			assert(_pimpl->_pointersAndTypesLock.try_lock());
 			// We can detach all of the pointers before or after we deregister from the CrossModule manager
 			for (const auto&ptr:_pimpl->_registeredPointers)
 				ptr.second._ptr->ManagerShuttingDown(true);
