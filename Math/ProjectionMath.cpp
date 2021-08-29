@@ -18,8 +18,8 @@
 #include <cfloat>
 #include <limits>
 
-#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
-    #include <intrin.h>
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__) 
+    #include <immintrin.h>
     #define HAS_SSE_INSTRUCTIONS
 #endif
 
@@ -436,7 +436,7 @@ namespace XLEMath
         ClipSpaceType clipSpaceType)
     {
 #if defined(HAS_SSE_INSTRUCTIONS)
-        assert(clipSpaceType == ClipSpaceType::Positive);
+        assert(clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded);
         return TestAABB_SSE(AsFloatArray(localToProjection), mins, maxs);
 #else
         return TestAABB(localToProjection, mins, maxs, clipSpaceType);
