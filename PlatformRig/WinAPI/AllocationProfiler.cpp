@@ -22,6 +22,8 @@ namespace PlatformRig
         {
         public:
             _CRT_ALLOC_HOOK _oldHook;
+            CurrentHeapMetrics _currentHeapMetrics;
+            mutable unsigned _currentHeapMetricsCountDown = 0;
             Pimpl() : _oldHook(nullptr) {}
         };
 
@@ -79,12 +81,17 @@ namespace PlatformRig
 
         auto AccumulatedAllocations::GetCurrentHeapMetrics() -> CurrentHeapMetrics
         {
-            _CrtMemState memState;
-            _CrtMemCheckpoint(&memState);
-            CurrentHeapMetrics metrics;
-            metrics._usage = memState.lSizes[_NORMAL_BLOCK];
-            metrics._blockCount = memState.lCounts[_NORMAL_BLOCK];
-            return metrics;
+            if (!_instance->_pimpl->_currentHeapMetricsCountDown) {
+                _CrtMemState memState;
+                _CrtMemCheckpoint(&memState);
+                _instance->_pimpl->_currentHeapMetrics = {};
+                _instance->_pimpl->_currentHeapMetrics._usage = memState.lSizes[_NORMAL_BLOCK];
+                _instance->_pimpl->_currentHeapMetrics._blockCount = memState.lCounts[_NORMAL_BLOCK];
+                _instance->_pimpl->_currentHeapMetricsCountDown = 128;
+            } else {
+                --_instance->_pimpl->_currentHeapMetricsCountDown;
+            }
+            return _instance->_pimpl->_currentHeapMetrics;
         }
 
     #else

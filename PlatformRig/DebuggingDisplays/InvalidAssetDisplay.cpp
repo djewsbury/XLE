@@ -17,8 +17,13 @@ namespace PlatformRig { namespace Overlays
 		const auto titleBkground = RenderOverlays::ColorB { 0, 10, 64 }; 
 
 		using namespace Assets;
-		auto records = ::Assets::Services::GetAssetSets().LogRecords();
-		for (const auto&r:records) {
+		if (!_currentRecordsCountDown) {
+			_currentRecords = ::Assets::Services::GetAssetSets().LogRecords();
+			_currentRecordsCountDown = 256;
+		} else {
+			--_currentRecordsCountDown;
+		}
+		for (const auto&r:_currentRecords) {
 			if (r._state != AssetState::Invalid) continue;
 
 			auto titleRect = layout.AllocateFullWidth(lineHeight);
@@ -40,7 +45,9 @@ namespace PlatformRig { namespace Overlays
 	}
 
 	InvalidAssetDisplay::InvalidAssetDisplay()
-	{}
+	{
+		_currentRecordsCountDown = 0;
+	}
 
 	InvalidAssetDisplay::~InvalidAssetDisplay()
 	{}

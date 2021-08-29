@@ -5,8 +5,10 @@
 #pragma once
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include <vector>
 
 namespace Utility { class IHierarchicalProfiler; }
+namespace Assets { class AssetHeapRecord; }
 
 namespace PlatformRig { namespace Overlays
 {
@@ -24,5 +26,8 @@ namespace PlatformRig { namespace Overlays
 
 		InvalidAssetDisplay();
 		~InvalidAssetDisplay();
+	private:
+		std::vector<::Assets::AssetHeapRecord> _currentRecords;
+		unsigned _currentRecordsCountDown;
 	};
 }}

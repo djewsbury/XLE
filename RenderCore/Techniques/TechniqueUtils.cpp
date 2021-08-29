@@ -202,8 +202,9 @@ namespace RenderCore { namespace Techniques
     {
         LocalTransformConstants localTransform;
         CopyTransform(localTransform._localToWorld, localToWorld);
-        auto worldToLocal = InvertOrthonormalTransform(localToWorld);
-        localTransform._localSpaceView = TransformPoint(worldToLocal, worldSpaceCameraPosition);
+        // note; disabled because many local-to-world transforms have scales, and shaders aren't reading this very frequently, anyway  
+        // localTransform._localSpaceView = TransformPointByOrthonormalInverse(localToWorld, worldSpaceCameraPosition);
+        localTransform._localSpaceView = Float3{0,0,0};
         return localTransform;
     }
 

@@ -76,7 +76,8 @@ namespace RenderCore { namespace Techniques
 				drawable._objectToWorld, 
 				ExtractTranslation(parserContext.GetProjectionDesc()._cameraToWorld));
 			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
-			drawFnContext.ApplyLooseUniforms(ImmediateDataStream{localTransform, drawCallProps});
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(localTransform), MakeOpaqueIteratorRange(drawCallProps) };
+			drawFnContext.ApplyLooseUniforms(UniformsStream{{}, immDatas});
 		}
 
         drawFnContext.DrawIndexed(
@@ -1106,6 +1107,8 @@ namespace RenderCore { namespace Techniques
 		for (const auto&u:uniformBufferDelegates) {
 			_usi->BindImmediateData(c++, u.first, u.second->GetLayout());
 		}
+
+		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
 
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
 		// Also count up the number of drawables that are going to be requires
