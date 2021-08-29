@@ -17,6 +17,16 @@
 
 namespace Utility
 {
+    namespace Internal
+    {
+        class YieldToPoolInterace : public Internal::IYieldToPool
+        {
+        public:
+            virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) override;
+            virtual void SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction) override;
+        };
+    }
+
 #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
     void CompletionThreadPool::EnqueueBasic(PendingTask&& task)
     {
@@ -35,12 +45,14 @@ namespace Utility
         _events[0] = OSServices::XlCreateEvent(false);
         _events[1] = OSServices::XlCreateEvent(true);
         _workerQuit = false;
+        if (!_yieldToPoolInterface)
+            _yieldToPoolInterface = std::make_shared<Internal::YieldToPoolInterace>();
 
         for (unsigned i = 0; i<threadCount; ++i)
             _workerThreads.emplace_back(
                 [this]
                 {
-                    SetYieldToPoolFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
+                    _yieldToPoolInterface->SetFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
                         assert(0);      // "waitUntilTime" must be respected
 
                         bool gotTask = false;
@@ -136,7 +148,7 @@ namespace Utility
                             false, OSServices::XL_INFINITE, true);
                     }
 
-                    SetYieldToPoolFunction(nullptr);
+                    _yieldToPoolInterface->SetFunction(nullptr);
                 }
             );
     }
@@ -166,7 +178,7 @@ namespace Utility
     {
         ++_runningWorkerCount;
 
-        SetYieldToPoolFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
+        _yieldToPoolInterface->SetFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
             std::function<void()> task;
             {
                 // slightly awkwardly, we can't actually use std::timed_mutex and try_lock_until
@@ -214,7 +226,7 @@ namespace Utility
                 if (_pendingTasks.empty()) {
                     --_runningWorkerCount;
                     if (finishWhenEmpty) {
-                        SetYieldToPoolFunction(nullptr);
+                        _yieldToPoolInterface->SetFunction(nullptr);
                         return;
                     }
                     _pendingTaskVariable.wait(autoLock);
@@ -239,13 +251,15 @@ namespace Utility
             } CATCH_END
         }
 
-        SetYieldToPoolFunction(nullptr);
+        _yieldToPoolInterface->SetFunction(nullptr);
     }
 
     ThreadPool::ThreadPool(unsigned threadCount)
     {
         _workerQuit = false;
         _runningWorkerCount.store(0);
+        if (!_yieldToPoolInterface)
+            _yieldToPoolInterface = std::make_shared<Internal::YieldToPoolInterace>();
 
         for (unsigned i = 0; i<threadCount; ++i)
             _workerThreads.emplace_back([this] { this->RunBlocks(false); });
@@ -280,41 +294,61 @@ namespace Utility
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if !FEATURE_THREAD_LOCAL_KEYWORD
-    static thread_local_ptr<std::function<void(std::chrono::steady_clock::time_point)>> s_threadPoolYieldFunction;
-
-    void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
+    namespace Internal
     {
-        auto* yieldFn = s_threadPoolYieldFunction.get();
-        if (yieldFn) {
-            (*yieldFn)(timeoutTime);
-        } else {
-            std::this_thread::sleep_until(timeoutTime);
+    #if !FEATURE_THREAD_LOCAL_KEYWORD
+        static thread_local_ptr<std::function<void(std::chrono::steady_clock::time_point)>> s_threadPoolYieldFunction;
+
+        void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
+        {
+            auto* yieldFn = s_threadPoolYieldFunction.get();
+            if (yieldFn) {
+                (*yieldFn)(timeoutTime);
+            } else {
+                std::this_thread::sleep_until(timeoutTime);
+            }
+        }
+
+        void SetYieldToPoolFunctionInternal(const std::function<void(std::chrono::steady_clock::time_point)>& yieldToPoolFunction)
+        {
+            s_threadPoolYieldFunction.allocate(yieldToPoolFunction);
+        }
+    #else
+        static thread_local std::function<void(std::chrono::steady_clock::time_point)> s_threadPoolYieldFunction;
+
+        void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
+        {
+            if (s_threadPoolYieldFunction) {
+                s_threadPoolYieldFunction(timeoutTime);
+            } else {
+                std::this_thread::sleep_until(timeoutTime);
+            }
+        }
+
+        void SetYieldToPoolFunctionInternal(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction)
+        {
+            s_threadPoolYieldFunction = yieldToPoolFunction;
+        }
+
+    #endif
+
+        void YieldToPoolInterace::YieldUntil(std::chrono::steady_clock::time_point timeoutTime)
+        {
+            YieldToPoolUntilInternal(timeoutTime);
+        }
+
+        void YieldToPoolInterace::SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction)
+        {
+            SetYieldToPoolFunctionInternal(std::move(yieldToPoolFunction));
+        }
+
+        IYieldToPool& GetYieldToPoolInterface()
+        {
+            static ConsoleRig::WeakAttachablePtr<Internal::IYieldToPool> result;
+            auto res = result.lock();
+            assert(res);
+            return *res;
         }
     }
-
-    void SetYieldToPoolFunction(const std::function<void(std::chrono::steady_clock::time_point)>& yieldToPoolFunction)
-    {
-        s_threadPoolYieldFunction.allocate(yieldToPoolFunction);
-    }
-#else
-    static thread_local std::function<void(std::chrono::steady_clock::time_point)> s_threadPoolYieldFunction;
-
-    void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
-    {
-        if (s_threadPoolYieldFunction) {
-            s_threadPoolYieldFunction(timeoutTime);
-        } else {
-            std::this_thread::sleep_until(timeoutTime);
-        }
-    }
-
-    void SetYieldToPoolFunction(const std::function<void(std::chrono::steady_clock::time_point)>& yieldToPoolFunction)
-    {
-        s_threadPoolYieldFunction = yieldToPoolFunction;
-    }
-
-#endif
-
 }
 

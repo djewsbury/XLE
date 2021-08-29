@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Mutex.h"
+#include "../ConsoleRig/AttachablePtr.h"
 #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
     #include "LockFree.h"
     #include "../../OSServices/WinAPI/System_WinAPI.h"
@@ -19,6 +20,18 @@
 
 namespace Utility
 {
+    namespace Internal
+    {
+        class IYieldToPool
+        {
+        public:
+            virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) = 0;
+            virtual void SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction) = 0;
+            virtual ~IYieldToPool() = default;
+        };
+        IYieldToPool& GetYieldToPoolInterface();
+    }
+
     /** <summary>Temporarily yield execution of this thread to whatever pool manages it</summary>
      * 
      * Operations running on a thread pool thread should normally not use busy loops or
@@ -37,13 +50,11 @@ namespace Utility
      * 
      * When run on some other thread, it will just yield back to the OS.
     */
-    void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime);
     template<typename Rep, typename Period>
         void YieldToPoolFor(const std::chrono::duration<Rep, Period>& timeout)
     {
-        return YieldToPoolUntilInternal(std::chrono::steady_clock::now() + timeout);
+        return Internal::GetYieldToPoolInterface().YieldUntil(std::chrono::steady_clock::now() + timeout);
     }
-    void SetYieldToPoolFunction(const std::function<void(std::chrono::steady_clock::time_point)>& yieldToPoolFunction);
 
 #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
     class CompletionThreadPool
@@ -72,6 +83,8 @@ namespace Utility
 
         OSServices::XlHandle _events[2];
         volatile bool _workerQuit;
+
+        ConsoleRig::AttachablePtr<Internal::IYieldToPool> _yieldToPoolInterface;
     };
 
     template<class Fn, class... Args>
@@ -114,6 +127,8 @@ namespace Utility
 
         volatile bool _workerQuit;
         std::atomic<signed> _runningWorkerCount;
+
+        ConsoleRig::AttachablePtr<Internal::IYieldToPool> _yieldToPoolInterface;
 
         void RunBlocks(bool finishWhenEmpty);
     };
