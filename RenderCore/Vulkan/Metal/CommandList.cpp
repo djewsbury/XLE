@@ -266,6 +266,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				++mustBeVisibleI;
 			}
 			std::inplace_merge(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.begin() + mustBeVisibleInitialSize, _resourcesThatMustBeVisible.end());
+			auto i = std::unique(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
+			_resourcesThatMustBeVisible.erase(i, _resourcesThatMustBeVisible.end());
 		#endif
 	}
 
