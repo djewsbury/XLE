@@ -21,7 +21,7 @@ namespace RenderCore
 }
 
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
-namespace RenderCore { class IDevice; class IDescriptorSet; }
+namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -86,6 +86,8 @@ namespace RenderCore { namespace Techniques
 
 		virtual void	RebuildAllOutOfDatePipelines() = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
+
+		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
 
 		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
 		// virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;

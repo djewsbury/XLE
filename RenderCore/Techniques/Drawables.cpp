@@ -67,12 +67,23 @@ namespace RenderCore { namespace Techniques
 		if (parserContext._extraSequencerDescriptorSet.second)
 			sequencerUSI.BindFixedDescriptorSet(2, parserContext._extraSequencerDescriptorSet.first);
 
+		UniformsStreamInterface emptyUSI;
 		DrawableGeo* currentGeo = nullptr;
 		PipelineAccelerator* currentPipelineAccelerator = nullptr;
 		IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
+		uint64_t currentSequencerUniformRules = 0;
+		UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
+		Metal::BoundUniforms* currentBoundUniforms = nullptr;
 
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
+
+		unsigned pipelineLookupCount = 0;
+		unsigned boundUniformLookupCount = 0;
+		unsigned applyLooseCount = 0;
+		unsigned fullDescSetCount = 0;
+		unsigned justMatDescSetCount = 0;
+		unsigned executeCount = 0;
 
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
@@ -82,8 +93,24 @@ namespace RenderCore { namespace Techniques
 					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
 					if (!pipeline)
 						continue;
+
 					currentPipeline = pipeline;
 					currentPipelineAccelerator = drawable._pipeline.get();
+
+					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
+						*currentPipeline->_metalPipeline,
+						sequencerUSI,
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
+					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
+					++boundUniformLookupCount;
+					++pipelineLookupCount;
+				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface.get()) {
+					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
+						*currentPipeline->_metalPipeline,
+						sequencerUSI,
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
+					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
+					++boundUniformLookupCount;
 				}
 
 				const IDescriptorSet* matDescSet = nullptr;
@@ -124,26 +151,31 @@ namespace RenderCore { namespace Techniques
 
 				//////////////////////////////////////////////////////////////////////////////
 
-				auto& boundUniforms = currentPipeline->_boundUniformsPool.Get(
-					*currentPipeline->_metalPipeline,
-					sequencerUSI,
-					drawable._looseUniformsInterface ? *drawable._looseUniformsInterface : UniformsStreamInterface{});
-
-				const IDescriptorSet* descriptorSets[3];
-				descriptorSets[0] = sequencerDescriptorSet.first.get();
-				descriptorSets[1] = matDescSet;
-				descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
-				boundUniforms.ApplyDescriptorSets(
-					metalContext, encoder,
-					MakeIteratorRange(descriptorSets), 0);
-				if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
-					ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, boundUniforms, 0);
+				if (currentBoundUniforms->GetGroupRulesHash(0) != currentSequencerUniformRules) {
+					const IDescriptorSet* descriptorSets[3];
+					descriptorSets[0] = sequencerDescriptorSet.first.get();
+					descriptorSets[1] = matDescSet;
+					descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
+					currentBoundUniforms->ApplyDescriptorSets(
+						metalContext, encoder,
+						MakeIteratorRange(descriptorSets), 0);
+					if (__builtin_expect(currentBoundUniforms->GetBoundLooseImmediateDatas(0) | currentBoundUniforms->GetBoundLooseResources(0) | currentBoundUniforms->GetBoundLooseResources(0), 0ull)) {
+						ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, *currentBoundUniforms, 0);
+						++applyLooseCount;
+					}
+					currentSequencerUniformRules = currentBoundUniforms->GetGroupRulesHash(0);
+					++fullDescSetCount;
+				} else {
+					// When the shader interface hasn't changed, we'll set just the material descriptor set
+					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet, 0, 1);
+					++justMatDescSetCount;
 				}
 
 				//////////////////////////////////////////////////////////////////////////////
 
-				RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), &boundUniforms };
+				RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), currentBoundUniforms };
 				drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
+				++executeCount;
 			}
 		} CATCH (...) {
 			encoder.EndStateCapture();

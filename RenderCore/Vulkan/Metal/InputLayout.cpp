@@ -313,9 +313,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<PushConstantBindingRules> _pushConstantsRules;
 			std::vector<FixedDescriptorSetBindingRules> _fixedDescriptorSetRules;
 
+			uint64_t _groupRulesHash;
 			uint64_t _boundLooseImmediateDatas = 0;
 			uint64_t _boundLooseResources = 0;
 			uint64_t _boundLooseSamplerStates = 0;
+
+			void Finalize();
 		};
 		GroupRules _group[4];
 
@@ -769,6 +772,45 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	};
 
+	void BoundUniforms::ConstructionHelper::GroupRules::Finalize()
+	{
+		// Hash the contents of all of the rules, so we can determine when 2 binding operations
+		// do the same thing
+		// Also sort some of the arrays to ensure consistency
+		std::sort(
+			_pushConstantsRules.begin(), _pushConstantsRules.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return lhs._offset < rhs._offset;
+			});
+		std::sort(
+			_fixedDescriptorSetRules.begin(), _fixedDescriptorSetRules.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return lhs._outputSlot < rhs._outputSlot;
+			});
+		std::sort(
+			_adaptiveSetRules.begin(), _adaptiveSetRules.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return lhs._descriptorSetIdx < rhs._descriptorSetIdx;
+			});
+		auto hash = DefaultSeed64;
+		for (const auto& a:_pushConstantsRules)
+			hash = Hash64(AsPointer(_pushConstantsRules.begin()), AsPointer(_pushConstantsRules.end()), hash);
+		for (const auto& a:_fixedDescriptorSetRules)
+			hash = Hash64(AsPointer(_fixedDescriptorSetRules.begin()), AsPointer(_fixedDescriptorSetRules.end()), hash);
+		for (const auto& a:_adaptiveSetRules)
+			hash = a.CalculateHash(hash);
+		_groupRulesHash = hash;
+	}
+
+	uint64_t BoundUniforms::AdaptiveSetBindingRules::CalculateHash(uint64_t seed) const
+	{
+		auto hash = Hash64(AsPointer(_resourceViewBinds.begin()), AsPointer(_resourceViewBinds.end()), seed);
+		hash = Hash64(AsPointer(_immediateDataBinds.begin()), AsPointer(_immediateDataBinds.end()), seed);
+		hash = Hash64(AsPointer(_samplerBinds.begin()), AsPointer(_samplerBinds.end()), seed);
+		hash = rotr64(hash, _descriptorSetIdx);
+		return hash;
+	}
+
 	void BoundUniforms::UnbindLooseUniforms(DeviceContext& context, SharedEncoder& encoder, unsigned groupIdx) const
 	{
 		assert(0);		// todo -- unimplemented
@@ -866,12 +908,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
+			helper._group[c].Finalize();
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
 
@@ -911,12 +955,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
+			helper._group[c].Finalize();
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
 
@@ -961,12 +1007,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (unsigned c=0; c<4; ++c) {
+			helper._group[c].Finalize();
 			_group[c]._adaptiveSetRules = std::move(helper._group[c]._adaptiveSetRules);
 			_group[c]._fixedDescriptorSetRules = std::move(helper._group[c]._fixedDescriptorSetRules);
 			_group[c]._pushConstantsRules = std::move(helper._group[c]._pushConstantsRules);
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
 
@@ -1233,6 +1281,28 @@ namespace RenderCore { namespace Metal_Vulkan
 				context.GetActiveCommandList().RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
 			#endif
 		}
+	}
+
+	void BoundUniforms::ApplyDescriptorSet(
+		DeviceContext& context,
+		SharedEncoder& encoder,
+		const IDescriptorSet& descriptorSet,
+		unsigned groupIdx, unsigned slotIdx) const
+	{
+		assert(groupIdx < dimof(_group));
+		for (const auto& fixedSet:_group[groupIdx]._fixedDescriptorSetRules)
+			if (fixedSet._inputSlot == slotIdx) {
+				auto* descSet = checked_cast<const CompiledDescriptorSet*>(&descriptorSet);
+				assert(descSet);
+				encoder.BindDescriptorSet(
+					fixedSet._outputSlot, descSet->GetUnderlying()
+					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
+
+				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+					context.GetActiveCommandList().RequireResourceVisbility(descSet->GetResourcesThatMustBeVisible());
+				#endif
+				break;
+			}
 	}
 
 	BoundUniforms::BoundUniforms() 

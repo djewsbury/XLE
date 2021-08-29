@@ -433,6 +433,8 @@ namespace RenderCore { namespace Techniques
 
 		void			RebuildAllOutOfDatePipelines() override;
 
+		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override;
+
 		const std::shared_ptr<IDevice>& GetDevice() const override;
 		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
 
@@ -450,6 +452,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::weak_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::vector<std::pair<uint64_t, std::weak_ptr<DescriptorSetAccelerator>>> _descriptorSetAccelerators;
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _compiledSamplerStates;
+		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
 
 		SequencerConfig MakeSequencerConfig(
 			/*out*/ uint64_t& hash,
@@ -865,6 +868,16 @@ namespace RenderCore { namespace Techniques
 	{
 		_globalSelectors.RemoveParameter(name.Cast<utf8>());
 		RebuildAllPipelines(_guid);
+	}
+
+	std::shared_ptr<UniformsStreamInterface> PipelineAcceleratorPool::CombineWithLike(std::shared_ptr<UniformsStreamInterface> input)
+	{
+		auto hash = input->GetHash();
+		auto i = LowerBound(_usis, hash);
+		if (i != _usis.end() && i->first == hash)
+			return i->second;
+		_usis.insert(i, std::make_pair(hash, input));
+		return input;
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }

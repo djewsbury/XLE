@@ -95,9 +95,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const IDescriptorSet* const*> descriptorSets,
 			unsigned groupIdx = 0) const;
 
+		void ApplyDescriptorSet(
+			DeviceContext& context,
+			SharedEncoder& encoder,
+			const IDescriptorSet& descriptorSet,
+			unsigned groupIdx = 0, unsigned slotIdx = 0) const;
+
 		uint64_t GetBoundLooseImmediateDatas(unsigned groupIdx = 0) const;
 		uint64_t GetBoundLooseResources(unsigned groupIdx = 0) const;
 		uint64_t GetBoundLooseSamplers(unsigned groupIdx = 0) const;
+		uint64_t GetGroupRulesHash(unsigned groupIdx = 0) const;
 
 		BoundUniforms(
 			const ShaderProgram& shader,
@@ -145,6 +152,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<DescriptorSlot> _sig;
 			uint64_t _dummyMask = 0ull;
 			unsigned _sharedBuilder = ~0u;
+
+			uint64_t CalculateHash(uint64_t) const;
 		};
 
 		struct PushConstantBindingRules
@@ -167,6 +176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<PushConstantBindingRules> _pushConstantsRules;
 			std::vector<FixedDescriptorSetBindingRules> _fixedDescriptorSetRules;
 			
+			uint64_t _groupRulesHash = 0ull;
 			uint64_t _boundLooseImmediateDatas = 0ull;
 			uint64_t _boundLooseResources = 0ull;
 			uint64_t _boundLooseSamplerStates = 0ull;
@@ -188,6 +198,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	inline uint64_t BoundUniforms::GetBoundLooseImmediateDatas(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseImmediateDatas; }
 	inline uint64_t BoundUniforms::GetBoundLooseResources(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseResources; }
 	inline uint64_t BoundUniforms::GetBoundLooseSamplers(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseSamplerStates; }
+	inline uint64_t BoundUniforms::GetGroupRulesHash(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._groupRulesHash; }
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
