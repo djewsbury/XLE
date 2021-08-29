@@ -6,7 +6,7 @@
 #include "SimpleModelRenderer.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
-#include "../../Assets/AssetLRUHeap.h"
+#include "../../Assets/AssetHeapLRU.h"
 #include "../../Utility/HeapUtils.h"
 #include <unordered_map>
 
@@ -18,8 +18,8 @@ namespace RenderCore { namespace Techniques
     public:
         std::vector<std::pair<uint64_t, BoundingBox>> _boundingBoxes;
 
-        ::Assets::AssetLRUHeap<std::shared_ptr<RenderCore::Assets::ModelScaffold>>		_modelScaffolds;
-        ::Assets::AssetLRUHeap<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
+        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffold>>		_modelScaffolds;
+        ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
 
 		Threading::Mutex _modelRenderersLock;
         LRUCachePtr<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;

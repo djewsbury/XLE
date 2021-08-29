@@ -15,6 +15,9 @@ namespace Assets
             PtrToFuture Get(Params...);
 
         template<typename... Params>
+            PtrToFuture Get(uint64_t hash, Params...);
+
+        template<typename... Params>
             uint64_t SetShadowingAsset(std::shared_ptr<AssetType>&& newShadowingAsset, Params...);
 
         void            Clear();
@@ -33,7 +36,7 @@ namespace Assets
         AssetHeapLRU& operator=(const AssetHeapLRU&) = delete;
     private:
         mutable Threading::Mutex _lock;
-        LRUCachePtr<PtrToFuture> _assets;
+        LRUCache<PtrToFuture> _assets;
         std::vector<std::pair<uint64_t, PtrToFuture>> _shadowingAssets;
 
         #if defined(_DEBUG)
@@ -43,10 +46,8 @@ namespace Assets
 
     template<typename AssetType>
         template<typename... Params>
-            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuture
+            auto AssetHeapLRU<AssetType>::Get(uint64_t hash, Params... initialisers) -> PtrToFuture
     {
-        auto hash = Internal::BuildParamHash(initialisers...);
-
         PtrToFuture newFuture;
         {
             ScopedLock(_lock);
@@ -55,12 +56,12 @@ namespace Assets
                 return shadowing->second;
 
             auto i = _assets.Get(hash);
-            if (i && !IsInvalidated(*i))
-                return i;
+            if (i && !IsInvalidated(**i))
+                return *i;
 
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
             newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
-            _assets.Insert(hash, newFuture);
+            _assets.Insert(hash, PtrToFuture{newFuture});
 
             #if defined(_DEBUG)
                 auto record = LowerBound(_initializationRecords, hash);
@@ -74,7 +75,7 @@ namespace Assets
                             AssetHeapRecord{
                                 stringInitializer,
                                 AssetState::Invalid,
-                                nullptr, nullptr, 0,
+                                DependencyValidation{}, {}, 0,
                                 hash, 1
                             }));
                 }
@@ -87,6 +88,14 @@ namespace Assets
         // another thread grabs the future before AutoConstructToFuture is done
         AutoConstructToFuture(*newFuture, std::forward<Params>(initialisers)...);
         return newFuture;
+    }
+
+    template<typename AssetType>
+        template<typename... Params>
+            auto AssetHeapLRU<AssetType>::Get(Params... initialisers) -> PtrToFuture
+    {
+        auto hash = Internal::BuildParamHash(initialisers...);
+        return Get(hash, std::forward<Params>(initialisers)...);
     }
 
     template<typename AssetType>
@@ -142,7 +151,7 @@ namespace Assets
     {
         ScopedLock(_lock);
         unsigned cacheSize = _assets.GetCacheSize();
-        _assets = LRUCachePtr<Future<AssetType>>{cacheSize};
+        _assets = LRUCache<PtrToFuture>{cacheSize};
         _shadowingAssets.clear();
     }
 
@@ -150,7 +159,7 @@ namespace Assets
         void AssetHeapLRU<AssetType>::SetCacheSize(unsigned newCacheSize)
     {
         ScopedLock(_lock);
-        _assets = LRUCachePtr<Future<AssetType>>{newCacheSize};
+        _assets = LRUCache<PtrToFuture>{newCacheSize};
     }
 
     template<typename AssetType>
@@ -170,11 +179,11 @@ namespace Assets
         #if defined(_DEBUG)
             for (const auto&r : _initializationRecords) {
                 auto record = r.second;
-                auto item = const_cast<LRUCachePtr<Future<AssetType>>&>(_assets).Get(r.first);
+                auto item = const_cast<LRUCache<PtrToFuture>&>(_assets).Get(r.first);
                 if (item) {
-                    record._state = item->GetAssetState();
-                    record._depVal = item->GetDependencyValidation();
-                    record._actualizationLog = item->GetActualizationLog();
+                    record._state = (*item)->GetAssetState();
+                    record._depVal = (*item)->GetDependencyValidation();
+                    record._actualizationLog = (*item)->GetActualizationLog();
                 }
                 result.push_back(record);
             }
