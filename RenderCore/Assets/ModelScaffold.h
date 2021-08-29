@@ -67,6 +67,7 @@ namespace RenderCore { namespace Assets
         ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
         ModelScaffold(ModelScaffold&& moveFrom) never_throws;
         ModelScaffold& operator=(ModelScaffold&& moveFrom) never_throws;
+        ModelScaffold();
         ~ModelScaffold();
 
     private:
@@ -107,6 +108,7 @@ namespace RenderCore { namespace Assets
         ModelSupplementScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
         ModelSupplementScaffold(ModelSupplementScaffold&& moveFrom) never_throws;
         ModelSupplementScaffold& operator=(ModelSupplementScaffold&& moveFrom) never_throws;
+        ModelSupplementScaffold();
         ~ModelSupplementScaffold();
 
 		static const auto CompileProcessType = ConstHash64<'Mode', 'l'>::Value;
@@ -159,6 +161,7 @@ namespace RenderCore { namespace Assets
         SkeletonScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
         SkeletonScaffold(SkeletonScaffold&& moveFrom) never_throws;
         SkeletonScaffold& operator=(SkeletonScaffold&& moveFrom) never_throws;
+        SkeletonScaffold();
         ~SkeletonScaffold();
 
     private:
@@ -186,6 +189,7 @@ namespace RenderCore { namespace Assets
         AnimationSetScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
         AnimationSetScaffold(AnimationSetScaffold&& moveFrom) never_throws;
         AnimationSetScaffold& operator=(AnimationSetScaffold&& moveFrom) never_throws;
+        AnimationSetScaffold();
         ~AnimationSetScaffold();
 
     private:

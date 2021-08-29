@@ -195,7 +195,6 @@ namespace ConsoleRig
 
 		InfraModuleManager::~InfraModuleManager()
 		{
-			assert(_pimpl->_pointersAndTypesLock.try_lock());
 			// We can detach all of the pointers before or after we deregister from the CrossModule manager
 			for (const auto&ptr:_pimpl->_registeredPointers)
 				ptr.second._ptr->ManagerShuttingDown(true);

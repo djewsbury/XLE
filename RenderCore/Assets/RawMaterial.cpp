@@ -425,13 +425,13 @@ namespace RenderCore { namespace Assets
 
 		// 
         auto containerInitializer = splitName.AllExceptParameters();
-		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(containerInitializer.AsString());
+		std::string containerInitializerString = containerInitializer.AsString();
+		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
 		::Assets::DefaultCompilerConstruction(
 			*containerFuture, 
             s_MaterialCompileProcessType,
 			containerInitializer);
 
-		std::string containerInitializerString = containerInitializer.AsString();
 		std::string section = splitName.Parameters().AsString();
         ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
             future,

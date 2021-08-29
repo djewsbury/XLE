@@ -89,16 +89,20 @@ namespace RenderCore { namespace Assets
 
     ModelScaffold& ModelScaffold::operator=(ModelScaffold&& moveFrom) never_throws
     {
-		ImmutableData().~ModelImmutableData();
+        if (_rawMemoryBlock)
+		    ImmutableData().~ModelImmutableData();
         _rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
 		_largeBlocksReopen = std::move(moveFrom._largeBlocksReopen);
 		_depVal = std::move(moveFrom._depVal);
         return *this;
     }
 
+    ModelScaffold::ModelScaffold() {}
+
     ModelScaffold::~ModelScaffold()
     {
-        ImmutableData().~ModelImmutableData();
+        if (_rawMemoryBlock)
+            ImmutableData().~ModelImmutableData();
     }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,16 +136,20 @@ namespace RenderCore { namespace Assets
 
     ModelSupplementScaffold& ModelSupplementScaffold::operator=(ModelSupplementScaffold&& moveFrom) never_throws
     {
-		ImmutableData().~ModelSupplementImmutableData();
+        if (_rawMemoryBlock)
+    		ImmutableData().~ModelSupplementImmutableData();
         _rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
 		_largeBlocksReopen = std::move(moveFrom._largeBlocksReopen);
 		_depVal = std::move(moveFrom._depVal);
 		return *this;
     }
 
+    ModelSupplementScaffold::ModelSupplementScaffold() {}
+
     ModelSupplementScaffold::~ModelSupplementScaffold()
     {
-        ImmutableData().~ModelSupplementImmutableData();
+        if (_rawMemoryBlock)
+            ImmutableData().~ModelSupplementImmutableData();
     }
 
 }}

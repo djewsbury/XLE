@@ -375,15 +375,19 @@ namespace RenderCore { namespace Assets
 
     SkeletonScaffold& SkeletonScaffold::operator=(SkeletonScaffold&& moveFrom) never_throws
     {
-		GetTransformationMachine().~SkeletonMachine();
+		if (_rawMemoryBlock)
+            GetTransformationMachine().~SkeletonMachine();
         _rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
 		_depVal = std::move(moveFrom._depVal);
         return *this;
     }
 
+    SkeletonScaffold::SkeletonScaffold() {}
+
     SkeletonScaffold::~SkeletonScaffold()
     {
-		GetTransformationMachine().~SkeletonMachine();
+        if (_rawMemoryBlock)
+		    GetTransformationMachine().~SkeletonMachine();
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -412,15 +416,19 @@ namespace RenderCore { namespace Assets
 
     AnimationSetScaffold& AnimationSetScaffold::operator=(AnimationSetScaffold&& moveFrom) never_throws
     {
-		ImmutableData().~AnimationImmutableData();
+		if (_rawMemoryBlock)
+            ImmutableData().~AnimationImmutableData();
         _rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
 		_depVal = std::move(moveFrom._depVal);
         return *this;
     }
 
+    AnimationSetScaffold::AnimationSetScaffold() {}
+
     AnimationSetScaffold::~AnimationSetScaffold()
     {
-        ImmutableData().~AnimationImmutableData();
+        if (_rawMemoryBlock)
+            ImmutableData().~AnimationImmutableData();
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
