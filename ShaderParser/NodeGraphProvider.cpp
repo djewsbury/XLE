@@ -16,7 +16,7 @@ namespace GraphLanguage
     {
 		::Assets::DependentFileState fileState;
 		size_t size = 0;
-		auto data = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(sourceFileName.AsString().c_str(), &size, &fileState);
+		auto data = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName.AsString().c_str(), &size, &fileState);
 		return std::make_pair(std::string((const char*)data.get(), (const char*)PtrAdd(data.get(), size)), fileState);
     }
 
