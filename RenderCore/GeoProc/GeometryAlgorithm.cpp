@@ -137,7 +137,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				Float4 plane;
 				if (expect_evaluation(PlaneFit_Checked(&plane, p0, p1, p2), true)) {
 					Triangle tri;
-					tri.normal = -Truncate(plane);
+					tri.normal = Truncate(plane);
 
 					if (tcElement != ~0u) {
 							/*	There is one natural tangent and one natural bitangent for each triangle, on the v=0 and u=0 axes 
