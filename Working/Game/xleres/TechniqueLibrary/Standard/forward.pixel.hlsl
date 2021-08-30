@@ -51,5 +51,8 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 
 float4 frameworkEntryWithEarlyRejection(VSOUT geo, SystemInputs sys) : SV_Target0
 {
-	return 1.0.xxxx;
+	if (EarlyRejectionTest(geo))
+        discard;
+
+	return frameworkEntry(geo, sys);
 }

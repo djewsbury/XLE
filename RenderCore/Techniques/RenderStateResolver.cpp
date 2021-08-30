@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
     {
         auto cullMode = CullMode::Back;
         auto fillMode = FillMode::Solid;
-        unsigned depthBias = 0;
+        int depthBias = 0;
         if (states._flag & Assets::RenderStateSet::Flag::DoubleSided) {
             cullMode = states._doubleSided ? CullMode::None : CullMode::Back;
         }

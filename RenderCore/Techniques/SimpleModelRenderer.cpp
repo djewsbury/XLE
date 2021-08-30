@@ -1047,6 +1047,7 @@ namespace RenderCore { namespace Techniques
 			// todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
+			assert(geoCall._materialCount);
             for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
 				_geoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, deform));
 			}
@@ -1059,6 +1060,7 @@ namespace RenderCore { namespace Techniques
             // todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
+			assert(geoCall._materialCount);
 			for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
 				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, deform));
 			}

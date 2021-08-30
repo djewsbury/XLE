@@ -457,7 +457,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
 						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
 					}
 
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
@@ -583,6 +583,8 @@ namespace RenderCore { namespace Techniques
 			if (stateSet._flag & Assets::RenderStateSet::Flag::DoubleSided)
 				cullDisable = !!stateSet._doubleSided;
 			nascentDesc->_rasterization = _rs[cullDisable];
+			if (stateSet._flag & Assets::RenderStateSet::Flag::DepthBias) 		// we must let the state set override depth bias for decal-style geometry
+				nascentDesc->_rasterization._depthBiasConstantFactor = (float)stateSet._depthBias;
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;
 			if (_preDepthType != PreDepthType::DepthOnly) {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
@@ -959,7 +961,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
 						psTechEntry = &techniqueFileHelper->_earlyRejectionSrc;
-						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_perPixel[dimof(s_patchExp_earlyRejection)]);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
 					}
 
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
