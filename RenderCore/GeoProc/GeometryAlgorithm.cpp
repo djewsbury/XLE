@@ -232,7 +232,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         }
 
 		// if there are no texture coordinates, we can only generate normals, not tangents
-        if (tcElement != ~0u && !hasTangents) {
+        // also, we should only generate tangents if we're missing both tangent and bitangents
+        // (ie, normal + bitangent + handiness flag is still a valid tangent frame)
+        if (tcElement != ~0u && !hasTangents && !hasBitangents) {
 
             unsigned normalsElement = mesh.FindElement("NORMAL");
             bool atLeastOneGoodTangent = false;
