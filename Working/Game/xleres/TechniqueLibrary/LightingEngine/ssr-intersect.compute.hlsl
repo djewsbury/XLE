@@ -227,7 +227,7 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     float3 L = 2.f * dot(V, H) * H - V;
 
     // todo -- this needs a lot of optimization
-    precise float D = TrowReitzD(NdotH, alphad);
+    float D = TrowReitzD(NdotH, alphad);
     weight = (4.f * VdotH) / (D * NdotH);
     weight *= ReferenceSpecularGGX(normal, V, L, H, roughness, 0.1f, false);
     return L;
@@ -333,6 +333,9 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
         float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction);
         reflection_radiance = confidence * reflection_radiance + (1 - confidence) * environment_lookup;
         reflection_radiance *= weight;
+
+        // protect against zero length normals (which we can sometimes run into, and which will result in nans)
+        if (all(world_space_normal == 0)) reflection_radiance = 0;
     }
 
     g_intersection_result[coords] = reflection_radiance;
