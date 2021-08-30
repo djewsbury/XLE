@@ -46,14 +46,14 @@ DeformedVertex DeformVertex_WindBending(DeformedVertex preDeform, VSIN input)
 	#endif
 
 	if (preDeform.coordinateSpace == 0) {
-		result.tangentFrame = TransformLocalToWorld(preDeform.tangentFrame);
+		result.tangentFrame = TransformLocalToWorld(preDeform.tangentFrame, VSIN_TangentVectorToReconstruct());
 		result.position = mul(SysUniform_GetLocalToWorld(), float4(preDeform.position,1)).xyz;
 	} else {
 		result.tangentFrame = preDeform.tangentFrame;
 		result.position = preDeform.position;
 	}
 
-	result.position = PerformWindBending(result.position, GetNormal(result.tangentFrame), objectCentreWorld, float3(1,0,0), VSIN_GetColor0(input).rgb);	
+	result.position = PerformWindBending(result.position, result.tangentFrame.normal, objectCentreWorld, float3(1,0,0), VSIN_GetColor0(input).rgb);	
 	return result;
 }
 

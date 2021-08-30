@@ -205,10 +205,10 @@ namespace UnitTests
 
 				if (deformedVertex.coordinateSpace == 0) {
 					worldPosition = mul(SysUniform_GetLocalToWorld(), float4(deformedVertex.position,1)).xyz;
-					worldSpaceTangentFrame = AsTangentFrame(TransformLocalToWorld(deformedVertex.tangentFrame));
+					worldSpaceTangentFrame = TransformLocalToWorld(deformedVertex.tangentFrame, VSIN_TangentVectorToReconstruct());
 				} else {
 					worldPosition = deformedVertex.position;
-					worldSpaceTangentFrame = AsTangentFrame(deformedVertex.tangentFrame);
+					worldSpaceTangentFrame = deformedVertex.tangentFrame;
 				}
 
 				VSOUT output;
@@ -219,7 +219,7 @@ namespace UnitTests
 				#endif
 
 				#if (VSOUT_HAS_NORMAL==1)
-					output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
+					output.normal = worldSpaceTangentFrame.normal;
 				#endif
 
 				#if VSOUT_HAS_WORLD_POSITION==1

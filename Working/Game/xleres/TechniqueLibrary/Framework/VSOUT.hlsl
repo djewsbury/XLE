@@ -194,7 +194,7 @@ float3 VSOUT_GetVertexNormal(VSOUT geo)
 	#endif
 }
 
-float3 TransformNormalMapToWorld(float3 normalTextureSample, VSOUT geo)
+float3 TransformTangentSpaceToWorld(float3 normalTextureSample, VSOUT geo)
 {
 	#if VSOUT_HAS_TANGENT_FRAME==1
 

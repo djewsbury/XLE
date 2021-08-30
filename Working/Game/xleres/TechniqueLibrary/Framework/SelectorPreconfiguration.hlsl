@@ -29,8 +29,7 @@
 	#endif
 #endif
 
-#if GEO_HAS_TEXTANGENT==1
-	#if RES_HAS_NormalsTexture==1
+#if (GEO_HAS_TEXTANGENT==1) || (GEO_HAS_TEXBITANGENT==1)
 		#if defined(TANGENT_PROCESS_IN_PS) && TANGENT_PROCESS_IN_PS==1
 			#if !defined(VSOUT_HAS_LOCAL_TANGENT_FRAME)
 				#define VSOUT_HAS_LOCAL_TANGENT_FRAME 1

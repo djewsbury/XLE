@@ -134,7 +134,7 @@ float3 SampleNormalMap(
 {
     const bool dxtNormalMap = false;
     float3 normalTextureSample = SampleNormalMap(normalMap, DefaultSampler, dxtNormalMap, texCoord);
-    return TransformNormalMapToWorld(normalTextureSample, geo);
+    return TransformTangentSpaceToWorld(normalTextureSample, geo);
 }
 
 float3 BlendNormals(float3 normalA, float3 normalB, float alpha)

@@ -10,16 +10,16 @@
 
 struct DeformedVertex
 {
-	float3 					position;
-	CompressedTangentFrame 	tangentFrame;
-	uint					coordinateSpace;
+	float3			position;
+	TangentFrame	tangentFrame;
+	uint			coordinateSpace;		// 0 for object local space, 1 for world space
 };
 
 DeformedVertex DeformedVertex_Initialize(VSIN input)
 {
 	DeformedVertex deformedVertex;
 	deformedVertex.position = VSIN_GetLocalPosition(input);
-	deformedVertex.tangentFrame = VSIN_GetCompressedTangentFrame(input);
+	deformedVertex.tangentFrame = VSIN_GetLocalTangentFrame(input);
 	deformedVertex.coordinateSpace = 0;
 	return deformedVertex;
 }

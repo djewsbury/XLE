@@ -151,7 +151,7 @@ namespace UnitTests
 
 					#if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_TextureNorm!=0)
 						float3 normalMapSample = SampleNormalMap(TextureNorm, DefaultSampler, true, geo.texCoord);
-						result.worldSpaceNormal = normalMapSample; // TransformNormalMapToWorld(normalMapSample, geo);
+						result.worldSpaceNormal = normalMapSample; // TransformTangentSpaceToWorld(normalMapSample, geo);
 					#elif (VSOUT_HAS_NORMAL==1)
 						result.worldSpaceNormal = normalize(geo.normal);
 					#endif

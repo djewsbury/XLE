@@ -37,7 +37,7 @@ void DoAlphaTest(VSOUT geo, float alphaThreshold)
 float3 VSOUT_GetNormal(VSOUT geo)
 {
 	#if (RES_HAS_NormalsTexture==1) && (VSOUT_HAS_TEXCOORD>=1)
-		return TransformNormalMapToWorld(SampleDefaultNormalMap(geo), geo);
+		return TransformTangentSpaceToWorld(SampleDefaultNormalMap(geo), geo);
 	#elif (VSOUT_HAS_NORMAL==1)
 		return normalize(geo.normal);
 	#elif VSOUT_HAS_LOCAL_TANGENT_FRAME==1

@@ -22,7 +22,7 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
+		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos.xy * SysUniform_GetViewportWidthHeight();
 		prevPos.xyz -= geo.position.xyz;
 		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
 	#else

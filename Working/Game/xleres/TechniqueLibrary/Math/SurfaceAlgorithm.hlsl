@@ -40,6 +40,11 @@ float GetWorldTangentFrameHandiness(float4 tangent)
 	#endif
 }
 
+float GetLocalTangentFrameHandiness(float4 tangent)
+{
+	return sign(tangent.w);
+}
+
 float3 NormalFromTangents(float3 tangent, float3 bitangent, float handiness)
 {
 		// Note -- the order of this cross product
@@ -48,6 +53,16 @@ float3 NormalFromTangents(float3 tangent, float3 bitangent, float handiness)
 		//		on how the tangent frame is generated, and
 		//		whether there is a flip on any transforms applied.
 	return cross(bitangent, tangent) * handiness;
+}
+
+float3 BitangentFromNormalTangent(float3 normal, float3 tangent, float handiness)
+{
+	return cross(tangent, normal) * handiness;
+}
+
+float3 TangentFromNormalBitangent(float3 normal, float3 bitangent, float handiness)
+{
+	return cross(normal, bitangent) * handiness;
 }
 
 float3 SampleNormalMap(Texture2D normalMap, SamplerState samplerObject, bool dxtFormatNormalMap, float2 texCoord)
@@ -139,6 +154,45 @@ CompressedTangentFrame TransformLocalToWorld(CompressedTangentFrame inputFrame)
 	#else
 		result.handiness = sign(inputFrame.handiness);
 	#endif
+	return result;
+}
+
+TangentFrame TransformLocalToWorld(TangentFrame inputFrame, uint vectorToReconstruct)
+{
+	// pass vectorToReconstruct == 0 to reconstruct tangent
+	// pass vectorToReconstruct == 1 to reconstruct bitangent
+	// pass vectorToReconstruct == 2 to reconstruct normal
+
+		// note that if we can guarantee no scale on local-to-world, we can skip normalize of worldtangent/worldbitangent
+	TangentFrame result;
+	if (vectorToReconstruct == 2) {
+		result.tangent = LocalToWorldUnitVector(inputFrame.tangent);
+		result.bitangent = LocalToWorldUnitVector(inputFrame.bitangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.normal = NormalFromTangents(result.tangent, result.bitangent, result.handiness);
+	} else if (vectorToReconstruct == 1) {
+		result.normal = LocalToWorldUnitVector(inputFrame.normal);
+		result.tangent = LocalToWorldUnitVector(inputFrame.tangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.bitangent = BitangentFromNormalTangent(result.normal, result.tangent, result.handiness);
+	} else if (vectorToReconstruct == 0) {
+		result.normal = LocalToWorldUnitVector(inputFrame.normal);
+		result.bitangent = LocalToWorldUnitVector(inputFrame.bitangent);
+		#if LOCAL_TO_WORLD_HAS_FLIP==1
+			result.handiness = sign(-inputFrame.handiness);
+		#else
+			result.handiness = sign(inputFrame.handiness);
+		#endif
+		result.tangent = TangentFromNormalBitangent(result.normal, result.bitangent, result.handiness);
+	}
 	return result;
 }
 

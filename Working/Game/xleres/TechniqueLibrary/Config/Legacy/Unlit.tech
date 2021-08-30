@@ -50,11 +50,6 @@ WriteTriangleIndex=~
 VisNormals=~
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
-		VSOUT_HAS_NORMAL=1
-		VSOUT_HAS_TANGENT_FRAME=1
-		GEO_HAS_TEXTANGENT
-		GEO_HAS_TEXBITANGENT
-		GEO_HAS_NORMAL
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/geowires.geo.hlsl:NormalsAndTangents
 	PixelShader=xleres/TechniqueLibrary/Basic/basic.pixel.hlsl:PC
