@@ -14,6 +14,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/Font.h"
+#include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
@@ -748,7 +749,7 @@ namespace ToolsRig
 		bool writeMaterialName = 
 			(_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver);
 
-		if (writeMaterialName) {
+		if (writeMaterialName || _pimpl->_settings._drawBasisAxis || _pimpl->_settings._drawGrid) {
 
 			CATCH_ASSETS_BEGIN
 
@@ -757,9 +758,13 @@ namespace ToolsRig
 				overlays.CaptureState();
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
 				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, **scene);
+				if (_pimpl->_settings._drawBasisAxis)
+					RenderOverlays::DrawBasisAxes(overlays, parserContext);
+				if (_pimpl->_settings._drawGrid)
+					RenderOverlays::DrawGrid(overlays, parserContext, 100.f);
 				overlays.ReleaseState();
 
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(threadContext, parserContext);
 				_pimpl->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
 
 			CATCH_ASSETS_END(parserContext)
@@ -859,10 +864,13 @@ namespace ToolsRig
         stateContext.SetRay(worldSpaceRay);
 		stateContext.ExecuteDrawables(parserContext, pkt);
 
-		// Just bail if we haven't yet submitted required buffer uploads command lists
+		// Stall if we haven't yet submitted required buffer uploads command lists
+		// (if we bail here, the draw commands are have still be submitted and we will run into ordering problems later)
 		auto requiredBufferUploads = parserContext._requiredBufferUploadsCommandList;
-		if (requiredBufferUploads && !RenderCore::Techniques::Services::GetBufferUploads().IsComplete(requiredBufferUploads))
-			return {};
+		if (requiredBufferUploads) {
+			auto& bu=RenderCore::Techniques::Services::GetBufferUploads();
+			bu.StallUntilCompletion(threadContext, parserContext._requiredBufferUploadsCommandList);
+		}
 		
         auto results = stateContext.GetResults();
         if (!results.empty()) {

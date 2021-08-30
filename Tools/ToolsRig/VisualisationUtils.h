@@ -87,6 +87,8 @@ namespace ToolsRig
 		unsigned		_skeletonMode = 0;
         bool			_drawNormals = false;
         bool			_drawWireframe = false;
+        bool            _drawBasisAxis = true;
+        bool            _drawGrid = true;
     };
 
     class VisMouseOver
