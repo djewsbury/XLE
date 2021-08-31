@@ -4,10 +4,15 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#define RAY_TEST_GEO 1
 #include "../Framework/VSOUT.hlsl"
 #include "../Framework/CommonResources.hlsl"
-#include "../../BasicMaterial.hlsl"
 #include "../Framework/SystemUniforms.hlsl"
+#include "../../Nodes/Templates.pixel.sh"
+
+#if !defined(PATCH_EARLY_REJECTION)
+	#include "../../BasicMaterial.hlsl"
+#endif
 
 struct GSOutput
 {
@@ -117,7 +122,15 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 		// used for "picking" tests in tools. Without this alpha test check,
 		// the alpha tested triangles will behave like opaque triangles, which
 		// will give a confusing result for the user.
-		#if (VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)
+		#if defined(PATCH_EARLY_REJECTION) && (VSOUT_HAS_TEXCOORD>=1)
+			float2 texCoord =
+				  barycentric.x * VSOUT_GetTexCoord0(input[0])
+				+ barycentric.y * VSOUT_GetTexCoord0(input[1])
+				+ barycentric.z * VSOUT_GetTexCoord0(input[2])
+				;
+			input[0].texCoord = texCoord;
+			isOpaquePart = !EarlyRejectionTest(input[0]);
+		#elif (VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)
 			float2 texCoord =
 				  barycentric.x * VSOUT_GetTexCoord0(input[0])
 				+ barycentric.y * VSOUT_GetTexCoord0(input[1])
