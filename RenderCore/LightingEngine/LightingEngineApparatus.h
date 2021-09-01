@@ -80,7 +80,6 @@ namespace RenderCore { namespace LightingEngine
 
 namespace RenderCore
 {
-	uint64_t Hash64(CullMode, uint64_t=DefaultSeed64);
 	namespace Techniques 
 	{ 
 		uint64_t Hash64(RSDepthBias, uint64_t=DefaultSeed64); 

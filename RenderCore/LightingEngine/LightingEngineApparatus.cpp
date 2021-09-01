@@ -61,11 +61,6 @@ namespace RenderCore { namespace LightingEngine
 
 namespace RenderCore
 {
-	uint64_t Hash64(CullMode cullMode, uint64_t seed)
-	{
-		return HashCombine((uint64_t)cullMode, seed);
-	}
-
 	namespace Techniques 
 	{ 
 		uint64_t Hash64(RSDepthBias depthBias, uint64_t seed)
