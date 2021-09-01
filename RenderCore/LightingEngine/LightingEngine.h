@@ -7,6 +7,7 @@
 #include "../Techniques/Drawables.h"		// for Techniques::BatchFilter
 
 namespace RenderCore { class IThreadContext; }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -14,7 +15,7 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox;
 	class CompiledLightingTechnique;
 
-	enum class StepType { ParseScene, DrawSky, None, Abort };
+	enum class StepType { ParseScene, MultiViewParseScene, DrawSky, None, Abort };
 
 	class LightingTechniqueIterator;
 	class LightingTechniqueInstance
@@ -25,6 +26,7 @@ namespace RenderCore { namespace LightingEngine
 			StepType _type = StepType::Abort;
 			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			Techniques::DrawablesPacket* _pkt = nullptr;
+			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- consider subframe allocator style vector for things like this!
 
 			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};

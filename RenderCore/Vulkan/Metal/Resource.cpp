@@ -472,7 +472,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(image_create_info.format != VK_FORMAT_UNDEFINED);
 			if (tDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
 				image_create_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-				assert(image_create_info.arrayLayers == 6u);		// arrays of cubemaps not supported currently
+				assert((image_create_info.arrayLayers%6u) == 0);		// "arrayLayers" should be the number of cubemap faces -- ie, 6 for each cubemap in the array
 			}
 
             // We don't need to use mutable formats in many cases in Vulkan. 

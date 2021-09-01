@@ -33,6 +33,7 @@
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>
 
@@ -53,7 +54,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		RenderCore::Assets::DrawCallDesc _drawCall;
-		Float4x4 _objectToWorld;
+		LocalTransformConstants _localTransform;
 		uint64_t _materialGuid;
 		unsigned _drawCallIdx;
 	};
@@ -71,12 +72,8 @@ namespace RenderCore { namespace Techniques
         const SimpleModelDrawable& drawable)
 	{
 		if (drawFnContext.GetBoundLooseImmediateDatas()) {
-			auto bindingField = drawFnContext.GetBoundLooseImmediateDatas();
-			auto localTransform = Techniques::MakeLocalTransform(
-				drawable._objectToWorld, 
-				ExtractTranslation(parserContext.GetProjectionDesc()._cameraToWorld));
 			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
-			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(localTransform), MakeOpaqueIteratorRange(drawCallProps) };
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform), MakeOpaqueIteratorRange(drawCallProps) };
 			drawFnContext.ApplyLooseUniforms(UniformsStream{{}, immDatas});
 		}
 
@@ -84,10 +81,43 @@ namespace RenderCore { namespace Techniques
 			drawable._drawCall._indexCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
 	}
 
+	static unsigned CountBitsSet(uint32_t viewMask)
+	{
+		unsigned v=0;
+		while (viewMask) {
+			auto lz = xl_ctz8(viewMask);
+			// constants._viewIndices[v++] = lz;
+			v++;
+			viewMask ^= 1ull<<lz;
+		}
+		return v;
+	}
+
+	static void DrawFn_SimpleModelStaticMultiView(
+		Techniques::ParsingContext& parserContext,
+		const Techniques::ExecuteDrawableContext& drawFnContext,
+        const SimpleModelDrawable& drawable)
+	{
+		auto viewCount = CountBitsSet(drawable._localTransform._viewMask);
+		if (!viewCount) return;
+		assert(viewCount <= 32);
+
+		if (drawFnContext.GetBoundLooseImmediateDatas()) {
+			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform), MakeOpaqueIteratorRange(drawCallProps) };
+			drawFnContext.ApplyLooseUniforms(UniformsStream{{}, immDatas});
+		}
+
+        drawFnContext.DrawIndexedInstances(
+			drawable._drawCall._indexCount, viewCount, drawable._drawCall._firstIndex, drawable._drawCall._firstVertex);
+	}
+
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<Techniques::DrawablesPacket** const> pkts,
-		const Float4x4& localToWorld) const
+		const Float4x4& localToWorld,
+		uint32_t viewMask) const
 	{
+		assert(viewMask != 0);
 		SimpleModelDrawable* drawables[dimof(_drawablesCount)];
 		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
 			if (!_drawablesCount[c]) {
@@ -98,6 +128,8 @@ namespace RenderCore { namespace Techniques
 				Throw(::Exceptions::BasicLabel("Drawables packet not provided for batch filter %i", c));
 			drawables[c] = pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawablesCount[c]);
 		}
+
+		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
 
 		unsigned drawCallCounter = 0;
 		const auto& cmdStream = _modelScaffold->CommandStream();
@@ -119,13 +151,14 @@ namespace RenderCore { namespace Techniques
 				drawable._geo = _geos[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
 				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic;
+				drawable._drawFn = drawableFn;
 				drawable._drawCall = drawCall;
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-                drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
-
+				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localSpaceView = Float3{0,0,0};
+				drawable._localTransform._viewMask = viewMask;
 				++drawCallCounter;
             }
 
@@ -154,12 +187,14 @@ namespace RenderCore { namespace Techniques
 				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
 				drawable._descriptorSet = compiledGeoCall._descriptorSetAccelerator;
-				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic;
+				drawable._drawFn = drawableFn;
 				drawable._drawCall = drawCall;
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-				drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localSpaceView = Float3{0,0,0};
+				drawable._localTransform._viewMask = viewMask;
 
 				++drawCallCounter;
             }
@@ -187,7 +222,7 @@ namespace RenderCore { namespace Techniques
 
 	uint64_t ICustomDrawDelegate::GetMaterialGuid(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._materialGuid; }
 	unsigned ICustomDrawDelegate::GetDrawCallIndex(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCallIdx; }
-	const Float4x4 ICustomDrawDelegate::GetLocalToWorld(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._objectToWorld; }
+	Float3x4 ICustomDrawDelegate::GetLocalToWorld(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._localTransform._localToWorld; }
 	RenderCore::Assets::DrawCallDesc ICustomDrawDelegate::GetDrawCallDesc(const Drawable& d) { return ((SimpleModelDrawable_Delegate&)d)._drawCall; }
 	void ICustomDrawDelegate::ExecuteStandardDraw(ParsingContext& parsingContext, const ExecuteDrawableContext& drawFnContext, const Drawable& d)
 	{
@@ -241,7 +276,9 @@ namespace RenderCore { namespace Techniques
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
 				drawable._delegate = delegate;
-                drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+                drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localSpaceView = Float3{0,0,0};
+				drawable._localTransform._viewMask = ~0u;
 
 				++drawCallCounter;
             }
@@ -277,7 +314,9 @@ namespace RenderCore { namespace Techniques
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
 				drawable._delegate = delegate;
-				drawable._objectToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localSpaceView = Float3{0,0,0};
+				drawable._localTransform._viewMask = ~0u;
 
 				++drawCallCounter;
             }

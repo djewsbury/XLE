@@ -67,7 +67,7 @@ namespace UnitTests
 				return result;
 			}
 
-			cbuffer MultiProbeProperties BIND_SEQ_B1
+			cbuffer MultiViewProperties BIND_SEQ_B1
 			{
 				uint MultiProbeCount; uint4 Dummy[3];
 				row_major float4x4 MultiProbeViews[64];
@@ -97,7 +97,7 @@ namespace UnitTests
 		)--")),
 
 		std::make_pair("instancing_multiprobe_shader.hlsl", ::Assets::AsBlob(R"--(
-			#define LOCAL_TRANSFORM_HAS_VIEW_INDICES 1
+			#define VERTEX_ID_VIEW_INSTANCING 1
 			#undef GEO_HAS_TEXCOORD
 			#undef GEO_HAS_NORMAL
 			#undef GEO_HAS_TEXTANGENT
@@ -111,7 +111,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
-			cbuffer MultiProbeProperties BIND_SEQ_B1
+			cbuffer MultiViewProperties BIND_SEQ_B1
 			{
 				uint MultiProbeCount; uint4 Dummy[3];
 				row_major float4x4 MultiProbeViews[64];
@@ -190,7 +190,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
-			cbuffer MultiProbeProperties BIND_SEQ_B1
+			cbuffer MultiViewProperties BIND_SEQ_B1
 			{
 				uint MultiProbeCount; uint4 Dummy[3];
 				row_major float4x4 MultiProbeViews[32];
@@ -438,35 +438,35 @@ namespace UnitTests
 		class ShaderResourceDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 		{
 		public:
-			struct MultiProbeProperties
+			struct MultiViewProperties
 			{
 				unsigned _probeCount; unsigned _dummy[15];
 				Float4x4 _worldToProjection[64];
 			};
-			MultiProbeProperties _multProbeProperties;
+			MultiViewProperties _multProbeProperties;
 
 			virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 			{
 				REQUIRE(idx == 0);
-				REQUIRE(dst.size() == sizeof(MultiProbeProperties));
+				REQUIRE(dst.size() == sizeof(MultiViewProperties));
 				std::memcpy(dst.begin(), &_multProbeProperties, sizeof(_multProbeProperties));
 			}
 
 			virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				REQUIRE(idx == 0);
-				return sizeof(MultiProbeProperties);
+				return sizeof(MultiViewProperties);
 			}
 
 			ShaderResourceDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
 			{
 				_multProbeProperties._probeCount = cameras.size();
-				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiProbeProperties::_worldToProjection));
+				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiProbeProperties"));
+				BindImmediateData(0, Hash64("MultiViewProperties"));
 			}
 		};
 
@@ -553,35 +553,35 @@ namespace UnitTests
 		class ShaderResourceDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 		{
 		public:
-			struct MultiProbeProperties
+			struct MultiViewProperties
 			{
 				unsigned _probeCount; unsigned _dummy[15];
 				Float4x4 _worldToProjection[64];
 			};
-			MultiProbeProperties _multProbeProperties;
+			MultiViewProperties _multProbeProperties;
 
 			virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 			{
 				REQUIRE(idx == 0);
-				REQUIRE(dst.size() == sizeof(MultiProbeProperties));
+				REQUIRE(dst.size() == sizeof(MultiViewProperties));
 				std::memcpy(dst.begin(), &_multProbeProperties, sizeof(_multProbeProperties));
 			}
 
 			virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				REQUIRE(idx == 0);
-				return sizeof(MultiProbeProperties);
+				return sizeof(MultiViewProperties);
 			}
 
 			ShaderResourceDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
 			{
 				_multProbeProperties._probeCount = cameras.size();
-				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiProbeProperties::_worldToProjection));
+				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiProbeProperties"));
+				BindImmediateData(0, Hash64("MultiViewProperties"));
 			}
 		};
 
@@ -753,35 +753,35 @@ namespace UnitTests
 		class ShaderResourceDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 		{
 		public:
-			struct MultiProbeProperties
+			struct MultiViewProperties
 			{
 				unsigned _probeCount; unsigned _dummy[15];
 				Float4x4 _worldToProjection[32];
 			};
-			MultiProbeProperties _multProbeProperties;
+			MultiViewProperties _multProbeProperties;
 
 			virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 			{
 				REQUIRE(idx == 0);
-				REQUIRE(dst.size() == sizeof(MultiProbeProperties));
+				REQUIRE(dst.size() == sizeof(MultiViewProperties));
 				std::memcpy(dst.begin(), &_multProbeProperties, sizeof(_multProbeProperties));
 			}
 
 			virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				REQUIRE(idx == 0);
-				return sizeof(MultiProbeProperties);
+				return sizeof(MultiViewProperties);
 			}
 
 			ShaderResourceDelegate(IteratorRange<const RenderCore::Techniques::CameraDesc*> cameras, UInt2 viewportDims)
 			{
 				_multProbeProperties._probeCount = cameras.size();
-				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiProbeProperties::_worldToProjection));
+				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
 					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
-				BindImmediateData(0, Hash64("MultiProbeProperties"));
+				BindImmediateData(0, Hash64("MultiViewProperties"));
 			}
 		};
 

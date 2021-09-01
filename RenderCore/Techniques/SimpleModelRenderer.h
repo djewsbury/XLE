@@ -41,7 +41,7 @@ namespace RenderCore { namespace Techniques
 
 		static uint64_t GetMaterialGuid(const Drawable&);
 		static unsigned GetDrawCallIndex(const Drawable&);
-		static const Float4x4 GetLocalToWorld(const Drawable&);
+		static Float3x4 GetLocalToWorld(const Drawable&);
 		static RenderCore::Assets::DrawCallDesc GetDrawCallDesc(const Drawable&);
 		static void ExecuteStandardDraw(ParsingContext&, const ExecuteDrawableContext&, const Drawable&);
 		virtual ~ICustomDrawDelegate();
@@ -52,7 +52,8 @@ namespace RenderCore { namespace Techniques
 	public:
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
-			const Float4x4& localToWorld = Identity<Float4x4>()) const;
+			const Float4x4& localToWorld = Identity<Float4x4>(),
+			uint32_t viewMask = 1) const;
 
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,

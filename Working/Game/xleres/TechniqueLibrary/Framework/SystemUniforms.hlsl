@@ -36,9 +36,8 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 	{
 		row_major float3x4 LocalToWorld;
 		float3 LocalSpaceView;
-		#if LOCAL_TRANSFORM_HAS_VIEW_INDICES
+		#if VERTEX_ID_VIEW_INSTANCING
 			uint ViewMask;
-			// uint4 ViewIndices[4];
 		#endif
 	} LocalTransform;
 
@@ -50,9 +49,8 @@ float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 	{
 		row_major float3x4 LocalToWorld;
 		float3 LocalSpaceView;
-		#if LOCAL_TRANSFORM_HAS_VIEW_INDICES
+		#if VERTEX_ID_VIEW_INSTANCING
 			uint ViewMask;
-			uint4 ViewIndices[16];
 		#endif
 	}
 

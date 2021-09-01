@@ -157,16 +157,18 @@ namespace RenderCore { namespace Metal_Vulkan
             if (adjWindow._dimensionality == TextureDesc::Dimensionality::Undefined)
                 adjWindow._dimensionality = tDesc._dimensionality;
 
-            if (adjWindow._dimensionality == TextureDesc::Dimensionality::CubeMap) {
-                // The "array layer" range values are a bit awkward for cubemaps. Let's support only 
-                // views of the entire cubemap resource for now
-                assert(adjWindow._arrayLayerRange._count == 6 || adjWindow._arrayLayerRange._count == TextureViewDesc::Unlimited);
-                assert(adjWindow._arrayLayerRange._min == 0);
+            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), tDesc._arrayCount > 1u);
+            if (createInfo.viewType == VK_IMAGE_VIEW_TYPE_CUBE) {
+                if (formatUsage != BindFlag::ShaderResource) {
+                    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+                } else {
+                    // The "array layer" range values are a bit awkward for cubemaps. Let's support only 
+                    // views of the entire cubemap resource for now
+                    assert(adjWindow._arrayLayerRange._count == 6 || adjWindow._arrayLayerRange._count == TextureViewDesc::Unlimited);
+                    assert(adjWindow._arrayLayerRange._min == 0);
+                }
             }
 
-            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), tDesc._arrayCount > 1u);
-            if (formatUsage != BindFlag::ShaderResource && createInfo.viewType == VK_IMAGE_VIEW_TYPE_CUBE)
-                createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
             _imageView = factory.CreateImageView(createInfo);
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;

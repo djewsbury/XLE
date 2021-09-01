@@ -98,35 +98,16 @@ namespace UnitTests
 		REQUIRE(finite);
 
 		// Build 6 projection for the cube faces
-		// Using DirectX conventions for face order here:
-		//		+X, -X
-		//		+Y, -Y
-		//		+Z, -Z
-		Float3 faceForward[] {
-			Float3{1.f, 0.f, 0.f},
-			Float3{-1.f, 0.f, 0.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, -1.f, 0.f},
-			Float3{0.f, 0.f, 1.f},
-			Float3{0.f, 0.f, -1.f}
-		};
-		Float3 faceUp[] = {
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 0.f, -1.f},
-			Float3{0.f, 0.f, 1.f},
-			Float3{0.f, 1.f, 0.f},
-			Float3{0.f, 1.f, 0.f}
-		};
 		Float4x4 worldToCamera[6];
 		Float4x4 cameraToProjection[6];
 		for (unsigned c=0; c<6; ++c) {
-			cameraToProjection[c] = PerspectiveProjection(
-				gPI/2.0f, 1.0f, 0.01f, finite->GetCutoffRange(), 
-				GeometricCoordinateSpace::RightHanded,
-				RenderCore::Techniques::GetDefaultClipSpaceType());
-			auto camToWorld = MakeCameraToWorld(faceForward[c], faceUp[c], ExtractTranslation(positional->GetLocalToWorld()));
-			worldToCamera[c] = InvertOrthonormalTransform(camToWorld);
+			std::tie(worldToCamera[c], cameraToProjection[c]) =
+				CubemapViewAndProjection(
+					c,
+					ExtractTranslation(positional->GetLocalToWorld()),
+					0.01f, finite->GetCutoffRange(),
+					GeometricCoordinateSpace::RightHanded,
+					RenderCore::Techniques::GetDefaultClipSpaceType());
 		}
 
 		auto* projections = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowId);

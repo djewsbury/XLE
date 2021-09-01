@@ -21,6 +21,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		BlueNoiseGenerator.cpp
 		LightTiler.cpp
 		SkyOperator.cpp
+		ShadowProbes.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

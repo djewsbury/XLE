@@ -54,6 +54,7 @@ namespace RenderCore { namespace LightingEngine
 		_dmShadowDescSetTemplate = i->second;
 
 		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device);
+		_systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
 	}
 
 	LightingEngineApparatus::~LightingEngineApparatus() {}

@@ -76,7 +76,7 @@ namespace RenderCore { namespace Techniques
     public:
         Float3x4    _localToWorld;
         Float3      _localSpaceView;
-        unsigned    _dummy0;
+        uint32_t    _viewMask;
     };
 
     struct ViewportConstants
@@ -104,7 +104,7 @@ namespace RenderCore { namespace Techniques
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera);
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition);
-    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition);
+    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition, uint32_t viewMask = 1);
 
     ViewportConstants BuildViewportConstants(const ViewportDesc&);
 
@@ -121,5 +121,8 @@ namespace RenderCore { namespace Techniques
         const Float4x4& cameraToWorld,
         float l, float t, float r, float b,
         float nearClip, float farClip);
+
+    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip);
+
 }}
 

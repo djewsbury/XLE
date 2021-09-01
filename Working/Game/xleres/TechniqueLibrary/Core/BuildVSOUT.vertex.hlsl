@@ -8,6 +8,29 @@
 #include "../Framework/DeformVertex.hlsl"
 #include "../SceneEngine/Lighting/resolvefog.hlsl"
 
+#if VERTEX_ID_VIEW_INSTANCING
+	cbuffer MultiViewProperties BIND_SEQ_B5
+	{
+		row_major float4x4 MultiViewWorldToClip[64];
+	}
+	uint GetMultiViewIndex(uint instanceId)
+	{
+		// Find the position of the instanceId'th bit set in the view mask
+		// this has a little processing to the vertex shader, but we gain something
+		// by avoiding having to store an array of view indices in LocalTransform 
+		uint mask = LocalTransform.ViewMask;
+		while (instanceId) {
+			mask ^= 1u << firstbithigh(mask);
+			--instanceId;
+		}
+		return firstbithigh(mask);
+	}
+	float4x4 GetMultiViewWorldToClip(uint instanceId)
+	{
+		return MultiViewWorldToClip[GetMultiViewIndex(instanceId)];
+	}
+#endif
+
 VSOUT BuildVSOUT(
 	DeformedVertex deformedVertex,
 	VSIN input)
@@ -24,10 +47,20 @@ VSOUT BuildVSOUT(
 	}
 
 	VSOUT output;
-	output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
+	#if !VERTEX_ID_VIEW_INSTANCING
+		output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-	#if VSOUT_HAS_PREV_POSITION
-		output.prevPosition = mul(SysUniform_GetPrevWorldToClip(), float4(worldPosition,1));
+		#if VSOUT_HAS_PREV_POSITION
+			output.prevPosition = mul(SysUniform_GetPrevWorldToClip(), float4(worldPosition,1));
+		#endif
+	#else
+		output.position = mul(GetMultiViewWorldToClip(input.instanceId), float4(worldPosition,1));
+
+		#if VSOUT_HAS_PREV_POSITION
+			// We could store a prev world-to-clip in the multi probe array, but
+			// generally we don't need it with probe rendering, so avoid the overhead
+			#error Prev position not supported with multi-probe rendering
+		#endif
 	#endif
 
 	#if VSOUT_HAS_COLOR>=1
@@ -86,7 +119,7 @@ VSOUT BuildVSOUT(
 
 	#if (VSOUT_HAS_PER_VERTEX_MLO==1)
 		output.mainLightOcclusion = 1.f;
-		#if (GEO_HAS_INSTANCE_ID==1)
+		#if (SPAWNED_INSTANCE==1)
 			output.mainLightOcclusion *= GetInstanceShadowing(input);
 		#endif
 	#endif

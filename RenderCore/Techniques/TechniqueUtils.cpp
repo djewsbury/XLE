@@ -198,13 +198,14 @@ namespace RenderCore { namespace Techniques
         return MakeLocalTransformPacket(localToWorld, ExtractTranslation(camera._cameraToWorld));
     }
 
-    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition)
+    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition, uint32_t viewMask)
     {
         LocalTransformConstants localTransform;
         CopyTransform(localTransform._localToWorld, localToWorld);
         // note; disabled because many local-to-world transforms have scales, and shaders aren't reading this very frequently, anyway  
         // localTransform._localSpaceView = TransformPointByOrthonormalInverse(localToWorld, worldSpaceCameraPosition);
         localTransform._localSpaceView = Float3{0,0,0};
+        localTransform._viewMask = viewMask;
         return localTransform;
     }
 
@@ -319,6 +320,23 @@ namespace RenderCore { namespace Techniques
         projDesc._worldToProjection = Combine(InvertOrthonormalTransform(cameraToWorld), cameraToProjection);
         projDesc._cameraToProjection = cameraToProjection;
         projDesc._cameraToWorld = cameraToWorld;
+        return projDesc;
+    }
+
+    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip)
+    {
+        auto m = CubemapViewAndProjection(
+            cubeFace, centerLocation, nearClip, farClip,
+            GeometricCoordinateSpace::RightHanded,
+            GetDefaultClipSpaceType());
+        Techniques::ProjectionDesc projDesc;
+        projDesc._verticalFov = gPI/2.0f;
+        projDesc._aspectRatio = 1.f;
+        projDesc._nearClip = nearClip;
+        projDesc._farClip = farClip;
+        projDesc._worldToProjection = Combine(m.first, m.second);
+        projDesc._cameraToProjection = m.second;
+        projDesc._cameraToWorld = InvertOrthonormalTransform(m.first);
         return projDesc;
     }
 

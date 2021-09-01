@@ -21,7 +21,7 @@ DescriptorSet Sequencer
 
 	UniformBuffer BasicLightingEnvironment;		// 3
 	UniformBuffer RayDefinition;				// 4
-	UniformBuffer ShadowProjection;				// 5
+	UniformBuffer MultiViewProperties;			// 5
 
 	SampledTexture tex0;						// 6
 	SampledTexture tex1;						// 7

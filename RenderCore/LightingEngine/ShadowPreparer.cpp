@@ -242,7 +242,9 @@ namespace RenderCore { namespace LightingEngine
 			desc._rasterDepthBias, desc._depthBiasClamp, desc._slopeScaledBias };
 		Techniques::RSDepthBias doubleSidedBias {
 			desc._dsRasterDepthBias, desc._dsDepthBiasClamp, desc._dsSlopeScaledBias };
-		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(singleSidedBias, doubleSidedBias, desc._cullMode);
+		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(
+			Techniques::ShadowGenType::GSAmplify,
+			singleSidedBias, doubleSidedBias, desc._cullMode);
 
 		ParameterBox sequencerSelectors;
 		if (desc._projectionMode == ShadowProjectionMode::Ortho) {

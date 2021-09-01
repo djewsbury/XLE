@@ -1049,6 +1049,38 @@ namespace XLEMath
             -nearAndFar.first / (nearAndFar.second - nearAndFar.first));
     }
 
+    std::pair<Float4x4, Float4x4> CubemapViewAndProjection(
+        unsigned cubeFace,
+        Float3 centerLocation, float nearClip, float farClip,
+        GeometricCoordinateSpace coordinateSpace,
+        ClipSpaceType clipSpaceType)
+    {
+		// Using DirectX conventions for face order here:
+		//		+X, -X
+		//		+Y, -Y
+		//		+Z, -Z
+		const Float3 faceForward[] {
+			Float3{1.f, 0.f, 0.f},
+			Float3{-1.f, 0.f, 0.f},
+			Float3{0.f, 1.f, 0.f},
+			Float3{0.f, -1.f, 0.f},
+			Float3{0.f, 0.f, 1.f},
+			Float3{0.f, 0.f, -1.f}
+		};
+		const Float3 faceUp[] = {
+			Float3{0.f, 1.f, 0.f},
+			Float3{0.f, 1.f, 0.f},
+			Float3{0.f, 0.f, -1.f},
+			Float3{0.f, 0.f, 1.f},
+			Float3{0.f, 1.f, 0.f},
+			Float3{0.f, 1.f, 0.f}
+		};
+        auto camToWorld = MakeCameraToWorld(faceForward[cubeFace], faceUp[cubeFace], centerLocation);
+        return {
+            InvertOrthonormalTransform(camToWorld),
+            PerspectiveProjection(gPI/2.0f, 1.0f, nearClip, farClip, coordinateSpace, clipSpaceType)};
+    }
+
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, 
         Float3 absFrustumCorners[], 

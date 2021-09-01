@@ -12,6 +12,11 @@ Silhouette=~
 		MAT_VCOLOR_IS_ANIM_PARAM
 	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl
 
+VertexIdViewInstancing=~
+	Selectors=~
+		VERTEX_ID_VIEW_INSTANCING=1
+		GEO_HAS_INSTANCE_ID=1
+
 VS_NoPatches=~
 	Inherit=~; Silhouette
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
@@ -22,23 +27,30 @@ VS_DeformVertex=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-ShadowGenShared=~
+ShadowGen_GSAmplify_Shared=~
 	Selectors=~
 		MAT_ALPHA_DITHER_SHADOWS
 		FRUSTUM_FILTER=63
 		SHADOW_CASCADE_MODE
 		VSOUT_HAS_SHADOW_PROJECTION_COUNT=6
 		SHADOW_ENABLE_NEAR_CASCADE
+	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
 
-VSShadowGen_NoPatches=~
-	Inherit=~; Silhouette; ShadowGenShared
+VSShadowGen_GSAmplify_NoPatches=~
+	Inherit=~; Silhouette; ShadowGen_GSAmplify_Shared
 	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:nopatches
-	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
 
-VSShadowGen_DeformVertex=~
-	Inherit=~; Silhouette; ShadowGenShared
+VSShadowGen_GSAmplify_DeformVertex=~
+	Inherit=~; Silhouette; ShadowGen_GSAmplify_Shared
 	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:frameworkEntryWithDeformVertex
-	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+VSShadowProbe_NoPatches=~
+	Inherit=~; VS_NoPatches; VertexIdViewInstancing
+
+VSShadowProbe_DeformVertex=~
+	Inherit=~; VS_DeformVertex; VertexIdViewInstancing
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

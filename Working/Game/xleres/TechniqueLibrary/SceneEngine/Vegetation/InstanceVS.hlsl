@@ -7,7 +7,7 @@
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/VSIN.hlsl"
 
-#if GEO_HAS_INSTANCE_ID==1
+#if SPAWNED_INSTANCE==1
     struct InstanceDef
     {
         float4 posAndShadowing;

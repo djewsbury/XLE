@@ -191,8 +191,12 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-deferred-delegate");
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-deferred-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 			bool deferredDecal = 
@@ -209,8 +213,6 @@ namespace RenderCore { namespace Techniques
 				*result,
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
-
-					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					switch (illumType) {
@@ -231,6 +233,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 					
 					// note -- we could premerge all of the combinations in the constructor, to cut down on cost here
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
@@ -310,8 +314,12 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -351,6 +359,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -407,7 +417,7 @@ namespace RenderCore { namespace Techniques
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
-			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, bool shadowGen)
+			TechniqueFileHelper(const std::shared_ptr<TechniqueSetFile>& techniqueSet, std::optional<ShadowGenType> shadowGen)
 			: _techniqueSet(techniqueSet)
 			{
 				const auto noPatchesHash = Hash64("DepthOnly_NoPatches");
@@ -415,8 +425,13 @@ namespace RenderCore { namespace Techniques
 				auto vsNoPatchesHash = Hash64("VS_NoPatches");
 				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
 				if (shadowGen) {
-					vsNoPatchesHash = Hash64("VSShadowGen_NoPatches");
-					vsDeformVertexHash = Hash64("VSShadowGen_DeformVertex");
+					if (*shadowGen == ShadowGenType::GSAmplify) {
+						vsNoPatchesHash = Hash64("VSShadowGen_GSAmplify_NoPatches");
+						vsDeformVertexHash = Hash64("VSShadowGen_GSAmplify_DeformVertex");
+					} else {
+						vsNoPatchesHash = Hash64("VSShadowProbe_NoPatches");
+						vsDeformVertexHash = Hash64("VSShadowProbe_DeformVertex");
+					}
 				}
 				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
 				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
@@ -437,6 +452,11 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
+
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
@@ -466,6 +486,8 @@ namespace RenderCore { namespace Techniques
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
 
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
+
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
 
@@ -485,7 +507,7 @@ namespace RenderCore { namespace Techniques
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode,
-			bool shadowGen)
+			std::optional<ShadowGenType> shadowGen)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
@@ -506,16 +528,17 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, false);
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, std::optional<ShadowGenType>{});
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, true);
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, shadowGenType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -576,6 +599,11 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
+			
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-predepth-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
@@ -618,6 +646,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -710,6 +740,11 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
+
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-utility-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
@@ -746,6 +781,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -833,6 +870,11 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
+
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
@@ -871,6 +913,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);
@@ -944,8 +988,12 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			#if defined(_DEBUG)
+				if (_techniqueFileHelper->GetDependencyValidation().GetValidationIndex() != 0)
+					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
+			#endif
 
+			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
 
@@ -969,6 +1017,8 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
 						nascentDesc->_patchExpansions.push_back(s_deformVertex);
 					}
+
+					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
 
 					TechniqueEntry mergedTechEntry = *vsTechEntry;
 					mergedTechEntry.MergeIn(*psTechEntry);

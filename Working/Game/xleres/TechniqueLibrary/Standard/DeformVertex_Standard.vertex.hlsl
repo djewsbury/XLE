@@ -17,7 +17,7 @@ DeformedVertex DeformVertex_Standard(DeformedVertex preDeform, VSIN input)
 	result.position = preDeform.position;
 	result.tangentFrame = preDeform.tangentFrame;
 
-	#if GEO_HAS_INSTANCE_ID==1
+	#if SPAWNED_INSTANCE==1
 		float3 objectCentreWorld;
 		float3 worldNormalTemp;
 		result.position = InstanceWorldPosition(input, worldNormalTemp, objectCentreWorld);
@@ -38,7 +38,7 @@ DeformedVertex DeformVertex_WindBending(DeformedVertex preDeform, VSIN input)
 	result.coordinateSpace = 1;
 
 	float3 objectCentreWorld;
-	#if GEO_HAS_INSTANCE_ID==1
+	#if SPAWNED_INSTANCE==1
 		float3 worldNormalTemp;
 		InstanceWorldPosition(input, worldNormalTemp, objectCentreWorld);
 	#else

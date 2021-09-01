@@ -68,8 +68,10 @@ namespace RenderCore { namespace Techniques
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
 
+	enum class ShadowGenType { GSAmplify, VertexIdViewInstancing };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		ShadowGenType shadowGenType = ShadowGenType::GSAmplify,
 		const RSDepthBias& singleSidedBias = RSDepthBias(),
         const RSDepthBias& doubleSidedBias = RSDepthBias(),
         CullMode cullMode = CullMode::Back);
