@@ -19,6 +19,8 @@
 #include "../../../Utility/StringFormat.h"
 #include "../../../Utility/Threading/Mutex.h"
 
+// #define TRACK_RESOURCE_GUIDS
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	static uint64_t s_nextResourceGUID = 1;
@@ -399,6 +401,21 @@ namespace RenderCore { namespace Metal_Vulkan
         return factory.AllocateMemory(memReqs.size, type);
     }
 
+	#if defined(TRACK_RESOURCE_GUIDS)
+		static std::vector<std::pair<unsigned, std::string>> s_resourceGUIDToName;
+		static void AssociateResourceGUID(unsigned guid, std::string name)
+		{
+			static Threading::Mutex lock;
+			ScopedLock(lock);
+			auto existing = std::find_if(s_resourceGUIDToName.begin(), s_resourceGUIDToName.end(), [name](const auto& p) { return p.second == name; });
+			if (existing != s_resourceGUIDToName.end()) {
+				int c=0;
+				(void)c;
+			}
+			s_resourceGUIDToName.push_back(std::make_pair(guid, name));
+		}
+	#endif
+
 	Resource::Resource(
 		ObjectFactory& factory, const Desc& desc,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
@@ -567,6 +584,10 @@ namespace RenderCore { namespace Metal_Vulkan
 					};
 					factory.GetExtensionFunctions()._setObjectName(factory.GetDevice().get(), &imageNameInfo);
 				}
+			#endif
+
+			#if defined(TRACK_RESOURCE_GUIDS)
+				AssociateResourceGUID(_guid, desc._name);
 			#endif
 		}
 
