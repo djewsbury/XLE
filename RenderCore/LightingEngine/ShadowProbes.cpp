@@ -150,6 +150,7 @@ namespace RenderCore { namespace LightingEngine
 							*_threadContext, *_static->_parsingContext, *_pimpl->_pipelineAccelerators, 
 							*_pimpl->_probePrepareCfg, _drawablePkt);
 						_static->_parsingContext->RemoveShaderResourceDelegate(*srDel);
+						_drawablePkt.Reset();
 					}
 					_probeIterator += _pendingViews.size()/6;
 					_pendingViews.clear();

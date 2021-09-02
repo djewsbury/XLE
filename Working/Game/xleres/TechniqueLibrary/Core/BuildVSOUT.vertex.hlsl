@@ -25,10 +25,6 @@
 		}
 		return firstbithigh(mask);
 	}
-	float4x4 GetMultiViewWorldToClip(uint instanceId)
-	{
-		return MultiViewWorldToClip[GetMultiViewIndex(instanceId)];
-	}
 #endif
 
 VSOUT BuildVSOUT(
@@ -54,7 +50,12 @@ VSOUT BuildVSOUT(
 			output.prevPosition = mul(SysUniform_GetPrevWorldToClip(), float4(worldPosition,1));
 		#endif
 	#else
-		output.position = mul(GetMultiViewWorldToClip(input.instanceId), float4(worldPosition,1));
+		uint viewIdx = GetMultiViewIndex(input.instanceId);
+		output.position = mul(MultiViewWorldToClip[viewIdx], float4(worldPosition,1));
+
+		#if (VSOUT_HAS_RENDER_TARGET_INDEX==1)
+			output.renderTargetIndex = viewIdx;
+		#endif
 
 		#if VSOUT_HAS_PREV_POSITION
 			// We could store a prev world-to-clip in the multi probe array, but
