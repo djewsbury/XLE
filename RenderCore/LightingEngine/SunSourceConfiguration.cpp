@@ -947,9 +947,9 @@ namespace RenderCore { namespace LightingEngine
             }
         }
 
-        auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowProjectionId);
+        auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowProjectionId);
         if (preparer) {
-            IShadowPreparer::Desc desc;
+            IDepthTextureResolve::Desc desc;
             // desc._worldSpaceResolveBias = settings._worldSpaceResolveBias;
             desc._tanBlurAngle = settings._tanBlurAngle;
             desc._minBlurSearch = settings._minBlurSearch;

@@ -9,7 +9,7 @@
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class SystemUniformsDelegate; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 namespace RenderCore { class IResourceView; class IThreadContext; }
 namespace RenderCore { namespace LightingEngine
 {
@@ -45,14 +45,15 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext,
 			const Techniques::ProjectionDesc& projDesc,
 			IteratorRange<const AABB*> dynamicObjects);
-		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(IThreadContext& threadContext);
+		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
+			IThreadContext& threadContext);
 		const IResourceView& GetStaticProbesTable();
 		const IResourceView& GetDynamicProbesTable();
 		const IResourceView& GetLookupTable();
 
 		ShadowProbes(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-			SharedTechniqueDelegateBox& sharedTechniqueDelegate, std::shared_ptr<Techniques::SystemUniformsDelegate> sysUniformsDelegate,
+			SharedTechniqueDelegateBox& sharedTechniqueDelegate,
 			IteratorRange<const Probe*> probeLocations, const Configuration& config);
 
 		ShadowProbes(

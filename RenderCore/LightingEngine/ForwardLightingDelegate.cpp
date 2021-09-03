@@ -5,6 +5,7 @@
 #include "ForwardLightingDelegate.h"
 #include "LightingEngineInternal.h"
 #include "LightingEngineApparatus.h"
+#include "LightingDelegateUtil.h"
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
@@ -93,6 +94,11 @@ namespace RenderCore { namespace LightingEngine
 
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 
+	struct ShadowOperatorIdMapping
+	{
+		std::vector<unsigned> _operatorToDynamicShadowOperator;
+	};
+
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
@@ -102,8 +108,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<IDevice> _device;
+		ShadowOperatorIdMapping _shadowOperatorIdMapping;
 
-		std::shared_ptr<ShadowPreparationOperators> _shadowPreparationOperators;
+		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
 		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
 
 		AmbientLight _ambientLight;
@@ -187,8 +194,12 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
 		{
-			auto desc = _shadowPreparationOperators->CreateShadowProjection(opId);
-			return AddShadowProjection(opId, associatedLight, std::move(desc));
+			auto dynIdx = _shadowOperatorIdMapping._operatorToDynamicShadowOperator[opId];
+			if (dynIdx != ~0u) {
+				auto desc = _shadowPreparationOperators->CreateShadowProjection(dynIdx);
+				return AddShadowProjection(opId, associatedLight, std::move(desc));
+			}
+			return ~0u;
 		}
 
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override
@@ -299,9 +310,9 @@ namespace RenderCore { namespace LightingEngine
 			if (dominantLightId != ~0u) {
 				// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 				assert(!parsingContext._extraSequencerDescriptorSet.second);
-				for (unsigned c=0; c<_shadowProjections.size(); ++c)
-					if (_shadowProjections[c]._lightId == dominantLightId) {
-						assert(_shadowProjections[c]._operatorId == 0);		// we require the shadow op used with the dominant light to be 0 currently
+				for (unsigned c=0; c<_dynamicShadowProjections.size(); ++c)
+					if (_dynamicShadowProjections[c]._lightId == dominantLightId) {
+						assert(_dynamicShadowProjections[c]._operatorId == 0);		// we require the shadow op used with the dominant light to be 0 currently
 						parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[c].second->GetDescriptorSet().get()};
 					}
 			}
@@ -450,54 +461,20 @@ namespace RenderCore { namespace LightingEngine
 		void DoToneMap(LightingTechniqueIterator& iterator);
 	};
 
-	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
-		LightingTechniqueIterator& iterator,
-		Internal::ILightBase& proj,
-		ICompiledShadowPreparer& preparer,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool)
-	{
-		auto res = preparer.CreatePreparedShadowResult();
-		iterator.PushFollowingStep(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool](LightingTechniqueIterator& iterator) {
-				iterator._rpi = preparer.Begin(
-					*iterator._threadContext,
-					*iterator._parsingContext,
-					proj,
-					shadowGenFrameBufferPool,
-					shadowGenAttachmentPool);
-			});
-		iterator.PushFollowingStep(Techniques::BatchFilter::General);
-		auto cfg = preparer.GetSequencerConfig();
-		iterator.PushFollowingStep(std::move(cfg.first), std::move(cfg.second));
-		iterator.PushFollowingStep(
-			[res, &preparer](LightingTechniqueIterator& iterator) {
-				iterator._rpi.End();
-				preparer.End(
-					*iterator._threadContext,
-					*iterator._parsingContext,
-					iterator._rpi,
-					*res);
-			});
-		return res;
-	}
-
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator)
 	{
 		if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
 
-		_lightScene->_preparedShadows.reserve(_lightScene->_shadowProjections.size());
+		_lightScene->_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
 		ILightScene::LightSourceId prevLightId = ~0u; 
-		for (unsigned c=0; c<_lightScene->_shadowProjections.size(); ++c) {
-			auto shadowOperatorId = _lightScene->_shadowProjections[c]._operatorId;
-			auto& shadowPreparer = *_lightScene->_shadowPreparationOperators->_operators[shadowOperatorId]._preparer;
+		for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
 			_lightScene->_preparedShadows.push_back(std::make_pair(
-				_lightScene->_shadowProjections[c]._lightId,
-				SetupShadowPrepare(iterator, *_lightScene->_shadowProjections[c]._desc, shadowPreparer, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
+				_lightScene->_dynamicShadowProjections[c]._lightId,
+				Internal::SetupShadowPrepare(iterator, *_lightScene->_dynamicShadowProjections[c]._desc, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
 
 			// shadow entries must be sorted by light id
-			assert(prevLightId == ~0u || prevLightId < _lightScene->_shadowProjections[c]._lightId);
-			prevLightId = _lightScene->_shadowProjections[c]._lightId;
+			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);
+			prevLightId = _lightScene->_dynamicShadowProjections[c]._lightId;
 		}
 	}
 
@@ -614,7 +591,26 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
-		auto shadowPreparationOperatorsFuture = CreateShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet);
+		ShadowOperatorIdMapping shadowOperatorMapping;
+		shadowOperatorMapping._operatorToDynamicShadowOperator.resize(shadowGenerators.size(), ~0u);
+		::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
+
+		{
+			ShadowOperatorDesc dynShadowGens[shadowGenerators.size()];
+			unsigned count = 0;
+			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
+				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {
+					// setup shadow operator for probes
+				} else {
+					dynShadowGens[count] = shadowGenerators[c];
+					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = count;
+					++count;
+				}
+			}
+			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparationOperators(
+				MakeIteratorRange(dynShadowGens, &dynShadowGens[shadowGenerators.size()]),
+				pipelineAccelerators, techDelBox, shadowDescSet);
+		}
 
 		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
 		RasterizationLightTileOperator::Configuration tilingConfig;
@@ -628,7 +624,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
 		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
 			*result,
-			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator, pipelinePool]
+			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator, pipelinePool, shadowOperatorMapping=std::move(shadowOperatorMapping)]
 			(	::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
 				auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
 
@@ -639,6 +635,7 @@ namespace RenderCore { namespace LightingEngine
 				lightScene->_ssrOperator = ssr;
 				lightScene->_lightTiler = lightTiler;
 				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
+				lightScene->_shadowOperatorIdMapping = std::move(shadowOperatorMapping);
 				lightScene->FinalizeConfiguration();
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();

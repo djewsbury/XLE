@@ -34,14 +34,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		std::vector<LightSet> _lightSets;
 
-		struct ShadowProjection
+		struct DynamicShadowProjection
 		{
 			ShadowProjectionId _id;
 			ShadowOperatorId _operatorId;
 			LightSourceId _lightId;
 			std::unique_ptr<ILightBase> _desc;
 		};
-		std::vector<ShadowProjection> _shadowProjections;
+		std::vector<DynamicShadowProjection> _dynamicShadowProjections;
 
 		LightSourceId _nextLightSource = 0;
 		ShadowProjectionId _nextShadow = 0;

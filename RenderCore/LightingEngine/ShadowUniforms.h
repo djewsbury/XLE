@@ -146,7 +146,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	};
 
 	/// <summary>Defines the projected shadows for a single light<summary>
-	class ShadowProjectionDesc : public Internal::ILightBase, public IShadowPreparer, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
+	class ShadowProjectionDesc : public Internal::ILightBase, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
 	{
 	public:
 		using Projections = MultiProjection<MaxShadowTexturesPerLight>;
@@ -157,6 +157,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float           _tanBlurAngle = 0.00436f;
 		float           _minBlurSearchPixels = 0.5f, _maxBlurSearchPixels = 25.f;
 		float			_casterLookupExtraBias = 0.001f;
+
+		std::shared_ptr<ICompiledShadowPreparer> _preparer;
 
 		virtual void SetDesc(const Desc& newDesc) override
 		{
@@ -242,8 +244,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override
 		{
-			if (interfaceTypeCode == typeid(IShadowPreparer).hash_code()) {
-				return (IShadowPreparer*)this;
+			if (interfaceTypeCode == typeid(IDepthTextureResolve).hash_code()) {
+				return (IDepthTextureResolve*)this;
 			} else if (interfaceTypeCode == typeid(IArbitraryShadowProjections).hash_code()) {
 				if (_projections._mode == ShadowProjectionMode::Arbitrary || _projections._mode == ShadowProjectionMode::ArbitraryCubeMap)
 					return (IArbitraryShadowProjections*)this;

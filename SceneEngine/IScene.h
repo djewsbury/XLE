@@ -74,12 +74,18 @@ namespace SceneEngine
 	class ILightingStateDelegate
 	{
 	public:
-        virtual void        ConfigureLightScene(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) const = 0;
-        virtual std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() const = 0;
-		virtual std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() const = 0;
+        virtual void        PreRender(
+            const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
+            RenderCore::LightingEngine::ILightScene& lightScene) = 0;
+        virtual void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
+        virtual void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
+        virtual void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
 
-        virtual auto        GetEnvironmentalLightingDesc() const -> EnvironmentalLightingDesc = 0;
-        virtual auto        GetToneMapSettings() const -> ToneMapSettings = 0;
+        virtual std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() = 0;
+		virtual std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() = 0;
+
+        virtual auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc = 0;
+        virtual auto        GetToneMapSettings() -> ToneMapSettings = 0;
 
         virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 

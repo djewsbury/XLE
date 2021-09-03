@@ -28,7 +28,7 @@ namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }
 namespace RenderCore { namespace LightingEngine
 {
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
-	enum class ShadowResolveType { DepthTexture, RayTraced };
+	enum class ShadowResolveType { DepthTexture, RayTraced, Probe };
 	enum class ShadowFilterModel { None, PoissonDisc, Smooth };
 
 	class ShadowOperatorDesc
@@ -76,11 +76,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		virtual const std::shared_ptr<IDescriptorSet>& GetDescriptorSet() const = 0;
-		virtual ILightScene::ShadowOperatorId GetShadowOperatorId() const = 0;
 		virtual ~IPreparedShadowResult();
 	};
 
 	namespace Internal { class ILightBase; }
+	class LightingTechniqueIterator;
 
 	class ICompiledShadowPreparer
 	{
@@ -105,12 +105,11 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox;
 	::Assets::PtrToFuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
-		ILightScene::ShadowOperatorId operatorId,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout);
 
-	class ShadowPreparationOperators
+	class DynamicShadowPreparationOperators
 	{
 	public:
 		struct Operator
@@ -120,9 +119,9 @@ namespace RenderCore { namespace LightingEngine
 		};
 		std::vector<Operator> _operators;
 
-		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(ILightScene::ShadowOperatorId);
+		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(unsigned operatorIdx);
 	};
-	::Assets::PtrToFuturePtr<ShadowPreparationOperators> CreateShadowPreparationOperators(
+	::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,

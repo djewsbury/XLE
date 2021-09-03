@@ -377,7 +377,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows)
+		IteratorRange<const PreparedShadow*> preparedShadows)
 	{
 		GPUAnnotation anno(threadContext, "Lights");
 
@@ -473,16 +473,16 @@ namespace RenderCore { namespace LightingEngine
 				
 				assert(set._operatorId < lightResolveOperators._pipelines.size());
 
-				while (shadowIterator != preparedShadows.end() && shadowIterator->first < i._id) ++shadowIterator;
-				if (shadowIterator != preparedShadows.end() && shadowIterator->first == i._id) {
-					IDescriptorSet* shadowDescSets[] = { shadowIterator->second->GetDescriptorSet().get() };
+				while (shadowIterator != preparedShadows.end() && shadowIterator->_lightId < i._id) ++shadowIterator;
+				if (shadowIterator != preparedShadows.end() && shadowIterator->_lightId == i._id) {
+					IDescriptorSet* shadowDescSets[] = { shadowIterator->_preparedResult->GetDescriptorSet().get() };
 					boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(shadowDescSets));
 					++shadowIterator;
 				} else {
 					// If you hit the following assert it probably means the preparedShadows are not sorted by lightId,
 					// or the lights in the light scene are not sorted in id order, or there's a prepared shadow
 					// generated for a light that doesn't exist
-					assert(shadowIterator == preparedShadows.end() || shadowIterator->first > i._id);
+					assert(shadowIterator == preparedShadows.end() || shadowIterator->_lightId > i._id);
 				}
 
 				UniformsStream uniformsStream;

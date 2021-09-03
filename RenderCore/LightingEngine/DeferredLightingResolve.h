@@ -62,6 +62,7 @@ namespace RenderCore { namespace LightingEngine
 	class IPreparedShadowResult;
 	class ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
+	struct PreparedShadow { ILightScene::LightSourceId _lightId; ILightScene::ShadowOperatorId _shadowOpId; std::shared_ptr<IPreparedShadowResult> _preparedResult; };
 
     void ResolveLights(
 		IThreadContext& threadContext,
@@ -69,7 +70,7 @@ namespace RenderCore { namespace LightingEngine
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		IteratorRange<const std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>*> preparedShadows);
+		IteratorRange<const PreparedShadow*> preparedShadows);
 
 	enum class GBufferType { PositionNormal, PositionNormalParameters };
 

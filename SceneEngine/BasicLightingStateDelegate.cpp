@@ -77,9 +77,9 @@ namespace SceneEngine
     static SwirlingPointLights s_swirlingLights;
     static unsigned s_swirlingLightsOp = ~0u;
 
-    void BasicLightingStateDelegate::ConfigureLightScene(
+    void BasicLightingStateDelegate::PreRender(
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
-        RenderCore::LightingEngine::ILightScene& lightScene) const
+        RenderCore::LightingEngine::ILightScene& lightScene)
     {
         auto lightOperators = GetLightResolveOperators();
         lightScene.Clear();
@@ -133,7 +133,18 @@ namespace SceneEngine
         }
     }
 
-    std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> BasicLightingStateDelegate::GetLightResolveOperators() const
+    void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
+    {
+        lightScene.Clear();
+    }
+
+    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+    {}
+
+    void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+    {}
+
+    std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> BasicLightingStateDelegate::GetLightResolveOperators()
     {
         std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
         for (const auto& light:_envSettings->_lights) {
@@ -156,7 +167,7 @@ namespace SceneEngine
         return result;
     }
 
-    std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> BasicLightingStateDelegate::GetShadowResolveOperators() const
+    std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> BasicLightingStateDelegate::GetShadowResolveOperators()
     {
         std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> result;
         std::vector<uint64_t> resultHashes;
@@ -172,12 +183,12 @@ namespace SceneEngine
         return result;
     }
 
-    auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() const -> RenderCore::LightingEngine::EnvironmentalLightingDesc
+    auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() -> RenderCore::LightingEngine::EnvironmentalLightingDesc
     {
         return GetEnvSettings()._environmentalLightingDesc;
     }
 
-    ToneMapSettings BasicLightingStateDelegate::GetToneMapSettings() const
+    ToneMapSettings BasicLightingStateDelegate::GetToneMapSettings()
     {
         return GetEnvSettings()._toneMapSettings;
     }

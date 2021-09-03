@@ -73,12 +73,15 @@ namespace SceneEngine
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
     public:
-        void        ConfigureLightScene(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) const override;
-        auto        GetEnvironmentalLightingDesc() const -> EnvironmentalLightingDesc override;
-        auto        GetToneMapSettings() const -> ToneMapSettings override;
+        void        PreRender(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
+        auto        GetToneMapSettings() -> ToneMapSettings override;
 
-        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() const override;
-		std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() const override;
+        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() override;
+		std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() override;
 
 		BasicLightingStateDelegate(
 			const std::shared_ptr<EnvironmentSettings>& envSettings);

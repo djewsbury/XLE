@@ -89,7 +89,7 @@ namespace RenderCore { namespace LightingEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class IShadowPreparer
+	class IDepthTextureResolve
 	{
 	public:
 		struct Desc
@@ -101,7 +101,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		virtual void SetDesc(const Desc&) = 0;
 		virtual Desc GetDesc() const = 0;
-		virtual ~IShadowPreparer();
+		virtual ~IDepthTextureResolve();
 	};
 	
 	class IArbitraryShadowProjections

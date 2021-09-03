@@ -32,7 +32,7 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
 		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
-		lightingState.ConfigureLightScene(parsingContext.GetProjectionDesc(), lightScene);
+		lightingState.PreRender(parsingContext.GetProjectionDesc(), lightScene);
 		return RenderCore::LightingEngine::LightingTechniqueInstance { threadContext, parsingContext, compiledTechnique };
 	}
 

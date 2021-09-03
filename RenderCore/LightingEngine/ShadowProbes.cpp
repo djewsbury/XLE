@@ -10,6 +10,7 @@
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/Services.h"
+#include "../Techniques/SystemUniformsDelegate.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
@@ -30,16 +31,15 @@ namespace RenderCore { namespace LightingEngine
 		Configuration _config;
 		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
-		std::shared_ptr<Techniques::SystemUniformsDelegate> _systemUniformsDelegate;
 
-		struct StaticProbePreparer
+		struct StaticProbePrepareHelper
 		{
 			ShadowProbes::Pimpl* _pimpl;
 			Techniques::TechniqueContext _techContext;
 			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
 			
 			static const auto semanticProbePrepare = ConstHash64<'prob', 'epre'>::Value;
-			StaticProbePreparer(std::shared_ptr<IDevice> device, ShadowProbes::Pimpl& pimpl)
+			StaticProbePrepareHelper(std::shared_ptr<IDevice> device, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
 				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
@@ -52,7 +52,7 @@ namespace RenderCore { namespace LightingEngine
 				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
 				_techContext._sequencerDescSetLayout = _pimpl->_sequencerDescSetLayout;
-				_techContext._systemUniformsDelegate = _pimpl->_systemUniformsDelegate;
+				_techContext._systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*device);
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext);
 				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
@@ -133,7 +133,7 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext* _threadContext = nullptr;
 		unsigned _probeIterator = 0;
 		std::vector<Float4x4> _pendingViews;	// candidate for subframe heap
-		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePreparer> _static;
+		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePrepareHelper> _static;
 		ShadowProbes::Pimpl* _pimpl = nullptr;
 		Techniques::DrawablesPacket _drawablePkt;
 
@@ -194,20 +194,19 @@ namespace RenderCore { namespace LightingEngine
 		auto result = std::make_shared<ProbeRenderingInstance>();
 		result->_threadContext = &threadContext;
 		result->_pimpl = _pimpl.get();
-		result->_static = std::make_unique<ShadowProbes::Pimpl::StaticProbePreparer>(threadContext.GetDevice(), *_pimpl);
+		result->_static = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext.GetDevice(), *_pimpl);
 		return result;
 	}
 
 	ShadowProbes::ShadowProbes(
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-		SharedTechniqueDelegateBox& sharedTechniqueDelegate, std::shared_ptr<Techniques::SystemUniformsDelegate> sysUniformsDelegate,
+		SharedTechniqueDelegateBox& sharedTechniqueDelegate,
 		IteratorRange<const Probe*> probeLocations, const Configuration& config)
 	{
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_config = config;
 		_pimpl->_probes.insert(_pimpl->_probes.end(), probeLocations.begin(), probeLocations.end());
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
-		_pimpl->_systemUniformsDelegate = std::move(sysUniformsDelegate);
 
 		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 		descSetLayoutFuture->StallWhilePending();
@@ -234,7 +233,7 @@ namespace RenderCore { namespace LightingEngine
 	ShadowProbes::ShadowProbes(
 		LightingEngineApparatus& apparatus,
 		IteratorRange<const Probe*> probeLocations, const Configuration& config)
-	: ShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, apparatus._systemUniformsDelegate, probeLocations, config)
+	: ShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, probeLocations, config)
 	{}
 
 	ShadowProbes::~ShadowProbes()

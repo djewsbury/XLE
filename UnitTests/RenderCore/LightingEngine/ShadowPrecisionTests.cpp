@@ -84,12 +84,12 @@ namespace UnitTests
 		};
 		projections->SetOrthoSubProjections(MakeIteratorRange(subProj));
 
-		IShadowPreparer::Desc desc;
+		IDepthTextureResolve::Desc desc;
 		desc._worldSpaceResolveBias = 0.f;
         desc._tanBlurAngle = 0.00436f;
 		desc._minBlurSearch = 3.f;
         desc._maxBlurSearch = 35.f;
-		auto* preparer = lightScene.TryGetShadowProjectionInterface<IShadowPreparer>(shadowId);
+		auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowId);
 		REQUIRE(preparer);
 		preparer->SetDesc(desc);
 
