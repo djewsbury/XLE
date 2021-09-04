@@ -186,8 +186,9 @@ namespace RenderCore { namespace LightingEngine
 		return nullptr;
 	}
 
-	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext)
+	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext, IteratorRange<const Probe*> probeLocations)
 	{
+		_pimpl->_probes.insert(_pimpl->_probes.end(), probeLocations.begin(), probeLocations.end());
 		if (_pimpl->_probes.empty())
 			return nullptr;
 
@@ -201,11 +202,10 @@ namespace RenderCore { namespace LightingEngine
 	ShadowProbes::ShadowProbes(
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 		SharedTechniqueDelegateBox& sharedTechniqueDelegate,
-		IteratorRange<const Probe*> probeLocations, const Configuration& config)
+		const Configuration& config)
 	{
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_config = config;
-		_pimpl->_probes.insert(_pimpl->_probes.end(), probeLocations.begin(), probeLocations.end());
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
 
 		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
@@ -230,10 +230,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	ShadowProbes::ShadowProbes(
-		LightingEngineApparatus& apparatus,
-		IteratorRange<const Probe*> probeLocations, const Configuration& config)
-	: ShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, probeLocations, config)
+	ShadowProbes::ShadowProbes(LightingEngineApparatus& apparatus, const Configuration& config)
+	: ShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, config)
 	{}
 
 	ShadowProbes::~ShadowProbes()

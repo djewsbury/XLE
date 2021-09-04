@@ -34,5 +34,11 @@ namespace RenderCore { namespace LightingEngine
 		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
+
+
+	class IProbeRenderingInstance;
+	std::shared_ptr<IProbeRenderingInstance> PrepareStaticShadowProbes(
+		CompiledLightingTechnique& lightingTechnique,
+		IThreadContext& threadContext);
 }}
 

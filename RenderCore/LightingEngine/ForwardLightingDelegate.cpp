@@ -8,6 +8,7 @@
 #include "LightingDelegateUtil.h"
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"
+#include "ShadowProbes.h"
 #include "RenderStepFragments.h"
 #include "StandardLightScene.h"
 #include "HierarchicalDepths.h"
@@ -97,7 +98,25 @@ namespace RenderCore { namespace LightingEngine
 	struct ShadowOperatorIdMapping
 	{
 		std::vector<unsigned> _operatorToDynamicShadowOperator;
+		unsigned _operatorForStaticProbes = ~0u;
+		ShadowProbes::Configuration _shadowProbesCfg;
 	};
+
+	class ShadowProbesInterface
+	{
+	public:
+		std::shared_ptr<ShadowProbes> _probes;
+		bool _builtProbes = false;
+
+		struct PendingProbe
+		{
+			ILightScene::LightSourceId _attachedSource; 
+		};
+		std::vector<PendingProbe> _pendingProbes;
+		std::vector<ShadowProbes::Probe> GetPendingProbes(ILightScene&);
+	};
+
+	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
@@ -112,6 +131,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
 		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
+		ShadowProbesInterface _shadowProbes;
 
 		AmbientLight _ambientLight;
 		bool _ambientLightEnabled = false;
@@ -198,6 +218,11 @@ namespace RenderCore { namespace LightingEngine
 			if (dynIdx != ~0u) {
 				auto desc = _shadowPreparationOperators->CreateShadowProjection(dynIdx);
 				return AddShadowProjection(opId, associatedLight, std::move(desc));
+			} else if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
+				if (_shadowProbes._builtProbes)
+					Throw(std::runtime_error("New shadow probes cannot be added after the probe database has been built"));
+				_shadowProbes._pendingProbes.push_back({associatedLight});
+				return s_shadowProbeShadowFlag | unsigned(_shadowProbes._pendingProbes.size());
 			}
 			return ~0u;
 		}
@@ -450,6 +475,45 @@ namespace RenderCore { namespace LightingEngine
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	std::vector<ShadowProbes::Probe> ShadowProbesInterface::GetPendingProbes(ILightScene& lightScene)
+	{
+		std::vector<ShadowProbes::Probe> result;
+		result.reserve(_pendingProbes.size());
+		for (const auto& pending:_pendingProbes) {
+			ShadowProbes::Probe probe;
+			probe._position = Zero<Float3>();
+			probe._radius = 1024;
+			auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending._attachedSource);
+			if (positional)
+				probe._position = ExtractTranslation(positional->GetLocalToWorld());
+			auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending._attachedSource);
+			if (finite)
+				probe._radius = finite->GetCutoffRange();
+			result.push_back(probe);
+		}
+		return result;
+	}
+
+	class IProbeRenderingInstance;
+	std::shared_ptr<IProbeRenderingInstance> PrepareStaticShadowProbes(
+		CompiledLightingTechnique& lightingTechnique,
+		IThreadContext& threadContext)
+	{
+		auto& lightScene = *checked_cast<ForwardPlusLightScene*>(&lightingTechnique.GetLightScene());
+		if (lightScene._shadowProbes._builtProbes)
+			Throw(std::runtime_error("Rebuilding shadow probes after they have been built once is not supported"));
+		
+		auto pendingProbes = lightScene._shadowProbes.GetPendingProbes(lightScene); 
+		if (pendingProbes.empty())
+			return nullptr;
+
+		lightScene._shadowProbes._pendingProbes.clear();
+		lightScene._shadowProbes._builtProbes = true;
+		return lightScene._shadowProbes._probes->PrepareStaticProbes(threadContext, MakeIteratorRange(pendingProbes));
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class ForwardLightingCaptures
 	{
 	public:
@@ -595,16 +659,22 @@ namespace RenderCore { namespace LightingEngine
 		shadowOperatorMapping._operatorToDynamicShadowOperator.resize(shadowGenerators.size(), ~0u);
 		::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
 
+		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{
 			ShadowOperatorDesc dynShadowGens[shadowGenerators.size()];
-			unsigned count = 0;
+			unsigned dynShadowCount = 0;
 			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
 				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {
 					// setup shadow operator for probes
+					if (shadowOperatorMapping._operatorForStaticProbes != ~0u)
+						Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
+					shadowOperatorMapping._operatorForStaticProbes = c;
+					shadowOperatorMapping._shadowProbesCfg._staticFaceDims = shadowGenerators[c]._width;
+					shadowOperatorMapping._shadowProbesCfg._staticFormat = shadowGenerators[c]._format;
 				} else {
-					dynShadowGens[count] = shadowGenerators[c];
-					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = count;
-					++count;
+					dynShadowGens[dynShadowCount] = shadowGenerators[c];
+					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = dynShadowCount;
+					++dynShadowCount;
 				}
 			}
 			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparationOperators(
@@ -644,6 +714,11 @@ namespace RenderCore { namespace LightingEngine
 				captures->_lightScene = lightScene;
 
 				lightTiler->SetLightScene(*lightScene);
+
+				if (lightScene->_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
+					lightScene->_shadowProbes._probes = std::make_shared<ShadowProbes>(
+						pipelineAccelerators, *techDelBox, lightScene->_shadowOperatorIdMapping._shadowProbesCfg);
+				}
 				
 				auto stitchingContext = stitchingContextCap;
 				hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);

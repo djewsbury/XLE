@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		struct Probe
 		{
 			Float3 _position;
-			float radius;
+			float _radius;
 		};
 
 		struct Configuration
@@ -46,7 +46,8 @@ namespace RenderCore { namespace LightingEngine
 			const Techniques::ProjectionDesc& projDesc,
 			IteratorRange<const AABB*> dynamicObjects);
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
-			IThreadContext& threadContext);
+			IThreadContext& threadContext,
+			IteratorRange<const Probe*> probeLocations);
 		const IResourceView& GetStaticProbesTable();
 		const IResourceView& GetDynamicProbesTable();
 		const IResourceView& GetLookupTable();
@@ -54,11 +55,11 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProbes(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 			SharedTechniqueDelegateBox& sharedTechniqueDelegate,
-			IteratorRange<const Probe*> probeLocations, const Configuration& config);
+			const Configuration& config);
 
 		ShadowProbes(
 			LightingEngineApparatus& apparatus,
-			IteratorRange<const Probe*> probeLocations, const Configuration& config);
+			const Configuration& config);
 
 		~ShadowProbes();
 	// private:
