@@ -3,28 +3,22 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ForwardLightingDelegate.h"
-#include "LightingEngineInternal.h"
-#include "LightingEngineApparatus.h"
-#include "LightingDelegateUtil.h"
-#include "LightUniforms.h"
-#include "ShadowPreparer.h"
-#include "ShadowProbes.h"
+#include "ForwardPlusLightScene.h"
 #include "RenderStepFragments.h"
-#include "StandardLightScene.h"
+#include "SkyOperator.h"
+#include "ShadowPreparer.h"
 #include "HierarchicalDepths.h"
 #include "ScreenSpaceReflections.h"
-#include "SkyOperator.h"
-#include "LightTiler.h"
-#include "SHCoefficients.h"
-#include "../Techniques/ParsingContext.h"
-#include "../Techniques/DrawableDelegates.h"
+#include "LightingDelegateUtil.h"
+#include "LightingEngineInternal.h"
+#include "LightingEngineApparatus.h"
 #include "../Techniques/RenderPass.h"
+#include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/CommonResources.h"
-#include "../Techniques/TechniqueDelegates.h"
-#include "../Techniques/PipelineOperators.h"
+#include "../Techniques/ParsingContext.h"
+#include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/DeferredShaderResource.h"
-#include "../Assets/TextureCompiler.h"
 #include "../IThreadContext.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"
@@ -34,465 +28,11 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/Shader.h"
 
+
 namespace RenderCore { namespace LightingEngine
 {
-	class AmbientLight
-	{
-	public:
-		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _specularIBL;
-		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _ambientRawCubemap;
-		::Assets::PtrToFuturePtr<SHCoefficientsAsset> _diffuseIBL;
-
-		enum class SourceImageType { Equirectangular };
-		SourceImageType _sourceImageType = SourceImageType::Equirectangular;
-		std::string _sourceImage;
-
-		AmbientLightOperatorDesc _ambientLightOperator;
-
-		void SetEquirectangularSource(StringSection<> input)
-		{
-			if (XlEqString(input, _sourceImage)) return;
-			_sourceImage = input.AsString();
-			_sourceImageType = SourceImageType::Equirectangular;
-			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(input);
-
-			Assets::TextureCompilationRequest request;
-			request._operation = Assets::TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular; 
-			request._srcFile = _sourceImage;
-			request._format = Format::BC6H_UF16;
-			request._faceDim = 512;
-			_specularIBL = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request);
-
-			Assets::TextureCompilationRequest request2;
-			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
-			request2._srcFile = _sourceImage;
-			request2._format = Format::BC6H_UF16;
-			request2._faceDim = 1024;
-			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request2);
-		}
-	};
-
-	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
-	{
-	public:
-        virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
-		{
-			assert(bindingFlags == 1<<0);
-			dst[0] = _normalsFitting.get();
-			context.RequireCommandList(_completionCmdList);
-		}
-
-		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
-		{
-			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
-			_normalsFitting = normalsFittingResource.GetShaderResource();
-			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
-		}
-		std::shared_ptr<IResourceView> _normalsFitting;
-		BufferUploads::CommandListID _completionCmdList;
-	};
-
-	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
-
-	struct ShadowOperatorIdMapping
-	{
-		std::vector<unsigned> _operatorToDynamicShadowOperator;
-		unsigned _operatorForStaticProbes = ~0u;
-		ShadowProbes::Configuration _shadowProbesCfg;
-	};
-
-	class ShadowProbesInterface
-	{
-	public:
-		std::shared_ptr<ShadowProbes> _probes;
-		bool _builtProbes = false;
-
-		struct PendingProbe
-		{
-			ILightScene::LightSourceId _attachedSource; 
-		};
-		std::vector<PendingProbe> _pendingProbes;
-		std::vector<ShadowProbes::Probe> GetPendingProbes(ILightScene&);
-	};
-
-	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
-
-	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
-	{
-	public:
-		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
-		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
-		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
-		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
-		std::shared_ptr<SkyOperator> _skyOperator;
-		std::shared_ptr<IDevice> _device;
-		ShadowOperatorIdMapping _shadowOperatorIdMapping;
-
-		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
-		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
-		ShadowProbesInterface _shadowProbes;
-
-		AmbientLight _ambientLight;
-		bool _ambientLightEnabled = false;
-		AmbientLightOperatorDesc _ambientLightOperator;
-
-		LightOperatorId _dominantLightOperatorId = ~0u;
-
-		Float4 _diffuseSHCoefficients[25];
-
-		BufferUploads::CommandListID _completionCommandListID = 0;
-
-		struct SceneLightUniforms
-		{
-			std::shared_ptr<IResource> _propertyCB;
-			std::shared_ptr<IResourceView> _propertyCBView;
-			std::shared_ptr<IResource> _lightList;
-			std::shared_ptr<IResourceView> _lightListUAV;
-			std::shared_ptr<IResource> _lightDepthTable;
-			std::shared_ptr<IResourceView> _lightDepthTableUAV;
-		};
-		SceneLightUniforms _uniforms[2];
-		unsigned _pingPongCounter = 0;
-
-		void FinalizeConfiguration()
-		{
-			auto tilerConfig = _lightTiler->GetConfiguration();
-			for (unsigned c=0; c<dimof(_uniforms); c++) {
-				_uniforms[c]._propertyCB = _device->CreateResource(
-					CreateDesc(BindFlag::ConstantBuffer, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps)), "env-props"));
-				_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
-
-				_uniforms[c]._lightList = _device->CreateResource(
-					CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light)), "light-list"));
-				_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
-
-				_uniforms[c]._lightDepthTable = _device->CreateResource(
-					CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)), "light-depth-table"));
-				_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
-			}
-			_pingPongCounter = 0;
-
-			// Default to using the first light operator & first shadow operator for the dominant light
-			_dominantLightOperatorId = ~0u;
-			for (unsigned c=0; c<_positionalLightOperators.size(); ++c)
-				if (_positionalLightOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
-					if (_dominantLightOperatorId != ~0u)
-						Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
-					_dominantLightOperatorId = c;
-				}
-		}
-
-		virtual LightSourceId CreateLightSource(ILightScene::LightOperatorId opId) override
-		{
-			if (opId == _positionalLightOperators.size()) {
-				if (_ambientLightEnabled)
-					Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
-				_ambientLightEnabled = true;
-				return 0;
-			}
-			auto desc = std::make_unique<Internal::StandardLightDesc>(Internal::StandardLightDesc::Flags::SupportFiniteRange);
-			return AddLightSource(opId, std::move(desc));
-		}
-
-		virtual void DestroyLightSource(LightSourceId sourceId) override
-		{
-			if (sourceId == 0) {
-				if (!_ambientLightEnabled)
-					Throw(std::runtime_error("Attempting to destroy the ambient light source, but it has not been created"));
-				_ambientLightEnabled = false;
-			} else {
-				Internal::StandardLightScene::DestroyLightSource(sourceId);
-			}
-		}
-
-		virtual void Clear() override
-		{
-			_ambientLightEnabled = false;
-			Internal::StandardLightScene::Clear();
-		}
-
-		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override
-		{
-			auto dynIdx = _shadowOperatorIdMapping._operatorToDynamicShadowOperator[opId];
-			if (dynIdx != ~0u) {
-				auto desc = _shadowPreparationOperators->CreateShadowProjection(dynIdx);
-				return AddShadowProjection(opId, associatedLight, std::move(desc));
-			} else if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
-				if (_shadowProbes._builtProbes)
-					Throw(std::runtime_error("New shadow probes cannot be added after the probe database has been built"));
-				_shadowProbes._pendingProbes.push_back({associatedLight});
-				return s_shadowProbeShadowFlag | unsigned(_shadowProbes._pendingProbes.size());
-			}
-			return ~0u;
-		}
-
-		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override
-		{
-			if (sourceId == 0) {
-				if (interfaceTypeCode == typeid(IDistantIBLSource).hash_code()) return (IDistantIBLSource*)this;
-				if (interfaceTypeCode == typeid(ISSAmbientOcclusion).hash_code()) return (ISSAmbientOcclusion*)this;
-				return nullptr;
-			} else {
-				return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
-			}
-		}
-
-		virtual void SetEquirectangularSource(StringSection<> input) override
-		{
-			if (XlEqString(input, _ambientLight._sourceImage)) return;
-			_ambientLight.SetEquirectangularSource(input);
-			auto weakThis = weak_from_this();
-			::Assets::WhenAll(_ambientLight._specularIBL, _ambientLight._diffuseIBL, _ambientLight._ambientRawCubemap).Then(
-				[weakThis](auto specularIBLFuture, auto diffuseIBLFuture, auto ambientRawCubemapFuture) {
-					auto l = weakThis.lock();
-					if (!l) return;
-					if (specularIBLFuture->GetAssetState() != ::Assets::AssetState::Ready
-						|| diffuseIBLFuture->GetAssetState() != ::Assets::AssetState::Ready) {
-						l->_ssrOperator->SetSpecularIBL(nullptr);
-						l->_skyOperator->SetResource(nullptr);
-						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-					} else {
-						auto ambientRawCubemap = ambientRawCubemapFuture->Actualize();
-						{
-							TextureViewDesc adjustedViewDesc;
-							adjustedViewDesc._mipRange._min = 2;
-							auto adjustedView = ambientRawCubemap->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
-							l->_ssrOperator->SetSpecularIBL(adjustedView);
-						}
-						l->_skyOperator->SetResource(ambientRawCubemap->GetShaderResource());
-						auto actualDiffuse = diffuseIBLFuture->Actualize();
-						std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-						std::memcpy(l->_diffuseSHCoefficients, actualDiffuse->GetCoefficients().begin(), sizeof(Float4*)*std::min(actualDiffuse->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
-						l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
-					}
-				});
-		}
-
-		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
-		{
-			bool lastFrameBuffersPrimed =  _pingPongCounter != 0;
-
-			/////////////////
-			++_pingPongCounter;
-			LightSourceId dominantLightId = ~0u;
-
-			auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
-			auto& tilerOutputs = _lightTiler->_outputs;
-			{
-				Metal::ResourceMap map(
-					*_device, *uniforms._lightDepthTable,
-					Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-					0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
-				std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
-			}
-			if (tilerOutputs._lightCount) {
-				Metal::ResourceMap map(
-					*_device, *uniforms._lightList,
-					Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-					0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount);
-				auto* i = (Internal::CB_Light*)map.GetData().begin();
-				auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
-				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-					auto set = *idx >> 16, light = (*idx)&0xffff;
-					auto op = _lightSets[set]._operatorId;
-					*i = MakeLightUniforms(
-						*(Internal::StandardLightDesc*)_lightSets[set]._lights[light]._desc.get(),
-						_positionalLightOperators[op]);
-				}
-			}
-
-			{
-				Metal::ResourceMap map(
-					*_device, *uniforms._propertyCB,
-					Metal::ResourceMap::Mode::WriteDiscardPrevious);
-				auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
-				i->_dominantLight = {};
-
-				if (_dominantLightOperatorId != ~0u) {
-					auto dominantLightOperator = _lightSets.begin();
-					for (; dominantLightOperator!=_lightSets.end(); ++dominantLightOperator)
-						if (dominantLightOperator->_operatorId == _dominantLightOperatorId && !dominantLightOperator->_lights.empty())
-							break;
-					if (dominantLightOperator != _lightSets.end()) {
-						if (dominantLightOperator->_lights.size() > 1)
-							Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
-						i->_dominantLight = Internal::MakeLightUniforms(
-							*checked_cast<Internal::StandardLightDesc*>(dominantLightOperator->_lights[0]._desc.get()),
-							_positionalLightOperators[_dominantLightOperatorId]);
-						dominantLightId = dominantLightOperator->_lights[0]._id;
-					}
-				}
-
-				i->_lightCount = tilerOutputs._lightCount;
-				i->_enableSSR = lastFrameBuffersPrimed;
-				std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
-			}
-
-			if (_completionCommandListID)
-				parsingContext.RequireCommandList(_completionCommandListID);
-
-			if (dominantLightId != ~0u) {
-				// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
-				assert(!parsingContext._extraSequencerDescriptorSet.second);
-				for (unsigned c=0; c<_dynamicShadowProjections.size(); ++c)
-					if (_dynamicShadowProjections[c]._lightId == dominantLightId) {
-						assert(_dynamicShadowProjections[c]._operatorId == 0);		// we require the shadow op used with the dominant light to be 0 currently
-						parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[c].second->GetDescriptorSet().get()};
-					}
-			}
-		}
-
-		void SetupProjection(Techniques::ParsingContext& parsingContext)
-		{
-			if (_hasPrevProjection) {
-				parsingContext.GetPrevProjectionDesc() = _prevProjDesc;
-				parsingContext.GetEnablePrevProjectionDesc() = true;
-			}
-			_prevProjDesc = parsingContext.GetProjectionDesc();
-			_hasPrevProjection = true;
-		}
-
-		class ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
-		{
-		public:
-			void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
-			{
-				assert(dst.size() >= 4);
-				auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_uniforms)];
-				dst[0] = uniforms._lightDepthTableUAV.get();
-				dst[1] = uniforms._lightListUAV.get();
-				dst[2] = uniforms._propertyCBView.get();
-				dst[3] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
-				if (bindingFlags & (1ull<<4ull)) {
-					assert(context._rpi);
-					dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
-				}
-			}
-			ForwardPlusLightScene* _lightScene = nullptr;
-			ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
-			{
-				_lightScene = &lightScene;
-				BindResourceView(0, Utility::Hash64("LightDepthTable"));
-				BindResourceView(1, Utility::Hash64("LightList"));
-				BindResourceView(2, Utility::Hash64("EnvironmentProps"));
-				BindResourceView(3, Utility::Hash64("TiledLightBitField"));
-				BindResourceView(4, Utility::Hash64("SSR"));
-			}
-		};
-
-		RenderStepFragmentInterface CreateDepthMotionFragment(
-			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate)
-		{
-			RenderStepFragmentInterface result { PipelineType::Graphics };
-			Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
-			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
-			preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
-			preDepthSubpass.SetName("PreDepth");
-			result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFilter::General);
-			return result;
-		}
-
-		RenderStepFragmentInterface CreateDepthMotionNormalFragment(
-			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalDelegate)
-		{
-			RenderStepFragmentInterface result { PipelineType::Graphics };
-			Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
-			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
-			preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
-			preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
-			preDepthSubpass.SetName("PreDepth");
-
-			auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
-			normalsFittingTexture->StallWhilePending();
-			auto srDelegate = std::make_shared<BuildGBufferResourceDelegate>(*normalsFittingTexture->Actualize());
-
-			result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFilter::General, {}, std::move(srDelegate));
-			return result;
-		}
-
-		RenderStepFragmentInterface CreateForwardSceneFragment(
-			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate)
-		{
-			RenderStepFragmentInterface result { PipelineType::Graphics };
-			auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare);
-			auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth);
-			
-			Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
-			skySubpass.AppendOutput(lightResolve);
-			skySubpass.SetDepthStencil(depth);
-			skySubpass.SetName("Sky");
-			const bool drawIBLAsSky = true;
-			if (drawIBLAsSky) {
-				result.AddSubpass(
-					std::move(skySubpass),
-					[weakThis = weak_from_this()](LightingTechniqueIterator& iterator) {
-						auto l = weakThis.lock();
-						if (l) l->_skyOperator->Execute(iterator);
-					});
-			} else {
-				result.AddSkySubpass(std::move(skySubpass));
-			}
-
-			Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
-			mainSubpass.AppendOutput(lightResolve);
-			mainSubpass.SetDepthStencil(depth);
-
-			const bool hasSSR = true;
-			if (hasSSR) {
-				auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections"), LoadStore::Retain, LoadStore::DontCare);
-				mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
-			}
-			mainSubpass.SetName("MainForward");
-
-			ParameterBox box;
-			if (_dominantLightOperatorId != ~0u) {
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)_positionalLightOperators[_dominantLightOperatorId]._shape);
-				if (!_shadowPreparationOperators->_operators.empty()) {
-					// assume the shadow operator that will be associated is index 0
-					auto resolveParam = Internal::MakeShadowResolveParam(_shadowPreparationOperators->_operators[0]._desc);
-					resolveParam.WriteShaderSelectors(box);
-				}
-			}
-
-			auto srDelegate = std::make_shared<ShaderResourceDelegate>(*this);
-			result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), srDelegate);
-			return result;
-		}
-
-		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)
-		: _ambientLightOperator(ambientLightOperator)
-		{
-			// We'll maintain the first few ids for system lights (ambient surrounds, etc)
-			ReserveLightSourceIds(32);
-			std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
-		}
-
-	private:
-		bool _hasPrevProjection = false;
-		Techniques::ProjectionDesc _prevProjDesc;
-	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	std::vector<ShadowProbes::Probe> ShadowProbesInterface::GetPendingProbes(ILightScene& lightScene)
-	{
-		std::vector<ShadowProbes::Probe> result;
-		result.reserve(_pendingProbes.size());
-		for (const auto& pending:_pendingProbes) {
-			ShadowProbes::Probe probe;
-			probe._position = Zero<Float3>();
-			probe._radius = 1024;
-			auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending._attachedSource);
-			if (positional)
-				probe._position = ExtractTranslation(positional->GetLocalToWorld());
-			auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending._attachedSource);
-			if (finite)
-				probe._radius = finite->GetCutoffRange();
-			result.push_back(probe);
-		}
-		return result;
-	}
 
 	class IProbeRenderingInstance;
 	std::shared_ptr<IProbeRenderingInstance> PrepareStaticShadowProbes(
@@ -500,16 +40,7 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext)
 	{
 		auto& lightScene = *checked_cast<ForwardPlusLightScene*>(&lightingTechnique.GetLightScene());
-		if (lightScene._shadowProbes._builtProbes)
-			Throw(std::runtime_error("Rebuilding shadow probes after they have been built once is not supported"));
-		
-		auto pendingProbes = lightScene._shadowProbes.GetPendingProbes(lightScene); 
-		if (pendingProbes.empty())
-			return nullptr;
-
-		lightScene._shadowProbes._pendingProbes.clear();
-		lightScene._shadowProbes._builtProbes = true;
-		return lightScene._shadowProbes._probes->PrepareStaticProbes(threadContext, MakeIteratorRange(pendingProbes));
+		return lightScene.PrepareStaticShadowProbes(threadContext);
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -520,6 +51,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
+		std::shared_ptr<SkyOperator> _skyOperator;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
 		void DoToneMap(LightingTechniqueIterator& iterator);
@@ -628,6 +160,85 @@ namespace RenderCore { namespace LightingEngine
 			stitchingContext.DefineAttachment(a);
 	}
 
+	static RenderStepFragmentInterface CreateDepthMotionFragment(
+		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+		Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
+		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
+		preDepthSubpass.SetName("PreDepth");
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFilter::General);
+		return result;
+	}
+
+	static RenderStepFragmentInterface CreateDepthMotionNormalFragment(
+		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalDelegate)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+		Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
+		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
+		preDepthSubpass.SetName("PreDepth");
+
+		auto srDelegateFuture = Internal::CreateBuildGBufferResourceDelegate();
+		srDelegateFuture.StallWhilePending();
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFilter::General, {}, srDelegateFuture.Actualize());
+		return result;
+	}
+
+	static RenderStepFragmentInterface CreateForwardSceneFragment(
+		std::shared_ptr<ForwardLightingCaptures> captures,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare);
+		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth);
+		
+		Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
+		skySubpass.AppendOutput(lightResolve);
+		skySubpass.SetDepthStencil(depth);
+		skySubpass.SetName("Sky");
+		const bool drawIBLAsSky = true;
+		if (drawIBLAsSky) {
+			result.AddSubpass(
+				std::move(skySubpass),
+				[weakCaptures = std::weak_ptr<ForwardLightingCaptures>{captures}](LightingTechniqueIterator& iterator) {
+					auto l = weakCaptures.lock();
+					if (l) l->_skyOperator->Execute(iterator);
+				});
+		} else {
+			result.AddSkySubpass(std::move(skySubpass));
+		}
+
+		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
+		mainSubpass.AppendOutput(lightResolve);
+		mainSubpass.SetDepthStencil(depth);
+
+		const bool hasSSR = true;
+		if (hasSSR) {
+			auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections"), LoadStore::Retain, LoadStore::DontCare);
+			mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
+		}
+		mainSubpass.SetName("MainForward");
+
+		ParameterBox box;
+		auto dominantLightOp = captures->_lightScene->GetDominantLightOperator();
+		if (dominantLightOp) {
+			box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOp.value()._shape);
+			auto shdw = captures->_lightScene->GetDominantShadowOperator();
+			if (shdw) {
+				// assume the shadow operator that will be associated is index 0
+				auto resolveParam = Internal::MakeShadowResolveParam(shdw.value());
+				resolveParam.WriteShaderSelectors(box);
+			}
+		}
+
+		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate());
+		return result;
+	}
+
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
@@ -637,109 +248,63 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferProperties& fbProps)
 	{
 		return CreateForwardLightingTechnique(
-			apparatus->_device, apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
+			apparatus->_pipelineAccelerators, apparatus->_lightingOperatorCollection, apparatus->_sharedDelegates, 
 			apparatus->_dmShadowDescSetTemplate,
 			resolveOperators, shadowGenerators, ambientLightOperator,
 			preregisteredAttachments, fbProps);
 	}
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
-		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
-		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,
+		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps)
 	{
-		ShadowOperatorIdMapping shadowOperatorMapping;
-		shadowOperatorMapping._operatorToDynamicShadowOperator.resize(shadowGenerators.size(), ~0u);
-		::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
-
-		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
-		{
-			ShadowOperatorDesc dynShadowGens[shadowGenerators.size()];
-			unsigned dynShadowCount = 0;
-			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
-				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {
-					// setup shadow operator for probes
-					if (shadowOperatorMapping._operatorForStaticProbes != ~0u)
-						Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-					shadowOperatorMapping._operatorForStaticProbes = c;
-					shadowOperatorMapping._shadowProbesCfg._staticFaceDims = shadowGenerators[c]._width;
-					shadowOperatorMapping._shadowProbesCfg._staticFormat = shadowGenerators[c]._format;
-				} else {
-					dynShadowGens[dynShadowCount] = shadowGenerators[c];
-					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = dynShadowCount;
-					++dynShadowCount;
-				}
-			}
-			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparationOperators(
-				MakeIteratorRange(dynShadowGens, &dynShadowGens[shadowGenerators.size()]),
-				pipelineAccelerators, techDelBox, shadowDescSet);
-		}
-
-		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
 		RasterizationLightTileOperator::Configuration tilingConfig;
-		auto lightTilerFuture = ::Assets::MakeFuture<std::shared_ptr<RasterizationLightTileOperator>>(pipelinePool, tilingConfig);
-		auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool);
+		auto lightSceneFuture = std::make_shared<::Assets::FuturePtr<ForwardPlusLightScene>>("forward-light-scene");
+		ForwardPlusLightScene::ConstructToFuture(
+			*lightSceneFuture, pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
+			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
 		
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		PreregisterAttachments(stitchingContext);
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
-		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
+		::Assets::WhenAll(lightSceneFuture).ThenConstructToFuture(
 			*result,
-			[device, techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, positionalLightOperators, ambientLightOperator, pipelinePool, shadowOperatorMapping=std::move(shadowOperatorMapping)]
+			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]
 			(	::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
-				auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
-
-				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
-				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
-				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
-				lightScene->_device = device;
-				lightScene->_ssrOperator = ssr;
-				lightScene->_lightTiler = lightTiler;
-				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
-				lightScene->_shadowOperatorIdMapping = std::move(shadowOperatorMapping);
-				lightScene->FinalizeConfiguration();
+				std::shared_ptr<ForwardPlusLightScene> lightScene) {
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();
-				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
+				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
 				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 				captures->_lightScene = lightScene;
 
-				lightTiler->SetLightScene(*lightScene);
-
-				if (lightScene->_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
-					lightScene->_shadowProbes._probes = std::make_shared<ShadowProbes>(
-						pipelineAccelerators, *techDelBox, lightScene->_shadowOperatorIdMapping._shadowProbesCfg);
-				}
-				
 				auto stitchingContext = stitchingContextCap;
-				hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-				lightTiler->PreregisterAttachments(stitchingContext);
-				ssr->PreregisterAttachments(stitchingContext);
+				lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+				lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+				lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 
 				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
-
 				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-				lightingTechnique->_depVal.RegisterDependency(hierarchicalDepthsOperator->GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(lightTiler->GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(ssr->GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
+				lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
 
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
 						PreregisterAttachments(stitchingContext);
-						captures->_lightScene->_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-						captures->_lightScene->_lightTiler->PreregisterAttachments(stitchingContext);
-						captures->_lightScene->_ssrOperator->PreregisterAttachments(stitchingContext);
+						captures->_lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+						captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+						captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 						captures->_lightScene->SetupProjection(*iterator._parsingContext);
 					});
 
@@ -751,17 +316,17 @@ namespace RenderCore { namespace LightingEngine
 
 				// Pre depth
 				// lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
-				lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
+				lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
 
 				// Build hierarchical depths
-				lightingTechnique->CreateStep_RunFragments(hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
+				lightingTechnique->CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
 
 				// Light tiling & configure lighting descriptors
-				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateInitFragment(stitchingContext._workingProps));
-				lightingTechnique->CreateStep_RunFragments(lightTiler->CreateFragment(stitchingContext._workingProps));
+				lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
+				lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
 				// Calculate SSRs
-				lightingTechnique->CreateStep_RunFragments(ssr->CreateFragment(stitchingContext._workingProps));
+				lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
 
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
@@ -769,7 +334,7 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Draw main scene
-				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(lightScene->CreateForwardSceneFragment(techDelBox->_forwardIllumDelegate_DisableDepthWrite));
+				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite));
 
 				// Post processing
 				auto toneMapFragment = CreateToneMapFragment(
@@ -792,7 +357,12 @@ namespace RenderCore { namespace LightingEngine
 				::Assets::WhenAll(skyOpFuture).ThenConstructToFuture(
 					thatFuture,
 					[captures, lightingTechnique](auto skyOp) {
-						captures->_lightScene->_skyOperator = skyOp;
+						captures->_skyOperator = skyOp;
+						captures->_lightScene->_onChangeSkyTexture.Bind(
+							[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](std::shared_ptr<Techniques::DeferredShaderResource> texture) {
+								auto l=weakSkyOperator.lock();
+								if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
+							});
 						lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
 						return lightingTechnique;
 					});

@@ -4,12 +4,14 @@
 
 #pragma once
 
+#include "Assets/AssetFuture.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques
 {
     class FrameBufferPool;
     class AttachmentPool;
+    class IShaderResourceDelegate;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -26,5 +28,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ILightBase& proj,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool);
+
+    ::Assets::FuturePtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 }}}
 

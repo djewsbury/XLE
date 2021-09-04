@@ -23,6 +23,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		SkyOperator.cpp
 		ShadowProbes.cpp
 		LightingDelegateUtil.cpp
+		ForwardPlusLightScene.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

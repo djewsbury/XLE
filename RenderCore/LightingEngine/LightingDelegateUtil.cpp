@@ -7,7 +7,12 @@
 #include "ShadowPreparer.h"
 #include "LightingEngineInternal.h"
 #include "../Techniques/RenderPass.h"
-#include "../Utility/PtrUtils.h"
+#include "../Techniques/DrawableDelegates.h"
+#include "../Techniques/DeferredShaderResource.h"
+#include "../Techniques/ParsingContext.h"
+#include "../../Utility/PtrUtils.h"
+#include "../../Assets/Assets.h"
+#include "../../xleres/FileList.h"
 #include <utility>
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -42,6 +47,36 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					*res);
 			});
 		return res;
+	}
+
+	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
+	{
+	public:
+        virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
+		{
+			assert(bindingFlags == 1<<0);
+			dst[0] = _normalsFitting.get();
+			context.RequireCommandList(_completionCmdList);
+		}
+
+		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
+		{
+			BindResourceView(0, Utility::Hash64("NormalsFittingTexture"));
+			_normalsFitting = normalsFittingResource.GetShaderResource();
+			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
+		}
+		std::shared_ptr<IResourceView> _normalsFitting;
+		BufferUploads::CommandListID _completionCmdList;
+	};
+
+	::Assets::FuturePtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate()
+	{
+		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
+		::Assets::FuturePtr<Techniques::IShaderResourceDelegate> result("gbuffer-srdelegate");
+		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture(
+			result,
+			[](auto nft) { return std::make_shared<BuildGBufferResourceDelegate>(*nft); });
+		return result;
 	}
 
 }}}
