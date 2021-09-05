@@ -25,6 +25,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<IResource> _staticTable;
+		std::shared_ptr<IResourceView> _staticTableSRV;
 		std::shared_ptr<IResource> _dynamicTable;
 		std::shared_ptr<IResource> _lookupTable;
 		std::vector<Probe> _probes;
@@ -70,11 +71,6 @@ namespace RenderCore { namespace LightingEngine
 
 				return Techniques::RenderPassInstance{threadContext, *_parsingContext, fragment};
 			}
-
-			std::shared_ptr<IResource> GetStaticTable()
-			{
-				return _techContext._attachmentPool->GetBoundResource(semanticProbePrepare);
-			}
 		};
 	};
 
@@ -89,7 +85,7 @@ namespace RenderCore { namespace LightingEngine
 			const auto& p = probes[c/6];
 			result.push_back(
 				Techniques::BuildCubemapProjectionDesc(
-					c%6, p._position, p._radius / 16384.f, p._radius));
+					c%6, p._position, p._radius / 1024.f, p._radius));
 		}
 		return result;
 	}
@@ -133,24 +129,28 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext* _threadContext = nullptr;
 		unsigned _probeIterator = 0;
 		std::vector<Float4x4> _pendingViews;	// candidate for subframe heap
-		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePrepareHelper> _static;
+		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePrepareHelper> _staticPrepareHelper;
 		ShadowProbes::Pimpl* _pimpl = nullptr;
 		Techniques::DrawablesPacket _drawablePkt;
 
 		LightingTechniqueInstance::Step GetNextStep() override
 		{
-			if (_static) {
+			if (_staticPrepareHelper) {
 				if (!_pendingViews.empty()) {
 					// Commit the objects that were prepared for rendering
 					if (!_drawablePkt._drawables.empty()) {
 						auto srDel = std::make_shared<MultiViewUniformsDelegate>(MakeIteratorRange(_pendingViews));
-						_static->_parsingContext->AddShaderResourceDelegate(srDel);
-						auto rpi = _static->BeginRPI(*_threadContext, _probeIterator*6, _pendingViews.size());
+						_staticPrepareHelper->_parsingContext->AddShaderResourceDelegate(srDel);
+						auto rpi = _staticPrepareHelper->BeginRPI(*_threadContext, _probeIterator*6, _pendingViews.size());
 						Techniques::Draw(
-							*_threadContext, *_static->_parsingContext, *_pimpl->_pipelineAccelerators, 
+							*_threadContext, *_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
 							*_pimpl->_probePrepareCfg, _drawablePkt);
-						_static->_parsingContext->RemoveShaderResourceDelegate(*srDel);
+						_staticPrepareHelper->_parsingContext->RemoveShaderResourceDelegate(*srDel);
 						_drawablePkt.Reset();
+
+						auto staticTable = rpi.GetDepthStencilAttachmentResource();
+						assert(!_pimpl->_staticTable || _pimpl->_staticTable == staticTable);
+						_pimpl->_staticTable = staticTable;
 					}
 					_probeIterator += _pendingViews.size()/6;
 					_pendingViews.clear();
@@ -161,7 +161,8 @@ namespace RenderCore { namespace LightingEngine
 				auto nextBatchCount = std::min(probeCount -_probeIterator, maxProbesPerBatch);
 				if (!nextBatchCount) {
 					// Completed all of the probes
-					_pimpl->_staticTable = _static->GetStaticTable();
+					if (_pimpl->_staticTable)		// (this will be null if all probes had no drawables)
+						_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
 					return { LightingEngine::StepType::None };
 				}
 				LightingTechniqueInstance::Step result;
@@ -192,11 +193,20 @@ namespace RenderCore { namespace LightingEngine
 		if (_pimpl->_probes.empty())
 			return nullptr;
 
+		_pimpl->_staticTable = nullptr;
+		_pimpl->_staticTableSRV = nullptr;
+
 		auto result = std::make_shared<ProbeRenderingInstance>();
 		result->_threadContext = &threadContext;
 		result->_pimpl = _pimpl.get();
-		result->_static = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext.GetDevice(), *_pimpl);
+		result->_staticPrepareHelper = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext.GetDevice(), *_pimpl);
 		return result;
+	}
+
+	IResourceView& ShadowProbes::GetStaticProbesTable()
+	{
+		assert(_pimpl->_staticTableSRV);
+		return *_pimpl->_staticTableSRV;
 	}
 
 	ShadowProbes::ShadowProbes(

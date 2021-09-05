@@ -864,7 +864,7 @@ namespace XLEMath
     Float4x4 PerspectiveProjection(
         float l, float t, float r, float b,
         float nearClipPlane, float farClipPlane,
-        ClipSpaceType clipSpaceType )
+        ClipSpaceType clipSpaceType)
     {
         const float n = nearClipPlane;
         const float f = farClipPlane;
@@ -1076,6 +1076,9 @@ namespace XLEMath
 			Float3{0.f, 1.f, 0.f}
 		};
         auto camToWorld = MakeCameraToWorld(faceForward[cubeFace], faceUp[cubeFace], centerLocation);
+        // See note in BuildCubemapProjectionDesc(), we usually need the geometric coordinates to be left
+        // handed here to get the right result if we want to lookup cubemaps from the shader using world space coordinates
+        assert(coordinateSpace == GeometricCoordinateSpace::LeftHanded);
         return {
             InvertOrthonormalTransform(camToWorld),
             PerspectiveProjection(gPI/2.0f, 1.0f, nearClip, farClip, coordinateSpace, clipSpaceType)};

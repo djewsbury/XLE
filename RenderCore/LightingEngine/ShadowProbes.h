@@ -48,9 +48,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
 			IThreadContext& threadContext,
 			IteratorRange<const Probe*> probeLocations);
-		const IResourceView& GetStaticProbesTable();
-		const IResourceView& GetDynamicProbesTable();
-		const IResourceView& GetLookupTable();
+		IResourceView& GetStaticProbesTable();
+		IResourceView& GetDynamicProbesTable();
+		IResourceView& GetLookupTable();
 
 		ShadowProbes(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,

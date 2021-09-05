@@ -16,6 +16,7 @@ VertexIdViewInstancing=~
 	Selectors=~
 		VERTEX_ID_VIEW_INSTANCING=1
 		GEO_HAS_INSTANCE_ID=1
+		VSOUT_HAS_RENDER_TARGET_INDEX=1
 
 VS_NoPatches=~
 	Inherit=~; Silhouette

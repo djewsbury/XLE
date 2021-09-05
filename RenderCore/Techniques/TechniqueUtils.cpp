@@ -325,9 +325,15 @@ namespace RenderCore { namespace Techniques
 
     ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip)
     {
+        // Slightly awkward here -- because we usually want to query the final cubemaps in world space
+        // we need to follow the GFX API's cubemap specifications very closely. For Vulkan, that requires
+        // setting our geometric coordinate space to left handed, rather than our typical right handed
+        // This will correspondingly flip face winding
+        // See Vulkan spec "16.5.4. Cube Map Face Selection" for Vulkan's rules for querying a cubemap texture
+        // with a 3d vector input
         auto m = CubemapViewAndProjection(
             cubeFace, centerLocation, nearClip, farClip,
-            GeometricCoordinateSpace::RightHanded,
+            GeometricCoordinateSpace::LeftHanded,
             GetDefaultClipSpaceType());
         Techniques::ProjectionDesc projDesc;
         projDesc._verticalFov = gPI/2.0f;

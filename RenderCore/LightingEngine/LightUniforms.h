@@ -48,7 +48,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float3 _brightness;         float _sourceRadiusX;
 		Float3 _orientationX;       float _sourceRadiusY;
 		Float3 _orientationY;       unsigned _shape; // float _diffuseWideningMin;
-		Float3 _orientationZ;       unsigned _dummy; // float _diffuseWideningMax;
+		Float3 _orientationZ;       unsigned _staticProbeDatabaseEntry; // float _diffuseWideningMax;
 	};
 
 	struct CB_EnvironmentProps

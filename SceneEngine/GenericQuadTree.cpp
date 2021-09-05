@@ -570,6 +570,7 @@ namespace SceneEngine
                 return false;
 
             if (objCellSpaceBoundingBoxes) {
+                unsigned objectsVisible = 0;
                 for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
                     const auto& boundary = *PtrAdd(objCellSpaceBoundingBoxes, (*i) * objStride);
                     uint32_t partialIterator = payloadIdx._partialInsideMask;
@@ -588,7 +589,10 @@ namespace SceneEngine
 
                     if ((visObjsCount+1) > visObjMaxCount)
                         return false;
-                    visObjs[visObjsCount++] = {*i, partialInside|payloadIdx._entirelyInsideMask};
+                    if (partialInside|payloadIdx._entirelyInsideMask) {
+                        visObjs[visObjsCount++] = {*i, partialInside|payloadIdx._entirelyInsideMask};
+                        ++objectsVisible;
+                    }
                 }
             } else {
                 if ((visObjsCount + payload._objects.size()) > visObjMaxCount)

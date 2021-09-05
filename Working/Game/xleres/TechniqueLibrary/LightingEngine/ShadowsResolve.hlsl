@@ -215,9 +215,9 @@ float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
     // these two methods should return the same result (and probably have similiar performance...)
     const bool useGatherCmpRed = false;
     if (!useGatherCmpRed) {
-        // SampleCmpLevelZero cannot be used with Vulkan, because there is no textureLod() override
+        // SampleCmpLevelZero cannot be used when cross compiling via glsl, because there is no textureLod() override
         // for a a sampler2DArrayShadow 
-        #if (VULKAN!=1)
+        #if defined(HLSLCC)
             return ShadowTextures.SampleCmpLevelZero(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
         #else
             return ShadowTextures.SampleCmp(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);

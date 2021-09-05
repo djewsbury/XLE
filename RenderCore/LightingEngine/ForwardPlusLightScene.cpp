@@ -27,6 +27,14 @@ namespace RenderCore { namespace LightingEngine
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
+	class ForwardPlusLightDesc : public Internal::StandardLightDesc
+	{
+	public:
+		unsigned _staticProbeDatabaseEntry = 0;
+
+		using StandardLightDesc::StandardLightDesc; 
+	};
+
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
@@ -65,7 +73,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
-	std::vector<ShadowProbes::Probe> ForwardPlusLightScene::ShadowProbesInterface::GetPendingProbes(ILightScene& lightScene)
+	std::vector<ShadowProbes::Probe> ForwardPlusLightScene::ShadowProbesInterface::GetPendingProbes(ForwardPlusLightScene& lightScene)
 	{
 		std::vector<ShadowProbes::Probe> result;
 		result.reserve(_pendingProbes.size());
@@ -73,12 +81,18 @@ namespace RenderCore { namespace LightingEngine
 			ShadowProbes::Probe probe;
 			probe._position = Zero<Float3>();
 			probe._radius = 1024;
-			auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending._attachedSource);
+			auto* positional = ((ILightScene&)lightScene).TryGetLightSourceInterface<IPositionalLightSource>(pending._attachedSource);
 			if (positional)
 				probe._position = ExtractTranslation(positional->GetLocalToWorld());
-			auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending._attachedSource);
+			auto* finite = ((ILightScene&)lightScene).TryGetLightSourceInterface<IFiniteLightSource>(pending._attachedSource);
 			if (finite)
 				probe._radius = finite->GetCutoffRange();
+
+			auto& internalLightDesc = *dynamic_cast<ForwardPlusLightDesc*>(positional);
+			assert(internalLightDesc._staticProbeDatabaseEntry == 0);
+			// we use zero as a sentinal, so add one to the actual index
+			internalLightDesc._staticProbeDatabaseEntry = unsigned(result.size()+1);
+
 			result.push_back(probe);
 		}
 		return result;
@@ -120,7 +134,7 @@ namespace RenderCore { namespace LightingEngine
 			_ambientLight->_ambientLightEnabled = true;
 			return 0;
 		}
-		auto desc = std::make_unique<Internal::StandardLightDesc>(Internal::StandardLightDesc::Flags::SupportFiniteRange);
+		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardLightDesc::Flags::SupportFiniteRange);
 		return AddLightSource(opId, std::move(desc));
 	}
 
@@ -225,9 +239,9 @@ namespace RenderCore { namespace LightingEngine
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto set = *idx >> 16, light = (*idx)&0xffff;
 				auto op = _lightSets[set]._operatorId;
-				*i = MakeLightUniforms(
-					*(Internal::StandardLightDesc*)_lightSets[set]._lights[light]._desc.get(),
-					_positionalLightOperators[op]);
+				auto& lightDesc = *(ForwardPlusLightDesc*)_lightSets[set]._lights[light]._desc.get();
+				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
+				i->_staticProbeDatabaseEntry = lightDesc._staticProbeDatabaseEntry;
 			}
 		}
 
@@ -247,7 +261,7 @@ namespace RenderCore { namespace LightingEngine
 					if (dominantLightOperator->_lights.size() > 1)
 						Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
 					i->_dominantLight = Internal::MakeLightUniforms(
-						*checked_cast<Internal::StandardLightDesc*>(dominantLightOperator->_lights[0]._desc.get()),
+						*checked_cast<ForwardPlusLightDesc*>(dominantLightOperator->_lights[0]._desc.get()),
 						_positionalLightOperators[_dominantLightOperatorId]);
 					dominantLightId = dominantLightOperator->_lights[0]._id;
 				}
@@ -311,6 +325,7 @@ namespace RenderCore { namespace LightingEngine
 				assert(context._rpi);
 				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 			}
+			dst[5] = &_lightScene->_shadowProbes._probes->GetStaticProbesTable();
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
@@ -321,6 +336,7 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(2, Utility::Hash64("EnvironmentProps"));
 			BindResourceView(3, Utility::Hash64("TiledLightBitField"));
 			BindResourceView(4, Utility::Hash64("SSR"));
+			BindResourceView(5, Utility::Hash64("StaticShadowProbeDatabase"));
 		}
 	};
 

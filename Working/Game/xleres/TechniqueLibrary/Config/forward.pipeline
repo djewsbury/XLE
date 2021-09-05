@@ -7,17 +7,18 @@ DescriptorSet ForwardLighting
 	SampledTexture TiledLightBitField;				// 3
 
 	SampledTexture SSR;								// 4
+	SampledTexture StaticShadowProbeDatabase;		// 5
 
-	SampledTexture NoiseTexture;					// 5
+	SampledTexture NoiseTexture;					// 6
 
-	Sampler ShadowSampler							// 6
+	Sampler ShadowSampler							// 7
 	{
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
 		Comparison = LessEqual
 	};
-	Sampler ShadowDepthSampler						// 7
+	Sampler ShadowDepthSampler						// 8
 	{
 		Filter = Bilinear,
 		AddressU = Border,

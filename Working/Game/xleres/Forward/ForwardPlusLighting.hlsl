@@ -11,6 +11,7 @@
 #include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
+#include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
 cbuffer EnvironmentProps : register (b0, space3)
 {
@@ -25,6 +26,8 @@ StructuredBuffer<uint> LightDepthTable : register(t2, space3);
 Texture3D<uint> TiledLightBitField : register(t3, space3);
 
 Texture2D SSR : register(t4, space3);
+
+TextureCubeArray StaticShadowProbeDatabase : register(t6, space3);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -50,6 +53,32 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 	#endif
 
 	return result; 
+}
+
+// See https://www.shadertoy.com/view/wtXXDl for interesting "biquadratic" texture sampling hack
+
+float SampleStaticDatabase(uint databaseEntry, float3 offset)
+{
+	// todo -- less silly way of querying the cubemap shadows
+	float distance;
+	if (abs(offset.x) > abs(offset.y)) {
+		if (abs(offset.x) > abs(offset.z)) {
+			distance = abs(offset.x);
+		} else {
+			distance = abs(offset.z);
+		}
+	} else if (abs(offset.y) > abs(offset.z)) {
+		distance = abs(offset.y);
+	} else {
+		distance = abs(offset.z);
+	}
+	const float f = 256.f;
+	const float n = f/1024.f;
+	MiniProjZW miniProjZW = AsMiniProjZW(float2(-(f) / (f-n), -(f*n) / (f-n)));		// projectionMatrix(2,2), projectionMatrix(2,3)
+	distance = WorldSpaceDepthToNDC_Perspective(distance, miniProjZW);
+	distance += 0.5f / 65535.f;		// offset half the depth precision
+	
+	return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
 }
 
 float3 CalculateIllumination(
@@ -109,7 +138,11 @@ float3 CalculateIllumination(
 						bitField ^= (1u << bitIdx);
 
 						LightDesc l = LightList[planeIdx*32+bitIdx];
+
 						float shadowing = 1.0f;
+						if (l.StaticDatabaseLightId != 0)
+							shadowing = SampleStaticDatabase(l.StaticDatabaseLightId-1, worldPosition-l.Position);
+
 						if (l.Shape == 0) {
 							result += shadowing * DirectionalLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
 						} else if (l.Shape == 1) {

@@ -89,7 +89,7 @@ namespace RenderCore { namespace LightingEngine
 				ILightScene::LightSourceId _attachedSource; 
 			};
 			std::vector<PendingProbe> _pendingProbes;
-			std::vector<ShadowProbes::Probe> GetPendingProbes(ILightScene&);
+			std::vector<ShadowProbes::Probe> GetPendingProbes(ForwardPlusLightScene&);
 		};
 		ShadowProbesInterface _shadowProbes;
 
