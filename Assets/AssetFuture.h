@@ -12,32 +12,52 @@
 #include <assert.h>
 #include <utility>
 
+// #include "../OSServices/Log.h"
+
 namespace Assets
 {
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
+	namespace Internal
+	{
+		class FutureShared : public IAsyncMarker
+		{
+		public:
+			const std::string& 			Initializer() const { return _initializer; }
+
+			explicit FutureShared(const std::string& initializer = {});
+			~FutureShared();
+		protected:
+			struct CallbackMarker { unsigned _markerId; FutureShared* _parent; };
+			mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
+
+			void RegisterFrameBarrierCallbackAlreadyLocked();
+			void ClearFrameBarrierCallbackAlreadyLocked() const;
+			virtual void OnFrameBarrier() = 0;
+
+			std::string _initializer;	// stored for debugging purposes
+		};
+	}
+
 	template<typename Type>
-		class Future : public IAsyncMarker
+		class Future : public Internal::FutureShared
 	{
 	public:
 		const Type& Actualize() const;
 		const Type* TryActualize() const;
-
-		bool			IsOutOfDate() const;
-		void			SimulateChange();
 		
-		AssetState		            GetAssetState() const;
-        std::optional<AssetState>   StallWhilePending(std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const;
+        std::optional<AssetState>   StallWhilePending(std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const override;
+
+		AssetState		            GetAssetState() const override { return _state; }
+		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
+		const Blob&				    GetActualizationLog() const { return _actualizationLog; }
 
 		AssetState		CheckStatusBkgrnd(
 			Type& actualized,
 			DependencyValidation& depVal,
 			Blob& actualizationLog);
-
-		const std::string&		    Initializer() const { return _initializer; }
-		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
-		const Blob&				    GetActualizationLog() const { return _actualizationLog; }
+		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
 
 		using PromisedType = Type;
 
@@ -61,22 +81,17 @@ namespace Assets
 		Blob					_actualizationLog;
 		DependencyValidation	_actualizedDepVal;
 
-		Type 					_pending;
 		AssetState				_pendingState;
+		Type 					_pending;
 		Blob					_pendingActualizationLog;
 		DependencyValidation	_pendingDepVal;
 
 		std::function<bool(Future<Type>&)> _pollingFunction;
 
-		std::string			_initializer;	// stored for debugging purposes
-		
-		void				OnFrameBarrier();
+		bool TryRunPollingFunction(std::unique_lock<Threading::Mutex>&);
+		void CheckFrameBarrierCallbackAlreadyLocked();
 
-		struct CallbackMarker { unsigned _markerId; Future<Type>* _parent; };
-		mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
-
-		void RegisterFrameBarrierCallbackAlreadyLocked();
-		void ClearFrameBarrierCallbackAlreadyLocked() const;
+		virtual void			OnFrameBarrier() override;
 	};
 
 	template<typename Type>
@@ -98,7 +113,10 @@ namespace Assets
 		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
 			DependencyValidation GetDependencyValidation(const Type& asset) { return asset ? (*asset).GetDependencyValidation() : DependencyValidation{}; }
 
-		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && !HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
+		template<typename Type, typename std::enable_if<std::is_same_v<std::decay_t<Type>, DependencyValidation>>::type* =nullptr>
+			DependencyValidation GetDependencyValidation(const Type& asset) { return asset; }
+
+		template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && !HasDerefGetDependencyValidation<Type>::value && !std::is_same_v<std::decay_t<Type>, DependencyValidation>>::type* =nullptr>
 			inline const DependencyValidation& GetDependencyValidation(const Type&) { static DependencyValidation dummy; return dummy; }
 
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
@@ -172,6 +190,37 @@ namespace Assets
 	}
 
 	template<typename Type>
+		bool Future<Type>::TryRunPollingFunction(std::unique_lock<Threading::Mutex>& lock)
+	{
+		if (!_pollingFunction)
+			return false;
+
+		std::function<bool(Future<Type>&)> pollingFunction;
+		std::swap(pollingFunction, _pollingFunction);
+		lock = {};
+		TRY {
+			auto pollingResult = pollingFunction(*this);
+			lock = std::unique_lock<Threading::Mutex>(_lock);
+			if (pollingResult) {
+				assert(!_pollingFunction);
+				std::swap(pollingFunction, _pollingFunction);
+			}
+		} CATCH (const Exceptions::ConstructionError& e) {
+			lock = std::unique_lock<Threading::Mutex>(_lock);
+			_pendingState = AssetState::Invalid;
+			_pendingActualizationLog = AsBlob(e);
+			_pendingDepVal = e.GetDependencyValidation();
+		} CATCH (const std::exception& e) {
+			lock = std::unique_lock<Threading::Mutex>(_lock);
+			_pendingState = AssetState::Invalid;
+			_pendingActualizationLog = AsBlob(e);
+		} CATCH_END
+
+		CheckFrameBarrierCallbackAlreadyLocked();
+		return true;
+	}
+
+	template<typename Type>
 		AssetState		Future<Type>::CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog)
 	{
 		if (_state == AssetState::Ready) {
@@ -182,7 +231,7 @@ namespace Assets
 		}
 
 		{
-			std::unique_lock<decltype(_lock)> lock(_lock);
+			std::unique_lock<Threading::Mutex> lock(_lock);
 			if (_state != AssetState::Pending) {
 				actualized = _actualized;
 				depVal = _actualizedDepVal;
@@ -195,38 +244,7 @@ namespace Assets
 				actualizationLog = _pendingActualizationLog;
 				return _pendingState;
 			}
-			if (_pollingFunction) {
-				std::function<bool(Future<Type>&)> pollingFunction;
-				std::swap(pollingFunction, _pollingFunction);
-				lock = {};
-				bool pollingResult = false;
-				TRY {
-					pollingResult = pollingFunction(*this);
-				} CATCH (const Exceptions::ConstructionError& e) {
-					lock = std::unique_lock<decltype(_lock)>(_lock);
-					_pendingState = AssetState::Invalid;
-					_pendingActualizationLog = AsBlob(e);
-					_pendingDepVal = e.GetDependencyValidation();
-					actualized = _pending;
-					depVal = _pendingDepVal;
-					actualizationLog = _pendingActualizationLog;
-					return _pendingState;
-				} CATCH (const std::exception& e) {
-					lock = std::unique_lock<decltype(_lock)>(_lock);
-					_pendingState = AssetState::Invalid;
-					_pendingActualizationLog = AsBlob(e);
-					actualized = _pending;
-					depVal = _pendingDepVal;
-					actualizationLog = _pendingActualizationLog;
-					return _pendingState;
-				} CATCH_END
-
-				lock = std::unique_lock<decltype(_lock)>(_lock);
-				if (pollingResult) {
-					assert(!_pollingFunction);
-					std::swap(pollingFunction, _pollingFunction);
-				}
-
+			if (TryRunPollingFunction(lock)) {
 				if (_state != AssetState::Pending) {
 					actualized = _actualized;
 					depVal = _actualizedDepVal;
@@ -247,40 +265,59 @@ namespace Assets
 	}
 
 	template<typename Type>
+		AssetState Future<Type>::CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog)
+	{
+		if (_state == AssetState::Ready) {
+			depVal = _actualizedDepVal;
+			actualizationLog = _actualizationLog;
+			return AssetState::Ready;
+		}
+
+		{
+			std::unique_lock<Threading::Mutex> lock(_lock);
+			if (_state != AssetState::Pending) {
+				depVal = _actualizedDepVal;
+				actualizationLog = _actualizationLog;
+				return _state;
+			}
+			if (_pendingState != AssetState::Pending) {
+				depVal = _actualizedDepVal;
+				actualizationLog = _pendingActualizationLog;
+				return _pendingState;
+			}
+			if (TryRunPollingFunction(lock)) {
+				if (_state != AssetState::Pending) {
+					depVal = _actualizedDepVal;
+					actualizationLog = _actualizationLog;
+					return _state;
+				}
+
+				if (_pendingState != AssetState::Pending) {
+					depVal = _actualizedDepVal;
+					actualizationLog = _pendingActualizationLog;
+					return _pendingState;
+				}
+			}
+		}
+
+		return AssetState::Pending;
+	}
+
+	template<typename Type>
 		void Future<Type>::OnFrameBarrier() 
 	{
 		auto state = _state;
-		if (state != AssetState::Pending) return;
+		assert(_frameBarrierCallbackMarker);
+		if (state != AssetState::Pending) {
+			// Log(Warning) << "OnFrameBarrier for non-pending future" << std::endl;
+			return;
+		}		
 
 			// lock & swap the asset into the front buffer. We only do this during the "frame barrier" phase, to
 			// prevent assets from changing in the middle of a single frame.
-		std::unique_lock<decltype(_lock)> lock(_lock);
-		if (_pollingFunction) {
-			std::function<bool(Future<Type>&)> pollingFunction;
-            std::swap(pollingFunction, _pollingFunction);
-			lock = {};
-			TRY {
-				bool pollingResult = pollingFunction(*this);
-				lock = std::unique_lock<decltype(_lock)>(_lock);
-				if (pollingResult) {
-					assert(!_pollingFunction);
-					std::swap(pollingFunction, _pollingFunction);
-				}
-			} CATCH (const Exceptions::ConstructionError& e) {
-				lock = std::unique_lock<decltype(_lock)>(_lock);
-				_pendingState = AssetState::Invalid;
-				_pendingActualizationLog = AsBlob(e);
-				_pendingDepVal = e.GetDependencyValidation();
-			} CATCH (const std::exception& e) {
-				lock = std::unique_lock<decltype(_lock)>(_lock);
-				_pendingState = AssetState::Invalid;
-				_pendingActualizationLog = AsBlob(e);
-				_pendingDepVal = {};
-			} CATCH_END
-		}
+		std::unique_lock<Threading::Mutex> lock(_lock);
+		TryRunPollingFunction(lock);
 
-		if (!_pollingFunction)
-			ClearFrameBarrierCallbackAlreadyLocked();
 		if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
 			_actualized = std::move(_pending);
 			_actualizationLog = std::move(_pendingActualizationLog);
@@ -289,35 +326,21 @@ namespace Assets
 			// when _state is set to AssetState::Ready
 			// we should also consider a cache flush here to ensure the CPU commits in the correct order
 			_state = _pendingState;
+
+			assert(!_pollingFunction);
+			ClearFrameBarrierCallbackAlreadyLocked();
 		}
 	}
 
 	template<typename Type>
-		bool			Future<Type>::IsOutOfDate() const
+		void Future<Type>::CheckFrameBarrierCallbackAlreadyLocked()
 	{
-		auto state = _state;
-		if (state == AssetState::Pending) return false;
-		return _actualizedDepVal.GetValidationIndex() > 0;
-	}
-
-	template<typename Type>
-		void			Future<Type>::SimulateChange()
-	{
-		assert(0);
-		/*auto state = _state;
-		if (state == AssetState::Ready || state == AssetState::Invalid) {
-			if (_actualizedDepVal)
-				_actualizedDepVal->OnChange();
-			return;
-		}*/
-
-		// else, still pending -- can't do anything right now
-	}
-
-	template<typename Type>
-		AssetState		Future<Type>::GetAssetState() const
-	{
-		return _state;
+		// Two reasons to run the frame barrier callback
+		//		1. run polling function
+		//		2. move background state into foreground state
+		// If neither of these are relevant now, we can go ahead and clear it
+		if (_state != ::Assets::AssetState::Pending && !_pollingFunction)
+			ClearFrameBarrierCallbackAlreadyLocked();
 	}
 
 	template<typename Type>
@@ -337,7 +360,7 @@ namespace Assets
         auto timeToCancel = startTime + timeout;
 
 		auto* that = const_cast<Future<Type>*>(this);	// hack to defeat the "const" on this method
-		std::unique_lock<decltype(that->_lock)> lock(that->_lock);
+		std::unique_lock<Threading::Mutex> lock(that->_lock);
 
 		// If we have polling function assigned, we have to poll waiting for
 		// it to be completed. Threading is a little complicated here, because
@@ -359,14 +382,14 @@ namespace Assets
 				TRY {
 					pollingResult = pollingFunction(*that);
 				} CATCH (const Exceptions::ConstructionError& e) {
-					lock = std::unique_lock<decltype(_lock)>(_lock);
+					lock = std::unique_lock<Threading::Mutex>(_lock);
 					that->_pendingState = AssetState::Invalid;
 					that->_pendingActualizationLog = AsBlob(e);
 					that->_pendingDepVal = e.GetDependencyValidation();
 					isInLock = true;		// already locked "that->_lock"
 					break;
 				} CATCH (const std::exception& e) {
-					lock = std::unique_lock<decltype(that->_lock)>(that->_lock);
+					lock = std::unique_lock<Threading::Mutex>(that->_lock);
 					that->_pendingState = AssetState::Invalid;
 					that->_pendingActualizationLog = AsBlob(e);
 					that->_pendingDepVal = {};
@@ -375,7 +398,7 @@ namespace Assets
 				} CATCH_END
 
 				if (!pollingResult) {
-					lock = std::unique_lock<decltype(that->_lock)>(that->_lock);
+					lock = std::unique_lock<Threading::Mutex>(that->_lock);
 					// If pollingResult was false, and no replacement polling function 
 					// has been set, then we are done, and we break out of the loop
 					// If we replacement polling function was set, we now capture that
@@ -390,7 +413,7 @@ namespace Assets
 
                 if (timeout.count() != 0 && std::chrono::steady_clock::now() >= timeToCancel) {
                     // return the polling function to the future
-                    lock = std::unique_lock<decltype(that->_lock)>(that->_lock);
+                    lock = std::unique_lock<Threading::Mutex>(that->_lock);
                     assert(!that->_pollingFunction);
                     that->_pollingFunction = std::move(pollingFunction);
 					DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
@@ -412,7 +435,9 @@ namespace Assets
 			}
 			
 			if (!isInLock)
-				lock = std::unique_lock<decltype(that->_lock)>(that->_lock);
+				lock = std::unique_lock<Threading::Mutex>(that->_lock);
+
+			that->CheckFrameBarrierCallbackAlreadyLocked();
 		}
 
 		for (;;) {
@@ -428,11 +453,11 @@ namespace Assets
 				// There is a problem if the caller is using bothActualize() and StallWhilePending() on the
 				// same asset in the same frame -- in this case, the order can have side effects.
 				assert(that->_state == AssetState::Pending);
-				ClearFrameBarrierCallbackAlreadyLocked();
 				that->_actualized = std::move(that->_pending);
 				that->_actualizationLog = std::move(that->_pendingActualizationLog);
 				that->_actualizedDepVal = std::move(that->_pendingDepVal);
 				that->_state = that->_pendingState;
+				that->ClearFrameBarrierCallbackAlreadyLocked();
 				DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 				return (AssetState)that->_state;
 			}
@@ -458,7 +483,7 @@ namespace Assets
 			_pendingState = AssetState::Ready;
 			_pendingActualizationLog = log;
 			_pendingDepVal = Internal::GetDependencyValidation(_pending);
-			RegisterFrameBarrierCallbackAlreadyLocked();
+			RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 
 			// If we are already in invalid / ready state, we will never move the pending
 			// asset into the foreground. We also cannot change from those states to pending, 
@@ -496,7 +521,7 @@ namespace Assets
 			_pendingState = AssetState::Invalid;
 			_pendingActualizationLog = log;
 			_pendingDepVal = std::move(depVal);
-			RegisterFrameBarrierCallbackAlreadyLocked();
+			RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 		}
 		_conditional.notify_all();
 	}
@@ -514,7 +539,7 @@ namespace Assets
 			// have completely immediately as well, and actually hit this same codeblock and moved the asset into 
 			// ready/invalid state already.
 			// assert(_state == AssetState::Pending);
-			if (!_pollingFunction)
+			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
 				ClearFrameBarrierCallbackAlreadyLocked();
 			if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
 				_actualized = std::move(_pending);
@@ -533,37 +558,8 @@ namespace Assets
 		assert(_state == AssetState::Pending);
 		assert(_pendingState == AssetState::Pending);
 		_pollingFunction = std::move(newFunction);
-		RegisterFrameBarrierCallbackAlreadyLocked();
-	}
-
-	template<typename Type>
-		void Future<Type>::RegisterFrameBarrierCallbackAlreadyLocked()
-	{
-		if (_frameBarrierCallbackMarker)
-			return;
-
-		_frameBarrierCallbackMarker = std::make_shared<CallbackMarker>();
-		_frameBarrierCallbackMarker->_parent = this;
-		std::weak_ptr<CallbackMarker> weakMarker = _frameBarrierCallbackMarker;
-		// Note that if we're in a background thread, then the callback can be called before we
-		// even assign "_frameBarrierCallbackMarker->_markerId". However, we avoid problems because
-		// we're inside of the mutex lock here
-		_frameBarrierCallbackMarker->_markerId = Internal::RegisterFrameBarrierCallback(
-			[weakMarker]() {
-				auto l = weakMarker.lock();
-				if (!l) return;
-				l->_parent->OnFrameBarrier();
-			});
-	}
-
-	template<typename Type>
-		void Future<Type>::ClearFrameBarrierCallbackAlreadyLocked() const
-	{
-		if (!_frameBarrierCallbackMarker)
-			return;
-
-		Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
-		_frameBarrierCallbackMarker.reset();
+		if (_pollingFunction)
+			RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
 	template<typename Type>
@@ -587,8 +583,10 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback)
+		if (needsFrameBufferCallback) {
+			assert(_pollingFunction);
 			RegisterFrameBarrierCallbackAlreadyLocked();
+		}
 	}
 
 	template<typename Type>
@@ -616,15 +614,17 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback)
+		if (needsFrameBufferCallback) {
+			assert(_pollingFunction);
 			RegisterFrameBarrierCallbackAlreadyLocked();
+		}
 
 		return *this;
 	}
 
 	template<typename Type>
 		Future<Type>::Future(const std::string& initializer)
-	: _initializer(initializer)
+	: FutureShared(initializer)
 	{
 		// Technically, we're not actually "pending" yet, because no background operation has begun.
 		// If this future is not bound to a specific operation, we'll be stuck in pending state
@@ -636,8 +636,51 @@ namespace Assets
 	template<typename Type>
 		Future<Type>::~Future() 
 	{
-		if (_frameBarrierCallbackMarker)
-			Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
 	}
 
+		////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		inline void FutureShared::RegisterFrameBarrierCallbackAlreadyLocked()
+		{
+			if (_frameBarrierCallbackMarker)
+				return;
+
+			_frameBarrierCallbackMarker = std::make_shared<CallbackMarker>();
+			_frameBarrierCallbackMarker->_parent = this;
+			std::weak_ptr<CallbackMarker> weakMarker = _frameBarrierCallbackMarker;
+			// Note that if we're in a background thread, then the callback can be called before we
+			// even assign "_frameBarrierCallbackMarker->_markerId". However, we avoid problems because
+			// we're inside of the mutex lock here
+			_frameBarrierCallbackMarker->_markerId = Internal::RegisterFrameBarrierCallback(
+				[weakMarker]() {
+					auto l = weakMarker.lock();
+					if (!l) {
+						// Log(Warning) << "Frame barrier callback function was not cleaned up before asset was destroyed" << std::endl; 
+						return;
+					}
+					l->_parent->OnFrameBarrier();
+				});
+		}
+
+		inline void FutureShared::ClearFrameBarrierCallbackAlreadyLocked() const
+		{
+			if (!_frameBarrierCallbackMarker)
+				return;
+
+			Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+			_frameBarrierCallbackMarker.reset();
+		}
+
+		inline FutureShared::FutureShared(const std::string& initializer)
+		: _initializer(initializer)
+		{}
+
+		inline FutureShared::~FutureShared() 
+		{
+			if (_frameBarrierCallbackMarker)
+				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+		}
+	}
 }

@@ -107,7 +107,8 @@ namespace Assets
         ScopedLock(_lock);
         auto shadowing = LowerBound(_shadowingAssets, hash);
         if (shadowing != _shadowingAssets.end() && shadowing->first == hash) {
-            shadowing->second->SimulateChange();
+            assert(0);
+            // shadowing->second->SimulateChange();
             if (newShadowingAsset) {
                 shadowing->second->SetAsset(std::move(newShadowingAsset), nullptr);
             } else {
@@ -123,9 +124,10 @@ namespace Assets
             _shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
         }
 
-        auto i = _assets.Get(hash);
+        assert(0);
+        /*auto i = _assets.Get(hash);
         if (i)
-            i->second->SimulateChange();
+            i->second->SimulateChange();*/
 
         return hash;
     }

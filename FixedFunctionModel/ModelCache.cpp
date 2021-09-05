@@ -84,6 +84,14 @@ namespace FixedFunctionModel
 
     uint32 ModelCache::GetReloadId() { return _pimpl->_reloadId; }
 
+    template<typename Future>
+        void IsOutOfData(Future& future)
+    {
+        auto state = future.GetAssetState();
+		if (state == AssetState::Pending) return false;
+		return future.GetDependencyValidation().GetValidationIndex() > 0;
+    }
+
     auto ModelCache::GetScaffolds(
         StringSection<ResChar> modelFilename, 
         StringSection<ResChar> materialFilename) -> ModelCacheScaffolds
@@ -91,7 +99,7 @@ namespace FixedFunctionModel
 		ModelCacheScaffolds result;
         result._hashedModelName = Hash64(modelFilename.begin(), modelFilename.end());
         auto modelFuture = _pimpl->_modelScaffolds.Get(result._hashedModelName);
-        if (!modelFuture || modelFuture->IsOutOfDate()) {
+        if (!modelFuture || IsOutOfDate(*modelFuture)) {
 			modelFuture = Internal::CreateModelScaffold(modelFilename);
             auto insertType = _pimpl->_modelScaffolds.Insert(result._hashedModelName, modelFuture);
                 // we upload the "_reloadId" value when change one of our pointers from a previous
@@ -103,7 +111,7 @@ namespace FixedFunctionModel
         auto matNamePtr = materialFilename;
 
         auto materialFuture = _pimpl->_materialScaffolds.Get(result._hashedMaterialName);
-        if (!materialFuture || materialFuture->IsOutOfDate()) {
+        if (!materialFuture || IsOutOfDate(*materialFuture)) {
 			materialFuture = Internal::CreateMaterialScaffold(modelFilename, matNamePtr);
             auto insertType = _pimpl->_materialScaffolds.Insert(result._hashedMaterialName, materialFuture);
             if (materialFuture || insertType == LRUCacheInsertType::EvictAndReplace) ++_pimpl->_reloadId;
@@ -143,7 +151,7 @@ namespace FixedFunctionModel
         for (auto s=supplements.cbegin(); s!=supplements.cend(); ++s) {
             auto hashName = HashCombine(HashCombine(Hash64(modelFilename.begin(), modelFilename.end()), Hash64(materialFilename.begin(), materialFilename.end())), *s);
             auto supp = _supplements.Get(hashName);
-            if (!supp || supp->IsOutOfDate()) {
+            if (!supp || IsOutOfDate(*supp)) {
                 if (supp) { ++_reloadId; }
                 supp = Internal::CreateSupplement(*s, modelFilename, materialFilename);
                 if (supp) {
