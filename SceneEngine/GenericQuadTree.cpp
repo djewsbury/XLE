@@ -12,6 +12,7 @@
 #include "../Utility/Streams/SerializationUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/ArithmeticUtils.h"
 #include "../Core/Prefix.h"
 #include <stack>
 #include <cfloat>
@@ -416,7 +417,7 @@ namespace SceneEngine
             //  Traverse through the quad tree, and find do bounding box level 
             //  culling on each object
         static std::stack<unsigned> workingStack;
-        static std::stack<unsigned> entirelyVisibleStack;
+        static std::vector<unsigned> entirelyVisibleStack;
         assert(workingStack.empty() && entirelyVisibleStack.empty());
         workingStack.push(0);
         while (!workingStack.empty()) {
@@ -434,15 +435,13 @@ namespace SceneEngine
 
                     //  this node and all children are "visible" without
                     //  any further culling tests
-                entirelyVisibleStack.push(nodeIndex);
+                entirelyVisibleStack.push_back(nodeIndex);
 
             } else {
 
-                for (unsigned c=0; c<4; ++c) {
-                    if (node._children[c] < pimpl._nodes.size()) {
+                for (unsigned c=0; c<4; ++c)
+                    if (node._children[c] < pimpl._nodes.size())
                         workingStack.push(node._children[c]);
-                    }
-                }
 
                 if (node._payloadID < pimpl._payloads.size()) {
                     auto& payload = pimpl._payloads[node._payloadID];
@@ -483,16 +482,11 @@ namespace SceneEngine
             //  some nodes might be "entirely visible" -- ie, the bounding box is completely
             //  within the culling frustum. In these cases, we can skip the rest of the culling
             //  checks and just add these objects as visible
-        while (!entirelyVisibleStack.empty()) {
-            auto nodeIndex = entirelyVisibleStack.top();
-            entirelyVisibleStack.pop();
-
-            auto& node = pimpl._nodes[nodeIndex];
-            for (unsigned c=0; c<4; ++c) {
-                if (node._children[c] < pimpl._nodes.size()) {
-                    entirelyVisibleStack.push(node._children[c]);
-                }
-            }
+        for (unsigned c=0; c<entirelyVisibleStack.size(); ++c) {
+            auto& node = pimpl._nodes[entirelyVisibleStack[c]];
+            for (unsigned c=0; c<4; ++c)
+                if (node._children[c] < pimpl._nodes.size())
+                    entirelyVisibleStack.push_back(node._children[c]);
 
             if (node._payloadID < pimpl._payloads.size()) {
                 auto& payload = pimpl._payloads[node._payloadID];
@@ -506,6 +500,104 @@ namespace SceneEngine
                 }
             }
         }
+        entirelyVisibleStack.clear();
+
+        assert(visObjsCount <= visObjMaxCount);
+        if (metrics) {
+            metrics->_nodeAabbTestCount = nodeAabbTestCount; 
+            metrics->_payloadAabbTestCount = payloadAabbTestCount;
+        }
+
+        return true;
+    }
+
+    bool GenericQuadTree::CalculateVisibleObjects(
+        IteratorRange<const Float4x4*> cellToClipAligned, uint32_t viewMask, ClipSpaceType clipSpaceType,
+        const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
+        std::pair<unsigned, uint32_t> visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,
+        Metrics* metrics) const
+    {
+        visObjsCount = 0;
+        assert((size_t(AsFloatArray(*cellToClipAligned.begin())) & 0xf) == 0);
+        assert(cellToClipAligned.size() <= 32);
+
+        unsigned nodeAabbTestCount = 0, payloadAabbTestCount = 0;
+
+		const auto& pimpl = GetPimpl();
+
+            //  Traverse through the quad tree, and find do bounding box level 
+            //  culling on each object
+        struct NodeEntry { unsigned _nodeIndex; uint32_t _partialInsideMask; uint32_t _entirelyInsideMask; };
+        static std::stack<NodeEntry> workingStack;
+        static std::vector<NodeEntry> payloadsToProcess;
+        assert(workingStack.empty() && payloadsToProcess.empty());
+        workingStack.push({0, viewMask, 0});
+        while (!workingStack.empty()) {
+            auto nodeIndex = workingStack.top();
+            workingStack.pop();
+            
+            auto& node = pimpl._nodes[nodeIndex._nodeIndex];
+            uint32_t partialInside = nodeIndex._partialInsideMask, entirelyInsideMask = nodeIndex._entirelyInsideMask;
+            uint32_t partialIterator = partialInside;
+            while (partialIterator) {
+                unsigned viewIdx = xl_ctz4(partialIterator);
+                partialIterator ^= 1u<<viewIdx;
+
+                auto test = TestAABB_Aligned(cellToClipAligned[viewIdx], node._boundary.first, node._boundary.second, clipSpaceType);
+                if (test == CullTestResult::Culled) {
+                    partialInside ^= 1u<<viewIdx;
+                } else if (test == CullTestResult::Within) {
+                    partialInside ^= 1u<<viewIdx;
+                    entirelyInsideMask |= 1u<<viewIdx;
+                }
+                ++nodeAabbTestCount;
+            }
+
+            if ((entirelyInsideMask|partialInside) != 0) {
+                for (unsigned c=0; c<4; ++c)
+                    if (node._children[c] < pimpl._nodes.size())
+                        workingStack.push({node._children[c], partialInside, entirelyInsideMask});
+
+                if (node._payloadID < pimpl._payloads.size())
+                    payloadsToProcess.push_back({node._payloadID, partialInside, entirelyInsideMask});
+            }
+        }
+
+        for (auto payloadIdx:payloadsToProcess) {
+            auto& payload = pimpl._payloads[payloadIdx._nodeIndex];
+            assert(payloadIdx._partialInsideMask | payloadIdx._entirelyInsideMask);
+            if ((visObjsCount + payload._objects.size()) > visObjMaxCount)
+                return false;
+
+            if (objCellSpaceBoundingBoxes) {
+                for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
+                    const auto& boundary = *PtrAdd(objCellSpaceBoundingBoxes, (*i) * objStride);
+                    uint32_t partialIterator = payloadIdx._partialInsideMask;
+                    uint32_t partialInside = payloadIdx._partialInsideMask;
+                    while (partialIterator) {
+                        unsigned viewIdx = xl_ctz4(partialIterator);
+                        partialIterator ^= 1u<<viewIdx;
+
+                        // we might be able to get better performance with a single optimized function that does either multiple views
+                        // or multiple bounding boxes all in one go 
+                        auto test = TestAABB_Aligned(cellToClipAligned[viewIdx], boundary.first, boundary.second, clipSpaceType);
+                        if (test == CullTestResult::Culled)
+                            partialInside ^= 1u<<viewIdx;
+                        ++payloadAabbTestCount;
+                    }
+
+                    if ((visObjsCount+1) > visObjMaxCount)
+                        return false;
+                    visObjs[visObjsCount++] = {*i, partialInside|payloadIdx._entirelyInsideMask};
+                }
+            } else {
+                if ((visObjsCount + payload._objects.size()) > visObjMaxCount)
+                    return false;
+                for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i)
+                    visObjs[visObjsCount++] = {*i, payloadIdx._partialInsideMask|payloadIdx._entirelyInsideMask};
+            }
+        }
+        payloadsToProcess.clear();
 
         assert(visObjsCount <= visObjMaxCount);
         if (metrics) {

@@ -16,7 +16,7 @@
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
-namespace Assets { class DirectorySearchRules; }
+namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 
 namespace SceneEngine
 {
@@ -75,6 +75,11 @@ namespace SceneEngine
             const ExecuteSceneContext& executeContext,
 			const PlacementCellSet& cellSet);
 
+        void BuildDrawables(
+            const ExecuteSceneContext& executeContext,
+            IteratorRange<const Float4x4*> worldToCullingFrustums,
+			const PlacementCellSet& cellSet);
+
             // -------------- Render filtered --------------
         void BuildDrawables(
             const ExecuteSceneContext& executeContext,
@@ -91,6 +96,8 @@ namespace SceneEngine
             -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>;
 
         void SetImposters(std::shared_ptr<DynamicImposters> imposters);
+
+        std::shared_ptr<::Assets::IAsyncMarker> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
 
         PlacementsRenderer(
             std::shared_ptr<PlacementsCache> placementsCache, 
