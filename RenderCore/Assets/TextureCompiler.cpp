@@ -399,7 +399,7 @@ namespace RenderCore { namespace Assets
 			"texture-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[](auto initializers) {
+			[](const ::Assets::InitializerPack& initializers) {
 				auto paramType = initializers.GetInitializer<unsigned>(0);
 				if (paramType == 0) {
 					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1));
