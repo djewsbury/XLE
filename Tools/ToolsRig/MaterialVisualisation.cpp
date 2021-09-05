@@ -172,6 +172,14 @@ namespace ToolsRig
             }
         }
 
+		void ExecuteScene(
+			RenderCore::IThreadContext& threadContext,
+			const SceneEngine::ExecuteSceneContext& executeContext,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const override
+		{
+			assert(0);
+		}
+
 		std::pair<Float3, Float3> GetBoundingBox() const override { return { Float3{-1.0f, 1.0f, 1.0f}, Float3{1.0f, 1.0f, 1.0f} }; }
 		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override { return { {}, {} }; }
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& delegate) override { return nullptr; }

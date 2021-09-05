@@ -20,7 +20,7 @@ namespace SceneEngine
 	class SceneView
 	{
 	public:
-		enum class Type { Normal, Shadow, PrepareResources, Other };
+		enum class Type { Normal, Shadow, PrepareResources, ShadowStatic, Other };
 		Type _type = SceneView::Type::Normal;
 		RenderCore::Techniques::ProjectionDesc _projection;
 	};
@@ -40,6 +40,10 @@ namespace SceneEngine
         virtual void ExecuteScene(
             RenderCore::IThreadContext& threadContext,
             const ExecuteSceneContext& executeContext) const = 0;
+        virtual void ExecuteScene(
+			RenderCore::IThreadContext& threadContext,
+			const SceneEngine::ExecuteSceneContext& executeContext,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const = 0;
 		virtual ~IScene() = default;
 	};
 

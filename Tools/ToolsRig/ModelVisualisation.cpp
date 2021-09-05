@@ -208,6 +208,14 @@ namespace ToolsRig
 			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), _preDrawDelegate);
 		}
 
+		void ExecuteScene(
+			RenderCore::IThreadContext& threadContext,
+			const SceneEngine::ExecuteSceneContext& executeContext,
+			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> multiViews) const override
+		{
+			assert(0);
+		}
+
 		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override
 		{
 			auto matName = _actualized->_renderer->GetMaterialScaffold()->GetMaterialName(materialGuid).AsString();
