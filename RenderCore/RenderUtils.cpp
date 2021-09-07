@@ -677,30 +677,76 @@ namespace RenderCore
             //          We could also use the "_alignedByteOffset" member
             //          to find out where the element begins and ends)
         unsigned result = 0;
+        unsigned largestAlignmentRequirement = 1;
         for (auto i=range.begin(); i<range.end(); ++i) {
             if (i->_inputSlot == slot) {
                 assert(i->_alignedByteOffset == (result/8) || i->_alignedByteOffset == ~unsigned(0x0));
+                auto alignmentRequirement = VertexAttributeRequiredAlignment(i->_nativeFormat);
+                largestAlignmentRequirement = std::max(largestAlignmentRequirement, alignmentRequirement);
+                assert(((result/8)%alignmentRequirement)==0);
                 result += BitsPerPixel(i->_nativeFormat);
             }
         }
+        assert(((result/8)%largestAlignmentRequirement)==0);
         return result / 8;
     }
 
 	std::vector<unsigned> CalculateVertexStrides(IteratorRange<const InputElementDesc*> layout)
 	{
 		std::vector<unsigned> result;
+        #if defined(_DEBUG)
+            std::vector<unsigned> largestAlignmentRequirement;
+        #endif
 		for (auto& a:layout) {
-			if (result.size() <= a._inputSlot)
+			if (result.size() <= a._inputSlot) {
 				result.resize(a._inputSlot + 1, 0);
+                largestAlignmentRequirement.resize(a._inputSlot + 1, 1);
+            }
 			unsigned& stride = result[a._inputSlot];
+            #if defined(_DEBUG)
+                auto alignmentRequirement = VertexAttributeRequiredAlignment(a._nativeFormat);
+                largestAlignmentRequirement[a._inputSlot] = std::max(largestAlignmentRequirement[a._inputSlot], alignmentRequirement);
+            #endif
 			auto bytes = BitsPerPixel(a._nativeFormat) / 8;
 			if (a._alignedByteOffset == ~0u) {
+                assert((stride%alignmentRequirement) == 0);
 				stride = stride + bytes;
 			} else {
+                assert((a._alignedByteOffset%alignmentRequirement) == 0);
 				stride = std::max(stride, a._alignedByteOffset + bytes);
 			}
 		}
+        #if defined(_DEBUG)
+            for (unsigned s=0; s<result.size(); ++s)
+                assert((result[s]%largestAlignmentRequirement[s])==0);
+        #endif
 		return result;
+	}
+
+    bool RequiresAlignmentSpacing(IteratorRange<const InputElementDesc*> layout)
+	{
+		std::vector<unsigned> result;
+        std::vector<unsigned> largestAlignmentRequirement;
+		for (auto& a:layout) {
+			if (result.size() <= a._inputSlot) {
+				result.resize(a._inputSlot + 1, 0);
+                largestAlignmentRequirement.resize(a._inputSlot + 1, 1);
+            }
+			unsigned& stride = result[a._inputSlot];
+            auto alignmentRequirement = VertexAttributeRequiredAlignment(a._nativeFormat);
+            largestAlignmentRequirement[a._inputSlot] = std::max(largestAlignmentRequirement[a._inputSlot], alignmentRequirement);
+			auto bytes = BitsPerPixel(a._nativeFormat) / 8;
+			if (a._alignedByteOffset == ~0u) {
+                if ((stride%alignmentRequirement) != 0) return true;
+				stride = stride + bytes;
+			} else {
+                if ((a._alignedByteOffset%alignmentRequirement) != 0) return true;
+				stride = std::max(stride, a._alignedByteOffset + bytes);
+			}
+		}
+        for (unsigned s=0; s<result.size(); ++s)
+            if ((result[s]%largestAlignmentRequirement[s])!=0) return true;
+		return false;
 	}
 
 	std::vector<InputElementDesc> NormalizeInputAssembly(IteratorRange<const InputElementDesc*> layout)
@@ -713,13 +759,24 @@ namespace RenderCore
 		std::vector<InputElementDesc> result(layout.begin(), layout.end());
 
 		std::vector<unsigned> runningSizes;
+        std::vector<unsigned> largestAlignmentRequirement;
 		for (auto& a:result) {
-			if (runningSizes.size() <= a._inputSlot)
+			if (runningSizes.size() <= a._inputSlot) {
 				runningSizes.resize(a._inputSlot + 1, 0);
+                largestAlignmentRequirement.resize(a._inputSlot + 1, 1);
+            }
 			unsigned& runningSize = runningSizes[a._inputSlot];
 			auto bytes = BitsPerPixel(a._nativeFormat) / 8;
-			if (a._alignedByteOffset == ~0u)
+            auto alignmentRequirement = VertexAttributeRequiredAlignment(a._nativeFormat);
+			if (a._alignedByteOffset == ~0u) {
+                if ((runningSize%alignmentRequirement) != 0) {
+                    runningSize += alignmentRequirement-(runningSize%alignmentRequirement);
+                    Log(Warning) << "Adding spacer in vertex buffer due to attribute alignment rules" << std::endl;
+                }
 				a._alignedByteOffset = runningSize;
+            } else {
+                assert((a._alignedByteOffset%alignmentRequirement) == 0);
+            }
 
 			runningSize = std::max(runningSize, a._alignedByteOffset + bytes);
 
@@ -746,6 +803,11 @@ namespace RenderCore
         // That makes this a little more complicated, unfortunately
         // Note -- this won't produce the correct result if the input is so scrambled that there are multiple
         // elements that overlap each other
+
+        #if defined(_DEBUG)
+            // no support for alignment spacing yet
+            assert(!RequiresAlignmentSpacing(inputAssembly));
+        #endif
 
         uint64_t result = seed;
 
@@ -860,22 +922,36 @@ namespace RenderCore
         //
         if (elements.empty()) return 0;
 		unsigned result = 0;
-        unsigned largestComponentPrecision = 0;
-        unsigned basicAlignment = 32;   // (ie, 4 bytes in # of bits)
+        unsigned largestRequiredAlignment = 1;
         for (auto i=elements.begin(); i<elements.end(); ++i) {
-            auto componentPrecision = GetComponentPrecision(i->_nativeFormat);
-            assert((result % componentPrecision) == 0);
-            largestComponentPrecision = std::max(largestComponentPrecision, componentPrecision);
-            auto size = BitsPerPixel(i->_nativeFormat);
+            auto alignment = VertexAttributeRequiredAlignment(i->_nativeFormat);
+            largestRequiredAlignment = std::max(largestRequiredAlignment, alignment);
+            if ((result%alignment) != 0) {
+                result += alignment-(result%alignment);
+                Log(Warning) << "Adding spacer in vertex buffer due to attribute alignment rules" << std::endl;
+            }
+            auto size = BitsPerPixel(i->_nativeFormat) / 8;
             result += size;
-            if ((size % basicAlignment) != 0)
-                result += basicAlignment - (size % basicAlignment);   // add padding required by basic alignment restriction
         }
         if (enforceAlignment) {
-            assert(!largestComponentPrecision || (result % largestComponentPrecision) == 0);      // ensure second and subsequent vertices will be aligned
+            if ((result%largestRequiredAlignment) != 0) {
+                result += largestRequiredAlignment-(result%largestRequiredAlignment);
+                Log(Warning) << "Adding spacer in vertex buffer due to attribute alignment rules" << std::endl;
+            }
         }
-        return result / 8;
+        return result;
 	}
+
+    unsigned VertexAttributeRequiredAlignment(Format fmt)
+    {
+        // The Vulkan space is clearest about the rules here:
+        //      if fmt is a "packed format" (ie, multi-component types that are treated as a single larger component type), then the alignment has special rules
+        //      for other formats, the alignment is the size of the component type
+        auto componentPrecision = GetComponentPrecision(fmt);
+        componentPrecision = std::max(componentPrecision, 8u);
+        assert(componentPrecision != 10 && componentPrecision != 11);       // these are the 10/10/10/2, 11/11/10 type formats
+        return componentPrecision/8;
+    }
 
     unsigned CalculatePrimitiveCount(Topology topology, unsigned vertexCount, unsigned drawCallCount)
     {

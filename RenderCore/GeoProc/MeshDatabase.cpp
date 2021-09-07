@@ -11,6 +11,7 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Vector.h"
 #include "../../Math/XLEMath.h"
+#include "../../OSServices/Log.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/IteratorUtils.h"
@@ -623,6 +624,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     NativeVBLayout BuildDefaultLayout(MeshDatabase& mesh, const NativeVBSettings& settings)
     {
         unsigned accumulatingOffset = 0;
+        unsigned largestRequiredAlignment = 1;
 
         NativeVBLayout result;
         result._elements.resize(mesh.GetStreams().size());
@@ -642,6 +644,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 //          We don't yet know how it will be bound to materials.
             nativeElement._nativeFormat         = CalculateFinalVBFormat(*stream.GetSourceData(), settings);
             nativeElement._inputSlot            = 0;
+
+            auto alignment = VertexAttributeRequiredAlignment(nativeElement._nativeFormat);
+            if ((accumulatingOffset%alignment) != 0) {
+                accumulatingOffset += alignment-(accumulatingOffset%alignment);
+                Log(Warning) << "Adding spacer in vertex buffer due to attribute alignment rules" << std::endl;
+            }
+            largestRequiredAlignment = std::max(largestRequiredAlignment, alignment);
             nativeElement._alignedByteOffset    = accumulatingOffset;
             nativeElement._inputSlotClass       = InputDataRate::PerVertex;
             nativeElement._instanceDataStepRate = 0;
@@ -649,12 +658,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             accumulatingOffset += BitsPerPixel(nativeElement._nativeFormat)/8;
         }
 
+        if ((accumulatingOffset%largestRequiredAlignment) != 0) {
+            accumulatingOffset += largestRequiredAlignment-(accumulatingOffset%largestRequiredAlignment);
+            Log(Warning) << "Adding spacer in vertex buffer due to attribute alignment rules" << std::endl;
+        }
         result._vertexStride = accumulatingOffset;
-
-            // DirectX seems to require vertex strides that are multiples of 4.
-            // I haven't verified this in documentation. But very small strides (such
-            // as 1) cause debug layer errors.
-        result._vertexStride = CeilToMultiple(result._vertexStride, 4u);
 
         return result;
     }

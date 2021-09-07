@@ -70,6 +70,8 @@ namespace RenderCore
 
     bool HasElement(IteratorRange<const MiniInputElementDesc*> elements, uint64_t semanticHash);
 	unsigned CalculateVertexStride(IteratorRange<const MiniInputElementDesc*> elements, bool enforceAlignment=true);
+    bool RequiresAlignmentSpacing(IteratorRange<const InputElementDesc*> layout);
+    unsigned VertexAttributeRequiredAlignment(Format fmt);
 
     uint64_t HashInputAssembly(IteratorRange<const InputElementDesc*>, uint64_t seed);
     uint64_t HashInputAssembly(IteratorRange<const MiniInputElementDesc*>, uint64_t seed);
