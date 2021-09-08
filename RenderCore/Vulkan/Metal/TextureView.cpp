@@ -17,7 +17,7 @@ namespace RenderCore { namespace Metal_Vulkan
         case TextureDesc::Dimensionality::T1D:      return isArray?VK_IMAGE_VIEW_TYPE_1D_ARRAY:VK_IMAGE_VIEW_TYPE_1D;
         case TextureDesc::Dimensionality::T2D:      return isArray?VK_IMAGE_VIEW_TYPE_2D_ARRAY:VK_IMAGE_VIEW_TYPE_2D;
         case TextureDesc::Dimensionality::T3D:      return VK_IMAGE_VIEW_TYPE_3D;
-        case TextureDesc::Dimensionality::CubeMap:  return VK_IMAGE_VIEW_TYPE_CUBE;             // VK_IMAGE_VIEW_TYPE_CUBE_ARRAY not supported currently
+        case TextureDesc::Dimensionality::CubeMap:  return isArray?VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:VK_IMAGE_VIEW_TYPE_CUBE;
         default:                                    return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
         }
     }
