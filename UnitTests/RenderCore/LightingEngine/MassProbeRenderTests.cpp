@@ -312,7 +312,7 @@ namespace UnitTests
 				using namespace RenderCore;
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
@@ -418,7 +418,7 @@ namespace UnitTests
 				using namespace RenderCore;
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/amplifying_geo_shader.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = "ut-data/amplifying_geo_shader.hlsl:gs_main";
@@ -534,7 +534,7 @@ namespace UnitTests
 				using namespace RenderCore;
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/instancing_multiprobe_shader.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/instancing_multiprobe_shader.hlsl:ps_main";
@@ -735,7 +735,7 @@ namespace UnitTests
 				using namespace RenderCore;
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteLessThan;
+				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";

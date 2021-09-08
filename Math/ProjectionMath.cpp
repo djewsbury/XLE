@@ -54,27 +54,27 @@ namespace XLEMath
         auto projectionToWorld = InvertWorldToProjection(worldToProjection, useAccurateInverse);
         float yAtTop = 1.f;
         float yAtBottom = -1.f;
-        if (clipSpaceType == ClipSpaceType::PositiveRightHanded) {
+        if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
             yAtTop = -1.f;
             yAtBottom = 1.f;
         }
-        Float4 v0, v1, v2, v3;
+        float zAtNear = 0.f, zAtFar = 1.0f;
         if (clipSpaceType == ClipSpaceType::StraddlingZero) {
-            v0 = projectionToWorld * Float4(-1.f, yAtTop,    -1.f, 1.f);
-            v1 = projectionToWorld * Float4(-1.f, yAtBottom, -1.f, 1.f);
-            v2 = projectionToWorld * Float4( 1.f, yAtTop,    -1.f, 1.f);
-            v3 = projectionToWorld * Float4( 1.f, yAtBottom, -1.f, 1.f);
-        } else {
-            v0 = projectionToWorld * Float4(-1.f, yAtTop,    0.f, 1.f);
-            v1 = projectionToWorld * Float4(-1.f, yAtBottom, 0.f, 1.f);
-            v2 = projectionToWorld * Float4( 1.f, yAtTop,    0.f, 1.f);
-            v3 = projectionToWorld * Float4( 1.f, yAtBottom, 0.f, 1.f);
+            zAtNear = -1.f;
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+            zAtNear = 1.f;
+            zAtFar = 0.f;
         }
 
-        Float4 v4 = projectionToWorld * Float4(-1.f, yAtTop,    1.f, 1.f);
-        Float4 v5 = projectionToWorld * Float4(-1.f, yAtBottom, 1.f, 1.f);
-        Float4 v6 = projectionToWorld * Float4( 1.f, yAtTop,    1.f, 1.f);
-        Float4 v7 = projectionToWorld * Float4( 1.f, yAtBottom, 1.f, 1.f);
+        Float4 v0 = projectionToWorld * Float4(-1.f, yAtTop,    zAtNear, 1.f);
+        Float4 v1 = projectionToWorld * Float4(-1.f, yAtBottom, zAtNear, 1.f);
+        Float4 v2 = projectionToWorld * Float4( 1.f, yAtTop,    zAtNear, 1.f);
+        Float4 v3 = projectionToWorld * Float4( 1.f, yAtBottom, zAtNear, 1.f);
+
+        Float4 v4 = projectionToWorld * Float4(-1.f, yAtTop,    zAtFar, 1.f);
+        Float4 v5 = projectionToWorld * Float4(-1.f, yAtBottom, zAtFar, 1.f);
+        Float4 v6 = projectionToWorld * Float4( 1.f, yAtTop,    zAtFar, 1.f);
+        Float4 v7 = projectionToWorld * Float4( 1.f, yAtBottom, zAtFar, 1.f);
 
         frustumCorners[0] = Truncate(v0) / v0[3];
         frustumCorners[1] = Truncate(v1) / v1[3];
@@ -399,7 +399,8 @@ namespace XLEMath
             farOr       |= (projectedCorners[c][2] >  projectedCorners[c][3]);
         }
         
-        if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
+        if (    clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded
+            ||  clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
             for (unsigned c=0; c<8; ++c) {
                 nearOr      |= (projectedCorners[c][2] < 0.f);
                 nearAnd     &= (projectedCorners[c][2] < 0.f);
@@ -436,7 +437,8 @@ namespace XLEMath
         ClipSpaceType clipSpaceType)
     {
 #if defined(HAS_SSE_INSTRUCTIONS)
-        assert(clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded);
+        assert(clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded
+            || clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ);
         return TestAABB_SSE(AsFloatArray(localToProjection), mins, maxs);
 #else
         return TestAABB(localToProjection, mins, maxs, clipSpaceType);
@@ -866,8 +868,8 @@ namespace XLEMath
         float nearClipPlane, float farClipPlane,
         ClipSpaceType clipSpaceType)
     {
-        const float n = nearClipPlane;
-        const float f = farClipPlane;
+        float n = nearClipPlane;
+        float f = farClipPlane;
         assert(n > 0.f);
 
             // Note --  there's a slight awkward thing here... l, t, r and b
@@ -886,7 +888,13 @@ namespace XLEMath
                 //      0<z/w<1
             result(2,2) =    -(f) / (f-n);            // (note z direction flip here as well as below)
             result(2,3) =  -(f*n) / (f-n);
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+                // as above, but swap Z/W direction for better depth buffer precision in mid and far distance
+            std::swap(n, f);
+            result(2,2) =    -(f) / (f-n);
+            result(2,3) =  -(f*n) / (f-n);
         } else {
+            assert(clipSpaceType == ClipSpaceType::StraddlingZero);
                 //  This is the OpenGL view of clip space
                 //      -1<z/w<1
             result(2,2) =       -(f+n) / (f-n);
@@ -906,7 +914,7 @@ namespace XLEMath
             //      the bottom of the screen.
             //
 
-        if (clipSpaceType == ClipSpaceType::PositiveRightHanded)
+        if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
             result(1,1) = -result(1,1);
 
         return result;
@@ -918,10 +926,10 @@ namespace XLEMath
         GeometricCoordinateSpace coordinateSpace,
         ClipSpaceType clipSpaceType)
     {
-        const float n = nearClipPlane;
-        const float f = farClipPlane;
+        float n = nearClipPlane;
+        float f = farClipPlane;
 
-        if (clipSpaceType == ClipSpaceType::PositiveRightHanded)
+        if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
             std::swap(t, b);
 
         Float4x4 result = Identity<Float4x4>();
@@ -936,7 +944,13 @@ namespace XLEMath
                 //      0<z/w<1
             result(2,2) =  -1.f / (f-n);            // (note z direction flip here)
             result(2,3) =    -n / (f-n);
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+                // as above, but swap Z/W direction for better depth buffer precision in mid and far distance
+            std::swap(n, f);
+            result(2,2) = -1.f / (f-n);
+            result(2,3) = -n / (f-n);
         } else {
+            assert(clipSpaceType == ClipSpaceType::StraddlingZero);
                 //  This is the OpenGL view of clip space
                 //      -1<z/w<1
             result(2,2) =     -2.f / (f-n);
@@ -992,6 +1006,8 @@ namespace XLEMath
             // This is a slightly more accurate way to calculate the
             // same value as B / (A+1) when A is very near -1.
             return std::make_pair(B / A, 1.f / (A/B + 1.f/B));
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+            return std::make_pair(1.f / (A/B + 1.f/B), B / A);
         } else {
             return std::make_pair(B / (A - 1.f), B / (A + 1.f));
         }
@@ -1017,6 +1033,8 @@ namespace XLEMath
         const float B = minimalProjection[3];
         if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
             return std::make_pair(B / A, (B - 1) / A);
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+            return std::make_pair((B - 1) / A, B / A);
         } else {
             return std::make_pair((B + 1) / A, (B - 1) / A);
         }

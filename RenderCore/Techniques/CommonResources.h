@@ -31,7 +31,7 @@ namespace RenderCore { namespace Techniques
         static DepthStencilDesc s_dsDisable;
         static DepthStencilDesc s_dsReadWriteWriteStencil;
         static DepthStencilDesc s_dsWriteOnly;
-        static DepthStencilDesc s_dsReadWriteLessThan;
+        static DepthStencilDesc s_dsReadWriteCloserThan;
 
 		static AttachmentBlendDesc s_abStraightAlpha;
 		static AttachmentBlendDesc s_abAlphaPremultiplied;

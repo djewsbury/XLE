@@ -40,9 +40,9 @@ namespace RenderCore { namespace Techniques
     {
             // (todo -- this condition could be a runtime test)
         #if (GFXAPI_TARGET == GFXAPI_DX11) || (GFXAPI_TARGET == GFXAPI_DX9) || (GFXAPI_TARGET == GFXAPI_APPLEMETAL)
-            return ClipSpaceType::Positive;
+            return ClipSpaceType::Positive_ReverseZ;
         #elif (GFXAPI_TARGET == GFXAPI_VULKAN)
-            return ClipSpaceType::PositiveRightHanded;
+            return ClipSpaceType::PositiveRightHanded_ReverseZ;
         #else
             return ClipSpaceType::StraddlingZero;
         #endif
@@ -119,11 +119,15 @@ namespace RenderCore { namespace Techniques
         globalTransform._viewToWorld = projDesc._cameraToWorld;
         globalTransform._worldSpaceView = ExtractTranslation(projDesc._cameraToWorld);
         globalTransform._minimalProjection = ExtractMinimalProjection(projDesc._cameraToProjection);
-        if (IsOrthogonalProjection(projDesc._cameraToProjection)) {
+        if (projDesc._nearClip == 0.f && projDesc._farClip == 0.f) {  // bitwise compare intended
+            globalTransform._farClip = 0;   // degenerate case, near and far clip haven't been configured
+        } else if (IsOrthogonalProjection(projDesc._cameraToProjection)) {
             globalTransform._farClip = CalculateNearAndFarPlane_Ortho(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
+            assert(globalTransform._farClip > 0.f);
             globalTransform._farClip = -globalTransform._farClip;       // we use negative far clip as a flag for orthogonal projection
         } else {
             globalTransform._farClip = CalculateNearAndFarPlane(globalTransform._minimalProjection, GetDefaultClipSpaceType()).second;
+            assert(globalTransform._farClip > 0.f);
         }
         globalTransform._prevWorldToClip = globalTransform._worldToClip;
 

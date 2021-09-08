@@ -24,6 +24,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../../../Foreign/stb/stb_image_write.h"
 #include <filesystem>
+#include <fstream>
 
 #if GFXAPI_TARGET == GFXAPI_DX11
 	#include "../../../RenderCore/Metal/State.h"
@@ -208,9 +209,15 @@ namespace UnitTests
 	void SaveImage(RenderCore::IThreadContext& threadContext, RenderCore::IResource& resource, StringSection<> filename)
 	{
 		auto desc = resource.GetDesc();
+		auto data = resource.ReadBackSynchronized(threadContext);
 		if (RenderCore::GetCompressionType(desc._textureDesc._format) != RenderCore::FormatCompressionType::None
-			|| RenderCore::GetComponentPrecision(desc._textureDesc._format) != 8)
-			Throw(std::runtime_error("Cannot output image in compressed or high precision format"));
+			|| RenderCore::GetComponentPrecision(desc._textureDesc._format) != 8) {
+			auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (filename.AsString() + ".bin");
+			std::fstream outf{outputName, std::ios::out|std::ios::binary|std::ios::trunc};
+			outf.write((const char*)AsPointer(data.begin()), data.size());
+			return;
+		}
+
 		auto components = RenderCore::GetComponents(desc._textureDesc._format);
 		unsigned compCount = 0;
 		switch (components) {
@@ -233,8 +240,6 @@ namespace UnitTests
 		}
 
 		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (filename.AsString() + ".png");
-		
-		auto data = resource.ReadBackSynchronized(threadContext);
 		
 		if (compCount == 4) {
 			// nuke alpha channel for RGBA outputs

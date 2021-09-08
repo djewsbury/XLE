@@ -19,6 +19,7 @@
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Format.h"
@@ -322,6 +323,7 @@ namespace UnitTests
 			desc->_shaders[(unsigned)RenderCore::ShaderStage::Pixel] = "ut-data/framework-entry.pixel.hlsl:frameworkEntry";
 
 			desc->_blend.push_back(RenderCore::AttachmentBlendDesc{});
+			desc->_depthStencil = RenderCore::Techniques::CommonResourceBox::s_dsReadWrite;
 
 			desc->_patchExpansions.push_back(perPixelPatchName);
 			if (hasDeformPosition)
@@ -462,7 +464,7 @@ namespace UnitTests
 					0,
 					RenderCore::AttachmentBlendDesc{},
 					RenderCore::RasterizationDesc{},
-					RenderCore::DepthStencilDesc{});
+					RenderCore::Techniques::CommonResourceBox::s_dsReadWrite);
 
 				RenderCore::Assets::RenderStateSet stateSet;
 				auto pipelineDescFuture = delegate->GetPipelineDesc(

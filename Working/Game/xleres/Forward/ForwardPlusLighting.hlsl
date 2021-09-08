@@ -27,7 +27,7 @@ Texture3D<uint> TiledLightBitField : register(t3, space3);
 
 Texture2D SSR : register(t4, space3);
 
-TextureCubeArray StaticShadowProbeDatabase : register(t6, space3);
+TextureCubeArray StaticShadowProbeDatabase : register(t5, space3);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;

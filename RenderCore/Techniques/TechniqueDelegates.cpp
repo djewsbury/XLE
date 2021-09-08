@@ -205,6 +205,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
@@ -386,7 +387,7 @@ namespace RenderCore { namespace Techniques
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
 			} else {
-				_depthStencil = {};
+				_depthStencil = CommonResourceBox::s_dsReadWrite;
 			}
 		}
 	private:
@@ -466,7 +467,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_rasterization = _rs[cullDisable];
 			// always use less than (not less than or equal) here, because writing equally deep pixels is redundant
 			// (and we can potentially skip a texture lookup for alpha test geo sometimes)
-			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
@@ -613,7 +614,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_rasterization = _rs[cullDisable];
 			if (stateSet._flag & Assets::RenderStateSet::Flag::DepthBias) 		// we must let the state set override depth bias for decal-style geometry
 				nascentDesc->_rasterization._depthBiasConstantFactor = (float)stateSet._depthBias;
-			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 			if (_preDepthType != PreDepthType::DepthOnly) {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 				if (_preDepthType == PreDepthType::DepthMotionNormal)
@@ -886,7 +887,7 @@ namespace RenderCore { namespace Techniques
 			} else {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
-			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteLessThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
+			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);

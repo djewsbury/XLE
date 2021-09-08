@@ -14,7 +14,13 @@ namespace XLEMath
 {
     enum class CullTestResult { Culled, Within, Boundary };    
     enum class GeometricCoordinateSpace { LeftHanded, RightHanded };
-    enum class ClipSpaceType { StraddlingZero,   Positive,   PositiveRightHanded };
+    enum class ClipSpaceType { 
+        StraddlingZero,
+        Positive,
+        PositiveRightHanded,
+        // StraddlingZero_ReverseZ,  (not yet implemented)
+        Positive_ReverseZ,
+        PositiveRightHanded_ReverseZ };
 
     CullTestResult TestAABB(
         const Float4x4& localToProjection, 

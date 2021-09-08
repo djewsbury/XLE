@@ -9,7 +9,7 @@
 #include "../SceneEngine/Lighting/resolvefog.hlsl"
 
 #if VERTEX_ID_VIEW_INSTANCING
-	cbuffer MultiViewProperties BIND_SEQ_B5
+	cbuffer MultiViewProperties BIND_SEQ_B3
 	{
 		row_major float4x4 MultiViewWorldToClip[64];
 	}

@@ -265,8 +265,8 @@ float3 WorldPositionFromLinear0To1Depth(float3 viewFrustumVector, float linear0T
         return SysUniform_GetWorldSpaceView() + viewFrustumVector * linear0To1Depth;
     } else {
         float4x4 cameraBasis = SysUniform_GetCameraBasis();
-        float3 cameraForward = -float3(cameraBasis[0].z, cameraBasis[1].z, cameraBasis[2].z);
-        return viewFrustumVector + SysUniform_GetWorldSpaceView() - linear0To1Depth * cameraForward;
+        float3 negCameraForward = float3(cameraBasis[0].z, cameraBasis[1].z, cameraBasis[2].z);
+        return viewFrustumVector + SysUniform_GetWorldSpaceView() + negCameraForward * (SysUniform_GetFarClip() * (1-linear0To1Depth));
     }
 }
 

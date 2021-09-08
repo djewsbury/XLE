@@ -33,7 +33,7 @@ uint LaneIndexWithKey(uint key)
 	uint bitIdx = objectIdx%32;
 	uint planeIdx = objectIdx/32;
 	uint3 outputCoord = uint3(position.xy, planeIdx);
-	bool write = position.z <= DownsampleDepths[outputCoord.xy];
+	bool write = position.z >= DownsampleDepths[outputCoord.xy];
 	[branch] if (write) {
 		uint outputKey = outputCoord.z+32*(outputCoord.x+(1920/GridDims)*outputCoord.y);
 		#if defined(MINIMIZE_ATOMIC_OPS)

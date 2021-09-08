@@ -44,7 +44,7 @@ DescriptorSet SharedDescriptors
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
-		Comparison = LessEqual
+		Comparison = GreaterEqual
 	};
 	Sampler ShadowDepthSampler				// 3
 	{

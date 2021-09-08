@@ -662,13 +662,13 @@ namespace ToolsRig
 
 			static auto visWireframeDelegate =
 				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-					Techniques::TechniqueIndex::VisWireframe, {}, {}, {});
+					Techniques::TechniqueIndex::VisWireframe, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
 			static auto visNormals =
 				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-					Techniques::TechniqueIndex::VisNormals, {}, {}, {});
+					Techniques::TechniqueIndex::VisNormals, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
 
 			DepthStencilDesc ds {
-				RenderCore::CompareOp::LessEqual, true, true,
+				RenderCore::CompareOp::GreaterEqual, true, true,
 				0xff, 0xff,
 				RenderCore::StencilDesc::AlwaysWrite,
 				RenderCore::StencilDesc::NoEffect };

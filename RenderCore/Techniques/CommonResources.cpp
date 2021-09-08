@@ -15,12 +15,12 @@
 
 namespace RenderCore { namespace Techniques
 {
-    DepthStencilDesc CommonResourceBox::s_dsReadWrite {};
-    DepthStencilDesc CommonResourceBox::s_dsReadOnly { CompareOp::LessEqual, false };
+    DepthStencilDesc CommonResourceBox::s_dsReadWrite { CompareOp::GreaterEqual };
+    DepthStencilDesc CommonResourceBox::s_dsReadOnly { CompareOp::GreaterEqual, false };
     DepthStencilDesc CommonResourceBox::s_dsDisable { CompareOp::Always, false };
-    DepthStencilDesc CommonResourceBox::s_dsReadWriteWriteStencil { CompareOp::LessEqual, true, true, 0xff, 0xff, StencilDesc::AlwaysWrite, StencilDesc::AlwaysWrite };
+    DepthStencilDesc CommonResourceBox::s_dsReadWriteWriteStencil { CompareOp::GreaterEqual, true, true, 0xff, 0xff, StencilDesc::AlwaysWrite, StencilDesc::AlwaysWrite };
     DepthStencilDesc CommonResourceBox::s_dsWriteOnly { CompareOp::Always, true };
-    DepthStencilDesc CommonResourceBox::s_dsReadWriteLessThan { CompareOp::Less };
+    DepthStencilDesc CommonResourceBox::s_dsReadWriteCloserThan { CompareOp::Greater }; // (ie, when reversed Z is the default, greater is closer)
 
     AttachmentBlendDesc CommonResourceBox::s_abStraightAlpha { true, Blend::SrcAlpha, Blend::InvSrcAlpha, BlendOp::Add };
     AttachmentBlendDesc CommonResourceBox::s_abAlphaPremultiplied { true, Blend::One, Blend::InvSrcAlpha, BlendOp::Add };

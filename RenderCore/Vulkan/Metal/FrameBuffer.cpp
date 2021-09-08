@@ -657,7 +657,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
 			if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil)
-				defaultClearValue = MakeClearValue(1.0f, 0);
+				defaultClearValue = MakeClearValue(0.0f, 0);
 			_clearValuesOrdering.push_back({res.first, defaultClearValue});
 
 			BuildMaxDims(maxDims, rtv->GetResource()->GetDesc(), a._view);

@@ -40,6 +40,7 @@ namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
 		std::make_pair("reconstruct_from_gbuffer.pixel.hlsl", ::Assets::AsBlob(R"--(
+			#define GBUFFER_SHADER_RESOURCE 1
 			#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 			#include "xleres/TechniqueLibrary/Utility/LoadGBuffer.hlsl"
 			#include "xleres/Deferred/resolveutil.hlsl"
@@ -52,7 +53,7 @@ namespace UnitTests
 						out float4 out_normal : SV_Target1)
 			{
 				ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
-				if (resolvePixel.ndcDepth >= 0.97f) discard;
+				if (resolvePixel.ndcDepth == 0.0f) discard;
 
 				out_position = float4(resolvePixel.worldPosition, 1);
 				GBufferValues sample = LoadGBuffer(position, sys);
@@ -114,7 +115,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferDiffuse,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::B8G8R8A8_UNORM_SRGB),
 					"gbuffer-diffuse"
 				),
@@ -123,7 +124,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferNormal,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_SNORM),
 					"gbuffer-normals"
 				),
@@ -132,7 +133,7 @@ namespace UnitTests
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferParameter,
 				CreateDesc(
-					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::InputAttachment, 0, 0, 
+					BindFlag::TransferSrc | BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(s_testResolution[0], s_testResolution[1], Format::R8G8B8A8_UNORM),
 					"gbuffer-parameters"
 				),
@@ -253,7 +254,6 @@ namespace UnitTests
 		RenderCore::UniformsStreamInterface& usi,
 		RenderCore::UniformsStream& us)
 	{
-		// Very simple stand-in tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
 		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
 		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
@@ -262,9 +262,11 @@ namespace UnitTests
 
 	static void CalculateSimularity(IteratorRange<const Float4*> A, IteratorRange<const Float4*> B)
 	{
+		// note -- this takes an extraordinarily large amount of time because it's a just a very naive implementation
 		REQUIRE(A.size() == B.size());
 		REQUIRE(A.size() > 0);
 		std::vector<double> differences;
+		differences.reserve(A.size()*3);
 		double totalDiff = 0;
 		differences.reserve(A.size() * 3);
 		for (auto a=A.begin(), b=B.begin(); a<A.end(); ++a, ++b) {
@@ -344,19 +346,19 @@ namespace UnitTests
 
 		RenderCore::Techniques::CameraDesc cameras[3];
 		cameras[0]._cameraToWorld = MakeCameraToWorld(Float3{1.0f, 0.0f, 0.0f}, Float3{0.0f, 1.0f, 0.0f}, Float3{-3.33f, 0.f, 0.f});
-		cameras[0]._nearClip = 0.01f;
-		cameras[0]._farClip = 1000.f;
+		cameras[0]._nearClip = 0.1f;
+		cameras[0]._farClip = 100.f;
 
 		cameras[1]._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-3.0f, 1.5f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-3.0f, 1.5f, 0.f});
-		cameras[1]._nearClip = 0.01f;
-		cameras[1]._farClip = 1000.f;
+		cameras[1]._nearClip = 0.1f;
+		cameras[1]._farClip = 100.f;
 
 		cameras[2]._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-3.0f, 1.5f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-3.0f, 1.5f, 0.f});		
 		cameras[2]._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		cameras[2]._left = -1.0f; cameras[0]._top = 1.0f;
 		cameras[2]._right = 1.0f; cameras[0]._bottom = -1.0f;
 		cameras[2]._nearClip = 0.f;
-		cameras[2]._farClip = 1000.f;
+		cameras[2]._farClip = 100.f;
 
 		testHelper->BeginFrameCapture();
 	
@@ -369,6 +371,7 @@ namespace UnitTests
 			auto pipelinePool = std::make_shared<Techniques::PipelinePool>(testHelper->_device);
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
+				INFO("Camera: " + std::to_string(c));
 				const auto& camera = cameras[c];
 				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, camera);
 
@@ -388,11 +391,11 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment fbFrag;
 					SubpassDesc subpass;
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Clear));
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Clear));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
-					depthAttachmentDesc._finalLayout = BindFlag::InputAttachment;
+					depthAttachmentDesc._finalLayout = BindFlag::ShaderResource;
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
 					subpass.SetDepthStencil(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));
 					fbFrag.AddSubpass(std::move(subpass));
@@ -432,10 +435,10 @@ namespace UnitTests
 					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition"), LoadStore::Clear));
 					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal"), LoadStore::Clear));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
-					subpass.AppendInput(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
+					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
+					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
+					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
 					reconstructedWorldPosition = rpi.GetOutputAttachmentResource(0);
@@ -448,10 +451,10 @@ namespace UnitTests
 					usi.BindResourceView(3, Utility::Hash64("DepthTexture"));
 					UniformsStream us;
 					IResourceView* srvs[] = { 
-						rpi.GetInputAttachmentView(0).get(),
-						rpi.GetInputAttachmentView(1).get(),
-						rpi.GetInputAttachmentView(2).get(),
-						rpi.GetInputAttachmentView(3).get()
+						rpi.GetNonFrameBufferAttachmentView(0).get(),
+						rpi.GetNonFrameBufferAttachmentView(1).get(),
+						rpi.GetNonFrameBufferAttachmentView(2).get(),
+						rpi.GetNonFrameBufferAttachmentView(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
 					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
@@ -500,6 +503,8 @@ namespace UnitTests
 				SaveImage(*threadContext, *diffuseResource, "gbuffer-diffuse");
 				SaveImage(*threadContext, *normalResource, "gbuffer-normals");
 				SaveImage(*threadContext, *parameterResource, "gbuffer-parameters");
+				// SaveImage(*threadContext, *reconstructedWorldPosition, "reconstructed-world-position");
+				// SaveImage(*threadContext, *directWorldPosition, "direct-world-position");
 				auto reconstructedPositionData = reconstructedWorldPosition->ReadBackSynchronized(*threadContext);
 				auto reconstructedNormalData = reconstructedWorldNormal->ReadBackSynchronized(*threadContext);
 
