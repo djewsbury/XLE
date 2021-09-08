@@ -29,7 +29,11 @@ namespace Assets
 			explicit FutureShared(const std::string& initializer = {});
 			~FutureShared();
 		protected:
-			struct CallbackMarker { unsigned _markerId; FutureShared* _parent; };
+			struct CallbackMarker
+			{
+				Threading::RecursiveMutex _parentLock; 
+				unsigned _markerId; FutureShared* _parent; 
+			};
 			mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
 
 			void RegisterFrameBarrierCallbackAlreadyLocked();
@@ -651,8 +655,8 @@ namespace Assets
 			_frameBarrierCallbackMarker->_parent = this;
 			std::weak_ptr<CallbackMarker> weakMarker = _frameBarrierCallbackMarker;
 			// Note that if we're in a background thread, then the callback can be called before we
-			// even assign "_frameBarrierCallbackMarker->_markerId". However, we avoid problems because
-			// we're inside of the mutex lock here
+			// even assign "_frameBarrierCallbackMarker->_markerId". That's why we need to be inside
+			// of the "_lock" mutex lock here
 			_frameBarrierCallbackMarker->_markerId = Internal::RegisterFrameBarrierCallback(
 				[weakMarker]() {
 					auto l = weakMarker.lock();
@@ -660,7 +664,8 @@ namespace Assets
 						// Log(Warning) << "Frame barrier callback function was not cleaned up before asset was destroyed" << std::endl; 
 						return;
 					}
-					l->_parent->OnFrameBarrier();
+					ScopedLock(l->_parentLock);
+					if (l->_parent) l->_parent->OnFrameBarrier();
 				});
 		}
 
@@ -669,7 +674,16 @@ namespace Assets
 			if (!_frameBarrierCallbackMarker)
 				return;
 
-			Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+			{
+				// We need to ensure that any OnFrameBarrier callbacks have finished, and will never be
+				// started beyond this point. This is partially critical when destroying the future
+				// Note that the OnFrameBarrier() callback doesn't take a ref count on this during it's callback
+				// (it only ref the _frameBarrierCallbackMarker). So the future can be destroyed in a background
+				// thread while the OnFrameBarrier() callback is being run -- we need a mutex to prevent that.
+				ScopedLock(_frameBarrierCallbackMarker->_parentLock);
+				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+				_frameBarrierCallbackMarker->_parent = nullptr;
+			}
 			_frameBarrierCallbackMarker.reset();
 		}
 
@@ -679,8 +693,7 @@ namespace Assets
 
 		inline FutureShared::~FutureShared() 
 		{
-			if (_frameBarrierCallbackMarker)
-				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
+			ClearFrameBarrierCallbackAlreadyLocked();
 		}
 	}
 }
