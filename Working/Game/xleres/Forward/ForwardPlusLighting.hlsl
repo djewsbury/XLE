@@ -72,14 +72,16 @@ float SampleStaticDatabase(uint databaseEntry, float3 offset)
 	} else {
 		distance = abs(offset.z);
 	}
-	const float f = 256.f;
-	const float n = f/1024.f;
+	const float n = 256.f;
+	const float f = n/128.f;
 	MiniProjZW miniProjZW = AsMiniProjZW(float2(-(f) / (f-n), -(f*n) / (f-n)));		// projectionMatrix(2,2), projectionMatrix(2,3)
 	distance = WorldSpaceDepthToNDC_Perspective(distance, miniProjZW);
 	distance += 0.5f / 65535.f;		// offset half the depth precision
 	
 	return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
 }
+
+uint MaskBitsUntil(uint bitIdx) { return (1u<<bitIdx)-1u; }
 
 float3 CalculateIllumination(
 	GBufferValues sample, float3 directionToEye,
@@ -118,7 +120,6 @@ float3 CalculateIllumination(
 			}
 		#endif
 
-
 		#if !defined(PROBE_PREPARE)
 
 			uint encodedDepthTable = LightDepthTable[linear0To1Depth*TiledLights_DepthGradiations];
@@ -130,14 +131,20 @@ float3 CalculateIllumination(
 			[branch] if (minIdx != maxIdx) {
 				// minIdx = WaveActiveMin(minIdx);
 				// maxIdx = WaveActiveMax(maxIdx);
-				for (uint planeIdx=minIdx/32; planeIdx<=maxIdx/32; ++planeIdx) {
+				uint firstPlane=minIdx/32, lastPlane=maxIdx/32; 
+				for (uint planeIdx=firstPlane; planeIdx<=lastPlane; ++planeIdx) {
 					uint bitField = TiledLightBitField.Load(uint4(tileCoord.xy, planeIdx, 0));
+					if (planeIdx == firstPlane )
+						bitField &= ~MaskBitsUntil(minIdx%32u);
+					if (planeIdx == lastPlane)
+						bitField &= MaskBitsUntil(maxIdx%32u) | (1u<<(maxIdx%32u));
 					// bitField = WaveActiveBitOr(bitField);
 					while (bitField != 0) {
 						uint bitIdx = firstbitlow(bitField);
 						bitField ^= (1u << bitIdx);
 
-						LightDesc l = LightList[planeIdx*32+bitIdx];
+						uint idx = planeIdx*32+bitIdx;
+						LightDesc l = LightList[idx];
 
 						float shadowing = 1.0f;
 						if (l.StaticDatabaseLightId != 0)
@@ -148,6 +155,7 @@ float3 CalculateIllumination(
 						} else if (l.Shape == 1) {
 							result += shadowing * SphereLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
 						}
+						// result += .5;
 					}
 				}
 			}

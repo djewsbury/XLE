@@ -33,22 +33,6 @@ namespace RenderCore { namespace LightingEngine
 		return (attenuationScalar*(halfRadius*halfRadius)+1.f) * (1.0f / (1.f-powerFraction));
 	}
 
-	static float LinearizedDepthMax(const Internal::CB_Light& light, const Techniques::ProjectionDesc& projDesc)
-	{
-		auto cameraForward = ExtractForward_Cam(projDesc._cameraToWorld);
-		auto projected = projDesc._worldToProjection * Float4{light._position + light._cutoffRange * cameraForward, 1};
-		float z = projected[2], w = projected[3];
-
-		auto zRow = Float4{projDesc._worldToProjection(2,0), projDesc._worldToProjection(2,1), projDesc._worldToProjection(2,2), projDesc._worldToProjection(2,3)};
-		auto wRow = Float4{projDesc._worldToProjection(3,0), projDesc._worldToProjection(3,1), projDesc._worldToProjection(3,2), projDesc._worldToProjection(3,3)};
-		float zRowMag = Magnitude(Truncate(zRow)), wRowMag = Magnitude(Truncate(wRow));
-
-		float z2 = Dot(Float4{light._position, 1}, zRow) + light._cutoffRange * zRowMag;
-		float w2 = Dot(Float4{light._position, 1}, wRow) + light._cutoffRange * wRowMag;
-
-		return z2/CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
-	}
-
 	static float LinearizedDepthMin(const Internal::CB_Light& light, const Techniques::ProjectionDesc& projDesc)
 	{
 		auto cameraForward = ExtractForward_Cam(projDesc._cameraToWorld);
@@ -89,7 +73,8 @@ namespace RenderCore { namespace LightingEngine
 		{
 			IntermediateLight intermediateLights[_config._maxLightsPerView];
 			IntermediateLight* intLight = intermediateLights, *intLightEnd = &intermediateLights[_config._maxLightsPerView];
-			auto zRow = Float4{projDesc._worldToProjection(2,0), projDesc._worldToProjection(2,1), projDesc._worldToProjection(2,2), projDesc._worldToProjection(2,3)};
+			auto worldToCamera = InvertOrthonormalTransform(projDesc._cameraToWorld);
+			auto zRow = Float4{worldToCamera(2,0), worldToCamera(2,1), worldToCamera(2,2), worldToCamera(2,3)};
 			float zRowMag = Magnitude(Truncate(zRow));
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
@@ -97,16 +82,18 @@ namespace RenderCore { namespace LightingEngine
 			for (auto& lightSet:_lightScene->_lightSets) {
 				// For now, don't tile shadowed lights. Ideally we want to tile everything except the "dominant" light
 				// (if it exists) -- because that will have cascaded shadows
-				if (lightSet._shadowOperatorId != ~0u) {
+				/*if (lightSet._shadowOperatorId != ~0u) {
 					++lightSetIdx;
 					continue;
-				}
+				}*/
 
 				for (auto light=lightSet._lights.begin(); light!=lightSet._lights.end(); ++light) {
 					auto& lightDesc = *(Internal::StandardLightDesc*)light->_desc.get();
 					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
 					
 					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+					// take the negative for convenience --> convert to -Z forward into +Z forward
+					zMin = -zMin;
 					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
 					zMin -= lightDesc._cutoffRange * zRowMag;
 
@@ -129,8 +116,8 @@ namespace RenderCore { namespace LightingEngine
 			// sort by distance to camera of closest point to camera
 			std::sort(intermediateLights, intLight, [](const IntermediateLight& lhs, IntermediateLight& rhs) { return lhs._linearizedDepthMin < rhs._linearizedDepthMin; });
 
-			// split up depth space in ndc depth space; 
-			// const float ndcDepthMin = clipSpaceType == ClipSpaceType::StraddlingZero ? -1.f : 0.f, ndcDepthMax = 1.0f;
+			// split up depth space in our linear depth coordinates
+			// there might be some waste here, because we're including the space between the camera and the near clip plane
 			auto* i = intermediateLights;
 			for (unsigned c=0; c<_config._depthLookupGradiations; ++c) {
 				float min = LinearInterpolate(0.f, 1.f, c/float(_config._depthLookupGradiations));
@@ -157,8 +144,6 @@ namespace RenderCore { namespace LightingEngine
 		ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
 		ScissorRect scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
 		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-		// const IDescriptorSet* descSets[] { sequencerDescSet.first.get() };
-		// boundUniforms.ApplyDescriptorSets(metalContext, encoder, MakeIteratorRange(descSets));
 
 		UniformsStream us;
 		const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };

@@ -142,6 +142,8 @@ struct ClipToNearVertex
 #endif
 };
 
+static const bool ReverseZ = true;
+
 float3 CalculateViewFrustumVectorFromClipSpacePosition(float4 clipSpacePosition)
 {
 	float2 positionProjected = clipSpacePosition.xy / clipSpacePosition.w;
@@ -155,7 +157,8 @@ float3 CalculateViewFrustumVectorFromClipSpacePosition(float4 clipSpacePosition)
 	texCoord.x = (positionProjected.x + 1.0f) / 2.0f;
 
 	// We can use bilinear interpolation here to find the correct view frustum vector
-	// Note that this require we use "noperspective" interpolation between vertices for this attribute, though
+	// alternatively we could just use barycentric interpolation; though we might get
+	// subtly different floating point creep in each
 	float w0 = (1.0f - texCoord.x) * (1.0f - texCoord.y);
 	float w1 = (1.0f - texCoord.x) * texCoord.y;
 	float w2 = texCoord.x * (1.0f - texCoord.y);
@@ -173,6 +176,7 @@ ClipToNearVertex Interpolate(ClipToNearVertex start, ClipToNearVertex end, float
 {
 	ClipToNearVertex result;
 	result.position = start.position * (1.0f - alpha) + end.position * alpha;
+	if (ReverseZ) result.position.z -= 1e-4;		// (creep protection)
 #if defined(GS_FVF)
 	result.texCoord = start.texCoord * (1.0f - alpha) + end.texCoord * alpha;
 	// result.vfv = start.vfv * (1.0f - alpha) + end.vfv * alpha;
@@ -184,15 +188,45 @@ ClipToNearVertex Interpolate(ClipToNearVertex start, ClipToNearVertex end, float
 	return result;
 }
 
+float NearClipAlpha_NonReverse(float Az, float Bz)
+{
+	return -Az / (Bz - Az);
+}
+
+ClipToNearVertex InterpolateToNear(ClipToNearVertex start, ClipToNearVertex end)
+{
+	if (ReverseZ) {
+		// interpolate to z=+w plane
+		float alpha = (start.position.w - start.position.z) / (end.position.z - end.position.w - start.position.z + start.position.w);
+		// float alpha = (start.position.w + start.position.z) / (start.position.z + start.position.w - end.position.z - end.position.w);
+		return Interpolate(start, end, alpha);
+	} else {
+		return Interpolate(start, end, NearClipAlpha_NonReverse(start.position.z, end.position.z));
+	}
+}
+
 ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 {
 	ClipToNearVertex result = input;
-	result.position.z = 1e-6f;
 	if (!SysUniform_IsOrthogonalProjection()) {
 		// The following is the distance to the near clip plane, but only valid for perspective ClipSpaceType::Positive or ClipSpaceType::PositiveRightHanded transforms
-		result.position.w = SysUniform_GetMinimalProjection().w / SysUniform_GetMinimalProjection().z;
+		// (or ClipSpaceType::Positive_ReverseZ or ClipSpaceType::PositiveRightHanded_ReverseZ)
+		float4 miniProj = SysUniform_GetMinimalProjection();
+		if (ReverseZ) {
+			float A = miniProj.z;
+			float B = miniProj.w;
+			// result.position.z = 1.0/(A/B + 1.0/B);	// more expensive, but more accurate than B/(A+1) when A is near -1
+			result.position.z = B/(A+1);
+			result.position.w = result.position.z;
+			result.position.z -= 1e-4;		// creep protection (need more than in the non-reverse-Z case)
+		} else {
+			result.position.z = 1e-6;		// creep protection
+			result.position.w = miniProj.w / miniProj.z;
+		}
 	} else {
-		// For an orthoraphic projection, we can actually just clamp to z=0, we don't actually have to do the full clipping algorithm
+		// For an orthographic projection, we can actually just clamp to z=0, we don't actually have to do the full clipping algorithm
+		// (note that the reverseZ case isn't handled here)
+		result.position.z = 1e-6;		// creep protection
 		result.position.w = 1;
 	}
 #if defined(GS_FVF)
@@ -210,10 +244,17 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 	ClipToNearVertex outVert;
 
 	// This will clip the geometry to the near clip space, and then flatten the part belond the near clip plane so that
-	// it's lying exactly on the near clip plane 
-	bool clip0 = input[0].position.z < 0.f;
-	bool clip1 = input[1].position.z < 0.f;
-	bool clip2 = input[2].position.z < 0.f;
+	// it's lying exactly on the near clip plane
+	bool clip0, clip1, clip2;
+	if (ReverseZ) {
+		clip0 = (input[0].position.z / input[0].position.w) < 0 || (input[0].position.z / input[0].position.w) > 1;
+		clip1 = (input[1].position.z / input[1].position.w) < 0 || (input[1].position.z / input[1].position.w) > 1;
+		clip2 = (input[2].position.z / input[2].position.w) < 0 || (input[2].position.z / input[2].position.w) > 1;
+	} else {
+		clip0 = input[0].position.z < 0.f;
+		clip1 = input[1].position.z < 0.f;
+		clip2 = input[2].position.z < 0.f;
+	}
 
 	// A: 0->1
 	// B: 1->2
@@ -228,10 +269,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 				outputStream.Append(ProjectOntoNearPlane(input[2]));
 			} else {
 				// 0, 1 -> outside, 2 -> inside
-				float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-				float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-				ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
-				ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
+				ClipToNearVertex B = InterpolateToNear(input[1], input[2]);
+				ClipToNearVertex C = InterpolateToNear(input[2], input[0]);
 
 				outputStream.Append(input[2]);
 				outputStream.Append(C);
@@ -242,10 +281,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 
 		} else if (clip2) {
 			// 0 -> outside, 1 -> inside, 2 -> outside
-			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
-			float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
-			ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
+			ClipToNearVertex A = InterpolateToNear(input[0], input[1]);
+			ClipToNearVertex B = InterpolateToNear(input[1], input[2]);
 
 			outputStream.Append(input[1]);
 			outputStream.Append(B);
@@ -255,10 +292,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 
 		} else {
 			// 0 -> outside, 1, 2 -> inside
-			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
-			float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
-			ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
+			ClipToNearVertex A = InterpolateToNear(input[0], input[1]);
+			ClipToNearVertex C = InterpolateToNear(input[2], input[0]);
 
 			outputStream.Append(input[1]);
 			outputStream.Append(input[2]);
@@ -270,10 +305,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 	} else if (clip1) {
 		if (clip2) {
 			// 0 -> inside, 1, 2 -> outside
-			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
-			float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
-			ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
+			ClipToNearVertex A = InterpolateToNear(input[0], input[1]);
+			ClipToNearVertex C = InterpolateToNear(input[2], input[0]);
 
 			outputStream.Append(input[0]);
 			outputStream.Append(A);
@@ -283,10 +316,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 
 		} else {
 			// 0 -> inside, 1 -> outside, 2 -> inside
-			float alphaA = -input[0].position.z / (input[1].position.z - input[0].position.z);
-			float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-			ClipToNearVertex A = Interpolate(input[0], input[1], alphaA);
-			ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
+			ClipToNearVertex A = InterpolateToNear(input[0], input[1]);
+			ClipToNearVertex B = InterpolateToNear(input[1], input[2]);
 
 			outputStream.Append(input[2]);
 			outputStream.Append(input[0]);
@@ -297,10 +328,8 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 		
 	} else if (clip2) {
 		// 0, 1 -> inside, 2 -> outside
-		float alphaB = -input[1].position.z / (input[2].position.z - input[1].position.z);
-		float alphaC = -input[2].position.z / (input[0].position.z - input[2].position.z);
-		ClipToNearVertex B = Interpolate(input[1], input[2], alphaB);
-		ClipToNearVertex C = Interpolate(input[2], input[0], alphaC);
+		ClipToNearVertex B = InterpolateToNear(input[1], input[2]);
+		ClipToNearVertex C = InterpolateToNear(input[2], input[0]);
 
 		outputStream.Append(input[0]);
 		outputStream.Append(input[1]);
