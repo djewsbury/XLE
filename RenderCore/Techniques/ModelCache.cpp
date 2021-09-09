@@ -22,8 +22,8 @@ namespace RenderCore { namespace Techniques
         ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
 
 		Threading::Mutex _modelRenderersLock;
-        LRUCachePtr<::Assets::FuturePtr<SimpleModelRenderer>>			_modelRenderers;
-		std::shared_ptr<IPipelineAcceleratorPool>  _pipelineAcceleratorPool;
+        FrameByFrameLRUHeap<std::shared_ptr<::Assets::FuturePtr<SimpleModelRenderer>>> _modelRenderers;
+		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 
         uint32_t _reloadId;
 
@@ -51,16 +51,18 @@ namespace RenderCore { namespace Techniques
 		::Assets::PtrToFuturePtr<SimpleModelRenderer> newFuture;
 		{
 			ScopedLock(_pimpl->_modelRenderersLock);
-			auto existing = _pimpl->_modelRenderers.Get(hash);
-			if (existing) {
-				if (!::Assets::IsInvalidated(**existing))
-					return *existing;
+			auto query = _pimpl->_modelRenderers.Query(hash);
+			if (query.GetType() == LRUCacheInsertType::Update) {
+				if (!::Assets::IsInvalidated(*query.GetExisting()))
+					return query.GetExisting();
 				++_pimpl->_reloadId;
-			}
+			} else if (query.GetType() == LRUCacheInsertType::Fail) {
+                return nullptr; // cache blown during this frame
+            }
 
 			auto stringInitializer = ::Assets::Internal::AsString(modelFilename, materialFilename);	// (used for tracking/debugging purposes)
 			newFuture = std::make_shared<::Assets::FuturePtr<SimpleModelRenderer>>(stringInitializer);
-			_pimpl->_modelRenderers.Insert(hash, decltype(newFuture){newFuture});
+			query.Set(decltype(newFuture){newFuture});
 		}
 
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
@@ -79,6 +81,12 @@ namespace RenderCore { namespace Techniques
 	{
 		return _pimpl->_materialScaffolds.Get(materialName, modelName);
 	}
+
+    void ModelCache::OnFrameBarrier()
+    {
+        ScopedLock(_pimpl->_modelRenderersLock);
+        _pimpl->_modelRenderers.OnFrameBarrier();
+    }
 
     ModelCache::ModelCache(const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool, const Config& cfg)
     {

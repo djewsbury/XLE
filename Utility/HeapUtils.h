@@ -7,6 +7,7 @@
 #pragma once
 
 #include "IteratorUtils.h"
+#include "ArithmeticUtils.h"
 #include "Threading/Mutex.h"
 #include <vector>
 #include <algorithm>
@@ -150,6 +151,174 @@ namespace Utility
         moveFrom._cacheSize = 0;
         return *this;
     }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    template<typename Type> class FrameByFrameLRUHeap
+    {
+    public:
+        struct QueryResult
+        {
+            Type GetExisting();
+            void Set(Type&& newValue);
+            LRUCacheInsertType GetType() { return _type; }
+
+            LRUCacheInsertType _type;
+            typename std::vector<Type>::iterator _i;
+
+            FrameByFrameLRUHeap<Type>* _heap = nullptr;
+            typename std::vector<std::pair<uint64_t, unsigned>>::iterator _lookupTableIterator;
+            uint64_t _hashName = 0;
+        };
+        QueryResult Query(uint64_t hashName);
+
+        void OnFrameBarrier();
+
+        FrameByFrameLRUHeap(unsigned cacheSize, unsigned decayGracePeriod = 32);
+        ~FrameByFrameLRUHeap();
+    private:
+        std::vector<Type> _objects;
+        std::vector<std::pair<uint64_t, unsigned>> _lookupTable;
+        struct StateEntry { uint64_t _usedThisFrame = 0, _inDecayHeap = 0; };
+        std::vector<StateEntry> _stateBits;
+        std::vector<unsigned> _decayStartFrames;
+        LRUQueue _lruQueue;
+        unsigned _currentFrame = 0;
+        unsigned _decayGracePeriod = 32;
+        unsigned _cacheSize;
+    };
+
+    template<typename Type>
+        auto FrameByFrameLRUHeap<Type>::Query(uint64_t hashName) -> QueryResult
+    {
+        auto i = std::lower_bound(_lookupTable.begin(), _lookupTable.end(), hashName, CompareFirst<uint64_t, unsigned>());
+        if (i != _lookupTable.cend() && i->first == hashName) {
+            unsigned idx = i->second;
+            _stateBits[idx/64]._usedThisFrame |= 1ull<<uint64_t(idx);
+            return QueryResult { LRUCacheInsertType::Update, _objects.begin() + idx };
+        }
+
+        if (_objects.size() < _cacheSize)
+            return QueryResult { LRUCacheInsertType::Add, {}, this, i, hashName };
+
+        // we need to evict an existing object
+        unsigned eviction;
+        for (;;) {
+            eviction = _lruQueue.GetOldestValue();
+            if (eviction == ~unsigned(0x0))
+                return { LRUCacheInsertType::Fail };
+
+            assert(_stateBits[eviction/64]._inDecayHeap & (1ull<<uint64_t(eviction%64)));
+            // If this "oldest" entry was actually used this frame, we need to do some patch-up work
+            if (_stateBits[eviction/64]._usedThisFrame & (1ull<<uint64_t(eviction%64))) {
+                _stateBits[eviction/64]._inDecayHeap ^= 1ull<<uint64_t(eviction%64);
+                _lruQueue.DisconnectOldest();
+            } else
+                break;
+        }
+
+        if ((_currentFrame - _decayStartFrames[eviction]) < _decayGracePeriod)
+            return { LRUCacheInsertType::Fail };
+
+        return QueryResult { LRUCacheInsertType::EvictAndReplace, _objects.begin() + eviction, this, i, hashName };
+    }
+
+    template<typename Type>
+        void FrameByFrameLRUHeap<Type>::OnFrameBarrier()
+    {
+        // any objects not used this frame, but not in the decay heap get sent there now
+        for (unsigned plane=0; plane<_stateBits.size(); ++plane) {
+            auto notUsedNotInDecay = (~_stateBits[plane]._usedThisFrame) & (~_stateBits[plane]._inDecayHeap);
+            auto usedAndInDecay = _stateBits[plane]._usedThisFrame & _stateBits[plane]._inDecayHeap;
+            if (plane == _stateBits.size()-1) {
+                unsigned bitsInLastOne = _objects.size()%64;
+                notUsedNotInDecay &= (1ull<<uint64_t(bitsInLastOne))-1;
+                usedAndInDecay &= (1ull<<uint64_t(bitsInLastOne))-1;
+            }
+            // unused entries start decaying...
+            while (notUsedNotInDecay) {
+                auto idx = xl_ctz8(notUsedNotInDecay);
+                notUsedNotInDecay ^= 1ull<<uint64_t(idx);
+                _stateBits[plane]._inDecayHeap |= 1ull<<uint64_t(idx);
+                idx += plane * 64;
+                _lruQueue.BringToFront(idx);
+                _decayStartFrames[idx] = _currentFrame;
+            }
+            // if used, remove from decay
+            while (usedAndInDecay) {
+                auto idx = xl_ctz8(usedAndInDecay);
+                usedAndInDecay ^= 1ull<<uint64_t(idx);
+                assert(_stateBits[plane]._inDecayHeap & (1ull<<uint64_t(idx)));
+                _stateBits[plane]._inDecayHeap ^= 1ull<<uint64_t(idx);
+                idx += plane * 64;
+                _lruQueue.SendToBack(idx);
+                _lruQueue.DisconnectOldest();
+            }
+            _stateBits[plane]._usedThisFrame = 0;       // reset for next frame
+        }
+        ++_currentFrame;
+    }
+
+    template<typename Type>
+        Type FrameByFrameLRUHeap<Type>::QueryResult::GetExisting()
+    {
+        assert(_type == LRUCacheInsertType::Update);
+        return *_i;
+    }
+
+    template<typename Type>
+        void FrameByFrameLRUHeap<Type>::QueryResult::Set(Type&& newValue)
+    {
+        if (_type == LRUCacheInsertType::EvictAndReplace) {
+            unsigned idx = (unsigned)std::distance(_heap->_objects.begin(), _i);
+
+            _heap->_objects[idx] = std::move(newValue);
+            _heap->_stateBits[idx/64]._usedThisFrame |= 1ull<<uint64_t(idx%64);
+            assert(_heap->_stateBits[idx/64]._inDecayHeap & (1ull<<uint64_t(idx%64)));
+            _heap->_stateBits[idx/64]._inDecayHeap &= ~(1ull<<uint64_t(idx%64));
+
+            _heap->_lruQueue.SendToBack(idx);
+            _heap->_lruQueue.DisconnectOldest();
+
+            // Erase old entry from lookup table, and add new one. We could
+            // do this a little more efficiently if we did in it one step and only
+            // moved entries between the erase and insertion points
+            auto oldLookup = std::find_if(_heap->_lookupTable.cbegin(), _heap->_lookupTable.cend(), [idx](const auto& p) { return p.second == idx; });
+            _heap->_lookupTable.erase(oldLookup);
+            auto newLookupTableIterator = std::lower_bound(_heap->_lookupTable.begin(), _heap->_lookupTable.end(), _hashName, CompareFirst<uint64_t, unsigned>());
+            _heap->_lookupTable.insert(newLookupTableIterator, std::make_pair(_hashName, idx));
+        } else if (_type == LRUCacheInsertType::Add) {
+            assert((_heap->_objects.size()+1) <= _heap->_cacheSize);
+            unsigned idx = (unsigned)_heap->_objects.size();
+            _heap->_objects.push_back(std::move(newValue));
+            _heap->_lookupTable.insert(_lookupTableIterator, std::make_pair(_hashName, idx));
+            _heap->_stateBits[idx/64]._usedThisFrame |= 1ull<<uint64_t(idx%64);
+        } else if (_type == LRUCacheInsertType::Update) {
+            // "Update" means both:
+            //      1. existing value is valid and usable
+            //      2. replacements should go into the same slot
+            unsigned idx = (unsigned)std::distance(_heap->_objects.begin(), _i);
+            _heap->_objects[idx] = std::move(newValue);
+        } else {
+            assert(0);
+        }
+    }
+
+    template<typename Type>
+        FrameByFrameLRUHeap<Type>::FrameByFrameLRUHeap(unsigned cacheSize, unsigned decayGracePeriod)
+        : _lruQueue(cacheSize)
+        , _decayGracePeriod(decayGracePeriod)
+        , _cacheSize(cacheSize)
+    {
+        _objects.reserve(cacheSize);
+        _lookupTable.reserve(cacheSize);
+        _stateBits.resize((cacheSize+63)/64, {0,0});
+        _decayStartFrames.resize(cacheSize, 0);
+        _currentFrame = 0;
+    }
+    template<typename Type>
+        FrameByFrameLRUHeap<Type>::~FrameByFrameLRUHeap()
+    {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -54,6 +54,7 @@ namespace RenderCore { namespace Techniques
 		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>;
 
         uint32_t GetReloadId() const;
+        void OnFrameBarrier();
 
         ModelCache(
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,

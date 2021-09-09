@@ -622,7 +622,7 @@ namespace SceneEngine
                 _currentModelRendered = false;
             }
 
-			auto current = _current->TryActualize();
+			auto current = _current ? _current->TryActualize() : nullptr;
 			if (!current) return;
 
             auto localToWorld = Combine(obj._localToCell, cellToWorld);
