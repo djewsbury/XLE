@@ -16,13 +16,17 @@ namespace RenderCore { namespace Assets
 	void ShaderPatchCollection::MergeInto(ShaderPatchCollection& dest) const
 	{
 		for (const auto&p:_patches) {
-			auto i = std::find_if(
-				dest._patches.begin(), dest._patches.end(),
-				[&p](const std::pair<std::string, ShaderSourceParser::InstantiationRequest>& q) { return q.first == p.first; });
-			if (i == dest._patches.end()) {
-				dest._patches.push_back(p);
+			if (p.first.empty()) {
+				dest._patches.push_back(p);	// empty name -- can't override
 			} else {
-				i->second = p.second;
+				auto i = std::find_if(
+					dest._patches.begin(), dest._patches.end(),
+					[&p](const std::pair<std::string, ShaderSourceParser::InstantiationRequest>& q) { return q.first == p.first; });
+				if (i == dest._patches.end()) {
+					dest._patches.push_back(p);
+				} else {
+					i->second = p.second;
+				}
 			}
 		}
 		if (!_descriptorSet.empty())
@@ -98,7 +102,7 @@ namespace RenderCore { namespace Assets
 	void ShaderPatchCollection::SerializeMethod(OutputStreamFormatter& formatter) const
 	{
 		for (const auto& p:_patches) {
-			auto pele = formatter.BeginKeyedElement(p.first);
+			auto pele = (p.first.empty()) ? formatter.BeginSequencedElement() : formatter.BeginKeyedElement(p.first);
 			SerializeInstantiationRequest(formatter, p.second);
 			formatter.EndElement(pele);
 		}
@@ -151,20 +155,28 @@ namespace RenderCore { namespace Assets
 	ShaderPatchCollection::ShaderPatchCollection(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
-			auto name = RequireKeyedItem(formatter);
-			
-			if (XlEqString(name, "DescriptorSet")) {
-				_descriptorSet = RequireValue(formatter).AsString();
-				continue;
-			}
-			
-			if (formatter.PeekNext() != FormatterBlob::BeginElement)
-				Throw(FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
+		for (;;) {
+			auto next = formatter.PeekNext();
+			if (next == FormatterBlob::KeyedItem) {
+				auto name = RequireKeyedItem(formatter);
+				
+				if (XlEqString(name, "DescriptorSet")) {
+					_descriptorSet = RequireValue(formatter).AsString();
+					continue;
+				}
+				
+				if (formatter.PeekNext() != FormatterBlob::BeginElement)
+					Throw(FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
 
-			RequireBeginElement(formatter);
-			_patches.emplace_back(std::make_pair(name.AsString(), DeserializeInstantiationRequest(formatter, searchRules)));
-			RequireEndElement(formatter);
+				RequireBeginElement(formatter);
+				_patches.emplace_back(std::make_pair(name.AsString(), DeserializeInstantiationRequest(formatter, searchRules)));
+				RequireEndElement(formatter);
+			} else if (next == FormatterBlob::BeginElement) {
+				RequireBeginElement(formatter);
+				_patches.emplace_back(std::make_pair(std::string{}, DeserializeInstantiationRequest(formatter, searchRules)));
+				RequireEndElement(formatter);
+			} else
+				break;
 		}
 
 		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)

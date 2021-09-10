@@ -42,13 +42,13 @@ using namespace Catch::literals;
 namespace UnitTests
 {
 	static const char s_exampleTechniqueFragments[] = R"--(
-		fragment=~
+		=~
 			ut-data/fragment.graph::Fragment
 		main=~
 			ut-data/outergraph.graph::deferred_pass_main
 			perPixel=~
 				ut-data/perpixel.graph::Default_PerPixel
-		coordsToColor=~
+		=~
 			ut-data/outergraph.graph::CoordsToColor
 		)--";
 
@@ -58,7 +58,7 @@ namespace UnitTests
 		)--";
 
 	static const char s_fragmentsWithRename[] = R"--(
-		perPixel=~
+		=~
 			ut-data/shader_with_selectors.pixel.hlsl::PerPixelWithSelectors
 			Implements=xleres/Nodes/Templates.pixel.sh::PerPixel
 		)--";
