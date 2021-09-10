@@ -91,6 +91,8 @@ namespace RenderCore { namespace Assets
 			SerializeInstantiationRequest(formatter, *p.second);
 			formatter.EndElement(ele);
 		}
+		if (!instRequest._implementsArchiveName.empty())
+			formatter.WriteKeyedValue("Implements", instRequest._implementsArchiveName);
 	}
 
 	void ShaderPatchCollection::SerializeMethod(OutputStreamFormatter& formatter) const
@@ -126,12 +128,18 @@ namespace RenderCore { namespace Assets
 
 		StringSection<> bindingName;
 		while (formatter.TryKeyedItem(bindingName)) {
-			RequireBeginElement(formatter);
-			result._parameterBindings.emplace(
-				std::make_pair(
-					bindingName.AsString(),
-					std::make_unique<ShaderSourceParser::InstantiationRequest>(DeserializeInstantiationRequest(formatter, searchRules))));
-			RequireEndElement(formatter);
+			if (XlEqString(bindingName, "Implements")) {
+				if (!result._implementsArchiveName.empty())
+					Throw(FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
+				result._implementsArchiveName = RequireValue(formatter).AsString();
+			} else {
+				RequireBeginElement(formatter);
+				result._parameterBindings.emplace(
+					std::make_pair(
+						bindingName.AsString(),
+						std::make_unique<ShaderSourceParser::InstantiationRequest>(DeserializeInstantiationRequest(formatter, searchRules))));
+				RequireEndElement(formatter);
+			}
 		}
 
 		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)

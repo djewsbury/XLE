@@ -65,10 +65,20 @@ namespace ShaderSourceParser
 			InstantiationRequest _instantiationParams;
 		};
 
+		// Used when we have to generate a scaffold function when we want a specific shader language function
+		// to be callable using a standard signature. This the equivalent of specifying a "implements" tag
+		// for a graph
+		struct PendingScaffoldToShaderLanguage
+		{
+			GraphLanguage::INodeGraphProvider::Signature _sig;
+			GraphLanguage::INodeGraphProvider::Signature _implementsSig;
+		};
+
 		class PendingInstantiationsHelper
 		{
 		public:
 			std::stack<PendingInstantiation> _instantiations;
+			std::stack<PendingScaffoldToShaderLanguage> _pendingScaffoldToShaderLanguages;
 			std::set<std::pair<std::string, uint64_t>> _previousInstantiation;
 			std::set<std::string> _rawShaderFileIncludes;
 			std::vector<ShaderEntryPoint> _entryPointsFromRawShaders;
@@ -91,6 +101,9 @@ namespace ShaderSourceParser
 					auto& dep = *i;
 					auto instHash = dep._instantiation.CalculateInstanceHash();
 					if (dep._isGraphSyntaxFile) {
+						if (!dep._instantiation._implementsArchiveName.empty())
+							Throw(std::runtime_error("Explicit \"implements\" value provide for graph based shader instantiation. This is only supported for shader language base instantiations"));
+
 						// todo -- not taking into account the custom provider on the following line (ie, incase the new load is using a different provider to the new load)
 						if (_previousInstantiation.find({dep._instantiation._archiveName, instHash}) == _previousInstantiation.end()) {
 
@@ -115,7 +128,7 @@ namespace ShaderSourceParser
 							auto filename = SplitArchiveName(dep._instantiation._archiveName).first;
 							_rawShaderFileIncludes.insert(std::string(StringMeld<MaxPath>() << filename.AsString() + "_" << instHash));
 						} else {
-							GraphLanguage::INodeGraphProvider::Signature sig;
+							GraphLanguage::INodeGraphProvider::Signature sig, implementsSig;
 							if (dep._instantiation._customProvider) {
 								sig = dep._instantiation._customProvider->FindSignature(dep._instantiation._archiveName).value();
 								_rawShaderFileIncludes.insert(sig._sourceFile);
@@ -123,12 +136,27 @@ namespace ShaderSourceParser
 								sig = provider.FindSignature(dep._instantiation._archiveName).value();
 								_rawShaderFileIncludes.insert(sig._sourceFile);
 							}
+							if (!dep._instantiation._implementsArchiveName.empty()) {
+								if (dep._instantiation._customProvider) {
+									implementsSig = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName).value();
+								} else
+									implementsSig = provider.FindSignature(dep._instantiation._implementsArchiveName).value();
+								_pendingScaffoldToShaderLanguages.emplace(PendingScaffoldToShaderLanguage{sig, implementsSig});
+							}
 
 							if (isRootInstantiation) {
 								// If this is a root instantiation, we can include this function as an entry point
 								ShaderEntryPoint entryPoint;
-								entryPoint._name = entryPoint._implementsName = sig._name;
-								entryPoint._signature = entryPoint._implementsSignature = sig._signature;
+								entryPoint._name = sig._name;
+								entryPoint._signature = sig._signature;
+
+								if (!dep._instantiation._implementsArchiveName.empty()) {
+									entryPoint._implementsName = implementsSig._name;
+									entryPoint._implementsSignature = implementsSig._signature;
+								} else {
+									entryPoint._implementsName = entryPoint._name;
+									entryPoint._implementsSignature = entryPoint._signature;
+								}
 								_entryPointsFromRawShaders.emplace_back(std::move(entryPoint));
 							}
 						}
@@ -230,6 +258,19 @@ namespace ShaderSourceParser
 			// Queue up all of the dependencies that we got out of the GenerateFunction() call
 			pendingInst.QueueUp(MakeIteratorRange(instFn._dependencies._dependencies), *inst._graph._subProvider);
         }
+
+		while (!pendingInst._pendingScaffoldToShaderLanguages.empty()) {
+			auto inst = std::move(pendingInst._pendingScaffoldToShaderLanguages.top());
+            pendingInst._pendingScaffoldToShaderLanguages.pop();
+
+			// generate a scaffold function with the signature _implementsSig that will call the
+			// function _sig
+			result._sourceFragments.push_back(
+				ShaderSourceParser::GenerateScaffoldFunction(
+					inst._implementsSig._signature, inst._sig._signature, 
+					inst._implementsSig._name, inst._sig._name,
+					ShaderSourceParser::ScaffoldFunctionFlags::ScaffoldeeUsesReturnSlot));
+		}
 
 		// Write the merged captures as a cbuffers in the material descriptor set
 		if (!mergedCaptures.empty()) {
@@ -362,13 +403,15 @@ namespace ShaderSourceParser
     uint64_t InstantiationRequest::CalculateInstanceHash() const
     {
         if (_parameterBindings.empty()) return 0;
-        uint64 result = DefaultSeed64;
+        uint64_t result = DefaultSeed64;
 		// todo -- ordering of parameters matters to the hash here
         for (const auto&p:_parameterBindings) {
             result = Hash64(p.first, CalculateDepHash(*p.second, result));
 			for (const auto&pc:p.second->_parametersToCurry)
 				result = Hash64(pc, result);
 		}
+		if (!_implementsArchiveName.empty())
+			result = Hash64(_implementsArchiveName, result);
         return result;
     }
 
@@ -376,6 +419,7 @@ namespace ShaderSourceParser
 	: _archiveName(copyFrom._archiveName)
 	, _customProvider(copyFrom._customProvider)
 	, _parametersToCurry(copyFrom._parametersToCurry)
+	, _implementsArchiveName(copyFrom._implementsArchiveName)
 	{
 		for (const auto&src:copyFrom._parameterBindings)
 			_parameterBindings.insert(std::make_pair(src.first, std::make_unique<InstantiationRequest>(*src.second)));
@@ -389,6 +433,7 @@ namespace ShaderSourceParser
 		_parameterBindings.clear();
 		for (const auto&src:copyFrom._parameterBindings)
 			_parameterBindings.insert(std::make_pair(src.first, std::make_unique<InstantiationRequest>(*src.second)));
+		_implementsArchiveName = copyFrom._implementsArchiveName;
 		return *this;
 	}
 

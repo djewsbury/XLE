@@ -35,6 +35,10 @@ namespace ShaderSourceParser
 		std::unordered_map<std::string, std::unique_ptr<InstantiationRequest>>	_parameterBindings;
 		std::vector<std::string>												_parametersToCurry;
 
+		/// when "implements" is not provided by the instantiation itself (eg, in the case of
+		/// a HLSL patch) we can specify the patch that will be implemented explicitly:
+		std::string																_implementsArchiveName;	 
+
 		uint64_t CalculateInstanceHash() const; ///< Calculate hash value for the parameter bindings (& curried parameters) in the request
 
 		InstantiationRequest(InstantiationRequest&&) = default;

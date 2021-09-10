@@ -57,6 +57,12 @@ namespace UnitTests
 			ut-data/shader_with_selectors_adapter.graph::Default_PerPixel
 		)--";
 
+	static const char s_fragmentsWithRename[] = R"--(
+		perPixel=~
+			ut-data/shader_with_selectors.pixel.hlsl::PerPixelWithSelectors
+			Implements=xleres/Nodes/Templates.pixel.sh::PerPixel
+		)--";
+
 	// The following data is mounted as virtual files in the folder "ut-data"
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
 		std::make_pair(
@@ -259,6 +265,25 @@ namespace UnitTests
 			generateOptions._shaderLanguage = RenderCore::ShaderLanguage::HLSL;
 			auto instantiation = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instantiations), generateOptions);
 			REQUIRE(instantiation._sourceFragments.size() != (size_t)0);
+		}
+
+		SECTION( "ShaderSourceParser::InstantiateShader with rename" )
+		{
+			InputStreamFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithRename) };
+			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+
+			std::vector<ShaderSourceParser::InstantiationRequest> instantiations;
+			for (const auto& p:patchCollection.GetPatches())
+				instantiations.push_back(p.second);
+
+			ShaderSourceParser::GenerateFunctionOptions generateOptions;
+			generateOptions._shaderLanguage = RenderCore::ShaderLanguage::HLSL;
+			auto instantiation = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instantiations), generateOptions);
+			REQUIRE(instantiation._sourceFragments.size() != (size_t)0);
+
+			auto expectingPatch = Hash64("PerPixel");
+			auto i = std::find_if(instantiation._entryPoints.begin(), instantiation._entryPoints.end(), [](const auto& c) { return c._implementsName == "PerPixel"; });
+			REQUIRE(i != instantiation._entryPoints.end());
 		}
 
 		SECTION( "InstantiateShaderGraphCompiler" )
