@@ -14,6 +14,7 @@
 
 namespace RenderCore { class IThreadContext; class FrameBufferDesc; class SharedPkt; class IResourceView; class ISampler; class UniformsStreamInterface; }
 namespace Assets { class IAsyncMarker; }
+namespace RenderCore { namespace Assets { class ShaderPatchCollection; }}
 
 namespace RenderCore { namespace Techniques
 {
@@ -37,6 +38,7 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream _uniforms;
 		ParameterBox _shaderSelectors;
 		RenderCore::Assets::RenderStateSet _stateSet;
+		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
 	};
 
 	class IImmediateDrawables

@@ -13,6 +13,7 @@
 #include "ParsingContext.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/PredefinedPipelineLayout.h"
+#include "../Assets/ShaderPatchCollection.h"
 #include "../Metal/DeviceContext.h"		// for CalculateFrameBufferRelevance
 #include "../Format.h"
 #include "../FrameBufferDesc.h"
@@ -34,6 +35,10 @@ namespace RenderCore { namespace Techniques
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
+			static const uint64_t s_patchShape = Hash64("IShape2D_Calculate");
+			static const uint64_t s_patchFill = Hash64("IFill_Calculate");
+			static const uint64_t s_patchOutline = Hash64("IOutline_Calculate");
+
 			unsigned dsMode = 0;
 			// We're re-purposing the _writeMask flag for depth test and write
 			if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::WriteMask) {
@@ -45,7 +50,22 @@ namespace RenderCore { namespace Techniques
 					dsMode = 2;
 				}
 			}
-			return _pipelineDescFuture[dsMode];
+
+			if (!shaderPatches.HasPatchType(s_patchShape)) {
+				return _pipelineDescFuture[dsMode];
+			} else {
+				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				*nascentDesc = *_pipelineDescFuture[dsMode]->Actualize();
+
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
+				nascentDesc->_patchExpansions.push_back(s_patchShape);
+				nascentDesc->_patchExpansions.push_back(s_patchFill);
+				nascentDesc->_patchExpansions.push_back(s_patchOutline);
+
+				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
+				result->SetAsset(std::move(nascentDesc), {});
+				return result;
+			}
 		}
 
 		virtual std::string GetPipelineLayout() override
@@ -133,7 +153,7 @@ namespace RenderCore { namespace Techniques
 			auto vertexDataSize = vertexCount * vStride;
 			if (!vertexDataSize) return {};	
 
-			auto pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors);
+			auto pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 
 			// check if we can just merge it into the previous draw call. If so we're just going to
 			// increase the vertex count on that draw call
@@ -184,7 +204,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 			drawable->_geo = std::move(customGeo);
-			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors);
+			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = indexOrVertexCount;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
@@ -209,7 +229,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 			drawable->_geo = std::move(customGeo);
-			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors);
+			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = indexOrVertexCount;
 			drawable->_vertexStartLocation = indexOrVertexStartLocation;
 			drawable->_vertexStride = 0;
@@ -354,7 +374,8 @@ namespace RenderCore { namespace Techniques
 				IteratorRange<const InputAssemblyType*> inputAssembly,
 				const RenderCore::Assets::RenderStateSet& stateSet,
 				Topology topology,
-				const ParameterBox& shaderSelectors)
+				const ParameterBox& shaderSelectors,
+				const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection)
 		{
 			uint64_t hashCode = HashInputAssembly(inputAssembly, stateSet.GetHash());
 			if (topology != Topology::TriangleList)
@@ -363,13 +384,15 @@ namespace RenderCore { namespace Techniques
 				hashCode = HashCombine(shaderSelectors.GetParameterNamesHash(), hashCode);
 				hashCode = HashCombine(shaderSelectors.GetHash(), hashCode);
 			}
+			if (patchCollection)
+				hashCode = HashCombine(patchCollection->GetHash(), hashCode);
 
 			auto existing = LowerBound(_pipelineAccelerators, hashCode);
 			if (existing != _pipelineAccelerators.end() && existing->first == hashCode)
 				return existing->second;
 
 			auto newAccelerator = _pipelineAcceleratorPool->CreatePipelineAccelerator(
-				nullptr, 
+				patchCollection, 
 				shaderSelectors, inputAssembly,
 				topology, stateSet);
 			// Note that we keep this pipeline accelerator alive indefinitely 

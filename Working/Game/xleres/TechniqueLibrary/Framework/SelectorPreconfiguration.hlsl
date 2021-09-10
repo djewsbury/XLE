@@ -21,12 +21,23 @@
 			#define VSOUT_HAS_COLOR 1
 		#endif
 	#endif
+	#if GEO_HAS_TEXCOORD1 && GEO_HAS_PIXELPOSITION
+		#define VSOUT_HAS_TEXCOORD1 1
+	#endif
+#endif
+
+#if GEO_HAS_COLOR1 && GEO_HAS_PIXELPOSITION
+	#define VSOUT_HAS_COLOR1 1
 #endif
 
 #if GEO_HAS_TEXCOORD>=1
 	#if !defined(VSOUT_HAS_TEXCOORD)
 		#define VSOUT_HAS_TEXCOORD 1
 	#endif
+#endif
+
+#if GEO_HAS_TEXCOORD1 && GEO_HAS_PIXELPOSITION
+	#define VSOUT_HAS_TEXCOORD1 1
 #endif
 
 #if (GEO_HAS_TEXTANGENT==1) || (GEO_HAS_TEXBITANGENT==1)

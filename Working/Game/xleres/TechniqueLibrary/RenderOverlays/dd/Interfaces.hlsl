@@ -23,7 +23,7 @@ struct DebuggingShapesCoords
 
 float4 GetPosition(DebuggingShapesCoords coords) { return coords.position; }
 float2 GetOutputDimensions(DebuggingShapesCoords coords) { return coords.outputDimensions; }
-float2 VSOUT_GetTexCoord0(DebuggingShapesCoords coords) { return coords.texCoord; }
+float2 DebuggingShapesCoords_GetTexCoord0(DebuggingShapesCoords coords) { return coords.texCoord; }
 
 #if 0
     float2 GetUDDS(DebuggingShapesCoords coords) { return float2(ddx(VSOUT_GetTexCoord0(coords).x), ddy(VSOUT_GetTexCoord0(coords).x)); }
@@ -101,18 +101,8 @@ ShapeResult MakeShapeResult(float fill, float border)  { ShapeResult temp; temp.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N T E R F A C E S
 
-interface IShape2D
-{
-    ShapeResult Calculate(
-        DebuggingShapesCoords coords,
-        ShapeDesc shapeDesc);
-};
-
-interface IBrush
-{
-    float4 Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
-    bool NeedsDerivatives();
-};
-
+ShapeResult IShape2D_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc);
+float4 IOutline_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
+float4 IFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
 
 #endif

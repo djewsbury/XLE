@@ -13,6 +13,7 @@
 
 namespace RenderCore { class IResourceView; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
+namespace RenderCore { namespace Assets { class ShaderPatchCollection; } }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderOverlays
@@ -79,6 +80,14 @@ namespace RenderOverlays
             const Float2& minTex0, const Float2& maxTex0, 
             const Float2& minTex1, const Float2& maxTex1,
             StringSection<char> shaderSelectorTable = {}) = 0;
+
+        virtual void    DrawQuad(
+            ProjectionMode proj, 
+            const Float3& mins, const Float3& maxs, 
+            ColorB color0, ColorB color1,
+            const Float2& minTex0, const Float2& maxTex0, 
+            const Float2& minTex1, const Float2& maxTex1,
+            std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches) = 0;
 
         virtual void    DrawQuad(
             ProjectionMode proj, 

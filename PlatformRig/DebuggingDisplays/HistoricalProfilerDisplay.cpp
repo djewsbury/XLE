@@ -157,10 +157,10 @@ namespace PlatformRig { namespace Overlays
 
                         InteractableId id = baseButtonIds[c]+sectionIndex;
                         if (interfaceState.HasMouseOver(id)) {
-                            DrawElipse(&context, buttonRect, ColorB(0xff000000u));
+                            DrawEllipse(&context, buttonRect, ColorB(0xff000000u));
                             DrawText(&context, buttonRect, nullptr, ColorB(0xff000000u), buttonNames[c]);
                         } else {
-                            DrawElipse(&context, buttonRect, ColorB(0xffffffffu));
+                            DrawEllipse(&context, buttonRect, ColorB(0xffffffffu));
                             DrawText(&context, buttonRect, nullptr, ColorB(0xffffffffu), buttonNames[c]);
                         }
                         interactables.Register(Interactables::Widget(buttonRect, id));

@@ -46,6 +46,14 @@ namespace RenderOverlays
         void    DrawQuad(
             ProjectionMode proj, 
             const Float3& mins, const Float3& maxs, 
+            ColorB color0, ColorB color1,
+            const Float2& minTex0, const Float2& maxTex0, 
+            const Float2& minTex1, const Float2& maxTex1,
+            std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches) override;
+
+        void    DrawQuad(
+            ProjectionMode proj, 
+            const Float3& mins, const Float3& maxs, 
             ColorB color,
             StringSection<> shaderSelectorTable) override;
 

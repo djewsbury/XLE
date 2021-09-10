@@ -354,6 +354,8 @@ namespace RenderCore { namespace Techniques
 				auto lastSemanticIndex = (endEquivalents-1)->_semanticHash - base;
 
 				meld << "GEO_HAS_" << basicSemantic.first;
+				if (basicSemantic.second != 0)
+					meld << basicSemantic.second;
 				_geoSelectors.SetParameter(meld.AsStringSection(), lastSemanticIndex+1);
 			} else {
 				// The MiniInputElementDesc is not all-knowing, unfortunately. We can only dehash the

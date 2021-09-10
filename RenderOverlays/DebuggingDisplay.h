@@ -123,8 +123,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     extern const ColorB   RandomPaletteColorTable[];
     extern const size_t   RandomPaletteColorTable_Size;
 
-    void        DrawElipse(IOverlayContext* context, const Rect& rect, ColorB colour);
-    void        DrawFilledElipse(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        DrawFilledEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
 
     void DrawRoundedRectangle(
         IOverlayContext* context, const Rect& rect, 

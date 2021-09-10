@@ -7,9 +7,13 @@
 #if !defined(BRUSH_UTILS_H)
 #define BRUSH_UTILS_H
 
+#if !defined(DD_INTERFACES_H)
+    #error Include Interfaces.hlsl before this file
+#endif
+
 #include "../../Math/EdgeDetection.hlsl"
 
-float2 ScreenSpaceDerivatives(IShape2D shape, DebuggingShapesCoords coords, ShapeDesc shapeDesc)
+float2 ScreenSpaceDerivatives(DebuggingShapesCoords coords, ShapeDesc shapeDesc)
 {
         //
         //		Using "sharr" filter to find image gradient. We can use
@@ -26,7 +30,7 @@ float2 ScreenSpaceDerivatives(IShape2D shape, DebuggingShapesCoords coords, Shap
             float2 texCoordOffset = ((x-2.f) * GetUDDS(coords)) + ((y-2.f) * GetVDDS(coords));
             DebuggingShapesCoords offsetCoords = coords;
             offsetCoords.texCoord += texCoordOffset;
-            float t = shape.Calculate(offsetCoords, shapeDesc)._fill;
+            float t = IShape2D_Calculate(offsetCoords, shapeDesc)._fill;
             dhdp.x += ScharrHoriz5x5[x][y] * t;
             dhdp.y += ScharrVert5x5[x][y] * t;
         }

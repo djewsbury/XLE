@@ -65,20 +65,10 @@ namespace ShaderSourceParser
 			InstantiationRequest _instantiationParams;
 		};
 
-		// Used when we have to generate a scaffold function when we want a specific shader language function
-		// to be callable using a standard signature. This the equivalent of specifying a "implements" tag
-		// for a graph
-		struct PendingScaffoldToShaderLanguage
-		{
-			GraphLanguage::INodeGraphProvider::Signature _sig;
-			GraphLanguage::INodeGraphProvider::Signature _implementsSig;
-		};
-
 		class PendingInstantiationsHelper
 		{
 		public:
 			std::stack<PendingInstantiation> _instantiations;
-			std::stack<PendingScaffoldToShaderLanguage> _pendingScaffoldToShaderLanguages;
 			std::set<std::pair<std::string, uint64_t>> _previousInstantiation;
 			std::set<std::string> _rawShaderFileIncludes;
 			std::vector<ShaderEntryPoint> _entryPointsFromRawShaders;
@@ -141,7 +131,6 @@ namespace ShaderSourceParser
 									implementsSig = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName).value();
 								} else
 									implementsSig = provider.FindSignature(dep._instantiation._implementsArchiveName).value();
-								_pendingScaffoldToShaderLanguages.emplace(PendingScaffoldToShaderLanguage{sig, implementsSig});
 							}
 
 							if (isRootInstantiation) {
@@ -258,19 +247,6 @@ namespace ShaderSourceParser
 			// Queue up all of the dependencies that we got out of the GenerateFunction() call
 			pendingInst.QueueUp(MakeIteratorRange(instFn._dependencies._dependencies), *inst._graph._subProvider);
         }
-
-		while (!pendingInst._pendingScaffoldToShaderLanguages.empty()) {
-			auto inst = std::move(pendingInst._pendingScaffoldToShaderLanguages.top());
-            pendingInst._pendingScaffoldToShaderLanguages.pop();
-
-			// generate a scaffold function with the signature _implementsSig that will call the
-			// function _sig
-			result._sourceFragments.push_back(
-				ShaderSourceParser::GenerateScaffoldFunction(
-					inst._implementsSig._signature, inst._sig._signature, 
-					inst._implementsSig._name, inst._sig._name,
-					ShaderSourceParser::ScaffoldFunctionFlags::ScaffoldeeUsesReturnSlot));
-		}
 
 		// Write the merged captures as a cbuffers in the material descriptor set
 		if (!mergedCaptures.empty()) {

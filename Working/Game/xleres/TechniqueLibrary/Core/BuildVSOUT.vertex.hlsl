@@ -68,8 +68,16 @@ VSOUT BuildVSOUT(
 		output.color = VSIN_GetColor0(input);
 	#endif
 
+	#if VSOUT_HAS_COLOR1>=1
+		output.color1 = VSIN_GetColor1(input);
+	#endif
+
 	#if VSOUT_HAS_TEXCOORD>=1
 		output.texCoord = VSIN_GetTexCoord0(input);
+	#endif
+
+	#if VSOUT_HAS_TEXCOORD1>=1
+		output.texCoord1 = VSIN_GetTexCoord1(input);
 	#endif
 
 	#if VSOUT_HAS_TANGENT_FRAME==1

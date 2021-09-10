@@ -95,7 +95,7 @@ namespace PlatformRig { namespace Overlays
         for (auto i=intersections._intr.cbegin(); i!=intersections._intr.cend(); ++i) {
             Coord2 centre(int((*i)[0] * elementDim) + gridArea._topLeft[0], int((*i)[1] * elementDim) + gridArea._topLeft[1]);
             Rect rect(centre - Coord2(2,2), centre + Coord2(2,2));
-            DrawElipse(&context, rect, ColorB(0xffff0000));
+            DrawEllipse(&context, rect, ColorB(0xffff0000));
         }
     }
 

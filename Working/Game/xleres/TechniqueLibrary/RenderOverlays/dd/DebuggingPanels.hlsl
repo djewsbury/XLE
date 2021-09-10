@@ -116,7 +116,7 @@ void RenderTile(float2 minCoords, float2 maxCoords, float2 texCoord, Texture2DAr
 		uint3 dimensions;
 		tex.GetDimensions(dimensions.x, dimensions.y, dimensions.z);
 		const int sampleIndex = 0;
-		result = float4(tex.Load(int4(tc*dimensions, arrayIndex, 0)).rrr, 1.f);
+		result = float4(tex.Load(int4(tc*dimensions.xy, arrayIndex, 0)).rrr, 1.f);
 	}
 }
 

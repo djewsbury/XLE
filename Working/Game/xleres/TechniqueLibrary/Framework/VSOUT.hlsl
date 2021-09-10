@@ -16,8 +16,16 @@ struct VSOUT /////////////////////////////////////////////////////
 		float4 color : COLOR0;
 	#endif
 
+	#if VSOUT_HAS_COLOR1>=1
+		float4 color1 : COLOR1;
+	#endif
+
 	#if VSOUT_HAS_TEXCOORD>=1
 		float2 texCoord : TEXCOORD0;
+	#endif
+
+	#if VSOUT_HAS_TEXCOORD1>=1
+		float2 texCoord1 : TEXCOORD1;
 	#endif
 
 	#if VSOUT_HAS_TANGENT_FRAME==1

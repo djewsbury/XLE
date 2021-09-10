@@ -25,8 +25,16 @@ struct VSIN //////////////////////////////////////////////////////
 		float4 color : COLOR;
 	#endif
 
+	#if GEO_HAS_COLOR1>=1
+		float4 color1 : COLOR1;
+	#endif
+
 	#if GEO_HAS_TEXCOORD>=1
 		float2 texCoord : TEXCOORD;
+	#endif
+
+	#if GEO_HAS_TEXCOORD1>=1
+		float2 texCoord1 : TEXCOORD1;
 	#endif
 
 	#if GEO_HAS_TEXTANGENT==1
@@ -65,16 +73,28 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 }; //////////////////////////////////////////////////////////////////
 
-#if GEO_HAS_COLOR>=1 ///////////////////////////////////////////////
+#if GEO_HAS_COLOR>=1 ////////////////////////////////////////////////
 	float4 VSIN_GetColor0(VSIN input) { return input.color; }
 #else
 	float4 VSIN_GetColor0(VSIN input) { return 1.0.xxxx; }
+#endif //////////////////////////////////////////////////////////////
+
+#if GEO_HAS_COLOR1>=1 ///////////////////////////////////////////////
+	float4 VSIN_GetColor1(VSIN input) { return input.color1; }
+#else
+	float4 VSIN_GetColor1(VSIN input) { return 1.0.xxxx; }
 #endif //////////////////////////////////////////////////////////////
 
 #if GEO_HAS_TEXCOORD>=1 /////////////////////////////////////////////
 	float2 VSIN_GetTexCoord0(VSIN input) { return input.texCoord; }
 #else
 	float2 VSIN_GetTexCoord0(VSIN input) { return 0.0.xx; }
+#endif //////////////////////////////////////////////////////////////
+
+#if GEO_HAS_TEXCOORD1>=1 ////////////////////////////////////////////
+	float2 VSIN_GetTexCoord1(VSIN input) { return input.texCoord1; }
+#else
+	float2 VSIN_GetTexCoord1(VSIN input) { return 0.0.xx; }
 #endif //////////////////////////////////////////////////////////////
 
 float3 VSIN_GetLocalPosition(VSIN input)

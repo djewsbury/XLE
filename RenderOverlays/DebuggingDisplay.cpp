@@ -177,10 +177,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const Rect upButton = coordinates.UpArrow();
         const Rect downButton = coordinates.DownArrow();
 
-        DrawFilledElipse(context, upButton, fillColour);
-        DrawFilledElipse(context, downButton, fillColour);
-        DrawElipse(context, upButton, outlineColour);
-        DrawElipse(context, downButton, outlineColour);
+        DrawFilledEllipse(context, upButton, fillColour);
+        DrawFilledEllipse(context, downButton, fillColour);
+        DrawEllipse(context, upButton, outlineColour);
+        DrawEllipse(context, downButton, outlineColour);
 
         const float W = 7.f;
         const float Q = W - 1.f;
@@ -229,7 +229,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     ///////////////////////////////////////////////////////////////////////////////////
 
-    void DrawElipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         Coord2 center( LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f) );
 
@@ -256,7 +256,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context->DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
-    void DrawFilledElipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void DrawFilledEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         Coord2 center( LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f) );
         Float3 pixelCenter = AsPixelCoords(center);
@@ -908,10 +908,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 Rect buttonRect = buttonsLayout.Allocate(Coord2(buttonSize, buttonSize));
                 InteractableId id = InteractableId_Make(s_PanelControlsButtons[c])+panelIndex;
                 if (interfaceState.HasMouseOver(id)) {
-                    DrawElipse(context, buttonRect, ColorB(0xff000000u));
+                    DrawEllipse(context, buttonRect, ColorB(0xff000000u));
                     DrawText(context, buttonRect, nullptr, ColorB(0xff000000u), s_PanelControlsButtons[c]);
                 } else {
-                    DrawElipse(context, buttonRect, ColorB(0xffffffffu));
+                    DrawEllipse(context, buttonRect, ColorB(0xffffffffu));
                     DrawText(context, buttonRect, nullptr, ColorB(0xffffffffu), s_PanelControlsButtons[c]);
                 }
                 interactables.Register(Interactables::Widget(buttonRect, id));
