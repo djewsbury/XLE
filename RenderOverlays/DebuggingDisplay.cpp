@@ -834,6 +834,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
+    void    IWidget::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) {}
+    bool    IWidget::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) { return false; }
     IWidget::~IWidget() {}
 
     InteractableId  InteractableId_Make(StringSection<char> name)   { return Hash64(name.begin(), name.end()); }
@@ -1392,12 +1394,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         if (!_caretY) { _caretY += _paddingInternalBorder; }
 
+        auto maxY = _maximumSize._bottomRight[1]-_paddingInternalBorder;
+
         Rect result;
         result._topLeft[0]        = _maximumSize._topLeft[0] + _paddingInternalBorder;
         result._bottomRight[0]    = _maximumSize._bottomRight[0] - _paddingInternalBorder;
-        result._topLeft[1]        = _maximumSize._topLeft[1] + _caretY;
-        result._bottomRight[1]    = std::min(result._topLeft[1]+height, _maximumSize._bottomRight[1]-_paddingInternalBorder);
-        _caretY = result._bottomRight[1] - _maximumSize._topLeft[1] + _paddingBetweenAllocations;
+        result._topLeft[1]        = std::min(maxY, _maximumSize._topLeft[1] + _caretY);
+        result._bottomRight[1]    = std::min(maxY, result._topLeft[1] + height);
+        _caretY += height + _paddingBetweenAllocations;
+    
         return result;
     }
 

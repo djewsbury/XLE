@@ -108,8 +108,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class IWidget
     {
     public:
-        virtual void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) = 0;
-        virtual bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) = 0;
+        using IOverlayContext = RenderOverlays::IOverlayContext;
+		using Layout = RenderOverlays::DebuggingDisplay::Layout;
+		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
+		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
+		using InputSnapshot = PlatformRig::InputSnapshot;
+
+        virtual void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
+        virtual bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
         virtual         ~IWidget();
     };
 

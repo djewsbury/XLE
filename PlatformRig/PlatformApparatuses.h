@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
 #include <memory>
 
@@ -21,6 +22,7 @@ namespace PlatformRig
 	class MainInputHandler;
 	class ResizePresentationChain;
 	class FrameRig;
+	class IDebugScreenRegistry;
 
 	class DebugOverlaysApparatus
 	{
@@ -32,6 +34,7 @@ namespace PlatformRig
 
 		std::shared_ptr<RenderOverlays::Font> _debugFont0;
 		std::shared_ptr<RenderOverlays::Font> _debugFont1;
+		ConsoleRig::AttachablePtr<IDebugScreenRegistry> _debugScreenRegistry;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

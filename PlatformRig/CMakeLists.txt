@@ -12,22 +12,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         PlatformRigUtil.cpp
         Screenshot.cpp
         UnitCamera.cpp
-        DebugScreensOverlay.cpp)
-    set(Headers 
-        AllocationProfiler.h
-        CameraManager.h
-        DebugHotKeys.h
-        FrameRig.h
-        InputListener.h
-        InputTranslator.h
-        MainInputHandler.h
-        OverlappedWindow.h
-        OverlaySystem.h
-        PlatformApparatuses.h
-        PlatformRigUtil.h
-        Screenshot.h
-        UnitCamera.h
-        DebugScreensOverlay.h)
+        DebugScreensOverlay.cpp
+        DebugScreenRegistry.cpp)
 
     set(DebuggingDisplaysSrc 
         #InitDebugDisplays.cpp
@@ -41,17 +27,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         #DebuggingDisplays/PlacementsDisplay.cpp
         #DebuggingDisplays/TestDisplays.cpp
         DebuggingDisplays/InvalidAssetDisplay.cpp
+        DebuggingDisplays/QuickMetricsDisplay.cpp
         )
-    set(DebuggingDisplaysHeaders 
-        DebuggingDisplays/BufferUploadDisplay.h
-        DebuggingDisplays/ConsoleDisplay.h
-        DebuggingDisplays/CPUProfileDisplay.h
-        DebuggingDisplays/DynamicImpostersDisplay.h
-        DebuggingDisplays/GPUProfileDisplay.h
-        DebuggingDisplays/HierarchicalSpikesDisplay.h
-        DebuggingDisplays/HistoricalProfilerDisplay.h
-        DebuggingDisplays/PlacementsDisplay.h
-        DebuggingDisplays/TestDisplays.h)
 
     set(MiniSceneEngineSrc
         ../SceneEngine/RayVsModel.cpp
@@ -65,10 +42,9 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     if (WIN32)
         set(WinSrc WinAPI/AllocationProfiler.cpp WinAPI/InputTranslator.cpp WinAPI/OverlappedWindow.cpp WinAPI/RunLoop_WinAPI.cpp)
-        set(WinHeaders WinAPI/RunLoop_WinAPI.h)
     endif()
 
-    add_library(PlatformRig-${metal_name} STATIC ${Src} ${WinSrc} ${Headers} ${WinHeaders} ${DebuggingDisplaysSrc} ${DebuggingDisplaysHeaders}  ${MiniSceneEngineSrc})
+    add_library(PlatformRig-${metal_name} STATIC ${Src} ${WinSrc} ${DebuggingDisplaysSrc} ${MiniSceneEngineSrc})
     xle_configure_library(PlatformRig-${metal_name})
     target_link_libraries(PlatformRig-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name} RenderCoreTechniques-${metal_name})
 

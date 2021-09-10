@@ -10,6 +10,7 @@
 #include "MainInputHandler.h"
 #include "InputTranslator.h"
 #include "DebugScreensOverlay.h"
+#include "DebugScreenRegistry.h"
 #include "DebuggingDisplays/GPUProfileDisplay.h"
 #include "DebuggingDisplays/CPUProfileDisplay.h"
 #include "DebuggingDisplays/InvalidAssetDisplay.h"
@@ -40,6 +41,22 @@ namespace PlatformRig
 		auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();
 		overlaySwitch->AddSystem(PlatformRig::KeyId_Make("~"), PlatformRig::CreateConsoleOverlaySystem(*immediateDrawingApparatus));
 		_debugScreensOverlaySystem->AddSystem(overlaySwitch);
+
+		_debugScreenRegistry = CreateDebugScreenRegistry();
+		_debugScreenRegistry->OnRegister.Bind(
+			[debugSys = std::weak_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>{_debugSystem}]
+			(std::string name, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> widget) {
+				auto l = debugSys.lock();
+				if (!l) return;
+				l->Register(widget, name.c_str());
+			});
+		_debugScreenRegistry->OnDeregister.Bind(
+			[debugSys = std::weak_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>{_debugSystem}]
+			(RenderOverlays::DebuggingDisplay::IWidget& widget) {
+				auto l = debugSys.lock();
+				if (!l) return;
+				l->Unregister(widget);
+			});
 
 		_debugFont0 = RenderOverlays::GetX2Font("Petra", 16);
 		_debugFont1 = RenderOverlays::GetX2Font("Vera", 16);
