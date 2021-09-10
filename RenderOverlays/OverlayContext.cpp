@@ -99,7 +99,6 @@ namespace RenderOverlays
 		IteratorRange<const MiniInputElementDesc*> _inputAssembly;
 		StringSection<>			_shaderSelectorTable;
 		std::shared_ptr<RenderCore::IResourceView> _textureResource;
-		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
 	};
 	
 	void ImmediateOverlayContext::DrawPoint      (ProjectionMode proj, const Float3& v,     const ColorB& col,      uint8_t size)
@@ -207,18 +206,17 @@ namespace RenderOverlays
 	}
 
 	void    ImmediateOverlayContext::DrawQuad(
-            ProjectionMode proj, 
-            const Float3& mins, const Float3& maxs, 
-            ColorB color0, ColorB color1,
-            const Float2& minTex0, const Float2& maxTex0, 
-            const Float2& minTex1, const Float2& maxTex1,
-            std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches)
+		ProjectionMode proj, 
+		const Float3& mins, const Float3& maxs, 
+		ColorB color0, ColorB color1,
+		const Float2& minTex0, const Float2& maxTex0, 
+		const Float2& minTex1, const Float2& maxTex1,
+		RenderCore::Techniques::ImmediateDrawableMaterial&& material)
 	{
 		using Vertex = Vertex_PCCTT;
 		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		DrawCall dc{6, Topology::TriangleList, inputElements};
-		dc._patchCollection = std::move(shaderPatches);
-		auto data = BeginDrawCall(dc).Cast<Vertex*>();
+
+		auto data = _immediateDrawables->QueueDraw(6, inputElements, std::move(material), Topology::TriangleList).Cast<Vertex*>();
 		auto col0 = HardwareColor(color0);
 		auto col1 = HardwareColor(color1);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col0, col1, Float2(minTex0[0], minTex0[1]), Float2(minTex1[0], minTex1[1]));
@@ -335,7 +333,6 @@ namespace RenderOverlays
 			mat._uniformStreamInterface = _texturedUSI;
 			mat._uniforms._resourceViews.push_back(drawCall._textureResource);
 		}
-		mat._patchCollection = drawCall._patchCollection;
 
 		return _immediateDrawables->QueueDraw(
 			drawCall._vertexCount,

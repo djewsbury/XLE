@@ -34,3 +34,13 @@ float4 frameworkEntry(
     a = a * (1.f - outline.a);
     return float4(A, 1.f - a);
 }
+
+float4 frameworkEntryForTwoLayersShader(
+    float4 position	    : SV_Position,
+    float4 color0		: COLOR0,
+    float4 color1		: COLOR1,
+    float2 texCoord0	: TEXCOORD0,
+    float2 texCoord1	: TEXCOORD1) : SV_Target0
+{
+    return TwoLayersShader(position, color0, color1, texCoord0, texCoord1);
+}

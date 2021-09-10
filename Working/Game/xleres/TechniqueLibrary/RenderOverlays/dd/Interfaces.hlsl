@@ -16,7 +16,6 @@ struct DebuggingShapesCoords
     float2 texCoord;
 
     float aspectRatio;
-    // float2 refractionCoords;
     float2 udds;
     float2 vdds;
 };
@@ -47,7 +46,6 @@ DebuggingShapesCoords DebuggingShapesCoords_Make(float4 position, float2 texCoor
 {
     DebuggingShapesCoords result;
     result.outputDimensions = outputDimensions;
-    // result.refractionCoords = position.xy/outputDimensions.xy;
     result.texCoord = texCoord;
 
     result.udds = float2(ddx(texCoord.x), ddy(texCoord.x));
@@ -104,5 +102,7 @@ ShapeResult MakeShapeResult(float fill, float border)  { ShapeResult temp; temp.
 ShapeResult IShape2D_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc);
 float4 IOutline_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
 float4 IFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
+
+float4 TwoLayersShader(float4 position, float4 color, float4 color1, float2 texCoord0, float2 texCoord1);
 
 #endif

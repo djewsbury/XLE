@@ -12,7 +12,7 @@
 #include "../Utility/StringUtils.h"
 
 namespace RenderCore { class IResourceView; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; } }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; } }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
@@ -87,7 +87,7 @@ namespace RenderOverlays
             ColorB color0, ColorB color1,
             const Float2& minTex0, const Float2& maxTex0, 
             const Float2& minTex1, const Float2& maxTex1,
-            std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches) = 0;
+            RenderCore::Techniques::ImmediateDrawableMaterial&& material) = 0;
 
         virtual void    DrawQuad(
             ProjectionMode proj, 

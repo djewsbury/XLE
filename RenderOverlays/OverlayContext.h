@@ -49,7 +49,7 @@ namespace RenderOverlays
             ColorB color0, ColorB color1,
             const Float2& minTex0, const Float2& maxTex0, 
             const Float2& minTex1, const Float2& maxTex1,
-            std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches) override;
+            RenderCore::Techniques::ImmediateDrawableMaterial&& material) override;
 
         void    DrawQuad(
             ProjectionMode proj, 

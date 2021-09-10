@@ -110,24 +110,30 @@ namespace RenderCore { namespace Assets
 			formatter.WriteKeyedValue("DescriptorSet", _descriptorSet);
 	}
 
+	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
+	{
+		auto splitName = MakeFileNameSplitter(src);
+		if (splitName.DriveAndPath().IsEmpty()) {
+			char resolvedFile[MaxPath];
+			searchRules.ResolveFile(resolvedFile, splitName.FileAndExtension());
+			if (resolvedFile[0]) {
+				std::string result = resolvedFile;
+				result.insert(result.end(), splitName.ParametersWithDivider().begin(), splitName.ParametersWithDivider().end());
+				return result;
+			} else {
+				return src.AsString();
+			}
+		} else {
+			return src.AsString();
+		}
+	}
+
 	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		ShaderSourceParser::InstantiationRequest result;
 
 		auto archiveNameInput = RequireValue(formatter);		// Expecting only a single sequenced value in each fragment, which is the entry point name
-		auto splitName = MakeFileNameSplitter(archiveNameInput);
-		if (splitName.DriveAndPath().IsEmpty()) {
-			char resolvedFile[MaxPath];
-			searchRules.ResolveFile(resolvedFile, splitName.FileAndExtension());
-			if (resolvedFile[0]) {
-				result._archiveName = resolvedFile;
-				result._archiveName.insert(result._archiveName.end(), splitName.ParametersWithDivider().begin(), splitName.ParametersWithDivider().end());
-			} else {
-				result._archiveName = archiveNameInput.AsString();
-			}
-		} else {
-			result._archiveName = archiveNameInput.AsString();
-		}
+		result._archiveName = ResolveArchiveName(archiveNameInput, searchRules);
 		assert(!result._archiveName.empty());
 
 		StringSection<> bindingName;
@@ -135,7 +141,7 @@ namespace RenderCore { namespace Assets
 			if (XlEqString(bindingName, "Implements")) {
 				if (!result._implementsArchiveName.empty())
 					Throw(FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
-				result._implementsArchiveName = RequireValue(formatter).AsString();
+				result._implementsArchiveName = ResolveArchiveName(RequireValue(formatter), searchRules);
 			} else {
 				RequireBeginElement(formatter);
 				result._parameterBindings.emplace(

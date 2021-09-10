@@ -29,12 +29,12 @@ float4 CrossHatchFill_Calculate(
     return color;
 }
 
-Texture2D RefractionsBuffer : register(t12);
+// Texture2D RefractionsBuffer : register(t12);
 
 static const float SqrtHalf = 0.70710678f;
 static const float3 BasicShapesLightDirection = normalize(float3(SqrtHalf, SqrtHalf, -0.25f));
 
-float4 RaisedRefactiveFill_Calculate(
+float4 RaisedRefractiveFill_Calculate(
     DebuggingShapesCoords coords,
     float4 baseColor,
     float2 dhdp)
@@ -48,7 +48,7 @@ float4 RaisedRefactiveFill_Calculate(
 
     float3 result = A * baseColor.rgb + 0.1.xxx;
 
-    result.rgb += RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(coords), 0).rgb;
+    // result.rgb += RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(coords), 0).rgb;
     return float4(result.rgb, 1.f);
 }
 

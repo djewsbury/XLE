@@ -1,0 +1,15 @@
+ScrollBar=~
+	Patches=~
+		=~
+			DebuggingShapes.pixel.hlsl::ScrollBarShader
+			Implements=Interfaces.hlsl::TwoLayersShader
+TagShader=~
+	Patches=~
+		=~
+			DebuggingShapes.pixel.hlsl::TagShader
+			Implements=Interfaces.hlsl::TwoLayersShader
+GridBackgroundShader=~
+	Patches=~
+		=~
+			DebuggingShapes.pixel.hlsl::GridBackgroundShader
+			Implements=Interfaces.hlsl::TwoLayersShader

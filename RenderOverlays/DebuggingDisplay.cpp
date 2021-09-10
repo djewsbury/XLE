@@ -8,10 +8,14 @@
 #include "../RenderOverlays/Font.h"
 #include "../RenderOverlays/FontRendering.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
+#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Assets/RawMaterial.h"
 #include "../ConsoleRig/Console.h"
 #include "../Math/Transformations.h"
 #include "../Math/ProjectionMath.h"
 #include "../ConsoleRig/ResourceBox.h"       // for FindCachedBox
+#include "../Assets/AssetFuture.h"
+#include "../Assets/Assets.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
@@ -612,7 +616,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefactiveFill,Outline=SolidFill");
+            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefractiveFill,Outline=SolidFill");
 
         TextStyle style{DrawTextOptions(false, true)};
 
@@ -654,7 +658,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             BkColor, BkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefactiveFill,Outline=SolidFill");
+            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefractiveFill,Outline=SolidFill");
 
         TextStyle style{DrawTextOptions(true, false)};
 
@@ -798,39 +802,90 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ///////////////////////////////////////////////////////////////////////////////////
     static float Saturate(float value) { return std::max(std::min(value, 1.f), 0.f); }
 
+    static RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
+        const RenderCore::Assets::RawMaterial& rawMat)
+    {
+        RenderCore::Techniques::ImmediateDrawableMaterial result;
+        result._shaderSelectors = rawMat._matParamBox;
+        result._stateSet = rawMat._stateSet;
+        result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
+        return result;
+    }
+
+    class StandardResources
+    {
+    public:
+        RenderCore::Techniques::ImmediateDrawableMaterial _scrollBarMaterial;
+        RenderCore::Techniques::ImmediateDrawableMaterial _tagShaderMaterial;
+        RenderCore::Techniques::ImmediateDrawableMaterial _gridBackgroundMaterial;
+
+        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
+        ::Assets::DependencyValidation _depVal;
+
+        StandardResources(
+            std::shared_ptr<RenderCore::Assets::RawMaterial> scrollBarMaterial,
+            std::shared_ptr<RenderCore::Assets::RawMaterial> tagShaderMaterial,
+            std::shared_ptr<RenderCore::Assets::RawMaterial> gridBackgroundMaterial)
+        {
+            _scrollBarMaterial = BuildImmediateDrawableMaterial(*scrollBarMaterial);
+            _tagShaderMaterial = BuildImmediateDrawableMaterial(*tagShaderMaterial);
+            _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
+
+            _depVal = ::Assets::GetDepValSys().Make();
+            _depVal.RegisterDependency(scrollBarMaterial->GetDependencyValidation());
+            _depVal.RegisterDependency(tagShaderMaterial->GetDependencyValidation());
+            _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
+        }
+
+        static void ConstructToFuture(::Assets::Future<std::shared_ptr<StandardResources>>& future)
+        {
+            auto scrollBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ScrollBar");
+            auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
+            auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
+
+            ::Assets::WhenAll(scrollBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToFuture(future);
+        }
+    };
+
     void HScrollBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition)
     {
         const auto r = coordinates.InteractableRect();
         float t = Saturate((thumbPosition - coordinates.MinValue()) / float(coordinates.MaxValue() - coordinates.MinValue()));
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
         context->DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1])),
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(t, 0.f), Float2(t, 0.f),
-            "Utility\\DebuggingShapes.pixel.hlsl:ScrollBarShader");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_scrollBarMaterial});
     }
 
     void HScrollBar_DrawLabel(IOverlayContext* context, const Rect& rect)
     {
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
         context->DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            "Utility\\DebuggingShapes.pixel.hlsl:TagShader");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_tagShaderMaterial});
     }
 
     void HScrollBar_DrawGridBackground(IOverlayContext* context, const Rect& rect)
     {
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
         context->DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            "Utility\\DebuggingShapes.pixel.hlsl:GridBackgroundShader");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_gridBackgroundMaterial});
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
