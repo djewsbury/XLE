@@ -174,13 +174,13 @@ namespace ConsoleRig
 
     GlobalServices::GlobalServices(const StartupConfig& cfg)
     {
+        CrossModule::GetInstance().EnsureReady();   // if we called CrossModule::GetInstance().Shutdown() previously, we can balance it with this
 		_pimpl = std::make_unique<Pimpl>();
         _pimpl->_shortTaskPool = std::make_unique<ThreadPool>(cfg._shortTaskThreadPoolCount);
         _pimpl->_longTaskPool = std::make_unique<ThreadPool>(cfg._longTaskThreadPoolCount);
         _pimpl->_pollingThread = std::make_shared<OSServices::PollingThread>();
 		_pimpl->_cfg = cfg;
 
-        CrossModule::GetInstance().EnsureReady();   // if we called CrossModule::GetInstance().Shutdown() previously, we can balance it with this
         MainRig_Startup(cfg);
 
         if (!_pimpl->_depValSys)
