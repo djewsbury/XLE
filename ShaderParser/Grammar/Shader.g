@@ -436,7 +436,7 @@ arguments
 	;
 	
 curly_brace_initialiser
-	: '{' expression (',' expression)* '}'
+	: '{' expression (',' expression)* ','? '}'
 	| '{' '}'
 	;
 
