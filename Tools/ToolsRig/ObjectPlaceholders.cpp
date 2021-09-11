@@ -258,7 +258,7 @@ namespace ToolsRig
 
 	static std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> BuildPipelineAccelerator(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const RenderCore::Assets::RawMaterial& mat)
+		const RenderCore::Assets::ResolvedMaterial& mat)
 	{
 		return pipelineAcceleratorPool->CreatePipelineAccelerator(
 			std::make_shared<RenderCore::Assets::ShaderPatchCollection>(mat._patchCollection),
@@ -284,9 +284,9 @@ namespace ToolsRig
 		::Assets::FuturePtr<VisGeoBox>& future,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
     {
-		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(AREA_LIGHT_TECH":sphere");
-		auto tubeMatFuture = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(AREA_LIGHT_TECH":tube");
-		auto rectangleMatFuture = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(AREA_LIGHT_TECH":rectangle");
+		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
+		auto tubeMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
+		auto rectangleMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":rectangle");
 		auto dsa = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 			nullptr,
 			ParameterBox {}, ParameterBox {}, ParameterBox {});
@@ -294,9 +294,9 @@ namespace ToolsRig
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToFuture(
 			future,
 			[pipelineAcceleratorPool, dsa](
-				std::shared_ptr<RenderCore::Assets::RawMaterial> sphereMat,
-				std::shared_ptr<RenderCore::Assets::RawMaterial> tubeMat,
-				std::shared_ptr<RenderCore::Assets::RawMaterial> rectangleMat) {
+				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> sphereMat,
+				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tubeMat,
+				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> rectangleMat) {
 
 				auto res = std::make_shared<VisGeoBox>();
 				res->_genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, *sphereMat);

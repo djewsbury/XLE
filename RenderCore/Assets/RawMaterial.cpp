@@ -363,9 +363,9 @@ namespace RenderCore { namespace Assets
     }
 
     auto RawMaterial::ResolveInherited(
-        const ::Assets::DirectorySearchRules& searchRules) const -> std::vector<AssetName>
+        const ::Assets::DirectorySearchRules& searchRules) const -> std::vector<std::string>
     {
-        std::vector<AssetName> result;
+        std::vector<std::string> result;
 
         for (auto i=_inherit.cbegin(); i!=_inherit.cend(); ++i) {
             auto name = *i;
@@ -378,7 +378,7 @@ namespace RenderCore { namespace Assets
                 
                 StringMeld<MaxPath, ::Assets::ResChar> finalRawMatName;
                 finalRawMatName << resolvedFile << colon;
-                result.push_back((AssetName)finalRawMatName);
+                result.push_back(finalRawMatName.AsString());
             } else {
                 result.push_back(name);
             }
@@ -443,6 +443,129 @@ namespace RenderCore { namespace Assets
                     containerActual->GetDependencyValidation());
             });
 	}
+
+    ResolvedMaterial::ResolvedMaterial() {}
+    ResolvedMaterial::~ResolvedMaterial() {}
+    
+    static void MergeIn(ResolvedMaterial& dest, const RawMaterial& source);
+
+    void ResolvedMaterial::ConstructToFuture(
+        ::Assets::FuturePtr<ResolvedMaterial>& futureMaterial,
+        StringSection<> initializer)
+    {
+        // We have to load an entire tree of RawMaterials and their inherited items.
+        // We'll do this all with one future in such a way that we create a linear
+        // list of all of the RawMaterials in the order that they need to be merged in
+        // We do this in a kind of breadth first way, were we queue up all of the futures
+        // for a given level together
+        class PendingRawMaterialTree
+        {
+        public:
+            unsigned _nextId = 1;
+            std::vector<std::pair<unsigned, ::Assets::PtrToFuturePtr<RawMaterial>>> _subFutures;
+            std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
+        };
+        auto pendingTree = std::make_shared<PendingRawMaterialTree>();
+
+        auto i = initializer.begin();
+        while (i != initializer.end()) {
+            while (i != initializer.end() && *i == ';') ++i;
+            auto i2 = i;
+            while (i2 != initializer.end() && *i2 != ';') ++i2;
+            if (i2==i) break;
+
+            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAsset<RawMaterial>(MakeStringSection(i, i2))));
+            i = i2;
+        }
+        assert(!pendingTree->_subFutures.empty());
+
+        futureMaterial.SetPollingFunction(
+            [pendingTree](::Assets::FuturePtr<ResolvedMaterial>& thatFuture) {
+                for (;;) {
+                    ::Assets::AssetState currentState = ::Assets::AssetState::Ready;
+                    std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> subMaterials;
+                    std::vector<::Assets::DependencyValidation> subDepVals;
+                    for (const auto& f:pendingTree->_subFutures) {
+                        ::Assets::Blob queriedLog;
+                        ::Assets::DependencyValidation queriedDepVal;
+                        std::shared_ptr<RawMaterial> subMat;
+                        auto state = f.second->CheckStatusBkgrnd(subMat, queriedDepVal, queriedLog);
+                        if (state == ::Assets::AssetState::Pending)
+                            return true;
+
+                        // "invalid" is actually ok here. we include the dep val as normal, but ignore
+                        // the RawMaterial
+
+                        subDepVals.push_back(queriedDepVal);
+                        if (state == ::Assets::AssetState::Ready)
+                            subMaterials.push_back(std::make_pair(f.first, std::move(subMat)));
+                    }
+                    pendingTree->_subFutures.clear();
+
+                    // merge these RawMats into _loadedSubMaterials in the right places
+                    // also queue the next level of loads as we go
+                    // We want each subMaterial to go into _loadedSubMaterials in the same order as 
+                    // in subMaterials, but immediately before their parent
+                    for (const auto&m:subMaterials) {
+                        unsigned newParentId = pendingTree->_nextId++;
+                        if (m.first == 0) {
+                            pendingTree->_loadedSubMaterials.push_back({newParentId, m.second});
+                        } else {
+                            auto i = std::find_if(pendingTree->_loadedSubMaterials.begin(), pendingTree->_loadedSubMaterials.end(),
+                                [s=m.first](const auto& c) { return c.first == s;});
+                            assert(i!=pendingTree->_loadedSubMaterials.end());
+                            // insert just before the parent, after any siblings added this turn 
+                            pendingTree->_loadedSubMaterials.insert(i, {newParentId, m.second});
+                        }
+
+                        auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
+                        for (const auto&i:inheritted)
+                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAsset<RawMaterial>(i)));
+                    }
+
+                    // if we still have subfutures, need to roll around again
+                    // we'll do this immediately, just incase everything is already loaded
+                    if (pendingTree->_subFutures.empty()) break;
+                }
+
+                // All of the RawMaterials in the tree are loaded; and we can just merge them together
+                // into a final resolved material
+                auto finalMaterial = std::make_shared<ResolvedMaterial>();
+                assert(!pendingTree->_loadedSubMaterials.empty());
+                for (const auto& m:pendingTree->_loadedSubMaterials)
+                    MergeIn(*finalMaterial, *m.second);
+                if (pendingTree->_loadedSubMaterials.size() == 1) {
+                    finalMaterial->_depVal = pendingTree->_loadedSubMaterials[0].second->GetDependencyValidation();
+                } else {
+                    finalMaterial->_depVal = ::Assets::GetDepValSys().Make();
+                    for (const auto& m:pendingTree->_loadedSubMaterials)
+                        finalMaterial->_depVal.RegisterDependency(m.second->GetDependencyValidation());
+                }
+                thatFuture.SetAsset(std::move(finalMaterial), {});
+                return false;
+            });
+    }
+
+    void MergeIn(ResolvedMaterial& dest, const RawMaterial& source)
+    {
+        dest._matParamBox.MergeIn(source._matParamBox);
+        dest._stateSet = Merge(dest._stateSet, source._stateSet);
+        dest._constants.MergeIn(source._constants);
+
+		// Resolve all of the directory names here, as we write into the Techniques::Material
+		for (const auto&b:source._resourceBindings) {
+			auto unresolvedName = b.ValueAsString();
+			if (!unresolvedName.empty()) {
+				char resolvedName[MaxPath];
+				source.GetDirectorySearchRules().ResolveFile(resolvedName, unresolvedName);
+				dest._resourceBindings.SetParameter(b.Name(), MakeStringSection(resolvedName));
+			} else {
+				dest._resourceBindings.SetParameter(b.Name(), MakeStringSection(unresolvedName));
+			}
+		}
+
+		source._patchCollection.MergeInto(dest._patchCollection);
+    }
 
 	void MergeInto(MaterialScaffold::Material& dest, ShaderPatchCollection& destPatchCollection, const RawMaterial& source)
     {

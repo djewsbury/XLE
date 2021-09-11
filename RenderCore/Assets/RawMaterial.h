@@ -38,8 +38,6 @@ namespace RenderCore { namespace Assets
     class RawMaterial
     {
     public:
-        using AssetName = ::Assets::rstring;
-        
         ParameterBox	_resourceBindings;
         ParameterBox	_matParamBox;
         RenderStateSet	_stateSet;
@@ -47,10 +45,10 @@ namespace RenderCore { namespace Assets
         
 		ShaderPatchCollection _patchCollection;
 
-        std::vector<AssetName> _inherit;
+        std::vector<std::string> _inherit;
 
-		void					MergeInto(RawMaterial& dest) const; 
-		std::vector<AssetName>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
+		void					    MergeInto(RawMaterial& dest) const; 
+		std::vector<std::string>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
 
 		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
 		const ::Assets::DirectorySearchRules&	GetDirectorySearchRules() const { return _searchRules; }
@@ -88,6 +86,28 @@ namespace RenderCore { namespace Assets
         auto GetDependencyValidation() const -> const ::Assets::DependencyValidation& { return _validationCallback; }
     protected:
         ::Assets::DependencyValidation _validationCallback;
+    };
+
+    class ResolvedMaterial
+    {
+    public:
+        ParameterBox	_resourceBindings;
+        ParameterBox	_matParamBox;
+        RenderStateSet	_stateSet;
+        ParameterBox	_constants;
+        
+		ShaderPatchCollection _patchCollection;
+
+		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
+
+        ResolvedMaterial();
+        ~ResolvedMaterial();
+
+        static void ConstructToFuture(
+			::Assets::FuturePtr<ResolvedMaterial>&,
+			StringSection<> initializer);
+    private:
+        ::Assets::DependencyValidation _depVal;
     };
 
     void ResolveMaterialFilename(
