@@ -189,6 +189,7 @@ namespace RenderCore { namespace ImplVulkan
         std::shared_ptr<ISampler> CreateSampler(const SamplerDesc& desc) override;
 
 		void			Stall() override;
+        void            PrepareForDestruction() override;
 
 		std::shared_ptr<ILowLevelCompiler>		CreateShaderCompiler() override;
         std::shared_ptr<ILowLevelCompiler>		CreateShaderCompiler(const VulkanCompilerConfiguration& cfg) override;

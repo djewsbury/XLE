@@ -177,6 +177,7 @@ namespace RenderCore
 
         // Block until the GPU has caught up to (at least) the end of the previous frame
         virtual void                Stall() = 0;
+        virtual void                PrepareForDestruction() = 0;
 
 		virtual std::shared_ptr<ILowLevelCompiler>		CreateShaderCompiler() = 0;
 

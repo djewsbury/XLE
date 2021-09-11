@@ -367,7 +367,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		// --------------- Legacy interface --------------- 
 		void			InvalidateCachedState() {}
-		static void		PrepareForDestruction(IDevice*, IPresentationChain*);
 		bool			IsImmediate() { return false; }
 
 	private:

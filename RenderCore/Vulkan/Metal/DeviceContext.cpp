@@ -1139,8 +1139,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			Internal::ValidateIsEmpty(*_captureForBindRecords);
 	}
 
-	void DeviceContext::PrepareForDestruction(IDevice*, IPresentationChain*) {}
-
 	VulkanEncoderSharedState::VulkanEncoderSharedState(
 		const ObjectFactory&    factory, 
 		GlobalPools&            globalPools)

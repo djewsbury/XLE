@@ -780,6 +780,11 @@ namespace RenderCore { namespace ImplVulkan
 		assert(0);	// unimplemented
 	}
 
+	void Device::PrepareForDestruction()
+	{
+		vkDeviceWaitIdle(_underlying.get());
+	}
+
     static const char* s_underlyingApi = "Vulkan";
         
     DeviceDesc Device::GetDesc()

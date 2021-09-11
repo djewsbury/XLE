@@ -29,13 +29,10 @@
 #include "../../OSServices/Log.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../ConsoleRig/Console.h"
 
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/StringFormat.h"
-
-#include "../../RenderCore/Metal/DeviceContext.h"		// (for PrepareForDestruction)
 
 #include <functional>
 
@@ -129,10 +126,8 @@ namespace Sample
             //  an unhandled exception)
             //  Before we go too far, though, let's log a list of active assets.
         Log(Verbose) << "Starting shutdown" << std::endl;
-        RenderCore::Metal::DeviceContext::PrepareForDestruction(sampleGlobals._renderDevice.get(), sampleGlobals._windowApparatus->_presentationChain.get());
-        ConsoleRig::ResourceBoxes_Shutdown();
-        ::Assets::Services::GetAssetSets().Clear();
-        ::ConsoleRig::GlobalServices::GetInstance().UnloadDefaultPlugins();
+        ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
+        sampleGlobals._renderDevice->PrepareForDestruction();
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt2);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);
     }
