@@ -15,7 +15,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/ObjectFactory.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"

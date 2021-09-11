@@ -5,7 +5,7 @@
 #pragma once
 
 #include "PipelineAccelerator.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../Types.h"
 #include "../StateDesc.h"
 #include "../RenderUtils.h"		// for SharedPkt

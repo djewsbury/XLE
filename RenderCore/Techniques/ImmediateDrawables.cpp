@@ -11,7 +11,7 @@
 #include "Drawables.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Metal/DeviceContext.h"		// for CalculateFrameBufferRelevance

@@ -29,16 +29,22 @@ namespace RenderCore { namespace Assets
 
 	static void AddDep(
 		std::vector<::Assets::DependentFileState>& deps,
+		const ::Assets::DependentFileState& newDep)
+	{
+		auto existing = std::find_if(
+			deps.cbegin(), deps.cend(),
+			[&](const ::Assets::DependentFileState& test) { return test._filename == newDep._filename; });
+		if (existing == deps.cend())
+			deps.push_back(newDep);
+	}
+	
+	static void AddDep(
+		std::vector<::Assets::DependentFileState>& deps,
 		StringSection<> newDep)
 	{
 			// we need to call "GetDependentFileState" first, because this can change the
 			// format of the filename. String compares alone aren't working well for us here
-		auto depState = ::Assets::IntermediatesStore::GetDependentFileState(newDep);
-		auto existing = std::find_if(
-			deps.cbegin(), deps.cend(),
-			[&](const ::Assets::DependentFileState& test) { return test._filename == depState._filename; });
-		if (existing == deps.cend())
-			deps.push_back(depState);
+		AddDep(deps, ::Assets::IntermediatesStore::GetDependentFileState(newDep));
 	}
 
 	class MaterialCompileOperation : public ::Assets::ICompileOperation
@@ -96,20 +102,12 @@ namespace RenderCore { namespace Assets
 					//  for each configuration, we want to build a resolved material
 					//  Note that this is a bit crazy, because we're going to be loading
 					//  and re-parsing the same files over and over again!
-				SerializableVector<std::pair<MaterialGuid, MaterialScaffold::Material>> resolved;
 				SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> resolvedNames;
-				std::vector<ShaderPatchCollection> patchCollections;
-				resolved.reserve(modelMat->_configurations.size());
-				patchCollections.reserve(modelMat->_configurations.size());
+				std::vector<std::pair<MaterialGuid, ::Assets::PtrToFuturePtr<ResolvedMaterial>>> materialFutures;
+				resolvedNames.reserve(modelMat->_configurations.size());
+				materialFutures.reserve(modelMat->_configurations.size());
 
-				auto searchRules = ::Assets::DefaultDirectorySearchRules(sourceModel);
-				::Assets::ResChar resolvedSourceMaterial[MaxPath];
-				ResolveMaterialFilename(resolvedSourceMaterial, dimof(resolvedSourceMaterial), searchRules, sourceMaterial);
-				searchRules.AddSearchDirectoryFromFilename(resolvedSourceMaterial);
-
-				using Meld = StringMeld<MaxPath, ::Assets::ResChar>;
 				for (const auto& cfg:modelMat->_configurations) {
-
 					MaterialScaffold::Material resMat;
 					ShaderPatchCollection patchCollection;
 					std::basic_stringstream<::Assets::ResChar> resName;
@@ -136,34 +134,50 @@ namespace RenderCore { namespace Assets
 						// a red version and a blue version)
 				
 						// resolve in model:configuration
-					Meld meld; meld << sourceModel << ":" << Conversion::Convert<::Assets::rstring>(cfg);
-					resName << meld;
+					StringMeld<3*MaxPath, ::Assets::ResChar> meld; 
+					meld << sourceModel << ":" << Conversion::Convert<::Assets::rstring>(cfg);
 
-					MergeIn_Stall(resMat, patchCollection, meld.AsStringSection(), searchRules, _dependencies);
-
-					if (resolvedSourceMaterial[0] != '\0') {
+					if (sourceMaterial[0] != '\0') {
 							// resolve in material:*
-						Meld starInit; starInit << resolvedSourceMaterial << ":*";
-						Meld configInit; configInit << resolvedSourceMaterial << ":" << Conversion::Convert<::Assets::rstring>(cfg);
-					
-						MergeIn_Stall(resMat, patchCollection, starInit.AsStringSection(), searchRules, _dependencies);
-						MergeIn_Stall(resMat, patchCollection, configInit.AsStringSection(), searchRules, _dependencies);
-
-						resName << ";" << starInit << ";" << configInit;
+						meld << ";" << sourceMaterial << ":*";
+						meld << ";" << sourceMaterial << ":" << Conversion::Convert<::Assets::rstring>(cfg);
 					}
 
-					resolved.push_back(std::make_pair(guid, std::move(resMat)));
+					auto futureMaterial = ::Assets::MakeAsset<ResolvedMaterial>(meld.AsStringSection());
+					materialFutures.push_back(std::make_pair(guid, std::move(futureMaterial)));
 
-					auto resNameStr = resName.str();
+					auto resNameStr = meld.AsString();
 					SerializableVector<char> resNameVec(resNameStr.begin(), resNameStr.end());
 					resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
+				}
+
+				SerializableVector<std::pair<MaterialGuid, MaterialScaffold::Material>> resolved;
+				std::vector<ShaderPatchCollection> patchCollections;
+				resolved.reserve(materialFutures.size());
+				patchCollections.reserve(materialFutures.size());
+
+				for (const auto&m:materialFutures) {
+					auto state = m.second->StallWhilePending();
+					assert(state.value() == ::Assets::AssetState::Ready);
+					auto resolvedMat = m.second->Actualize();
+
+					MaterialScaffold::Material scaffoldMat;
+					scaffoldMat._bindings = resolvedMat->_resourceBindings;
+					scaffoldMat._matParams = resolvedMat->_matParamBox;
+					scaffoldMat._stateSet = resolvedMat->_stateSet;
+					scaffoldMat._constants = resolvedMat->_constants;
+					scaffoldMat._patchCollection = resolvedMat->_patchCollection.GetHash();
+					resolved.push_back({m.first, std::move(scaffoldMat)});
 
 					bool gotExisting = false;
 					for (const auto&p:patchCollections)
-						gotExisting |= p.GetHash() == patchCollection.GetHash();
+						gotExisting |= p.GetHash() == resolvedMat->_patchCollection.GetHash();
 
 					if (!gotExisting)
-						patchCollections.emplace_back(std::move(patchCollection));
+						patchCollections.emplace_back(resolvedMat->_patchCollection);
+
+					for (const auto& d:resolvedMat->_depFileStates)
+						AddDep(_dependencies, d);
 				}
 
 				std::sort(resolved.begin(), resolved.end(), CompareFirst<MaterialGuid, MaterialScaffold::Material>());
@@ -183,12 +197,12 @@ namespace RenderCore { namespace Assets
 				_serializedArtifacts = std::vector<SerializedArtifact>{
 					{
 						ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
-						(Meld() << sourceModel << "&" << sourceMaterial).AsString(),
+						(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),
 						::Assets::AsBlob(blockSerializer)
 					},
 					{
 						ChunkType_PatchCollections, ResolvedMat_ExpectedVersion, 
-						(Meld() << sourceModel << "&" << sourceMaterial).AsString(),
+						(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),
 						::Assets::AsBlob(MakeIteratorRange(patchCollectionStrm.GetBuffer().Begin(), patchCollectionStrm.GetBuffer().End()))
 					}
 				};

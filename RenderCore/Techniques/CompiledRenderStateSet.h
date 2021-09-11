@@ -10,7 +10,7 @@
     #error CompiledRenderStateSet.h is deprecated code. Only supported in DX11 now
 #endif
 
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../Metal/State.h"
 
 namespace RenderCore { namespace Techniques

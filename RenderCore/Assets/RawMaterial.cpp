@@ -448,6 +448,7 @@ namespace RenderCore { namespace Assets
     ResolvedMaterial::~ResolvedMaterial() {}
     
     static void MergeIn(ResolvedMaterial& dest, const RawMaterial& source);
+    static void AddDep(std::vector<::Assets::DependentFileState>& deps, StringSection<> newDep);
 
     void ResolvedMaterial::ConstructToFuture(
         ::Assets::FuturePtr<ResolvedMaterial>& futureMaterial,
@@ -464,6 +465,7 @@ namespace RenderCore { namespace Assets
             unsigned _nextId = 1;
             std::vector<std::pair<unsigned, ::Assets::PtrToFuturePtr<RawMaterial>>> _subFutures;
             std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
+            std::vector<::Assets::DependentFileState> _deps;
         };
         auto pendingTree = std::make_shared<PendingRawMaterialTree>();
 
@@ -474,6 +476,7 @@ namespace RenderCore { namespace Assets
             while (i2 != initializer.end() && *i2 != ';') ++i2;
             if (i2==i) break;
 
+            AddDep(pendingTree->_deps, MakeFileNameSplitter(MakeStringSection(i, i2)).AllExceptParameters());
             pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAsset<RawMaterial>(MakeStringSection(i, i2))));
             i = i2;
         }
@@ -519,8 +522,10 @@ namespace RenderCore { namespace Assets
                         }
 
                         auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
-                        for (const auto&i:inheritted)
+                        for (const auto&i:inheritted) {
+                            AddDep(pendingTree->_deps, MakeFileNameSplitter(i).AllExceptParameters());
                             pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAsset<RawMaterial>(i)));
+                        }
                     }
 
                     // if we still have subfutures, need to roll around again
@@ -541,6 +546,7 @@ namespace RenderCore { namespace Assets
                     for (const auto& m:pendingTree->_loadedSubMaterials)
                         finalMaterial->_depVal.RegisterDependency(m.second->GetDependencyValidation());
                 }
+                finalMaterial->_depFileStates = std::move(pendingTree->_deps);
                 thatFuture.SetAsset(std::move(finalMaterial), {});
                 return false;
             });
@@ -567,28 +573,6 @@ namespace RenderCore { namespace Assets
 		source._patchCollection.MergeInto(dest._patchCollection);
     }
 
-	void MergeInto(MaterialScaffold::Material& dest, ShaderPatchCollection& destPatchCollection, const RawMaterial& source)
-    {
-        dest._matParams.MergeIn(source._matParamBox);
-        dest._stateSet = Merge(dest._stateSet, source._stateSet);
-        dest._constants.MergeIn(source._constants);
-
-		// Resolve all of the directory names here, as we write into the Techniques::Material
-		for (const auto&b:source._resourceBindings) {
-			auto unresolvedName = b.ValueAsString();
-			if (!unresolvedName.empty()) {
-				char resolvedName[MaxPath];
-				source.GetDirectorySearchRules().ResolveFile(resolvedName, unresolvedName);
-				dest._bindings.SetParameter(b.Name(), MakeStringSection(resolvedName));
-			} else {
-				dest._bindings.SetParameter(b.Name(), MakeStringSection(unresolvedName));
-			}
-		}
-
-		source._patchCollection.MergeInto(destPatchCollection);
-		dest._patchCollection = destPatchCollection.GetHash();
-    }
-
 	static void AddDep(
         std::vector<::Assets::DependentFileState>& deps,
         StringSection<::Assets::ResChar> newDep)
@@ -602,56 +586,6 @@ namespace RenderCore { namespace Assets
         if (existing == deps.cend())
             deps.push_back(depState);
     }
-
-	void MergeIn_Stall(
-		MaterialScaffold::Material& result,
-		ShaderPatchCollection& patchCollectionResult,
-		StringSection<> sourceMaterialName,
-        const ::Assets::DirectorySearchRules& searchRules,
-        std::vector<::Assets::DependentFileState>& deps)
-    {
-
-            // resolve all of the inheritance options and generate a final 
-            // ResolvedMaterial object. We need to start at the bottom of the
-            // inheritance tree, and merge in new parameters as we come across them.
-
-			// we still need to add a dependency, even if it's a missing file
-		AddDep(deps, MakeFileNameSplitter(sourceMaterialName).AllExceptParameters());
-
-		auto dependencyMat = ::Assets::MakeAsset<RawMaterial>(sourceMaterialName);
-		auto state = dependencyMat->StallWhilePending();
-		if (state == ::Assets::AssetState::Ready) {
-			auto source = dependencyMat->Actualize();
-
-			auto childSearchRules = source->GetDirectorySearchRules();
-			childSearchRules.Merge(searchRules);
-
-			for (const auto& child: source->ResolveInherited(searchRules))
-				MergeIn_Stall(result, patchCollectionResult, child, childSearchRules, deps);
-
-			MergeInto(result, patchCollectionResult, *source);
-		}
-    }
-
-	void MergeIn_Stall(
-		MaterialScaffold::Material& result,
-		ShaderPatchCollection& patchCollectionResult,
-		const RenderCore::Assets::RawMaterial& src,
-		const ::Assets::DirectorySearchRules& searchRules)
-	{
-		auto childSearchRules = searchRules;
-		childSearchRules.Merge(src.GetDirectorySearchRules());
-
-		for (const auto& child : src.ResolveInherited(childSearchRules)) {
-			auto dependencyMat = ::Assets::MakeAsset<RawMaterial>(child);
-			auto state = dependencyMat->StallWhilePending();
-			if (state == ::Assets::AssetState::Ready) {
-				MergeIn_Stall(result, patchCollectionResult, *dependencyMat->Actualize(), childSearchRules);
-			}
-		}
-
-		MergeInto(result, patchCollectionResult, src);
-	}
 
 	MaterialGuid MakeMaterialGuid(StringSection<> name)
 	{

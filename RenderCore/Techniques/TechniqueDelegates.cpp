@@ -6,7 +6,7 @@
 #include "CommonResources.h"
 #include "CompiledShaderPatchCollection.h"
 #include "Techniques.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../IDevice.h"
 #include "../Format.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"

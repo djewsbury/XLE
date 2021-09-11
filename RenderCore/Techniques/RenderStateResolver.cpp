@@ -10,7 +10,7 @@
     #include "CompiledRenderStateSet.h"
     #include "../Metal/State.h"
 #endif
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/RawMaterial.h"
 #include "../../Utility/MemoryUtils.h"
 
 namespace RenderCore { namespace Techniques
