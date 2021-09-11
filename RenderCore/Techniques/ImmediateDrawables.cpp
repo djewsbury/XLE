@@ -38,6 +38,7 @@ namespace RenderCore { namespace Techniques
 			static const uint64_t s_patchShape = Hash64("IShape2D_Calculate");
 			static const uint64_t s_patchFill = Hash64("IFill_Calculate");
 			static const uint64_t s_patchOutline = Hash64("IOutline_Calculate");
+			static const uint64_t s_patchTwoLayersShader = Hash64("TwoLayersShader");
 
 			unsigned dsMode = 0;
 			// We're re-purposing the _writeMask flag for depth test and write
@@ -51,9 +52,7 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			if (!shaderPatches.HasPatchType(s_patchShape)) {
-				return _pipelineDescFuture[dsMode];
-			} else {
+			if (shaderPatches.HasPatchType(s_patchShape)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDescFuture[dsMode]->Actualize();
 
@@ -65,6 +64,18 @@ namespace RenderCore { namespace Techniques
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc), {});
 				return result;
+			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
+				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
+				*nascentDesc = *_pipelineDescFuture[dsMode]->Actualize();
+
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
+				nascentDesc->_patchExpansions.push_back(s_patchTwoLayersShader);
+
+				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
+				result->SetAsset(std::move(nascentDesc), {});
+				return result;
+			} else {
+				return _pipelineDescFuture[dsMode];
 			}
 		}
 

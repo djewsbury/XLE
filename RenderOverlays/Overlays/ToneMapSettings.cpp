@@ -56,7 +56,7 @@ namespace Overlays
             
             Rect textRect = windAngle0;
             textRect._topLeft[0] += 32;
-            /*Coord a = */DrawFormatText(&context, textRect, nullptr, ColorB(0xffffffff), objects[q]._name);
+            /*Coord a = */DrawText(&context, textRect, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Left, objects[q]._name);
 
             Rect scrollBar = windAngle0;
             scrollBar._topLeft[0] = labelRect._bottomRight[0];

@@ -75,6 +75,11 @@ float CircleShape2(float2 centrePoint, float radius, float2 texCoord, float aspe
     return dot(o, o) <= (radius*radius);
 }
 
+float RectShape2(float2 mins, float2 maxs, float2 texCoord)
+{
+    return all(texCoord >= mins) && all(texCoord <= maxs);
+}
+
 ShapeResult RectShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc)
 {
         // we'll assume pixel-perfect coords, so we don't have handle
@@ -102,27 +107,32 @@ ShapeResult ScrollBarShape_Calculate(DebuggingShapesCoords coords, ShapeDesc sha
     float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
     float aspectRatio = GetAspectRatio(coords);
 
-    float2 baseLineMin = float2(minCoords.x, lerp(minCoords.y, maxCoords.y, 0.4f));
-    float2 baseLineMax = float2(maxCoords.x, lerp(minCoords.y, maxCoords.y, 0.6f));
+    const float thumbWidth = coords.udds.x * 10;
+    const float markerWidth = coords.udds.x * 4;
+    const float baseLineWidth = coords.vdds.y * 4;
+
+    float2 baseLineMin = float2(minCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) - baseLineWidth/2);
+    float2 baseLineMax = float2(maxCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) + baseLineWidth/2);
     //float result = 0.5f * RoundedRectShape(baseLineMin, baseLineMax, texCoord, aspectRatio, 0.4f);
-    float result = 0.5f * RoundedRectShape_Calculate(coords, MakeShapeDesc(baseLineMin, baseLineMax, 0.f, 0.4f))._fill;
+    float result = 0.25f * RoundedRectShape_Calculate(coords, MakeShapeDesc(baseLineMin, baseLineMax, 0.f, 0.4f))._fill;
 
         //	Add small markers at fractional positions along the scroll bar
     float markerPositions[7] = { .125f, .25f, .375f, .5f,   .625f, .75f, .875f };
-    float markerHeights[7]   = { .5f  , .75f, .5f ,  .825f, .5f,   .75f, .5f   };
+    float markerHeights[7]   = { .5f  , .65f, .5f ,  .65f, .5f,   .65f, .5f   };
 
     for (uint c=0; c<7; ++c) {
         float x = lerp(minCoords.x, maxCoords.x, markerPositions[c]);
-        float2 markerMin = float2(x - 0.002f, lerp(minCoords.y, maxCoords.y, 0.5f*(1.f-markerHeights[c])));
-        float2 markerMax = float2(x + 0.002f, lerp(minCoords.y, maxCoords.y, 0.5f+0.5f*markerHeights[c]));
+        float2 markerMin = float2(x - markerWidth/2, lerp(minCoords.y, maxCoords.y, 0.5f*(1.f-markerHeights[c])));
+        float2 markerMax = float2(x + markerWidth/2, lerp(minCoords.y, maxCoords.y, 0.5f+0.5f*markerHeights[c]));
         // result = max(result, 0.75f*RectShape(markerMin, markerMax, texCoord));
-        result = max(result, 0.75f*RectShape_Calculate(coords, MakeShapeDesc(markerMin, markerMax, 0.f, 0.f))._fill);
+        result = max(result, 0.25f*RectShape_Calculate(coords, MakeShapeDesc(markerMin, markerMax, 0.f, 0.f))._fill);
     }
 
     float2 thumbCenter = float2(
         lerp(minCoords.x, maxCoords.x, thumbPosition),
         lerp(minCoords.y, maxCoords.y, 0.5f));
-    result = max(result, CircleShape2(thumbCenter, 0.475f * (maxCoords.y - minCoords.y), texCoord, aspectRatio));
+    // result = max(result, CircleShape2(thumbCenter, 0.475f * (maxCoords.y - minCoords.y), texCoord, aspectRatio));
+    result = max(result, RectShape2(float2(thumbCenter.x-thumbWidth/2, minCoords.y), float2(thumbCenter.x+thumbWidth/2, maxCoords.y), texCoord));
     return MakeShapeResult(result, 0.f);
 }
 
