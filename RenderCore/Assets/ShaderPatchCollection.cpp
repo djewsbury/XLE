@@ -72,6 +72,8 @@ namespace RenderCore { namespace Assets
 			assert(!p.second._customProvider);
 			_hash = Hash64(p.second._archiveName, _hash);
 			_hash = HashCombine(p.second.CalculateInstanceHash(), _hash);
+			if (!p.second._implementsArchiveName.empty())
+				_hash = Hash64(p.second._implementsArchiveName, _hash);
 		}
 		if (!_descriptorSet.empty())
 			_hash = Hash64(_descriptorSet, _hash);

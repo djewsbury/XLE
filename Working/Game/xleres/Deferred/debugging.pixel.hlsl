@@ -74,7 +74,7 @@ float4 GBufferDebugging(float4 position : SV_Position, float2 texCoord : TEXCOOR
 	RenderTile(float2( 0, .5), float2(.5,  1), texCoord, DepthTexture, result);
 	RenderTile(float2(.5, .5), float2( 1,  1), texCoord, GBuffer_Parameters, result);
 	// RenderTag(float2(.1, .1f), float2(.4f, .15f), texCoord, aspectRatio, outputDimensions, result);
-	// RenderScrollBar(float2(.1, .2f), float2(.4f, .225f), 0.155f, texCoord, aspectRatio, outputDimensions, result);
+	// RenderHorizTweakerBarShader(float2(.1, .2f), float2(.4f, .225f), 0.155f, texCoord, aspectRatio, outputDimensions, result);
 
 	return result;
 }

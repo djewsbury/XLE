@@ -79,21 +79,12 @@ namespace RenderOverlays
             ColorB color0, ColorB color1,
             const Float2& minTex0, const Float2& maxTex0, 
             const Float2& minTex1, const Float2& maxTex1,
-            StringSection<char> shaderSelectorTable = {}) = 0;
-
-        virtual void    DrawQuad(
-            ProjectionMode proj, 
-            const Float3& mins, const Float3& maxs, 
-            ColorB color0, ColorB color1,
-            const Float2& minTex0, const Float2& maxTex0, 
-            const Float2& minTex1, const Float2& maxTex1,
             RenderCore::Techniques::ImmediateDrawableMaterial&& material) = 0;
 
         virtual void    DrawQuad(
             ProjectionMode proj, 
             const Float3& mins, const Float3& maxs, 
-            ColorB color,
-            StringSection<char> shaderSelectorTable = {}) = 0;
+            ColorB color) = 0;
 
         virtual void    DrawTexturedQuad(
             ProjectionMode proj, 

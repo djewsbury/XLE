@@ -1,7 +1,7 @@
-ScrollBar=~
+HorizTweakerBar=~
 	Patches=~
 		=~
-			DebuggingShapes.pixel.hlsl::ScrollBarShader
+			DebuggingShapes.pixel.hlsl::HorizTweakerBarShader
 			Implements=Interfaces.hlsl::TwoLayersShader
 TagShader=~
 	Patches=~
@@ -13,3 +13,65 @@ GridBackgroundShader=~
 		=~
 			DebuggingShapes.pixel.hlsl::GridBackgroundShader
 			Implements=Interfaces.hlsl::TwoLayersShader
+
+SolidNoBorder=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::SolidFill_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate
+		=~
+			CommonBrushes.hlsl::NoFill_Calculate
+			Implements=Interfaces.hlsl::IOutline_Calculate
+
+RaisedNoBorder=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::RaisedFill_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate
+		=~
+			CommonBrushes.hlsl::NoFill_Calculate
+			Implements=Interfaces.hlsl::IOutline_Calculate
+
+EmptySolidBorder=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::NoFill_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate
+		=~
+			CommonBrushes.hlsl::SolidFill_Calculate
+			Implements=Interfaces.hlsl::IOutline_Calculate
+
+FillRoundedRect=~
+	Inherit=~; <.>:SolidNoBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RoundedRectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+OutlineRoundedRect=~
+	Inherit=~; <.>:EmptySolidBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RoundedRectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+RaisedFillRect=~
+	Inherit=~; <.>:RaisedNoBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+FillEllipse=~
+	Inherit=~; <.>:SolidNoBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::Ellipse_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+OutlineEllipse=~
+	Inherit=~; <.>:EmptySolidBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::Ellipse_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate

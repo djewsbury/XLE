@@ -97,7 +97,6 @@ namespace RenderOverlays
 		unsigned				_vertexCount;
 		RenderCore::Topology	_topology;
 		IteratorRange<const MiniInputElementDesc*> _inputAssembly;
-		StringSection<>			_shaderSelectorTable;
 		std::shared_ptr<RenderCore::IResourceView> _textureResource;
 	};
 	
@@ -183,28 +182,7 @@ namespace RenderOverlays
 		data[1] = Vertex(v1, HardwareColor(colV1));
 		data[2] = Vertex(v2, HardwareColor(colV2));
 	}
-
-	void    ImmediateOverlayContext::DrawQuad(
-		ProjectionMode proj,
-		const Float3& mins, const Float3& maxs, 
-		ColorB color0, ColorB color1,
-		const Float2& minTex0, const Float2& maxTex0, 
-		const Float2& minTex1, const Float2& maxTex1,
-		StringSection<> shaderSelectorTable)
-	{
-		using Vertex = Vertex_PCCTT;
-		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, shaderSelectorTable}).Cast<Vertex*>();
-		auto col0 = HardwareColor(color0);
-		auto col1 = HardwareColor(color1);
-		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col0, col1, Float2(minTex0[0], minTex0[1]), Float2(minTex1[0], minTex1[1]));
-		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]));
-		data[2] = Vertex(Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]));
-		data[3] = Vertex(Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]));
-		data[4] = Vertex(Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]));
-		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col0, col1, Float2(maxTex0[0], maxTex0[1]), Float2(maxTex1[0], maxTex1[1]));
-	}
-
+	
 	void    ImmediateOverlayContext::DrawQuad(
 		ProjectionMode proj, 
 		const Float3& mins, const Float3& maxs, 
@@ -230,12 +208,11 @@ namespace RenderOverlays
 	void    ImmediateOverlayContext::DrawQuad(
 			ProjectionMode proj, 
 			const Float3& mins, const Float3& maxs, 
-			ColorB color,
-			StringSection<> shaderSelectorTable)
+			ColorB color)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, shaderSelectorTable}).Cast<Vertex*>();
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col);
 		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col);
@@ -253,7 +230,7 @@ namespace RenderOverlays
 	{
 		using Vertex = Vertex_PCCTT;
 		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, {}, std::move(textureResource)}).Cast<Vertex*>();
+		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, std::move(textureResource)}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
 		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col, col, Float2(minTex0[0], minTex0[1]), Float2(0.f, 0.f));
 		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, col, Float2(minTex0[0], maxTex0[1]), Float2(0.f, 0.f));

@@ -7,7 +7,7 @@
 #include "DebuggingShapes.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 
-float4 ScrollBarShader(
+float4 HorizTweakerBarShader(
 	float4 position,
 	float4 color,
 	float4 color1,
@@ -16,7 +16,7 @@ float4 ScrollBarShader(
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	float4 result = 0.0.xxxx;
-	RenderScrollBar(
+	RenderHorizTweakerBarShader(
 		0.0.xx, 1.0.xx, texCoord1.x,
 		DebuggingShapesCoords_Make(position, texCoord0, outputDimensions),
 		result);
@@ -112,8 +112,8 @@ float4 GridBackgroundShader(
 	}
 
 	if (brightness > 0.f) {
-		return float4(brightness * 0.25.xxx, .75f);
+		return float4(brightness * 0.125.xxx, .5f);
 	} else {
-		return float4(1.0.xxx, 0.25f);
+		return float4(0.3.xxx, 0.25f);
 	}
 }

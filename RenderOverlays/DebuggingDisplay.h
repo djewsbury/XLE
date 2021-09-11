@@ -237,9 +237,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void DrawScrollBar(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour = ColorB(0xffffffff), ColorB outlineColour = ColorB(0xff000000));
 
-    void HScrollBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition);
-    void HScrollBar_DrawLabel(IOverlayContext* context, const Rect& rect);
-    void HScrollBar_DrawGridBackground(IOverlayContext* context, const Rect& rect);
+    void HTweakerBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition);
+    void HTweakerBar_DrawLabel(IOverlayContext* context, const Rect& rect);
+    void HTweakerBar_DrawGridBackground(IOverlayContext* context, const Rect& rect);
 
     ///////////////////////////////////////////////////////////////////////////////////
     //          T A B L E S

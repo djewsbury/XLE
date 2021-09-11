@@ -233,71 +233,112 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     ///////////////////////////////////////////////////////////////////////////////////
 
-    void DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    static RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
+        const RenderCore::Assets::ResolvedMaterial& rawMat)
     {
-        Coord2 center( LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f) );
+        RenderCore::Techniques::ImmediateDrawableMaterial result;
+        result._shaderSelectors = rawMat._matParamBox;
+        result._stateSet = rawMat._stateSet;
+        result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
+        return result;
+    }
 
-        //  we should also take into account the pixel aspect ratio, so that circles appear
-        //  as a circles on screen
-        Float3 pixelCenter = AsPixelCoords(center);
-        Float2 pixelRadius(rect.Width()/2, rect.Height()/2);
+    class StandardResources
+    {
+    public:
+        RenderCore::Techniques::ImmediateDrawableMaterial _horizTweakerBarMaterial;
+        RenderCore::Techniques::ImmediateDrawableMaterial _tagShaderMaterial;
+        RenderCore::Techniques::ImmediateDrawableMaterial _gridBackgroundMaterial;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _outlineRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _raisedFillRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
+        RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
 
-        const unsigned segmentCount = 64;
-        Float3 lines[segmentCount*2];
-        float sinA = 0.f, cosA = 1.f;
-        const float beta = (2.f*gPI)/float(segmentCount-1);
-        float cosB, sinB;
-        std::tie(sinB, cosB) = XlSinCos(beta);
-        for (unsigned s=0; s<segmentCount; ++s) {
-            //  using trigonometric addition formulae (avoid sin/cos in the loop)
-            float nextSinA = sinA * cosB + sinB * cosA;
-            float nextCosA = cosA * cosB - sinA * sinB;
-            lines[s*2]   = Float3(pixelCenter[0]+pixelRadius[0]*cosA,       pixelCenter[1]+pixelRadius[1]*sinA,         pixelCenter[2]);
-            lines[s*2+1] = Float3(pixelCenter[0]+pixelRadius[0]*nextCosA,   pixelCenter[1]+pixelRadius[1]*nextSinA,     pixelCenter[2]);
-            sinA = nextSinA; cosA = nextCosA;
+        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
+        ::Assets::DependencyValidation _depVal;
+
+        StandardResources(
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> horizTweakerBarMaterial,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tagShaderMaterial,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> gridBackgroundMaterial,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRoundedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineRoundedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> raisedFillRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillEllipse,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineEllipse)
+        {
+            _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(*horizTweakerBarMaterial);
+            _tagShaderMaterial = BuildImmediateDrawableMaterial(*tagShaderMaterial);
+            _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
+            _fillRoundedRect = BuildImmediateDrawableMaterial(*fillRoundedRect);
+            _outlineRoundedRect = BuildImmediateDrawableMaterial(*outlineRoundedRect);
+            _raisedFillRect = BuildImmediateDrawableMaterial(*raisedFillRect);
+            _fillEllipse = BuildImmediateDrawableMaterial(*fillEllipse);
+            _outlineEllipse = BuildImmediateDrawableMaterial(*outlineEllipse);
+
+            _depVal = ::Assets::GetDepValSys().Make();
+            _depVal.RegisterDependency(horizTweakerBarMaterial->GetDependencyValidation());
+            _depVal.RegisterDependency(tagShaderMaterial->GetDependencyValidation());
+            _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
+            _depVal.RegisterDependency(fillRoundedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(outlineRoundedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(raisedFillRect->GetDependencyValidation());
+            _depVal.RegisterDependency(fillEllipse->GetDependencyValidation());
+            _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
         }
 
-        context->DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
+        static void ConstructToFuture(::Assets::Future<std::shared_ptr<StandardResources>>& future)
+        {
+            auto horizTweakerBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
+            auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
+            auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
+            auto fillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
+            auto outlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
+            auto raisedFillRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":RaisedFillRect");
+            auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
+            auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
+
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, raisedFillRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
+        }
+    };
+
+    void DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
+        const float borderWidthPix = 1.f;
+        context->DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            ColorB::Zero, colour,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineEllipse});
     }
 
     void DrawFilledEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
-        Coord2 center( LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f) );
-        Float3 pixelCenter = AsPixelCoords(center);
-        Float2 pixelRadius(rect.Width()/2, rect.Height()/2);
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
 
-        const unsigned segmentCount = 64;
-        Float3 pts[segmentCount];
-        float sinA = 0.f, cosA = 1.f;
-        const float beta = (2.f*gPI)/float(segmentCount-1);
-        float cosB, sinB;
-        std::tie(sinB, cosB) = XlSinCos(beta);
-        for (unsigned s=0; s<segmentCount; ++s) {
-            pts[s]   = Float3(pixelCenter[0]+pixelRadius[0]*cosA, pixelCenter[1]+pixelRadius[1]*sinA, pixelCenter[2]);
-            float nextSinA = sinA * cosB + sinB * cosA;
-            float nextCosA = cosA * cosB - sinA * sinB;
-            sinA = nextSinA; cosA = nextCosA;
-        }
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
 
-        Float3 triangles[(segmentCount-2)*3];
-        Float3* t = triangles;
-        *t++ = pts[0];
-        *t++ = pts[1];
-        *t++ = pts[segmentCount-1];
-        unsigned lastA = segmentCount-1;
-        unsigned lastB = 1;
-        unsigned q = 0;
-        while (t < &triangles[dimof(triangles)]) {
-            unsigned C = (q&1)?(segmentCount-2-q/2):(q/2+2);
-            ++q;
-            *t++ = pts[lastA];
-            *t++ = pts[lastB];
-            *t++ = pts[C];
-            lastA = lastB;
-            lastB = C;
-        }
-
-        context->DrawTriangles(ProjectionMode::P2D, triangles, dimof(triangles), colour);
+        const float borderWidthPix = 1.f;
+        context->DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            colour, ColorB::Zero,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillEllipse});
     }
 
     void DrawRoundedRectangleOutline(
@@ -305,9 +346,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         ColorB colour, 
         float width, float roundedProportion)
     {
-        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
-        }
+
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
 
         context->DrawQuad(
             ProjectionMode::P2D,
@@ -316,7 +359,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(width, roundedProportion), Float2(width, roundedProportion),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RoundedRectShape,Fill=None,Outline=SolidFill");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineRoundedRect});
     }
 
     void DrawRoundedRectangle(
@@ -328,6 +371,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
         context->DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
@@ -335,7 +381,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             backgroundColour, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(borderWidth, roundedProportion), Float2(borderWidth, roundedProportion),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RoundedRectShape,Fill=SolidFill,Outline=SolidFill");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRoundedRect});
     }
 
     void DrawRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
@@ -347,14 +393,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context->DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])), colour,
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1]-1)), colour,
+            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour);
 
         context->DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour,
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1]-1)), colour,
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1]-1)), colour);
+            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
+            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1])), colour);
     }
 
     void DrawRectangle(IOverlayContext* context, const Rect& rect, float depth, ColorB colour)
@@ -366,14 +412,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context->DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Float3(rect._topLeft[0], rect._topLeft[1], depth)), colour,
-            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1]-1, depth)), colour,
-            AsPixelCoords(Float3(rect._bottomRight[0]-1, rect._topLeft[1], depth)), colour);
+            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1], depth)), colour,
+            AsPixelCoords(Float3(rect._bottomRight[0], rect._topLeft[1], depth)), colour);
 
         context->DrawTriangle(
             ProjectionMode::P2D, 
-            AsPixelCoords(Float3(rect._bottomRight[0]-1, rect._topLeft[1], depth)), colour,
-            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1]-1, depth)), colour,
-            AsPixelCoords(Float3(rect._bottomRight[0]-1, rect._bottomRight[1]-1, depth)), colour);
+            AsPixelCoords(Float3(rect._bottomRight[0], rect._topLeft[1], depth)), colour,
+            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1], depth)), colour,
+            AsPixelCoords(Float3(rect._bottomRight[0], rect._bottomRight[1], depth)), colour);
     }
 
     void DrawRectangleOutline(IOverlayContext* context, const Rect& rect, float depth, ColorB colour)
@@ -383,14 +429,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
 
         Float3 lines[8];
-        lines[0] = AsPixelCoords(Float3(rect._topLeft[0],         rect._topLeft[1],        depth));
-        lines[1] = AsPixelCoords(Float3(rect._bottomRight[0]-1,   rect._topLeft[1],        depth));
-        lines[2] = AsPixelCoords(Float3(rect._bottomRight[0]-1,   rect._topLeft[1],        depth));
-        lines[3] = AsPixelCoords(Float3(rect._bottomRight[0]-1,   rect._bottomRight[1]-1,  depth));
-        lines[4] = AsPixelCoords(Float3(rect._bottomRight[0]-1,   rect._bottomRight[1]-1,  depth));
-        lines[5] = AsPixelCoords(Float3(rect._topLeft[0],         rect._bottomRight[1]-1,  depth));
-        lines[6] = AsPixelCoords(Float3(rect._topLeft[0],         rect._bottomRight[1]-1,  depth));
-        lines[7] = AsPixelCoords(Float3(rect._topLeft[0],         rect._topLeft[1],        depth));
+        lines[0] = AsPixelCoords(Float3(rect._topLeft[0],       rect._topLeft[1],       depth));
+        lines[1] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._topLeft[1],       depth));
+        lines[2] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._topLeft[1],       depth));
+        lines[3] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._bottomRight[1],   depth));
+        lines[4] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._bottomRight[1],   depth));
+        lines[5] = AsPixelCoords(Float3(rect._topLeft[0],       rect._bottomRight[1],   depth));
+        lines[6] = AsPixelCoords(Float3(rect._topLeft[0],       rect._bottomRight[1],   depth));
+        lines[7] = AsPixelCoords(Float3(rect._topLeft[0],       rect._topLeft[1],       depth));
         context->DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
@@ -610,12 +656,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const ColorB HeaderBkOutColor    ( 255, 255, 255, 255 );
         static const ColorB SepColor            ( 255, 255, 255, 255 );
 
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
         context->DrawQuad(
             ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefractiveFill,Outline=SolidFill");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedFillRect});
 
         TextStyle style{DrawTextOptions(false, true)};
 
@@ -652,12 +701,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const ColorB BkOutColor  ( 255, 255, 255, 255 );
         static const ColorB SepColor    ( 255, 255, 255, 255 );
 
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
         context->DrawQuad(
             ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             BkColor, BkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RectShape,Fill=RaisedRefractiveFill,Outline=SolidFill");
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedFillRect});
 
         TextStyle style{DrawTextOptions(true, false)};
 
@@ -801,52 +853,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ///////////////////////////////////////////////////////////////////////////////////
     static float Saturate(float value) { return std::max(std::min(value, 1.f), 0.f); }
 
-    static RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
-        const RenderCore::Assets::RawMaterial& rawMat)
-    {
-        RenderCore::Techniques::ImmediateDrawableMaterial result;
-        result._shaderSelectors = rawMat._matParamBox;
-        result._stateSet = rawMat._stateSet;
-        result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
-        return result;
-    }
-
-    class StandardResources
-    {
-    public:
-        RenderCore::Techniques::ImmediateDrawableMaterial _scrollBarMaterial;
-        RenderCore::Techniques::ImmediateDrawableMaterial _tagShaderMaterial;
-        RenderCore::Techniques::ImmediateDrawableMaterial _gridBackgroundMaterial;
-
-        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
-        ::Assets::DependencyValidation _depVal;
-
-        StandardResources(
-            std::shared_ptr<RenderCore::Assets::RawMaterial> scrollBarMaterial,
-            std::shared_ptr<RenderCore::Assets::RawMaterial> tagShaderMaterial,
-            std::shared_ptr<RenderCore::Assets::RawMaterial> gridBackgroundMaterial)
-        {
-            _scrollBarMaterial = BuildImmediateDrawableMaterial(*scrollBarMaterial);
-            _tagShaderMaterial = BuildImmediateDrawableMaterial(*tagShaderMaterial);
-            _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
-
-            _depVal = ::Assets::GetDepValSys().Make();
-            _depVal.RegisterDependency(scrollBarMaterial->GetDependencyValidation());
-            _depVal.RegisterDependency(tagShaderMaterial->GetDependencyValidation());
-            _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
-        }
-
-        static void ConstructToFuture(::Assets::Future<std::shared_ptr<StandardResources>>& future)
-        {
-            auto scrollBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ScrollBar");
-            auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
-            auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::RawMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
-
-            ::Assets::WhenAll(scrollBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToFuture(future);
-        }
-    };
-
-    void HScrollBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition)
+    void HTweakerBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition)
     {
         const auto r = coordinates.InteractableRect();
         float t = Saturate((thumbPosition - coordinates.MinValue()) / float(coordinates.MaxValue() - coordinates.MinValue()));
@@ -858,10 +865,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(t, 0.f), Float2(t, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_scrollBarMaterial});
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_horizTweakerBarMaterial});
     }
 
-    void HScrollBar_DrawLabel(IOverlayContext* context, const Rect& rect)
+    void HTweakerBar_DrawLabel(IOverlayContext* context, const Rect& rect)
     {
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
@@ -874,7 +881,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_tagShaderMaterial});
     }
 
-    void HScrollBar_DrawGridBackground(IOverlayContext* context, const Rect& rect)
+    void HTweakerBar_DrawGridBackground(IOverlayContext* context, const Rect& rect)
     {
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;

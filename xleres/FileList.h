@@ -52,6 +52,7 @@
 #define AO_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/ao.compute.hlsl"
 
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/TechniqueLibrary/RenderOverlays/dd/ShapesFrameworkEntry.hlsl"
+#define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.material"
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 

@@ -49,7 +49,7 @@ float BorderFromDerivatives(float2 dhdp, float value, float borderSize)
     // return (pixelsAway <= borderSize) ? 1 : 0;
     // returns 1.0f to the distance "borderSize" and then falls off to zero to borderSize*2.0f
     // return saturate(1.0f - (pixelsAway-borderSize)/borderSize);
-    return saturate(smoothstep(1, 0, (pixelsAway-borderSize)/borderSize));
+    return saturate(smoothstep(1, 0, (pixelsAway-borderSize)/(0.25f*borderSize)));
 }
 
 #endif

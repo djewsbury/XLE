@@ -115,15 +115,11 @@ namespace PlatformRig { namespace Overlays
         if (extendFromMiddle) {
             Coord barMaxHalfWidth = std::min(middleX - rect._topLeft[0], rect._bottomRight[0] - middleX);
             Coord barHalfWidth = Coord(std::min(barSize, 1.f) * float(barMaxHalfWidth));
-            context->DrawQuad(
-                ProjectionMode::P2D,
-                AsPixelCoords(Coord2(middleX - barHalfWidth, rect._topLeft[1])),
-                AsPixelCoords(Coord2(middleX + barHalfWidth, rect._bottomRight[1])),
+            DrawRoundedRectangle(
+                context,
+                Rect{Coord2(middleX - barHalfWidth, rect._topLeft[1]), Coord2(middleX + barHalfWidth, rect._bottomRight[1])},
                 highlighted ? settings._highlightBarColor0 : settings._barColor0, ColorB::White,
-                Float2(0.f, 0.f), Float2(1.f, 1.f),
-                Float2(settings._barBorderSize, settings._barRoundedProportion),
-                Float2(settings._barBorderSize, settings._barRoundedProportion),
-                RENDEROVERLAYS_SHAPES_HLSL ":Paint,Shape=RoundedRectShape,Fill=CrossHatchFill,Outline=SolidFill");
+                settings._barBorderSize, settings._barRoundedProportion);
         } else {
             Coord barMaxWidth = rect._bottomRight[0] - rect._topLeft[0];
             Coord barWidth = Coord(std::min(barSize, 1.f) * float(barMaxWidth));

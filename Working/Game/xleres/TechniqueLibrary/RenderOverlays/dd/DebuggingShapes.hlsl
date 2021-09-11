@@ -68,14 +68,12 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 
 	ShapeDesc shapeDesc = MakeShapeDesc(tagMin, tagMax, 0.f, 0.f);
 	float2 dhdp = 0.0.xxx;
-	float accentuate = 4.f;
+	float accentuate = 8.f;
 	ScreenSpaceDerivatives_Template(TagShape_Calculate, coords, shapeDesc);
 
 	float t = TagShape_Calculate(coords, shapeDesc)._fill;
 	if (t > 0.f) {
-		// const float3 baseColor = 2.f * float3(0.125f, 0.2f, .25f);
 		const float3 baseColor = float3(0.333f, 0.333f, 0.333f);
-		// return RaisedRefractiveFill_Calculate(coords, float4(baseColor, 1.f), accentuate*dhdp);
 		return RaisedFill_Calculate(coords, float4(baseColor, 1.f), accentuate*dhdp);
 	} else {
 		const float borderSize = 6.f;
@@ -84,28 +82,22 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 	return 0.0.xxxx;
 }
 
-void RenderScrollBar(   float2 minCoords, float2 maxCoords, float thumbPosition,
+void RenderHorizTweakerBarShader(   float2 minCoords, float2 maxCoords, float thumbPosition,
                         DebuggingShapesCoords coords, inout float4 result)
 {
 	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, 0.f, thumbPosition);
 	float2 dhdp = 0.0.xxx;
-	float accentuate = 4.f;
+	float accentuate = 8.f;
 	ScreenSpaceDerivatives_Template(ScrollBarShape_Calculate, coords, shapeDesc);
 
 	float t = ScrollBarShape_Calculate(coords, shapeDesc)._fill;
 	if (t > 0.f) {
 		float3 normal = NormalToSurface(accentuate*dhdp);
-		float d = saturate(-dot(BasicShapesLightDirection, normal));
-		float A = d; // 12.5f * pow(d, 2.f);
-
+		float A = saturate(-dot(BasicShapesLightDirection, normal));
 		if (t > 0.75f) {
-			// result = float4(A * 2.f * float3(0.125f, 0.2f, .25f) + 0.1.xxx, 1.f);
-			result = float4(A * 2.f*float3(0.666f, 0.66f, 0.666f), 1.f);
-			// result.rgb += RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(coords), 0).rgb;
+			result = float4(A * 2.0f*float3(0.666f, 0.66f, 0.666f), 1.f);
 		} else {
-			// result = float4(A * float3(1.1f, .9f, .5f) + 0.1.xxx, 1.f);
-			result = float4(A * float3(.33f, .33f, .33f), 1.0f);
-			// result.rgb += 0.5f * RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(coords), 0).rgb;
+			result = float4(A * float3(.66f, .66f, .66f), 1.0f);
 		}
 	} else {
 		/*const float borderSize = 10.f;

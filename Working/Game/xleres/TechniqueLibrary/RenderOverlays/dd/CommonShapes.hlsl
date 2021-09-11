@@ -68,6 +68,38 @@ ShapeResult RoundedRectShape_Calculate(
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+float Sq(float i) { return i*i; }
+
+ShapeResult Ellipse_Calculate(
+    DebuggingShapesCoords coords,
+    ShapeDesc shapeDesc)
+{
+    float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+    float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
+    float borderSizePix = shapeDesc._borderSizePix;
+    minCoords.x += borderSizePix*GetUDDS(coords).x;
+    minCoords.y += borderSizePix*GetVDDS(coords).y;
+    maxCoords.x -= borderSizePix*GetUDDS(coords).x;
+    maxCoords.y -= borderSizePix*GetVDDS(coords).y;
+
+    float2 pixelSize = float2(GetUDDS(coords).x, GetVDDS(coords).y);
+    float2 borderSize = borderSizePix * pixelSize;
+
+    float2 center = 0.5f * (minCoords + maxCoords);
+    float e = Sq(texCoord.x - center.x) / Sq(0.5f*(maxCoords.x - minCoords.x)) + Sq(texCoord.y - center.y) / Sq(0.5f*(maxCoords.y - minCoords.y));
+    float partialDevX = 2.f*abs(texCoord.x - center.x) / Sq(0.5f*(maxCoords.x - minCoords.x)) + Sq(texCoord.y - center.y) / Sq(0.5f*(maxCoords.y - minCoords.y));
+    float partialDevY = Sq(texCoord.x - center.x) / Sq(0.5f*(maxCoords.x - minCoords.x)) + 2.f*abs(texCoord.y - center.y) / Sq(0.5f*(maxCoords.y - minCoords.y));
+    if (e > 1) {
+        float2 pixelsAway = float2((e-1)/partialDevX, (e-1)/partialDevY);
+        pixelsAway = (pixelsAway-borderSize)/(0.25f*borderSize);
+        float border = saturate(smoothstep(1, 0, min(pixelsAway.x, pixelsAway.y)));
+        return MakeShapeResult(e < 1.0f, border);
+    } else {
+        return MakeShapeResult(e < 1.0f, 0);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 float CircleShape2(float2 centrePoint, float radius, float2 texCoord, float aspectRatio)
 {
     float2 o = texCoord - centrePoint;
@@ -109,7 +141,7 @@ ShapeResult ScrollBarShape_Calculate(DebuggingShapesCoords coords, ShapeDesc sha
 
     const float thumbWidth = coords.udds.x * 10;
     const float markerWidth = coords.udds.x * 4;
-    const float baseLineWidth = coords.vdds.y * 4;
+    const float baseLineWidth = coords.vdds.y * 6;
 
     float2 baseLineMin = float2(minCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) - baseLineWidth/2);
     float2 baseLineMax = float2(maxCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) + baseLineWidth/2);
