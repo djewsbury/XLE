@@ -53,19 +53,13 @@ namespace Sample
     class RenderPostSceneResources
     {
     public:
-        class Desc 
-        {
-        public:
-            unsigned _fontSize;
-            Desc(unsigned fontSize) : _fontSize(fontSize) {}
-        };
 		std::shared_ptr<RenderOverlays::Font> _font;
-        RenderPostSceneResources(const Desc& desc);
+        RenderPostSceneResources(unsigned fontSize);
     };
 
-    RenderPostSceneResources::RenderPostSceneResources(const Desc& desc)
+    RenderPostSceneResources::RenderPostSceneResources(unsigned fontSize)
     {
-        _font = RenderOverlays::GetX2Font("DosisExtraBold", desc._fontSize);
+        _font = RenderOverlays::GetX2Font("DosisExtraBold", fontSize);
     }
 
     /// <summary>Renders some text to a device</summary>
@@ -83,7 +77,7 @@ namespace Sample
         const bool textRenderingMethod = 1;
 
         using namespace RenderOverlays;
-        auto& res = ConsoleRig::FindCachedBox<RenderPostSceneResources>(RenderPostSceneResources::Desc(64));
+        auto& res = ConsoleRig::FindCachedBox<RenderPostSceneResources>(64);
 		TextStyle style{};
         ColorB col(0xffffffff);
 

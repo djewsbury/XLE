@@ -89,8 +89,7 @@ namespace ToolsRig
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _techniqueSetFile->GetDependencyValidation(); }
 
-		struct Desc {};
-		TechniqueBox(const Desc&)
+		TechniqueBox()
 		{
 			_techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			_forwardIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Utility(
@@ -113,7 +112,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
+				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,
@@ -138,7 +137,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
+				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,
@@ -167,7 +166,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
-				ConsoleRig::FindCachedBoxDep2<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
+				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
 			Placements_RenderFiltered(
                 threadContext, parserContext, pipelineAccelerators,

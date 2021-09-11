@@ -147,9 +147,42 @@ namespace ConsoleRig
 
 		Console::SetInstance(nullptr);
 
-		ResourceBoxes_Shutdown();
 		DebugUtil_Shutdown();
     }
+
+    namespace Internal
+	{
+        struct CachedBoxManager
+        {
+            Threading::Mutex _lock;
+            std::vector<std::pair<uint64_t, std::unique_ptr<IBoxTable>>> _tables;
+
+            void Clear()
+            {
+                ScopedLock(_lock);
+                // Destroy the box tables in reverse order
+                while (!_tables.empty())
+                    _tables.erase(_tables.end()-1);
+            }
+
+            ~CachedBoxManager()
+            {
+                Clear();
+            }
+        };
+        static ConsoleRig::WeakAttachablePtr<CachedBoxManager> s_cachedBoxTables;
+
+		IBoxTable* GetOrRegisterBoxTable(uint64_t typeId, std::unique_ptr<IBoxTable> table)
+        {
+            auto man = s_cachedBoxTables.lock();
+            ScopedLock(man->_lock);
+            auto i = LowerBound(man->_tables, typeId);
+            if (i == man->_tables.end() || i->first != typeId)
+                i = man->_tables.insert(i, std::make_pair(typeId, std::move(table)));
+            return i->second.get();
+        }
+		IBoxTable::~IBoxTable() {}
+	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -163,6 +196,7 @@ namespace ConsoleRig
 		StartupConfig _cfg;
 		std::shared_ptr<PluginSet> _pluginSet;
 
+        AttachablePtr<Internal::CachedBoxManager> _cachedBoxManager;
         AttachablePtr<::Assets::IDependencyValidationSystem> _depValSys;
         std::shared_ptr<::Assets::IFileSystem> _defaultFilesystem;
         std::shared_ptr<::Assets::MountingTree> _mountingTree;
@@ -195,6 +229,9 @@ namespace ConsoleRig
         if (!_pimpl->_assetsSetsManager)
             _pimpl->_assetsSetsManager = std::make_shared<::Assets::AssetSetManager>();
 
+        if (!_pimpl->_cachedBoxManager)
+            _pimpl->_cachedBoxManager = std::make_shared<Internal::CachedBoxManager>();
+
             // add "nsight" marker to global services when "-nsight" is on
             // the command line. This is an easy way to record a global (&cross-dll)
             // state to use the nsight configuration when the given flag is set.
@@ -210,6 +247,7 @@ namespace ConsoleRig
         assert(s_instance == nullptr);  // (should already have been detached in the Withhold() call)
         _pimpl->_shortTaskPool->StallAndDrainQueue();
         _pimpl->_longTaskPool->StallAndDrainQueue();
+        _pimpl->_cachedBoxManager = nullptr;
         _pimpl->_assetsSetsManager->Clear();
         _pimpl->_pluginSet = nullptr;
         _pimpl->_shortTaskPool = nullptr;
@@ -245,6 +283,15 @@ namespace ConsoleRig
         _pimpl->_pluginSet->DeinitializePlugins();
 	}
 
+    void GlobalServices::PrepareForDestruction()
+    {
+        _pimpl->_shortTaskPool->StallAndDrainQueue();
+        _pimpl->_longTaskPool->StallAndDrainQueue();
+        _pimpl->_cachedBoxManager->Clear();
+        _pimpl->_assetsSetsManager->Clear();
+        UnloadDefaultPlugins();
+    }
+
     void GlobalServices::AttachCurrentModule()
     {
         assert(s_instance == nullptr);
@@ -274,20 +321,7 @@ namespace ConsoleRig
     IProgress::~IProgress() {}
 
 
-	namespace Internal
-	{
-		std::vector<std::unique_ptr<IBoxTable>> BoxTables;
-		IBoxTable::~IBoxTable() {}
-	}
-
-	void ResourceBoxes_Shutdown()
-	{
-		// Destroy the box tables in reverse order
-		while (!Internal::BoxTables.empty())
-			Internal::BoxTables.erase(Internal::BoxTables.end()-1);
-		Internal::BoxTables = std::vector<std::unique_ptr<Internal::IBoxTable>>();
-	}
-
+	
 
 	StartupConfig::StartupConfig()
     {

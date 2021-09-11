@@ -47,19 +47,12 @@ namespace Sample
         class DualContourTest
         {
         public:
-            class Desc
-            {
-            public:
-                unsigned _gridDims;
-                Desc(unsigned gridDims) : _gridDims(gridDims) {}
-            };
-
             DualContourMesh _mesh;
             std::unique_ptr<DualContourRenderer> _renderer;
 
             const ::Assets::DependencyValidation& GetDependencyValidation() const { return _dependencyValidation; }
 
-            DualContourTest(const Desc& desc);
+            DualContourTest(unsigned gridDims);
             ~DualContourTest();
 
         protected:
@@ -130,9 +123,9 @@ namespace Sample
             }
         };
 
-        DualContourTest::DualContourTest(const Desc& desc)
+        DualContourTest::DualContourTest(unsigned gridDims)
         {
-			_mesh = DualContourMesh_Build({desc._gridDims, desc._gridDims, desc._gridDims}, TestDensityFunction());
+			_mesh = DualContourMesh_Build({gridDims, gridDims, gridDims}, TestDensityFunction());
             _renderer = std::make_unique<DualContourRenderer>(std::ref(_mesh));
             
             _dependencyValidation = _renderer->GetDependencyValidation();
@@ -152,7 +145,7 @@ namespace Sample
         CPUProfileEvent pEvnt("ExecuteScene", g_cpuProfiler);
 
         bool renderAsCloud = Tweakable("RenderAsCloud", false);
-        auto& box = ConsoleRig::FindCachedBoxDep2<Test::DualContourTest>(Tweakable("GridDims", 256));
+        auto& box = ConsoleRig::FindCachedBox<Test::DualContourTest>(Tweakable("GridDims", 256));
 
         auto& metalContext = *RenderCore::Metal::DeviceContext::Get(context);
 

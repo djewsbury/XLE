@@ -483,9 +483,8 @@ namespace RenderOverlays
 	class DefaultFontBox
 	{
 	public:
-		class Desc {};
 		std::shared_ptr<Font> _font;
-		DefaultFontBox(const Desc&)
+		DefaultFontBox()
 		{
 			_font = GetX2Font("Petra", 16);
 		}
@@ -511,7 +510,7 @@ namespace RenderOverlays
 	{
 		_fontRenderingManager = fontRenderingManager;
 		if (_fontRenderingManager)
-			_defaultFont = ConsoleRig::FindCachedBox2<DefaultFontBox>()._font;
+			_defaultFont = ConsoleRig::FindCachedBox<DefaultFontBox>()._font;
 		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
 		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
 		_requiredBufferUploadsCommandList = 0;

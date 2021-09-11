@@ -721,10 +721,8 @@ namespace FixedFunctionModel
     class ModelRenderingBox
     {
     public:
-        class Desc {};
-
         Metal::ConstantBuffer _localTransformBuffer;
-        ModelRenderingBox(const Desc&)
+        ModelRenderingBox()
         {
             _localTransformBuffer = 
 				Metal::MakeConstantBuffer(
@@ -1049,7 +1047,7 @@ namespace FixedFunctionModel
             const MeshToModel&  transforms,
             PreparedAnimation*  preparedAnimation) const
     {
-        auto& box = ConsoleRig::FindCachedBox<ModelRenderingBox>(ModelRenderingBox::Desc());
+        auto& box = ConsoleRig::FindCachedBox<ModelRenderingBox>();
 		ConstantBufferView pkts[] = { &box._localTransformBuffer, {} };
 
         unsigned currTextureSet = ~unsigned(0x0), currCB = ~unsigned(0x0), currGeoCall = ~unsigned(0x0);

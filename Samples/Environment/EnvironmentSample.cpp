@@ -114,12 +114,10 @@ namespace Sample
     class UsefulFonts
     {
     public:
-        class Desc {};
-
 		std::shared_ptr<RenderOverlays::Font> _defaultFont0;
 		std::shared_ptr<RenderOverlays::Font> _defaultFont1;
 
-        UsefulFonts(const Desc&)
+        UsefulFonts()
         {
             _defaultFont0 = RenderOverlays::GetX2Font("Raleway", 18);
             _defaultFont1 = RenderOverlays::GetX2Font("Vera", 18);
@@ -382,7 +380,7 @@ namespace Sample
         if (!scene->GetPlayerCharacter()->IsPresent())
             StringMeldAppend(parserContext._stringHelpers->_errorString) << "No player CharacterSpawn detected. Press Tab to switch camera types.";
 
-        auto& usefulFonts = ConsoleRig::FindCachedBox<UsefulFonts>(UsefulFonts::Desc());
+        auto& usefulFonts = ConsoleRig::FindCachedBox<UsefulFonts>();
         DrawPendingResources(context, parserContext, usefulFonts._defaultFont0);
 
         if (Tweakable("QuickMetrics", false))

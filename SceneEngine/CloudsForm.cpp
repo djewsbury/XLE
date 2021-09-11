@@ -1186,12 +1186,11 @@ namespace SceneEngine
     class WidgetResources
     {
     public:
-        class Desc {};
 		std::shared_ptr<RenderOverlays::Font> _font;
-        WidgetResources(const Desc&);
+        WidgetResources();
     };
 
-    WidgetResources::WidgetResources(const Desc&)
+    WidgetResources::WidgetResources()
     {
         _font = RenderOverlays::GetX2Font("PoiretOne", 20u);
     }

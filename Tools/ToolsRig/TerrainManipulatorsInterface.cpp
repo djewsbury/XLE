@@ -159,13 +159,11 @@ namespace ToolsRig
     class WidgetResources
     {
     public:
-        class Desc {};
-
 		std::shared_ptr<RenderOverlays::Font> _headingFont;
-        WidgetResources(const Desc&);
+        WidgetResources();
     };
 
-    WidgetResources::WidgetResources(const Desc&)
+    WidgetResources::WidgetResources()
     {
         _headingFont = GetX2Font("Raleway", 20);
     }
@@ -188,7 +186,7 @@ namespace ToolsRig
         auto boolParameters = manipulator.GetBoolParameters();
         auto statusText = manipulator.GetStatusText();
 
-        auto& res = ConsoleRig::FindCachedBox<WidgetResources>(WidgetResources::Desc());
+        auto& res = ConsoleRig::FindCachedBox<WidgetResources>();
 
         unsigned parameterCount = unsigned(1 + floatParameters.size() + boolParameters.size()); // (+1 for the selector control)
         if (!statusText.empty()) { ++parameterCount; }

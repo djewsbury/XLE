@@ -595,10 +595,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class TableFontBox
     {
     public:
-        class Desc {};
         std::shared_ptr<RenderOverlays::Font> _headerFont;
 		std::shared_ptr<RenderOverlays::Font> _valuesFont;
-        TableFontBox(const Desc&) 
+        TableFontBox() 
             : _headerFont(RenderOverlays::GetX2Font("DosisExtraBold", 20))
             , _valuesFont(RenderOverlays::GetX2Font("Petra", 20)) {}
     };
@@ -635,7 +634,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 r._topLeft[0] += 8;
 
                 const ColorB colour = HeaderTextColor;
-                context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
+                context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
 
                 if (interactables)
                     interactables->Register(Interactables::Widget(r, InteractableId_Make(MakeStringSection(i->first))));
@@ -680,7 +679,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
                     const ColorB colour = TextColor;
                     // DrawRectangle(context, r, s->second._bkColour);
-                    context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox2<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
+                    context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
                 }
             }
         }

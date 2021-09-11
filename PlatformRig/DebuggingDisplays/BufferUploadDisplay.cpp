@@ -150,10 +150,9 @@ namespace PlatformRig { namespace Overlays
     class FontBox
     {
     public:
-        class Desc {};
         std::shared_ptr<RenderOverlays::Font> _font;
 		std::shared_ptr<RenderOverlays::Font> _smallFont;
-        FontBox(const Desc&) 
+        FontBox() 
             : _font(RenderOverlays::GetX2Font("OrbitronBlack", 18))
             , _smallFont(RenderOverlays::GetX2Font("Vera", 16)) {}
     };
@@ -229,7 +228,7 @@ namespace PlatformRig { namespace Overlays
 
             TextStyle style{DrawTextOptions{false, true}};
             context->DrawText(
-                AsPixelCoords(rect), ConsoleRig::FindCachedBox2<FontBox>()._font, style, text, 
+                AsPixelCoords(rect), ConsoleRig::FindCachedBox<FontBox>()._font, style, text, 
                 TextAlignment::Center, g.first);
 
             interactables.Register(Interactables::Widget(rect, hash));
@@ -252,7 +251,7 @@ namespace PlatformRig { namespace Overlays
 
 				TextStyle style{DrawTextOptions{false, true}};
                 context->DrawText(
-                    AsPixelCoords(rect), ConsoleRig::FindCachedBox2<FontBox>()._smallFont, style, col, 
+                    AsPixelCoords(rect), ConsoleRig::FindCachedBox<FontBox>()._smallFont, style, col, 
                     TextAlignment::Left, name);
 
                 if ((c+1) != dropDown->size())

@@ -89,14 +89,6 @@ namespace SceneEngine
     class ModelIntersectionResources
     {
     public:
-        class Desc 
-        {
-        public:
-            unsigned _elementSize;
-            unsigned _elementCount;
-            Desc(unsigned elementSize, unsigned elementCount) : _elementSize(elementSize), _elementCount(elementCount) {}
-        };
-
         RenderCore::IResourcePtr _streamOutputBuffer;
         RenderCore::IResourcePtr _cpuAccessBuffer;
 
@@ -106,17 +98,17 @@ namespace SceneEngine
 		Techniques::AttachmentPool _dummyAttachmentPool;
 		std::shared_ptr<Techniques::FrameBufferPool> _frameBufferPool;
 
-        ModelIntersectionResources(const Desc&);
+        ModelIntersectionResources(unsigned elementSize, unsigned elementCount);
     };
 
-    ModelIntersectionResources::ModelIntersectionResources(const Desc& desc)
+    ModelIntersectionResources::ModelIntersectionResources(unsigned elementSize, unsigned elementCount)
 	: _dummyAttachmentPool(RenderCore::Techniques::Services::GetDevicePtr())
     {
         auto& device = RenderCore::Techniques::Services::GetDevice();
 
         LinearBufferDesc lbDesc;
-        lbDesc._structureByteSize = desc._elementSize;
-        lbDesc._sizeInBytes = desc._elementSize * desc._elementCount;
+        lbDesc._structureByteSize = elementSize;
+        lbDesc._sizeInBytes = elementSize * elementCount;
 
         auto bufferDesc = CreateDesc(
             BindFlag::StreamOutput | BindFlag::TransferSrc, 0, GPUAccess::Read | GPUAccess::Write,
@@ -248,8 +240,7 @@ namespace SceneEngine
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		struct Desc {};
-		ModelIntersectionTechniqueBox(const Desc& desc)
+		ModelIntersectionTechniqueBox()
 		{
 			auto device = RenderCore::Techniques::Services::GetDevicePtr();
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
@@ -274,7 +265,7 @@ namespace SceneEngine
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 		_pimpl->_pendingUnbind = true;
         _pimpl->_res = &ConsoleRig::FindCachedBox<ModelIntersectionResources>(
-            ModelIntersectionResources::Desc(sizeof(ResultEntry), s_maxResultCount));
+            sizeof(ResultEntry), s_maxResultCount);
 
 		    // We're doing the intersection test in the geometry shader. This means
             // we have to setup a projection transform to avoid removing any potential
@@ -287,7 +278,7 @@ namespace SceneEngine
         // Viewport newViewport(0.f, 0.f, float(255.f), float(255.f), 0.f, 1.f);
         // metalContext.Bind(MakeIteratorRange(&newViewport, &newViewport+1), {});
 
-		auto& box = ConsoleRig::FindCachedBoxDep2<ModelIntersectionTechniqueBox>();
+		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>();
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,

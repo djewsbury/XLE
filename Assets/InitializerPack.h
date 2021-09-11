@@ -124,7 +124,7 @@ namespace Assets
 		
 
 		template <typename FirstParam, typename... Params>
-			uint64_t BuildParamHash(FirstParam firstInitializer, Params... initialisers)
+			uint64_t BuildParamHash(FirstParam firstInitializer, const Params&... initialisers)
 		{
 				//  Note Hash64 is a relatively expensive hash function
 				//      ... we might get away with using a simpler/quicker hash function

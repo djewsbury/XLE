@@ -36,11 +36,7 @@ namespace RenderOverlays
 	{
 	public:
 		std::shared_ptr<Font> _font;
-		::Assets::DependencyValidation _depVal;
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-		class Desc { uint64_t _dummy=0; };
-		SkeletonPreviewResourceBox(const Desc&)
+		SkeletonPreviewResourceBox()
 		{
 			_font = RenderOverlays::GetX2Font("Vera", 12);
 		}
@@ -54,7 +50,7 @@ namespace RenderOverlays
 		const Float4x4& localToWorld, 
 		bool drawBoneNames)
     {
-		auto& box = ConsoleRig::FindCachedBoxDep2<SkeletonPreviewResourceBox>();
+		auto& box = ConsoleRig::FindCachedBox<SkeletonPreviewResourceBox>();
 
 		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
         auto vertexCount = outputMatrixCount * 2 * 2 * 3;

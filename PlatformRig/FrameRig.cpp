@@ -92,16 +92,14 @@ namespace PlatformRig
     class FrameRigResources
     {
     public:
-        class Desc {};
-
         std::shared_ptr<RenderOverlays::Font> _frameRateFont;
         std::shared_ptr<RenderOverlays::Font> _smallFrameRateFont;
         std::shared_ptr<RenderOverlays::Font> _tabHeadingFont;
 
-        FrameRigResources(const Desc&);
+        FrameRigResources();
     };
 
-    FrameRigResources::FrameRigResources(const Desc&)
+    FrameRigResources::FrameRigResources()
     {
         auto frameRateFont = RenderOverlays::GetX2Font("Shojumaru", 32);
         auto smallFrameRateFont = RenderOverlays::GetX2Font("PoiretOne", 14);
@@ -471,7 +469,7 @@ namespace PlatformRig
     void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout, 
                                     Interactables&interactables, InterfaceState& interfaceState)
     {
-        auto& res = ConsoleRig::FindCachedBox<FrameRigResources>(FrameRigResources::Desc());
+        auto& res = ConsoleRig::FindCachedBox<FrameRigResources>();
 
         using namespace RenderOverlays;
         using namespace RenderOverlays::DebuggingDisplay;

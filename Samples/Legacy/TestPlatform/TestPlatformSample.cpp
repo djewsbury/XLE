@@ -203,12 +203,10 @@ namespace Sample
     class UsefulFonts
     {
     public:
-        class Desc {};
-
 		std::shared_ptr<RenderOverlays::Font> _defaultFont0;
 		std::shared_ptr<RenderOverlays::Font> _defaultFont1;
 
-        UsefulFonts(const Desc&)
+        UsefulFonts()
         {
             _defaultFont0 = RenderOverlays::GetX2Font("Raleway", 16);
             _defaultFont1 = RenderOverlays::GetX2Font("Vera", 16);
@@ -250,7 +248,7 @@ namespace Sample
             overlaySys->RenderToScene(context, parsingContext);
         }
 
-        auto& usefulFonts = ConsoleRig::FindCachedBox2<UsefulFonts>();
+        auto& usefulFonts = ConsoleRig::FindCachedBox<UsefulFonts>();
         DrawPendingResources(context, parsingContext, usefulFonts._defaultFont0);
 
         if (overlaySys) {

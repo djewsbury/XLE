@@ -86,12 +86,11 @@ namespace PlatformRig { namespace Overlays
     class DrawProfilerResources
     {
     public:
-        class Desc {};
 		std::shared_ptr<RenderOverlays::Font> _leftFont;
 		std::shared_ptr<RenderOverlays::Font> _middleFont;
 		std::shared_ptr<RenderOverlays::Font> _rightFont;
 
-        DrawProfilerResources(const Desc& desc)
+        DrawProfilerResources()
         {
             _leftFont = RenderOverlays::GetX2Font("DosisBook", 20);
             _middleFont = RenderOverlays::GetX2Font("Shojumaru", 32);
@@ -167,7 +166,7 @@ namespace PlatformRig { namespace Overlays
         Float3 dividingLines[256];
         Float3* divingLinesIterator = dividingLines;
 
-        auto& res = ConsoleRig::FindCachedBox<DrawProfilerResources>(DrawProfilerResources::Desc());
+        auto& res = ConsoleRig::FindCachedBox<DrawProfilerResources>();
         TextStyle leftStyle; leftStyle._options.shadow = 0;
         TextStyle middleStyle; middleStyle._options.outline = 1; middleStyle._options.shadow = 0;
         TextStyle rightStyle;

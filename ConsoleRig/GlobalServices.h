@@ -44,6 +44,8 @@ namespace ConsoleRig
 		void LoadDefaultPlugins();
 		void UnloadDefaultPlugins();
 
+        void PrepareForDestruction();
+
         GlobalServices(const StartupConfig& cfg = StartupConfig());
         ~GlobalServices();
 
