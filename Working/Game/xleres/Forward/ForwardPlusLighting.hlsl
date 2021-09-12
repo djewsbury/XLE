@@ -46,7 +46,7 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 		diffuseSHRef += ResolveSH_Reference(DiffuseSHCoefficients[c].rgb, c, sample.worldSpaceNormal);
 	float3 result = diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb;
 
-	#if !defined(PROBE_PREPARE)
+	#if 0 // !defined(PROBE_PREPARE)
 		float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
 		fresnel *= float(EnableSSR); 
 		result += fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;

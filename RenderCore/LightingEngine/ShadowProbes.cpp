@@ -85,7 +85,7 @@ namespace RenderCore { namespace LightingEngine
 			const auto& p = probes[c/6];
 			result.push_back(
 				Techniques::BuildCubemapProjectionDesc(
-					c%6, p._position, p._radius / 1024.f, p._radius));
+					c%6, p._position, p._radius / 128.f, p._radius));
 		}
 		return result;
 	}

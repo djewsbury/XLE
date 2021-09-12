@@ -81,6 +81,7 @@ namespace PlatformRig
 
         auto AccumulatedAllocations::GetCurrentHeapMetrics() -> CurrentHeapMetrics
         {
+            if (!_instance) return {};
             if (!_instance->_pimpl->_currentHeapMetricsCountDown) {
                 _CrtMemState memState;
                 _CrtMemCheckpoint(&memState);

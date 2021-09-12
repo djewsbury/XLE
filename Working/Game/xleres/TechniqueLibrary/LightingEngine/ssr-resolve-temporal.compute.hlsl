@@ -52,7 +52,7 @@ cbuffer ExtendedTransforms          : register(b9, space1)
     row_major float4x4 PrevWorldToClip; // g_prev_view_proj
 };
 
-#define g_temporal_stability_factor 0.95f
+#define g_temporal_stability_factor 0.975f
 #define g_temporal_variance_threshold 0.002f
 
 static const float g_roughness_sigma_min = 0.001f;

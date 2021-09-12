@@ -40,7 +40,7 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	result.a = sample.blendingAlpha;
 
     #if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
-        result.rgb *= geo.color.rgb;
+        // result.rgb *= geo.color.rgb;
     #endif
 
 	#if MAT_SKIP_LIGHTING_SCALE==0

@@ -80,6 +80,7 @@ namespace OSServices
 		std::any GeneratePayload(unsigned numberOfBytesReturned) override
 		{
 			assert(!_cancelled);
+			assert(numberOfBytesReturned != 0);
 			FILE_NOTIFY_INFORMATION* notifyInformation = 
 				(FILE_NOTIFY_INFORMATION*)_resultBuffer;
 			auto* end = PtrAdd(notifyInformation, numberOfBytesReturned);
