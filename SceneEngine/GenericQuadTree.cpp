@@ -13,6 +13,7 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/ArithmeticUtils.h"
+#include "../Utility/StreamUtils.h"
 #include "../Core/Prefix.h"
 #include <stack>
 #include <cfloat>
@@ -95,13 +96,15 @@ namespace SceneEngine
             return result;
         }
 
-        static std::tuple<unsigned, unsigned, unsigned> DividingLineMetrics(float dividingLine, const std::vector<WorkingObject>& workingObjects, unsigned axis)
+        struct DivMetrics { unsigned _leftCount = 0; unsigned _straddleCount = 0; unsigned _rightCount = 0; };
+
+        static DivMetrics DividingLineMetrics(float dividingLine, const std::vector<WorkingObject>& workingObjects, unsigned axis)
         {
-            auto result = std::make_tuple(0,0,0);
+            DivMetrics result;
             for (auto i=workingObjects.cbegin(); i!=workingObjects.cend(); ++i) {
-                std::get<0>(result) += (i->_boundary.second[axis] <= dividingLine);
-                std::get<1>(result) += (i->_boundary.first[axis] < dividingLine) && (i->_boundary.second[axis] > dividingLine);
-                std::get<2>(result) += (i->_boundary.first[axis] >= dividingLine);
+                result._leftCount += (i->_boundary.second[axis] <= dividingLine);
+                result._straddleCount += (i->_boundary.first[axis] < dividingLine) && (i->_boundary.second[axis] > dividingLine);
+                result._rightCount += (i->_boundary.first[axis] >= dividingLine);
             }
             return result;
         }
@@ -117,6 +120,8 @@ namespace SceneEngine
 			SerializationOperator(serializer, _payloads);
 			SerializationOperator(serializer, _maxCullResults);
 		}
+
+        void SerializeNode(std::ostream&str, unsigned nodeIdx) const;
     };
 #pragma pack(pop)
 
@@ -129,14 +134,7 @@ namespace SceneEngine
         newNode._boundary = CalculateBoundary(workingObjects);
         newNode._children[0] = newNode._children[1] = newNode._children[2] = newNode._children[3] = ~unsigned(0x0);
 
-		unsigned axis0, axis1;
-		if (orientation == Orientation::ZUp) {
-			axis0 = 0;
-			axis1 = 1;
-		} else {
-			axis0 = 0;
-			axis1 = 2;
-		}
+		const unsigned axis0 = 0, axis1 = 1, axis2 = 2;
 
         Node* parent = nullptr;
         if (parentNodeIndex < _nodes.size())
@@ -171,45 +169,32 @@ namespace SceneEngine
             //  but minimize the number of straddling objects. We can just do a brute
             //  force test of various potential dividing lines near the median points
 
-        float bestDividingLineX = 0.0f; // LinearInterpolate(newNode._boundary.first[axis0], newNode._boundary.second[axis0], 0.5f);
-        float bestDividingLineY = 0.0f; // LinearInterpolate(newNode._boundary.first[axis1], newNode._boundary.second[axis1], 0.5f);
+        float bestDividingLine[3];
+        unsigned straddleCount[3];
 
         {
             std::vector<WorkingObject> sortedObjects = workingObjects;
+            auto objCount =  unsigned(sortedObjects.size());
             std::sort(
                 sortedObjects.begin(), sortedObjects.end(),
                 [axis0](const WorkingObject& lhs, const WorkingObject&rhs)
                 { return (lhs._boundary.first[axis0] + lhs._boundary.second[axis0]) < (rhs._boundary.first[axis0] + rhs._boundary.second[axis0]); });
 
-            bestDividingLineX = .5f * (sortedObjects[sortedObjects.size()/2]._boundary.first[axis0] + sortedObjects[sortedObjects.size()/2]._boundary.second[axis0]);
-
-            std::sort(
-                sortedObjects.begin(), sortedObjects.end(),
-                [axis1](const WorkingObject& lhs, const WorkingObject&rhs)
-                { return (lhs._boundary.first[axis1] + lhs._boundary.second[axis1]) < (rhs._boundary.first[axis1] + rhs._boundary.second[axis1]); });
-
-            bestDividingLineY = .5f * (sortedObjects[sortedObjects.size()/2]._boundary.first[axis1] + sortedObjects[sortedObjects.size()/2]._boundary.second[axis1]);
+            bestDividingLine[axis0] = .5f * (sortedObjects[objCount/2]._boundary.first[axis0] + sortedObjects[objCount/2]._boundary.second[axis0]);
 
                 //  Attempt to improve the subdivision by looking for dividing lines
                 //  that minimize the number of objects straddling this line. This will
                 //  help try to avoid overlap between child nodes.
-            const bool useAdaptiveDivision = true;
-            if (constant_expression<useAdaptiveDivision>::result()) {
-
-                auto objCount =  unsigned(sortedObjects.size());
+            {
                 auto testCount = std::max(size_t(1), objCount/size_t(4));
 
                     //  Attempt to optimise X dividing line
                     //  Our optimised dividing line should always be on one
                     //  of the edges of the bounding box of one of the objects.
-                std::sort(
-                    sortedObjects.begin(), sortedObjects.end(),
-                    [axis0](const WorkingObject& lhs, const WorkingObject&rhs)
-                    { return (lhs._boundary.first[axis0] + lhs._boundary.second[axis0]) < (rhs._boundary.first[axis0] + rhs._boundary.second[axis0]); });
 
-                unsigned minStradingCount = std::get<1>(DividingLineMetrics(bestDividingLineX, sortedObjects, axis0));
-                float minDivLineX = LinearInterpolate(newNode._boundary.first[axis0], newNode._boundary.second[axis0], 0.25f);
-                float maxDivLineX = LinearInterpolate(newNode._boundary.first[axis0], newNode._boundary.second[axis0], 0.75f);
+                unsigned minStradingCount = DividingLineMetrics(bestDividingLine[axis0], sortedObjects, axis0)._straddleCount;
+                float minDivLineX = LinearInterpolate(newNode._boundary.first[axis0], newNode._boundary.second[axis0], 0.f); // 0.25f);
+                float maxDivLineX = LinearInterpolate(newNode._boundary.first[axis0], newNode._boundary.second[axis0], 1.f); // 0.75f);
 
                     // todo -- rather than starting at the object that has an equal number
                     //  of objects on each side, we could consider starting on the object that
@@ -223,34 +208,41 @@ namespace SceneEngine
                         //  this object's bounding box.
                     float testLine = sortedObjects[o]._boundary.first[axis0];
                     if (testLine >= minDivLineX && testLine <= maxDivLineX) {
-                        unsigned leftCount, straddleCount, rightCount;
-                        std::tie(leftCount, straddleCount, rightCount) = DividingLineMetrics(testLine, sortedObjects, axis0);
-                        if (straddleCount < minStradingCount && leftCount && rightCount) {
-                            bestDividingLineX = testLine;
-                            minStradingCount = straddleCount;
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis0);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis0] = testLine;
+                            minStradingCount = metrics._straddleCount;
                         }
                     }
 
                     testLine = sortedObjects[o]._boundary.second[axis0];
                     if (testLine >= minDivLineX && testLine <= maxDivLineX) {
-                        unsigned leftCount, straddleCount, rightCount;
-                        std::tie(leftCount, straddleCount, rightCount) = DividingLineMetrics(testLine, sortedObjects, axis0);
-                        if (straddleCount < minStradingCount && leftCount && rightCount) {
-                            bestDividingLineX = testLine;
-                            minStradingCount = straddleCount;
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis0);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis0] = testLine;
+                            minStradingCount = metrics._straddleCount;
                         }
                     }
                 }
 
-                    //  Attempt to optimise Y dividing line
-                std::sort(
-                    sortedObjects.begin(), sortedObjects.end(),
-                    [axis1](const WorkingObject& lhs, const WorkingObject&rhs)
-                    { return (lhs._boundary.first[axis1] + lhs._boundary.second[axis1]) < (rhs._boundary.first[axis1] + rhs._boundary.second[axis1]); });
+                straddleCount[axis0] = minStradingCount;
+            }
 
-                minStradingCount = std::get<1>(DividingLineMetrics(bestDividingLineY, sortedObjects, axis1));
-                float minDivLineY = LinearInterpolate(newNode._boundary.first[axis1], newNode._boundary.second[axis1], 0.25f);
-                float maxDivLineY = LinearInterpolate(newNode._boundary.first[axis1], newNode._boundary.second[axis1], 0.75f);
+            std::sort(
+                sortedObjects.begin(), sortedObjects.end(),
+                [axis1](const WorkingObject& lhs, const WorkingObject&rhs)
+                { return (lhs._boundary.first[axis1] + lhs._boundary.second[axis1]) < (rhs._boundary.first[axis1] + rhs._boundary.second[axis1]); });
+
+            bestDividingLine[axis1] = .5f * (sortedObjects[objCount/2]._boundary.first[axis1] + sortedObjects[objCount/2]._boundary.second[axis1]);
+
+            {
+                auto testCount = std::max(size_t(1), objCount/size_t(4));
+
+                    //  Attempt to optimise Y dividing line
+
+                unsigned minStradingCount = DividingLineMetrics(bestDividingLine[axis1], sortedObjects, axis1)._straddleCount;
+                float minDivLineY = LinearInterpolate(newNode._boundary.first[axis1], newNode._boundary.second[axis1], 0.f); // 0.25f);
+                float maxDivLineY = LinearInterpolate(newNode._boundary.first[axis1], newNode._boundary.second[axis1], 1.f); // 0.75f);
 
                 for (unsigned c=0; c<testCount && minStradingCount; ++c) {
                     unsigned o;
@@ -259,26 +251,82 @@ namespace SceneEngine
 
                     float testLine = sortedObjects[o]._boundary.first[axis1];
                     if (testLine >= minDivLineY && testLine <= maxDivLineY) {
-                        unsigned leftCount, straddleCount, rightCount;
-                        std::tie(leftCount, straddleCount, rightCount) = DividingLineMetrics(testLine, sortedObjects, axis1);
-                        if (straddleCount < minStradingCount && leftCount && rightCount) {
-                            bestDividingLineY = testLine;
-                            minStradingCount = straddleCount;
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis1);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis1] = testLine;
+                            minStradingCount = metrics._straddleCount;
                         }
                     }
 
                     testLine = sortedObjects[o]._boundary.second[axis1];
                     if (testLine >= minDivLineY && testLine <= maxDivLineY) {
-                        unsigned leftCount, straddleCount, rightCount;
-                        std::tie(leftCount, straddleCount, rightCount) = DividingLineMetrics(testLine, sortedObjects, axis1);
-                        if (straddleCount < minStradingCount && leftCount && rightCount) {
-                            bestDividingLineY = testLine;
-                            minStradingCount = straddleCount;
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis1);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis1] = testLine;
+                            minStradingCount = metrics._straddleCount;
                         }
                     }
                 }
 
+                straddleCount[axis1] = minStradingCount;
             }
+
+            std::sort(
+                sortedObjects.begin(), sortedObjects.end(),
+                [axis2](const WorkingObject& lhs, const WorkingObject&rhs)
+                { return (lhs._boundary.first[axis2] + lhs._boundary.second[axis2]) < (rhs._boundary.first[axis2] + rhs._boundary.second[axis2]); });
+
+            bestDividingLine[axis2] = .5f * (sortedObjects[objCount/2]._boundary.first[axis2] + sortedObjects[objCount/2]._boundary.second[axis2]);
+
+            {
+                auto testCount = std::max(size_t(1), objCount/size_t(4));
+
+                    //  Attempt to optimise Y dividing line
+
+                unsigned minStradingCount = DividingLineMetrics(bestDividingLine[axis2], sortedObjects, axis2)._straddleCount;
+                float minDivLineZ = LinearInterpolate(newNode._boundary.first[axis2], newNode._boundary.second[axis2], 0.f); // 0.25f);
+                float maxDivLineZ = LinearInterpolate(newNode._boundary.first[axis2], newNode._boundary.second[axis2], 1.f); // 0.75f);
+
+                for (unsigned c=0; c<testCount && minStradingCount; ++c) {
+                    unsigned o;
+                    if (c & 1)  { o = objCount/2 - ((c+1)>>1); }
+                    else        { o = objCount/2 + ((c+1)>>1); }
+
+                    float testLine = sortedObjects[o]._boundary.first[axis2];
+                    if (testLine >= minDivLineZ && testLine <= maxDivLineZ) {
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis2);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis2] = testLine;
+                            minStradingCount = metrics._straddleCount;
+                        }
+                    }
+
+                    testLine = sortedObjects[o]._boundary.second[axis2];
+                    if (testLine >= minDivLineZ && testLine <= maxDivLineZ) {
+                        auto metrics = DividingLineMetrics(testLine, sortedObjects, axis2);
+                        if (metrics._straddleCount < minStradingCount && metrics._leftCount && metrics._rightCount) {
+                            bestDividingLine[axis2] = testLine;
+                            minStradingCount = metrics._straddleCount;
+                        }
+                    }
+                }
+
+                straddleCount[axis2] = minStradingCount;
+            }
+        }
+
+        
+        unsigned splitAxis0 = axis0, splitAxis1 = axis1;
+        if (straddleCount[axis0] > straddleCount[axis1]) {
+            if (straddleCount[axis0] > straddleCount[axis2]) {
+                splitAxis0 = axis2;
+            } else {
+                // Z rejected
+            }
+        } else if (straddleCount[axis1] > straddleCount[axis2]) {
+            splitAxis1 = axis2;
+        } else {
+            // Z rejected
         }
 
             //  ok, now we have our dividing line. We an divide our objects up into 5 parts:
@@ -293,22 +341,22 @@ namespace SceneEngine
                 ///         of our children to almost the size of the parent node)
 
             unsigned index = 0;
-            if (i->_boundary.first[axis0] > bestDividingLineX)          { index |= 0x1; } 
-            else if (i->_boundary.second[axis0] < bestDividingLineX)    { index |= 0x0; } 
+            if (i->_boundary.first[splitAxis0] > bestDividingLine[splitAxis0])          { index |= 0x1; } 
+            else if (i->_boundary.second[splitAxis0] < bestDividingLine[splitAxis0])    { index |= 0x0; } 
             else { 
                     //  try to put this object on the left or the right (based on where
                     //  the larger volume of this object is)
-                if ((bestDividingLineX - i->_boundary.first[axis0]) > (i->_boundary.second[axis0] - bestDividingLineX)) {
+                if ((bestDividingLine[splitAxis0] - i->_boundary.first[splitAxis0]) > (i->_boundary.second[splitAxis0] - bestDividingLine[splitAxis0])) {
                     index |= 0x0;
                 } else {
                     index |= 0x1;
                 }
             }
 
-            if (i->_boundary.first[axis1] > bestDividingLineY)          { index |= 0x2; } 
-            else if (i->_boundary.second[axis1] < bestDividingLineY)    { index |= 0x0; } 
+            if (i->_boundary.first[splitAxis1] > bestDividingLine[splitAxis1])          { index |= 0x2; } 
+            else if (i->_boundary.second[splitAxis1] < bestDividingLine[splitAxis1])    { index |= 0x0; } 
             else { 
-                if ((bestDividingLineY - i->_boundary.first[axis1]) > (i->_boundary.second[axis1] - bestDividingLineY)) {
+                if ((bestDividingLine[splitAxis1] - i->_boundary.first[splitAxis1]) > (i->_boundary.second[splitAxis1] - bestDividingLine[splitAxis1])) {
                     index |= 0x0;
                 } else {
                     index |= 0x2;
@@ -445,7 +493,7 @@ namespace SceneEngine
 
                 if (node._payloadID < pimpl._payloads.size()) {
                     auto& payload = pimpl._payloads[node._payloadID];
-					if (objCellSpaceBoundingBoxes) {
+					if (objCellSpaceBoundingBoxes && payload._objects.size() > 1) {     // if only one object in the payload, assume that the node bounding test is a tight test for that object
 						for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
 
 								//  Test the "cell" space bounding box of the object itself
@@ -672,6 +720,34 @@ namespace SceneEngine
         ::Assets::NascentBlockSerializer serializer;
 		SerializationOperator(serializer, *pimpl);
 		return std::make_pair(std::move(serializer.AsMemoryBlock()), serializer.Size());
+    }
+
+    void GenericQuadTree::Pimpl::SerializeNode(std::ostream&str, unsigned nodeIdx) const
+    {
+        const auto& node = _nodes[nodeIdx];
+        if (node._payloadID != ~0u) {
+            str << StreamIndent(node._treeDepth*4) << "Node " << nodeIdx << ". Payload: [";
+            for (auto p=_payloads[node._payloadID]._objects.begin(); p!=_payloads[node._payloadID]._objects.end(); ++p) {
+                if (p != _payloads[node._payloadID]._objects.begin())
+                    str << ", ";
+                str << *p;
+            }
+            str << "]" << std::endl;
+        } else {
+            str << StreamIndent(node._treeDepth*4) << "Node " << nodeIdx << ". No payload" << std::endl;
+        }
+        for (unsigned c=0; c<4; ++c)
+            if (node._children[c] != ~0u)
+                SerializeNode(str, node._children[c]);
+    }
+
+    std::ostream& GenericQuadTree::SerializeMethod(std::ostream& str) const
+    {
+        const auto& pimpl = GetPimpl();
+        if (pimpl._nodes.empty()) return str;
+
+        pimpl.SerializeNode(str, 0);
+        return str;
     }
 
 	static const uint64 ChunkType_QuadTree = ConstHash64<'Quad', 'Tree'>::Value;

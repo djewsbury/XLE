@@ -9,6 +9,7 @@
 #include "../Core/Types.h"
 #include <utility>
 #include <memory>
+#include <iosfwd>
 
 namespace Assets { class ChunkFileContainer; }
 namespace XLEMath { enum class ClipSpaceType; }
@@ -72,6 +73,8 @@ namespace SceneEngine
             const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
             size_t objCount, unsigned leafThreshold,
 			Orientation orientation = Orientation::ZUp);
+
+        std::ostream& SerializeMethod(std::ostream&) const;
 
 		GenericQuadTree(const ::Assets::ChunkFileContainer& chunkFile);
 		GenericQuadTree(DataBlock&& dataBlock);

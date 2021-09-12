@@ -453,6 +453,8 @@ namespace SceneEngine
         return i2->second;
     }
 
+    static const unsigned s_quadTreeLeafThreshold = 12;
+
     const Placements* PlacementsRenderer::Pimpl::CullCell(
         std::vector<unsigned>& visibleObjects,
         const SceneView& view,
@@ -481,12 +483,11 @@ namespace SceneEngine
         if (!placements) return nullptr;
 
         if (!renderInfo._quadTree) {
-            const unsigned leafThreshold = 12;
             auto dataBlock = GenericQuadTree::BuildQuadTree(
                 &placements->GetObjectReferences()->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference), 
                 placements->GetObjectReferenceCount(),
-                leafThreshold);
+                s_quadTreeLeafThreshold);
             ::Assets::Block_Initialize(dataBlock.first.get());
             // ::Assets::Block_GetFirstObject(...) is handled inside of GenericQuadTree
             renderInfo._quadTree = std::make_unique<GenericQuadTree>(std::move(dataBlock.first));
@@ -515,12 +516,11 @@ namespace SceneEngine
         if (!placements) return nullptr;
 
         if (!renderInfo._quadTree) {
-            const unsigned leafThreshold = 12;
             auto dataBlock = GenericQuadTree::BuildQuadTree(
                 &placements->GetObjectReferences()->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference), 
                 placements->GetObjectReferenceCount(),
-                leafThreshold);
+                s_quadTreeLeafThreshold);
             ::Assets::Block_Initialize(dataBlock.first.get());
             renderInfo._quadTree = std::make_unique<GenericQuadTree>(std::move(dataBlock.first));
         }
