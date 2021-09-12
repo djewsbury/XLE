@@ -309,19 +309,51 @@ namespace SceneEngine
 		return ::Assets::AssetState::Ready;
     }
 
+    struct CullMetrics
+    {
+        GenericQuadTree::Metrics _qtMetrics;
+        unsigned _qtTotalNodeCount = 0;
+        unsigned _qtObjectCount = 0;
+
+        CullMetrics& operator+=(const CullMetrics& other)
+        {
+            _qtMetrics += other._qtMetrics;
+            _qtTotalNodeCount += other._qtTotalNodeCount;
+            _qtObjectCount += other._qtObjectCount;
+            return *this;
+        }
+    };
+
+    struct BuildDrawablesMetrics
+    {
+        unsigned _instancesPrepared = 0;
+        unsigned _uniqueModelsPrepared = 0;
+        unsigned _impostersQueued = 0;
+
+        BuildDrawablesMetrics& operator+=(const BuildDrawablesMetrics& other)
+        {
+            _instancesPrepared += other._instancesPrepared;
+            _uniqueModelsPrepared += other._uniqueModelsPrepared;
+            _impostersQueued += other._impostersQueued;
+            return *this;
+        }
+    };
+
     class PlacementsRenderer::Pimpl
     {
     public:
         const Placements* CullCell(
             std::vector<unsigned>& visiblePlacements,
             const SceneView& view,
-            const PlacementCell& cell);
+            const PlacementCell& cell,
+            CullMetrics* metrics = nullptr);
 
         void CullCell(
             std::vector<unsigned>& visiblePlacements,
             const Float4x4& cellToCullSpace,
             const Placements& placements,
-            const GenericQuadTree* quadTree);
+            const GenericQuadTree* quadTree,
+            CullMetrics* metrics = nullptr);
 
         const Placements* CullCell(
             std::vector<std::pair<unsigned, uint32_t>>& visibleObjects,
@@ -341,15 +373,17 @@ namespace SceneEngine
             const Placements& placements,
             IteratorRange<const unsigned*> objects,
             const Float3x4& cellToWorld,
-            const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr);
+            const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr,
+            BuildDrawablesMetrics* metrics = nullptr);
 
         void BuildDrawables(
             RenderCore::Techniques::DrawablesPacket& destinationPkt,
             const Placements& placements,
             IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
-            const Float3x4& cellToWorld);
+            const Float3x4& cellToWorld,
+            BuildDrawablesMetrics* metrics = nullptr);
 
-        auto GetCachedQuadTree(uint64_t cellFilenameHash) const -> const GenericQuadTree*;
+        auto GetCachedQuadTree(uint64_t cellFilenameHash) const -> std::shared_ptr<GenericQuadTree>;
         PlacementsModelCache& GetModelCache() { return *_cache; }
 
         Pimpl(
@@ -360,7 +394,7 @@ namespace SceneEngine
         struct CellRenderInfo
         {
             std::shared_ptr<::Assets::Future<Placements>> _placements;
-            std::unique_ptr<GenericQuadTree> _quadTree;
+            std::shared_ptr<GenericQuadTree> _quadTree;
         };
         CellRenderInfo& GetCellRenderInfo(const PlacementCell& cell);
 
@@ -400,12 +434,11 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    auto PlacementsRenderer::Pimpl::GetCachedQuadTree(uint64_t cellFilenameHash) const -> const GenericQuadTree*
+    auto PlacementsRenderer::Pimpl::GetCachedQuadTree(uint64_t cellFilenameHash) const -> std::shared_ptr<GenericQuadTree>
     {
         auto i2 = LowerBound(_cells, cellFilenameHash);
-        if (i2!=_cells.end() && i2->first == cellFilenameHash) {
-            return i2->second._quadTree.get();
-        }
+        if (i2!=_cells.end() && i2->first == cellFilenameHash)
+            return i2->second._quadTree;
         return nullptr;
     }
 
@@ -423,7 +456,8 @@ namespace SceneEngine
     const Placements* PlacementsRenderer::Pimpl::CullCell(
         std::vector<unsigned>& visibleObjects,
         const SceneView& view,
-        const PlacementCell& cell)
+        const PlacementCell& cell,
+        CullMetrics* metrics)
     {
         // Look for a "RenderInfo" for this cell.. and create it if it doesn't exist
         // Note that there's a bit of extra overhead here:
@@ -462,7 +496,8 @@ namespace SceneEngine
         CullCell(
             visibleObjects, cellToCullSpace, 
             *placements, 
-            renderInfo._quadTree.get());
+            renderInfo._quadTree.get(),
+            metrics);
 
         return placements;
     }
@@ -526,22 +561,8 @@ namespace SceneEngine
                     const Float3& cameraPosition,
                     unsigned viewMask = 1);
 
-            class Metrics
-            {
-            public:
-                unsigned _instancesPrepared;
-                unsigned _uniqueModelsPrepared;
-                unsigned _impostersQueued;
 
-                Metrics()
-                {
-                    _instancesPrepared = 0;
-                    _uniqueModelsPrepared = 0;
-                    _impostersQueued = 0;
-                }
-            };
-
-            Metrics _metrics;
+            BuildDrawablesMetrics _metrics;
 
             RendererHelper(DynamicImposters* imposters)
             {
@@ -551,7 +572,7 @@ namespace SceneEngine
                 auto maxDistance = 1000.f;
                 if (imposters && imposters->IsEnabled())
                     maxDistance = imposters->GetThresholdDistance();
-                _maxDistanceSq = maxDistance * maxDistance;
+                _imposterDistSq = maxDistance * maxDistance;
 
                 _imposters = imposters;
                 _currentModelRendered = false;
@@ -560,7 +581,7 @@ namespace SceneEngine
             uint64_t _currentModel, _currentMaterial;
             unsigned _currentSupplements;
             ::Assets::PtrToFuturePtr<RenderCore::Techniques::SimpleModelRenderer> _current;
-            float _maxDistanceSq;
+            float _imposterDistSq;
             bool _currentModelRendered;
             DynamicImposters* _imposters;
         };
@@ -581,9 +602,6 @@ namespace SceneEngine
 
             float distanceSq = MagnitudeSquared(
                 .5f * (obj._cellSpaceBoundary.first + obj._cellSpaceBoundary.second) - cameraPosition);
-
-            if (constant_expression<!UseImposters>::result() && distanceSq > _maxDistanceSq)
-                return; 
 
                 //  Objects should be sorted by model & material. This is important for
                 //  reducing the work load in "_cache". Typically cells will only refer
@@ -627,7 +645,7 @@ namespace SceneEngine
 
             auto localToWorld = Combine(obj._localToCell, cellToWorld);
 
-            if (constant_expression<UseImposters>::result() && distanceSq > _maxDistanceSq) {
+            if (constant_expression<UseImposters>::result() && distanceSq > _imposterDistSq) {
                 assert(_imposters);
                 // _imposters->Queue(*current, *current->GetModelScaffold(), localToWorld, cameraPosition);
                 ++_metrics._impostersQueued;
@@ -645,16 +663,17 @@ namespace SceneEngine
         }
     }
 
-    /*static Utility::Internal::StringMeldInPlace<char> QuickMetrics(RenderCore::Techniques::ParsingContext& parserContext)
+    static Utility::Internal::StringMeldInPlace<char> QuickMetrics(const ExecuteSceneContext& executeContext)
     {
-        return StringMeldAppend(parserContext._stringHelpers->_quickMetrics);
-    }*/
+        return StringMeldAppend(executeContext._quickMetrics);
+    }
 
     void PlacementsRenderer::Pimpl::CullCell(
         std::vector<unsigned>& visiblePlacements,
         const Float4x4& cellToCullSpace,
         const Placements& placements,
-        const GenericQuadTree* quadTree)
+        const GenericQuadTree* quadTree,
+        CullMetrics* metrics)
     {
         auto placementCount = placements.GetObjectReferenceCount();
         if (!placementCount)
@@ -666,17 +685,19 @@ namespace SceneEngine
             auto cullResults = quadTree->GetMaxResults();
             assert(cullResults);
             visiblePlacements.resize(cullResults);
-            GenericQuadTree::Metrics metrics;
 			assert(placementCount < (1<<28));
             quadTree->CalculateVisibleObjects(
                 cellToCullSpace, RenderCore::Techniques::GetDefaultClipSpaceType(),
                 &objRef->_cellSpaceBoundary,
                 sizeof(Placements::ObjectReference),
                 AsPointer(visiblePlacements.begin()), cullResults, cullResults,
-                &metrics);
+                metrics ? &metrics->_qtMetrics : nullptr);
             visiblePlacements.resize(cullResults);
 
-            // QuickMetrics(parserContext) << "Cull placements cell... AABB test: (" << metrics._nodeAabbTestCount << ") nodes + (" << metrics._payloadAabbTestCount << ") payloads\n";
+            if (metrics) {
+                metrics->_qtObjectCount += quadTree->GetMaxResults();
+                metrics->_qtTotalNodeCount += quadTree->GetNodeCount();
+            }
 
                 // we have to sort to return to our expected order
             std::sort(visiblePlacements.begin(), visiblePlacements.end());
@@ -688,6 +709,8 @@ namespace SceneEngine
                     continue;
                 visiblePlacements.push_back(c);
             }
+            if (metrics)
+                metrics->_qtMetrics._payloadAabbTestCount += placementCount;
         }
     }
 
@@ -734,7 +757,8 @@ namespace SceneEngine
         const Placements& placements,
         IteratorRange<const unsigned*> objects,
         const Float3x4& cellToWorld,
-        const uint64_t* filterStart, const uint64_t* filterEnd)
+        const uint64_t* filterStart, const uint64_t* filterEnd,
+        BuildDrawablesMetrics* metrics)
     {
             //
             //  Here we render all of the placements defined by the placement
@@ -819,14 +843,15 @@ namespace SceneEngine
             }
         } /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        // QuickMetrics(parserContext) << "Placements cell: (" << helper._metrics._instancesPrepared << ") instances from (" << helper._metrics._uniqueModelsPrepared << ") models. Imposters: (" << helper._metrics._impostersQueued << ")\n";
+        if (metrics) *metrics += helper._metrics;
     }
 
     void PlacementsRenderer::Pimpl::BuildDrawables(
         RenderCore::Techniques::DrawablesPacket& destinationPkt,
         const Placements& placements,
         IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
-        const Float3x4& cellToWorld)
+        const Float3x4& cellToWorld,
+        BuildDrawablesMetrics* metrics)
     {
         Internal::RendererHelper helper(_imposters.get());
         
@@ -843,6 +868,8 @@ namespace SceneEngine
                 MakeIteratorRange(pkts), *_cache,
                 filenamesBuffer, supplementsBuffer, objRef[o.first], cellToWorld, cameraPositionCell,
                 o.second);
+
+        if (metrics) *metrics += helper._metrics;
     }
 
     PlacementsRenderer::Pimpl::Pimpl(
@@ -892,6 +919,9 @@ namespace SceneEngine
         static std::vector<unsigned> visibleObjects;
         const auto& view = executeContext._view;
 
+        CullMetrics overallCullMetrics;
+        BuildDrawablesMetrics overallBDMetrics;
+
             // Render every registered cell
             // We catch exceptions on a cell based level (so pending cells won't cause other cells to flicker)
             // non-asset exceptions will throw back to the caller and bypass EndRender()
@@ -905,17 +935,31 @@ namespace SceneEngine
                 //  placements, we need a way to render them before they are flushed to disk.
             visibleObjects.clear();
 			auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
+            CullMetrics cullMetrics;
+            BuildDrawablesMetrics bdMetrics;
 
 			if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
                 __declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, view._projection._worldToProjection);
-                _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr);
-				_pimpl->BuildDrawables(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                _pimpl->CullCell(visibleObjects, cellToCullSpace, *ovr->second.get(), nullptr, &cullMetrics);
+				_pimpl->BuildDrawables(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			} else {
-				auto* plc = _pimpl->CullCell(visibleObjects, view, *i);
+				auto* plc = _pimpl->CullCell(visibleObjects, view, *i, &cullMetrics);
 				if (plc)
-					_pimpl->BuildDrawables(executeContext, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+					_pimpl->BuildDrawables(executeContext, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			}
+
+            QuickMetrics(executeContext) << "PlcmntsCell[" << i->_filename << "]: AABB test: (" 
+                << cullMetrics._qtMetrics._nodeAabbTestCount << ") nodes + (" << cullMetrics._qtMetrics._payloadAabbTestCount << ") payloads (from " 
+                << cullMetrics._qtObjectCount << "/" << cullMetrics._qtTotalNodeCount << " - " << 100.f*float((cullMetrics._qtMetrics._nodeAabbTestCount+cullMetrics._qtMetrics._payloadAabbTestCount)/float(cullMetrics._qtObjectCount)) << "%)";
+            QuickMetrics(executeContext) << " BD: (" << bdMetrics._instancesPrepared << ") instances from (" << bdMetrics._uniqueModelsPrepared << ") models\n";
+            overallCullMetrics += cullMetrics;
+            overallBDMetrics += bdMetrics;
         }
+
+        QuickMetrics(executeContext) << "Overall: AABB test: (" 
+            << overallCullMetrics._qtMetrics._nodeAabbTestCount << ") nodes + (" << overallCullMetrics._qtMetrics._payloadAabbTestCount << ") payloads (from " 
+            << overallCullMetrics._qtObjectCount << "/" << overallCullMetrics._qtTotalNodeCount << " - " << 100.f*float((overallCullMetrics._qtMetrics._nodeAabbTestCount+overallCullMetrics._qtMetrics._payloadAabbTestCount)/float(overallCullMetrics._qtObjectCount)) << "%)";
+        QuickMetrics(executeContext) << " BD: (" << overallBDMetrics._instancesPrepared << ") instances from (" << overallBDMetrics._uniqueModelsPrepared << ") models\n";
     }
 
     void PlacementsRenderer::BuildDrawables(
@@ -1014,16 +1058,22 @@ namespace SceneEngine
     }
 
     auto PlacementsRenderer::GetVisibleQuadTrees(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
-            -> std::vector<std::pair<Float3x4, const GenericQuadTree*>>
+            -> std::vector<std::pair<Float3x4, std::shared_ptr<GenericQuadTree>>>
     {
-        std::vector<std::pair<Float3x4, const GenericQuadTree*>> result;
+        std::vector<std::pair<Float3x4, std::shared_ptr<GenericQuadTree>>> result;
         for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
             if (!CullAABB(worldToClip, i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType())) {
-                auto* tree = _pimpl->GetCachedQuadTree(i->_filenameHash);
+                auto tree = _pimpl->GetCachedQuadTree(i->_filenameHash);
                 result.push_back(std::make_pair(i->_cellToWorld, tree));
             }
         }
         return std::move(result);
+    }
+
+    auto PlacementsRenderer::GetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const
+            -> std::shared_ptr<GenericQuadTree>
+    {
+        return _pimpl->GetCachedQuadTree(Hash64(cellName));
     }
 
     auto PlacementsRenderer::GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
@@ -1041,6 +1091,26 @@ namespace SceneEngine
             }
         }
         return std::move(result);
+    }
+
+    auto PlacementsRenderer::GetObjectBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> ObjectBoundingBoxes
+    {
+        auto fnHash = Hash64(cellName);
+        for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
+            if (i->_filenameHash != fnHash) continue;
+
+            auto& renderInfo = _pimpl->GetCellRenderInfo(*i);
+            auto* placements = renderInfo._placements->TryActualize();
+            if (!placements) return {};
+
+            ObjectBoundingBoxes obb;
+            obb._boundingBox = &placements->GetObjectReferences()->_cellSpaceBoundary;
+            obb._stride = sizeof(Placements::ObjectReference);
+            obb._count = placements->GetObjectReferenceCount();
+            return obb;
+        }
+
+        return {};
     }
 
     std::shared_ptr<::Assets::IAsyncMarker> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
@@ -1170,7 +1240,18 @@ namespace SceneEngine
 
         _pimpl->_cells.push_back(cell);
     }
-    
+
+    std::optional<Float3x4> PlacementCellSet::GetCellToWorld(StringSection<> placementsInitializer) const
+    {
+        auto hash = Hash64(placementsInitializer);
+        auto i = std::find_if(
+            _pimpl->_cells.begin(), _pimpl->_cells.end(),
+            [hash](const auto& c) { return c._filenameHash == hash; });
+        if (i == _pimpl->_cells.end())
+            return {};
+        return i->_cellToWorld;
+    }
+ 
     PlacementCellSet::PlacementCellSet()
     {
         _pimpl = std::make_unique<Pimpl>();
@@ -2564,4 +2645,3 @@ namespace SceneEngine
         return plcmnts.Serialize();
     }
 }
-

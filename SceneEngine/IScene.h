@@ -32,6 +32,12 @@ namespace SceneEngine
         SceneView _view;
         RenderCore::Techniques::BatchFilter _batchFilter = RenderCore::Techniques::BatchFilter(0);
         RenderCore::Techniques::DrawablesPacket* _destinationPkt = nullptr;
+        mutable char _quickMetrics[4096];
+
+        ExecuteSceneContext(const SceneView& view, RenderCore::Techniques::BatchFilter batchFilter, RenderCore::Techniques::DrawablesPacket* destinationPkt)
+        :  _view(view), _batchFilter(batchFilter), _destinationPkt(destinationPkt)
+        { _quickMetrics[0] = '\0'; }
+        ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };
 
     class IScene

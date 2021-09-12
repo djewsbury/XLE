@@ -17,6 +17,7 @@
 namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
+namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 
 namespace SceneEngine
 {
@@ -35,6 +36,7 @@ namespace SceneEngine
     {
     public:
         void Add(StringSection<> placementsInitializer, const Float3x4& cellToWorld, std::pair<Float3, Float3> localSpaceAABB);
+        std::optional<Float3x4> GetCellToWorld(StringSection<> placementsInitializer) const;
 
         PlacementCellSet();
         ~PlacementCellSet();
@@ -89,11 +91,14 @@ namespace SceneEngine
 
             // -------------- Utilities --------------
         auto GetVisibleQuadTrees(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
-            -> std::vector<std::pair<Float3x4, const GenericQuadTree*>>;
+            -> std::vector<std::pair<Float3x4, std::shared_ptr<GenericQuadTree>>>;
+        auto GetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const
+            -> std::shared_ptr<GenericQuadTree>;
 
-        struct ObjectBoundingBoxes { const std::pair<Float3, Float3> * _boundingBox; unsigned _stride; unsigned _count; };
+        struct ObjectBoundingBoxes { const std::pair<Float3, Float3> * _boundingBox = nullptr; unsigned _stride = 0; unsigned _count = 0; };
         auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, const Float4x4& worldToClip) const
             -> std::vector<std::pair<Float3x4, ObjectBoundingBoxes>>;
+        auto GetObjectBoundingBoxes(const PlacementCellSet& cellSet, StringSection<> cellName) const -> ObjectBoundingBoxes;
 
         void SetImposters(std::shared_ptr<DynamicImposters> imposters);
 

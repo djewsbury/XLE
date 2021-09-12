@@ -504,8 +504,8 @@ namespace SceneEngine
 
         assert(visObjsCount <= visObjMaxCount);
         if (metrics) {
-            metrics->_nodeAabbTestCount = nodeAabbTestCount; 
-            metrics->_payloadAabbTestCount = payloadAabbTestCount;
+            metrics->_nodeAabbTestCount += nodeAabbTestCount; 
+            metrics->_payloadAabbTestCount += payloadAabbTestCount;
         }
 
         return true;
@@ -605,8 +605,8 @@ namespace SceneEngine
 
         assert(visObjsCount <= visObjMaxCount);
         if (metrics) {
-            metrics->_nodeAabbTestCount = nodeAabbTestCount; 
-            metrics->_payloadAabbTestCount = payloadAabbTestCount;
+            metrics->_nodeAabbTestCount += nodeAabbTestCount; 
+            metrics->_payloadAabbTestCount += payloadAabbTestCount;
         }
 
         return true;
@@ -615,6 +615,11 @@ namespace SceneEngine
 	unsigned GenericQuadTree::GetMaxResults() const
     {
         return GetPimpl()._maxCullResults;
+    }
+    
+    unsigned GenericQuadTree::GetNodeCount() const
+    {
+        return GetPimpl()._nodes.size();
     }
 
 	std::vector<std::pair<Float3, Float3>> GenericQuadTree::GetNodeBoundingBoxes() const
@@ -708,17 +713,110 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if 0
-
-#include "PlacementsQuadTreeDebugger.h"
-#include "PlacementsManager.h"
 #include "../RenderOverlays/IOverlayContext.h"
-#include "../RenderCore/Metal/DeviceContext.h"
-#include "../RenderCore/Techniques/CommonResources.h"
-#include "../ConsoleRig/Console.h"
+#include "../RenderOverlays/DebuggingDisplay.h"
 
 namespace SceneEngine
 {
+    class QuadTreeDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    {
+    public:
+        static void DrawQuadTree(
+            RenderOverlays::IOverlayContext& context,
+            const GenericQuadTree& qt,
+            const Float3x4& localToWorld,
+            int treeDepthFilter = -1)
+        {
+            using namespace RenderOverlays;
+            using namespace RenderOverlays::DebuggingDisplay;
+            ColorB cols[]= {
+                ColorB(196, 230, 230),
+                ColorB(255, 128, 128),
+                ColorB(128, 255, 128),
+                ColorB(128, 128, 255),
+                ColorB(255, 255, 128)
+            };
+
+            auto& nodes = qt.GetPimpl()._nodes;
+            for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
+                if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
+                    DrawBoundingBox(
+                        &context, n->_boundary, localToWorld,
+                        cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x1);
+                }
+            }
+            for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
+                if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
+                    DrawBoundingBox(
+                        &context, n->_boundary, localToWorld,
+                        cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x2);
+                }
+            }
+        }
+
+        void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
+        {
+            DrawQuadTree(context, *_quadTree, _localToWorld);
+        }
+
+        QuadTreeDisplay(std::shared_ptr<GenericQuadTree> quadTree, const Float3x4& localToWorld) : _quadTree(quadTree), _localToWorld(localToWorld) {}
+        std::shared_ptr<GenericQuadTree> _quadTree;
+        Float3x4 _localToWorld;
+    };
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateQuadTreeDisplay(
+        std::shared_ptr<GenericQuadTree> qt,
+        const Float3x4& localToWorld)
+    {
+        return std::make_shared<QuadTreeDisplay>(qt, localToWorld);
+    }
+
+    class BoundingBoxDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    {
+    public:
+        void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
+        {
+            using namespace RenderOverlays;
+            using namespace RenderOverlays::DebuggingDisplay;
+            ColorB cols[]= {
+                ColorB(196, 230, 230),
+                ColorB(255, 128, 128),
+                ColorB(128, 255, 128),
+                ColorB(128, 128, 255),
+                ColorB(255, 255, 128)
+            };
+
+            for (unsigned c=0; c<_boundingBoxes.size(); ++c)
+                DrawBoundingBox(
+                    &context, _boundingBoxes[c], _localToWorld,
+                    cols[c%dimof(cols)], 0x1);
+
+            for (unsigned c=0; c<_boundingBoxes.size(); ++c)
+                DrawBoundingBox(
+                    &context, _boundingBoxes[c], _localToWorld,
+                    cols[c%dimof(cols)], 0x2);
+        }
+
+        BoundingBoxDisplay(const GenericQuadTree::BoundingBox objCellSpaceBoundingBoxes[], size_t objStride, size_t objCount, const Float3x4& localToWorld)
+        : _localToWorld(localToWorld)
+        {
+            _boundingBoxes.reserve(objCount);
+            for (unsigned c=0; c<objCount; ++c)
+                _boundingBoxes.push_back(*PtrAdd(objCellSpaceBoundingBoxes, c*objStride));
+        }
+        std::vector<GenericQuadTree::BoundingBox> _boundingBoxes;
+        Float3x4 _localToWorld;
+    };
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateBoundingBoxDisplay(
+        const GenericQuadTree::BoundingBox objCellSpaceBoundingBoxes[], size_t objStride, size_t objCount,
+        const Float3x4& cellToWorld)
+    {
+        return std::make_shared<BoundingBoxDisplay>(objCellSpaceBoundingBoxes, objStride, objCount, cellToWorld);
+    }
+}
+
+#if 0
     void    PlacementsQuadTreeDebugger::Render(
         RenderOverlays::IOverlayContext& context, Layout& layout, 
         Interactables& interactables, InterfaceState& interfaceState)
@@ -749,22 +847,7 @@ namespace SceneEngine
                 auto cellToWorld = i->first;
                 auto quadTree = i->second;
                 if (!quadTree) continue;
-
-                auto& nodes = quadTree->_pimpl->_nodes;
-                for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
-                    if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
-                        DrawBoundingBox(
-                            &context, n->_boundary, cellToWorld,
-                            cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x1);
-                    }
-                }
-                for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
-                    if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
-                        DrawBoundingBox(
-							&context, n->_boundary, cellToWorld,
-                            cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x2);
-                    }
-                }
+                QuadTreeDisplay::DrawQuadTree(context, *quadTree, cellToWorld, treeDepthFilter);
             }
         } else {
             auto cells = _placementsManager->GetRenderer()->GetObjectBoundingBoxes(*_cells, context.GetProjectionDesc()._worldToProjection);
@@ -801,7 +884,4 @@ namespace SceneEngine
     {}
 
 }
-
 #endif
-
-

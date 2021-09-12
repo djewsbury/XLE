@@ -12,6 +12,8 @@
 
 namespace Assets { class ChunkFileContainer; }
 namespace XLEMath { enum class ClipSpaceType; }
+namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
+namespace RenderOverlays { class IOverlayContext; }
 
 namespace SceneEngine
 {
@@ -34,13 +36,17 @@ namespace SceneEngine
     public:
         typedef std::pair<Float3, Float3> BoundingBox;
 
-        class Metrics
+        struct Metrics
         {
-        public:
-            unsigned _nodeAabbTestCount;
-            unsigned _payloadAabbTestCount;
+            unsigned _nodeAabbTestCount = 0;
+            unsigned _payloadAabbTestCount = 0;
 
-            Metrics() : _nodeAabbTestCount(0), _payloadAabbTestCount(0) {}
+            Metrics& operator+=(const Metrics& other)
+            {
+                _nodeAabbTestCount += other._nodeAabbTestCount;
+                _payloadAabbTestCount += other._payloadAabbTestCount;
+                return *this;
+            }
         };
 
         bool CalculateVisibleObjects(
@@ -56,6 +62,7 @@ namespace SceneEngine
             Metrics* metrics = nullptr) const;
 
         unsigned GetMaxResults() const;
+        unsigned GetNodeCount() const;
 
 		enum class Orientation { YUp, ZUp };
 
@@ -82,8 +89,15 @@ namespace SceneEngine
 		DataBlock _dataBlock;
 		::Assets::DependencyValidation _depVal;
 
-		const Pimpl& GetPimpl() const;
-        
-        friend class GenericQuadTreeDebugger;
+		const Pimpl& GetPimpl() const;        
+        friend class QuadTreeDisplay;
     };
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateQuadTreeDisplay(
+        std::shared_ptr<GenericQuadTree>,
+        const Float3x4& localToWorld);
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateBoundingBoxDisplay(
+        const GenericQuadTree::BoundingBox objCellSpaceBoundingBoxes[], size_t objStride, size_t objCount,
+        const Float3x4& localToWorld);
 }
