@@ -80,6 +80,9 @@ namespace RenderCore { namespace Assets
 				if (initializers.GetCount() >= 2)
 					sourceModel = initializers.GetInitializer<std::string>(1);
 
+				if (sourceMaterial == sourceModel)
+					sourceMaterial = {};
+
 					// Parameters must be stripped off the source model filename before we get here.
 					// the parameters are irrelevant to the compiler -- so if they stay on the request
 					// name, will we end up with multiple assets that are equivalent
@@ -137,7 +140,7 @@ namespace RenderCore { namespace Assets
 					StringMeld<3*MaxPath, ::Assets::ResChar> meld; 
 					meld << sourceModel << ":" << Conversion::Convert<::Assets::rstring>(cfg);
 
-					if (sourceMaterial[0] != '\0') {
+					if (!sourceMaterial.empty()) {
 							// resolve in material:*
 						meld << ";" << sourceMaterial << ":*";
 						meld << ";" << sourceMaterial << ":" << Conversion::Convert<::Assets::rstring>(cfg);
