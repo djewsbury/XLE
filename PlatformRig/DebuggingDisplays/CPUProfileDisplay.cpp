@@ -115,7 +115,7 @@ namespace PlatformRig { namespace Overlays
         if (extendFromMiddle) {
             Coord barMaxHalfWidth = std::min(middleX - rect._topLeft[0], rect._bottomRight[0] - middleX);
             Coord barHalfWidth = Coord(std::min(barSize, 1.f) * float(barMaxHalfWidth));
-            DrawRoundedRectangle(
+            FillAndOutlineRoundedRectangle(
                 context,
                 Rect{Coord2(middleX - barHalfWidth, rect._topLeft[1]), Coord2(middleX + barHalfWidth, rect._bottomRight[1])},
                 highlighted ? settings._highlightBarColor0 : settings._barColor0, ColorB::White,
@@ -146,7 +146,7 @@ namespace PlatformRig { namespace Overlays
             //  The resolved events are arranged as a tree. We just want
             //  to traverse in depth-first order, and display as a tree
 
-        // DrawRectangle(context, layout.GetMaximumSize(), settings._bkColor);
+        // FillRectangle(context, layout.GetMaximumSize(), settings._bkColor);
 
         if (resolvedEvents.empty()) return;
 

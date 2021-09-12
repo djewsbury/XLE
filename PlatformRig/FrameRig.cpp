@@ -492,11 +492,10 @@ namespace PlatformRig
         static ColorB normalColor = ColorB(70, 31, 0, 0x9f);
         static ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
         static ColorB pressed = ColorB(128, 50, 0, 0xff);
-        /*      Disabled because the rounded rect shader not hooked up for non-DX11
-        DrawRoundedRectangle(&context, displayRect, 
+        FillAndOutlineRoundedRectangle(&context, displayRect, 
             FormatButton(interfaceState, Id_FrameRigDisplayMain, normalColor, mouseOverColor, pressed), 
             ColorB::White,
-            (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);*/
+            (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);
 
         static ColorB menuBkgrnd(128, 96, 64, 64);
         static ColorB menuBkgrndHigh(128, 96, 64, 192);
@@ -520,7 +519,7 @@ namespace PlatformRig
         auto frameAllocations = _prevFrameAllocationCount->_allocationCount;
 
         DrawFormatText(
-            &context, innerLayout.AllocateFullWidth(smallLineHeight), 0.f,
+            &context, innerLayout.AllocateFullWidth(smallLineHeight),
             &smallStyle, ColorB(0xffffffff), TextAlignment::Center,
             "%.2fM (%i)", heapMetrics._usage / (1024.f*1024.f), frameAllocations);
 
@@ -557,7 +556,7 @@ namespace PlatformRig
                         Coord2 iconTopLeft(iconLeft, rect._topLeft[1]);
                         Rect iconRect(iconTopLeft, iconTopLeft + iconSize);
 
-                        DrawRectangle(&context, rect, menuBkgrnd);
+                        FillRectangle(&context, rect, menuBkgrnd);
 
                         auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
                         context.RequireCommandList(texture->GetCompletionCommandList());
@@ -567,7 +566,7 @@ namespace PlatformRig
                             AsPixelCoords(iconRect._bottomRight),
                             texture->GetShaderResource());
                         DrawText(
-                            &context, rect, 0.f,
+                            &context, rect,
                             &tabHeader, tabHeaderColor, TextAlignment::Bottom,
                             categories[c]);
 
@@ -603,7 +602,7 @@ namespace PlatformRig
                         auto rect = screenListLayout.AllocateFullWidth(lineHeight);
                         rect._topLeft[0] = rect._bottomRight[0] - width;
 
-                        DrawRectangle(&context, 
+                        FillRectangle(&context, 
                             Rect(rect._topLeft - Coord2(2 + margin + smallIconSize[0],2), rect._bottomRight + Coord2(2,2)), 
                             interfaceState.HasMouseOver(i->_hashCode) ? menuBkgrndHigh : menuBkgrnd);
 
@@ -615,7 +614,7 @@ namespace PlatformRig
                             AsPixelCoords(Coord2(rect._topLeft[0]-margin, rect._bottomRight[1])),
                             texture->GetShaderResource());
                         DrawText(
-                            &context, rect, 0.f,
+                            &context, rect,
                             &tabHeader, tabHeaderColor, TextAlignment::Left,
                             i->_name.c_str());
 

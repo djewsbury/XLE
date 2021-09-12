@@ -57,7 +57,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Coord   GetWidthRemaining() const;
     };
 
-    typedef uint64 InteractableId;
+    typedef uint64_t InteractableId;
     InteractableId InteractableId_Make(StringSection<char> name);
     typedef uint32 KeyId;
 
@@ -123,29 +123,26 @@ namespace RenderOverlays { namespace DebuggingDisplay
     extern const ColorB   RandomPaletteColorTable[];
     extern const size_t   RandomPaletteColorTable_Size;
 
-    void        DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
-    void        DrawFilledEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        OutlineEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        FillEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
 
-    void DrawRoundedRectangle(
+    void FillAndOutlineRoundedRectangle(
         IOverlayContext* context, const Rect& rect, 
         ColorB backgroundColour, ColorB outlineColour,
         float borderWidth = 1.f, float roundedProportion = 1.f / 8.f);
-    void DrawRoundedRectangleOutline(
+    void OutlineRoundedRectangle(
         IOverlayContext* context, const Rect& rect, 
         ColorB colour, 
         float width, float roundedProportion = 1.f / 8.f);
 
-    void        DrawRectangle(IOverlayContext* context, const Rect& rect, ColorB colour);
-    void        DrawRectangle(IOverlayContext* context, const Rect& rect, float depth, ColorB colour);
-    void        DrawRectangleOutline(IOverlayContext* context, const Rect& rect, float depth = 0.f, ColorB colour = ColorB(0xff000000));
+    void        FillRectangle(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        OutlineRectangle(IOverlayContext* context, const Rect& rect, ColorB colour = ColorB(0xff000000));
 
     Coord       DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
-    Coord       DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, StringSection<> text);
-    Coord       DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
+    Coord       DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
     Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
+    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
+    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
     void        DrawHistoryGraph(IOverlayContext* context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
     void        DrawHistoryGraph_ExtraLine(IOverlayContext* context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
 
@@ -260,22 +257,23 @@ namespace RenderOverlays { namespace DebuggingDisplay
         bool        OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt);
         void        Render(IOverlayContext& overlayContext, const Rect& viewport);
         bool        IsAnythingVisible();
+        bool        IsAnyPanelActive();
         
         enum Type { InPanel, SystemDisplay };
-        void        Register(std::shared_ptr<IWidget> widget, const char name[], Type type = InPanel);
-        void        Unregister(const char name[]);
+        void        Register(std::shared_ptr<IWidget> widget, StringSection<> name, Type type = InPanel);
+        void        Unregister(StringSection<> name);
         void        Unregister(IWidget& widget);
 
-        void        SwitchToScreen(unsigned panelIndex, const char name[]);
-        bool        SwitchToScreen(unsigned panelIndex, uint64 hashCode);
-        void        SwitchToScreen(const char name[]);
+        void        SwitchToScreen(unsigned panelIndex, StringSection<> name);
+        bool        SwitchToScreen(unsigned panelIndex, uint64_t hashCode);
+        void        SwitchToScreen(StringSection<> name);
         const char* CurrentScreen(unsigned panelIndex);
         
         struct WidgetAndName 
         {
             std::shared_ptr<IWidget>    _widget;
             std::string                 _name;
-            uint64                      _hashCode;
+            uint64_t                      _hashCode;
         };
         const std::vector<WidgetAndName>& GetWidgets() const { return _widgets; }
         

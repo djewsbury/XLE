@@ -99,7 +99,7 @@ namespace PlatformRig { namespace Overlays
                 break;
             }
 
-            DrawRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
+            FillAndOutlineRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
             Layout sectionLayout(sectionRect);
             Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
@@ -109,7 +109,7 @@ namespace PlatformRig { namespace Overlays
             Rect sectionNameRect(
                 Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                 Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-            DrawText(&context, sectionNameRect, 2.f, nullptr, ColorB(0xffffffffu), label);
+            DrawText(&context, sectionNameRect, nullptr, ColorB(0xffffffffu), label);
 
             if (section._durationHistoryLength) {
                 auto stats = Pimpl::CalculateDurationStats({section._durationHistory, &section._durationHistory[section._durationHistoryLength]});
@@ -157,10 +157,10 @@ namespace PlatformRig { namespace Overlays
 
                         InteractableId id = baseButtonIds[c]+sectionIndex;
                         if (interfaceState.HasMouseOver(id)) {
-                            DrawEllipse(&context, buttonRect, ColorB(0xff000000u));
+                            OutlineEllipse(&context, buttonRect, ColorB(0xff000000u));
                             DrawText(&context, buttonRect, nullptr, ColorB(0xff000000u), buttonNames[c]);
                         } else {
-                            DrawEllipse(&context, buttonRect, ColorB(0xffffffffu));
+                            OutlineEllipse(&context, buttonRect, ColorB(0xffffffffu));
                             DrawText(&context, buttonRect, nullptr, ColorB(0xffffffffu), buttonNames[c]);
                         }
                         interactables.Register(Interactables::Widget(buttonRect, id));

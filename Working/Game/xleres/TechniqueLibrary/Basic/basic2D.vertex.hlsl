@@ -10,14 +10,17 @@
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Framework/VSIN.hlsl"
 #include "../Framework/VSOUT.hlsl"
+#include "../Utility/Colour.hlsl"
 
 #define NDC_POSITIVE 1
 #define NDC_POSITIVE_RIGHT_HANDED 2
+#define NDC_POSITIVE_REVERSEZ 3
+#define NDC_POSITIVE_RIGHT_HANDED_REVERSEZ 4
 
 #if VULKAN
-	#define NDC NDC_POSITIVE_RIGHT_HANDED
+	#define NDC NDC_POSITIVE_RIGHT_HANDED_REVERSEZ
 #else
-	#define NDC NDC_POSITIVE
+	#define NDC NDC_POSITIVE_REVERSEZ
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +45,7 @@ FullscreenCorner MakeFullscreenCorner(uint vertexId)
 	FullscreenCorner result;
 
 	result.coord = float2((float)(vertexId >> 1), (float)(vertexId & 1));
-	#if NDC == NDC_POSITIVE_RIGHT_HANDED
+	#if (NDC == NDC_POSITIVE_RIGHT_HANDED) || (NDC == NDC_POSITIVE_RIGHT_HANDED_REVERSEZ)
 		result.position = float4(2.f * result.coord.x - 1.f, 2.f * result.coord.y - 1.f, 0.f, 1.f);
 	#else
 		result.position = float4(2.f * result.coord.x - 1.f, -2.f * result.coord.y + 1.f, 0.f, 1.f);
@@ -57,10 +60,18 @@ float4 PixelCoordToSVPosition(float2 pixelCoord)
 {
 	// This is a kind of viewport transform -- unfortunately it needs to
 	// be customized for vulkan because of the different NDC space
-#if NDC == NDC_POSITIVE_RIGHT_HANDED
+#if (NDC == NDC_POSITIVE_RIGHT_HANDED)
 	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
 					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y *  2.f - 1.f,
 					0.f, 1.f);
+#elif (NDC == NDC_POSITIVE_RIGHT_HANDED_REVERSEZ)
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y *  2.f - 1.f,
+					1.f, 1.f);
+#elif (NDC == NDC_POSITIVE_REVERSEZ)
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y * -2.f + 1.f,
+					1.f, 1.f);
 #else
 	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
 					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y * -2.f + 1.f,
@@ -85,12 +96,14 @@ VSOUT frameworkEntry(VSIN vsin)
 		output.position = TransformPosition(vsin.position);
 	#endif
 
+	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
+	// assuming 8 bit color inputs	
 	#if VSOUT_HAS_COLOR>=1
-		output.color = VSIN_GetColor0(vsin);
+		output.color = float4(SRGBToLinear_Formal(VSIN_GetColor0(vsin).rgb), VSIN_GetColor0(vsin).a);
 	#endif
 
 	#if VSOUT_HAS_COLOR1>=1
-		output.color1 = VSIN_GetColor1(vsin);
+		output.color1 = float4(SRGBToLinear_Formal(VSIN_GetColor1(vsin).rgb), VSIN_GetColor1(vsin).a);
 	#endif
 
 	#if VSOUT_HAS_TEXCOORD>=1
@@ -191,7 +204,7 @@ void P_viewfrustumvector(float3 iPosition : POSITION, out float4 oPosition : SV_
 {
 	oPosition = TransformPosition(iPosition);
 	
-	#if NDC == NDC_POSITIVE_RIGHT_HANDED
+	#if (NDC == NDC_POSITIVE_RIGHT_HANDED) || (NDC == NDC_POSITIVE_RIGHT_HANDED_REVERSEZ)
 		oTexCoord.y = (oPosition.y + 1.0f) / 2.0f;
 	#else
 		oTexCoord.y = (1.0f - oPosition.y) / 2.0f;

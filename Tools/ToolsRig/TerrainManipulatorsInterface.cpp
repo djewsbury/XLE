@@ -201,8 +201,8 @@ namespace ToolsRig
 
         Layout internalLayout(controlsRect);
         
-        DrawRectangle(&context, controlsRect, backgroundRectangleColour);
-        DrawRectangleOutline(&context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), 0.f, backgroundOutlineColour);
+        FillRectangle(&context, controlsRect, backgroundRectangleColour);
+        OutlineRectangle(&context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);
         interactables.Register(Interactables::Widget(controlsRect, Id_TotalRect));
 
         const auto headingRect = internalLayout.AllocateFullWidth(25);
@@ -230,6 +230,9 @@ namespace ToolsRig
             } else {
                 alpha = Clamp((std::log(*p) - std::log(parameter._min)) / (std::log(parameter._max) - std::log(parameter._min)), 0.f, 1.f);
             }
+            assert(0);
+            // switch to using RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader"
+            /*
             context.DrawQuad(
                 ProjectionMode::P2D, 
                 AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
@@ -237,6 +240,7 @@ namespace ToolsRig
                 ColorB(0xffffffff), ColorB(0xffffffff),
                 Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(alpha, 0.f), Float2(alpha, 0.f),
                 "Utility\\DebuggingShapes.pixel.hlsl:SmallGridBackground");
+            */
 
                 // text label (name and value)
             char buffer[256];

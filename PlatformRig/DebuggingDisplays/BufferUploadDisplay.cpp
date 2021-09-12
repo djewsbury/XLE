@@ -5,15 +5,16 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "BufferUploadDisplay.h"
+#include "../../BufferUploads/Metrics.h"
 #include "../../RenderOverlays/OverlayUtils.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
+#include "../../OSServices/TimeUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/TimeUtils.h"
 #include <assert.h>
 
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant
@@ -55,7 +56,7 @@ namespace PlatformRig { namespace Overlays
         _mostRecentGPUFrameId = 0;
         _lockedFrameId = ~unsigned(0x0);
 
-        auto timerFrequency = GetPerformanceCounterFrequency();
+        auto timerFrequency = OSServices::GetPerformanceCounterFrequency();
         _reciprocalTimerFrequency = 1./double(timerFrequency);
 
         assert(s_gpuListenerDisplay==0);
@@ -68,44 +69,44 @@ namespace PlatformRig { namespace Overlays
         s_gpuListenerDisplay = NULL;
     }
 
-    static const char* AsString(BufferUploads::UploadDataType::Enum value)
+    static const char* AsString(BufferUploads::UploadDataType value)
     {
-        using namespace BufferUploads::UploadDataType;
         switch (value) {
-        case Texture:   return "Texture";
-        case Vertex:    return "Vertex";
-        case Index:     return "Index";
+        case BufferUploads::UploadDataType::Texture:   return "Texture";
+        case BufferUploads::UploadDataType::Vertex:    return "Vertex";
+        case BufferUploads::UploadDataType::Index:     return "Index";
         default: return "<<unknown>>";
         }
     };
 
-    static const char* TypeString(const BufferUploads::BufferDesc& desc)
+    static const char* TypeString(const RenderCore::ResourceDesc& desc)
     {
         using namespace BufferUploads;
-        if (desc._type == BufferDesc::Type::Texture) {
+        if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
             switch (tDesc._dimensionality) {
             case TextureDesc::Dimensionality::T1D: return "Tex1D";
             case TextureDesc::Dimensionality::T2D: return "Tex2D";
             case TextureDesc::Dimensionality::T3D: return "Tex3D";
             case TextureDesc::Dimensionality::CubeMap: return "TexCube";
+            default: break;
             }
-        } else if (desc._type == BufferDesc::Type::LinearBuffer) {
+        } else if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
             if (desc._bindFlags & BindFlag::VertexBuffer) return "VB";
             else if (desc._bindFlags & BindFlag::IndexBuffer) return "IB";
         }
         return "Unknown";
     }
 
-    static std::string BuildDescription(const BufferUploads::BufferDesc& desc)
+    static std::string BuildDescription(const RenderCore::ResourceDesc& desc)
     {
         using namespace BufferUploads;
         char buffer[2048];
-        if (desc._type == BufferDesc::Type::Texture) {
+        if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
             xl_snprintf(buffer, dimof(buffer), "(%4ix%4i) mips:(%i), array:(%i)", 
                 tDesc._width, tDesc._height, tDesc._mipCount, tDesc._arrayCount);
-        } else if (desc._type == BufferDesc::Type::LinearBuffer) {
+        } else if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
             xl_snprintf(buffer, dimof(buffer), "%6.2fkb", 
                 desc._linearBufferDesc._sizeInBytes/1024.f);
         } else {
@@ -189,15 +190,15 @@ namespace PlatformRig { namespace Overlays
         auto fullSize = layout.GetMaximumSize();
 
             // bkgrnd
-        DrawRectangle(
+        FillRectangle(
             context, 
             Rect(fullSize._topLeft, Coord2(fullSize._bottomRight[0], fullSize._topLeft[1]+layout._paddingInternalBorder)),
             edge);
-        DrawRectangle(
+        FillRectangle(
             context, 
             Rect(Coord2(fullSize._topLeft[0], fullSize._bottomRight[1]-layout._paddingInternalBorder), fullSize._bottomRight),
             edge);
-        DrawRectangle(
+        FillRectangle(
             context, 
             Rect(Coord2(fullSize._topLeft[0], fullSize._topLeft[1]+layout._paddingInternalBorder), Coord2(fullSize._bottomRight[0], fullSize._bottomRight[1]-layout._paddingInternalBorder)),
             middle);
@@ -213,7 +214,7 @@ namespace PlatformRig { namespace Overlays
 
             auto hash = Hash64(g.first);
             if (interfaceState.HasMouseOver(hash)) {
-                DrawRectangle(context, rect, mouseOver);
+                FillRectangle(context, rect, mouseOver);
                 DrawTopLeftRight(context, rect, ColorB::White);
                 dropDown = &g.second;
                 
@@ -235,7 +236,7 @@ namespace PlatformRig { namespace Overlays
         }
 
         if (dropDown) {
-            DrawRectangle(context, dropDownRect, mouseOver);
+            FillRectangle(context, dropDownRect, mouseOver);
             DrawBottomLeftRight(context, dropDownRect, ColorB::White);
 
             Layout dd(dropDownRect);
@@ -301,7 +302,7 @@ namespace PlatformRig { namespace Overlays
                 for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                     BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
                     if (_graphsMode == Uploads) { // bytes uploaded
-                        value += (commandList._bytesUploaded[uploadType] + commandList._bytesUploadedDuringCreation[uploadType]) / (1024.f*1024.f);
+                        value += (commandList._bytesUploaded[uploadType]) / (1024.f*1024.f);
                     } else if (_graphsMode == CreatesMB) { // creations (bytes)
                         value += commandList._bytesCreated[uploadType] / (1024.f*1024.f);
                     } else if (_graphsMode == CreatesCount) { // creations (count)
@@ -330,10 +331,10 @@ namespace PlatformRig { namespace Overlays
                 value = (float(processingTimeSum))?(100.f * (1.0f-(waitTimeSum/float(processingTimeSum)))):0.f;
             } else if (_graphsMode == BatchedCopy) {
                 value = 0;
-                for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
+                /*for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                     BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
                     value += commandList._batchedCopyBytes;
-                }
+                }*/
             }
         }
         return valuesCount;
@@ -349,22 +350,22 @@ namespace PlatformRig { namespace Overlays
         float valuesBuffer[s_MaxGraphSegments];
         XlZeroMemory(valuesBuffer);
 
-        unsigned graphCount = (_graphsMode<=GraphTabs::PendingBuffers)?UploadDataType::Max:1;
+        unsigned graphCount = (_graphsMode<=GraphTabs::PendingBuffers)?(unsigned)UploadDataType::Max:1;
         for (unsigned c=0; c<graphCount; ++c) {
             Layout section = layout.AllocateFullWidthFraction(1.f/float(graphCount));
             Rect labelRect = section.AllocateFullHeightFraction( .25f );
             Rect historyRect = section.AllocateFullHeightFraction( .75f );
 
-            // DrawRectangleOutline(context, section._maximumSize);
-            DrawRoundedRectangle(context, section._maximumSize, ColorB(180,200,255,128), ColorB(255,255,255,128));
+            // OutlineRectangle(context, section._maximumSize);
+            FillAndOutlineRoundedRectangle(context, section._maximumSize, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
             size_t valuesCount2 = FillValuesBuffer(_graphsMode, c, valuesBuffer, dimof(valuesBuffer));
 
-            if (graphCount == UploadDataType::Max) {
+            if (graphCount == (unsigned)UploadDataType::Max) {
                 context->DrawText(
 					AsPixelCoords(labelRect), GetDefaultFont(), TextStyle{}, ColorB(0xffffffffu), 
                     TextAlignment::Left,
-                    StringMeld<256>() << GraphTabs::Names[_graphsMode] << " (" << AsString(UploadDataType::Enum(c)) << ")");
+                    StringMeld<256>() << GraphTabs::Names[_graphsMode] << " (" << AsString(UploadDataType(c)) << ")");
             } else {
                 context->DrawText(
                     AsPixelCoords(labelRect), GetDefaultFont(), TextStyle{}, ColorB(0xffffffffu), 
@@ -397,8 +398,8 @@ namespace PlatformRig { namespace Overlays
                     valuesBuffer[dimof(valuesBuffer)-valuesCount] = 0;
                     for (unsigned cl=i->_commandListStart; cl<i->_commandListEnd; ++cl) {
                         BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
-                        for (unsigned c2=0; c2<UploadDataType::Max; ++c2) {
-                            valuesBuffer[dimof(valuesBuffer)-valuesCount] += (commandList._bytesUploaded[c2] + commandList._bytesUploadedDuringCreation[c2]) / (1024.f*1024.f);
+                        for (unsigned c2=0; c2<(unsigned)UploadDataType::Max; ++c2) {
+                            valuesBuffer[dimof(valuesBuffer)-valuesCount] += (commandList._bytesUploaded[c2]) / (1024.f*1024.f);
                         }
                     }
                 }
@@ -421,9 +422,9 @@ namespace PlatformRig { namespace Overlays
                         Coord2(LinearInterpolate(historyRect._topLeft[0], historyRect._bottomRight[0], (graphPartIndex+1)/float(dimof(valuesBuffer))), historyRect._bottomRight[1]));
                     InteractableId id = framePicker + newValuesCount;
                     if (interfaceState.HasMouseOver(id)) {
-                        DrawRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
+                        FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
                     } else if (i->_frameId == _lockedFrameId) {
-                        DrawRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
+                        FillRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
                     }
                     interactables.Register(Interactables::Widget(graphPart, id));
                     ++newValuesCount;
@@ -501,7 +502,7 @@ namespace PlatformRig { namespace Overlays
             {   std::make_pair("Name", "Thread activity"), 
                 std::make_pair("Value", XlDynFormatString("%6.3f%% (%i)", (float(processingTimeSum))?(100.f * (1.0f-(waitTimeSum/float(processingTimeSum)))):0.f, wakeCountSum)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        /*DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Pending creates (peak)"), 
                 std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedCreates, mostRecentResults._assemblyLineMetrics._queuedPeakCreates)) });
 
@@ -511,7 +512,7 @@ namespace PlatformRig { namespace Overlays
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Pending staging creates (peak)"),
-                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedStagingCreates, mostRecentResults._assemblyLineMetrics._queuedPeakStagingCreates)) });
+                std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedStagingCreates, mostRecentResults._assemblyLineMetrics._queuedPeakStagingCreates)) });*/
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Transaction count"),
@@ -521,33 +522,33 @@ namespace PlatformRig { namespace Overlays
         DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), headerColor, &interactables);
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Recent creates"), 
-                std::make_pair("Tex", XlDynFormatString("%i", mostRecentResults._countCreations[UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", mostRecentResults._countCreations[UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", mostRecentResults._countCreations[UploadDataType::Index])) });
+                std::make_pair("Tex", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Texture])),
+                std::make_pair("VB", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Vertex])),
+                std::make_pair("IB", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Index])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates"), 
-                std::make_pair("Tex", XlDynFormatString("%i", _accumulatedCreateCount[UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", _accumulatedCreateCount[UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", _accumulatedCreateCount[UploadDataType::Index])) });
+                std::make_pair("Tex", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Texture])),
+                std::make_pair("VB", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Vertex])),
+                std::make_pair("IB", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Index])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates (MB)"), 
-                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[UploadDataType::Texture] / (1024.f*1024.f))),
-                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[UploadDataType::Vertex] / (1024.f*1024.f))),
-                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[UploadDataType::Index] / (1024.f*1024.f))) });
+                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Texture] / (1024.f*1024.f))),
+                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Vertex] / (1024.f*1024.f))),
+                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedCreateBytes[(unsigned)UploadDataType::Index] / (1024.f*1024.f))) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads"), 
-                std::make_pair("Tex", XlDynFormatString("%i", _accumulatedUploadCount[UploadDataType::Texture])),
-                std::make_pair("VB", XlDynFormatString("%i", _accumulatedUploadCount[UploadDataType::Vertex])),
-                std::make_pair("IB", XlDynFormatString("%i", _accumulatedUploadCount[UploadDataType::Index])) });
+                std::make_pair("Tex", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Texture])),
+                std::make_pair("VB", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Vertex])),
+                std::make_pair("IB", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Index])) });
 
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads (MB)"), 
-                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[UploadDataType::Texture] / (1024.f*1024.f))),
-                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[UploadDataType::Vertex] / (1024.f*1024.f))),
-                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[UploadDataType::Index] / (1024.f*1024.f))) });
+                std::make_pair("Tex", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Texture] / (1024.f*1024.f))),
+                std::make_pair("VB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Vertex] / (1024.f*1024.f))),
+                std::make_pair("IB", XlDynFormatString("%8.3f MB", _accumulatedUploadBytes[(unsigned)UploadDataType::Index] / (1024.f*1024.f))) });
     }
 
     void    BufferUploadDisplay::DrawRecentRetirements(
@@ -600,11 +601,11 @@ namespace PlatformRig { namespace Overlays
                 mostRecentResults = metrics;
                 _recentHistory.push_back(metrics);
                 AddCommandListToFrame(metrics._frameId, unsigned(_recentHistory.size()-1));
-                for (unsigned c=0; c<BufferUploads::UploadDataType::Max; ++c) {
+                for (unsigned c=0; c<(unsigned)BufferUploads::UploadDataType::Max; ++c) {
                     _accumulatedCreateCount[c] += metrics._countCreations[c];
                     _accumulatedCreateBytes[c] += metrics._bytesCreated[c];
                     _accumulatedUploadCount[c] += metrics._countUploaded[c];
-                    _accumulatedUploadBytes[c] += metrics._bytesUploaded[c] + metrics._bytesUploadedDuringCreation[c];
+                    _accumulatedUploadBytes[c] += metrics._bytesUploaded[c];
                 }
                 ++commandListCount;
             }
@@ -743,8 +744,8 @@ namespace PlatformRig { namespace Overlays
             float gpuCost = gI->_gpuCost; unsigned bytesUploaded = 0;
             for (unsigned cl=gI->_commandListStart; cl<gI->_commandListEnd; ++cl) {
                 BufferUploads::CommandListMetrics& commandList = _recentHistory[cl];
-                for (unsigned c2=0; c2<BufferUploads::UploadDataType::Max; ++c2) {
-                    bytesUploaded += commandList._bytesUploaded[c2] + commandList._bytesUploadedDuringCreation[c2];
+                for (unsigned c2=0; c2<(unsigned)BufferUploads::UploadDataType::Max; ++c2) {
+                    bytesUploaded += commandList._bytesUploaded[c2];
                 }
             }
             totalGPUCost += gpuCost;
@@ -827,11 +828,11 @@ namespace PlatformRig { namespace Overlays
         static const char* Names[] = { "Index Buffers", "Vertex Buffers", "Staging Textures" };
     }
 
-    bool    ResourcePoolDisplay::Filter(const BufferUploads::BufferDesc& desc)
+    bool    ResourcePoolDisplay::Filter(const RenderCore::ResourceDesc& desc)
     {
         if (_filter == 0 && (desc._bindFlags&BufferUploads::BindFlag::IndexBuffer)) return true;
         if (_filter == 1 && (desc._bindFlags&BufferUploads::BindFlag::VertexBuffer)) return true;
-        if (_filter == 2 && (desc._type == BufferUploads::BufferDesc::Type::Texture)) return true;
+        if (_filter == 2 && (desc._type == RenderCore::ResourceDesc::Type::Texture)) return true;
         return false;
     }
 
@@ -846,7 +847,7 @@ namespace PlatformRig { namespace Overlays
 
                 /////////////////////////////////////////////////////////////////////////////
             const std::vector<PoolMetrics>& metricsVector = (_filter==2)?metrics._stagingPools:metrics._resourcePools;
-            unsigned maxSize = 0, count = 0;
+            size_t maxSize = 0, count = 0;
             for (std::vector<PoolMetrics>::const_iterator i=metricsVector.begin();i!=metricsVector.end(); ++i) {
                 if (Filter(i->_desc)) {
                     maxSize = std::max(maxSize, i->_peakSize);
@@ -881,14 +882,14 @@ namespace PlatformRig { namespace Overlays
                         float B = i->_peakSize / float(maxSize);
                         Rect fullRect = barsLayout.AllocateFullHeight(barWidth);
                         Rect colouredRect(Coord2(fullRect._topLeft[0], LinearInterpolate(fullRect._topLeft[1], fullRect._bottomRight[1], 1.f-A)), fullRect._bottomRight);
-                        DrawRectangle(&context, colouredRect, rectColor);
-                        DrawRectangle(&context, Rect(    Coord2(fullRect._topLeft[0], LinearInterpolate(fullRect._topLeft[1], fullRect._bottomRight[1], 1.f-B)),
+                        FillRectangle(&context, colouredRect, rectColor);
+                        FillRectangle(&context, Rect(    Coord2(fullRect._topLeft[0], LinearInterpolate(fullRect._topLeft[1], fullRect._bottomRight[1], 1.f-B)),
                                                         Coord2(fullRect._bottomRight[0], LinearInterpolate(fullRect._topLeft[1], fullRect._bottomRight[1], 1.f-B)+2)), peakMarkerColor);
 
                         Rect textRect(colouredRect._topLeft, Coord2(colouredRect._bottomRight[0], colouredRect._topLeft[1]+10));
                         if (i->_peakSize) {
-                            const BufferDesc& desc = i->_desc;
-                            if (desc._type == BufferDesc::Type::LinearBuffer) {
+                            const auto& desc = i->_desc;
+                            if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
                                 if (desc._bindFlags & BindFlag::IndexBuffer) {
                                     DrawFormatText(&context, textRect, nullptr, textColour, "IB %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
                                 } else if (desc._bindFlags & BindFlag::VertexBuffer) {
@@ -896,13 +897,13 @@ namespace PlatformRig { namespace Overlays
                                 } else {
                                     DrawFormatText(&context, textRect, nullptr, textColour, "B %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
                                 }
-                            } else if (desc._type == BufferDesc::Type::Texture) {
+                            } else if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
                                 DrawFormatText(&context, textRect, nullptr, textColour, "Tex %ix%i", desc._textureDesc._width, desc._textureDesc._height);
                             }
                             textRect._topLeft[1] += 16; textRect._bottomRight[1] += 16;
                             if (i->_currentSize) {
                                 DrawFormatText(&context, textRect, nullptr, textColour, "%i (%6.3fMB)", 
-                                    i->_currentSize, (i->_currentSize * manager->ByteCount(i->_desc)) / (1024.f*1024.f));
+                                    i->_currentSize, (i->_currentSize * RenderCore::ByteCount(i->_desc)) / (1024.f*1024.f));
                             }
                         }
 
@@ -976,10 +977,10 @@ namespace PlatformRig { namespace Overlays
             static ColorB textColour(192, 192, 192, 128);
             static ColorB unallocatedLineColour(192, 192, 192, 128);
 
-            unsigned allocatedSpace = 0, unallocatedSpace = 0;
-            unsigned largestFreeBlock = 0;
-            unsigned largestHeapSize = 0;
-            unsigned totalBlockCount = 0;
+            size_t allocatedSpace = 0, unallocatedSpace = 0;
+            size_t largestFreeBlock = 0;
+            size_t largestHeapSize = 0;
+            size_t totalBlockCount = 0;
             for (std::vector<BatchedHeapMetrics>::const_iterator i=metrics._heaps.begin(); i!=metrics._heaps.end(); ++i) {
                 allocatedSpace += i->_allocatedSpace;
                 unallocatedSpace += i->_unallocatedSpace;
@@ -1004,7 +1005,7 @@ namespace PlatformRig { namespace Overlays
                 Rect outsideRect = layout.AllocateFullWidth(DebuggingDisplay::Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
                 Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
 
-                DrawRectangleOutline(&context, outsideRect);
+                OutlineRectangle(&context, outsideRect);
 
                 std::vector<Float3> lines;
                 std::vector<ColorB> lineColors;

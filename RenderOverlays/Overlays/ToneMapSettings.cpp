@@ -56,7 +56,7 @@ namespace Overlays
             
             Rect textRect = windAngle0;
             textRect._topLeft[0] += 32;
-            /*Coord a = */DrawText(&context, textRect, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Left, objects[q]._name);
+            /*Coord a = */DrawText(&context, textRect, nullptr, ColorB(0xffffffff), TextAlignment::Left, objects[q]._name);
 
             Rect scrollBar = windAngle0;
             scrollBar._topLeft[0] = labelRect._bottomRight[0];
@@ -70,7 +70,7 @@ namespace Overlays
             interactables.Register(
                 Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
 
-            DrawFormatText(&context, scrollBar, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
+            DrawFormatText(&context, scrollBar, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
         }
     }
 
@@ -166,7 +166,7 @@ namespace Overlays
             interactables.Register(
                 Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
 
-            DrawFormatText(&context, scrollBar, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
+            DrawFormatText(&context, scrollBar, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
         }
     }
 

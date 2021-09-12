@@ -94,6 +94,8 @@ namespace RenderCore { namespace Techniques
 
     ClipSpaceType GetDefaultClipSpaceType();
 	ShaderLanguage GetDefaultShaderLanguage();
+    extern float g_NDCDepthAtNearClip;
+    extern float g_NDCDepthAtFarClip;
 
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, const CameraDesc& sceneCamera, 

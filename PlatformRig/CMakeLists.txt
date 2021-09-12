@@ -17,7 +17,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     set(DebuggingDisplaysSrc 
         #InitDebugDisplays.cpp
-        #DebuggingDisplays/BufferUploadDisplay.cpp
+        DebuggingDisplays/BufferUploadDisplay.cpp
         DebuggingDisplays/ConsoleDisplay.cpp
         DebuggingDisplays/CPUProfileDisplay.cpp
         #DebuggingDisplays/DynamicImpostersDisplay.cpp

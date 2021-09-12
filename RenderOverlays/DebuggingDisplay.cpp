@@ -26,10 +26,6 @@
 #include <assert.h>
 #include <string.h>
 
-#if defined(HAS_XLE_CONSOLE_RIG)
-    #include "../ConsoleRig/IncludeLUA.h"
-#endif
-
 #pragma warning(disable:4244)   // conversion from 'int' to 'float', possible loss of data
 
 namespace RenderOverlays { namespace DebuggingDisplay
@@ -167,64 +163,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         _pendingDelta = 0.f;
     }
 
-    void DrawScrollBar(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour, ColorB outlineColour)
-    {
-
-            //
-            //        Divide the rectangle into 3 parts
-            //      
-            //            Up button
-            //            Scroll area
-            //            Down button
-            //
-
-        const Rect upButton = coordinates.UpArrow();
-        const Rect downButton = coordinates.DownArrow();
-
-        DrawFilledEllipse(context, upButton, fillColour);
-        DrawFilledEllipse(context, downButton, fillColour);
-        DrawEllipse(context, upButton, outlineColour);
-        DrawEllipse(context, downButton, outlineColour);
-
-        const float W = 7.f;
-        const float Q = W - 1.f;
-        const Coord2 upA    (upButton._topLeft[0]*(1.f/2.f)+upButton._bottomRight[0]*(1.f/2.f), upButton._topLeft[1]*1.f+upButton._bottomRight[1]*0.f-5);
-        const Coord2 upB    (upButton._topLeft[0]*(Q/W)+upButton._bottomRight[0]*(1.f/W), upButton._topLeft[1]*0.f+upButton._bottomRight[1]*1.f);
-        const Coord2 upC    (upButton._topLeft[0]*(1.f/W)+upButton._bottomRight[0]*(Q/W), upButton._topLeft[1]*0.f+upButton._bottomRight[1]*1.f);
-        const Coord2 downA  (downButton._topLeft[0]*(1.f/2.f)+downButton._bottomRight[0]*(1.f/2.f), downButton._topLeft[1]*0.f+downButton._bottomRight[1]*1.f+5);
-        const Coord2 downB  (downButton._topLeft[0]*(Q/W)+downButton._bottomRight[0]*(1.f/W), downButton._topLeft[1]*1.f+downButton._bottomRight[1]*0.f);
-        const Coord2 downC  (downButton._topLeft[0]*(1.f/W)+downButton._bottomRight[0]*(Q/W), downButton._topLeft[1]*1.f+downButton._bottomRight[1]*0.f);
-
-        const Coord2 leftA   (upButton._topLeft[0]*(3.f/5.f)+upButton._bottomRight[0]*(2.f/5.f), upButton._bottomRight[1]);
-        const Coord2 leftB   (upButton._topLeft[0]*(3.f/5.f)+upButton._bottomRight[0]*(2.f/5.f), downButton._topLeft[1]);
-        const Coord2 rightA  (upButton._topLeft[0]*(2.f/5.f)+upButton._bottomRight[0]*(3.f/5.f), upButton._bottomRight[1]);
-        const Coord2 rightB  (upButton._topLeft[0]*(2.f/5.f)+upButton._bottomRight[0]*(3.f/5.f), downButton._topLeft[1]);
-        const Coord2 midA    (upButton._topLeft[0]*(1.f/2.f)+upButton._bottomRight[0]*(1.f/2.f), upButton._bottomRight[1]);
-        const Coord2 midB    (upButton._topLeft[0]*(1.f/2.f)+upButton._bottomRight[0]*(1.f/2.f), downButton._topLeft[1]);
-
-        const Coord2 triangles[]         = {upA, upB, upC, downA, downB, downC};
-        const ColorB triangleColours[]   = {fillColour, fillColour, fillColour, fillColour, fillColour, fillColour};
-        DrawTriangles(context, triangles, triangleColours, dimof(triangles)/3);
-        DrawRectangle(context, Rect(leftA, rightB), 0.f, fillColour);
-
-        const Coord2 lines[] = { upA, upB, upA, upC, upB, upC, 
-                                 downA, downB, downA, downC, downB, downC, 
-                                 leftA, leftB, rightA, rightB };
-        const ColorB lineColours[] = {  outlineColour, outlineColour, outlineColour, outlineColour, 
-                                        outlineColour, outlineColour, outlineColour, outlineColour, 
-                                        outlineColour, outlineColour, outlineColour, outlineColour,
-                                        outlineColour, outlineColour, outlineColour, outlineColour };
-        DrawLines(context, lines, lineColours, dimof(lines)/2);
-        
-        const Rect thumbRect = coordinates.Thumb(thumbPosition);
-        DrawRoundedRectangle(context, thumbRect, fillColour, outlineColour, 1.f/2.7f);
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////
 
-    Float3 AsPixelCoords(Coord2 input)              { return Float3(float(input[0]), float(input[1]), 0.f); }
+    Float3 AsPixelCoords(Coord2 input)              { return Float3(float(input[0]), float(input[1]), RenderCore::Techniques::g_NDCDepthAtNearClip); }
     Float3 AsPixelCoords(Coord2 input, float depth) { return Float3(float(input[0]), float(input[1]), depth); }
-    Float3 AsPixelCoords(Float2 input)              { return Expand(input, 0.f); }
+    Float3 AsPixelCoords(Float2 input)              { return Expand(input, RenderCore::Techniques::g_NDCDepthAtNearClip); }
     Float3 AsPixelCoords(Float3 input)              { return input; }
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect)
     {
@@ -252,6 +195,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _raisedFillRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _raisedRoundedFillRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
 
@@ -265,6 +209,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> raisedFillRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> raisedFillRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillEllipse,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineEllipse)
         {
@@ -274,6 +219,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillRoundedRect = BuildImmediateDrawableMaterial(*fillRoundedRect);
             _outlineRoundedRect = BuildImmediateDrawableMaterial(*outlineRoundedRect);
             _raisedFillRect = BuildImmediateDrawableMaterial(*raisedFillRect);
+            _raisedRoundedFillRect = BuildImmediateDrawableMaterial(*raisedFillRoundedRect);
             _fillEllipse = BuildImmediateDrawableMaterial(*fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(*outlineEllipse);
 
@@ -284,6 +230,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(fillRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(outlineRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(raisedFillRect->GetDependencyValidation());
+            _depVal.RegisterDependency(raisedFillRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(fillEllipse->GetDependencyValidation());
             _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
         }
@@ -296,14 +243,32 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
             auto outlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
             auto raisedFillRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":RaisedFillRect");
+            auto raisedFillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":RaisedFillRoundedRect");
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, raisedFillRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, raisedFillRect, raisedFillRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
         }
     };
 
-    void DrawEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void DrawScrollBar(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour, ColorB outlineColour)
+    {
+        const Rect thumbRect = coordinates.Thumb(thumbPosition);
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
+        const float roundedProportion = 2.f/5.f;
+        context->DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(thumbRect._topLeft),
+            AsPixelCoords(thumbRect._bottomRight),
+            ColorB{0x57, 0x57, 0x57}, ColorB::Zero,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(0.f, roundedProportion), Float2(0.f, roundedProportion),
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedRoundedFillRect});
+    }
+
+    void OutlineEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -322,7 +287,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineEllipse});
     }
 
-    void DrawFilledEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void FillEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -341,7 +306,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillEllipse});
     }
 
-    void DrawRoundedRectangleOutline(
+    void OutlineRoundedRectangle(
         IOverlayContext* context, const Rect & rect, 
         ColorB colour, 
         float width, float roundedProportion)
@@ -362,7 +327,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineRoundedRect});
     }
 
-    void DrawRoundedRectangle(
+    void FillAndOutlineRoundedRectangle(
         IOverlayContext* context, 
         const Rect & rect,
         ColorB backgroundColour, ColorB outlineColour,
@@ -384,7 +349,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRoundedRect});
     }
 
-    void DrawRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void FillRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
@@ -403,40 +368,21 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1])), colour);
     }
 
-    void DrawRectangle(IOverlayContext* context, const Rect& rect, float depth, ColorB colour)
-    {
-        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
-            return;
-        }
-
-        context->DrawTriangle(
-            ProjectionMode::P2D, 
-            AsPixelCoords(Float3(rect._topLeft[0], rect._topLeft[1], depth)), colour,
-            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1], depth)), colour,
-            AsPixelCoords(Float3(rect._bottomRight[0], rect._topLeft[1], depth)), colour);
-
-        context->DrawTriangle(
-            ProjectionMode::P2D, 
-            AsPixelCoords(Float3(rect._bottomRight[0], rect._topLeft[1], depth)), colour,
-            AsPixelCoords(Float3(rect._topLeft[0], rect._bottomRight[1], depth)), colour,
-            AsPixelCoords(Float3(rect._bottomRight[0], rect._bottomRight[1], depth)), colour);
-    }
-
-    void DrawRectangleOutline(IOverlayContext* context, const Rect& rect, float depth, ColorB colour)
+    void OutlineRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
         }
 
         Float3 lines[8];
-        lines[0] = AsPixelCoords(Float3(rect._topLeft[0],       rect._topLeft[1],       depth));
-        lines[1] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._topLeft[1],       depth));
-        lines[2] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._topLeft[1],       depth));
-        lines[3] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._bottomRight[1],   depth));
-        lines[4] = AsPixelCoords(Float3(rect._bottomRight[0],   rect._bottomRight[1],   depth));
-        lines[5] = AsPixelCoords(Float3(rect._topLeft[0],       rect._bottomRight[1],   depth));
-        lines[6] = AsPixelCoords(Float3(rect._topLeft[0],       rect._bottomRight[1],   depth));
-        lines[7] = AsPixelCoords(Float3(rect._topLeft[0],       rect._topLeft[1],       depth));
+        lines[0] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
+        lines[1] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._topLeft[1]));
+        lines[2] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._topLeft[1]));
+        lines[3] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._bottomRight[1]));
+        lines[4] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._bottomRight[1]));
+        lines[5] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
+        lines[6] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
+        lines[7] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
         context->DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
@@ -445,17 +391,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
 		return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
     }
 
-    Coord DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, StringSection<> text)
-    {
-        return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
-    }
-
-    Coord DrawText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
+    Coord DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
     {
         return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
     }
 
-    Coord DrawFormatText(IOverlayContext* context, const Rect& rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
+    Coord DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
     {
         char buffer[4096];
         vsnprintf(buffer, dimof(buffer), text, args);
@@ -466,25 +407,16 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         va_list args;
         va_start(args, text);
-        auto result = DrawFormatText(context, rect, 0.f, textStyle, colour, TextAlignment::TopLeft, text, args);
+        auto result = DrawFormatText(context, rect, textStyle, colour, TextAlignment::TopLeft, text, args);
         va_end(args);
         return result;
     }
 
-    Coord DrawFormatText(IOverlayContext* context, const Rect & rect, float depth, TextStyle* textStyle, ColorB colour, const char text[], ...)
+    Coord DrawFormatText(IOverlayContext* context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
     {
         va_list args;
         va_start(args, text);
-        auto result = DrawFormatText(context, rect, depth, textStyle, colour, TextAlignment::TopLeft, text, args);
-        va_end(args);
-        return result;
-    }
-
-    Coord DrawFormatText(IOverlayContext* context, const Rect & rect, float depth, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
-    {
-        va_list args;
-        va_start(args, text);
-        auto result = DrawFormatText(context, rect, depth, textStyle, colour, alignment, text, args);
+        auto result = DrawFormatText(context, rect, textStyle, colour, alignment, text, args);
         va_end(args);
         return result;
     }
@@ -673,7 +605,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
             Rect r = tempLayout.AllocateFullHeight(i->second);
             if (!i->first.empty() && i->second) {
-                // DrawRectangle(context, r, bkColor);
+                // FillRectangle(context, r, bkColor);
 
                 if (i != fieldHeaders.begin())
                     context->DrawLine(ProjectionMode::P2D,
@@ -730,7 +662,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
 
                     const ColorB colour = TextColor;
-                    // DrawRectangle(context, r, s->second._bkColour);
+                    // FillRectangle(context, r, s->second._bkColour);
                     context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
                 }
             }
@@ -961,7 +893,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
             //      panel controls are only visible when we've got a mouse over...
         if (interfaceState.HasMouseOver(panelControlsId) || interfaceState.HasMouseOver(nameDropDownId)) {
-            DrawRoundedRectangle(context, buttonsRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
+            FillAndOutlineRoundedRectangle(context, buttonsRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
 
             Layout buttonsLayout(buttonsRect);
             buttonsLayout._paddingBetweenAllocations = buttonsLayout._paddingInternalBorder = buttonPadding;
@@ -969,10 +901,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 Rect buttonRect = buttonsLayout.Allocate(Coord2(buttonSize, buttonSize));
                 InteractableId id = InteractableId_Make(s_PanelControlsButtons[c])+panelIndex;
                 if (interfaceState.HasMouseOver(id)) {
-                    DrawEllipse(context, buttonRect, ColorB(0xff000000u));
+                    OutlineEllipse(context, buttonRect, ColorB(0xff000000u));
                     DrawText(context, buttonRect, nullptr, ColorB(0xff000000u), s_PanelControlsButtons[c]);
                 } else {
-                    DrawEllipse(context, buttonRect, ColorB(0xffffffffu));
+                    OutlineEllipse(context, buttonRect, ColorB(0xffffffffu));
                     DrawText(context, buttonRect, nullptr, ColorB(0xffffffffu), s_PanelControlsButtons[c]);
                 }
                 interactables.Register(Interactables::Widget(buttonRect, id));
@@ -991,7 +923,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 const Coord dropDownSize = Coord(_widgets.size() * buttonSize + (_widgets.size()+1) * buttonPadding);
                 const Rect dropDownRect(    Coord2(nameRect._topLeft[0], nameRect._bottomRight[1]-3),
                                             Coord2(nameRect._topLeft[0]+nameSize, nameRect._bottomRight[1]-3+dropDownSize));
-                DrawRectangle(context, dropDownRect, RoundedRectBackgroundColour);
+                FillRectangle(context, dropDownRect, RoundedRectBackgroundColour);
                 const Rect dropDownInteractableRect(Coord2(dropDownRect._topLeft[0], dropDownRect._topLeft[1]-8), Coord2(dropDownRect._bottomRight[0], dropDownRect._bottomRight[1]));
                 interactables.Register(Interactables::Widget(dropDownInteractableRect, nameDropDownId));
 
@@ -1004,7 +936,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                                 + panelIndex * _widgets.size();
                     const bool mouseOver = interfaceState.HasMouseOver(thisId);
                     if (mouseOver) {
-                        DrawRectangle(context, partRect, ColorB(180, 200, 255, 64));
+                        FillRectangle(context, partRect, ColorB(180, 200, 255, 64));
                     }
                     DrawText(context, partRect, nullptr, ColorB(0xffffffffu), MakeStringSection(i->_name));
                     y += buttonSize + buttonPadding;
@@ -1021,7 +953,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             interactables.Register(Interactables::Widget(backButtonRect, backButtonId));
             const bool mouseOver = interfaceState.HasMouseOver(backButtonId);
             if (mouseOver) {
-                DrawRoundedRectangle(context, backButtonRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
+                FillAndOutlineRoundedRectangle(context, backButtonRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
                 ColorB colour = ColorB(0x7fffffffu);
                 if (interfaceState.IsMouseButtonHeld()) {
                     colour = ColorB(0xffffffffu);
@@ -1176,11 +1108,19 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return false;
     }
 
-    void DebugScreensSystem::Register(std::shared_ptr<IWidget> widget, const char name[], Type type)
+    bool DebugScreensSystem::IsAnyPanelActive()
+    {
+        for (const auto& i:_panels)
+            if (i._widgetIndex < _widgets.size())
+                return true;
+        return false;
+    }
+
+    void DebugScreensSystem::Register(std::shared_ptr<IWidget> widget, StringSection<> name, Type type)
     {
         WidgetAndName wAndN;
         wAndN._widget = std::move(widget);
-        wAndN._name = name;
+        wAndN._name = name.AsString();
         wAndN._hashCode = Hash64(wAndN._name);
         
         if (type == InPanel) {
@@ -1191,11 +1131,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
     
-    void DebugScreensSystem::Unregister(const char name[])
+    void DebugScreensSystem::Unregister(StringSection<> name)
     {
         auto it = _widgets.begin();
         for (; it != _widgets.end(); ++it) {
-            if (strcmp(it->_name.c_str(), name) == 0) {
+            if (XlEqString(name, it->_name)) {
                 break;
             }
         }
@@ -1219,10 +1159,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void DebugScreensSystem::SwitchToScreen(unsigned panelIndex, const char name[])
+    void DebugScreensSystem::SwitchToScreen(unsigned panelIndex, StringSection<> name)
     {
         if (panelIndex < _panels.size()) {
-            if (!name) {
+            if (name.IsEmpty()) {
                 _panels[panelIndex]._widgetIndex = size_t(-1);
                 _panels[panelIndex]._backButton = std::string();
                 return;
@@ -1230,7 +1170,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
                 // look for exact match first...
             for (std::vector<WidgetAndName>::const_iterator i=_widgets.begin(); i!=_widgets.end(); ++i) {
-                if (!XlCompareStringI(i->_name.c_str(), name)) {
+                if (XlEqStringI(name, i->_name)) {
                     _panels[panelIndex]._widgetIndex = std::distance(_widgets.cbegin(), i);
                     _panels[panelIndex]._backButton = std::string();  // clear out the back button
                     return;
@@ -1239,7 +1179,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
                 // If we don't have an exact match, just find a substring...
             for (std::vector<WidgetAndName>::const_iterator i=_widgets.begin(); i!=_widgets.end(); ++i) {
-                if (XlFindStringI(i->_name.c_str(), name)) {
+                if (XlFindStringI(i->_name, name)) {
                     _panels[panelIndex]._widgetIndex = std::distance(_widgets.cbegin(), i);
                     _panels[panelIndex]._backButton = std::string();  // clear out the back button
                     return;
@@ -1248,12 +1188,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void DebugScreensSystem::SwitchToScreen(const char name[])
+    void DebugScreensSystem::SwitchToScreen(StringSection<> name)
     {
         SwitchToScreen(0, name);
     }
 
-    bool DebugScreensSystem::SwitchToScreen(unsigned panelIndex, uint64 hashCode)
+    bool DebugScreensSystem::SwitchToScreen(unsigned panelIndex, uint64_t hashCode)
     {
         if (panelIndex < _panels.size()) {
             for (std::vector<WidgetAndName>::const_iterator i=_widgets.begin(); i!=_widgets.end(); ++i) {
@@ -1312,29 +1252,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         p._size = .5f;
         p._horizontalDivider = false;
         _panels.push_back(p);
-
-#if defined(HAS_XLE_CONSOLE_RIG)
-       {
-           using namespace luabridge;
-           auto* luaState = ConsoleRig::Console::GetInstance().GetLuaState();
-           void (DebugScreensSystem::*switchToScreen)(const char[]) = &DebugScreensSystem::SwitchToScreen;
-           getGlobalNamespace(luaState)
-               .beginClass<DebugScreensSystem>("DebugScreensSystem")
-                   .addFunction("SwitchToScreen", switchToScreen)
-               .endClass();
-
-           setGlobal(luaState, this, "MainDebug");
-       }
-#endif
     }
 
     DebugScreensSystem::~DebugScreensSystem()
     {
-#if defined(HAS_XLE_CONSOLE_RIG)
-       auto* luaState = ConsoleRig::Console::GetInstance().GetLuaState();
-       lua_pushnil(luaState);
-       lua_setglobal(luaState, "MainDebug");
-#endif
     }
 
     ///////////////////////////////////////////////////////////////////////////////////

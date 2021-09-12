@@ -13,7 +13,8 @@ namespace RenderCore
 	class IPresentationChain;
 }
 
-namespace RenderCore { namespace Techniques { 
+namespace RenderCore { namespace Techniques
+{
 	class TechniqueContext;
 	class DrawingApparatus;
 	class ImmediateDrawingApparatus;
@@ -21,8 +22,7 @@ namespace RenderCore { namespace Techniques {
 	class FrameRenderingApparatus;
 }}
 
-namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
-namespace PlatformRig { class MainInputHandler; class WindowApparatus; }
+namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; }
 
 namespace Sample
 {
@@ -36,6 +36,7 @@ namespace Sample
         std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateDrawingApparatus;
         std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
+		std::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
 	};
 
 	class ISampleOverlay : public PlatformRig::IOverlaySystem

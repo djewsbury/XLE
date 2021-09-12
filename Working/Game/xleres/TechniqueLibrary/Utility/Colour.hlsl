@@ -13,6 +13,33 @@ float3 LinearToSRGB_Fast(float3 input)		{ return sqrt(input); }
 float3 LinearToSRGB(float3 input)		    { return pow(max(0.0.xxx, input), 1.f/2.2f); }
 float3 SRGBToLinear(float3 input)		    { return pow(max(0.0.xxx, input), 2.2f); }
 
+float SRGBToLinear_Formal(float input)		    
+{
+	// The following matches exactly the linear to srgb conversion by the hardware (tested on NVIDIA drivers)
+	// if we skip the condition, it only effects color values less than 7 (at least with 8 bit color values)
+	// and numbers between 7 and 10 seem to be accurate enough even via the other path
+	// So, for example, taking SRGB input -> SRGBToLinear_Formal (without first condition) -> hardware linear to SRGB, will end up with
+	// conversion: 
+	// 		0 -> 3
+	// 		1 -> 3
+	// 		2 -> 4
+	// 		3 -> 4
+	// 		4 -> 5
+	// 		5 -> 6
+	// 		6 -> 7
+	// 		7 -> 7... etc
+	// in practice, that difference seems so minute to be completely pendantic
+	if (input <= 0.04045f) {
+		return input / 12.92f;
+	} else
+		return pow((input+0.055f)/1.055f, 2.4f);
+}
+
+float3 SRGBToLinear_Formal(float3 input)
+{
+	return float3(SRGBToLinear_Formal(input.r), SRGBToLinear_Formal(input.g), SRGBToLinear_Formal(input.b));
+}
+
 static const float LightingScale = 1.f;     // note -- LightingScale is currently not working with high res screenshots (it is applied twice, so only 1 is safe)
 
 float4 ByteColor(uint r, uint g, uint b, uint a) { return float4(r/float(0xff), g/float(0xff), b/float(0xff), a/float(0xff)); }

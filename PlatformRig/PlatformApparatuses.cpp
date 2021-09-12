@@ -19,11 +19,18 @@
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/Font.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
+#include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
 #include "../Utility/Profiling/CPUProfiler.h"
+#include "../Utility/MemoryUtils.h"
+
+/*#include "../RenderCore/Techniques/Services.h"
+#include "DebuggingDisplays/BufferUploadDisplay.h"*/
 
 namespace PlatformRig
 {
+
+	static auto Fn_ShowScreen = ConstHash64<'show', 'scre', 'en'>::Value;
 
 	DebugOverlaysApparatus::DebugOverlaysApparatus(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
@@ -60,10 +67,20 @@ namespace PlatformRig
 
 		_debugFont0 = RenderOverlays::GetX2Font("Petra", 16);
 		_debugFont1 = RenderOverlays::GetX2Font("Vera", 16);
+
+		ConsoleRig::CrossModule::GetInstance()._services.Add(
+			Fn_ShowScreen,
+			[weakDebugScreens = std::weak_ptr<DebugScreensSystem>{_debugSystem}](StringSection<> screenName) {
+				auto l = weakDebugScreens.lock();
+				if (l)
+					l->SwitchToScreen(screenName);
+			});
 	}
 
 	DebugOverlaysApparatus::~DebugOverlaysApparatus()
-	{}
+	{
+		ConsoleRig::CrossModule::GetInstance()._services.Remove(Fn_ShowScreen);
+	}
 
 
 	WindowApparatus::WindowApparatus(std::shared_ptr<RenderCore::IDevice> device)
@@ -102,9 +119,18 @@ namespace PlatformRig
 			std::make_shared<PlatformRig::Overlays::HierarchicalProfilerDisplay>(&cpuProfiler),
 			"[Profiler] CPU Profiler");
 
+		/*debugSys.Register(
+			std::make_shared<PlatformRig::Overlays::BufferUploadDisplay>(&RenderCore::Techniques::Services::GetBufferUploads()),
+			"[Profiler] Buffer uploads");*/
+
 		debugSys.Register(std::make_shared<PlatformRig::Overlays::InvalidAssetDisplay>(), "[Console] Invalid asset display");
 		debugSys.SwitchToScreen("[Console] Invalid asset display");
 		// debugSys.SwitchToScreen("[Profiler] GPU Profiler");
+	}
+
+	void ShowDebugScreen(StringSection<> screenName)
+	{
+		ConsoleRig::CrossModule::GetInstance()._services.Call<void>(Fn_ShowScreen, screenName);
 	}
 
 }

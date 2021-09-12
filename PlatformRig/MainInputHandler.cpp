@@ -47,12 +47,16 @@ namespace PlatformRig
         static const KeyId escape = KeyId_Make("escape");
         if (evnt.IsPress(escape)) {
             if (_debugScreens->CurrentScreen(0)) {
-                _debugScreens->SwitchToScreen(0, nullptr);
+                _debugScreens->SwitchToScreen(0, StringSection<>{});
                 return true;
             }
         }
 
-        return _debugScreens && _debugScreens->OnInputEvent(context, evnt);
+        if (_debugScreens) {
+            if (_debugScreens->OnInputEvent(context, evnt))
+                return true;
+        }
+        return false;
     }
 
     DebugScreensInputHandler::DebugScreensInputHandler(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreens)

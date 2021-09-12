@@ -66,7 +66,8 @@ float4 RaisedFill_Calculate(
     float4 baseColor,
     float2 dhdp)
 {
-    float3 normal = NormalToSurface(dhdp);
+    float accentuate = 8.f;
+    float3 normal = NormalToSurface(accentuate*dhdp);
     float d = saturate(-dot(BasicShapesLightDirection, normal));
     return float4(d * baseColor.rgb, 1.f);
 }

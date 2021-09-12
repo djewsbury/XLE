@@ -80,18 +80,18 @@ namespace Sample
             //  It just provides a convenient architecture for visualizing important information.
         Log(Verbose) << "Setup tools and debugging" << std::endl;
         PlatformRig::FrameRig frameRig(sampleGlobals._frameRenderingApparatus->GetSubFrameEvents());
-        auto debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-        PlatformRig::InitProfilerDisplays(*debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
-        frameRig.SetDebugScreensOverlaySystem(debugOverlaysApparatus->_debugScreensOverlaySystem);
+        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
+        PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
+        frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
         frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
 
         Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
         sampleOverlay->OnStartup(sampleGlobals);
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("xleres/hotkey.txt"));
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.txt"));
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
         auto sampleListener = sampleOverlay->GetInputListener();
         if (sampleListener)
             sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
 
         frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
         sampleGlobals._windowApparatus->_windowHandler->_onResize.Bind(

@@ -5,6 +5,7 @@
 #include "QuickMetricsDisplay.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderOverlays/Font.h"
 #include "../../Utility/MemoryUtils.h"
 
 namespace PlatformRig { namespace Overlays
@@ -13,9 +14,9 @@ namespace PlatformRig { namespace Overlays
 	{
 		using namespace RenderOverlays::DebuggingDisplay;
 		const unsigned lineHeight = 20;
-		const auto titleBkground = RenderOverlays::ColorB { 0, 10, 64 };
+		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-		Layout textArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 32);
+		Layout textArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 24);
 		auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
 
 		ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
@@ -26,12 +27,16 @@ namespace PlatformRig { namespace Overlays
 		if (unsigned(_scrollOffset) < _lines.size()) {
 			auto l = _lines.begin() + unsigned(_scrollOffset);
 			for (; l!=_lines.end(); ++l) {
-				auto allocation = textArea.AllocateFullWidth(lineHeight);
-				if (!allocation.Height()) break;
 				if (l->first == Style::Heading0) {
-					DrawRectangle(&context, allocation, titleBkground);
-					DrawText(&context, allocation, nullptr, RenderOverlays::ColorB{0xff, 0xff, 0xff}, l->second);
+					auto allocation = textArea.AllocateFullWidth(24);
+					if (!allocation.Height()) break;
+					FillRectangle(&context, allocation, titleBkground);
+					allocation._topLeft[0] += 8;
+					RenderOverlays::TextStyle textStyle{RenderOverlays::DrawTextOptions{false, false}};
+					DrawText(&context, allocation, &textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
 				} else {
+					auto allocation = textArea.AllocateFullWidth(lineHeight);
+					if (!allocation.Height()) break;
 					DrawText(&context, allocation, nullptr, RenderOverlays::ColorB{0xcf, 0xcf, 0xcf}, l->second);
 				}
 			}

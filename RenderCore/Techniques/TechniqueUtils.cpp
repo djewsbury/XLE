@@ -63,6 +63,17 @@ namespace RenderCore { namespace Techniques
         #endif
 	}
 
+    // this must correspond to GetDefaultClipSpaceType()
+    // ReverseZ are 1.f -> 0.f, otherwise
+    // 0.f -> 1.f
+    #if (GFXAPI_TARGET == GFXAPI_DX11) || (GFXAPI_TARGET == GFXAPI_DX9) || (GFXAPI_TARGET == GFXAPI_APPLEMETAL) || (GFXAPI_TARGET == GFXAPI_VULKAN)
+        float g_NDCDepthAtNearClip = 1.f;
+        float g_NDCDepthAtFarClip = 0.f;
+    #else
+        float g_NDCDepthAtNearClip = 0.f;
+        float g_NDCDepthAtFarClip = 1.f;
+    #endif
+
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, const CameraDesc& sceneCamera, 
         const std::pair<Float2, Float2>& viewport)

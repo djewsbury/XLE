@@ -28,8 +28,9 @@ ShapeResult RoundedRectShape_Calculate(
     float2 pixelSize = float2(GetUDDS(coords).x, GetVDDS(coords).y);
     float2 borderSize = borderSizePix * pixelSize;
 
-    float roundedHeight = (maxCoords.y - minCoords.y) * roundedProportion;
-    float roundedWidth = roundedHeight * GetAspectRatio(coords);
+    float roundedPix = min((maxCoords.y - minCoords.y)/GetVDDS(coords).y, (maxCoords.x - minCoords.x)/GetUDDS(coords).x) * roundedProportion;
+    float roundedHeight = roundedPix * GetVDDS(coords).y;
+    float roundedWidth = roundedPix * GetUDDS(coords).x;
 
         // mirror coords so we only have to consider the top/left quadrant
     float2 r = float2(
@@ -56,7 +57,7 @@ ShapeResult RoundedRectShape_Calculate(
             float dist = roundedHeight - length(o);
             result._border += .25f * (dist >= 0.f && dist < borderSize.y);
             // result._fill = max(result._fill, dist >= borderSize.y);
-            result._fill +=  .25f * (dist >= 0.f);
+            result._fill += .25f * (dist >= 0.f);
         }
         return result;
     }

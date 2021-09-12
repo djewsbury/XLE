@@ -118,7 +118,7 @@ namespace PlatformRig { namespace Overlays
                             (unsigned)LinearInterpolate(textureArea._topLeft[1], textureArea._bottomRight[1], r.second[1] / float(atlasSize[1])));
                             
                         float age = Clamp(sm._timeSinceUsage/60.f, 0.f, 1.f);
-                        DrawRoundedRectangleOutline(
+                        OutlineRoundedRectangle(
                             &context, Rect(topLeft, bottomRight),
                             ColorB::FromNormalized(LinearInterpolate(0.f, 1.f, age), 0.f, LinearInterpolate(1.f, 0.f, age), 1.f),
                             2.f, 0.05f);

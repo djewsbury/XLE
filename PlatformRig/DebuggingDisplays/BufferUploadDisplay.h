@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderCore/ResourceDesc.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../BufferUploads/Metrics.h"
 #include "../../Utility/Threading/Mutex.h"
@@ -90,7 +91,7 @@ namespace PlatformRig { namespace Overlays
 
     protected:
         unsigned _filter, _detailsIndex;
-        bool Filter(const BufferUploads::BufferDesc&);
+        bool Filter(const RenderCore::ResourceDesc&);
         std::vector<BufferUploads::PoolMetrics> _detailsHistory;
         float _graphMin, _graphMax;
         BufferUploads::IManager* _manager;

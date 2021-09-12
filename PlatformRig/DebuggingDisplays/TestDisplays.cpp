@@ -95,7 +95,7 @@ namespace PlatformRig { namespace Overlays
         for (auto i=intersections._intr.cbegin(); i!=intersections._intr.cend(); ++i) {
             Coord2 centre(int((*i)[0] * elementDim) + gridArea._topLeft[0], int((*i)[1] * elementDim) + gridArea._topLeft[1]);
             Rect rect(centre - Coord2(2,2), centre + Coord2(2,2));
-            DrawEllipse(&context, rect, ColorB(0xffff0000));
+            OutlineEllipse(&context, rect, ColorB(0xffff0000));
         }
     }
 
@@ -642,8 +642,8 @@ namespace PlatformRig { namespace Overlays
 
     static void DrawButtonBasic(IOverlayContext* context, const Rect& rect, const char label[], ButtonFormatting formatting)
     {
-        DrawRectangle(context, rect, formatting._background);
-        DrawRectangleOutline(context, rect, 0.f, formatting._foreground);
+        FillRectangle(context, rect, formatting._background);
+        OutlineRectangle(context, rect, 0.f, formatting._foreground);
         context->DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);
@@ -699,7 +699,7 @@ namespace PlatformRig { namespace Overlays
             UInt2 maxs = remainingSpace._topLeft + UInt2(
                  unsigned(r.second[0] * float(remainingSpace.Width()) / float(RectPackerSize[0])),
                  unsigned(r.second[1] * float(remainingSpace.Height()) / float(RectPackerSize[1])));
-            DrawRectangle(&context, Rect(mins, maxs), ColorB(colors[(++c)%dimof(colors)]));
+            FillRectangle(&context, Rect(mins, maxs), ColorB(colors[(++c)%dimof(colors)]));
         }
     }
 

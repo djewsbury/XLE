@@ -54,7 +54,7 @@ namespace RenderCore { namespace Techniques
 
 			if (shaderPatches.HasPatchType(s_patchShape)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDescFuture[dsMode]->Actualize();
+				*nascentDesc = *_pipelineDesc[dsMode];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
 				nascentDesc->_patchExpansions.push_back(s_patchShape);
@@ -66,7 +66,7 @@ namespace RenderCore { namespace Techniques
 				return result;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDescFuture[dsMode]->Actualize();
+				*nascentDesc = *_pipelineDesc[dsMode];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.push_back(s_patchTwoLayersShader);
@@ -100,16 +100,17 @@ namespace RenderCore { namespace Techniques
 				CommonResourceBox::s_dsDisable
 			};
 			for (unsigned c=0; c<dimof(dsModes); ++c) {
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
-				nascentDesc->_depthStencil = dsModes[c];
+				_pipelineDesc[c] = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
+				_pipelineDesc[c]->_depthStencil = dsModes[c];
 
 				_pipelineDescFuture[c] = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
-				_pipelineDescFuture[c]->SetAsset(std::move(nascentDesc), {});
+				_pipelineDescFuture[c]->SetAsset(std::shared_ptr<GraphicsPipelineDesc>{_pipelineDesc[c]}, {});
 			}
 		}
 		~ImmediateRendererTechniqueDelegate() {}
 	private:
 		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
+		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc[3];
 	};
 
 	struct DrawableWithVertexCount : public Drawable 

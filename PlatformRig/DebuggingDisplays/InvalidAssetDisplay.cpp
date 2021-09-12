@@ -27,7 +27,7 @@ namespace PlatformRig { namespace Overlays
 			if (r._state != AssetState::Invalid) continue;
 
 			auto titleRect = layout.AllocateFullWidth(lineHeight);
-			RenderOverlays::DebuggingDisplay::DrawRectangle(&context, titleRect, titleBkground);
+			RenderOverlays::DebuggingDisplay::FillRectangle(&context, titleRect, titleBkground);
 			RenderOverlays::DebuggingDisplay::DrawText(&context, titleRect, nullptr, RenderOverlays::ColorB{0xff, 0xff, 0xff}, r._initializer);
 
 			auto msg = std::stringstream{AsString(r._actualizationLog)};

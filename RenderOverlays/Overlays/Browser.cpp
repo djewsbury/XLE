@@ -211,8 +211,8 @@ namespace Overlays
 
     static void DrawButtonBasic(IOverlayContext* context, const Rect& rect, const char label[], ButtonFormatting formatting)
     {
-        DrawRectangle(context, rect, formatting._background);
-        DrawRectangleOutline(context, rect, 0.f, formatting._foreground);
+        FillRectangle(context, rect, formatting._background);
+        OutlineRectangle(context, rect, 0.f, formatting._foreground);
         // DrawText(context, rect, 0.f, nullptr, formatting._foreground, manipulatorName);
         context->DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
@@ -256,8 +256,8 @@ namespace Overlays
 
             // Header at the top
         {
-            DrawRectangle(&context, toolBoxLayout.GetMaximumSize(), backgroundRectangleColour);
-            DrawRectangleOutline(&context, Rect(toolBoxLayout.GetMaximumSize()._topLeft + Coord2(2,2), toolBoxLayout.GetMaximumSize()._bottomRight - Coord2(2,2)), 0.f, backgroundOutlineColour);
+            FillRectangle(&context, toolBoxLayout.GetMaximumSize(), backgroundRectangleColour);
+            OutlineRectangle(&context, Rect(toolBoxLayout.GetMaximumSize()._topLeft + Coord2(2,2), toolBoxLayout.GetMaximumSize()._bottomRight - Coord2(2,2)), 0.f, backgroundOutlineColour);
             interactables.Register(Interactables::Widget(toolBoxLayout.GetMaximumSize(), Id_TotalRect));
 
             const auto headingRect = toolBoxLayout.AllocateFullWidth(25);
@@ -391,7 +391,7 @@ namespace Overlays
 
         for (auto i=labels.cbegin(); i!=labels.cend(); ++i) {
             auto outputRect = i->second;
-            DrawRectangleOutline(&context, Rect(outputRect._topLeft + Coord2(2,2), outputRect._bottomRight - Coord2(1,1)), 0.f, backgroundOutlineColour);
+            OutlineRectangle(&context, Rect(outputRect._topLeft + Coord2(2,2), outputRect._bottomRight - Coord2(1,1)), 0.f, backgroundOutlineColour);
             Rect labelRect(Coord2(outputRect._topLeft[0], outputRect._bottomRight[1]-20), outputRect._bottomRight);
 
             context.DrawText(
@@ -402,7 +402,7 @@ namespace Overlays
             // draw the scroll bar over the top on the right size
         if (!scrollCoordinates.Collapse()) {
             auto thumbRect = scrollCoordinates.Thumb(float(itemScrollOffset));
-            DrawRectangleOutline(&context, thumbRect, 0.f, backgroundOutlineColour);
+            OutlineRectangle(&context, thumbRect, 0.f, backgroundOutlineColour);
         }
     }
 

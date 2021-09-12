@@ -17,8 +17,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         IOverlayContext* context, const Rect& rect, 
         const char label[], const ButtonStyle& formatting)
     {
-        DrawRectangle(context, rect, formatting._background);
-        DrawRectangleOutline(context, rect, 0.f, formatting._foreground);
+        FillRectangle(context, rect, formatting._background);
+        OutlineRectangle(context, rect, formatting._foreground);
         context->DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);

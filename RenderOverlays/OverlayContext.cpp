@@ -30,7 +30,7 @@ namespace RenderOverlays
 
 	static inline unsigned  HardwareColor(ColorB input)
 	{
-		return (uint32(input.a) << 24) | (uint32(input.b) << 16) | (uint32(input.g) << 8) | uint32(input.r);
+		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
 	}
 
 	MiniInputElementDesc Vertex_PC::inputElements3D[] = 
@@ -297,7 +297,8 @@ namespace RenderOverlays
 		result._stateSet._forwardBlendSrc = Blend::SrcAlpha;
 		result._stateSet._forwardBlendDst = Blend::InvSrcAlpha;
 		result._stateSet._forwardBlendOp = BlendOp::Add;
-		result._stateSet._flag = RenderCore::Assets::RenderStateSet::Flag::ForwardBlend;
+		result._stateSet._flag = RenderCore::Assets::RenderStateSet::Flag::ForwardBlend | RenderCore::Assets::RenderStateSet::Flag::WriteMask;
+		result._stateSet._writeMask = 1<<1;		// repurposed -- bit 0 is depth write; bit 1 is depth read
 		return result;
 	}
 

@@ -180,7 +180,7 @@ namespace PlatformRig { namespace Overlays
                     break;
                 }
 
-                DrawRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
+                FillAndOutlineRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
                 Layout sectionLayout(sectionRect);
                 Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
@@ -190,7 +190,7 @@ namespace PlatformRig { namespace Overlays
                 Rect sectionNameRect(
                     Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                     Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-                DrawText(&context, sectionNameRect, 2.f, nullptr, ColorB(0xffffffffu), (const char*)i->first);
+                DrawText(&context, sectionNameRect, nullptr, ColorB(0xffffffffu), (const char*)i->first);
 
                 if (section._durationHistoryLength) {
                     auto stats = Pimpl::CalculateDurationStats({section._durationHistory, &section._durationHistory[section._durationHistoryLength]});

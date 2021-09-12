@@ -56,6 +56,7 @@ namespace PlatformRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     void InitDebugDisplays(RenderOverlays::DebuggingDisplay::DebugScreensSystem& system);
+    void ShowDebugScreen(StringSection<>);
 
 }
 
