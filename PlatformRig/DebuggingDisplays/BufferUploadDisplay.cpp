@@ -776,13 +776,13 @@ namespace PlatformRig { namespace Overlays
             uint32 eventType = (uint32)*((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
             if (eventType == ~uint32(0x0)) {
                 size_t frameId = *((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
-                GPUTime frequency = *((const uint64*)evnt); evnt = PtrAdd(evnt, sizeof(uint64));
+                GPUTime frequency = *((const uint64_t*)evnt); evnt = PtrAdd(evnt, sizeof(uint64_t));
                 _mostRecentGPUFrequency = frequency;
                 _mostRecentGPUFrameId = (unsigned)frameId;
             } else {
                 const char* eventName = *((const char**)evnt); evnt = PtrAdd(evnt, sizeof(const char*));
-                assert((size_t(evnt)%sizeof(uint64))==0);
-                uint64 timeValue = *((const uint64*)evnt); evnt = PtrAdd(evnt, sizeof(uint64));
+                assert((size_t(evnt)%sizeof(uint64_t))==0);
+                uint64_t timeValue = *((const uint64_t*)evnt); evnt = PtrAdd(evnt, sizeof(uint64_t));
 
                 if (eventName && !XlCompareStringI(eventName, "GPU_UPLOAD")) {
                     if (eventType == 0) {

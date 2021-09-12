@@ -50,7 +50,7 @@ namespace PlatformRig { namespace Overlays
         std::vector<unsigned>   _gpuEventsBuffer;
         Threading::Mutex        _gpuEventsBufferLock;
 
-        typedef uint64 GPUTime;
+        typedef uint64_t GPUTime;
         GPUTime         _mostRecentGPUFrequency, _lastUploadBeginTime;
         float           _mostRecentGPUCost;
         unsigned        _mostRecentGPUFrameId;

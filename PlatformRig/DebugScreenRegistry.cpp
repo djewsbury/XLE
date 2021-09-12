@@ -15,7 +15,7 @@ namespace PlatformRig
             std::string name,
             std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> widget) override
 		{
-			auto result = _nextRegistrySetId+1;
+			auto result = _nextRegistrySetId++;
 			_registrySet.push_back(RegisteredScreen{result, name, widget});
             OnRegister.Invoke(name, widget);
 			return result;
