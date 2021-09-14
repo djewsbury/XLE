@@ -7,6 +7,7 @@
 #include "../FileSystemMonitor.h"
 #include "../PollingThread.h"
 #include "../Log.h"
+#include "../../OSServices/RawFS.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Core/Prefix.h"
 #include "../../Core/Types.h"
@@ -114,6 +115,7 @@ namespace OSServices
 		: _directoryName(directoryName)
 		, _cancelled(false)
 		{
+			assert(!_directoryName.empty());
 			_directoryHandle = INVALID_HANDLE_VALUE;
 			_bytesReturned = 0;
 			std::memset(_resultBuffer, 0, dimof(_resultBuffer));
@@ -241,6 +243,12 @@ namespace OSServices
 	{
 		auto splitter = MakeFileNameSplitter(filenameWithPath);
 		auto directoryName = splitter.DriveAndPath();
+		char cwdBuffer[MaxPath];
+		if (directoryName.IsEmpty()) {
+			// Empty directory implies cwd
+			OSServices::GetCurrentDirectory(dimof(cwdBuffer), cwdBuffer);
+			directoryName = cwdBuffer;
+		}
 		auto dirHash = HashFilenameAndPath(directoryName);
 
 		ScopedLock(_pimpl->_monitoredDirectoriesLock);
