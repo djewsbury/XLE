@@ -71,11 +71,13 @@ namespace PlatformRig
     {
         static KeyId ctrlKey = KeyId_Make("control");
         if (evnt.IsHeld(ctrlKey)) {
-            auto& t = Assets::Legacy::GetAssetDep<TableOfKeys>(_filename.c_str());  // (todo -- cash the hash value, rather than rebuilding every time)
-            for (auto i=t.GetTable().cbegin(); i!=t.GetTable().cend(); ++i) {
-                if (evnt.IsPress(i->first)) {
-                    ConsoleRig::Console::GetInstance().Execute(i->second);
-                    return true;
+            auto* t = Assets::MakeAsset<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
+            if (t) {
+                for (auto i=(*t)->GetTable().cbegin(); i!=(*t)->GetTable().cend(); ++i) {
+                    if (evnt.IsPress(i->first)) {
+                        ConsoleRig::Console::GetInstance().Execute(i->second);
+                        return true;
+                    }
                 }
             }
         }
