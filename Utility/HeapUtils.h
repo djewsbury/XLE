@@ -231,7 +231,7 @@ namespace Utility
             auto notUsedNotInDecay = (~_stateBits[plane]._usedThisFrame) & (~_stateBits[plane]._inDecayHeap);
             auto usedAndInDecay = _stateBits[plane]._usedThisFrame & _stateBits[plane]._inDecayHeap;
             if (plane == _stateBits.size()-1) {
-                unsigned bitsInLastOne = _objects.size()%64;
+                unsigned bitsInLastOne = _cacheSize%64;
                 notUsedNotInDecay &= (1ull<<uint64_t(bitsInLastOne))-1;
                 usedAndInDecay &= (1ull<<uint64_t(bitsInLastOne))-1;
             }
