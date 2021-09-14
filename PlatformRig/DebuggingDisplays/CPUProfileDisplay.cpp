@@ -19,9 +19,6 @@
 
 namespace PlatformRig { namespace Overlays
 {
-    float g_fpsDisplay = 0.f;
-	float g_loadDisplay = 0.f;
-
     static float AsMilliseconds(uint64 profilerTime)
     {
         static float freqMult = 1000.f / OSServices::GetPerformanceCounterFrequency();
@@ -275,36 +272,16 @@ namespace PlatformRig { namespace Overlays
         IOverlayContext& context, Layout& layout,
         Interactables&interactables, InterfaceState& interfaceState)
     {
-        if (true) {
-            std::vector<IHierarchicalProfiler::ResolvedEvent> resolvedEvents;
-            {
-                ScopedLock(_pimpl->_resolvedEventsLock);
-                resolvedEvents = _pimpl->_resolvedEvents;
-            }
-            Layout tableView(layout.GetMaximumSize());
-            tableView._caretY -= _pimpl->_rowOffset * 200;
-            static ProfilerTableSettings settings;
-            DrawProfilerTable(resolvedEvents, _pimpl->_toggledItems, settings, &context, tableView,
-                              interactables, interfaceState);
+        std::vector<IHierarchicalProfiler::ResolvedEvent> resolvedEvents;
+        {
+            ScopedLock(_pimpl->_resolvedEventsLock);
+            resolvedEvents = _pimpl->_resolvedEvents;
         }
-
-	    {
-		    context.DrawText(
-			    std::make_tuple(AsPixelCoords(Coord2(layout.GetMaximumSize()._bottomRight[0] - 100,
-			                                         layout.GetMaximumSize()._topLeft[1])),
-			                    AsPixelCoords(layout.GetMaximumSize()._bottomRight)),
-				GetDefaultFont(64), TextStyle{}, ColorB{0xff, 0xff, 0xff}, TextAlignment::Left,
-			    StringMeld<64>() << std::setprecision(3) << g_fpsDisplay);
-	    }
-
-	    if (g_loadDisplay != 0.f) {
-		    context.DrawText(
-			    std::make_tuple(AsPixelCoords(Coord2(layout.GetMaximumSize()._bottomRight[0] - 100,
-			                                         layout.GetMaximumSize()._topLeft[1] + 64)),
-			                    AsPixelCoords(layout.GetMaximumSize()._bottomRight)),
-				GetDefaultFont(32), TextStyle{}, ColorB{0xff, 0xff, 0xff}, TextAlignment::Left,
-			    StringMeld<64>() << std::setprecision(3) << g_loadDisplay * 100.f << "%");
-	    }
+        Layout tableView(layout.GetMaximumSize());
+        tableView._caretY -= _pimpl->_rowOffset * 200;
+        static ProfilerTableSettings settings;
+        DrawProfilerTable(resolvedEvents, _pimpl->_toggledItems, settings, &context, tableView,
+                            interactables, interfaceState);
     }
 
     bool HierarchicalProfilerDisplay::ProcessInput(
