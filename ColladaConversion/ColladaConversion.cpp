@@ -42,6 +42,7 @@ using namespace RenderCore::Assets::GeoProc;
 
 namespace ColladaConversion
 {
+	static const char* s_cfgName = "rawos/colladaimport.cfg";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -559,10 +560,10 @@ namespace ColladaConversion
 		auto split = MakeFileNameSplitter(identifier);
 		auto filePath = split.AllExceptParameters().AsString();
 
-		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState("colladaimport.cfg"));
+		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(s_cfgName));
 		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(filePath));
 
-		result->_cfg = ImportConfiguration("colladaimport.cfg");
+		result->_cfg = ImportConfiguration(s_cfgName);
 		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(MakeStringSection(filePath), 0, "r", OSServices::FileShareMode::Read);
 		XmlInputStreamFormatter<utf8> formatter(
 			MakeStringSection((const char*)result->_fileData.GetData().begin(), (const char*)result->_fileData.GetData().end()));
@@ -631,9 +632,9 @@ namespace ColladaConversion
 		}
 
 		std::shared_ptr<MergedAnimCompileOp> result = std::make_shared<MergedAnimCompileOp>();
-		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState("colladaimport.cfg"));
+		result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(s_cfgName));
 
-		ImportConfiguration cfg("colladaimport.cfg");
+		ImportConfiguration cfg(s_cfgName);
 
 		for (const auto&filePath:sourceFiles) {
 			result->_dependencies.push_back(::Assets::IntermediatesStore::GetDependentFileState(filePath.first));

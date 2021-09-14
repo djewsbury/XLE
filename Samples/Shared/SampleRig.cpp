@@ -54,7 +54,6 @@ namespace Sample
 
         auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>();
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
-        auto rawosmnt2 = ::Assets::MainFileSystem::GetMountingTree()->Mount("", ::Assets::MainFileSystem::GetDefaultFileSystem());
         auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
 
@@ -128,7 +127,6 @@ namespace Sample
         Log(Verbose) << "Starting shutdown" << std::endl;
         ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
         sampleGlobals._renderDevice->PrepareForDestruction();
-        ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt2);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);
     }
 

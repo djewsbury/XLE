@@ -150,7 +150,7 @@ namespace MaterialTool
 
             doc.Uri = uri;
             doc.GraphMetaData.DefaultsMaterial = _activeMaterialContext.MaterialName;
-            doc.GraphMetaData.PreviewModelFile = "game/model/galleon/galleon.dae";
+            doc.GraphMetaData.PreviewModelFile = "rawos/game/model/galleon/galleon.dae";
 
             var subgraphContext = _exportProvider.GetExport<DiagramEditingContext>().Value;
             subgraphContext.Document = doc;

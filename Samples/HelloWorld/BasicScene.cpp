@@ -152,8 +152,8 @@ namespace Sample
                 //
                 //  We can also get a Assets::Exceptions::InvalidAsset if asset can
                 //  never be correctly loaded (eg, missing file or something)
-            const char sampleAsset[] = "game/model/galleon/galleon.dae";
-            const char sampleMaterial[] = "game/model/galleon/galleon.material";
+            const char sampleAsset[] = "rawos/game/model/galleon/galleon.dae";
+            const char sampleMaterial[] = "rawos/game/model/galleon/galleon.material";
             auto& scaffold = Assets::Legacy::GetAssetComp<ModelScaffold>(sampleAsset);
             auto& matScaffold = Assets::Legacy::GetAssetComp<MaterialScaffold>(sampleMaterial, sampleAsset);
 

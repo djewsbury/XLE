@@ -340,8 +340,8 @@ namespace ToolsRig
 
 	ModelVisSettings::ModelVisSettings()
     {
-        _modelName = "game/model/galleon/galleon.dae";
-        _materialName = "game/model/galleon/galleon.material";
+        _modelName = "rawos/game/model/galleon/galleon.dae";
+        _materialName = "rawos/game/model/galleon/galleon.material";
 		_levelOfDetail = 0;
 		_materialBindingFilter = 0;
 
