@@ -120,11 +120,14 @@ namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    ChunkFileContainer::ChunkFileContainer(StringSection<ResChar> assetTypeName)
+    ChunkFileContainer::ChunkFileContainer(std::string assetTypeName, DependencyValidation depVal)
+    : _filename(std::move(assetTypeName))
+    , _validationCallback(std::move(depVal))
+    {}
+    ChunkFileContainer::ChunkFileContainer(StringSection<> assetTypeName)
     : _filename(assetTypeName.AsString())
     {
-        StringSection<> initializer = _filename;
-		_validationCallback = GetDepValSys().Make(initializer);
+		_validationCallback = GetDepValSys().Make(_filename);
     }
 
 	ChunkFileContainer::ChunkFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar>)

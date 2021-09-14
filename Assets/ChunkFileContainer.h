@@ -21,7 +21,7 @@ namespace Assets
     class ChunkFileContainer
     {
     public:
-        const rstring& Filename() const						{ return _filename; }
+        const std::string& Filename() const						{ return _filename; }
 		const DependencyValidation& GetDependencyValidation() const	{ return _validationCallback; }
 
 		std::vector<ArtifactRequestResult> ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const;
@@ -29,8 +29,9 @@ namespace Assets
 
 		std::shared_ptr<IFileInterface> OpenFile() const;
 
-		ChunkFileContainer(StringSection<ResChar> assetTypeName);
-		ChunkFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar>);
+        ChunkFileContainer(std::string assetTypeName, DependencyValidation depVal);
+		ChunkFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<>);
+		ChunkFileContainer(StringSection<> assetTypeName);      // note -- avoid using, because this will query the depVal for the given file
 		ChunkFileContainer();
         ~ChunkFileContainer();
 

@@ -467,7 +467,7 @@ namespace Assets
 					if (prod._type == ChunkType_Multi) {
 						// open with no sharing
 						auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", 0);
-						ChunkFileContainer temp(prod._intermediateArtifact);
+						ChunkFileContainer temp(prod._intermediateArtifact, _depVal);
 						auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
 						for (size_t c=0; c<fromMulti.size(); ++c)
 							result[requestsForMultiMapping[c]] = std::move(fromMulti[c]);
