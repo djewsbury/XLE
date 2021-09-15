@@ -9,6 +9,7 @@
 #include "../../Math/Matrix.h"
 #include "../../Utility/VariantUtils.h"
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/Threading/Mutex.h"
 #include <vector>
 #include <memory>
 #include <string>
@@ -108,6 +109,8 @@ namespace RenderCore { namespace Techniques
 		unsigned _startIndexLocation = 0;
 	};
 
+	class DrawablesPacketPool;
+
 	class DrawablesPacket
 	{
 	public:
@@ -120,10 +123,35 @@ namespace RenderCore { namespace Techniques
 		void Reset() { _drawables.clear(); _vbStorage.clear(); _ibStorage.clear(); }
 
 		IteratorRange<const void*> GetStorage(Storage storageType) const;
+
+		DrawablesPacket();
+		~DrawablesPacket();
+		DrawablesPacket(DrawablesPacket&& moveFrom) never_throws;
+		DrawablesPacket&operator=(DrawablesPacket&& moveFrom) never_throws;
 	private:
 		std::vector<uint8_t>	_vbStorage;
 		std::vector<uint8_t>	_ibStorage;
 		unsigned				_storageAlignment = 0u;
+		DrawablesPacketPool*	_pool = nullptr;
+
+		friend class DrawablesPacketPool;
+		DrawablesPacket(DrawablesPacketPool&);
+	};
+
+	class DrawablesPacketPool
+	{
+	public:
+		DrawablesPacket Allocate();
+		void ReturnToPool(DrawablesPacket&&);
+
+		DrawablesPacketPool();
+		~DrawablesPacketPool();
+
+		DrawablesPacketPool(const DrawablesPacketPool&) = delete;
+		DrawablesPacketPool& operator=(const DrawablesPacketPool&) = delete;
+	private:
+		Threading::Mutex _lock;
+		std::vector<DrawablesPacket> _availablePackets;
 	};
 
 	class IPipelineAcceleratorPool;

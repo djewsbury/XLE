@@ -295,6 +295,7 @@ namespace PlatformRig
     		techniqueContext._systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
             techniqueContext._commonResources = drawingApparatus->_commonResources;
             techniqueContext._sequencerDescSetLayout = drawingApparatus->_sequencerDescSetLayout;
+            techniqueContext._drawablesPacketsPool = drawingApparatus->_drawablesPacketsPool;
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;

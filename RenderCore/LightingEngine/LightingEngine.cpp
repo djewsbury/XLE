@@ -229,7 +229,8 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		const CompiledLightingTechnique& compiledTechnique)
-	: _threadContext(&threadContext)
+	: _drawablePkt(parsingContext.GetTechniqueContext()._drawablesPacketsPool->Allocate())
+	, _threadContext(&threadContext)
 	, _parsingContext(&parsingContext)
 	, _pipelineAcceleratorPool(compiledTechnique._pipelineAccelerators.get())
 	, _compiledTechnique(&compiledTechnique)

@@ -388,6 +388,72 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	DrawablesPacket::DrawablesPacket() {}
+	DrawablesPacket::DrawablesPacket(DrawablesPacketPool& pool)
+	: _pool(&pool) {}
+	DrawablesPacket::~DrawablesPacket()
+	{
+		if (_pool) {
+			Reset();
+			_pool->ReturnToPool(std::move(*this));
+		}
+	}
+	DrawablesPacket::DrawablesPacket(DrawablesPacket&& moveFrom) never_throws
+	: _drawables(std::move(moveFrom._drawables))
+	, _vbStorage(std::move(moveFrom._vbStorage))
+	, _ibStorage(std::move(moveFrom._ibStorage))
+	{
+		_pool = moveFrom._pool;
+		moveFrom._pool = nullptr;
+		_storageAlignment = moveFrom._storageAlignment;
+	}
+	DrawablesPacket& DrawablesPacket::operator=(DrawablesPacket&& moveFrom) never_throws
+	{
+		if (&moveFrom == this)
+			return *this;
+
+		if (_pool)
+			_pool->ReturnToPool(std::move(*this));
+
+		_drawables = std::move(moveFrom._drawables);
+		_vbStorage = std::move(moveFrom._vbStorage);
+		_ibStorage = std::move(moveFrom._ibStorage);
+		_pool = moveFrom._pool;
+		moveFrom._pool = nullptr;
+		_storageAlignment = moveFrom._storageAlignment;
+		return *this;
+	}
+
+	DrawablesPacket DrawablesPacketPool::Allocate()
+	{
+		ScopedLock(_lock);
+		if (_availablePackets.empty())
+			return DrawablesPacket(*this);
+		auto res = std::move(*(_availablePackets.end()-1));
+		_availablePackets.erase(_availablePackets.end()-1);
+		return res;
+	}
+
+	void DrawablesPacketPool::ReturnToPool(DrawablesPacket&& pkt)
+	{
+		assert(pkt._drawables.empty() && pkt._vbStorage.empty() && pkt._ibStorage.empty());
+		ScopedLock(_lock);
+		_availablePackets.push_back(std::move(pkt));
+	}
+
+	DrawablesPacketPool::DrawablesPacketPool()
+	{
+		_availablePackets.reserve(8);
+	}
+
+	DrawablesPacketPool::~DrawablesPacketPool()
+	{
+		// ensure packets in _availablePackets don't try to call ReturnToPool when shutting down
+		for (auto& p:_availablePackets)
+			p._pool = nullptr;
+	}
+
+
 	DrawableInputAssembly::DrawableInputAssembly(
 		IteratorRange<const InputElementDesc*> inputElements,
 		Topology topology)

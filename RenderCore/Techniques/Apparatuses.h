@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
 	class SystemUniformsDelegate;
 	class PipelinePool;
 	class SubFrameEvents;
+	class DrawablesPacketPool;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
 	 * 
@@ -72,6 +73,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
 		std::shared_ptr<CommonResourceBox> _commonResources;
+		std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
 
 		SignalDelegateId _frameBarrierBinding;
 
