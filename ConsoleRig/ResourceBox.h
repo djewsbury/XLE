@@ -9,12 +9,12 @@
 #include "../Assets/AssetFuture.h"
 #include "../Assets/InitializerPack.h"
 #include "../OSServices/Log.h"
-#include "../Core/Types.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include <vector>
-#include <algorithm>
+#include <utility>
+#include <memory>
 
 namespace ConsoleRig
 {

@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual void Draw(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Draw(IThreadContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IShaderOperator();

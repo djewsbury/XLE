@@ -26,7 +26,7 @@ namespace RenderCore { namespace LightingEngine
 			StepType _type = StepType::Abort;
 			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			Techniques::DrawablesPacket* _pkt = nullptr;
-			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- consider subframe allocator style vector for things like this!
+			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
 
 			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};

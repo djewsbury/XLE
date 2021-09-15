@@ -87,7 +87,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned	_pendingBufferViews = 0;
 
         uint64_t	_sinceLastFlush = 0;
-		std::vector<DescriptorSlot> _signature;
+		IteratorRange<const DescriptorSlot*> _signature;		// avoid copying this because ProgressiveDescriptorSetBuilder is mostly for short-term use
 
 		Flags::BitField _flags = 0;
 

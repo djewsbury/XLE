@@ -294,7 +294,7 @@ namespace RenderCore { namespace Techniques
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
 
-		std::shared_ptr<SequencerConfig> GetSequencerConfig(const FrameBufferDesc& fbDesc, unsigned subpassIndex)
+		SequencerConfig& GetSequencerConfig(const FrameBufferDesc& fbDesc, unsigned subpassIndex)
 		{
 			auto hash = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(fbDesc, subpassIndex);
 			auto i = LowerBound(_sequencerConfigs, hash);
@@ -302,11 +302,9 @@ namespace RenderCore { namespace Techniques
 				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
 					_techniqueDelegate, ParameterBox{},
 					fbDesc, subpassIndex);
-				_sequencerConfigs.insert(i, std::make_pair(hash, result));
-				return result;
-			} else {
-				return i->second;
+				i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));
 			}
+			return *i->second;
 		}
 
 		void ExecuteDraws(
@@ -315,13 +313,13 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) override
 		{
-			auto sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
+			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			SequencerUniformsHelper uniformsHelper{parserContext};
 			Draw(
 				context, parserContext,
 				*_pipelineAcceleratorPool,
-				*sequencerConfig.get(),
+				sequencerConfig,
 				uniformsHelper,
 				_workingPkt);
 
@@ -330,8 +328,8 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(const FrameBufferDesc& fbDesc, unsigned subpassIndex) override
 		{
-			auto sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
-			return Techniques::PrepareResources(*_pipelineAcceleratorPool, *sequencerConfig, _workingPkt);
+			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
+			return Techniques::PrepareResources(*_pipelineAcceleratorPool, sequencerConfig, _workingPkt);
 		}
 
 		virtual DrawablesPacket* GetDrawablesPacket() override

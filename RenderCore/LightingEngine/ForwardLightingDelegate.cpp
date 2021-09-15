@@ -19,9 +19,11 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/DeferredShaderResource.h"
+#include "../Techniques/Techniques.h"
 #include "../IThreadContext.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"
+#include "../../ConsoleRig/ResourceBox.h"
 #include "../../xleres/FileList.h"
 
 #include "../Metal/DeviceContext.h"
@@ -74,30 +76,38 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
+	class ToneMapStandin
+	{
+	public:
+		::Assets::PtrToFuturePtr<Techniques::IShaderOperator> _operator;
+		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
+		ToneMapStandin(
+			const std::shared_ptr<Techniques::PipelinePool>& pool,
+			const Techniques::FrameBufferTarget& fbTarget)
+		{
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
+			_operator = Techniques::CreateFullViewportOperator(
+				pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+				BASIC_PIXEL_HLSL ":copy_inputattachment",
+				{}, LIGHTING_OPERATOR_PIPELINE ":LightingOperator",
+				fbTarget, usi);
+		}
+	};
+
 	void ForwardLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
-		auto& pipelineLayout = ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
-			iterator._threadContext->GetDevice(), 
-			LIGHTING_OPERATOR_PIPELINE ":LightingOperator");
-		auto& copyShader = *::Assets::Actualize<Metal::ShaderProgram>(
-			pipelineLayout->GetPipelineLayout(),
-			BASIC2D_VERTEX_HLSL ":fullscreen",
-			BASIC_PIXEL_HLSL ":copy_inputattachment");
-		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout->GetPipelineLayout());
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
-		Metal::BoundUniforms uniforms(copyShader, usi);
-		encoder.Bind(copyShader);
-		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
-		UniformsStream us;
-		IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
-		us._resourceViews = MakeIteratorRange(srvs);
-		uniforms.ApplyLooseUniforms(metalContext, encoder, us);
-		encoder.Bind({}, Topology::TriangleStrip);
-		encoder.Draw(4);
+		auto& standin = ConsoleRig::FindCachedBox<ToneMapStandin>(
+			iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool,
+			Techniques::FrameBufferTarget{iterator._rpi});
+		auto* pipeline = standin._operator->TryActualize();
+		if (pipeline) {
+			UniformsStream us;
+			IResourceView* srvs[] = { iterator._rpi.GetInputAttachmentView(0).get() };
+			us._resourceViews = MakeIteratorRange(srvs);
+			(*pipeline)->Draw(*iterator._threadContext, us);
+		} 
 	}
 
 	static RenderStepFragmentInterface CreateToneMapFragment(

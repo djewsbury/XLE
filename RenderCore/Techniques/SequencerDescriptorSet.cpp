@@ -138,7 +138,7 @@ namespace RenderCore { namespace Techniques
 			++idx;
 		}
 
-		_srBindings.push_back(newBinding);
+		_srBindings.push_back(std::move(newBinding));
 	}
 
 	void SequencerUniformsHelper::Pimpl::QueryResources(ParsingContext& parsingContext, uint64_t resourcesToQuery, ShaderResourceDelegateBinding& del)

@@ -378,7 +378,7 @@ namespace RenderCore { namespace Techniques
         #if defined(_DEBUG)
             if (_attachedContext) {
                 _attachedContext->EndLabel();
-                _attachedContext->BeginLabel(_layout.GetSubpasses()[_currentSubpassIndex+1]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[_currentSubpassIndex+1]._name.c_str());
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[_currentSubpassIndex+1]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[_currentSubpassIndex+1]._name.c_str());
             }
         #endif
         ++_currentSubpassIndex;
@@ -439,7 +439,7 @@ namespace RenderCore { namespace Techniques
 
     auto RenderPassInstance::GetInputAttachmentResource(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResource>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -449,7 +449,7 @@ namespace RenderCore { namespace Techniques
 
     auto RenderPassInstance::GetInputAttachmentView(unsigned inputAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetInputs()[inputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -459,7 +459,7 @@ namespace RenderCore { namespace Techniques
 	
 	auto RenderPassInstance::GetOutputAttachmentResource(unsigned outputAttachmentSlot) const -> const std::shared_ptr<IResource>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -469,7 +469,7 @@ namespace RenderCore { namespace Techniques
 	
 	auto RenderPassInstance::GetOutputAttachmentSRV(unsigned outputAttachmentSlot, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetOutputs()[outputAttachmentSlot]._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -479,7 +479,7 @@ namespace RenderCore { namespace Techniques
 
 	auto RenderPassInstance::GetDepthStencilAttachmentSRV(const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetDepthStencil()._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -489,7 +489,7 @@ namespace RenderCore { namespace Techniques
 
 	auto RenderPassInstance::GetDepthStencilAttachmentResource() const -> const std::shared_ptr<IResource>&
 	{
-		const auto& subPass = _layout.GetSubpasses()[GetCurrentSubpassIndex()];
+		const auto& subPass = _layout->GetSubpasses()[GetCurrentSubpassIndex()];
 		auto resName = subPass.GetDepthStencil()._resourceName;
 		assert(_attachmentPool);
         if (resName < _attachmentPoolReservation.GetResourceIds().size())
@@ -529,13 +529,13 @@ namespace RenderCore { namespace Techniques
         _frameBuffer = std::move(fb._frameBuffer);
         _attachmentPoolReservation = std::move(fb._poolReservation);
         _attachmentPool = &attachmentPool;
-        _layout = *fb._completedDesc;
+        _layout = fb._completedDesc;        // expecting this to be retained by the pool until at least the destruction of this
         // todo -- we might need to pass offset & extent parameters to BeginRenderPass
         // this could be derived from _attachmentPool->GetFrameBufferProperties()?
         _trueRenderPass = true;
 
         #if defined(_DEBUG)
-            _attachedContext->BeginLabel(_layout.GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[0]._name.c_str());
+            _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
         #endif
         _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
         _attachedParsingContext = nullptr;
@@ -564,14 +564,14 @@ namespace RenderCore { namespace Techniques
             _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions);
             _attachmentPool = &attachmentPool;
             _attachmentPoolReservation.CompleteInitialization(context);
-            _layout = stitchedFragment._fbDesc;
+            _layout = &stitchedFragment._fbDesc;
             // clear not supported in this mode
-            for (const auto& a:_layout.GetAttachments())
+            for (const auto& a:_layout->GetAttachments())
                 assert(!HasClear(a._loadFromPreviousPhase));
 
             _attachedContext = Metal::DeviceContext::Get(context).get();
             #if defined(_DEBUG)
-                _attachedContext->BeginLabel(_layout.GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout.GetSubpasses()[0]._name.c_str());
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
             #endif
         }
 
@@ -616,6 +616,9 @@ namespace RenderCore { namespace Techniques
         _attachedParsingContext = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
+        // todo -- have to protect lifetime of stitchResult._fbDesc in this case
+        // candidate for subframe heap
+        // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
         *this = RenderPassInstance { context, parsingContext, stitchResult, beginInfo };
     }
 
@@ -623,7 +626,7 @@ namespace RenderCore { namespace Techniques
         const FrameBufferDesc& layout,
         IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
         AttachmentPool& attachmentPool)
-	: _layout(layout)
+	: _layout(&layout)
     {
 		// This constructs a kind of "non-metal" RenderPassInstance
 		// It allows us to use the RenderPassInstance infrastructure (for example, for remapping attachment requests)
@@ -658,6 +661,7 @@ namespace RenderCore { namespace Techniques
         moveFrom._attachmentPool = nullptr;
         moveFrom._currentSubpassIndex = 0;
         moveFrom._trueRenderPass = false;
+        moveFrom._layout = nullptr;
 
         if (moveFrom._attachedParsingContext) {
             assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
@@ -677,6 +681,7 @@ namespace RenderCore { namespace Techniques
         moveFrom._attachedContext = nullptr;
         moveFrom._attachmentPool = nullptr;
 		_layout = std::move(moveFrom._layout);
+        moveFrom._layout = nullptr;
         _viewedAttachments = std::move(moveFrom._viewedAttachments);
         _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
         _currentSubpassIndex = moveFrom._currentSubpassIndex;
@@ -826,8 +831,11 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const PreregisteredAttachment*> attachmentRequests,
         ReservationFlag::BitField flags) -> Reservation
     {
-        std::vector<bool> consumed(_pimpl->_attachments.size(), false);
-        std::vector<bool> consumedSemantic(_pimpl->_semanticAttachments.size(), false);
+        bool consumed[_pimpl->_attachments.size()];
+        bool consumedSemantic[_pimpl->_semanticAttachments.size()];
+        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c) consumed[c] = false;
+        for (unsigned c=0; c<_pimpl->_semanticAttachments.size(); ++c) consumedSemantic[c] = false;
+        auto originalAttachmentsSize = _pimpl->_attachments.size();
 
         // Treat any attachments that are bound to semantic values as "consumed" already.
         // In other words, we can't give these attachments to requests without a semantic,
@@ -876,7 +884,7 @@ namespace RenderCore { namespace Techniques
             // If we haven't found a match yet, we must treat the request as a temporary buffer
             // We will go through and either find an existing buffer or create a new one
             for (unsigned q=0; q<_pimpl->_attachments.size(); ++q) {
-                if (MatchRequest(requestDesc, _pimpl->_attachments[q]._desc) && q < consumed.size() && !consumed[q]) {
+                if (MatchRequest(requestDesc, _pimpl->_attachments[q]._desc) && q < originalAttachmentsSize && !consumed[q]) {
                     consumed[q] = true;
                     selectedAttachments.push_back(q);
                     foundMatch = true;

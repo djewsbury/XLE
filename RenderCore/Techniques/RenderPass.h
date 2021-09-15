@@ -195,7 +195,7 @@ namespace RenderCore { namespace Techniques
         Reservation(const Reservation&);
         Reservation& operator=(const Reservation&);
     private:
-        std::vector<AttachmentName> _reservedAttachments;
+        std::vector<AttachmentName> _reservedAttachments;       // good candidate for subframe heap
         AttachmentPool* _pool;
         ReservationFlag::BitField _reservationFlags;
 
@@ -247,7 +247,7 @@ namespace RenderCore { namespace Techniques
 
         Metal::FrameBuffer& GetFrameBuffer() { return *_frameBuffer; }
         const Metal::FrameBuffer& GetFrameBuffer() const { return *_frameBuffer; }
-        const FrameBufferDesc& GetFrameBufferDesc() const { return _layout; }
+        const FrameBufferDesc& GetFrameBufferDesc() const { return *_layout; }
         ViewportDesc GetDefaultViewport() const;
         const AttachmentPool::Reservation& GetAttachmentReservation() const { return _attachmentPoolReservation; }
 
@@ -292,6 +292,7 @@ namespace RenderCore { namespace Techniques
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
         // Construct a "non-metal" RenderPassInstance (useful for compute shader work)
+        // expects that the input FrameBufferDesc outlives this 
 		RenderPassInstance(
 			const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
@@ -307,13 +308,13 @@ namespace RenderCore { namespace Techniques
         Metal::DeviceContext* _attachedContext;
         AttachmentPool* _attachmentPool;
         AttachmentPool::Reservation _attachmentPoolReservation;
-		FrameBufferDesc _layout;
+		const FrameBufferDesc* _layout;     // this is expensive to copy, so avoid it when we can
         unsigned _currentSubpassIndex = 0;
         ParsingContext* _attachedParsingContext = nullptr;
         bool _trueRenderPass = false;
 
-        std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;
-        std::vector<unsigned> _viewedAttachmentsMap;
+        std::vector<std::shared_ptr<IResourceView>> _viewedAttachments;         // good candidate for subframe heap
+        std::vector<unsigned> _viewedAttachmentsMap;                            // good candidate for subframe heap
     };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -332,6 +332,9 @@ namespace RenderCore { namespace Assets
             return (rhs == TransformStackCommand::UniformScale_Static)
                 || (rhs == TransformStackCommand::ArbitraryScale_Static)
                 ;
+
+        default:
+            break;
         }
 
         return false;

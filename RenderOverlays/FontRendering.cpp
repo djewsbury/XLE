@@ -129,27 +129,31 @@ namespace RenderOverlays
 		_immediateDrawables->UpdateLastDrawCallVertexCount(_currentIterator - _currentAllocation.begin());
 	}
 
+	static RenderCore::Techniques::ImmediateDrawableMaterial CreateWorkingVertexSetPCTMaterial()
+	{
+		RenderCore::Techniques::ImmediateDrawableMaterial material;
+		material._uniformStreamInterface = std::make_shared<RenderCore::UniformsStreamInterface>();
+		material._uniformStreamInterface->BindResourceView(0, Hash64("InputTexture"));
+		material._stateSet = RenderCore::Assets::RenderStateSet{};
+		material._shaderSelectors.SetParameter("FONT_RENDERER", 1);
+		return material;
+	}
+
 	WorkingVertexSetPCT::WorkingVertexSetPCT(
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 		std::shared_ptr<RenderCore::IResourceView> textureView,
 		unsigned reservedQuads)
 	: _immediateDrawables(&immediateDrawables)
 	{
-		static std::shared_ptr<RenderCore::UniformsStreamInterface> usi;
-		if (!usi) {
-			usi = std::make_shared<RenderCore::UniformsStreamInterface>();
-			usi->BindResourceView(0, Hash64("InputTexture"));
-		}
 		assert(reservedQuads != 0);
-		_material._uniformStreamInterface = usi;
-		_material._uniforms._resourceViews.push_back(std::move(textureView));
-		_material._stateSet = RenderCore::Assets::RenderStateSet{};
-		_material._shaderSelectors.SetParameter("FONT_RENDERER", 1);
+		static auto material = CreateWorkingVertexSetPCTMaterial();
+		material._uniforms._resourceViews.push_back(std::move(textureView));		// super un-thread-safe
 		_currentAllocation = _immediateDrawables->QueueDraw(
 			reservedQuads * 6,
 			MakeIteratorRange(s_inputElements), 
-			_material).Cast<Vertex*>();
+			material).Cast<Vertex*>();
 		_currentIterator = _currentAllocation.begin();
+		material._uniforms._resourceViews.clear();
 	}
 
 	static unsigned ToDigitValue(ucs4 chr, unsigned base)

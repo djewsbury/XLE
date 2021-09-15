@@ -593,7 +593,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	ProgressiveDescriptorSetBuilder::ProgressiveDescriptorSetBuilder(
 		IteratorRange<const DescriptorSlot*> signature,
 		Flags::BitField flags)
-	: _signature(signature.begin(), signature.end())
+	: _signature(signature)
 	{
 		_flags = flags;
 		_sinceLastFlush = 0;
@@ -612,6 +612,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		, _verboseDescription(std::move(moveFrom._verboseDescription))
 	#endif
 	{
+		moveFrom._signature = {};
 		_pendingWrites = moveFrom._pendingWrites; moveFrom._pendingWrites = 0;
         _pendingImageInfos = moveFrom._pendingImageInfos; moveFrom._pendingImageInfos = 0;
         _pendingBufferInfos = moveFrom._pendingBufferInfos; moveFrom._pendingBufferInfos = 0;
@@ -630,6 +631,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	ProgressiveDescriptorSetBuilder& ProgressiveDescriptorSetBuilder::operator=(ProgressiveDescriptorSetBuilder&& moveFrom)
 	{
 		_signature = std::move(moveFrom._signature);
+		moveFrom._signature = {};
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			_verboseDescription = std::move(moveFrom._verboseDescription);
 		#endif

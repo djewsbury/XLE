@@ -17,6 +17,9 @@ namespace RenderCore { namespace Techniques
 
 		Metal::BoundUniforms& Get(
 			const Metal::GraphicsPipeline& pipeline,
+			const UniformsStreamInterface& group0);
+		Metal::BoundUniforms& Get(
+			const Metal::GraphicsPipeline& pipeline,
 			const UniformsStreamInterface& group0,
 			const UniformsStreamInterface& group1);
 		Metal::BoundUniforms& Get(
@@ -49,6 +52,19 @@ namespace RenderCore { namespace Techniques
 		#endif
 	};
 
+	inline Metal::BoundUniforms& BoundUniformsPool::Get(
+		const Metal::GraphicsPipeline& pipeline,
+		const UniformsStreamInterface& group0)
+	{
+		uint64_t hash = HashCombine(group0.GetHash(), pipeline.GetInterfaceBindingGUID());
+		auto i = LowerBound(_boundUniforms, hash);
+		if (i == _boundUniforms.end() || i->first != hash) {
+			Metal::BoundUniforms boundUniforms(pipeline, group0);
+			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
+		}
+		return i->second;
+	}
+	
 	inline Metal::BoundUniforms& BoundUniformsPool::Get(
 		const Metal::GraphicsPipeline& pipeline,
 		const UniformsStreamInterface& group0,

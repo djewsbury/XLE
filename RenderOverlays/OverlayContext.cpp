@@ -489,9 +489,6 @@ namespace RenderOverlays
 		_fontRenderingManager = fontRenderingManager;
 		if (_fontRenderingManager)
 			_defaultFont = ConsoleRig::FindCachedBox<DefaultFontBox>()._font;
-		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
-		_texturedUSI->BindResourceView(0, Hash64("InputTexture"));
-		_requiredBufferUploadsCommandList = 0;
 	}
 
 	ImmediateOverlayContext::~ImmediateOverlayContext()

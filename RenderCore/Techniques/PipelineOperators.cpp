@@ -86,6 +86,22 @@ namespace RenderCore { namespace Techniques
 			encoder.Draw(*_pipeline, 4);
 		}
 
+		virtual void Draw(
+			IThreadContext& threadContext,
+			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+		{
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, _usi);	// maybe silly to do a lookup here because it's the same every time
+
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
+
+			if (!descSets.empty())
+				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 0);
+			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+			
+			encoder.Draw(*_pipeline, 4);
+		}
+
 		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const override
 		{
 			if (!_predefinedPipelineLayout)

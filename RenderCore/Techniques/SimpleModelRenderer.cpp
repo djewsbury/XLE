@@ -48,6 +48,36 @@ namespace RenderCore { namespace Techniques
         const RenderCore::Assets::ModelScaffold& scaffold,
         const RenderCore::Assets::IndexData& ib);
 
+	#if _DEBUG
+		static Float3x4    Combine_NoDebugOverhead(const Float3x4& firstTransform, const Float3x4& secondTransform)
+		{
+			// Debug overhead is kind of crazy for this operation. Let's just cut some of it out, just for day-to-day
+			// convenience
+			const float* lhs = (const float*)&secondTransform;
+			const float* rhs = (const float*)&firstTransform;
+
+			Float3x4 resultm;
+			float* result = (float*)&resultm;
+			result[0*4+0] = lhs[0*4+0] * rhs[0*4+0] + lhs[0*4+1] * rhs[1*4+0] + lhs[0*4+2] * rhs[2*4+0];
+			result[0*4+1] = lhs[0*4+0] * rhs[0*4+1] + lhs[0*4+1] * rhs[1*4+1] + lhs[0*4+2] * rhs[2*4+1];
+			result[0*4+2] = lhs[0*4+0] * rhs[0*4+2] + lhs[0*4+1] * rhs[1*4+2] + lhs[0*4+2] * rhs[2*4+2];
+			result[0*4+3] = lhs[0*4+0] * rhs[0*4+3] + lhs[0*4+1] * rhs[1*4+3] + lhs[0*4+2] * rhs[2*4+3] + lhs[0*4+3];
+			
+			result[1*4+0] = lhs[1*4+0] * rhs[0*4+0] + lhs[1*4+1] * rhs[1*4+0] + lhs[1*4+2] * rhs[2*4+0];
+			result[1*4+1] = lhs[1*4+0] * rhs[0*4+1] + lhs[1*4+1] * rhs[1*4+1] + lhs[1*4+2] * rhs[2*4+1];
+			result[1*4+2] = lhs[1*4+0] * rhs[0*4+2] + lhs[1*4+1] * rhs[1*4+2] + lhs[1*4+2] * rhs[2*4+2];
+			result[1*4+3] = lhs[1*4+0] * rhs[0*4+3] + lhs[1*4+1] * rhs[1*4+3] + lhs[1*4+2] * rhs[2*4+3] + lhs[1*4+3];
+			
+			result[2*4+0] = lhs[2*4+0] * rhs[0*4+0] + lhs[2*4+1] * rhs[1*4+0] + lhs[2*4+2] * rhs[2*4+0];
+			result[2*4+1] = lhs[2*4+0] * rhs[0*4+1] + lhs[2*4+1] * rhs[1*4+1] + lhs[2*4+2] * rhs[2*4+1];
+			result[2*4+2] = lhs[2*4+0] * rhs[0*4+2] + lhs[2*4+1] * rhs[1*4+2] + lhs[2*4+2] * rhs[2*4+2];
+			result[2*4+3] = lhs[2*4+0] * rhs[0*4+3] + lhs[2*4+1] * rhs[1*4+3] + lhs[2*4+2] * rhs[2*4+3] + lhs[2*4+3];
+			return resultm;
+		}
+	#else
+		#define Combine_NoDebugOverhead Combine
+	#endif
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class SimpleModelDrawable : public Techniques::Drawable
@@ -131,6 +161,7 @@ namespace RenderCore { namespace Techniques
 
 		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
 
+		auto localToWorld3x4 = AsFloat3x4(localToWorld);
 		unsigned drawCallCounter = 0;
 		const auto& cmdStream = _modelScaffold->CommandStream();
         const auto& immData = _modelScaffold->ImmutableData();
@@ -141,7 +172,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -156,7 +187,7 @@ namespace RenderCore { namespace Techniques
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = viewMask;
 				++drawCallCounter;
@@ -172,7 +203,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -192,7 +223,7 @@ namespace RenderCore { namespace Techniques
 				drawable._looseUniformsInterface = _usi;
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
-				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = viewMask;
 
@@ -250,6 +281,7 @@ namespace RenderCore { namespace Techniques
 			drawables[c] = pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(_drawablesCount[c]);
 		}
 
+		auto localToWorld3x4 = AsFloat3x4(localToWorld);
 		unsigned drawCallCounter = 0;
 		const auto& cmdStream = _modelScaffold->CommandStream();
         const auto& immData = _modelScaffold->ImmutableData();
@@ -260,7 +292,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -276,7 +308,7 @@ namespace RenderCore { namespace Techniques
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
 				drawable._delegate = delegate;
-                drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+                drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = ~0u;
 
@@ -293,7 +325,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&_baseTransforms[machineOutput], localToWorld3x4);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -314,7 +346,7 @@ namespace RenderCore { namespace Techniques
 				drawable._materialGuid = geoCall._materialGuids[drawCall._subMaterialIndex];
 				drawable._drawCallIdx = drawCallCounter;
 				drawable._delegate = delegate;
-				drawable._localTransform._localToWorld = AsFloat3x4(Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld));
+				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = ~0u;
 
@@ -349,7 +381,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -358,7 +390,7 @@ namespace RenderCore { namespace Techniques
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _geos[geoCall._geoId];
 				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
-				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._indexCount = drawCall._indexCount;
 				drawable._startIndexLocation = drawCall._firstIndex;
 				assert(drawCall._firstVertex == 0);
@@ -374,7 +406,7 @@ namespace RenderCore { namespace Techniques
 
 			auto machineOutput = _skeletonBinding.ModelJointToMachineOutput(geoCall._transformMarker);
             assert(machineOutput < _baseTransformCount);
-			auto geoCallToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
+			auto nodeSpaceToWorld = Combine(_baseTransforms[machineOutput], localToWorld);
 
             for (unsigned d = 0; d < unsigned(rawGeo._drawCalls.size()); ++d) {
                 const auto& drawCall = rawGeo._drawCalls[d];
@@ -383,7 +415,7 @@ namespace RenderCore { namespace Techniques
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
 				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
-				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, geoCallToWorld);
+				drawable._localToWorld = Combine(rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._indexCount = drawCall._indexCount;
 				drawable._startIndexLocation = drawCall._firstIndex;
 				assert(drawCall._firstVertex == 0);

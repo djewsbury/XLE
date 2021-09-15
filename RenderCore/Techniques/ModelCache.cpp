@@ -20,8 +20,6 @@ namespace RenderCore { namespace Techniques
 
         ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::ModelScaffold>>		_modelScaffolds;
         ::Assets::AssetHeapLRU<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>	_materialScaffolds;
-
-		Threading::Mutex _modelRenderersLock;
         FrameByFrameLRUHeap<std::shared_ptr<::Assets::FuturePtr<SimpleModelRenderer>>> _modelRenderers;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
 
@@ -50,7 +48,6 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::PtrToFuturePtr<SimpleModelRenderer> newFuture;
 		{
-			ScopedLock(_pimpl->_modelRenderersLock);
 			auto query = _pimpl->_modelRenderers.Query(hash);
 			if (query.GetType() == LRUCacheInsertType::Update) {
 				if (!::Assets::IsInvalidated(*query.GetExisting()))
@@ -84,7 +81,6 @@ namespace RenderCore { namespace Techniques
 
     void ModelCache::OnFrameBarrier()
     {
-        ScopedLock(_pimpl->_modelRenderersLock);
         _pimpl->_modelRenderers.OnFrameBarrier();
     }
 

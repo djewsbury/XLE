@@ -13,12 +13,6 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueIterator;
     class RenderStepFragmentInterface;
 
-	struct FragmentLinkResults
-	{
-		std::vector<std::pair<uint64_t, AttachmentName>> _generatedAttachments;
-		std::vector<uint64_t> _consumedAttachments;
-	};
-
 	class CompiledLightingTechnique
 	{
 	public:
@@ -66,7 +60,6 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			unsigned _fbDescIdx = ~0u;
-			FragmentLinkResults _fragmentLinkResults;
 
 			std::function<StepFnSig> _function;
 		};
