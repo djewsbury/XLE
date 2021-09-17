@@ -33,12 +33,15 @@ namespace RenderOverlays
 		float x = 0.0f, prevMaxX = 0.0f;
 		while (!text.IsEmpty()) {
 			ucs4 ch = NextCharacter(text);
-			if (ch == '\n') {
+			if (ch == '\n' || ch == '\r') {
+				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
 				prevMaxX = std::max(x, prevMaxX);
 				prevGlyph = 0;
 				x = 0;
 				continue;
 			}
+
+			// note -- tags like {color:xxxx} not considered
 
 			int curGlyph;
 			x += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
@@ -50,6 +53,51 @@ namespace RenderOverlays
 		}
 
 		return std::max(x, prevMaxX);
+	}
+
+	template<typename CharType>
+		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra=0.f, bool outline=false)
+	{
+		int prevGlyph = 0;
+		float x = 0.0f, prevMaxX = 0.0f;
+		unsigned newLineCount = 0;
+		while (!text.IsEmpty()) {
+			ucs4 ch = NextCharacter(text);
+			if (ch == '\n' || ch == '\r') {
+				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+				prevMaxX = std::max(x, prevMaxX);
+				prevGlyph = 0;
+				x = 0;
+				++newLineCount;
+				continue;
+			}
+
+			// note -- tags like {color:xxxx} not considered
+
+			int curGlyph;
+			x += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
+			prevGlyph = curGlyph;
+			x += font.GetGlyphProperties(ch)._xAdvance;
+
+			if(outline) x += 2.0f;
+			if(ch == ' ') x += spaceExtra;
+		}
+
+		return {std::max(x, prevMaxX), newLineCount};
+	}
+
+	template<typename CharType>
+		unsigned NewLineCount(const Font& font, StringSection<CharType> text)
+	{
+		unsigned newLineCount = 0;
+		while (!text.IsEmpty()) {
+			ucs4 ch = NextCharacter(text);
+			if (ch == '\n' || ch == '\r') {
+				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+				++newLineCount;
+			}
+		}
+		return newLineCount;
 	}
 
 	template<typename CharType>
@@ -205,18 +253,33 @@ namespace RenderOverlays
 		return pos;
 	}
 
-	static Float2 AlignText(const Quad& q, const Font& font, float stringWidth, float indent, TextAlignment align)
+	template<typename CharType>
+		static Float2 AlignText(const Quad& q, const Font& font, StringSection<CharType> text, float indent, TextAlignment align)
 	{
 		auto fontProps = font.GetFontProperties();
-		Float2 extent = Float2(stringWidth, fontProps._ascenderExcludingAccent);
+		Float2 extent{0,0};
+
+		// do we need the width, height, or both?
+		if (align == TextAlignment::Top || align == TextAlignment::TopRight) {
+			extent[0] = StringWidth(font, text);
+		} else if (align == TextAlignment::Left || align == TextAlignment::BottomLeft) {
+			extent[1] = NewLineCount(font, text) * fontProps._lineHeight + fontProps._ascenderExcludingAccent;
+		} else if (align == TextAlignment::Center || align == TextAlignment::Right || align == TextAlignment::Bottom || align == TextAlignment::BottomRight) {
+			auto measurements = StringWidthAndNewLineCount(font, text);
+			extent[0] = measurements.first;
+			extent[1] = measurements.second * fontProps._lineHeight + fontProps._ascenderExcludingAccent;
+		}
+
 		Float2 pos = GetAlignPos(q, extent, align);
 		pos[0] += indent;
-		pos[1] += extent[1];
+
+		// reposition "pos" to be on the base line for the first line
+		pos[1] += fontProps._ascenderExcludingAccent;
 		switch (align) {
 		case TextAlignment::TopLeft:
 		case TextAlignment::Top:
 		case TextAlignment::TopRight:
-			pos[1] += fontProps._ascender - extent[1];
+			pos[1] += fontProps._ascender - fontProps._ascenderExcludingAccent;
 			break;
 		case TextAlignment::BottomLeft:
 		case TextAlignment::Bottom:
@@ -231,17 +294,12 @@ namespace RenderOverlays
 
 	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<ucs4> text)
 	{
-		return AlignText(q, font, StringWidth(font, text), 0, align);
+		return AlignText(q, font, text, 0, align);
 	}
 
 	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text)
 	{
-		return AlignText(q, font, StringWidth(font, text), 0, align);
-	}
-
-	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, float width, float indent)
-	{
-		return AlignText(q, font, width, indent, align);
+		return AlignText(q, font, text, 0, align);
 	}
 
 	template float StringWidth(const Font&, StringSection<utf8>, float, bool);

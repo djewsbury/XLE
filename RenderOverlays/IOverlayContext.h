@@ -93,7 +93,7 @@ namespace RenderOverlays
             ColorB color = ColorB(0xffffffff),
             const Float2& minTex0 = Float2(0.f, 0.f), const Float2& maxTex0 = Float2(1.0f, 1.f)) = 0;
 
-        virtual float   DrawText(
+        virtual Float2   DrawText(
             const std::tuple<Float3, Float3>& quad,
             const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
 			ColorB col, TextAlignment alignment, StringSection<char> text) = 0;

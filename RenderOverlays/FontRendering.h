@@ -24,20 +24,22 @@ namespace RenderOverlays
 	class FontTexture2D;
 	class FontRenderingManager;
         
-    float       Draw(   RenderCore::IThreadContext& threadContext,
+    Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, const TextStyle& style,
-                        float x, float y, StringSection<> text,
-                        float scale, float mx, float depth,
+                        float x, float y, float maxX, float maxY,
+						StringSection<> text,
+                        float scale, float depth,
                         ColorB col);
 
-	float       Draw(   RenderCore::IThreadContext& threadContext,
+	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, const TextStyle& style,
-                        float x, float y, StringSection<ucs4> text,
-                        float scale, float mx, float depth,
+                        float x, float y, float maxX, float maxY,
+						StringSection<ucs4> text,
+                        float scale, float depth,
                         ColorB col);
 
 	class FontRenderingManager

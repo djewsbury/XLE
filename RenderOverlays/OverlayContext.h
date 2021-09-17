@@ -55,7 +55,7 @@ namespace RenderOverlays
             std::shared_ptr<RenderCore::IResourceView> textureResource,
             ColorB color, const Float2& minTex0, const Float2& maxTex0) override;
 
-        float   DrawText(
+        Float2   DrawText(
             const std::tuple<Float3, Float3>& quad, 
             const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
             ColorB col, TextAlignment alignment, StringSection<char> text) override;

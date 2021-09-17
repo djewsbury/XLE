@@ -241,12 +241,12 @@ namespace RenderOverlays
 		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col, col, Float2(maxTex0[0], maxTex0[1]), Float2(0.f, 0.f));
 	}
 
-	float ImmediateOverlayContext::DrawText      (  const std::tuple<Float3, Float3>& quad, 
+	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad, 
 													const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
 													ColorB col, 
 													TextAlignment alignment, StringSection<char> text)
 	{
-		if (!_fontRenderingManager) return 0.f;
+		if (!_fontRenderingManager) return Float2{0, 0};
 
 		Quad q;
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
@@ -258,8 +258,9 @@ namespace RenderOverlays
 			*_fontRenderingManager,
 			font ? *font : *_defaultFont, textStyle,
 			alignedPosition[0], alignedPosition[1],
+			0.f, 0.f, // q.max[0], q.max[1],
 			text,
-			1.f, 0.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
 			col);
 	}
 
