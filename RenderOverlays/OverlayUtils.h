@@ -9,13 +9,11 @@
 
 namespace RenderOverlays { namespace DebuggingDisplay
 {
-    class ButtonStyle
+    struct ButtonStyle
     {
-    public:
         ColorB  _background;
         ColorB  _foreground;
-
-        ButtonStyle(ColorB background, ColorB foreground) : _background(background), _foreground(foreground) {}
+        bool _depressed = false;
     };
 
     extern ButtonStyle s_buttonNormal;

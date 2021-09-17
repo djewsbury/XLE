@@ -278,6 +278,7 @@ namespace UnitTests
 	}
 
 	static std::shared_ptr<RenderCore::Techniques::SequencerConfig> CreateSequencerConfig(
+		const std::string& name,
 		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate,
 		bool multiView = false)
@@ -292,7 +293,7 @@ namespace UnitTests
 		sp.SetName("prepare-probe");
 		if (multiView) sp.SetViewInstanceMask(~0u);
 		FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
-		return pipelineAccelerators.CreateSequencerConfig(techniqueDelegate, ParameterBox{}, representativeFB, 0);
+		return pipelineAccelerators.CreateSequencerConfig(name, techniqueDelegate, ParameterBox{}, representativeFB, 0);
 	}
 
 	// Simpliest method -- we just create a massive render target with separate subpasses for each
@@ -368,7 +369,7 @@ namespace UnitTests
 				_fragment.AddSubpass(std::move(sp));
 			}
 
-			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-simple", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -510,7 +511,7 @@ namespace UnitTests
 		{
 			using namespace RenderCore;
 			_fragments = MakeFragments(s_probesToRender, maxPerBatch);
-			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-amplifying-gs", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -712,7 +713,7 @@ namespace UnitTests
 		VertexInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			_fragments = MakeFragments(s_probesToRender, maxViewsPerDraw);
-			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
+			_cfg = CreateSequencerConfig("mass-probe-vertex-instancing", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>());
 		}
 
 	private:
@@ -824,7 +825,7 @@ namespace UnitTests
 		ViewInstancingShader(const LightingEngineTestApparatus& testApparatus)
 		{
 			_fragments = MakeFragments(s_probesToRender, maxMultiview, true);
-			_cfg = CreateSequencerConfig(*testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
+			_cfg = CreateSequencerConfig("mass-probe-view-instancing", *testApparatus._pipelineAcceleratorPool, std::make_shared<TechniqueDelegate>(), true);
 		}
 
 	private:

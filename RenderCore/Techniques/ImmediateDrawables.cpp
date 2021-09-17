@@ -300,6 +300,7 @@ namespace RenderCore { namespace Techniques
 			auto i = LowerBound(_sequencerConfigs, hash);
 			if (i==_sequencerConfigs.end() || i->first != hash) {
 				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
+					"immediate-drawables",
 					_techniqueDelegate, ParameterBox{},
 					fbDesc, subpassIndex);
 				i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));

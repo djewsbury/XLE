@@ -28,12 +28,14 @@ namespace PlatformRig { namespace Overlays
 			auto l = _lines.begin() + unsigned(_scrollOffset);
 			for (; l!=_lines.end(); ++l) {
 				if (l->first == Style::Heading0) {
-					auto allocation = textArea.AllocateFullWidth(24);
+					auto allocation = textArea.AllocateFullWidth(30);
 					if (!allocation.Height()) break;
 					FillRectangle(context, allocation, titleBkground);
 					allocation._topLeft[0] += 8;
-					RenderOverlays::TextStyle textStyle{RenderOverlays::DrawTextOptions{false, false}};
-					DrawText(context, allocation, &textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
+					RenderOverlays::TextStyle textStyle{RenderOverlays::DrawTextOptions{true, false}};
+					context.DrawText(
+						std::make_tuple(AsPixelCoords(allocation._topLeft), AsPixelCoords(allocation._bottomRight)),
+						_headingFont, textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
 				} else {
 					auto allocation = textArea.AllocateFullWidth(lineHeight);
 					if (!allocation.Height()) break;
@@ -86,6 +88,7 @@ namespace PlatformRig { namespace Overlays
 				this->_lines.clear();
 				this->_internalBufferIterator = this->_internalBuffer;
 			});
+		_headingFont = RenderOverlays::GetX2Font("DosisExtraBold", 20);
 	}
 
 	QuickMetricsDisplay::~QuickMetricsDisplay()

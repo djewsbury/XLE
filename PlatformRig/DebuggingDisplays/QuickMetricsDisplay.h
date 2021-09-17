@@ -35,5 +35,7 @@ namespace PlatformRig { namespace Overlays
 
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _scrollOffset = 0.f;
+
+		std::shared_ptr<RenderOverlays::Font> _headingFont;
 	};
 }}

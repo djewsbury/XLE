@@ -183,6 +183,7 @@ namespace UnitTests
 			drawableGeo->_vertexStreamCount = 1;
 
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
+				"test",
 				std::make_shared<SimpleTechniqueDelegate>(),
 				ParameterBox {},
 				fbHelper.GetDesc());

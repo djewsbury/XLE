@@ -33,8 +33,6 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
-	struct PipelineAcceleratorRecord;
-	struct SequencerConfigRecord;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -66,6 +64,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {}) = 0;
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
+			const std::string& name,
 			std::shared_ptr<ITechniqueDelegate> delegate,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
@@ -91,7 +90,8 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
 
-		virtual std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> LogRecords() const = 0;
+		struct Records;
+		virtual Records LogRecords() const = 0;
 
 		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
 		// virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;
@@ -124,8 +124,17 @@ namespace RenderCore { namespace Techniques
 
 	struct SequencerConfigRecord
 	{
+		std::string _name;
 		std::string _sequencerSelectors;
-		std::string _fbDesc;
+		uint64_t _fbRelevanceValue = 0ull;
+	};
+
+	struct IPipelineAcceleratorPool::Records
+	{
+		std::vector<PipelineAcceleratorRecord> _pipelineAccelerators;
+		std::vector<SequencerConfigRecord> _sequencerConfigs;
+		size_t _descriptorSetAcceleratorCount = 0;
+		size_t _metalPipelineCount = 0;
 	};
 
 	namespace PipelineAcceleratorPoolFlags

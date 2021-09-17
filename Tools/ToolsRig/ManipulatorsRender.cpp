@@ -112,6 +112,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
+                "render-highlight",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
@@ -137,6 +138,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
+                "render-highlight",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
@@ -166,6 +168,7 @@ namespace ToolsRig
                 threadContext,
                 parserContext);
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
+                "render-shadow",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
 			Placements_RenderFiltered(

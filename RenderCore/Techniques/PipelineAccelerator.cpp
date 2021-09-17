@@ -46,6 +46,7 @@ namespace RenderCore { namespace Techniques
 		FrameBufferDesc _fbDesc;
 		unsigned _subpassIdx = 0;
 		uint64_t _fbRelevanceValue = 0;
+		std::string _name;
 	};
 
 	struct InputAssembly
@@ -514,6 +515,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
+			const std::string& name,
 			std::shared_ptr<ITechniqueDelegate> delegate,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
@@ -536,7 +538,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override;
 
-		std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> LogRecords() const override;
+		Records LogRecords() const override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
 		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
@@ -846,6 +848,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	auto PipelineAcceleratorPool::CreateSequencerConfig(
+		const std::string& name,
 		std::shared_ptr<ITechniqueDelegate> delegate,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
@@ -869,6 +872,7 @@ namespace RenderCore { namespace Techniques
 					result = std::make_shared<SequencerConfig>(std::move(cfg));
 					result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
 					result->_cfgId = cfgId;
+					result->_name = name;
 					i->second = result;
 
 					// If a pipeline accelerator was added while this sequencer config was expired, the pipeline
@@ -883,6 +887,9 @@ namespace RenderCore { namespace Techniques
 							}
 						}
 					}
+				} else {
+					if (!name.empty() && !XlFindString(result->_name, name))
+						result->_name += "|" + name;		// we're repurposing the same cfg for something else
 				}
 
 				return result;
@@ -893,6 +900,7 @@ namespace RenderCore { namespace Techniques
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
 		result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
 		result->_cfgId = cfgId;
+		result->_name = name;
 
 		_sequencerConfigById.emplace_back(std::make_pair(hash, result));		// (note; only holding onto a weak pointer here)
 
@@ -998,11 +1006,10 @@ namespace RenderCore { namespace Techniques
 		return str.str();
 	}
 
-	std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> PipelineAcceleratorPool::LogRecords() const
+	auto PipelineAcceleratorPool::LogRecords() const -> Records
 	{
-		std::vector<PipelineAcceleratorRecord> paRecords;
-		std::vector<SequencerConfigRecord> cfgRecords;
-		paRecords.reserve(_pipelineAccelerators.size());
+		Records result;
+		result._pipelineAccelerators.reserve(_pipelineAccelerators.size());
 		for (const auto&pa:_pipelineAccelerators) {
 			auto l = pa.second.lock();
 			if (!l) continue;
@@ -1016,10 +1023,27 @@ namespace RenderCore { namespace Techniques
 				record._inputAssemblyHash = HashInputAssembly(l->_ia._miniInputAssembly, DefaultSeed64);
 			else
 				record._inputAssemblyHash = HashInputAssembly(l->_ia._inputAssembly, DefaultSeed64);
-			paRecords.push_back(std::move(record));
+			result._pipelineAccelerators.push_back(std::move(record));
 		}
 
-		return std::make_pair(std::move(paRecords), std::move(cfgRecords));
+		result._sequencerConfigs.reserve(_sequencerConfigById.size());
+		for (const auto&cfg:_sequencerConfigById) {
+			auto l = cfg.second.lock();
+			if (!l) continue;
+
+			SequencerConfigRecord record;
+			record._name = l->_name;
+			record._sequencerSelectors = AsString(l->_sequencerSelectors, 2);
+			record._fbRelevanceValue = l->_fbRelevanceValue;
+			result._sequencerConfigs.push_back(record);
+		}
+		result._descriptorSetAcceleratorCount = _descriptorSetAccelerators.size();
+		{
+			ScopedLock(_sharedPools->_lock);
+			result._metalPipelineCount = _sharedPools->_metalPipelines.size();
+		}
+
+		return result;
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }

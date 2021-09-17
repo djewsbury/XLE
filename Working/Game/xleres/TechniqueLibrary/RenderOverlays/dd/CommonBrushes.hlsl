@@ -33,7 +33,7 @@ Texture2D RefractionsBuffer : register(t12);
 
 static const float SqrtHalf = 0.70710678f;
 static const float3 BasicShapesLightDirection = normalize(float3(4.f*SqrtHalf, SqrtHalf, -1.25f));
-// static const float3 BasicShapesLightDirection = normalize(float3(0,0, -1.f));
+static const float3 BasicShapesReverseLightDirection = normalize(float3(-4.f*SqrtHalf, -SqrtHalf, -1.25f));
 
 float3 NormalToSurface(float2 dhdp)
 {
@@ -69,6 +69,17 @@ float4 RaisedFill_Calculate(
     float accentuate = 8.f;
     float3 normal = NormalToSurface(accentuate*dhdp);
     float d = saturate(-dot(BasicShapesLightDirection, normal));
+    return float4(d * baseColor.rgb, 1.f);
+}
+
+float4 ReverseRaisedFill_Calculate(
+    DebuggingShapesCoords coords,
+    float4 baseColor,
+    float2 dhdp)
+{
+    float accentuate = 8.f;
+    float3 normal = NormalToSurface(accentuate*dhdp);
+    float d = saturate(-dot(BasicShapesReverseLightDirection, normal));
     return float4(d * baseColor.rgb, 1.f);
 }
 

@@ -41,6 +41,15 @@ RaisedNoBorder=~
 			CommonBrushes.hlsl::NoFill_Calculate
 			Implements=Interfaces.hlsl::IOutline_Calculate
 
+ReverseRaisedNoBorder=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::ReverseRaisedFill_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate
+		=~
+			CommonBrushes.hlsl::NoFill_Calculate
+			Implements=Interfaces.hlsl::IOutline_Calculate
+
 EmptySolidBorder=~
 	Patches=~
 		=~
@@ -64,15 +73,22 @@ OutlineRoundedRect=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
-RaisedFillRect=~
+FillRaisedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
-RaisedFillRoundedRect=~
+FillRaisedRoundedRect=~
 	Inherit=~; <.>:RaisedNoBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RoundedRectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+FillReverseRaisedRoundedRect=~
+	Inherit=~; <.>:ReverseRaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate

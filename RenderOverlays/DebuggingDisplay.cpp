@@ -194,8 +194,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _gridBackgroundMaterial;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineRoundedRect;
-        RenderCore::Techniques::ImmediateDrawableMaterial _raisedFillRect;
-        RenderCore::Techniques::ImmediateDrawableMaterial _raisedRoundedFillRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillRaisedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillRaisedRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillReverseRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
 
@@ -208,8 +209,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> gridBackgroundMaterial,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> raisedFillRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> raisedFillRoundedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRoundedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillReverseRaisedRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillEllipse,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineEllipse)
         {
@@ -218,8 +220,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
             _fillRoundedRect = BuildImmediateDrawableMaterial(*fillRoundedRect);
             _outlineRoundedRect = BuildImmediateDrawableMaterial(*outlineRoundedRect);
-            _raisedFillRect = BuildImmediateDrawableMaterial(*raisedFillRect);
-            _raisedRoundedFillRect = BuildImmediateDrawableMaterial(*raisedFillRoundedRect);
+            _fillRaisedRect = BuildImmediateDrawableMaterial(*fillRaisedRect);
+            _fillRaisedRoundedRect = BuildImmediateDrawableMaterial(*fillRaisedRoundedRect);
+            _fillReverseRaisedRoundedRect = BuildImmediateDrawableMaterial(*fillReverseRaisedRoundedRect);
             _fillEllipse = BuildImmediateDrawableMaterial(*fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(*outlineEllipse);
 
@@ -229,8 +232,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
             _depVal.RegisterDependency(fillRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(outlineRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(raisedFillRect->GetDependencyValidation());
-            _depVal.RegisterDependency(raisedFillRoundedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(fillRaisedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(fillRaisedRoundedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(fillReverseRaisedRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(fillEllipse->GetDependencyValidation());
             _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
         }
@@ -242,16 +246,17 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
             auto fillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
             auto outlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
-            auto raisedFillRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":RaisedFillRect");
-            auto raisedFillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":RaisedFillRoundedRect");
+            auto fillRaisedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
+            auto fillRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
+            auto fillReverseRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, raisedFillRect, raisedFillRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
         }
     };
 
-    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour, ColorB outlineColour)
+    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour)
     {
         const Rect thumbRect = coordinates.Thumb(thumbPosition);
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
@@ -262,10 +267,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ProjectionMode::P2D,
             AsPixelCoords(thumbRect._topLeft),
             AsPixelCoords(thumbRect._bottomRight),
-            ColorB{0x57, 0x57, 0x57}, ColorB::Zero,
+            fillColour, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(0.f, roundedProportion), Float2(0.f, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedRoundedFillRect});
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRoundedRect});
     }
 
     void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -330,7 +335,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, 
         const Rect & rect,
-        ColorB backgroundColour, ColorB outlineColour,
+        ColorB fillColor, ColorB outlineColour,
         float borderWidth, float roundedProportion)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -343,10 +348,52 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
-            backgroundColour, outlineColour,
+            fillColor, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(borderWidth, roundedProportion), Float2(borderWidth, roundedProportion),
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRoundedRect});
+    }
+
+    void FillRaisedRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        ColorB fillColor,
+        float roundedProportion)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
+        context.DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            fillColor, ColorB::Zero,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRoundedRect});
+    }
+
+    void FillDepressedRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        ColorB fillColor,
+        float roundedProportion)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
+        context.DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            fillColor, ColorB::Zero,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillReverseRaisedRoundedRect});
     }
 
     void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -596,7 +643,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedFillRect});
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRect});
 
         TextStyle style{DrawTextOptions(false, true)};
 
@@ -641,7 +688,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             BkColor, BkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedFillRect});
+            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRect});
 
         auto font = ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont;
         TextStyle style{DrawTextOptions(true, false)};

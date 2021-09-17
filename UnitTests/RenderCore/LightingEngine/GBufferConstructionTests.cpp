@@ -407,6 +407,7 @@ namespace UnitTests
 					depthResource = rpi.GetDepthStencilAttachmentResource();
 
 					auto gbufferWriteCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+						"gbufferWriteCfg",
 						Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 						ParameterBox {},
 						rpi.GetFrameBufferDesc());
@@ -475,6 +476,7 @@ namespace UnitTests
 					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
 
 					auto writeDirectCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+						"writeDirectCfg",
 						std::make_shared<WriteWorldCoordsDelegate>(),
 						ParameterBox {},
 						rpi.GetFrameBufferDesc());

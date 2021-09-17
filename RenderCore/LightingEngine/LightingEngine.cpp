@@ -122,7 +122,10 @@ namespace RenderCore { namespace LightingEngine
 					_steps.emplace_back(std::move(drawStep));
 
 					drawStep._type = Step::Type::ExecuteDrawables;
+					auto name = _fbDescs[beginStep._fbDescIdx]._fbDesc.GetSubpasses()[c]._name;
+					if (name.empty()) name = "lighting-technique";
 					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(
+						name,
 						sb._techniqueDelegate, sb._sequencerSelectors, 
 						_fbDescs[beginStep._fbDescIdx]._fbDesc, c);
 					drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;

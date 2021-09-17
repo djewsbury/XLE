@@ -198,6 +198,7 @@ namespace UnitTests
 		auto mainPool = testApparatus._pipelineAccelerators;
 		mainPool->SetGlobalSelector("GLOBAL_SEL", 55);
 		auto cfgId = mainPool->CreateSequencerConfig(
+			"cfgId",
 			techniqueDelegate,
 			ParameterBox { std::make_pair("SEQUENCER_SEL", "37") },
 			MakeSimpleFrameBufferDesc());
@@ -278,6 +279,7 @@ namespace UnitTests
 				"temporary-out");
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 			auto cfgIdWithColor = mainPool->CreateSequencerConfig(
+				"cfgIdWithColor",
 				techniqueDelegate,
 				ParameterBox { std::make_pair("COLOR_RED", "1") },
 				MakeSimpleFrameBufferDesc());
@@ -301,6 +303,7 @@ namespace UnitTests
 
 			// Change the sequencer config to now set the COLOR_GREEN selector
 			cfgIdWithColor = mainPool->CreateSequencerConfig(
+				"cfgIdWithColor",
 				techniqueDelegate,
 				ParameterBox { std::make_pair("COLOR_GREEN", "1") },
 				MakeSimpleFrameBufferDesc());
@@ -462,6 +465,7 @@ namespace UnitTests
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
+				"cfgId",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
@@ -558,6 +562,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
+				"cfgId",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());

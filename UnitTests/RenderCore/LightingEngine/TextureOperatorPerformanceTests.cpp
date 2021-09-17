@@ -230,6 +230,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 		auto sequencerConfig = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
+			"WriteDownsampleInput",
 			testApparatus._sharedDelegates->_deferredIllumDelegate,
 			{}, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 

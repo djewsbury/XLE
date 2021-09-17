@@ -288,6 +288,7 @@ namespace RenderCore { namespace LightingEngine
 		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1));
 
 		_sequencerConfigs = pipelineAccelerators->CreateSequencerConfig(
+			"shadow-prepare",
 			shadowGenDelegate,
 			sequencerSelectors,
 			_fbDesc._fbDesc,

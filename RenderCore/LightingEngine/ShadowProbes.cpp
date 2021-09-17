@@ -235,6 +235,7 @@ namespace RenderCore { namespace LightingEngine
 				std::vector<AttachmentDesc>{attachmentDesc},
 				std::vector<SubpassDesc>{spDesc}};
 			_pimpl->_probePrepareCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(
+				"shadow-probe",
 				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(Techniques::ShadowGenType::VertexIdViewInstancing),
 				{}, fbDesc, 0);
 		}

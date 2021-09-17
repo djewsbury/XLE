@@ -677,7 +677,7 @@ namespace ToolsRig
 					Techniques::TechniqueIndex::DepthOnly, {}, {}, ds);
 
 			if (_pimpl->_settings._drawWireframe) {
-				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig(visWireframeDelegate, ParameterBox{}, rpi.GetFrameBufferDesc());
+				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-wireframe", visWireframeDelegate, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
 					*sequencerConfig,
@@ -686,7 +686,7 @@ namespace ToolsRig
 			}
 
 			if (_pimpl->_settings._drawNormals) {
-				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig(visNormals, ParameterBox{}, rpi.GetFrameBufferDesc());
+				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-normals", visNormals, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
 					*sequencerConfig,
@@ -715,7 +715,7 @@ namespace ToolsRig
 				if (visContent)
 					oldDelegate = visContent->SetCustomDrawDelegate(_pimpl->_stencilPrimeDelegate);
 				// Prime the stencil buffer with draw call indices
-				auto sequencerCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(primeStencilBuffer, ParameterBox{}, rpi.GetFrameBufferDesc());
+				auto sequencerCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", primeStencilBuffer, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					threadContext, parserContext, *_pimpl->_pipelineAccelerators,
 					*sequencerCfg,

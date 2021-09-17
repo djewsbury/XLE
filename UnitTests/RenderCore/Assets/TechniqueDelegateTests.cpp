@@ -325,9 +325,9 @@ namespace UnitTests
 			desc->_blend.push_back(RenderCore::AttachmentBlendDesc{});
 			desc->_depthStencil = RenderCore::Techniques::CommonResourceBox::s_dsReadWrite;
 
-			desc->_patchExpansions.push_back(perPixelPatchName);
+			desc->_patchExpansions.emplace_back(perPixelPatchName, RenderCore::ShaderStage::Pixel);
 			if (hasDeformPosition)
-				desc->_patchExpansions.push_back(deformPositionPatchName);
+				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
 			result->SetAsset(std::move(desc), {});
@@ -545,11 +545,13 @@ namespace UnitTests
 				// try to maintain in memory only those pipelines that are required
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();
 				auto cfg = pipelinePool->CreateSequencerConfig(
+					"cfg",
 					techniqueDelegate,
 					ParameterBox{}, 
 					fbHelper.GetDesc(), 0);
 
 				auto cfgOutputRed = pipelinePool->CreateSequencerConfig(
+					"cfgOutputRed",
 					techniqueDelegate,
 					ParameterBox{ std::make_pair("OUTPUT_RED", "1") }, 
 					fbHelper.GetDesc(), 0);
@@ -622,7 +624,7 @@ namespace UnitTests
 				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 				
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();
-				auto cfg = pipelinePool->CreateSequencerConfig(techniqueDelegate, ParameterBox{}, fbHelper.GetDesc(), 0);
+				auto cfg = pipelinePool->CreateSequencerConfig("cfg", techniqueDelegate, ParameterBox{}, fbHelper.GetDesc(), 0);
 
 				auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
 					patchCollection,

@@ -289,10 +289,12 @@ namespace SceneEngine
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
 		if (testType == TestType::FrustumTest) {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
+				"frustum-test",
 				box._frustumTechniqueDelegate,
 				{}, box._fbDesc);
 		} else {
 			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
+				"ray-vs-model",
 				box._rayTestTechniqueDelegate,
 				{}, box._fbDesc);
 		}

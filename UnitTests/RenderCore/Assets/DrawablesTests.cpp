@@ -197,6 +197,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
+				"test",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
@@ -260,6 +261,7 @@ namespace UnitTests
 
 			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
+				"test",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());

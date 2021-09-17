@@ -6,22 +6,32 @@
 
 #include "OverlayUtils.h"
 #include "Font.h"
+#include "../ConsoleRig/ResourceBox.h"
 
 namespace RenderOverlays { namespace DebuggingDisplay
 {
-    ButtonStyle s_buttonNormal      ( ColorB(127, 192, 127,  64), ColorB(164, 192, 164, 255) );
-    ButtonStyle s_buttonMouseOver   ( ColorB(127, 192, 127,  64), ColorB(255, 255, 255, 160) );
-    ButtonStyle s_buttonPressed     ( ColorB(127, 192, 127,  64), ColorB(255, 255, 255,  96) );
+    ButtonStyle s_buttonNormal      { ColorB( 51,  51,  51), ColorB(191, 123, 0) };
+    ButtonStyle s_buttonMouseOver   { ColorB(120, 120, 120), ColorB(255, 255, 255) };
+    ButtonStyle s_buttonPressed     { ColorB(120, 120, 120), ColorB(196, 196, 196), true };
+
+    class UtilFontBox
+    {
+    public:
+        std::shared_ptr<RenderOverlays::Font> _buttonFont;
+        UtilFontBox() : _buttonFont(RenderOverlays::GetX2Font("DosisExtraBold", 20)) {}
+    };
 
     void DrawButtonBasic(
         IOverlayContext& context, const Rect& rect, 
         const char label[], const ButtonStyle& formatting)
     {
-        FillRectangle(context, rect, formatting._background);
-        OutlineRectangle(context, rect, formatting._foreground);
+        if (formatting._depressed)
+            FillDepressedRoundedRectangle(context, rect, formatting._background);
+        else
+            FillRaisedRoundedRectangle(context, rect, formatting._background);
         context.DrawText(
-            std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
-			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);
+            std::make_tuple(AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight)),
+			ConsoleRig::FindCachedBox<UtilFontBox>()._buttonFont, TextStyle{}, formatting._foreground, TextAlignment::Center, label);
     }
 
 }}

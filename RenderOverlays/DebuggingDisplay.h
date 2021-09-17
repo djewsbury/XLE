@@ -128,12 +128,21 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
-        ColorB backgroundColour, ColorB outlineColour,
+        ColorB fillColor, ColorB outlineColour,
         float borderWidth = 1.f, float roundedProportion = 1.f / 8.f);
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
         float width, float roundedProportion = 1.f / 8.f);
+
+    void FillRaisedRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        ColorB fillColor,
+        float roundedProportion = 1.f / 8.f);
+    void FillDepressedRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        ColorB fillColor,
+        float roundedProportion = 1.f / 8.f);
 
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour = ColorB(0xff000000));
@@ -232,7 +241,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Coordinates::Flags::BitField _flags;
     };
 
-    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour = ColorB(0xffffffff), ColorB outlineColour = ColorB(0xff000000));
+    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour = ColorB{0x57, 0x57, 0x57});
 
     void HTweakerBar_Draw(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition);
     void HTweakerBar_DrawLabel(IOverlayContext& context, const Rect& rect);
