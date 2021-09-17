@@ -2,30 +2,30 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "PipelineAcceleratorDisplay.h"
-#include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "ModelCacheDisplay.h"
+#include "../../RenderCore/Techniques/ModelCache.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/OverlayUtils.h"
+#include "../../Assets/AssetHeap.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 
 namespace PlatformRig { namespace Overlays
 {
-    class PipelineAcceleratorPoolDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    class ModelCacheDisplay : public RenderOverlays::DebuggingDisplay::IWidget
 	{
 	public:
-		PipelineAcceleratorPoolDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators);
-		~PipelineAcceleratorPoolDisplay();
+		ModelCacheDisplay(std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache);
+		~ModelCacheDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
 		bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) override;
 		
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<RenderCore::Techniques::ModelCache> _modelCache;
 
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
-		float _paScrollOffset = 0.f;
-		float _cfgScrollOffset = 0.f;
+		float _scrollOffsets[3];
 		unsigned _tab = 0;
 	};
 
@@ -37,9 +37,9 @@ namespace PlatformRig { namespace Overlays
         interactables.Register(Interactables::Widget(buttonRect, id));
     }
 
-	const char* s_tabNames[] = { "pipeline-accelerators", "sequencer-configs", "stats" };
+    static const char* s_tabNames[] = { "ModelRenderers", "ModelScaffolds", "MaterialScaffolds" };
 
-	void    PipelineAcceleratorPoolDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
+	void    ModelCacheDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{
 		using namespace RenderOverlays::DebuggingDisplay;
 		const unsigned lineHeight = 20;
@@ -51,8 +51,8 @@ namespace PlatformRig { namespace Overlays
                 DrawButton(context, s_tabNames[t], buttonsLayout.AllocateFullHeightFraction(1.f/float(dimof(s_tabNames))), interactables, interfaceState);
 		}
 
-    	auto records = _pipelineAccelerators->LogRecords();
-		if (_tab == 0 || _tab == 1) {
+    	auto records = _modelCache->LogRecords();
+		{
 			Layout tableArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 24);
 			auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
 			unsigned entryCount = 0, sourceEntryCount = 0;
@@ -64,25 +64,21 @@ namespace PlatformRig { namespace Overlays
                     
 			const auto headerColor = RenderOverlays::ColorB::Blue;
             std::vector<Float3> lines;
-			lines.reserve(records._pipelineAccelerators.size()*2);
 			if (_tab == 0) {
 				std::pair<std::string, unsigned> headers0[] = { 
-					std::make_pair("Patches", 190), std::make_pair("IA", 190), std::make_pair("States", 100), 
-					std::make_pair("MatSelectors", 750),
-					std::make_pair("GeoSelectors", 750) };
+					std::make_pair("Model", 900), std::make_pair("Material", 900), std::make_pair("Decay", 50) };
 
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
-				for (const auto& r:records._pipelineAccelerators) {
-					if (entryCount < _paScrollOffset) {
+				std::sort(records._modelRenderers.begin(),records._modelRenderers.end(), [](const auto& lhs, const auto& rhs) { return lhs._model < rhs._model; });
+				for (const auto& r:records._modelRenderers) {
+					if (entryCount < _scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}
 					std::map<std::string, TableElement> entries;
-					entries["Patches"] = (StringMeld<32>() << std::hex << r._shaderPatchesHash).AsString();
-					entries["States"] = (StringMeld<32>() << std::hex << r._stateSetHash).AsString();
-					entries["IA"] = (StringMeld<32>() << std::hex << r._inputAssemblyHash).AsString();
-					entries["MatSelectors"] = r._materialSelectors;
-					entries["GeoSelectors"] = r._geoSelectors;
+					entries["Model"] = r._model;
+					entries["Material"] = r._material;
+					entries["Decay"] = std::to_string(r._decayFrames);
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;
@@ -93,23 +89,23 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 					++entryCount;
 				}
-				sourceEntryCount = (unsigned)records._pipelineAccelerators.size();
-			} else if (_tab == 1) {
+				sourceEntryCount = (unsigned)records._modelRenderers.size();
+			} else if (_tab == 1 || _tab == 2) {
 				std::pair<std::string, unsigned> headers0[] = { 
-					std::make_pair("Name", 250), std::make_pair("FBRelevance", 190),
-					std::make_pair("SeqSelectors", 3000),
+					std::make_pair("Name", 3000)
 				};
 
 				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
-				for (const auto& cfg:records._sequencerConfigs) {
-					if (entryCount < _cfgScrollOffset) {
+                auto& recordList = (_tab == 1) ? records._modelScaffolds : records._materialScaffolds;
+				std::sort(recordList.begin(), recordList.end(), [](const auto& lhs, const auto& rhs) { return lhs._initializer < rhs._initializer; });
+				for (const auto& r:recordList) {
+					if (entryCount < _scrollOffsets[_tab]) {
 						++entryCount;
 						continue;
 					}
 					std::map<std::string, TableElement> entries;
-					entries["Name"] = cfg._name;
-					entries["FBRelevance"] = (StringMeld<32>() << std::hex << cfg._fbRelevanceValue).AsString();
-					entries["SeqSelectors"] = cfg._sequencerSelectors;
+                    entries["Name"] = r._initializer;
+                    if (r._state != ::Assets::AssetState::Ready) entries["Name"]._bkColour = 0xffff3f3f;
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;
@@ -120,25 +116,20 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 					++entryCount;
 				}
-				sourceEntryCount = (unsigned)records._pipelineAccelerators.size();
+				sourceEntryCount = (unsigned)recordList.size();
 			}
 
 			context.DrawLines(RenderOverlays::ProjectionMode::P2D, lines.data(), lines.size(), RenderOverlays::ColorB::White);
-			auto& scrollOffset = (_tab == 0) ? _paScrollOffset : _cfgScrollOffset;
+			auto& scrollOffset = _scrollOffsets[_tab];
 
 			ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
 			interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
-		} else if (_tab == 2) {
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Pipeline accelerator count: %u", (unsigned)records._pipelineAccelerators.size());
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Sequencer config count: %u", (unsigned)records._sequencerConfigs.size());
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Descriptor set accelerator count: %u", (unsigned)records._descriptorSetAcceleratorCount);
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Metal pipeline count: %u", (unsigned)records._metalPipelineCount);
 		}
 	}
 
-	bool    PipelineAcceleratorPoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+	bool    ModelCacheDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
 	{
 		using namespace RenderOverlays::DebuggingDisplay;
 		if (_scrollBar.ProcessInput(interfaceState, inputContext, input))
@@ -146,13 +137,8 @@ namespace PlatformRig { namespace Overlays
 
 		static KeyId pgdn       = KeyId_Make("page down");
         static KeyId pgup       = KeyId_Make("page up");
-		if (_tab == 0) {
-			if (input.IsPress(pgdn)) _paScrollOffset += 1.f;
-			if (input.IsPress(pgup)) _paScrollOffset = std::max(0.f, _paScrollOffset-1.f);
-		} else if (_tab == 1) {
-			if (input.IsPress(pgdn)) _cfgScrollOffset += 1.f;
-			if (input.IsPress(pgup)) _cfgScrollOffset = std::max(0.f, _cfgScrollOffset-1.f);
-		}
+        if (input.IsPress(pgdn)) _scrollOffsets[_tab] += 1.f;
+        if (input.IsPress(pgup)) _scrollOffsets[_tab] = std::max(0.f, _scrollOffsets[_tab]-1.f);
 
 		auto topMostWidget = interfaceState.TopMostId();
 		if (topMostWidget)
@@ -166,24 +152,24 @@ namespace PlatformRig { namespace Overlays
 		return false;
 	}
 
-	PipelineAcceleratorPoolDisplay::PipelineAcceleratorPoolDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators)
-    : _pipelineAccelerators(std::move(pipelineAccelerators))
+	ModelCacheDisplay::ModelCacheDisplay(std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache)
+    : _modelCache(std::move(modelCache))
 	{
-		_paScrollOffset = _cfgScrollOffset = 0.f;
+        for (auto&so:_scrollOffsets) so = 0.f;
 		_tab = 0;
-		auto scrollBarId = RenderOverlays::DebuggingDisplay::InteractableId_Make("PipelineAccelerators_ScrollBar");
+		auto scrollBarId = RenderOverlays::DebuggingDisplay::InteractableId_Make("ModelCache_ScrollBar");
 		scrollBarId += IntegerHash64((uint64_t)this);
 		_scrollBar = RenderOverlays::DebuggingDisplay::ScrollBar(scrollBarId);
 	}
 
-	PipelineAcceleratorPoolDisplay::~PipelineAcceleratorPoolDisplay()
+	ModelCacheDisplay::~ModelCacheDisplay()
 	{
 	}
 
-    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePipelineAcceleratorPoolDisplay(
-        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators)
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateModelCacheDisplay(
+        std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache)
     {
-        return std::make_shared<PipelineAcceleratorPoolDisplay>(std::move(pipelineAccelerators));
+        return std::make_shared<ModelCacheDisplay>(std::move(modelCache));
     }
 
 }}

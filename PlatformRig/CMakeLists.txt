@@ -29,6 +29,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/InvalidAssetDisplay.cpp
         DebuggingDisplays/QuickMetricsDisplay.cpp
         DebuggingDisplays/PipelineAcceleratorDisplay.cpp
+        DebuggingDisplays/ModelCacheDisplay.cpp
         )
 
     set(MiniSceneEngineSrc

@@ -151,6 +151,11 @@ namespace Utility
         return count;
     }
 
+    bool LRUQueue::HasValue(unsigned value) const
+    {
+        return _oldestBlock == value || _newestBlock == value || (value < _lruQueue.size() && _lruQueue[value] != std::make_pair(~unsigned(0x0), ~unsigned(0x0)));
+    }
+
     LRUQueue::LRUQueue(unsigned maxValues)
     {
         _oldestBlock = _newestBlock = ~unsigned(0x0);

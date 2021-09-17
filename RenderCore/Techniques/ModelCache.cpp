@@ -84,6 +84,22 @@ namespace RenderCore { namespace Techniques
         _pimpl->_modelRenderers.OnFrameBarrier();
     }
 
+    ModelCache::Records ModelCache::LogRecords() const
+    {
+        ModelCache::Records result;
+        result._modelScaffolds = _pimpl->_modelScaffolds.LogRecords();
+        result._materialScaffolds = _pimpl->_materialScaffolds.LogRecords();
+
+        auto rendererRecords = _pimpl->_modelRenderers.LogRecords();
+        result._modelRenderers.reserve(rendererRecords.size());
+        for (const auto& r:rendererRecords) {
+            auto actual = r._value->TryActualize();
+            if (actual)
+                result._modelRenderers.push_back({(*actual)->GetModelScaffoldName(), (*actual)->GetMaterialScaffoldName(), r._decayFrames});
+        }
+        return result;
+    }
+
     ModelCache::ModelCache(const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool, const Config& cfg)
     {
         _pimpl = std::make_unique<Pimpl>(cfg);

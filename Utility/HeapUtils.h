@@ -25,6 +25,7 @@ namespace Utility
         void SendToBack(unsigned linearAddress);
         void DisconnectOldest();
         unsigned QueueDepth() const;
+        bool HasValue(unsigned value) const;
 
         LRUQueue(unsigned maxValues);
         LRUQueue();
@@ -174,6 +175,9 @@ namespace Utility
 
         void OnFrameBarrier();
 
+        struct Record { Type _value; unsigned _decayFrames = 0; };
+        std::vector<Record> LogRecords() const;
+
         FrameByFrameLRUHeap(unsigned cacheSize, unsigned decayGracePeriod = 32);
         ~FrameByFrameLRUHeap();
     private:
@@ -302,6 +306,19 @@ namespace Utility
         } else {
             assert(0);
         }
+    }
+
+    template<typename Type>
+        auto FrameByFrameLRUHeap<Type>::LogRecords() const -> std::vector<Record>
+    {
+        std::vector<Record> result;
+        result.reserve(_objects.size());
+        for (unsigned c=0; c<_objects.size(); ++c) {
+            unsigned decay = 0;
+            if (_lruQueue.HasValue(c)) decay = _currentFrame - _decayStartFrames[c];
+            result.push_back({_objects[c], decay});
+        }
+        return result;
     }
 
     template<typename Type>

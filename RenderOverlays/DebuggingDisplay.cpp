@@ -652,8 +652,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
             Rect r = tempLayout.AllocateFullHeight(i->second);
             if (!i->first.empty() && i->second) {
-                // FillRectangle(context, r, bkColor);
-
                 if (i != fieldHeaders.begin())
                     context.DrawLine(ProjectionMode::P2D,
                         AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
@@ -662,7 +660,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 r._topLeft[0] += 8;
 
                 const ColorB colour = HeaderTextColor;
-                context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
+                context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::Left, MakeStringSection(i->first));
 
                 if (interactables)
                     interactables->Register(Interactables::Widget(r, InteractableId_Make(MakeStringSection(i->first))));
@@ -676,19 +674,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                 const std::map<std::string, TableElement>& entry)
     {
         static const ColorB TextColor   ( 255, 255, 255, 255 );
-        static const ColorB BkColor     (   0,   0,   0,  20 );
+        
         static const ColorB BkOutColor  ( 255, 255, 255, 255 );
         static const ColorB SepColor    ( 255, 255, 255, 255 );
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return 0;
 
-        context.DrawQuad(
-            ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
-            BkColor, BkOutColor, 
-            Float2(0.f, 0.f), Float2(1.f, 1.f),
-            Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRect});
+        
 
         auto font = ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont;
         TextStyle style{DrawTextOptions(true, false)};
@@ -701,17 +694,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 auto s = entry.find(i->first);
                 Rect r = tempLayout.AllocateFullHeight(i->second);
                 if (s != entry.end() && !s->second._label.empty()) {
-
-                    /*if (i != fieldHeaders.begin())
-                        context.DrawLine(ProjectionMode::P2D,
-                            AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
-                            AsPixelCoords(Coord2(r._topLeft[0], r._bottomRight[1]-2)), SepColor,
-                            1.f);*/
                     r._topLeft[0] += 8;
 
-
                     const ColorB colour = TextColor;
-                    // FillRectangle(context, r, s->second._bkColour);
                     auto textSpace = context.DrawText(AsPixelCoords(r), font, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
                     heightUsed = std::max(textSpace[1] - r._topLeft[1], heightUsed);
                 }

@@ -16,6 +16,8 @@ namespace RenderCore { namespace Assets
     class MaterialScaffold;
 }}
 
+namespace Assets { class AssetHeapRecord; }
+
 namespace RenderCore { namespace Techniques
 {
     class SimpleModelRenderer;
@@ -56,6 +58,9 @@ namespace RenderCore { namespace Techniques
         uint32_t GetReloadId() const;
         void OnFrameBarrier();
 
+        struct Records;
+        Records LogRecords() const;
+
         ModelCache(
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const Config& cfg = Config());
@@ -63,6 +68,19 @@ namespace RenderCore { namespace Techniques
     protected:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    struct ModelCache::Records
+    {
+        std::vector<::Assets::AssetHeapRecord> _modelScaffolds;
+        std::vector<::Assets::AssetHeapRecord> _materialScaffolds;
+
+        struct Renderer
+        {
+            std::string _model, _material;
+            unsigned _decayFrames = 0;
+        };
+        std::vector<Renderer> _modelRenderers;
     };
 
 }}

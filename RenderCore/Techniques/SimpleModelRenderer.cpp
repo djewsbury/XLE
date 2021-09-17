@@ -1244,9 +1244,11 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
 		StringSection<> deformOperations,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
-		const std::string& modelScaffoldNameString,
-		const std::string& materialScaffoldNameString)
+		const std::string& modelScaffoldNameStringInit,
+		const std::string& materialScaffoldNameStringInit)
 	{
+		auto modelScaffoldNameString = !modelScaffoldNameStringInit.empty() ? modelScaffoldNameStringInit : modelScaffoldFuture->Initializer();
+		auto materialScaffoldNameString = !materialScaffoldNameStringInit.empty() ? materialScaffoldNameStringInit : materialScaffoldFuture->Initializer();
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToFuture(
 			future,
