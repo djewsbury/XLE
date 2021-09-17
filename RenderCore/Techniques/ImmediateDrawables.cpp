@@ -57,9 +57,9 @@ namespace RenderCore { namespace Techniques
 				*nascentDesc = *_pipelineDesc[dsMode];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
-				nascentDesc->_patchExpansions.push_back(s_patchShape);
-				nascentDesc->_patchExpansions.push_back(s_patchFill);
-				nascentDesc->_patchExpansions.push_back(s_patchOutline);
+				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
+				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
+				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc), {});
@@ -69,7 +69,7 @@ namespace RenderCore { namespace Techniques
 				*nascentDesc = *_pipelineDesc[dsMode];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
-				nascentDesc->_patchExpansions.push_back(s_patchTwoLayersShader);
+				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc), {});

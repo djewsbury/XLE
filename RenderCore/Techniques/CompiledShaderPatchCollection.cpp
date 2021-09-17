@@ -51,16 +51,15 @@ namespace RenderCore { namespace Techniques
 		// With the given shader patch collection, build the source code and the 
 		// patching functions associated
 		if (!src.GetPatches().empty()) {
-			std::vector<ShaderSourceParser::InstantiationRequest> finalInstRequests;
-			finalInstRequests.reserve(src.GetPatches().size());
-			for (const auto&i:src.GetPatches()) finalInstRequests.push_back(i.second);
-
-			ShaderSourceParser::GenerateFunctionOptions generateOptions;
-			generateOptions._shaderLanguage = GetDefaultShaderLanguage();
-			generateOptions._pipelineLayoutMaterialDescriptorSet = materialDescSetLayout.GetLayout().get();
-			generateOptions._materialDescriptorSetIndex = materialDescSetLayout.GetSlotIndex();
-			auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequests), generateOptions);
-			BuildFromInstantiatedShader(inst);
+			for (const auto&i:src.GetPatches()) {
+				ShaderSourceParser::InstantiationRequest finalInstRequest[] = { i.second };
+				ShaderSourceParser::GenerateFunctionOptions generateOptions;
+				generateOptions._shaderLanguage = GetDefaultShaderLanguage();
+				generateOptions._pipelineLayoutMaterialDescriptorSet = materialDescSetLayout.GetLayout().get();
+				generateOptions._materialDescriptorSetIndex = materialDescSetLayout.GetSlotIndex();
+				auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequest), generateOptions);
+				BuildFromInstantiatedShader(inst);
+			}
 		}
 	}
 
@@ -100,6 +99,7 @@ namespace RenderCore { namespace Techniques
 			#if defined(_DEBUG)
 				p._entryPointName = patch._name;
 			#endif
+			p._filteringRulesId = (unsigned)_interface._filteringRules.size();
 
 			_interface._patches.emplace_back(std::move(p));
 		}
@@ -117,13 +117,14 @@ namespace RenderCore { namespace Techniques
 				_dependencies.push_back(d);
 		}
 
-		_interface._filteringRules = inst._selectorRelevance;
+		ShaderSourceParser::SelectorFilteringRules filteringRules = inst._selectorRelevance;
 		for (const auto& rawShader:inst._rawShaderFileIncludes) {
-			auto filteringRules = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(rawShader);
-			filteringRules->StallWhilePending();
-			_interface._filteringRules.MergeIn(*filteringRules->Actualize());
+			auto rawIncludeFilteringRules = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(rawShader);
+			rawIncludeFilteringRules->StallWhilePending();
+			filteringRules.MergeIn(*rawIncludeFilteringRules->Actualize());
 		}
-		_depVal.RegisterDependency(_interface._filteringRules.GetDependencyValidation());
+		_interface._filteringRules.push_back(filteringRules);
+		_depVal.RegisterDependency(filteringRules.GetDependencyValidation());
 
 		size_t size = 0;
 		for (const auto&i:inst._sourceFragments)
@@ -139,6 +140,12 @@ namespace RenderCore { namespace Techniques
 
 	CompiledShaderPatchCollection::~CompiledShaderPatchCollection() {}
 
+	const ShaderSourceParser::SelectorFilteringRules& CompiledShaderPatchCollection::Interface::GetSelectorFilteringRules(unsigned filteringRulesId) const
+	{
+		assert(filteringRulesId < _filteringRules.size());
+		return _filteringRules[filteringRulesId];
+	}
+
 	static std::string Merge(const std::vector<std::string>& v)
 	{
 		size_t size=0;
@@ -149,7 +156,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::string CompiledShaderPatchCollection::InstantiateShader(const ParameterBox& selectors) const
+	std::string CompiledShaderPatchCollection::InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const
 	{
 		if (_src.GetPatches().empty()) {
 			// If we'ved used  the constructor that takes a ShaderSourceParser::InstantiatedShader,
@@ -158,9 +165,23 @@ namespace RenderCore { namespace Techniques
 			return _savedInstantiation;
 		}
 
+		// find the particular patches that were requested and instantiate them
 		std::vector<ShaderSourceParser::InstantiationRequest> finalInstRequests;
-		finalInstRequests.reserve(_src.GetPatches().size());
-		for (const auto&i:_src.GetPatches()) finalInstRequests.push_back(i.second);
+		std::vector<unsigned> srcPatchesToInclude;
+		srcPatchesToInclude.reserve(patchExpansions.size());
+		for (auto expansion:patchExpansions) {
+			auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
+			assert(i != _interface._patches.end());
+			if (i == _interface._patches.end()) continue;
+			auto srcPatchIdx = i->_filteringRulesId;		// this is actually the idx from the source patches array
+			if (std::find(srcPatchesToInclude.begin(), srcPatchesToInclude.end(), srcPatchIdx) == srcPatchesToInclude.end())
+				srcPatchesToInclude.push_back(srcPatchIdx);
+		}
+		finalInstRequests.reserve(srcPatchesToInclude.size());
+		for (auto i:srcPatchesToInclude) {
+			assert(i < _src.GetPatches().size());
+			finalInstRequests.push_back(_src.GetPatches()[i].second);
+		}
 
 		ShaderSourceParser::GenerateFunctionOptions generateOptions;
 		if (selectors.GetCount() != 0) {
@@ -231,7 +252,7 @@ namespace RenderCore { namespace Techniques
 
 	auto AssembleShader(
 		const CompiledShaderPatchCollection& patchCollection,
-		IteratorRange<const uint64_t*> redirectedPatchFunctions,
+		IteratorRange<const uint64_t*> patchExpansions,
 		StringSection<> definesTable) -> SourceCodeWithRemapping
 
 	{
@@ -267,9 +288,9 @@ namespace RenderCore { namespace Techniques
 
             p = (defineEnd == definesTable.end()) ? defineEnd : (defineEnd+1);
         }
-		output << patchCollection.InstantiateShader(paramBoxSelectors);
+		output << patchCollection.InstantiateShader(paramBoxSelectors, patchExpansions);
 
-		for (auto fn:redirectedPatchFunctions) {
+		for (auto fn:patchExpansions) {
 			auto i = std::find_if(
 				patchCollection.GetInterface().GetPatches().begin(), patchCollection.GetInterface().GetPatches().end(),
 				[fn](const CompiledShaderPatchCollection::Interface::Patch& p) { return p._implementsHash == fn; });

@@ -19,6 +19,7 @@
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/AssetHeapLRU.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -47,12 +48,121 @@ namespace RenderCore { namespace Techniques
 		uint64_t _fbRelevanceValue = 0;
 	};
 
+	struct InputAssembly
+	{
+		std::vector<InputElementDesc> _inputAssembly;
+		std::vector<MiniInputElementDesc> _miniInputAssembly;
+		uint64_t _hash;
+	};
+
 	class SharedPools
 	{
 	public:
 		Threading::Mutex _lock;
 		UniqueShaderVariationSet _selectorVariationsSet;
 		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
+
+		// todo -- _metalPipelines should really hold weak pointers, not strong ones. But it's awkward, and not
+		// as easy as just making it a weak pointer to the future, or a future of a weak pointer
+		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _metalPipelines;
+
+		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateMetalPipelineAlreadyLocked(
+			const InputAssembly& ia,
+			Topology topology,
+			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
+			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
+			const SequencerConfig& sequencerCfg)
+		{
+			uint64_t hash = HashCombine(compiledPatchCollection->GetGUID(), pipelineLayout->GetGUID());
+			for (auto s:filteredSelectors)
+				if (s._hashValue)
+					hash = HashCombine(s._hashValue, hash);
+			hash = HashCombine(sequencerCfg._fbRelevanceValue, hash);
+			hash = HashCombine((uint64_t)topology, hash);
+			hash = HashCombine(ia._hash, hash);
+
+			// we need to hash specific parts of the graphics pipeline desc -- only those parts that we'll use below
+			// some parts of the pipeline desc (eg, the selectors) have already been used to create other inputs here
+			// we don't want to use use them, because they may be more aggressively filtered in the secondary products
+			// (particularly for the filtered selectors)
+			hash = pipelineDesc->CalculateHashNoSelectors(hash);
+
+			auto i = LowerBound(_metalPipelines, hash);
+			if (i!=_metalPipelines.end() && i->first == hash)
+				if (!::Assets::IsInvalidated(*i->second))
+					return i->second;
+
+			#if 0
+				Log(Verbose) << "Building pipeline for pipeline accelerator: " << std::endl;
+				Log(Verbose) << "\tPipeline layout: " << pipelineLayout->GetGUID() << " (" << (size_t)pipelineLayout.get() << ")" << std::endl;
+				Log(Verbose) << "\tFB relevance: " << sequencerCfg._fbRelevanceValue << std::endl;
+				Log(Verbose) << "\tIA: " << ia._hash << std::endl;
+				Log(Verbose) << "\tPatch collection: " << compiledPatchCollection->GetGUID() << std::endl;
+				for (unsigned c=0; c<filteredSelectors.size(); ++c) {
+					if (!filteredSelectors[c]._hashValue) continue;
+					Log(Verbose) << "\tFiltered selectors[" << c << "]: " << filteredSelectors[c]._selectors << std::endl;
+				}
+			#endif
+
+			auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
+
+			StreamOutputInitializers so;
+			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
+			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
+
+			auto shaderProgram = Internal::MakeShaderProgram(*pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors, so);
+			
+			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
+				*result,
+				[	ia=ia, topology, pipelineDesc, 
+					fbDesc=sequencerCfg._fbDesc, subpassIdx=sequencerCfg._subpassIdx
+					](std::shared_ptr<Metal::ShaderProgram> shaderProgram) {
+
+					return InternalCreatePipeline(
+						*shaderProgram, 
+						*pipelineDesc, ia, topology,
+						fbDesc, subpassIdx);
+				});
+
+			if (i!=_metalPipelines.end() && i->first == hash) {
+				i->second = result;
+			} else
+				_metalPipelines.insert(i, std::make_pair(hash, result));
+			return result;
+		}
+
+	private:
+		static std::shared_ptr<Metal::GraphicsPipeline> InternalCreatePipeline(
+			const Metal::ShaderProgram& shader,
+			const GraphicsPipelineDesc& pipelineDesc,
+			const InputAssembly& ia,
+			Topology topology,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIdx)
+		{
+			Metal::GraphicsPipelineBuilder builder;
+			builder.Bind(shader);
+			builder.Bind(pipelineDesc._blend);
+			builder.Bind(pipelineDesc._depthStencil);
+			builder.Bind(pipelineDesc._rasterization);
+
+			if (!ia._inputAssembly.empty()) {
+				Metal::BoundInputLayout boundIA(MakeIteratorRange(ia._inputAssembly), shader);
+				assert(boundIA.AllAttributesBound());
+				builder.Bind(boundIA, topology);
+			} else {
+				Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(ia._miniInputAssembly), 0 };
+				Metal::BoundInputLayout boundIA(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
+				assert(boundIA.AllAttributesBound());
+				builder.Bind(boundIA, topology);
+			}
+
+			builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
+
+			return builder.CreatePipeline(Metal::GetObjectFactory());
+		}
 	};
 
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
@@ -91,42 +201,11 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
 		ParameterBox _geoSelectors;
-
-		std::vector<InputElementDesc> _inputAssembly;
-		std::vector<MiniInputElementDesc> _miniInputAssembly;
+		InputAssembly _ia;
 		Topology _topology;
 		RenderCore::Assets::RenderStateSet _stateSet;
 
 		unsigned _ownerPoolId;
-
-		std::shared_ptr<Metal::GraphicsPipeline> InternalCreatePipeline(
-			const Metal::ShaderProgram& shader,
-			const DepthStencilDesc& depthStencil,
-			IteratorRange<const AttachmentBlendDesc*> attachmentBlends,
-			const RasterizationDesc& rasterization,
-			const SequencerConfig& sequencerCfg)
-		{
-			Metal::GraphicsPipelineBuilder builder;
-			builder.Bind(shader);
-			builder.Bind(attachmentBlends);
-			builder.Bind(depthStencil);
-			builder.Bind(rasterization);
-
-			if (!_inputAssembly.empty()) {
-				Metal::BoundInputLayout ia(MakeIteratorRange(_inputAssembly), shader);
-				assert(ia.AllAttributesBound());
-				builder.Bind(ia, _topology);
-			} else {
-				Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(_miniInputAssembly), 0 };
-				Metal::BoundInputLayout ia(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-				assert(ia.AllAttributesBound());
-				builder.Bind(ia, _topology);
-			}
-
-			builder.SetRenderPassConfiguration(sequencerCfg._fbDesc, sequencerCfg._subpassIdx);
-
-			return builder.CreatePipeline(Metal::GetObjectFactory());
-		}
 	};
 
 
@@ -183,6 +262,7 @@ namespace RenderCore { namespace Techniques
 							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
 						UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
+						::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> metalPipelineFuture;
 						{
 							// The list here defines the override order. Note that the global settings are last
 							// because they can actually override everything
@@ -196,16 +276,40 @@ namespace RenderCore { namespace Techniques
 							ScopedLock(sharedPools->_lock);
 							for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
 								if (!pipelineDesc->_shaders[c].empty()) {
-									const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = {
-										pipelineDescWithFiltering->_automaticFiltering[c].get(), 
-										&compiledPatchCollection->GetInterface().GetSelectorFilteringRules() 
-									};
+									const ShaderSourceParser::SelectorFilteringRules* autoFiltering[1+pipelineDesc->_patchExpansions.size()];
+									unsigned filteringRulesPulledIn[1+pipelineDesc->_patchExpansions.size()];
+									unsigned autoFilteringCount = 0;
+									autoFiltering[autoFilteringCount++] = pipelineDescWithFiltering->_automaticFiltering[c].get();
+									filteringRulesPulledIn[0] = ~0u;
+
+									// Figure out which filtering rules we need from the compiled patch collection, and include them
+									// This is important because the filtering rules for different shader stages might be vastly different
+									for (auto exp:pipelineDesc->_patchExpansions) {
+										if (exp.second != (ShaderStage)c) continue;
+										auto i = std::find_if(
+											compiledPatchCollection->GetInterface().GetPatches().begin(), compiledPatchCollection->GetInterface().GetPatches().end(),
+											[exp](const auto& c) { return c._implementsHash == exp.first; });
+										assert(i != compiledPatchCollection->GetInterface().GetPatches().end());
+										if (i == compiledPatchCollection->GetInterface().GetPatches().end()) continue;
+										if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
+										filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
+										autoFiltering[autoFilteringCount++] = &compiledPatchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
+									}
+
 									filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
 										MakeIteratorRange(paramBoxes),
 										pipelineDesc->_manualSelectorFiltering,
-										MakeIteratorRange(autoFiltering),
+										MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]),
 										pipelineDescWithFiltering->_preconfiguration.get());
-								}
+								} else
+									filteredSelectors[c]._hashValue = 0;
+
+							metalPipelineFuture = sharedPools->CreateMetalPipelineAlreadyLocked(
+								containingPipelineAccelerator->_ia, containingPipelineAccelerator->_topology, 
+								pipelineDesc, pipelineLayoutAsset->GetPipelineLayout(),
+								compiledPatchCollection,
+								MakeIteratorRange(filteredSelectors),
+								cfg);
 						}
 
 						// todo -- we could consider hashing all of the creation parameters at this point and looking up in a
@@ -224,39 +328,30 @@ namespace RenderCore { namespace Techniques
 							configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
 						configurationDepVal.RegisterDependency(pipelineLayoutAsset->GetDependencyValidation());
 
-						StreamOutputInitializers so;
-						so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
-						so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
-
-						auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
-						auto shaderProgram = Internal::MakeShaderProgram(*pipelineDesc, pipelineLayout, compiledPatchCollection, MakeIteratorRange(filteredSelectors), so);
 						std::string vsd, psd, gsd;
 						#if defined(_DEBUG)
+							auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
 							vsd = Internal::MakeShaderDescription(ShaderStage::Vertex, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Vertex]);
 							psd = Internal::MakeShaderDescription(ShaderStage::Pixel, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Pixel]);
 							gsd = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
 						#endif
-						::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
+
+						::Assets::WhenAll(metalPipelineFuture).ThenConstructToFuture(
 							resultFuture,
-							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](std::shared_ptr<Metal::ShaderProgram> shaderProgram) {
+							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](std::shared_ptr<Metal::GraphicsPipeline> metalPipeline) {
 								auto containingPipelineAccelerator = weakThis.lock();
 								if (!containingPipelineAccelerator)
 									Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
 								auto result = std::make_shared<IPipelineAcceleratorPool::Pipeline>();
-								result->_metalPipeline = containingPipelineAccelerator->InternalCreatePipeline(
-									*shaderProgram, 
-									pipelineDesc->_depthStencil, 
-									pipelineDesc->_blend, 
-									pipelineDesc->_rasterization, 
-									cfg);
+								result->_metalPipeline = metalPipeline;
 								result->_depVal = configurationDepVal;
 								#if defined(_DEBUG)
 									result->_vsDescription = vsd;
 									result->_psDescription = psd;
 									result->_gsDescription = gsd;
 								#endif
-								result->_depVal.RegisterDependency(result->_metalPipeline->GetDependencyValidation());
+								result->_depVal.RegisterDependency(metalPipeline->GetDependencyValidation());
 								return result;
 							});
 					});
@@ -286,12 +381,13 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::RenderStateSet& stateSet)
 	: _shaderPatches(shaderPatches)
 	, _materialSelectors(materialSelectors)
-	, _inputAssembly(inputAssembly.begin(), inputAssembly.end())
 	, _topology(topology)
 	, _stateSet(stateSet)
 	, _ownerPoolId(ownerPoolId)
 	{
-		std::vector<InputElementDesc> sortedIA = _inputAssembly;
+		_ia._inputAssembly = {inputAssembly.begin(), inputAssembly.end()};
+		_ia._hash = HashInputAssembly(_ia._inputAssembly, DefaultSeed64);
+		std::vector<InputElementDesc> sortedIA = _ia._inputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
 			[](const InputElementDesc& lhs, const InputElementDesc& rhs) {
@@ -332,12 +428,13 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::RenderStateSet& stateSet)
 	: _shaderPatches(shaderPatches)
 	, _materialSelectors(materialSelectors)
-	, _miniInputAssembly(miniInputAssembly.begin(), miniInputAssembly.end())
 	, _topology(topology)
 	, _stateSet(stateSet)
 	, _ownerPoolId(ownerPoolId)
 	{
-		std::vector<MiniInputElementDesc> sortedIA = _miniInputAssembly;
+		_ia._miniInputAssembly = {miniInputAssembly.begin(), miniInputAssembly.end()};
+		_ia._hash = HashInputAssembly(_ia._miniInputAssembly, DefaultSeed64);
+		std::vector<MiniInputElementDesc> sortedIA = _ia._miniInputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
 			[](const MiniInputElementDesc& lhs, const MiniInputElementDesc& rhs) {
@@ -915,10 +1012,10 @@ namespace RenderCore { namespace Techniques
 			record._materialSelectors = AsString(l->_materialSelectors, 4);
 			record._geoSelectors = AsString(l->_geoSelectors, 2);
 			record._stateSetHash = l->_stateSet.GetHash();
-			if (!l->_miniInputAssembly.empty())
-				record._inputAssemblyHash = HashInputAssembly(l->_miniInputAssembly, DefaultSeed64);
+			if (!l->_ia._miniInputAssembly.empty())
+				record._inputAssemblyHash = HashInputAssembly(l->_ia._miniInputAssembly, DefaultSeed64);
 			else
-				record._inputAssemblyHash = HashInputAssembly(l->_inputAssembly, DefaultSeed64);
+				record._inputAssemblyHash = HashInputAssembly(l->_ia._inputAssembly, DefaultSeed64);
 			paRecords.push_back(std::move(record));
 		}
 

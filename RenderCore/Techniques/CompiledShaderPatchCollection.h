@@ -73,11 +73,12 @@ namespace RenderCore { namespace Techniques
 				#if defined(_DEBUG)
 					std::string _entryPointName;
 				#endif
+				unsigned 		_filteringRulesId;
 			};
 			IteratorRange<const Patch*> GetPatches() const { return MakeIteratorRange(_patches); }
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& GetMaterialDescriptorSet() const { return *_descriptorSet; }
 			unsigned GetMaterialDescriptorSetSlotIndex() const { return _materialDescriptorSetSlotIndex; }
-			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules() const { return _filteringRules; }
+			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
 
 			bool HasPatchType(uint64_t implementing) const;
 
@@ -85,7 +86,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<Patch> _patches;
 			std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _descriptorSet;
 			unsigned _materialDescriptorSetSlotIndex;
-			ShaderSourceParser::SelectorFilteringRules _filteringRules;
+			std::vector<ShaderSourceParser::SelectorFilteringRules> _filteringRules;
 
 			friend class CompiledShaderPatchCollection;
 		};
@@ -96,7 +97,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 		std::vector<::Assets::DependentFileState> _dependencies;
 
-		std::string InstantiateShader(const ParameterBox& selectors) const;
+		std::string InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const;
 
 		uint64_t GetGUID() const { return _guid; }
 

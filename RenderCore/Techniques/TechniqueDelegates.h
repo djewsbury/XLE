@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
 		ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
 		std::string				_selectorPreconfigurationFile;
 
-		std::vector<uint64_t>	_patchExpansions;
+		std::vector<std::pair<uint64_t, ShaderStage>>	_patchExpansions;
 
 		std::vector<AttachmentBlendDesc> 	_blend;
 		DepthStencilDesc					_depthStencil;
@@ -35,6 +35,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
+		uint64_t CalculateHashNoSelectors(uint64_t seed) const;
 	};
 
 	class ITechniqueDelegate

@@ -88,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		} else {
 			FilteredSelectorSet result;
 			result._selectors = MakeFilteredDefinesTable(selectors, techniqueFiltering, automaticFiltering, preconfiguration);
-			result._hashValue = Hash64(result._selectors);
+			result._hashValue = result._selectors.empty() ? 0ull : Hash64(result._selectors);
 			i = _globalToFiltered.insert(i, {inputHash, result});
 			return i->second;
 		}

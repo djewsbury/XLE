@@ -356,8 +356,8 @@ namespace UnitTests
 			// We're expecting the selectors "RES_HAS_TextureDif" and "RES_HAS_TextureNorm"
 			ParameterBox testBox { std::make_pair("VSOUT_HAS_TEXCOORD", "1") };
 			const ParameterBox* env[] = { &testBox };
-			REQUIRE(compiledCollection.GetInterface().GetSelectorFilteringRules().IsRelevant("RES_HAS_TextureDif", {}, MakeIteratorRange(env)));
-			REQUIRE(compiledCollection.GetInterface().GetSelectorFilteringRules().IsRelevant("RES_HAS_TextureNorm", {}, MakeIteratorRange(env)));
+			REQUIRE(compiledCollection.GetInterface().GetSelectorFilteringRules(0).IsRelevant("RES_HAS_TextureDif", {}, MakeIteratorRange(env)));
+			REQUIRE(compiledCollection.GetInterface().GetSelectorFilteringRules(0).IsRelevant("RES_HAS_TextureNorm", {}, MakeIteratorRange(env)));
 		}
 
 		SECTION( "TestCompiledShaderDependencyChecking" )

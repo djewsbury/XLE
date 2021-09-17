@@ -202,8 +202,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			}
 		}
 
-		std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
-
 		auto adjustedDefinesTable = definesTable;
 		if (stage == ShaderStage::Geometry && !so._outputElements.empty()) {
 			if (!definesTable.empty()) adjustedDefinesTable += ";";
@@ -211,6 +209,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 		if (patchCollection && !patchExpansions.empty()) {
+			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
 			auto res = ::Assets::MakeAsset<CompiledShaderByteCode_InstantiateShaderGraph>(
 				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<CompiledShaderByteCode>*>(&res);
@@ -228,16 +227,21 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	{
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3];
 
+		uint64_t patchExpansionsBuffer[pipelineDesc._patchExpansions.size()];
 		for (unsigned c=0; c<3; ++c) {
 			if (pipelineDesc._shaders[c].empty())
 				continue;
+
+			unsigned patchExpansionCount = 0;
+			for (auto p:pipelineDesc._patchExpansions)
+				if (p.second == (ShaderStage)c) patchExpansionsBuffer[patchExpansionCount++] = p.first;
 
 			byteCodeFuture[c] = MakeByteCodeFuture(
 				(ShaderStage)c,
 				pipelineDesc._shaders[c],
 				filteredSelectors[c]._selectors,
 				compiledPatchCollection,
-				pipelineDesc._patchExpansions,
+				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]),
 				so);
 		}
 

@@ -131,9 +131,10 @@ namespace RenderCore { namespace Techniques
 	static const auto s_perPixel = Hash64("PerPixel");
 	static const auto s_earlyRejectionTest = Hash64("EarlyRejectionTest");
 	static const auto s_deformVertex = Hash64("DeformVertex");
-	static uint64_t s_patchExp_perPixelAndEarlyRejection[] = { s_perPixel, s_earlyRejectionTest };
-	static uint64_t s_patchExp_perPixel[] = { s_perPixel };
-	static uint64_t s_patchExp_earlyRejection[] = { s_earlyRejectionTest };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelAndEarlyRejection[] = { {s_perPixel, ShaderStage::Pixel}, {s_earlyRejectionTest, ShaderStage::Pixel} };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixel[] = { {s_perPixel, ShaderStage::Pixel} };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_earlyRejection[] = { {s_earlyRejectionTest, ShaderStage::Pixel} };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_deformVertex[] = { { s_deformVertex, ShaderStage::Vertex } };
 
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection::Interface& shaderPatches)
 	{
@@ -232,7 +233,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -358,7 +359,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -423,8 +424,8 @@ namespace RenderCore { namespace Techniques
 			{
 				const auto noPatchesHash = Hash64("DepthOnly_NoPatches");
 				const auto earlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
-				auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
+				auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
+				auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
 				if (shadowGen) {
 					if (*shadowGen == ShadowGenType::GSAmplify) {
 						vsNoPatchesHash = Hash64("VSShadowGen_GSAmplify_NoPatches");
@@ -484,7 +485,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -577,8 +578,8 @@ namespace RenderCore { namespace Techniques
 					psPerPixelHash = Hash64("DepthOnly_NoPatches");
 					perPixelAndEarlyRejectionHash = Hash64("DepthOnly_EarlyRejection");
 				}
-				auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				auto vsDeformVertexHash = Hash64("VS_DeformVertex");
+				auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
+				auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
 				auto* psNoPatchesSrc = _techniqueSet->FindEntry(psNoPatchesHash);
 				auto* psPerPixelSrc = _techniqueSet->FindEntry(psPerPixelHash);
 				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
@@ -645,7 +646,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -780,7 +781,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -912,7 +913,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -968,8 +969,8 @@ namespace RenderCore { namespace Techniques
 			{
 				const auto noPatchesHash = Hash64("RayTest_NoPatches");
 				const auto earlyRejectionHash = Hash64("RayTest_EarlyRejection");
-				const auto vsNoPatchesHash = Hash64("VS_NoPatches");
-				const auto vsDeformVertexHash = Hash64("VS_DeformVertex");
+				const auto vsNoPatchesHash = Hash64("VSDepthOnly_NoPatches");
+				const auto vsDeformVertexHash = Hash64("VSDepthOnly_DeformVertex");
 				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
 				auto* earlyRejectionSrc = _techniqueSet->FindEntry(earlyRejectionHash);
 				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
@@ -1016,7 +1017,7 @@ namespace RenderCore { namespace Techniques
 					const TechniqueEntry* vsTechEntry = &techniqueFileHelper->_vsNoPatchesSrc;
 					if (hasDeformVertex) {
 						vsTechEntry = &techniqueFileHelper->_vsDeformVertexSrc;
-						nascentDesc->_patchExpansions.push_back(s_deformVertex);
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
 
 					nascentDesc->_depVal = techniqueFileHelper->GetDependencyValidation();
@@ -1067,22 +1068,27 @@ namespace RenderCore { namespace Techniques
 
 	uint64_t GraphicsPipelineDesc::GetHash() const
 	{
-		uint64_t result = _manualSelectorFiltering.GetHash();
-		for (unsigned c=0; c<dimof(_shaders); ++c)
-			if (!_shaders[c].empty()) result = Hash64(_shaders[c], result);
+		auto result = CalculateHashNoSelectors(_manualSelectorFiltering.GetHash());
 		if (!_selectorPreconfigurationFile.empty())
 			result = Hash64(_selectorPreconfigurationFile, result);
-		if (!_patchExpansions.empty())
-			result = Hash64(AsPointer(_patchExpansions.begin()), AsPointer(_patchExpansions.end()), result);
-		for (const auto&b:_blend)
-			result = HashCombine(b.Hash(), result);
-		result = HashCombine(_depthStencil.HashDepthAspect(), result);
+		return result;
+	}
+
+	uint64_t GraphicsPipelineDesc::CalculateHashNoSelectors(uint64_t seed) const
+	{
+		uint64_t result = HashCombine(_depthStencil.HashDepthAspect(), seed);
 		result = HashCombine(_depthStencil.HashStencilAspect(), result);
 		result = HashCombine(_rasterization.Hash(), result);
+		for (const auto&b:_blend)
+			result = HashCombine(b.Hash(), result);
 		if (!_soElements.empty()) {
 			result = HashInputAssembly(MakeIteratorRange(_soElements), result);
 			result = Hash64(AsPointer(_soBufferStrides.begin()), AsPointer(_soBufferStrides.end()), result);
 		}
+		for (unsigned c=0; c<dimof(_shaders); ++c)
+			if (!_shaders[c].empty()) result = Hash64(_shaders[c], result);
+		if (!_patchExpansions.empty())
+			result = Hash64(AsPointer(_patchExpansions.begin()), AsPointer(_patchExpansions.end()), result);
 		return result;
 	}
 
