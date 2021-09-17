@@ -42,12 +42,12 @@ namespace PlatformRig { namespace Overlays
         static ColorB       selectionColor  = ColorB(0x7f, 0x7f, 0x7f, 0x7f);
         static ColorB       borderColor     = ColorB(0xff, 0xff, 0xff, 0x7f);
         static ColorB       entryBoxColor   = ColorB(0x00, 0x00, 0x00, 0x4f);
-        FillRectangle(&context, consoleMaxSize, backColor);
-        FillRectangle(&context, 
+        FillRectangle(context, consoleMaxSize, backColor);
+        FillRectangle(context, 
             Rect(   Coord2(consoleMaxSize._topLeft[0],      consoleMaxSize._bottomRight[1]-3),
                     Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]  )),
             borderColor);
-        FillRectangle(&context, 
+        FillRectangle(context, 
             Rect(   Coord2(consoleMaxSize._topLeft[0],      entryBoxArea._topLeft[1]-3),
                     Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]-3)),
             entryBoxColor);
@@ -81,7 +81,7 @@ namespace PlatformRig { namespace Overlays
             if (selStart != selEnd) {
                 Rect rect(  Coord2(entryBoxArea._topLeft[0] + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
                             Coord2(entryBoxArea._topLeft[0] + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
-                FillRectangle(&context, rect, selectionColor);
+                FillRectangle(context, rect, selectionColor);
             }
 
             char buffer[1024];
@@ -94,7 +94,7 @@ namespace PlatformRig { namespace Overlays
         if ((_renderCounter / 20) & 0x1) {
             Rect rect(  Coord2(entryBoxArea._topLeft[0] + caretOffset - 1, entryBoxArea._topLeft[1]),
                         Coord2(entryBoxArea._topLeft[0] + caretOffset + 2, entryBoxArea._bottomRight[1]));
-            FillRectangle(&context, rect, caretColor);
+            FillRectangle(context, rect, caretColor);
         }
 
         ++_renderCounter;

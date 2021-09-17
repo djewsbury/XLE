@@ -74,10 +74,10 @@ namespace PlatformRig { namespace Overlays
         static void     GPUEventListener(const void* eventsBufferStart, const void* eventsBufferEnd);
         static BufferUploadDisplay* s_gpuListenerDisplay;
 
-        void    DrawMenuBar(IOverlayContext* context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
-        void    DrawDisplay(IOverlayContext* context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
-        void    DrawStatistics(IOverlayContext* context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const BufferUploads::CommandListMetrics& mostRecentResults);
-        void    DrawRecentRetirements(IOverlayContext* context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
+        void    DrawMenuBar(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
+        void    DrawDisplay(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
+        void    DrawStatistics(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const BufferUploads::CommandListMetrics& mostRecentResults);
+        void    DrawRecentRetirements(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
         size_t  FillValuesBuffer(unsigned graphType, unsigned uploadType, float valuesBuffer[], size_t valuesMaxCount);
     };
 

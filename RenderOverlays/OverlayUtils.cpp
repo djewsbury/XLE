@@ -14,12 +14,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ButtonStyle s_buttonPressed     ( ColorB(127, 192, 127,  64), ColorB(255, 255, 255,  96) );
 
     void DrawButtonBasic(
-        IOverlayContext* context, const Rect& rect, 
+        IOverlayContext& context, const Rect& rect, 
         const char label[], const ButtonStyle& formatting)
     {
         FillRectangle(context, rect, formatting._background);
         OutlineRectangle(context, rect, formatting._foreground);
-        context->DrawText(
+        context.DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);
     }

@@ -56,15 +56,15 @@ namespace Overlays
             Rect gridBackgroundRect = windAngle0;
             gridBackgroundRect._topLeft[0] += 128; gridBackgroundRect._bottomRight[0] -= 4;
             gridBackgroundRect._topLeft[1] += 4; gridBackgroundRect._bottomRight[1] -= 4;
-            HTweakerBar_DrawGridBackground(&context, gridBackgroundRect);
+            HTweakerBar_DrawGridBackground(context, gridBackgroundRect);
             
             Rect labelRect = windAngle0;
             labelRect._bottomRight[0] = labelRect._topLeft[0] + 256;
-            HTweakerBar_DrawLabel(&context, labelRect);
+            HTweakerBar_DrawLabel(context, labelRect);
             
             Rect textRect = windAngle0;
             textRect._topLeft[0] += 32;
-            /*Coord a = */DrawFormatText(&context, textRect, nullptr, ColorB(0xffffffff), objects[q]._name);
+            /*Coord a = */DrawFormatText(context, textRect, nullptr, ColorB(0xffffffff), objects[q]._name);
 
             Rect scrollBar = windAngle0;
             scrollBar._topLeft[0] = labelRect._bottomRight[0];
@@ -75,11 +75,11 @@ namespace Overlays
                 scrollBar, objects[q]._min, objects[q]._max, (objects[q]._max - objects[q]._min)/40.f,
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
-            HTweakerBar_Draw(&context, scrollCoordinates, *objects[q]._member);
+            HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
             interactables.Register(
                 Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
 
-            DrawFormatText(&context, scrollBar, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
+            DrawFormatText(context, scrollBar, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
         }
     }
 

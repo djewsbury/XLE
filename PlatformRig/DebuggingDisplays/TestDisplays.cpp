@@ -69,8 +69,8 @@ namespace PlatformRig { namespace Overlays
             colours[c*2+1] = ColorB(0xffafafaf);
         }
 
-        DrawLines(&context, segsX.get(), colours.get(), segmentsX);
-        DrawLines(&context, segsY.get(), colours.get(), segmentsY);
+        DrawLines(context, segsX.get(), colours.get(), segmentsX);
+        DrawLines(context, segsY.get(), colours.get(), segmentsY);
 
         Float2 start = Float2(float(gridArea._bottomRight[0] - gridArea._topLeft[0]), float(gridArea._bottomRight[1] - gridArea._topLeft[1])) / float(elementDim) / 2.f;
         Float2 end = Float2(float(_currentMousePosition[0] - gridArea._topLeft[0]), float(_currentMousePosition[1] - gridArea._topLeft[1])) / float(elementDim);
@@ -86,7 +86,7 @@ namespace PlatformRig { namespace Overlays
             Coord2(int(end[0]*elementDim), int(end[1]*elementDim)) + gridArea._topLeft,
         };
         ColorB testLineCol[] = { ColorB(0xffffffff), ColorB(0xffffffff) };
-        DrawLines(&context, testLine, testLineCol, 1);
+        DrawLines(context, testLine, testLineCol, 1);
 
         CollectIntersectionPts intersections;
         // GridEdgeIterator(Int2(start), Int2(end), intersections);
@@ -524,8 +524,8 @@ namespace PlatformRig { namespace Overlays
             }
             assert(c==segmentsY);
 
-            DrawLines(&context, segsX.get(), colours.get(), segmentsX);
-            DrawLines(&context, segsY.get(), colours.get(), segmentsY);
+            DrawLines(context, segsX.get(), colours.get(), segmentsX);
+            DrawLines(context, segsY.get(), colours.get(), segmentsY);
         }
 
             //////////////////////////////////////////////////////////////
@@ -542,7 +542,7 @@ namespace PlatformRig { namespace Overlays
                 lineColours.push_back(ColorB(0xffffffff));
             }
 
-            DrawLines(&context,
+            DrawLines(context,
                 AsPointer(transformedLines.cbegin()),
                 AsPointer(lineColours.cbegin()),
                 unsigned(transformedLines.size()/2));
@@ -640,11 +640,11 @@ namespace PlatformRig { namespace Overlays
         ButtonFormatting(ColorB background, ColorB foreground) : _background(background), _foreground(foreground) {}
     };
 
-    static void DrawButtonBasic(IOverlayContext* context, const Rect& rect, const char label[], ButtonFormatting formatting)
+    static void DrawButtonBasic(IOverlayContext& context, const Rect& rect, const char label[], ButtonFormatting formatting)
     {
         FillRectangle(context, rect, formatting._background);
         OutlineRectangle(context, rect, 0.f, formatting._foreground);
-        context->DrawText(
+        context.DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);
     }

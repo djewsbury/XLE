@@ -344,14 +344,14 @@ namespace UnitTests
 				leftTopFront[2] = -leftTopFront[2];
 				rightBottomBack[2] = -rightBottomBack[2];
 				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
-					overlayContext.get(), 
+					*overlayContext, 
 					std::make_tuple(leftTopFront, rightBottomBack),
 					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
 					col, 0x2);
 
 				col.a = 196;
 				RenderOverlays::DebuggingDisplay::DrawBoundingBox(
-					overlayContext.get(), 
+					*overlayContext, 
 					std::make_tuple(leftTopFront, rightBottomBack),
 					InvertOrthonormalTransform(AsFloat3x4(worldToView)),
 					col, 0x1);
@@ -359,7 +359,7 @@ namespace UnitTests
 		}
 		
 		auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
-		RenderOverlays::DebuggingDisplay::DrawFrustum(overlayContext.get(), sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
+		RenderOverlays::DebuggingDisplay::DrawFrustum(*overlayContext, sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
 		auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());

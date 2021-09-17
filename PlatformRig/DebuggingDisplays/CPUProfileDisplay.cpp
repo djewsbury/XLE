@@ -19,16 +19,16 @@
 
 namespace PlatformRig { namespace Overlays
 {
-    static float AsMilliseconds(uint64 profilerTime)
+    static float AsMilliseconds(uint64_t profilerTime)
     {
         static float freqMult = 1000.f / OSServices::GetPerformanceCounterFrequency();
         return float(profilerTime) * freqMult;
     }
 
-    static uint64 MillisecondsAsTimerValue(float milliseconds)
+    static uint64_t MillisecondsAsTimerValue(float milliseconds)
     {
         static float converter = OSServices::GetPerformanceCounterFrequency() / 1000.f;
-        return uint64(milliseconds * converter);
+        return uint64_t(milliseconds * converter);
     }
 
     using namespace RenderOverlays;
@@ -97,12 +97,12 @@ namespace PlatformRig { namespace Overlays
 
     static void DrawProfilerBar(
         const ProfilerTableSettings& settings,
-        IOverlayContext* context,
+        IOverlayContext& context,
         const Rect& rect, Coord middleX, bool highlighted, float barSize)
     {
             // draw a hatched bar behind in the given rect, centred on the given
             // position
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1] + 4)),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1] - 4)),
@@ -120,7 +120,7 @@ namespace PlatformRig { namespace Overlays
         } else {
             Coord barMaxWidth = rect._bottomRight[0] - rect._topLeft[0];
             Coord barWidth = Coord(std::min(barSize, 1.f) * float(barMaxWidth));
-            context->DrawQuad(
+            context.DrawQuad(
                 ProjectionMode::P2D,
                 AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
                 AsPixelCoords(Coord2(rect._topLeft[0] + barWidth, rect._bottomRight[1])),
@@ -134,9 +134,9 @@ namespace PlatformRig { namespace Overlays
 
     static void DrawProfilerTable(
         const std::vector<IHierarchicalProfiler::ResolvedEvent>& resolvedEvents,
-        const std::vector<uint64>& toggledItems,
+        const std::vector<uint64_t>& toggledItems,
         const ProfilerTableSettings& settings,
-        IOverlayContext* context, Layout& layout,
+        IOverlayContext& context, Layout& layout,
         Interactables&interactables, InterfaceState& interfaceState)
     {
 
@@ -148,7 +148,7 @@ namespace PlatformRig { namespace Overlays
         if (resolvedEvents.empty()) return;
 
         static std::stack<std::pair<unsigned, unsigned>> items;
-        uint64 rootItemsTotalTime = 0;
+        uint64_t rootItemsTotalTime = 0;
         auto rootItem = 0;
         while (rootItem != HierarchicalCPUProfiler::ResolvedEvent::s_id_Invalid) {
             items.push(std::make_pair(rootItem,0));
@@ -170,7 +170,7 @@ namespace PlatformRig { namespace Overlays
             items.pop();
 
             const auto idLowerPart = evnt._label ? Hash32(evnt._label, XlStringEnd(evnt._label)) : 0;
-            const auto elementId = uint64(g_InteractableIdTopPart) << 32ull | uint64(idLowerPart);
+            const auto elementId = uint64_t(g_InteractableIdTopPart) << 32ull | uint64_t(idLowerPart);
 
             auto leftPart = layout.Allocate(Coord2(settings._leftPartWidth, settings._lineHeight));
             auto middlePart = layout.Allocate(Coord2(settings._middlePartWidth, settings._lineHeight));
@@ -202,11 +202,11 @@ namespace PlatformRig { namespace Overlays
                 LinearInterpolate(middlePart._topLeft[0], middlePart._bottomRight[0], 0.5f),
                 highlighted, barSize);
 
-            context->DrawText(
+            context.DrawText(
                 std::make_tuple(AsPixelCoords(leftPart._topLeft), AsPixelCoords(Coord2(leftPart._bottomRight - Coord2(treeDepth * 16, 0)))),
                 res._leftFont, leftStyle, settings._leftColor, TextAlignment::Right, evnt._label);
 
-            context->DrawText(
+            context.DrawText(
                 std::make_tuple(AsPixelCoords(middlePart._topLeft), AsPixelCoords(middlePart._bottomRight)),
                 res._middleFont, middleStyle, settings._middleColor, TextAlignment::Center,
                 StringMeld<32>() << std::setprecision(settings._precision) << std::fixed << AsMilliseconds(evnt._inclusiveTime));
@@ -224,7 +224,7 @@ namespace PlatformRig { namespace Overlays
                 workingBuffer << " <<closed>>";
             }
 
-            context->DrawText(
+            context.DrawText(
                 std::make_tuple(AsPixelCoords(rightPart._topLeft), AsPixelCoords(rightPart._bottomRight)),
                 res._rightFont, rightStyle, settings._rightColor, TextAlignment::Left,
                 workingBuffer);
@@ -244,7 +244,7 @@ namespace PlatformRig { namespace Overlays
             }
         }
 
-        context->DrawLines(
+        context.DrawLines(
             ProjectionMode::P2D, dividingLines, unsigned(divingLinesIterator - dividingLines), settings._dividingLineColor);
     }
 
@@ -253,7 +253,7 @@ namespace PlatformRig { namespace Overlays
     public:
         IHierarchicalProfiler* _profiler;
         IHierarchicalProfiler::ListenerId _listenerId;
-        std::vector<uint64> _toggledItems;
+        std::vector<uint64_t> _toggledItems;
         std::vector<IHierarchicalProfiler::ResolvedEvent> _resolvedEvents;
         Threading::Mutex _resolvedEventsLock;
         int _rowOffset = 0;
@@ -280,7 +280,7 @@ namespace PlatformRig { namespace Overlays
         Layout tableView(layout.GetMaximumSize());
         tableView._caretY -= _pimpl->_rowOffset * 200;
         static ProfilerTableSettings settings;
-        DrawProfilerTable(resolvedEvents, _pimpl->_toggledItems, settings, &context, tableView,
+        DrawProfilerTable(resolvedEvents, _pimpl->_toggledItems, settings, context, tableView,
                             interactables, interfaceState);
     }
 

@@ -1218,7 +1218,7 @@ namespace SceneEngine
             UInt2 gridCoords(
                 Clamp(unsigned(_pimpl->_mouseHover[0]), 0u, _pimpl->_dimsWithBorder[0]-1),
                 Clamp(unsigned(_pimpl->_mouseHover[1]), 0u, _pimpl->_dimsWithBorder[1]-1));
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "At coords: " << gridCoords[0] << ", " << gridCoords[1]);
@@ -1231,40 +1231,40 @@ namespace SceneEngine
             const float ambientTheta = _pimpl->_troposphere.GetPotentialTemperature(gridCoords[1]);
             const float ambientEquilib = _pimpl->_troposphere.GetEquilibriumMixingRatio(
                 _pimpl->_troposphere.GetPotentialTemperature(gridCoords[1]), gridCoords[1]);
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Vapour: " << qv << " Amb: " << _pimpl->_troposphere.GetVaporMixingRatio(gridCoords[1]));
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "%Equilib: " << 100.f * qv / equilibiriumVapor << "% RH: " << 100.f * qv / ambientEquilib << "%");
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Condensed: " << qc);
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Theta: " << KelvinToCelsius(potTemp) << " Buoyancy: " << potTemp/ambientTheta-1.f);
 
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Altitude: " << _pimpl->_troposphere.AltitudeKm(gridCoords[1]));
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Equilibrium Vapor: " << equilibiriumVapor << " Amb: " << ambientEquilib);
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Temp Release: " << _pimpl->_troposphere.GetPotentialTemperatureRelease(gridCoords[1]));
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() << "Ambient Theta: " << KelvinToCelsius(ambientTheta));
-            overlayContext->DrawText(
+            overlayContext.DrawText(
                 AsPixelCoords(completeLayout.AllocateFullWidth(lineHeight)),
                 res._font, textStyle, ColorB(0xffffffff), TextAlignment::Left,
                 StringMeld<256>() 

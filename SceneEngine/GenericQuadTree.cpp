@@ -817,14 +817,14 @@ namespace SceneEngine
             for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
                 if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
                     DrawBoundingBox(
-                        &context, n->_boundary, localToWorld,
+                        context, n->_boundary, localToWorld,
                         cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x1);
                 }
             }
             for (auto n=nodes.cbegin(); n!=nodes.cend(); ++n) {
                 if (treeDepthFilter < 0 || signed(n->_treeDepth) == treeDepthFilter) {
                     DrawBoundingBox(
-                        &context, n->_boundary, localToWorld,
+                        context, n->_boundary, localToWorld,
                         cols[std::min((unsigned)dimof(cols), n->_treeDepth)], 0x2);
                 }
             }
@@ -864,12 +864,12 @@ namespace SceneEngine
 
             for (unsigned c=0; c<_boundingBoxes.size(); ++c)
                 DrawBoundingBox(
-                    &context, _boundingBoxes[c], _localToWorld,
+                    context, _boundingBoxes[c], _localToWorld,
                     cols[c%dimof(cols)], 0x1);
 
             for (unsigned c=0; c<_boundingBoxes.size(); ++c)
                 DrawBoundingBox(
-                    &context, _boundingBoxes[c], _localToWorld,
+                    context, _boundingBoxes[c], _localToWorld,
                     cols[c%dimof(cols)], 0x2);
         }
 
@@ -933,11 +933,11 @@ namespace SceneEngine
 
                 for (unsigned c=0; c<objs._count; ++c) {
                     auto& boundary = *PtrAdd(objs._boundingBox, c*objs._stride);
-                    DrawBoundingBox(&context, boundary, cellToWorld, cols[0], 0x1);
+                    DrawBoundingBox(context, boundary, cellToWorld, cols[0], 0x1);
                 }
                 for (unsigned c=0; c<objs._count; ++c) {
                     auto& boundary = *PtrAdd(objs._boundingBox, c*objs._stride);
-                    DrawBoundingBox(&context, boundary, cellToWorld, cols[0], 0x2);
+                    DrawBoundingBox(context, boundary, cellToWorld, cols[0], 0x2);
                 }
             }
         }

@@ -251,14 +251,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     };
 
-    void DrawScrollBar(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour, ColorB outlineColour)
+    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour, ColorB outlineColour)
     {
         const Rect thumbRect = coordinates.Thumb(thumbPosition);
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
 
         const float roundedProportion = 2.f/5.f;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(thumbRect._topLeft),
             AsPixelCoords(thumbRect._bottomRight),
@@ -268,7 +268,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedRoundedFillRect});
     }
 
-    void OutlineEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -277,7 +277,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!res) return;
 
         const float borderWidthPix = 1.f;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
@@ -287,7 +287,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineEllipse});
     }
 
-    void FillEllipse(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -296,7 +296,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!res) return;
 
         const float borderWidthPix = 1.f;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
@@ -307,7 +307,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     void OutlineRoundedRectangle(
-        IOverlayContext* context, const Rect & rect, 
+        IOverlayContext& context, const Rect & rect, 
         ColorB colour, 
         float width, float roundedProportion)
     {
@@ -317,7 +317,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
 
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
@@ -328,7 +328,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     void FillAndOutlineRoundedRectangle(
-        IOverlayContext* context, 
+        IOverlayContext& context, 
         const Rect & rect,
         ColorB backgroundColour, ColorB outlineColour,
         float borderWidth, float roundedProportion)
@@ -339,7 +339,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
 
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
@@ -349,26 +349,26 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRoundedRect});
     }
 
-    void FillRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
         }
 
-        context->DrawTriangle(
+        context.DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])), colour,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour);
 
-        context->DrawTriangle(
+        context.DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1])), colour);
     }
 
-    void OutlineRectangle(IOverlayContext* context, const Rect& rect, ColorB colour)
+    void OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
@@ -383,27 +383,27 @@ namespace RenderOverlays { namespace DebuggingDisplay
         lines[5] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
         lines[6] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
         lines[7] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
-        context->DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
+        context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
-    Coord DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
+    Coord DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
     {
-		return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
+		return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
     }
 
-    Coord DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
+    Coord DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
     {
-        return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
+        return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
     }
 
-    Coord DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
+    Coord DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
     {
         char buffer[4096];
         vsnprintf(buffer, dimof(buffer), text, args);
-        return (Coord)context->DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
+        return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
     }
 
-    Coord DrawFormatText(IOverlayContext* context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
+    Coord DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
     {
         va_list args;
         va_start(args, text);
@@ -412,7 +412,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return result;
     }
 
-    Coord DrawFormatText(IOverlayContext* context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
+    Coord DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
     {
         va_list args;
         va_start(args, text);
@@ -421,13 +421,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return result;
     }
 
-    void DrawHistoryGraph(IOverlayContext* context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory)
+    void DrawHistoryGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory)
     {
-        context->DrawLine(
+        context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],     rect._bottomRight[1])), HistoryGraphAxisColour,
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])), HistoryGraphAxisColour );
-        context->DrawLine(
+        context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],       rect._topLeft[1])), HistoryGraphAxisColour,
             AsPixelCoords(Coord2(rect._topLeft[0],       rect._bottomRight[1])), HistoryGraphAxisColour );
@@ -435,15 +435,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Rect graphArea( Coord2( rect._topLeft[0]+1, rect._topLeft[1] ),
                         Coord2( rect._bottomRight[0], rect._bottomRight[1]-1 ) );
 
-        context->DrawLine(
+        context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],     LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.25f))), HistoryGraphAxisColour,
             AsPixelCoords(Coord2(rect._bottomRight[0], LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.25f))), HistoryGraphAxisColour );
-        context->DrawLine(
+        context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],     LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f))), HistoryGraphAxisColour,
             AsPixelCoords(Coord2(rect._bottomRight[0], LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.5f))), HistoryGraphAxisColour );
-        context->DrawLine(
+        context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],     LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.75f))), HistoryGraphAxisColour,
             AsPixelCoords(Coord2(rect._bottomRight[0], LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], 0.75f))), HistoryGraphAxisColour );
@@ -504,8 +504,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
             assert((ptIterator-graphTrianglePoints) == (valuesCount-1)*3*2);
             assert((colorIterator-graphTriangleColors) == (valuesCount-1)*3*2);
-            context->DrawTriangles(ProjectionMode::P2D, graphTrianglePoints, ptIterator-graphTrianglePoints, graphTriangleColors);
-            context->DrawLines(ProjectionMode::P2D, graphLinePoints, (valuesCount-1)*2, HistoryGraphLineColor);
+            context.DrawTriangles(ProjectionMode::P2D, graphTrianglePoints, ptIterator-graphTrianglePoints, graphTriangleColors);
+            context.DrawLines(ProjectionMode::P2D, graphLinePoints, (valuesCount-1)*2, HistoryGraphLineColor);
 
             {
                     // label the peak & write min and max values
@@ -520,7 +520,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void DrawHistoryGraph_ExtraLine(IOverlayContext* context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue)
+    void DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue)
     {
         Rect graphArea( Coord2( rect._topLeft[0]+1, rect._topLeft[1] ),
                         Coord2( rect._bottomRight[0], rect._bottomRight[1]-1 ));
@@ -544,11 +544,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 graphLinePoints[c*2+1]  = AsPixelCoords(Float2(x1+.5f, y1+.5f));
             }
 
-            context->DrawLines(ProjectionMode::P2D, graphLinePoints, (valuesCount-1)*2, HistoryGraphExtraLineColor);
+            context.DrawLines(ProjectionMode::P2D, graphLinePoints, (valuesCount-1)*2, HistoryGraphExtraLineColor);
         }
     }
 
-    void        DrawTriangles(IOverlayContext* context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
+    void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
     {
         std::vector<Float3> pixelCoords;
         pixelCoords.resize(triangleCount*3);
@@ -556,10 +556,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
             pixelCoords[c] = AsPixelCoords(Coord2(triangleCoordinates[c][0], triangleCoordinates[c][1]));
         }
 
-        context->DrawTriangles(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), triangleCount*3, triangleColours);
+        context.DrawTriangles(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), triangleCount*3, triangleColours);
     }
 
-    void        DrawLines(IOverlayContext* context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount)
+    void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount)
     {
         std::vector<Float3> pixelCoords;
         pixelCoords.resize(lineCount*2);
@@ -567,7 +567,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             pixelCoords[c] = AsPixelCoords(Coord2(lineCoordinates[c][0], lineCoordinates[c][1]));
         }
 
-        context->DrawLines(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), lineCount*2, lineColours);
+        context.DrawLines(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), lineCount*2, lineColours);
     }
 
     class TableFontBox
@@ -581,7 +581,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void DrawTableHeaders(IOverlayContext* context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables)
+    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables)
     {
         static const ColorB HeaderTextColor     ( 255, 255, 255, 255 );
         static const ColorB HeaderBkColor       (  96,  96,  96, 196 );
@@ -591,7 +591,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
 
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
@@ -608,14 +608,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 // FillRectangle(context, r, bkColor);
 
                 if (i != fieldHeaders.begin())
-                    context->DrawLine(ProjectionMode::P2D,
+                    context.DrawLine(ProjectionMode::P2D,
                         AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
                         AsPixelCoords(Coord2(r._topLeft[0], r._bottomRight[1]-2)), SepColor,
                         1.f);
                 r._topLeft[0] += 8;
 
                 const ColorB colour = HeaderTextColor;
-                context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
+                context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::TopLeft, MakeStringSection(i->first));
 
                 if (interactables)
                     interactables->Register(Interactables::Widget(r, InteractableId_Make(MakeStringSection(i->first))));
@@ -623,7 +623,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void DrawTableEntry(        IOverlayContext* context,
+    void DrawTableEntry(        IOverlayContext& context,
                                 const Rect& rect, 
                                 const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, 
                                 const std::map<std::string, TableElement>& entry)
@@ -636,7 +636,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
 
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             BkColor, BkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
@@ -654,7 +654,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 if (s != entry.end() && !s->second._label.empty()) {
 
                     if (i != fieldHeaders.begin())
-                        context->DrawLine(ProjectionMode::P2D,
+                        context.DrawLine(ProjectionMode::P2D,
                             AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
                             AsPixelCoords(Coord2(r._topLeft[0], r._bottomRight[1]-2)), SepColor,
                             1.f);
@@ -663,7 +663,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
                     const ColorB colour = TextColor;
                     // FillRectangle(context, r, s->second._bkColour);
-                    context->DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
+                    context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
                 }
             }
         }
@@ -722,7 +722,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     static const unsigned char  BoundingBoxTriangleAlpha = 0x1f;
     static const unsigned char  BoundingBoxLineAlpha     = 0xff;
 
-    void DrawHexahedronCorners(IOverlayContext* context, const HexahedronCorners&corners, ColorB entryColour, unsigned partMask)
+    void DrawHexahedronCorners(IOverlayContext& context, const HexahedronCorners&corners, ColorB entryColour, unsigned partMask)
     {
         if (partMask & 0x2) {
             Float3 lines[12*2];
@@ -741,7 +741,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             lines[10*2+0] = corners._worldSpacePts[2]; lines[10*2+1] = corners._worldSpacePts[6];
             lines[11*2+0] = corners._worldSpacePts[3]; lines[11*2+1] = corners._worldSpacePts[7];
 
-            context->DrawLines( 
+            context.DrawLines( 
                 ProjectionMode::P3D, 
                 lines, dimof(lines), 
                 ColorB(entryColour.r, entryColour.g, entryColour.b, BoundingBoxLineAlpha), 
@@ -758,7 +758,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             SetQuadPts(&triangles[4*2*3], corners._worldSpacePts[4], corners._worldSpacePts[0], corners._worldSpacePts[6], corners._worldSpacePts[2]);
             SetQuadPts(&triangles[5*2*3], corners._worldSpacePts[1], corners._worldSpacePts[5], corners._worldSpacePts[3], corners._worldSpacePts[7]);
 
-            context->DrawTriangles(
+            context.DrawTriangles(
                 ProjectionMode::P3D, 
                 triangles, dimof(triangles),
                 ColorB(entryColour.r, entryColour.g, entryColour.b, BoundingBoxTriangleAlpha));
@@ -766,7 +766,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     void DrawBoundingBox(
-        IOverlayContext* context, const AABoundingBox& box, 
+        IOverlayContext& context, const AABoundingBox& box, 
         const Float3x4& localToWorld, 
         ColorB entryColour, unsigned partMask)
     {
@@ -775,7 +775,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
     
     void DrawFrustum(
-        IOverlayContext* context, const Float4x4& worldToProjection, 
+        IOverlayContext& context, const Float4x4& worldToProjection, 
         ColorB entryColour, unsigned partMask)
     {
         auto corners = HexahedronCorners::FromFrustumCorners(worldToProjection);
@@ -785,13 +785,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ///////////////////////////////////////////////////////////////////////////////////
     static float Saturate(float value) { return std::max(std::min(value, 1.f), 0.f); }
 
-    void HTweakerBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition)
+    void HTweakerBar_Draw(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition)
     {
         const auto r = coordinates.InteractableRect();
         float t = Saturate((thumbPosition - coordinates.MinValue()) / float(coordinates.MaxValue() - coordinates.MinValue()));
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1])),
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
@@ -800,11 +800,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_horizTweakerBarMaterial});
     }
 
-    void HTweakerBar_DrawLabel(IOverlayContext* context, const Rect& rect)
+    void HTweakerBar_DrawLabel(IOverlayContext& context, const Rect& rect)
     {
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
@@ -813,11 +813,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_tagShaderMaterial});
     }
 
-    void HTweakerBar_DrawGridBackground(IOverlayContext* context, const Rect& rect)
+    void HTweakerBar_DrawGridBackground(IOverlayContext& context, const Rect& rect)
     {
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
-        context->DrawQuad(
+        context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
@@ -871,7 +871,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     static const char* s_PanelControlsButtons[] = {"<", ">", "H", "V", "X"};
     
-    void DebugScreensSystem::RenderPanelControls(   IOverlayContext* context,
+    void DebugScreensSystem::RenderPanelControls(   IOverlayContext& context,
                                                     unsigned panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
                                                     Interactables& interactables, InterfaceState& interfaceState)
     {
@@ -1073,7 +1073,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                             //  get some basic default gui elements...
                         if (_systemWidgets.empty()) {
                             RenderPanelControls(
-                                &overlayContext, (unsigned)std::distance(_panels.begin(), i),
+                                overlayContext, (unsigned)std::distance(_panels.begin(), i),
                                 _widgets[i->_widgetIndex]._name, widgetLayout, _panels.size()!=1, _currentInteractables, _currentInterfaceState);
                         }
                     }

@@ -164,7 +164,7 @@ namespace UnitTests
 					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 
 				RenderOverlays::DebuggingDisplay::DrawFrustum(
-					overlayContext.get(), _worldToProjection,
+					*overlayContext, _worldToProjection,
 					RenderOverlays::ColorB { 255, 255, 255 });
 
 				auto sphereGeo = ToolsRig::BuildGeodesicSphereP(2);
@@ -257,7 +257,7 @@ namespace UnitTests
 						}
 
 						RenderOverlays::DebuggingDisplay::DrawBoundingBox(
-							overlayContext.get(), { mins, maxs },
+							*overlayContext, { mins, maxs },
 							localToWorld,
 							col);
 					}

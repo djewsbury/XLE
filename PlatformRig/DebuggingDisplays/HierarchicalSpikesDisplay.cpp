@@ -180,7 +180,7 @@ namespace PlatformRig { namespace Overlays
                     break;
                 }
 
-                FillAndOutlineRoundedRectangle(&context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
+                FillAndOutlineRoundedRectangle(context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
                 Layout sectionLayout(sectionRect);
                 Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
@@ -190,7 +190,7 @@ namespace PlatformRig { namespace Overlays
                 Rect sectionNameRect(
                     Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                     Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-                DrawText(&context, sectionNameRect, nullptr, ColorB(0xffffffffu), (const char*)i->first);
+                DrawText(context, sectionNameRect, nullptr, ColorB(0xffffffffu), (const char*)i->first);
 
                 if (section._durationHistoryLength) {
                     auto stats = Pimpl::CalculateDurationStats({section._durationHistory, &section._durationHistory[section._durationHistoryLength]});
@@ -200,17 +200,17 @@ namespace PlatformRig { namespace Overlays
                         Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.667f)) );
 
                     float recentCost = section._durationHistory[section._durationHistoryLength-1];
-                    DrawFormatText(&context, durationRect, nullptr, ColorB(0xffffffffu), "%.2fms (%.2fms)", stats._mean, recentCost);
+                    DrawFormatText(context, durationRect, nullptr, ColorB(0xffffffffu), "%.2fms (%.2fms)", stats._mean, recentCost);
 
                     Rect varianceRect(
                         Coord2(labelRect._topLeft[0], durationRect._bottomRight[1]),
                         Coord2(labelRect._bottomRight[0], labelRect._bottomRight[1]) );
-                    DrawFormatText(&context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", stats._variance);
+                    DrawFormatText(context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", stats._variance);
                 }
 
                 //  Then draw the graph in the main part of the widget
                 DrawHistoryGraph(
-                    &context, historyRect, section._durationHistory,
+                    context, historyRect, section._durationHistory,
                     section._durationHistoryLength, Pimpl::TrackingLabel::DurationHistoryLength,
                     section._graphMin, section._graphMax);
             }

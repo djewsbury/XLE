@@ -118,7 +118,7 @@ namespace ToolsRig
 
     static const auto Id_CurBoolParameters = InteractableId_Make("CurrentManipulatorBoolParameters");
 
-    static void DrawAndRegisterLeftRight(IOverlayContext* context, Interactables&interactables, InterfaceState& interfaceState, const Rect& rect, InteractableId left, InteractableId right)
+    static void DrawAndRegisterLeftRight(IOverlayContext& context, Interactables&interactables, InterfaceState& interfaceState, const Rect& rect, InteractableId left, InteractableId right)
     {
         Rect manipulatorLeft(rect._topLeft, Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._bottomRight[1]));
         Rect manipulatorRight(Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._topLeft[1]), rect._bottomRight);
@@ -137,7 +137,7 @@ namespace ToolsRig
                 Expand(Float2(centerPoint + Float2( 0.f,   -5.f)), 0.f),
                 Expand(Float2(centerPoint + Float2( 0.f,    5.f)), 0.f)
             };
-            context->DrawTriangle(ProjectionMode::P2D, pts[0], ColorB(0xffffffff), pts[1], ColorB(0xffffffff), pts[2], ColorB(0xffffffff));
+            context.DrawTriangle(ProjectionMode::P2D, pts[0], ColorB(0xffffffff), pts[1], ColorB(0xffffffff), pts[2], ColorB(0xffffffff));
         }
 
         if (interfaceState.HasMouseOver(right)) {
@@ -152,7 +152,7 @@ namespace ToolsRig
                 Expand(Float2(centerPoint + Float2(  0.f, -5.f)), 0.f),
                 Expand(Float2(centerPoint + Float2(  0.f,  5.f)), 0.f)
             };
-            context->DrawTriangle(ProjectionMode::P2D, pts[0], ColorB(0xffffffff), pts[1], ColorB(0xffffffff), pts[2], ColorB(0xffffffff));
+            context.DrawTriangle(ProjectionMode::P2D, pts[0], ColorB(0xffffffff), pts[1], ColorB(0xffffffff), pts[2], ColorB(0xffffffff));
         }
     }
 
@@ -201,8 +201,8 @@ namespace ToolsRig
 
         Layout internalLayout(controlsRect);
         
-        FillRectangle(&context, controlsRect, backgroundRectangleColour);
-        OutlineRectangle(&context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);
+        FillRectangle(context, controlsRect, backgroundRectangleColour);
+        OutlineRectangle(context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);
         interactables.Register(Interactables::Widget(controlsRect, Id_TotalRect));
 
         const auto headingRect = internalLayout.AllocateFullWidth(25);
@@ -249,7 +249,7 @@ namespace ToolsRig
                 std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 				nullptr, TextStyle{}, formatting._foreground, TextAlignment::Center, buffer);
             
-            DrawAndRegisterLeftRight(&context, interactables, interfaceState, rect, Id_CurFloatParametersLeft+c, Id_CurFloatParametersRight+c);
+            DrawAndRegisterLeftRight(context, interactables, interfaceState, rect, Id_CurFloatParametersLeft+c, Id_CurFloatParametersRight+c);
         }
 
             //
@@ -295,12 +295,12 @@ namespace ToolsRig
         Rect selectedManipulatorRect = internalLayout.AllocateFullWidth(lineHeight);
         interactables.Register(Interactables::Widget(selectedManipulatorRect, Id_SelectedManipulator));
         DrawButtonBasic(
-            &context, selectedManipulatorRect, manipulator.GetName(),
+            context, selectedManipulatorRect, manipulator.GetName(),
             FormatButton(interfaceState, Id_SelectedManipulator));
 
             //  this button is a left/right selector. Create interactable rectangles for the left and right sides
         DrawAndRegisterLeftRight(
-            &context, interactables, interfaceState, selectedManipulatorRect, 
+            context, interactables, interfaceState, selectedManipulatorRect, 
             Id_SelectedManipulatorLeft, Id_SelectedManipulatorRight);
 
         return controlsRect;

@@ -123,31 +123,31 @@ namespace RenderOverlays { namespace DebuggingDisplay
     extern const ColorB   RandomPaletteColorTable[];
     extern const size_t   RandomPaletteColorTable_Size;
 
-    void        OutlineEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
-    void        FillEllipse(IOverlayContext* context, const Rect& rect, ColorB colour);
+    void        OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
+    void        FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
 
     void FillAndOutlineRoundedRectangle(
-        IOverlayContext* context, const Rect& rect, 
+        IOverlayContext& context, const Rect& rect, 
         ColorB backgroundColour, ColorB outlineColour,
         float borderWidth = 1.f, float roundedProportion = 1.f / 8.f);
     void OutlineRoundedRectangle(
-        IOverlayContext* context, const Rect& rect, 
+        IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
         float width, float roundedProportion = 1.f / 8.f);
 
-    void        FillRectangle(IOverlayContext* context, const Rect& rect, ColorB colour);
-    void        OutlineRectangle(IOverlayContext* context, const Rect& rect, ColorB colour = ColorB(0xff000000));
+    void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
+    void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour = ColorB(0xff000000));
 
-    Coord       DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
-    Coord       DrawText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext* context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
-    void        DrawHistoryGraph(IOverlayContext* context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
-    void        DrawHistoryGraph_ExtraLine(IOverlayContext* context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
+    Coord       DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
+    Coord       DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
+    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
+    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
+    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
+    void        DrawHistoryGraph(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
+    void        DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
 
-    void        DrawTriangles(IOverlayContext* context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
-    void        DrawLines(IOverlayContext* context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
+    void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
+    void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
 
     Float3      AsPixelCoords(Coord2 input);
     Float3      AsPixelCoords(Coord2 input, float depth);
@@ -159,12 +159,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     typedef std::tuple<Float3, Float3>      AABoundingBox;
 
     void        DrawBoundingBox(
-        IOverlayContext* context, const AABoundingBox& box, 
+        IOverlayContext& context, const AABoundingBox& box, 
         const Float3x4& localToWorld, 
         ColorB entryColour, unsigned partMask = 0x3);
 
     void        DrawFrustum(
-        IOverlayContext* context, const Float4x4& worldToProjection, 
+        IOverlayContext& context, const Float4x4& worldToProjection, 
         ColorB entryColour, unsigned partMask = 0x3);
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -232,11 +232,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Coordinates::Flags::BitField _flags;
     };
 
-    void DrawScrollBar(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour = ColorB(0xffffffff), ColorB outlineColour = ColorB(0xff000000));
+    void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour = ColorB(0xffffffff), ColorB outlineColour = ColorB(0xff000000));
 
-    void HTweakerBar_Draw(IOverlayContext* context, const ScrollBar::Coordinates& coordinates, float thumbPosition);
-    void HTweakerBar_DrawLabel(IOverlayContext* context, const Rect& rect);
-    void HTweakerBar_DrawGridBackground(IOverlayContext* context, const Rect& rect);
+    void HTweakerBar_Draw(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition);
+    void HTweakerBar_DrawLabel(IOverlayContext& context, const Rect& rect);
+    void HTweakerBar_DrawGridBackground(IOverlayContext& context, const Rect& rect);
 
     ///////////////////////////////////////////////////////////////////////////////////
     //          T A B L E S
@@ -247,8 +247,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement(const char label[],  ColorB bkColour = ColorB(0xff000000)) : _label(label), _bkColour(bkColour) {}
         TableElement() : _bkColour(0xff000000) {}
     };
-    void DrawTableHeaders(IOverlayContext* context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables=NULL);
-    void DrawTableEntry(IOverlayContext* context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
+    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables=NULL);
+    void DrawTableEntry(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class DebugScreensSystem : public PlatformRig::IInputListener
@@ -312,7 +312,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         unsigned    _currentMouseHeld;
         bool        _consumedInputEvent;
 
-        void    RenderPanelControls(        IOverlayContext*    context,
+        void    RenderPanelControls(        IOverlayContext&    context,
                                             unsigned            panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
                                             Interactables&      interactables, InterfaceState& interfaceState);
         bool    ProcessInputPanelControls(  InterfaceState&     interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot&    evnt);

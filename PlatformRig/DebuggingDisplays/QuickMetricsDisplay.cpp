@@ -21,7 +21,7 @@ namespace PlatformRig { namespace Overlays
 
 		ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
 		_scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, _scrollOffset);
-		DrawScrollBar(&context, scrollCoordinates, _scrollOffset);
+		DrawScrollBar(context, scrollCoordinates, _scrollOffset);
 		interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
 
 		if (unsigned(_scrollOffset) < _lines.size()) {
@@ -30,14 +30,14 @@ namespace PlatformRig { namespace Overlays
 				if (l->first == Style::Heading0) {
 					auto allocation = textArea.AllocateFullWidth(24);
 					if (!allocation.Height()) break;
-					FillRectangle(&context, allocation, titleBkground);
+					FillRectangle(context, allocation, titleBkground);
 					allocation._topLeft[0] += 8;
 					RenderOverlays::TextStyle textStyle{RenderOverlays::DrawTextOptions{false, false}};
-					DrawText(&context, allocation, &textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
+					DrawText(context, allocation, &textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
 				} else {
 					auto allocation = textArea.AllocateFullWidth(lineHeight);
 					if (!allocation.Height()) break;
-					DrawText(&context, allocation, nullptr, RenderOverlays::ColorB{0xcf, 0xcf, 0xcf}, l->second);
+					DrawText(context, allocation, nullptr, RenderOverlays::ColorB{0xcf, 0xcf, 0xcf}, l->second);
 				}
 			}
 		}

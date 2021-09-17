@@ -37,7 +37,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return FormatButton(interfaceState, id, s_buttonNormal, s_buttonMouseOver, s_buttonPressed);
     }
 
-    void DrawButtonBasic(IOverlayContext* context, const Rect& rect, const char label[], const ButtonStyle& formatting);
+    void DrawButtonBasic(IOverlayContext& context, const Rect& rect, const char label[], const ButtonStyle& formatting);
 
 }}
 

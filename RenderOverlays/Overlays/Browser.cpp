@@ -209,12 +209,12 @@ namespace Overlays
         ButtonFormatting(ColorB background, ColorB foreground) : _background(background), _foreground(foreground) {}
     };
 
-    static void DrawButtonBasic(IOverlayContext* context, const Rect& rect, const char label[], ButtonFormatting formatting)
+    static void DrawButtonBasic(IOverlayContext& context, const Rect& rect, const char label[], ButtonFormatting formatting)
     {
         FillRectangle(context, rect, formatting._background);
         OutlineRectangle(context, rect, 0.f, formatting._foreground);
         // DrawText(context, rect, 0.f, nullptr, formatting._foreground, manipulatorName);
-        context->DrawText(
+        context.DrawText(
             std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
 			GetDefaultFont(), TextStyle{}, formatting._foreground, TextAlignment::Center, label);
     }

@@ -186,7 +186,7 @@ namespace ToolsRig
 		return ::Assets::AssetState::Ready;
 	}
 
-	static void DrawDiamond(RenderOverlays::IOverlayContext* context, const RenderOverlays::DebuggingDisplay::Rect& rect, RenderOverlays::ColorB colour)
+	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::DebuggingDisplay::Rect& rect, RenderOverlays::ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
@@ -194,13 +194,13 @@ namespace ToolsRig
 
 		using namespace RenderOverlays;
 		using namespace RenderOverlays::DebuggingDisplay;
-        context->DrawTriangle(
+        context.DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._bottomRight[0],								0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour,
             AsPixelCoords(Coord2(0.5f * (rect._topLeft[0] + rect._bottomRight[0]),	rect._topLeft[1])), colour,
             AsPixelCoords(Coord2(rect._topLeft[0],									0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour);
 
-        context->DrawTriangle(
+        context.DrawTriangle(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],									0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour,
             AsPixelCoords(Coord2(0.5f * (rect._topLeft[0] + rect._bottomRight[0]),	rect._bottomRight[1])), colour,
@@ -246,7 +246,7 @@ namespace ToolsRig
 
 			using namespace RenderOverlays::DebuggingDisplay;
 			float fadeOff = std::min((1.0f - a) * 10.f, 1.0f);
-			DrawDiamond(&context, r, RenderOverlays::ColorB { uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), 0xff });
+			DrawDiamond(context, r, RenderOverlays::ColorB { uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), 0xff });
 		}
 	}
 
@@ -606,7 +606,7 @@ namespace ToolsRig
 		if (visContent)
 			matName = visContent->GetDrawCallDetails(mouseOver._drawCallIndex, mouseOver._materialGuid)._materialName;
         DrawText(
-            &context,
+            context,
             Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-8), Coord2(viewport._bottomRight[0]-6, viewport._bottomRight[1]-8)),
             nullptr, RenderOverlays::ColorB(0xffafafaf),
             StringMeld<512>() 
