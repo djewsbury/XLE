@@ -30,6 +30,7 @@ namespace RenderOverlays
 
 	static inline unsigned  HardwareColor(ColorB input)
 	{
+		// see duplicate in FontRendering.cpp
 		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
 	}
 
@@ -247,24 +248,19 @@ namespace RenderOverlays
 	{
 		if (!_fontRenderingManager) return 0.f;
 
-		ucs4 unicharBuffer[4096];
-		utf8_2_ucs4((const utf8*)text.begin(), text.size(), unicharBuffer, dimof(unicharBuffer));
-		StringSection<ucs4> convertedText = unicharBuffer;
-
 		Quad q;
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
 		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
-		Float2 alignedPosition = AlignText(*_defaultFont, q, alignment, convertedText);
+		Float2 alignedPosition = AlignText(*_defaultFont, q, alignment, text);
 		return Draw(
 			*_threadContext,
 			*_immediateDrawables, 
 			*_fontRenderingManager,
 			font ? *font : *_defaultFont, textStyle,
 			alignedPosition[0], alignedPosition[1],
-			convertedText,
-			0.f, 1.f, 0.f, 
-			LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
-			col.AsUInt32(), false);
+			text,
+			1.f, 0.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			col);
 	}
 
 	void ImmediateOverlayContext::CaptureState() 

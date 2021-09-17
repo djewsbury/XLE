@@ -234,6 +234,11 @@ namespace RenderOverlays
 		return AlignText(q, font, StringWidth(font, text), 0, align);
 	}
 
+	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text)
+	{
+		return AlignText(q, font, StringWidth(font, text), 0, align);
+	}
+
 	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, float width, float indent)
 	{
 		return AlignText(q, font, width, indent, align);

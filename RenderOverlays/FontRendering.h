@@ -28,9 +28,17 @@ namespace RenderOverlays
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, const TextStyle& style,
+                        float x, float y, StringSection<> text,
+                        float scale, float mx, float depth,
+                        ColorB col);
+
+	float       Draw(   RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font, const TextStyle& style,
                         float x, float y, StringSection<ucs4> text,
-                        float spaceExtra, float scale, float mx, float depth,
-                        unsigned colorARGB, bool applyDescender);
+                        float scale, float mx, float depth,
+                        ColorB col);
 
 	class FontRenderingManager
 	{

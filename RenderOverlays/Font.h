@@ -88,6 +88,7 @@ namespace RenderOverlays
 								bool outline         = false);
 
     Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<ucs4> text);
+	Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text);
     Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, float width, float indent);
 
 	struct DrawTextOptions 

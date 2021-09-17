@@ -58,7 +58,7 @@ namespace RenderOverlays
 		};
 		static const int VertexSize = sizeof(Vertex);
 
-		void PushQuad(const Quad& positions, unsigned color, const Quad& textureCoords, float depth, bool snap=true);
+		void PushQuad(const Quad& positions, ColorB color, const Quad& textureCoords, float depth, bool snap=true);
 		void Complete();
 
 		WorkingVertexSetPCT(
@@ -80,7 +80,13 @@ namespace RenderOverlays
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
 	};
 
-	void WorkingVertexSetPCT::PushQuad(const Quad& positions, unsigned color, const Quad& textureCoords, float depth, bool snap)
+	static inline unsigned  HardwareColor(ColorB input)
+	{
+		// see duplicate in OverlayContext.cpp
+		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
+	}
+
+	void WorkingVertexSetPCT::PushQuad(const Quad& positions, ColorB color, const Quad& textureCoords, float depth, bool snap)
 	{
 		if (__builtin_expect((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
@@ -115,12 +121,13 @@ namespace RenderOverlays
 			//
 			//      Following behaviour from DrawQuad in Archeage display_list.cpp
 			//
-		*_currentIterator++ = Vertex(p0, color, Float2( textureCoords.min[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p2, color, Float2( textureCoords.min[0], textureCoords.max[1] ));
-		*_currentIterator++ = Vertex(p1, color, Float2( textureCoords.max[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p1, color, Float2( textureCoords.max[0], textureCoords.min[1] ));
-		*_currentIterator++ = Vertex(p2, color, Float2( textureCoords.min[0], textureCoords.max[1] ));
-		*_currentIterator++ = Vertex(p3, color, Float2( textureCoords.max[0], textureCoords.max[1] ));
+		auto col = HardwareColor(color);
+		*_currentIterator++ = Vertex(p0, col, Float2( textureCoords.min[0], textureCoords.min[1] ));
+		*_currentIterator++ = Vertex(p2, col, Float2( textureCoords.min[0], textureCoords.max[1] ));
+		*_currentIterator++ = Vertex(p1, col, Float2( textureCoords.max[0], textureCoords.min[1] ));
+		*_currentIterator++ = Vertex(p1, col, Float2( textureCoords.max[0], textureCoords.min[1] ));
+		*_currentIterator++ = Vertex(p2, col, Float2( textureCoords.min[0], textureCoords.max[1] ));
+		*_currentIterator++ = Vertex(p3, col, Float2( textureCoords.max[0], textureCoords.max[1] ));
 	}
 
 	void WorkingVertexSetPCT::Complete()
@@ -156,7 +163,8 @@ namespace RenderOverlays
 		material._uniforms._resourceViews.clear();
 	}
 
-	static unsigned ToDigitValue(ucs4 chr, unsigned base)
+	template<typename CharType>
+		static unsigned ToDigitValue(CharType chr, unsigned base)
 	{
 		if (chr >= '0' && chr <= '9')                   { return       chr - '0'; }
 		else if (chr >= 'a' && chr < ('a'+base-10))     { return 0xa + chr - 'a'; }
@@ -164,7 +172,8 @@ namespace RenderOverlays
 		return 0xff;
 	}
 
-	static unsigned ParseColorValue(const ucs4 text[], unsigned* colorOverride)
+	template<typename CharType>
+		static unsigned ParseColorValue(const CharType text[], unsigned* colorOverride)
 	{
 		assert(text && colorOverride);
 
@@ -185,14 +194,33 @@ namespace RenderOverlays
 		}
 		return 0;
 	}
-	float Draw(
-		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-		FontRenderingManager& textureMan,
-		const Font& font, const TextStyle& style,
-		float x, float y, StringSection<ucs4> text,
-		float spaceExtra, float scale, float mx, float depth,
-		unsigned colorARGB, bool applyDescender)
+
+	static ucs4 GetNext(StringSection<ucs4>& text)
+	{
+		assert(!text.IsEmpty());
+		++text._start;
+		return *(text._start-1);
+	}
+
+	static ucs4 GetNext(StringSection<char>& text)
+	{
+		assert(!text.IsEmpty());
+		return utf8_nextchar(text._start, text._end);
+	}
+
+	template<typename CharType> struct DrawingTags { static const StringSection<CharType> s_changeColor; };
+	template<> const StringSection<ucs4> DrawingTags<ucs4>::s_changeColor = (const ucs4*)"C\0\0\0o\0\0\0l\0\0\0o\0\0\0r\0\0\0:\0\0\0";
+	template<> const StringSection<utf8> DrawingTags<utf8>::s_changeColor = "Color:";
+
+	template<typename CharType>
+		static float DrawTemplate(
+			RenderCore::IThreadContext& threadContext,
+			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			FontRenderingManager& textureMan,
+			const Font& font, const TextStyle& style,
+			float x, float y, StringSection<CharType> text,
+			float scale, float mx, float depth,
+			ColorB color)
 	{
 		using namespace RenderCore;
 		if (text.IsEmpty()) return 0.f;
@@ -200,6 +228,8 @@ namespace RenderOverlays
 		int prevGlyph = 0;
 		float xScale = scale;
 		float yScale = scale;
+
+		float xAtLineStart = x, yAtLineStart = y;
 
 		if (style._options.snap) {
 			x = xScale * (int)(0.5f + x / xScale);
@@ -219,28 +249,39 @@ namespace RenderOverlays
 			estimatedQuadCount += 8 * text.size();
 		WorkingVertexSetPCT workingVertices(immediateDrawables, textureMan.GetFontTexture().GetSRV(), estimatedQuadCount);
 
-		float descent = 0.0f;
-		if (applyDescender) {
-			descent = font.GetFontProperties()._descender;
-		}
-		float opacity = (colorARGB >> 24) / float(0xff);
-		unsigned colorOverride = 0x0;
+		auto shadowColor = ColorB{0, 0, 0, color.a};
+		ColorB colorOverride = 0x0;
+		bool useColorOverride = false;
 		unsigned prev_rsb_delta = 0;
 
-		for (auto i=text.begin(); i!=text.end(); ++i) {
-			auto ch = *i;
-			if (__builtin_expect(mx > 0.0f && x > mx, false)) {
-				break;
+		while (!text.IsEmpty()) {
+			auto ch = GetNext(text);
+
+			// \n, \r\n, \r all considered new lines
+			if (ch == '\n' || ch == '\r') {
+				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+				x = xAtLineStart;
+				prevGlyph = 0;
+				y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
+				if (style._options.snap) {
+					x = xScale * (int)(0.5f + x / xScale);
+					y = yScale * (int)(0.5f + y / yScale);
+				}
+				continue;
 			}
 
-			if (__builtin_expect(!XlComparePrefixI((ucs4*)"{\0\0\0C\0\0\0o\0\0\0l\0\0\0o\0\0\0r\0\0\0:\0\0\0", i, 7), false)) {
-				unsigned newColorOverride = 0;
-				unsigned parseLength = ParseColorValue(i+7, &newColorOverride);
-				if (parseLength) {
-					colorOverride = newColorOverride;
-					i += 7 + parseLength;
-					while (i<text.end() && *i != '}') ++i;
-					continue;
+			if (__builtin_expect(ch == '{', false)) {
+				if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
+					unsigned newColorOverride = 0;
+					unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
+					if (parseLength) {
+						colorOverride = newColorOverride;
+						useColorOverride = true;
+						text._start += 6 + parseLength;
+						while (text._start!=text.end() && *text._start != '}') ++text._start;
+						if (text._start!=text.end()) ++text._start;
+						continue;
+					}
 				}
 			}
 
@@ -264,7 +305,7 @@ namespace RenderOverlays
 
 			if (bitmap._width && bitmap._height) {
 				float baseX = x + bitmap._bitmapOffsetX * xScale;
-				float baseY = y + (bitmap._bitmapOffsetY - descent) * yScale;
+				float baseY = y + bitmap._bitmapOffsetY * yScale;
 				if (style._options.snap) {
 					baseX = xScale * (int)(0.5f + baseX / xScale);
 					baseY = yScale * (int)(0.5f + baseY / yScale);
@@ -277,69 +318,69 @@ namespace RenderOverlays
 					bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
 					bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
 
-				if (style._options.outline) {
-					Quad shadowPos;
-					unsigned shadowColor = ColorB::FromNormalized(0, 0, 0, opacity).AsUInt32();
+				if (__builtin_expect(mx == 0.0f || pos.max[0] <= mx, true)) {
+					if (style._options.outline) {
+						Quad shadowPos;
+						shadowPos = pos;
+						shadowPos.min[0] -= xScale;
+						shadowPos.max[0] -= xScale;
+						shadowPos.min[1] -= yScale;
+						shadowPos.max[1] -= yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[1] -= yScale;
+						shadowPos.max[1] -= yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[0] += xScale;
+						shadowPos.max[0] += xScale;
+						shadowPos.min[1] -= yScale;
+						shadowPos.max[1] -= yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[0] -= xScale;
+						shadowPos.max[0] -= xScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[0] += xScale;
+						shadowPos.max[0] += xScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[0] -= xScale;
+						shadowPos.max[0] -= xScale;
+						shadowPos.min[1] += yScale;
+						shadowPos.max[1] += yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[1] += yScale;
+						shadowPos.max[1] += yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 
-					shadowPos = pos;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+						shadowPos = pos;
+						shadowPos.min[0] += xScale;
+						shadowPos.max[0] += xScale;
+						shadowPos.min[1] += yScale;
+						shadowPos.max[1] += yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					}
 
-					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					if (style._options.shadow) {
+						Quad shadowPos = pos;
+						shadowPos.min[0] += xScale;
+						shadowPos.max[0] += xScale;
+						shadowPos.min[1] += yScale;
+						shadowPos.max[1] += yScale;
+						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+					}
+
+					workingVertices.PushQuad(pos, useColorOverride?colorOverride:color, tc, depth);
 				}
-
-				if (style._options.shadow) {
-					Quad shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
-					workingVertices.PushQuad(shadowPos, ColorB::FromNormalized(0,0,0,opacity).AsUInt32(), tc, depth);
-				}
-
-				workingVertices.PushQuad(pos, RenderCore::ARGBtoABGR(colorOverride?colorOverride:colorARGB), tc, depth);
 			}
 
 			x += bitmap._xAdvance * xScale;
@@ -347,13 +388,32 @@ namespace RenderOverlays
 			if (style._options.outline) {
 				x += 2 * xScale;
 			}
-			if (ch == ' ') {
-				x += spaceExtra;
-			}
 		}
 
 		workingVertices.Complete();
 		return x;
+	}
+
+	float       Draw(   RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font, const TextStyle& style,
+                        float x, float y, StringSection<> text,
+                        float scale, float mx, float depth,
+                        ColorB col)
+	{
+		return DrawTemplate<utf8>(threadContext, immediateDrawables, textureMan, font, style, x, y, text, scale, mx, depth, col);
+	}
+
+	float       Draw(   RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font, const TextStyle& style,
+                        float x, float y, StringSection<ucs4> text,
+                        float scale, float mx, float depth,
+                        ColorB col)
+	{
+		return DrawTemplate<ucs4>(threadContext, immediateDrawables, textureMan, font, style, x, y, text, scale, mx, depth, col);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////
