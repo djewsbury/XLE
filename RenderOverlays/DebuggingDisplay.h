@@ -138,11 +138,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour = ColorB(0xff000000));
 
-    Coord       DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
-    Coord       DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
-    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
-    Coord       DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
+    Coord2      DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
+    Coord2      DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
+    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
+    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
+    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
     void        DrawHistoryGraph(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
     void        DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
 
@@ -248,7 +248,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement() : _bkColour(0xff000000) {}
     };
     void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables=NULL);
-    void DrawTableEntry(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
+    float DrawTableEntry(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class DebugScreensSystem : public PlatformRig::IInputListener

@@ -23,6 +23,8 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include <cctype>
+#include <sstream>
+#include <iomanip>
 
 #include "Techniques.h"
 #include "TechniqueDelegates.h"
@@ -436,6 +438,8 @@ namespace RenderCore { namespace Techniques
 		void			RebuildAllOutOfDatePipelines() override;
 
 		std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) override;
+
+		std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> LogRecords() const override;
 
 		const std::shared_ptr<IDevice>& GetDevice() const override;
 		const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const override;
@@ -880,6 +884,45 @@ namespace RenderCore { namespace Techniques
 			return i->second;
 		_usis.insert(i, std::make_pair(hash, input));
 		return input;
+	}
+
+	static std::string AsString(const ParameterBox& selectors, unsigned countPerLine)
+	{
+		std::stringstream str;
+		str.fill('0');
+		unsigned counter = 0;
+		for (auto e:selectors) {
+			if ((counter%countPerLine) == (countPerLine-1)) str << "\n";
+			else if (counter != 0) str << ", ";
+			++counter;
+			str << "{color:" << std::hex << std::setw(6) << (e.HashName() & 0xffffff) << std::setw(0) << "}";
+			str << e.Name() << ":" << e.ValueAsString();
+		};
+		return str.str();
+	}
+
+	std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> PipelineAcceleratorPool::LogRecords() const
+	{
+		std::vector<PipelineAcceleratorRecord> paRecords;
+		std::vector<SequencerConfigRecord> cfgRecords;
+		paRecords.reserve(_pipelineAccelerators.size());
+		for (const auto&pa:_pipelineAccelerators) {
+			auto l = pa.second.lock();
+			if (!l) continue;
+
+			PipelineAcceleratorRecord record;
+			record._shaderPatchesHash = l->_shaderPatches ? l->_shaderPatches->GetHash() : 0ull;
+			record._materialSelectors = AsString(l->_materialSelectors, 4);
+			record._geoSelectors = AsString(l->_geoSelectors, 2);
+			record._stateSetHash = l->_stateSet.GetHash();
+			if (!l->_miniInputAssembly.empty())
+				record._inputAssemblyHash = HashInputAssembly(l->_miniInputAssembly, DefaultSeed64);
+			else
+				record._inputAssemblyHash = HashInputAssembly(l->_inputAssembly, DefaultSeed64);
+			paRecords.push_back(std::move(record));
+		}
+
+		return std::make_pair(std::move(paRecords), std::move(cfgRecords));
 	}
 
 	const std::shared_ptr<IDevice>& PipelineAcceleratorPool::GetDevice() const { return _device; }

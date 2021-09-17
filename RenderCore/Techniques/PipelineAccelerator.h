@@ -33,6 +33,8 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
+	struct PipelineAcceleratorRecord;
+	struct SequencerConfigRecord;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -89,6 +91,8 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
 
+		virtual std::pair<std::vector<PipelineAcceleratorRecord>, std::vector<SequencerConfigRecord>> LogRecords() const = 0;
+
 		virtual const DescriptorSetLayoutAndBinding& GetMaterialDescriptorSetLayout() const = 0;
 		// virtual const DescriptorSetLayoutAndBinding& GetSequencerDescriptorSetLayout() const = 0;
 		// virtual const std::shared_ptr<ICompiledPipelineLayout>& GetPipelineLayout() const = 0;
@@ -109,7 +113,20 @@ namespace RenderCore { namespace Techniques
         SetGlobalSelector(name, MakeOpaqueIteratorRange(value), insertType);
 	}
 
-	// namespace Internal { const DescriptorSetLayoutAndBinding& GetDefaultDescriptorSetLayoutAndBinding(); }
+	struct PipelineAcceleratorRecord
+	{
+		uint64_t _shaderPatchesHash = 0ull;
+		std::string _materialSelectors, _geoSelectors;
+		uint64_t _inputAssemblyHash = 0ull;
+		Topology _topology;
+		uint64_t _stateSetHash = 0ull;
+	};
+
+	struct SequencerConfigRecord
+	{
+		std::string _sequencerSelectors;
+		std::string _fbDesc;
+	};
 
 	namespace PipelineAcceleratorPoolFlags
 	{
@@ -121,8 +138,5 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>&,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags = 0);
-
-		// const DescriptorSetLayoutAndBinding& matDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding(),
-		// const DescriptorSetLayoutAndBinding& sequencerDescSetLayout = Internal::GetDefaultDescriptorSetLayoutAndBinding());
 }}
 

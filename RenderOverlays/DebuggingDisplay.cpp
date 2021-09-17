@@ -386,24 +386,24 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
-    Coord DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
+    Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
     {
-		return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
+		return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
     }
 
-    Coord DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
+    Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
     {
-        return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
+        return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
     }
 
-    Coord DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
+    Coord2 DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
     {
         char buffer[4096];
         vsnprintf(buffer, dimof(buffer), text, args);
-        return (Coord)context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
+        return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
     }
 
-    Coord DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
+    Coord2 DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
     {
         va_list args;
         va_start(args, text);
@@ -412,7 +412,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return result;
     }
 
-    Coord DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
+    Coord2 DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
     {
         va_list args;
         va_start(args, text);
@@ -623,7 +623,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void DrawTableEntry(        IOverlayContext& context,
+    float DrawTableEntry(       IOverlayContext& context,
                                 const Rect& rect, 
                                 const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, 
                                 const std::map<std::string, TableElement>& entry)
@@ -634,7 +634,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const ColorB SepColor    ( 255, 255, 255, 255 );
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
-        if (!res) return;
+        if (!res) return 0;
 
         context.DrawQuad(
             ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
@@ -643,30 +643,34 @@ namespace RenderOverlays { namespace DebuggingDisplay
             Float2(0.f, 0.f), Float2(0.f, 0.f),
             RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_raisedFillRect});
 
+        auto font = ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont;
         TextStyle style{DrawTextOptions(true, false)};
 
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
+        float heightUsed = 0;
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
             if (i->second) {
                 auto s = entry.find(i->first);
                 Rect r = tempLayout.AllocateFullHeight(i->second);
                 if (s != entry.end() && !s->second._label.empty()) {
 
-                    if (i != fieldHeaders.begin())
+                    /*if (i != fieldHeaders.begin())
                         context.DrawLine(ProjectionMode::P2D,
                             AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
                             AsPixelCoords(Coord2(r._topLeft[0], r._bottomRight[1]-2)), SepColor,
-                            1.f);
+                            1.f);*/
                     r._topLeft[0] += 8;
 
 
                     const ColorB colour = TextColor;
                     // FillRectangle(context, r, s->second._bkColour);
-                    context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
+                    auto textSpace = context.DrawText(AsPixelCoords(r), font, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
+                    heightUsed = std::max(textSpace[1] - r._topLeft[1], heightUsed);
                 }
             }
         }
+        return heightUsed;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
