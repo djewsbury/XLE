@@ -2,16 +2,6 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#if (SPAWNED_INSTANCE==1)
-	#define GEO_HAS_INSTANCE_ID 1
-	#if !defined(VSOUT_HAS_SHADOW_PROJECTION_COUNT)
-		#define PER_INSTANCE_MLO 1
-	#endif
-	#if (PER_INSTANCE_MLO==1)
-		#define VSOUT_HAS_PER_VERTEX_MLO 1
-	#endif
-#endif
-
 #if GEO_HAS_COLOR>=1
 		// vertex is used only in the vertex shader when
 		// "MAT_VCOLOR_IS_ANIM_PARAM" is set. So, in this case,
@@ -99,4 +89,14 @@
 
 #if GEO_HAS_PARTICLE_INPUTS
 	#define VSOUT_HAS_BLEND_TEXCOORD 1
+#endif
+
+#if (SPAWNED_INSTANCE==1)
+	#define GEO_HAS_INSTANCE_ID 1
+	#if !defined(VSOUT_HAS_SHADOW_PROJECTION_COUNT)
+		#define PER_INSTANCE_MLO 1
+	#endif
+	#if (PER_INSTANCE_MLO==1)
+		#define VSOUT_HAS_PER_VERTEX_MLO 1
+	#endif
 #endif

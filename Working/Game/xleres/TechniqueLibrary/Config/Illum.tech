@@ -6,11 +6,11 @@
 
 Silhouette=~
 	Inherit=~; Shared.tech:Skinnable; Shared.tech:VegetationSpawn
-	Selectors=~
-		MAT_ALPHA_TEST
-		RES_HAS_DiffuseTexture
-		MAT_VCOLOR_IS_ANIM_PARAM
 	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl
+
+SilhouetteDepthOnly=~
+	Inherit=~; Shared.tech:Skinnable; Shared.tech:VegetationSpawn
+	Preconfiguration=xleres/TechniqueLibrary/Framework/SelectorPreconfigurationDepthOnly.hlsl
 
 VertexIdViewInstancing=~
 	Selectors=~
@@ -26,6 +26,14 @@ VS_DeformVertex=~
 	Inherit=~; Silhouette
 	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithDeformVertex
 
+VSDepthOnly_NoPatches=~
+	Inherit=~; SilhouetteDepthOnly
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+
+VSDepthOnly_DeformVertex=~
+	Inherit=~; SilhouetteDepthOnly
+	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithDeformVertex
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ShadowGen_GSAmplify_Shared=~
@@ -38,11 +46,11 @@ ShadowGen_GSAmplify_Shared=~
 	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
 
 VSShadowGen_GSAmplify_NoPatches=~
-	Inherit=~; Silhouette; ShadowGen_GSAmplify_Shared
+	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
 	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:nopatches
 
 VSShadowGen_GSAmplify_DeformVertex=~
-	Inherit=~; Silhouette; ShadowGen_GSAmplify_Shared
+	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
 	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:frameworkEntryWithDeformVertex
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,11 +80,6 @@ Deferred=~
 	Inherit=~; IllumShared; Shared.tech:Deferred
 
 DepthOnly=~
-	Selectors=~
-		MAT_ALPHA_TEST_PREDEPTH
-		STOCHASTIC_TRANS
-		STOCHASTIC_TRANS_PRIMITIVEID
-		STOCHASTIC_TRANS_OPACITY
 
 RayTest=~
 	Selectors=~
