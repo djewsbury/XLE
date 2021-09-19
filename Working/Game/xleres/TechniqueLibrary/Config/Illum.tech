@@ -119,7 +119,7 @@ Forward_PerPixelAndEarlyRejection=~
 
 DepthOnly_NoPatches=~
 	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthonly
 
 DepthOnly_EarlyRejection=~
 	Inherit=~; DepthOnly

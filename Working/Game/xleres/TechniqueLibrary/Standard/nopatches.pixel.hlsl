@@ -35,10 +35,14 @@ GBufferEncoded deferred(VSOUT geo)
 	return Encode(result);
 }
 
-#if (VULKAN!=1)
-    [earlydepthstencil]
+#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+    [earlydepthstencil] void depthonly() {}
+#else
+	void depthonly(VSOUT geo) 
+	{
+		DoAlphaTest(geo, GetAlphaThreshold());
+	}
 #endif
-void depthonly() {}
 
 #if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
