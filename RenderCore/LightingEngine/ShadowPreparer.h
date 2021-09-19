@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "LightScene.h"		// for IShadowProjectionFactory
+#include "ILightScene.h"		// for IShadowProjectionFactory
 #include "../StateDesc.h"
 #include "../Format.h"
 #include "../../Assets/AssetsCore.h"

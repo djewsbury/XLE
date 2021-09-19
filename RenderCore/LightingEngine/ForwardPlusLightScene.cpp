@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ForwardPlusLightScene.h"
-#include "LightScene.h"
+#include "ILightScene.h"
 #include "SHCoefficients.h"
 #include "HierarchicalDepths.h"
 #include "ScreenSpaceReflections.h"
@@ -73,18 +73,18 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
-	std::vector<ShadowProbes::Probe> ForwardPlusLightScene::ShadowProbesInterface::GetPendingProbes(ForwardPlusLightScene& lightScene)
+	static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights)
 	{
 		std::vector<ShadowProbes::Probe> result;
-		result.reserve(_pendingProbes.size());
-		for (const auto& pending:_pendingProbes) {
+		result.reserve(lights.size());
+		for (auto pending:lights) {
 			ShadowProbes::Probe probe;
 			probe._position = Zero<Float3>();
 			probe._radius = 1024;
-			auto* positional = ((ILightScene&)lightScene).TryGetLightSourceInterface<IPositionalLightSource>(pending._attachedSource);
+			auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
 			if (positional)
 				probe._position = ExtractTranslation(positional->GetLocalToWorld());
-			auto* finite = ((ILightScene&)lightScene).TryGetLightSourceInterface<IFiniteLightSource>(pending._attachedSource);
+			auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
 			if (finite)
 				probe._radius = finite->GetCutoffRange();
 
@@ -100,17 +100,18 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
+		auto& device = *_pipelineAccelerators->GetDevice();
 		auto tilerConfig = _lightTiler->GetConfiguration();
 		for (unsigned c=0; c<dimof(_uniforms); c++) {
-			_uniforms[c]._propertyCB = _device->CreateResource(
+			_uniforms[c]._propertyCB = device.CreateResource(
 				CreateDesc(BindFlag::ConstantBuffer, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps)), "env-props"));
 			_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
 
-			_uniforms[c]._lightList = _device->CreateResource(
+			_uniforms[c]._lightList = device.CreateResource(
 				CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light)), "light-list"));
 			_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
 
-			_uniforms[c]._lightDepthTable = _device->CreateResource(
+			_uniforms[c]._lightDepthTable = device.CreateResource(
 				CreateDesc(BindFlag::UnorderedAccess, CPUAccess::Write, 0, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)), "light-depth-table"));
 			_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
 		}
@@ -162,12 +163,48 @@ namespace RenderCore { namespace LightingEngine
 			auto desc = _shadowPreparationOperators->CreateShadowProjection(dynIdx);
 			return AddShadowProjection(opId, associatedLight, std::move(desc));
 		} else if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
-			if (_shadowProbes._builtProbes)
-				Throw(std::runtime_error("New shadow probes cannot be added after the probe database has been built"));
-			_shadowProbes._pendingProbes.push_back({associatedLight});
-			return s_shadowProbeShadowFlag | unsigned(_shadowProbes._pendingProbes.size());
+			Throw(std::runtime_error("Use the multi-light shadow projection constructor for shadow probes"));
 		}
 		return ~0u;
+	}
+
+	class ForwardPlusLightScene::ShadowProbePrepareDelegate : public IPreparable
+	{
+	public:
+		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) override
+		{
+			return _shadowProbes->PrepareStaticProbes(threadContext);
+		}
+		std::shared_ptr<ShadowProbes> _shadowProbes;
+		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes) : _shadowProbes(std::move(shadowProbes)) {}
+	};
+
+	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
+	{
+		if (opId == _shadowOperatorIdMapping._operatorForStaticProbes) {
+			if (_shadowProbes)
+				Throw(std::runtime_error("Cannot create multiple shadow probe databases in on light scene."));
+			
+			_shadowProbes = std::make_shared<ShadowProbes>(
+				_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
+			auto probes = MakeProbes(*this, associatedLights);
+			_shadowProbes->AddProbes(probes);
+			_spPrepareDelegate = std::make_shared<ShadowProbePrepareDelegate>(_shadowProbes);
+			return s_shadowProbeShadowFlag;
+		} else {
+			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
+		}
+		return ~0u;
+	}
+
+	void ForwardPlusLightScene::DestroyShadowProjection(ShadowProjectionId projectionId)
+	{
+		if (projectionId == s_shadowProbeShadowFlag) {
+			_shadowProbes.reset();
+			_spPrepareDelegate.reset();
+		} else {
+			return Internal::StandardLightScene::DestroyShadowProjection(projectionId);
+		}
 	}
 
 	void* ForwardPlusLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
@@ -179,6 +216,16 @@ namespace RenderCore { namespace LightingEngine
 		} else {
 			return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
 		}
+	}
+
+	void* ForwardPlusLightScene::TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode)
+	{
+		if (projectionid == s_shadowProbeShadowFlag) {
+			if (interfaceTypeCode == typeid(IPreparable).hash_code()) return _spPrepareDelegate.get();
+			return nullptr;
+		} else {
+			return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
+		} 
 	}
 
 	void ForwardPlusLightScene::SetEquirectangularSource(StringSection<> input)
@@ -222,16 +269,17 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 		auto& tilerOutputs = _lightTiler->_outputs;
+		auto& device = *_pipelineAccelerators->GetDevice();
 		{
 			Metal::ResourceMap map(
-				*_device, *uniforms._lightDepthTable,
+				device, *uniforms._lightDepthTable,
 				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
 				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 		}
 		if (tilerOutputs._lightCount) {
 			Metal::ResourceMap map(
-				*_device, *uniforms._lightList,
+				device, *uniforms._lightList,
 				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
 				0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount);
 			auto* i = (Internal::CB_Light*)map.GetData().begin();
@@ -247,7 +295,7 @@ namespace RenderCore { namespace LightingEngine
 
 		{
 			Metal::ResourceMap map(
-				*_device, *uniforms._propertyCB,
+				device, *uniforms._propertyCB,
 				Metal::ResourceMap::Mode::WriteDiscardPrevious);
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
@@ -296,20 +344,6 @@ namespace RenderCore { namespace LightingEngine
 		_hasPrevProjection = true;
 	}
 
-	std::shared_ptr<IProbeRenderingInstance> ForwardPlusLightScene::PrepareStaticShadowProbes(IThreadContext& threadContext)
-	{
-		if (_shadowProbes._builtProbes)
-			Throw(std::runtime_error("Rebuilding shadow probes after they have been built once is not supported"));
-		
-		auto pendingProbes = _shadowProbes.GetPendingProbes(*this); 
-		if (pendingProbes.empty())
-			return nullptr;
-
-		_shadowProbes._pendingProbes.clear();
-		_shadowProbes._builtProbes = true;
-		return _shadowProbes._probes->PrepareStaticProbes(threadContext, MakeIteratorRange(pendingProbes));
-	}
-
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
@@ -325,7 +359,7 @@ namespace RenderCore { namespace LightingEngine
 				assert(context._rpi);
 				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 			}
-			dst[5] = &_lightScene->_shadowProbes._probes->GetStaticProbesTable();
+			dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
@@ -424,18 +458,15 @@ namespace RenderCore { namespace LightingEngine
 				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
 				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
 				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
-				lightScene->_device = pipelineAccelerators->GetDevice();
 				lightScene->_ssrOperator = ssr;
 				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
+				lightScene->_pipelineAccelerators = std::move(pipelineAccelerators);
+				lightScene->_techDelBox = std::move(techDelBox);
 
 				lightScene->_lightTiler = lightTiler;
 				lightTiler->SetLightScene(*lightScene);
 
 				lightScene->_shadowOperatorIdMapping = std::move(shadowOperatorMapping);
-				if (lightScene->_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
-					lightScene->_shadowProbes._probes = std::make_shared<ShadowProbes>(
-						pipelineAccelerators, *techDelBox, lightScene->_shadowOperatorIdMapping._shadowProbesCfg);
-				}
 
 				lightScene->FinalizeConfiguration();
 				return lightScene;

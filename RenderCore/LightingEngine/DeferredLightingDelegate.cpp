@@ -9,7 +9,7 @@
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
-#include "LightScene.h"
+#include "ILightScene.h"
 #include "StandardLightScene.h"
 #include "StandardLightOperators.h"
 #include "LightingDelegateUtil.h"
@@ -53,6 +53,12 @@ namespace RenderCore { namespace LightingEngine
 		{
 			auto desc = _shadowPreparationOperators->CreateShadowProjection(opId);
 			return AddShadowProjection(opId, associatedLight, std::move(desc));
+		}
+
+		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, IteratorRange<const LightSourceId*> associatedLights) override
+		{
+			assert(0);
+			return ~0u;
 		}
 	};
 

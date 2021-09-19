@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "StandardLightScene.h"
-#include "LightScene.h"
+#include "ILightScene.h"
 #include "../../Core/Exceptions.h"
 
 namespace RenderCore { namespace LightingEngine { namespace Internal

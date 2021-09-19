@@ -36,17 +36,6 @@ namespace RenderCore { namespace LightingEngine
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class IProbeRenderingInstance;
-	std::shared_ptr<IProbeRenderingInstance> PrepareStaticShadowProbes(
-		CompiledLightingTechnique& lightingTechnique,
-		IThreadContext& threadContext)
-	{
-		auto& lightScene = *checked_cast<ForwardPlusLightScene*>(&lightingTechnique.GetLightScene());
-		return lightScene.PrepareStaticShadowProbes(threadContext);
-	}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	class ForwardLightingCaptures
 	{
 	public:

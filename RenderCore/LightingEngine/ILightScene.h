@@ -25,6 +25,7 @@ namespace RenderCore { namespace LightingEngine
 		using ShadowOperatorId = unsigned;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId, uint64_t interfaceTypeCode) = 0; 
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, LightSourceId associatedLight) = 0;
+		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId op, IteratorRange<const LightSourceId*> associatedLights) = 0;
 		virtual void DestroyShadowProjection(ShadowProjectionId) = 0;
 
 		virtual void Clear() = 0;

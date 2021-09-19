@@ -20,6 +20,13 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IProbeRenderingInstance() = default;
 	};
 
+	class IPreparable
+	{
+	public:
+		virtual std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) = 0;
+		virtual ~IPreparable() = default;
+	};
+
 	class LightingEngineApparatus;
 
 	class ShadowProbes
@@ -46,11 +53,12 @@ namespace RenderCore { namespace LightingEngine
 			const Techniques::ProjectionDesc& projDesc,
 			IteratorRange<const AABB*> dynamicObjects);
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
-			IThreadContext& threadContext,
-			IteratorRange<const Probe*> probeLocations);
+			IThreadContext& threadContext);
 		IResourceView& GetStaticProbesTable();
 		IResourceView& GetDynamicProbesTable();
 		IResourceView& GetLookupTable();
+
+		void AddProbes(IteratorRange<const Probe*>);
 
 		ShadowProbes(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
@@ -62,9 +70,10 @@ namespace RenderCore { namespace LightingEngine
 			const Configuration& config);
 
 		~ShadowProbes();
-	// private:
+	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
+		class ProbeRenderingInstance;
 	};
 
 }}

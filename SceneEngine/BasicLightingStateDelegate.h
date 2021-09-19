@@ -77,6 +77,7 @@ namespace SceneEngine
         void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
         void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
         void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
         auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
         auto        GetToneMapSettings() -> ToneMapSettings override;
 

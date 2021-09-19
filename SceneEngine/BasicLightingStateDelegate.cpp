@@ -144,6 +144,11 @@ namespace SceneEngine
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {}
 
+    std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BasicLightingStateDelegate::BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)
+    {
+        return nullptr;
+    }
+
     std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> BasicLightingStateDelegate::GetLightResolveOperators()
     {
         std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;

@@ -10,7 +10,7 @@
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; enum class BatchFilter; } }
-namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; }}
+namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
 
 namespace SceneEngine
@@ -90,6 +90,7 @@ namespace SceneEngine
         virtual void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
         virtual void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
         virtual void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
+        virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) = 0;
 
         virtual std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() = 0;
 		virtual std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() = 0;

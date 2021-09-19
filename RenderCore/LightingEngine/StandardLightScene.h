@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "LightScene.h"
+#include "ILightScene.h"
 #include "StandardLightOperators.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"

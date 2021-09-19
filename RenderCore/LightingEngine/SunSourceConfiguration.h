@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "LightScene.h"
+#include "ILightScene.h"
 
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 

@@ -6,7 +6,7 @@
 
 #include "DeferredLightingDelegate.h"
 #include "StandardLightOperators.h"
-#include "LightScene.h"
+#include "ILightScene.h"
 #include "../Metal/Forward.h"
 #include "../Metal/InputLayout.h"
 #include <vector>

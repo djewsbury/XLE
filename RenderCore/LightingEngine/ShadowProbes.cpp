@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 		Configuration _config;
 		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
+		bool _pendingRebuild = false;
 
 		struct StaticProbePrepareHelper
 		{
@@ -85,7 +86,7 @@ namespace RenderCore { namespace LightingEngine
 			const auto& p = probes[c/6];
 			result.push_back(
 				Techniques::BuildCubemapProjectionDesc(
-					c%6, p._position, p._radius / 128.f, p._radius));
+					c%6, p._position, p._radius / 1024.f, p._radius));
 		}
 		return result;
 	}
@@ -123,7 +124,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
-	class ProbeRenderingInstance : public IProbeRenderingInstance
+	class ShadowProbes::ProbeRenderingInstance : public IProbeRenderingInstance
 	{
 	public:
 		IThreadContext* _threadContext = nullptr;
@@ -187,14 +188,21 @@ namespace RenderCore { namespace LightingEngine
 		return nullptr;
 	}
 
-	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext, IteratorRange<const Probe*> probeLocations)
+	void ShadowProbes::AddProbes(IteratorRange<const Probe*> probeLocations)
 	{
+		assert(!probeLocations.empty());
 		_pimpl->_probes.insert(_pimpl->_probes.end(), probeLocations.begin(), probeLocations.end());
+		_pimpl->_pendingRebuild = true;
+	}
+
+	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext)
+	{
 		if (_pimpl->_probes.empty())
 			return nullptr;
 
 		_pimpl->_staticTable = nullptr;
 		_pimpl->_staticTableSRV = nullptr;
+		_pimpl->_pendingRebuild = false;
 
 		auto result = std::make_shared<ProbeRenderingInstance>();
 		result->_threadContext = &threadContext;
@@ -206,6 +214,7 @@ namespace RenderCore { namespace LightingEngine
 	IResourceView& ShadowProbes::GetStaticProbesTable()
 	{
 		assert(_pimpl->_staticTableSRV);
+		assert(!_pimpl->_pendingRebuild);
 		return *_pimpl->_staticTableSRV;
 	}
 

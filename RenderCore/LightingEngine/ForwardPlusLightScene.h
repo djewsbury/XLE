@@ -26,13 +26,12 @@ namespace RenderCore { namespace LightingEngine
 		ScreenSpaceReflectionsOperator& GetScreenSpaceReflectionsOperator() { return *_ssrOperator; }
 		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
 		HierarchicalDepthsOperator& GetHierarchicalDepthsOperator() { return *_hierarchicalDepthsOperator; }
-		ShadowProbes& GetShadowProbes() { return *_shadowProbes._probes; }
+		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
 
 		void FinalizeConfiguration();
 		virtual void SetEquirectangularSource(StringSection<> input) override;
 		void SetupProjection(Techniques::ParsingContext& parsingContext);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
-		std::shared_ptr<IProbeRenderingInstance> PrepareStaticShadowProbes(IThreadContext& threadContext);
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
@@ -45,7 +44,10 @@ namespace RenderCore { namespace LightingEngine
 		virtual void DestroyLightSource(LightSourceId sourceId) override;
 		virtual void Clear() override;
 		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, LightSourceId associatedLight) override;
+		virtual ShadowProjectionId CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights) override;
+		virtual void DestroyShadowProjection(ShadowProjectionId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
+		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override;
 
 		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator);
 
@@ -68,7 +70,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
-		std::shared_ptr<IDevice> _device;
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
 		struct ShadowOperatorIdMapping
 		{
@@ -78,20 +81,9 @@ namespace RenderCore { namespace LightingEngine
 		};
 		ShadowOperatorIdMapping _shadowOperatorIdMapping;
 
-		class ShadowProbesInterface
-		{
-		public:
-			std::shared_ptr<ShadowProbes> _probes;
-			bool _builtProbes = false;
-
-			struct PendingProbe
-			{
-				ILightScene::LightSourceId _attachedSource; 
-			};
-			std::vector<PendingProbe> _pendingProbes;
-			std::vector<ShadowProbes::Probe> GetPendingProbes(ForwardPlusLightScene&);
-		};
-		ShadowProbesInterface _shadowProbes;
+		std::shared_ptr<ShadowProbes> _shadowProbes;
+		class ShadowProbePrepareDelegate;
+		std::shared_ptr<ShadowProbePrepareDelegate> _spPrepareDelegate;
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;
