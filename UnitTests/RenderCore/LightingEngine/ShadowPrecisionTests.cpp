@@ -242,11 +242,11 @@ namespace UnitTests
 
 					auto encoder = Metal::DeviceContext::Get(*threadContext)->BeginBlitEncoder();
 					encoder.Copy(
-						Metal::BlitEncoder::CopyPartial_Dest {
-							stitchedImage.get(), {}, UInt3{0,c*stripeHeight,0}
+						CopyPartial_Dest {
+							*stitchedImage, {}, UInt3{0,c*stripeHeight,0}
 						},
-						Metal::BlitEncoder::CopyPartial_Src {
-							fbHelper.GetMainTarget().get(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
+						CopyPartial_Src {
+							*fbHelper.GetMainTarget(), {}, UInt3{0,0,0}, UInt3{2048,stripeHeight,1}
 						});
 
 					lightScene.DestroyLightSource(lightId);

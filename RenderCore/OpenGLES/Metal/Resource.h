@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../ResourceDesc.h"
+#include "../../ResourceUtils.h"        // for CopyPartial_Dest, CopyPartial_Src
 #include "../../IDevice.h"
 #include "ObjectFactory.h"
 #include "../../../Utility/IteratorUtils.h"
@@ -80,23 +81,6 @@ namespace RenderCore { namespace Metal_OpenGLES
     class BlitPass
     {
     public:
-        class CopyPartial_Dest
-        {
-        public:
-            IResource*          _resource;
-            SubResourceId       _subResource;
-            VectorPattern<unsigned, 3>      _leftTopFront;
-        };
-
-        class CopyPartial_Src
-        {
-        public:
-            IResource*          _resource;
-            SubResourceId       _subResource;
-            VectorPattern<unsigned, 3>      _leftTopFront;
-            VectorPattern<unsigned, 3>      _rightBottomBack;
-        };
-
         void    Write(
             const CopyPartial_Dest& dst,
             const SubResourceInitData& srcData,

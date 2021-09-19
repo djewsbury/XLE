@@ -203,11 +203,11 @@ namespace RenderCore { namespace LightingEngine
 				/*
 					Can't copy from our R32_FLOAT downsampled depth buffer onto a D32_FLOAT texture to be used for depth/stencil tests
 				auto bltEncoder = metalContext.BeginBlitEncoder();
-				Metal::BlitEncoder::CopyPartial_Dest copyDst;
+				CopyPartial_Dest copyDst;
 				copyDst._resource = iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource().get();
 				copyDst._subResource = {};
 				copyDst._leftTopFront = {0,0,0};
-				Metal::BlitEncoder::CopyPartial_Src copySrc;
+				CopyPartial_Src copySrc;
 				copySrc._resource = iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource().get();
 				copySrc._subResource = {5, 0};
 				copySrc._leftTopFront = {0,0,0};

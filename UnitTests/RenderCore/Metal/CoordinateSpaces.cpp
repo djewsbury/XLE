@@ -455,8 +455,8 @@ namespace UnitTests
 		{
 			auto blitPass = metalContext.BeginBlitEncoder();
 			blitPass.Copy(
-				Metal::BlitEncoder::CopyPartial_Dest { fbHelper1.GetMainTarget().get() },
-				Metal::BlitEncoder::CopyPartial_Src { fbHelper0.GetMainTarget().get(), {}, {0,0,0}, {64, 64, 1} });
+				CopyPartial_Dest { *fbHelper1.GetMainTarget() },
+				CopyPartial_Src { *fbHelper0.GetMainTarget(), {}, {0,0,0}, {64, 64, 1} });
 		}
 
 		// The data in fpHelper1 is should now be the same as what we got through the

@@ -26,6 +26,49 @@ namespace RenderCore
         //      C O P Y I N G       //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    class CopyPartial_Dest
+    {
+    public:
+        IResource*          _resource;
+        SubResourceId       _subResource;
+        VectorPattern<unsigned, 3>      _leftTopFront;
+
+        CopyPartial_Dest(
+            IResource& destination,
+            SubResourceId subRes = {},
+            VectorPattern<unsigned, 3> leftTopFront = {0,0,0})
+        : _resource(&destination), _subResource(subRes), _leftTopFront(leftTopFront) {}
+
+        CopyPartial_Dest(
+            IResource& destination,
+            unsigned bufferStart)
+        : _resource(&destination), _subResource(), _leftTopFront(bufferStart, 0, 0) {}
+    };
+
+    class CopyPartial_Src
+    {
+    public:
+        IResource*          _resource;
+        SubResourceId       _subResource;
+        VectorPattern<unsigned, 3>      _leftTopFront;
+        VectorPattern<unsigned, 3>      _rightBottomBack;
+
+        CopyPartial_Src(
+            IResource& source,
+            SubResourceId subRes = {},
+            VectorPattern<unsigned, 3> leftTopFront = {0u,0u,0u},
+            VectorPattern<unsigned, 3> rightBottomBack = {~0u,~0u,~0u})
+        : _resource(&source), _subResource(subRes), _leftTopFront(leftTopFront), _rightBottomBack(rightBottomBack) {}
+
+        // Note that there's no way to copy from a buffer to a subcube within a texture
+        // using this interface -- because rightBottomBack is only in CopyPartial_Src, and that's
+        // considered a linear begin/end. However we can copy a subcube in the opposite direction
+        CopyPartial_Src(
+            IResource& source,
+            unsigned bufferStart, unsigned bufferEnd = ~0u)
+        : _resource(&source), _subResource(), _leftTopFront(bufferStart, 0, 0), _rightBottomBack(bufferEnd, ~0u, ~0u) {}
+    };
+        
     class Box2D
     {
     public:

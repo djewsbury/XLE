@@ -471,8 +471,8 @@ namespace RenderOverlays
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 		auto blitEncoder = metalContext.BeginBlitEncoder();
 		blitEncoder.Write(
-			Metal::BlitEncoder::CopyPartial_Dest {
-				_resource.get(), {}, VectorPattern<unsigned, 3>{ unsigned(destBox._left), unsigned(destBox._top), 0u }
+			CopyPartial_Dest {
+				*_resource, {}, VectorPattern<unsigned, 3>{ unsigned(destBox._left), unsigned(destBox._top), 0u }
 			},
 			SubResourceInitData { data },
 			_format,

@@ -7,6 +7,7 @@
 #include "VulkanCore.h"
 #include "../../IDevice.h"
 #include "../../ResourceDesc.h"
+#include "../../ResourceUtils.h"        // for CopyPartial_Dest, CopyPartial_Src
 #include "../../Types.h"
 #include "../../ResourceUtils.h"
 #include "../../../Utility/IteratorUtils.h"
@@ -176,23 +177,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	class BlitEncoder
 	{
 	public:
-		class CopyPartial_Dest
-		{
-		public:
-			IResource*          _resource;
-			SubResourceId       _subResource;
-			VectorPattern<unsigned, 3>      _leftTopFront;
-		};
-
-		class CopyPartial_Src
-		{
-		public:
-			IResource*          _resource;
-			SubResourceId       _subResource;
-			VectorPattern<unsigned, 3>      _leftTopFront;
-			VectorPattern<unsigned, 3>      _rightBottomBack;
-		};
-
 		void    Write(
 			const CopyPartial_Dest& dst,
 			const SubResourceInitData& srcData,

@@ -91,11 +91,11 @@ namespace BufferUploads { namespace PlatformInterface
             for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
                 for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
                     blitEncoder.Copy(
-                        Metal::BlitEncoder::CopyPartial_Dest{
-                            finalResource.GetContainingResource().get(), 
+                        CopyPartial_Dest{
+                            *finalResource.GetContainingResource(), 
                             SubResourceId{mip, a}, {(unsigned)dstBox._left, (unsigned)dstBox._top, 0}},
-                        Metal::BlitEncoder::CopyPartial_Src{
-                            stagingResource.GetContainingResource().get(), 
+                        CopyPartial_Src{
+                            *stagingResource.GetContainingResource(), 
                             SubResourceId{mip-stagingToFinalMapping._stagingLODOffset, a-stagingToFinalMapping._stagingArrayOffset},
                             {(unsigned)dstBox._left - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._top - stagingToFinalMapping._stagingXYOffset[1], 0u},
                             {(unsigned)dstBox._right - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._bottom - stagingToFinalMapping._stagingXYOffset[1], 1u}});
