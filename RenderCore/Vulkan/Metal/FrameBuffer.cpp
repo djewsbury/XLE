@@ -232,6 +232,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned _mappedAttachmentIdx;
 			TextureViewDesc _view;
 			uint64_t _viewHash;
+			bool _firstViewOfResource;
+			bool _lastViewOfResource;
 		};
 		std::vector<WorkingViewedAttachment> _workingViewedAttachments;
 
@@ -247,9 +249,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		std::vector<SubpassDependency> _dependencies;
 
-		VkAttachmentDescription2 CreateAttachmentDescription(AttachmentName resName, const WorkingAttachmentResource& res, const TextureViewDesc& view)
+		VkAttachmentDescription2 CreateAttachmentDescription(const WorkingViewedAttachment& viewedAttachment)
 		{
-			const auto& attachmentDesc = res._desc;
+			auto& res = _workingAttachments[viewedAttachment._mappedAttachmentIdx];
+			AttachmentName resName = res.first; 
+			const auto& attachmentDesc = res.second._desc;
 			
 			// We need to look through all of the places we use this attachment to finalize the
 			// format filter
@@ -266,8 +270,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 
             BindFlag::Enum formatUsage = BindFlag::ShaderResource;
-            if (res._attachmentUsage & Internal::AttachmentResourceUsageType::Output) formatUsage = BindFlag::RenderTarget;
-            if (res._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
+            if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::Output) formatUsage = BindFlag::RenderTarget;
+            if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil) formatUsage = BindFlag::DepthStencil;
             auto resolvedFormat = ResolveFormat(attachmentDesc._format, formatFilter, formatUsage);
 
 			LoadStore originalLoad = attachmentDesc._loadFromPreviousPhase;
@@ -279,10 +283,12 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.flags = 0;
             desc.format = (VkFormat)AsVkFormat(resolvedFormat);
             desc.samples = VK_SAMPLE_COUNT_1_BIT;
-            desc.loadOp = AsLoadOp(originalLoad);
-            desc.stencilLoadOp = AsLoadOpStencil(originalLoad);
-			desc.storeOp = AsStoreOp(finalStore);
-            desc.stencilStoreOp = AsStoreOpStencil(finalStore);
+			// the loadOp only matters with the first VkAttachmentDescription2 for the physical attachment
+			// and the storeOp only matters for the second VkAttachmentDescription2
+            desc.loadOp = viewedAttachment._firstViewOfResource ? AsLoadOp(originalLoad) : VK_ATTACHMENT_LOAD_OP_LOAD;
+            desc.stencilLoadOp = viewedAttachment._firstViewOfResource ? AsLoadOpStencil(originalLoad) : VK_ATTACHMENT_LOAD_OP_LOAD;
+			desc.storeOp = viewedAttachment._lastViewOfResource ? AsStoreOp(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
+            desc.stencilStoreOp = viewedAttachment._lastViewOfResource ? AsStoreOpStencil(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
 			desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -292,11 +298,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			// If the attachment desc has initial and/or final layout flags, those take precidence
 			// Otherwise 
 			if (HasRetain(attachmentDesc._loadFromPreviousPhase))
-				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, res._attachmentUsage);
+				desc.initialLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._initialLayout, res.second._attachmentUsage);
 
 			// Even if we don't have a "retain" on the store operation, we're still supposed to give the attachment
 			// a final layout. Using "undefined" here results in a validation warning
-			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res._attachmentUsage);
+			desc.finalLayout = LayoutFromBindFlagsAndUsage(attachmentDesc._finalLayout, res.second._attachmentUsage);
 
             if (attachmentDesc._flags & AttachmentDesc::Flags::Multisampled)
                 desc.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(_layout->GetProperties()._samples);
@@ -342,11 +348,24 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			i->second._attachmentUsage |= subpassUsage;
 			auto mappedAttachmentIdx = (unsigned)std::distance(_workingAttachments.begin(), i);
+
+			bool firstViewOfResource = true;
+			for (auto&view:_workingViewedAttachments) {
+				if (view._mappedAttachmentIdx == mappedAttachmentIdx) {
+					firstViewOfResource = false;
+					view._lastViewOfResource = false;		// even if it were previously the last view, it is no longer
+				}
+			}
+
 			uint64_t viewHash = view.GetHash();
-			auto i2 = FindIf(_workingViewedAttachments, [viewHash, mappedAttachmentIdx](auto& i) { 
-				return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
-			if (i2 == _workingViewedAttachments.end())
-				i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash});
+			auto i2 = std::find_if(
+				_workingViewedAttachments.begin(), _workingViewedAttachments.end(),
+				[viewHash, mappedAttachmentIdx](auto& i) { return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
+			if (i2 == _workingViewedAttachments.end()) {
+				i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash, firstViewOfResource, true});
+			} else {
+				i2->_lastViewOfResource = true;
+			}
 
 			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
 			// We need to do this sometimes even when it seems like it shouldn't be required -- such as 2 subpasses that use the same depth/stencil buffer (otherwise we get validation errors)
@@ -466,10 +485,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		// Build the VkAttachmentDescription objects
         std::vector<VkAttachmentDescription2> attachmentDescs;
 		attachmentDescs.reserve(helper._workingViewedAttachments.size());
-		for (const auto& a:helper._workingViewedAttachments) {
-			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
-			attachmentDescs.push_back(helper.CreateAttachmentDescription(res.first, res.second, a._view));
-		}
+		for (const auto& a:helper._workingViewedAttachments)
+			attachmentDescs.push_back(helper.CreateAttachmentDescription(a));
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the VkSubpassDependency objects
