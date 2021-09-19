@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
 
-		SignalDelegateId _frameBarrierBinding;
+		SignalDelegateId _frameBarrierBinding, _onCheckCompleteInitialization;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

@@ -14,6 +14,7 @@
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Init.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/IThreadContext.h"
@@ -83,6 +84,7 @@ namespace Sample
         PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
         frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
         frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
+        techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
         Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
         sampleOverlay->OnStartup(sampleGlobals);
@@ -107,6 +109,7 @@ namespace Sample
             });
 
         RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
+        techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
             //  Finally, we execute the frame loop
         while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {

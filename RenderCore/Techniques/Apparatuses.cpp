@@ -101,12 +101,19 @@ namespace RenderCore { namespace Techniques
 				if (l) l->RebuildAllOutOfDatePipelines();
 			});
 
+		_onCheckCompleteInitialization = subFrameEvents._onCheckCompleteInitialization.Bind(
+			[cr=std::weak_ptr<CommonResourceBox>{_commonResources}](IThreadContext& threadContext) {
+				auto l = cr.lock();
+				if (l) l->CompleteInitialization(threadContext);
+			});
+
 		assert(_assetServices != nullptr);
 	}
 
 	DrawingApparatus::~DrawingApparatus()
 	{
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
+		subFrameEvents._onCheckCompleteInitialization.Unbind(_onCheckCompleteInitialization);
 		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
 	}
 

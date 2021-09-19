@@ -153,7 +153,7 @@ namespace RenderCore
         static TextureDesc Plain3D(
             uint32_t width, uint32_t height, uint32_t depth, Format format, uint8_t mipCount=1);
         static TextureDesc PlainCube(
-            uint32_t width, uint32_t height, Format format, uint8_t mipCount=1);
+            uint32_t width, uint32_t height, Format format, uint8_t mipCount=1, uint16_t arrayCount=6);
         static TextureDesc Empty();
 
         uint64_t CalculateHash() const;
@@ -336,7 +336,8 @@ namespace RenderCore
 	}
 
     inline TextureDesc TextureDesc::PlainCube(
-        uint32_t width, uint32_t height, Format format, uint8_t mipCount)
+        uint32_t width, uint32_t height, Format format, uint8_t mipCount,
+        uint16_t arrayCount)
     {
         TextureDesc result;
 		result._width = width;
@@ -345,7 +346,7 @@ namespace RenderCore
 		result._format = format;
 		result._dimensionality = Dimensionality::CubeMap;
 		result._mipCount = mipCount;
-		result._arrayCount = 6;
+		result._arrayCount = arrayCount;
 		result._samples = TextureSamples::Create();
 		return result;
     }

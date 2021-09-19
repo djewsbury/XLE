@@ -24,6 +24,24 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<ISampler> _unnormalizedBilinearClampSampler;
         SamplerPool _samplerPool;
 
+        ///////////////////////////////////////
+            // "dummy/blank" resources
+            // Theses can be used to prevent a GPU seg fault when we don't want
+            // to bind a real resources (ie, for a disable feature)
+            // The dummy textures will generally be small sized single channel
+            // textures 
+        std::shared_ptr<IResourceView> _black2DSRV;
+        std::shared_ptr<IResourceView> _black2DArraySRV;
+        std::shared_ptr<IResourceView> _black3DSRV;
+        std::shared_ptr<IResourceView> _blackCubeSRV;
+        std::shared_ptr<IResourceView> _blackCubeArraySRV;
+        std::shared_ptr<IResourceView> _white2DSRV;
+        std::shared_ptr<IResourceView> _white2DArraySRV;
+        std::shared_ptr<IResourceView> _white3DSRV;
+        std::shared_ptr<IResourceView> _whiteCubeSRV;
+        std::shared_ptr<IResourceView> _whiteCubeArraySRV;
+        std::shared_ptr<IResource> _blackCB;
+
 		///////////////////////////////////////
 
 		static DepthStencilDesc s_dsReadWrite;
@@ -44,6 +62,7 @@ namespace RenderCore { namespace Techniques
         static RasterizationDesc s_rsCullReverse;
 
         uint64_t GetGUID() const { return _guid; }
+        void CompleteInitialization(IThreadContext&);
 
         CommonResourceBox(IDevice&);
         ~CommonResourceBox();
@@ -52,6 +71,7 @@ namespace RenderCore { namespace Techniques
         CommonResourceBox(CommonResourceBox&) = delete;
         CommonResourceBox& operator=(const CommonResourceBox&) = delete;
         uint64_t _guid = 0;
+        bool _pendingCompleteInitialization = false;
     };
 
 }}

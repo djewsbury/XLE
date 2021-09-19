@@ -5,7 +5,10 @@
 #include "CommonResources.h"
 #include "CommonBindings.h"
 #include "../IDevice.h"
+#include "../IThreadContext.h"
 #include "../Metal/Metal.h"
+#include "../Metal/Resource.h"          // for Metal::CompleteInitialization
+#include "../Metal/DeviceContext.h"     // for Metal::CompleteInitialization
 #include "../../Utility/MemoryUtils.h"
 
 #if GFXAPI_TARGET == GFXAPI_DX11
@@ -33,6 +36,26 @@ namespace RenderCore { namespace Techniques
     RasterizationDesc CommonResourceBox::s_rsCullReverse { CullMode::Back, FaceWinding::CW };
 
     static uint64_t s_nextCommonResourceBoxGuid = 1;
+
+    static std::shared_ptr<IResource> CreateBlackResource(IDevice& device, const ResourceDesc& resDesc)
+    {
+        if (resDesc._type == ResourceDesc::Type::Texture) {
+            return device.CreateResource(resDesc);
+        } else {
+            std::vector<uint8_t> blank(ByteCount(resDesc), 0);
+            return device.CreateResource(resDesc, SubResourceInitData{MakeIteratorRange(blank)});
+        }
+    }
+
+    static std::shared_ptr<IResource> CreateWhiteResource(IDevice& device, const ResourceDesc& resDesc)
+    {
+        if (resDesc._type == ResourceDesc::Type::Texture) {
+            return device.CreateResource(resDesc);
+        } else {
+            std::vector<uint8_t> blank(ByteCount(resDesc), 0xff);
+            return device.CreateResource(resDesc, SubResourceInitData{MakeIteratorRange(blank)});
+        }
+    }
 
     CommonResourceBox::CommonResourceBox(IDevice& device)
     : _samplerPool(device)
@@ -65,10 +88,71 @@ namespace RenderCore { namespace Techniques
         _anisotropicWrapSampler = device.CreateSampler(SamplerDesc{FilterMode::Anisotropic, AddressMode::Wrap, AddressMode::Wrap});
         _unnormalizedBilinearClampSampler = device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp, AddressMode::Clamp, CompareOp::Never, SamplerDescFlags::UnnormalizedCoordinates});
         _defaultSampler = _linearWrapSampler;
+
+        _black2DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "black2d"))->CreateTextureView();
+        _black2DArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "black2darray"))->CreateTextureView();
+        _black3DSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "black3d"))->CreateTextureView();
+        _blackCubeSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "blackCube"))->CreateTextureView();
+        _blackCubeArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "blackCubeArray"))->CreateTextureView();
+        _blackCB = CreateBlackResource(device, CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc{256}, "blackbuffer"));
+
+        _white2DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "white2d"))->CreateTextureView();
+        _white2DArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "white2darray"))->CreateTextureView();
+        _white3DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM), "white3d"))->CreateTextureView();
+        _whiteCubeSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "whiteCube"))->CreateTextureView();
+        _whiteCubeArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "whiteCubeArray"))->CreateTextureView();
+
+        _pendingCompleteInitialization = true;
     }
 
     CommonResourceBox::~CommonResourceBox()
     {}
+
+    void CommonResourceBox::CompleteInitialization(IThreadContext& threadContext)
+    {
+        if (!_pendingCompleteInitialization) return;
+        IResource* blackTextures[] {
+            _black2DSRV->GetResource().get(),
+            _black2DArraySRV->GetResource().get(),
+            _black3DSRV->GetResource().get(),
+            _blackCubeSRV->GetResource().get(),
+            _blackCubeArraySRV->GetResource().get()
+        };
+        IResource* whiteTextures[] {
+            _white2DSRV->GetResource().get(),
+            _white2DArraySRV->GetResource().get(),
+            _white3DSRV->GetResource().get(),
+            _whiteCubeSRV->GetResource().get(),
+            _whiteCubeArraySRV->GetResource().get()
+        };
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::CompleteInitialization(metalContext, MakeIteratorRange(blackTextures));
+        Metal::CompleteInitialization(metalContext, MakeIteratorRange(whiteTextures));
+        
+        // We also have to clear out data for the textures (since these can't be initialized
+        // in the construction operation)
+        // We might be able to do this with just a clear call on some APIs; but let's do it
+        // it hard way, anyway
+        size_t largest = 0;
+        for (const auto& res:blackTextures)
+            largest = std::max(largest, (size_t)ByteCount(res->GetDesc()));
+        for (const auto& res:whiteTextures)
+            largest = std::max(largest, (size_t)ByteCount(res->GetDesc()));
+
+        {
+            auto staging = CreateBlackResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, 0, 0, LinearBufferDesc{(unsigned)largest}, "staging"));
+            auto encoder = metalContext.BeginBlitEncoder();
+            for (const auto& res:blackTextures)
+                encoder.Copy(*res, *staging);
+        }
+        {
+            auto staging = CreateWhiteResource(*threadContext.GetDevice(), CreateDesc(BindFlag::TransferSrc, 0, 0, LinearBufferDesc{(unsigned)largest}, "staging"));
+            auto encoder = metalContext.BeginBlitEncoder();
+            for (const auto& res:whiteTextures)
+                encoder.Copy(*res, *staging);
+        }
+        _pendingCompleteInitialization = false;
+    }
 
     namespace AttachmentSemantics
     {
