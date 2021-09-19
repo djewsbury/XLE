@@ -74,15 +74,35 @@ namespace Utility
             ClassAccessors::Property::SetterFn WrapSetFunction(SetFn&& setFn)
         {
             return [capSetFn=std::move(setFn)](void* object, IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) {
-                using MidwayObjectType = std::decay_t<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>>;
                 using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<SetFn>::ArgumentTuple>>;
-                MidwayObjectType midwayObject;
-                bool castSuccess = ImpliedTyping::Cast(
-                    MakeOpaqueIteratorRange(midwayObject), ImpliedTyping::TypeOf<MidwayObjectType>(),
-                    src, srcType);
-                if (!castSuccess)
-                    return false;
-                capSetFn(*(ExpectedObjectType*)object, midwayObject);
+
+                if constexpr (!std::is_same_v<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>, StringSection<>>) {
+                    // Setter does not take a string as input
+                    using MidwayObjectType = std::decay_t<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>>;
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        auto midwayObject = ImpliedTyping::ParseFullMatch<MidwayObjectType>(MakeStringSection((const char*)src.begin(), (const char*)src.end()));
+                        if (!midwayObject.has_value()) return false;
+                        capSetFn(*(ExpectedObjectType*)object, midwayObject.value());
+                    } else {
+                        assert(srcType._typeHint != ImpliedTyping::TypeHint::String);       // no support for wide char type strings here
+                        MidwayObjectType midwayObject;
+                        bool castSuccess = ImpliedTyping::Cast(
+                            MakeOpaqueIteratorRange(midwayObject), ImpliedTyping::TypeOf<MidwayObjectType>(),
+                            src, srcType);
+                        if (!castSuccess)
+                            return false;
+                        capSetFn(*(ExpectedObjectType*)object, midwayObject);
+                    }
+                } else {
+                    // Setter does take a string as input
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        capSetFn(*(ExpectedObjectType*)object, MakeStringSection((const char*)src.begin(), (const char*)src.end()));
+                    } else {
+                        assert(srcType._typeHint != ImpliedTyping::TypeHint::String);       // no support for wide char type strings here
+                        auto str = ImpliedTyping::AsString(src, srcType);
+                        capSetFn(*(ExpectedObjectType*)object, str);
+                    }
+                }
                 return true;
             };
         }

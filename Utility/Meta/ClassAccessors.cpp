@@ -46,12 +46,9 @@ namespace Utility
         void* dstObject, PropertyName id,
         StringSection<> src) const
     {
-        uint8_t parseBuffer[256];
-        auto parseType = ImpliedTyping::ParseFullMatch(src, parseBuffer, sizeof(parseBuffer));
-        assert(parseType.GetSize() < sizeof(parseBuffer));
         return Set(
             dstObject, id,
-            MakeIteratorRange(parseBuffer, PtrAdd(parseBuffer, parseType.GetSize())), parseType);
+            MakeIteratorRange(src.begin(), src.end()), ImpliedTyping::TypeDesc{ImpliedTyping::TypeOf<const char*>()._type, (uint16_t)src.size(), ImpliedTyping::TypeHint::String});
     }
 
     std::optional<ImpliedTyping::TypeDesc> ClassAccessors::GetNaturalType(PropertyName id) const
