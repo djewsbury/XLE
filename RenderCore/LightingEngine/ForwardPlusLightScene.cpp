@@ -17,6 +17,8 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/PipelineAccelerator.h"
+#include "../Techniques/Techniques.h"
+#include "../Techniques/CommonResources.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
 #include "../../Assets/AssetFuture.h"
@@ -359,7 +361,13 @@ namespace RenderCore { namespace LightingEngine
 				assert(context._rpi);
 				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 			}
-			dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+			if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
+				dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+			} else {
+				// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
+				assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
+				dst[5] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)

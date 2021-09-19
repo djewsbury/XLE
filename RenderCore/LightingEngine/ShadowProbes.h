@@ -54,9 +54,8 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const AABB*> dynamicObjects);
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
 			IThreadContext& threadContext);
-		IResourceView& GetStaticProbesTable();
-		IResourceView& GetDynamicProbesTable();
-		IResourceView& GetLookupTable();
+		IResourceView& GetStaticProbesTable() const;
+		bool IsReady() const;
 
 		void AddProbes(IteratorRange<const Probe*>);
 

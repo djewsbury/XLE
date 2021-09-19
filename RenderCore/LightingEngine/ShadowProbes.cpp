@@ -211,11 +211,16 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	IResourceView& ShadowProbes::GetStaticProbesTable()
+	IResourceView& ShadowProbes::GetStaticProbesTable() const
 	{
 		assert(_pimpl->_staticTableSRV);
 		assert(!_pimpl->_pendingRebuild);
 		return *_pimpl->_staticTableSRV;
+	}
+
+	bool ShadowProbes::IsReady() const
+	{
+		return _pimpl->_staticTableSRV && !_pimpl->_pendingRebuild;
 	}
 
 	ShadowProbes::ShadowProbes(
