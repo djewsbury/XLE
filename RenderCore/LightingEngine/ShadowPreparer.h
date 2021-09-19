@@ -149,4 +149,12 @@ namespace RenderCore { namespace LightingEngine
 
 		ShadowResolveParam MakeShadowResolveParam(const ShadowOperatorDesc& shadowOp);
 	}
+
+	const char* AsString(ShadowProjectionMode);
+	std::optional<ShadowProjectionMode> AsShadowProjectionMode(StringSection<>);
+	const char* AsString(ShadowResolveType);
+	std::optional<ShadowResolveType> AsShadowResolveType(StringSection<>);
+	const char* AsString(ShadowFilterModel);
+	std::optional<ShadowFilterModel> AsShadowFilterModel(StringSection<>);
+
 }}

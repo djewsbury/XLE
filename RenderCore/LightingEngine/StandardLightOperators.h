@@ -5,6 +5,8 @@
 #pragma once
 
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/StringUtils.h"
+#include <optional>
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -31,5 +33,10 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 	};
+
+	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);
+	const char* AsString(LightSourceShape);
+	std::optional<DiffuseModel> AsDiffuseModel(StringSection<>);
+	const char* AsString(DiffuseModel);
 
 }}

@@ -103,6 +103,6 @@ namespace RenderCore
 	Utility::ImpliedTyping::TypeDesc AsImpliedType(Format fmt);
 
     const char* AsString(Format);
-	Format AsFormat(StringSection<> name);
+	std::optional<Format> AsFormat(StringSection<> name);
 }
 

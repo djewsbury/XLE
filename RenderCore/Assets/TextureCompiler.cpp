@@ -177,9 +177,10 @@ namespace RenderCore { namespace Assets
 		auto dstFormatName = operationElement.Attribute("Format");
 		if (!dstFormatName)
 			Throw(std::runtime_error("Expecting 'Format' field in texture compiler file: " + srcFN));
-		result._format = AsFormat(dstFormatName.Value());
-		if (result._format == Format::Unknown)
+		auto fmtOpt = AsFormat(dstFormatName.Value());
+		if (!fmtOpt.has_value())
 			Throw(std::runtime_error("Unknown 'Format' field in texture compiler file: " + srcFN));
+		result._format = fmtOpt.value();
 
 		result._faceDim = operationElement.Attribute("FaceDim", result._faceDim);
 		result._width = operationElement.Attribute("Width", result._width);

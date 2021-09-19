@@ -479,5 +479,63 @@ namespace RenderCore { namespace LightingEngine
 			return param;
 		}
 	}
+
+	const char* AsString(ShadowProjectionMode input)
+	{
+		switch (input) {
+		case ShadowProjectionMode::Arbitrary: return "Arbitrary";
+		case ShadowProjectionMode::Ortho: return "Ortho";
+		case ShadowProjectionMode::ArbitraryCubeMap: return "ArbitraryCubeMap";
+		default:
+			return nullptr;
+		}
+	}
+
+	std::optional<ShadowProjectionMode> AsShadowProjectionMode(StringSection<> input)
+	{
+		if (XlEqString(input, "Arbitrary")) return ShadowProjectionMode::Arbitrary;
+		if (XlEqString(input, "Ortho")) return ShadowProjectionMode::Ortho;
+		if (XlEqString(input, "ArbitraryCubeMap")) return ShadowProjectionMode::ArbitraryCubeMap;
+		return {};
+	}
+
+	const char* AsString(ShadowResolveType input)
+	{
+		switch (input) {
+		case ShadowResolveType::DepthTexture: return "DepthTexture";
+		case ShadowResolveType::RayTraced: return "RayTraced";
+		case ShadowResolveType::Probe: return "Probe";
+		default:
+			return nullptr;
+		}
+	}
+
+	std::optional<ShadowResolveType> AsShadowResolveType(StringSection<> input)
+	{
+		if (XlEqString(input, "DepthTexture")) return ShadowResolveType::DepthTexture;
+		if (XlEqString(input, "RayTraced")) return ShadowResolveType::RayTraced;
+		if (XlEqString(input, "Probe")) return ShadowResolveType::Probe;
+		return {};
+	}
+
+	const char* AsString(ShadowFilterModel input)
+	{
+		switch (input) {
+		case ShadowFilterModel::None: return "None";
+		case ShadowFilterModel::PoissonDisc: return "PoissonDisc";
+		case ShadowFilterModel::Smooth: return "Smooth";
+		default:
+			return nullptr;
+		}
+	}
+
+	std::optional<ShadowFilterModel> AsShadowFilterModel(StringSection<> input)
+	{
+		if (XlEqString(input, "None")) return ShadowFilterModel::None;
+		if (XlEqString(input, "PoissonDisc")) return ShadowFilterModel::PoissonDisc;
+		if (XlEqString(input, "Smooth")) return ShadowFilterModel::Smooth;
+		return {};
+	}
+
 }}
 

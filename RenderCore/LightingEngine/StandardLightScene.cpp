@@ -178,6 +178,43 @@ namespace RenderCore { namespace LightingEngine
 		return HashCombine(h, seed);
 	}
 
+	std::optional<LightSourceShape> AsLightSourceShape(StringSection<> input)
+	{
+		if (XlEqString(input, "Directional")) return LightSourceShape::Directional;
+		if (XlEqString(input, "Sphere")) return LightSourceShape::Sphere;
+		if (XlEqString(input, "Tube")) return LightSourceShape::Tube;
+		if (XlEqString(input, "Rectangle")) return LightSourceShape::Rectangle;
+		if (XlEqString(input, "Disc")) return LightSourceShape::Disc;
+		return {};
+	}
+	const char* AsString(LightSourceShape shape)
+	{
+		switch (shape) {
+		case LightSourceShape::Directional: return "Directional";
+		case LightSourceShape::Sphere: return "Sphere";
+		case LightSourceShape::Tube: return "Tube";
+		case LightSourceShape::Rectangle: return "Rectangle";
+		case LightSourceShape::Disc: return "Disc";
+		default:
+			return nullptr;
+		}
+	}
+	std::optional<DiffuseModel> AsDiffuseModel(StringSection<> input)
+	{
+		if (XlEqString(input, "Lambert")) return DiffuseModel::Lambert;
+		if (XlEqString(input, "Disney")) return DiffuseModel::Disney;
+		return {};
+	}
+	const char* AsString(DiffuseModel diffuseModel)
+	{
+		switch (diffuseModel) {
+		case DiffuseModel::Lambert: return "Lambert";
+		case DiffuseModel::Disney: return "Disney";
+		default:
+			return nullptr;
+		}
+	}
+
 	ILightScene::~ILightScene() {}
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}

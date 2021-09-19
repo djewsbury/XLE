@@ -24,7 +24,7 @@ namespace RenderCore { namespace LightingEngine
                 RayTraced = 1<<2,
                 CullFrontFaces = 1<<3       //< When set, cull front faces and leave back faces; when not set, cull back faces and leave front faces
             };
-            typedef unsigned BitField;
+            using BitField = unsigned;
         };
         unsigned        _maxFrustumCount;
         float           _maxDistanceFromCamera;

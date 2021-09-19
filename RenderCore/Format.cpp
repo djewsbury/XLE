@@ -781,7 +781,7 @@ namespace RenderCore
         }
     }
 
-    Format AsFormat(StringSection<> name)
+    std::optional<Format> AsFormat(StringSection<> name)
     {
         #define _EXP(X, Y, Z, U)    if (XlEqStringI(name, STRINGIZE(X##_##Y))) return Format::X##_##Y;
             #include "Metal/Detail/DXGICompatibleFormats.h"
@@ -796,7 +796,7 @@ namespace RenderCore
         if (!XlEqStringI(name, "Matrix3x4")) return Format::Matrix3x4;
 		if (!XlEqStringI(name, "R10G10B10A10_SNORM")) return Format::R10G10B10A10_SNORM;
 		if (!XlEqStringI(name, "R12G12B12A4_SNORM")) return Format::R12G12B12A4_SNORM;
-        return Format::Unknown;
+        return {};
     }
 
     Format ResolveFormat(Format baseFormat, TextureViewDesc::FormatFilter filter, BindFlag::Enum usage)
