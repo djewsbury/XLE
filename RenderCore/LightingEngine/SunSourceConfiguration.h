@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "../../Math/ProjectionMath.h"
 
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 
@@ -62,5 +63,14 @@ namespace RenderCore { namespace LightingEngine
         const SunSourceFrustumSettings& settings);
 
 	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings);
+
+    namespace Internal
+    {
+        std::vector<IOrthoShadowProjections::OrthoSubProjection> TestResolutionNormalizedOrthogonalShadowProjections(
+            const Float3& negativeLightDirection,
+            const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+            const SunSourceFrustumSettings& settings,
+            ClipSpaceType clipSpaceType);
+    }
 
 }}

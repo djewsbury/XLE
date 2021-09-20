@@ -298,12 +298,29 @@ namespace RenderCore { namespace LightingEngine
         return result;
     }
 
+    // We can use either Z or W for tests related to depth in the view frustu,
+    // Z can work for either projection or orthogonal, but W is a lot simplier for perspective
+    // projections. Using W also isolates us from the inpact of the ReverseZ modes
+    #define USE_W_FOR_DEPTH_RANGE_COVERED
+
+    static bool ClipSpaceFurther(const Float4& lhs, float rhs, ClipSpaceType clipSpaceType)
+    {
+        #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
+            // In non-reverseZ modes, lhs is further than rhs if it larger
+            // In reverseZ mods, lhs is further than rhs if it is smaller
+            return (clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ || clipSpaceType == ClipSpaceType::Positive_ReverseZ) ^ (lhs[2] > rhs);
+        #else
+            return lhs[3] > rhs;
+        #endif
+    }
+
     static std::pair<std::vector<Float3>, float> NearestPointNotInsideOrthoProjection(
         const Float4x4& cameraWorldToClip,
         const Float3* absFrustumCorners,
         const Float4x4& orthoViewToWorld,
         const IOrthoShadowProjections::OrthoSubProjection& projection,
-        float depthRangeCovered)
+        float depthRangeCovered,
+        ClipSpaceType clipSpaceType)
     {
         // We need to test the edges of ortho box against the camera frustum
         // and the edges of the ortho box against the frustum
@@ -361,8 +378,8 @@ namespace RenderCore { namespace LightingEngine
                         assert(alpha >= 0.f && alpha <= 1.0f);
                         Float4 intersection = start + (end-start)*alpha;
                         assert(Equivalent(intersection[ele], -intersection[3], 1e-1f));
-                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
-                            if (intersection[2] > depthRangeCovered) {
+                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3] && intersection[2] >= 0) {
+                            if (ClipSpaceFurther(intersection, depthRangeCovered, clipSpaceType)) {
                                 intersectionPts.push_back(intersection);
                             }
                         }
@@ -377,8 +394,8 @@ namespace RenderCore { namespace LightingEngine
                         assert(alpha >= 0.f && alpha <= 1.0f);
                         Float4 intersection = start + (end-start)*alpha;
                         assert(Equivalent(intersection[ele], intersection[3], 1e-1f));
-                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3]) {
-                            if (intersection[2] > depthRangeCovered) {
+                        if (std::abs(intersection[ele^1]) <= intersection[3] && std::abs(intersection[2]) <= intersection[3] && intersection[2] >= 0) {
+                            if (ClipSpaceFurther(intersection, depthRangeCovered, clipSpaceType)) {
                                 intersectionPts.push_back(intersection);
                             }
                         }
@@ -404,7 +421,7 @@ namespace RenderCore { namespace LightingEngine
                             && intersection[(ele+2)%3] >= projection._leftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= projection._rightBottomBack[(ele+2)%3]) {
 
                             Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
-                            if (clipSpace[2] > depthRangeCovered) {
+                            if (ClipSpaceFurther(clipSpace, depthRangeCovered, clipSpaceType)) {
                                 intersectionPts.push_back(clipSpace);
                             }
                         }
@@ -417,7 +434,7 @@ namespace RenderCore { namespace LightingEngine
                             && intersection[(ele+2)%3] >= projection._leftTopFront[(ele+2)%3] && intersection[(ele+2)%3] <= projection._rightBottomBack[(ele+2)%3]) {
 
                             Float4 clipSpace = orthoToClip * Expand(intersection, 1.0f);
-                            if (clipSpace[2] > depthRangeCovered) {
+                            if (ClipSpaceFurther(clipSpace, depthRangeCovered, clipSpaceType)) {
                                 intersectionPts.push_back(clipSpace);
                             }
                         }
@@ -429,11 +446,21 @@ namespace RenderCore { namespace LightingEngine
         if (!intersectionPts.empty()) {
             auto clipToWorld = Inverse(cameraWorldToClip);
             std::vector<Float3> result;
-            std::sort(intersectionPts.begin(), intersectionPts.end(), [](const auto& lhs, const auto& rhs) { return lhs[2] < rhs[2]; });
+            // sort closest to camera first
+            #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
+                if (clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ || clipSpaceType == ClipSpaceType::Positive_ReverseZ) {
+                    std::sort(intersectionPts.begin(), intersectionPts.end(), [](const auto& lhs, const auto& rhs) { return lhs[2] > rhs[2]; });
+                } else
+                    std::sort(intersectionPts.begin(), intersectionPts.end(), [](const auto& lhs, const auto& rhs) { return lhs[2] < rhs[2]; });
+                const unsigned depthRangeConveredEle = 2;
+            #else
+                std::sort(intersectionPts.begin(), intersectionPts.end(), [](const auto& lhs, const auto& rhs) { return lhs[3] < rhs[3]; });
+                const unsigned depthRangeConveredEle = 3;
+            #endif
             result.reserve(intersectionPts.size());
             for (auto& pt:intersectionPts)
                 result.push_back(Truncate(clipToWorld * pt));
-            return {std::move(result), intersectionPts[0][2]};
+            return {std::move(result), intersectionPts[0][depthRangeConveredEle]};
         }
 
         return {{}, depthRangeCovered};
@@ -445,7 +472,8 @@ namespace RenderCore { namespace LightingEngine
         const Float4x4& orthoViewToWorld,
         const Float2& leftTop2D, const Float2& rightBottom2D,
         const Float4& cameraMiniProj,
-        float depthRangeCovered)
+        float depthRangeCovered,
+        ClipSpaceType clipSpaceType)
     {
         const unsigned edges_zpattern[] = {
             0, 1,
@@ -524,6 +552,22 @@ namespace RenderCore { namespace LightingEngine
                         }
                     }
                 }
+
+                // also check against the Z=0 plane (we've already done Z=W above) 
+                if (((start[2] < 0) != (end[2] < 0))) {
+                    auto alpha = (start[2]) / (start[2] - end[2]);
+                    assert(alpha >= 0.f && alpha <= 1.0f);
+                    Float4 intersection = start + (end-start)*alpha;
+                    assert(Equivalent(intersection[2], 0.f, 1e-1f));
+                    if (std::abs(intersection[0]) <= intersection[3] && std::abs(intersection[1]) <= intersection[3]) {
+                        auto orthoView = clipToOrthoView * intersection;
+                        float z = orthoView[2];
+                        result[0] = std::min(result[0], z);
+                        result[1] = std::max(result[1], z);
+                    }
+                } else {
+                    assert((start[2]<0) == (end[2]<0));
+                }
             }
         }
 
@@ -532,11 +576,13 @@ namespace RenderCore { namespace LightingEngine
             assert(leftTopFront[1] < rightBottomBack[1]);
 
             float f, n;
-            std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, Techniques::GetDefaultClipSpaceType());
-            // cz = z * -f/(f-n) + -(f*n)/(f-n)
-            // z = cz + (f*n)/(f-n) * -(f-n)/f
-            float depthAlphaValue = (depthRangeCovered + (f*n)/(f-n)) * -(f-n)/f;
-            depthAlphaValue = (-depthAlphaValue - n) / f;
+            std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType);
+            #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
+                float depthAlphaValue = (depthRangeCovered - cameraMiniProj[3]) / cameraMiniProj[2];            
+                depthAlphaValue = (-depthAlphaValue - n) / f;
+            #else
+                float depthAlphaValue = (depthRangeCovered - n) / f;
+            #endif
 
             for (unsigned e=0; e<dimof(edges_zpattern); e+=2) {
                 unsigned startPt = edges_zpattern[e+0], endPt = edges_zpattern[e+1];
@@ -599,7 +645,8 @@ namespace RenderCore { namespace LightingEngine
         const Float4x4& lightViewToWorld,
         const IOrthoShadowProjections::OrthoSubProjection& prev,
         const Float4& cameraMiniProj,
-        float depthRangeCovered)
+        float depthRangeCovered,
+        ClipSpaceType clipSpaceType)
     {
         // Calculate the next frustum for a set of cascades, based on unfilled space
         // Find the nearest part of the view frustum that is not included in the previous ortho projection
@@ -608,7 +655,7 @@ namespace RenderCore { namespace LightingEngine
         auto closestUncoveredPart = NearestPointNotInsideOrthoProjection(
             mainSceneProjectionDesc._worldToProjection, absFrustumCorners,
             lightViewToWorld,
-            prev, depthRangeCovered);
+            prev, depthRangeCovered, clipSpaceType);
 
         if (!closestUncoveredPart.first.empty()) {
 
@@ -701,7 +748,7 @@ namespace RenderCore { namespace LightingEngine
             result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
             result._rightBottomBack = Float3 { focusPositionInOrtho[0] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] + 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] + 0.5f * newProjectionDimsZ };
 
-            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack), cameraMiniProj, closestUncoveredPart.second);
+            auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(result._leftTopFront), Truncate(result._rightBottomBack), cameraMiniProj, closestUncoveredPart.second, clipSpaceType);
             if (minAndMaxDepth[0] > minAndMaxDepth[1])
                 return {{}, closestUncoveredPart.second};
 
@@ -724,7 +771,8 @@ namespace RenderCore { namespace LightingEngine
     static OrthoProjections BuildResolutionNormalizedOrthogonalShadowProjections(
         const Float3& negativeLightDirection,
         const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
-        const SunSourceFrustumSettings& settings)
+        const SunSourceFrustumSettings& settings,
+        ClipSpaceType clipSpaceType)
     {
         const UInt2 normalizedScreenResolution(1920, 1080);
         const unsigned shadowMapResolution = 2048;
@@ -764,7 +812,7 @@ namespace RenderCore { namespace LightingEngine
         Float3 focusLightView = TransformPoint(worldToLightView, focusPoint);
 
         Float3 absFrustumCorners[8];
-        CalculateAbsFrustumCorners(absFrustumCorners, mainSceneProjectionDesc._worldToProjection, Techniques::GetDefaultClipSpaceType());
+        CalculateAbsFrustumCorners(absFrustumCorners, mainSceneProjectionDesc._worldToProjection, clipSpaceType);
         for (unsigned c=0; c<4; ++c) {
             auto lightView = TransformPoint(worldToLightView, absFrustumCorners[c]);
             nearPlaneLightViewMins[0] = std::min(nearPlaneLightViewMins[0], lightView[0]);
@@ -810,13 +858,26 @@ namespace RenderCore { namespace LightingEngine
         firstSubProjection._leftTopFront[1]     = centerProjectOrtho[1] - 0.5f * projectionDimsXY;
         firstSubProjection._rightBottomBack[1]  = centerProjectOrtho[1] + 0.5f * projectionDimsXY;
 
+        float depthRangeClosest;
+        #if !defined(USE_W_FOR_DEPTH_RANGE_COVERED)
+            if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+                float n, f;
+                std::tie(n,f) = CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType);
+                depthRangeClosest = (n*n-(n*f)) / (n-f);
+            } else {
+                depthRangeClosest = 0.f;
+            }
+        #else
+            depthRangeClosest = 0.f;
+        #endif
+
         // We're assuming that geometry closer to the light than the view frustum will be clamped
         // to zero depth here -- so the shadow projection doesn't need to extend all the way to
         // the light
         // However, we also have to consider when the camera is looking directly into the light
         // ... in that case we may want to sometimes have shadow casters outside of the far clip
         // still casting shadows in
-        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, 0.f);
+        auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, depthRangeClosest, clipSpaceType);
         assert(projectionDimsZ > 0);
         if (TransformDirectionVector(worldToLightView, cameraForward)[2] > 0) {
             // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
@@ -833,9 +894,9 @@ namespace RenderCore { namespace LightingEngine
         result._normalProjCount = 1;
         result._orthSubProjections[0] = firstSubProjection;
 
-        float depthRangeCovered = 0.f;
+        float depthRangeCovered = depthRangeClosest;
         while (result._normalProjCount < settings._maxFrustumCount) {
-            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, depthRangeCovered);
+            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, depthRangeCovered, clipSpaceType);
             if (!next.first.has_value()) break;
 
             result._orthSubProjections[result._normalProjCount] = next.first.value();
@@ -862,6 +923,19 @@ namespace RenderCore { namespace LightingEngine
         */
 
         return result;
+    }
+
+    namespace Internal
+    {
+        std::vector<IOrthoShadowProjections::OrthoSubProjection> TestResolutionNormalizedOrthogonalShadowProjections(
+            const Float3& negativeLightDirection,
+            const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+            const SunSourceFrustumSettings& settings,
+            ClipSpaceType clipSpaceType)
+        {
+            auto midway = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, clipSpaceType);
+            return {midway._orthSubProjections, &midway._orthSubProjections[midway._normalProjCount]};
+        }
     }
 
 	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings)
@@ -937,7 +1011,7 @@ namespace RenderCore { namespace LightingEngine
                     MakeIteratorRange(t._cameraToProjection, &t._cameraToProjection[t._normalProjCount]));
         } else {
             // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
-            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, RenderCore::Techniques::GetDefaultClipSpaceType());
             assert(t._normalProjCount);
             auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
             if (cascades) {

@@ -597,4 +597,70 @@ namespace UnitTests
 
 		testHelper->EndFrameCapture();
 	}
+
+	TEST_CASE( "LightingEngine-SunSourceCascadesProjectionMath", "[rendercore_lighting_engine]" )
+	{
+		using namespace RenderCore;
+		using namespace RenderCore::LightingEngine;
+		// test "BuildResolutionNormalizedOrthogonalShadowProjections" to ensure that the results with
+		// different clip space types agree
+
+		RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceFrustumSettings;
+		sunSourceFrustumSettings._flags = 0;
+		sunSourceFrustumSettings._maxDistanceFromCamera = 100.f;
+		sunSourceFrustumSettings._focusDistance = 5.0f;
+		sunSourceFrustumSettings._maxFrustumCount = 5;
+		sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
+
+		std::mt19937_64 rng(89125492);
+		for (unsigned c=0; c<1000; ++c) {
+			RenderCore::Techniques::CameraDesc sceneCamera;
+			sceneCamera._cameraToWorld = MakeCameraToWorld(
+				SphericalToCartesian(Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f}), 
+				Normalize(Float3{0.0f, 1.0f, 0.0f}), 
+				Float3{5.0f, 10.0f, 5.0f});
+			sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
+			sceneCamera._nearClip = 0.05f;
+			sceneCamera._farClip = 150.f;
+			sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
+
+			const Float3 negativeLightDirection = Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f};
+
+			ClipSpaceType clipSpaceTypes[] = {
+				ClipSpaceType::PositiveRightHanded_ReverseZ,
+				ClipSpaceType::PositiveRightHanded,
+				ClipSpaceType::Positive_ReverseZ,
+				ClipSpaceType::Positive
+			};
+			std::vector<IOrthoShadowProjections::OrthoSubProjection> baseline;
+			for (unsigned clipSpace=0; c<dimof(clipSpaceTypes); ++clipSpace) {
+				Techniques::ProjectionDesc projDesc;
+				projDesc._verticalFov = sceneCamera._verticalFieldOfView;
+				projDesc._aspectRatio = 1920.f/1080.f;
+				projDesc._nearClip = sceneCamera._nearClip;
+				projDesc._farClip = sceneCamera._farClip;
+				projDesc._cameraToProjection = PerspectiveProjection(
+					sceneCamera._verticalFieldOfView, projDesc._aspectRatio,
+					sceneCamera._nearClip, sceneCamera._farClip, 
+					GeometricCoordinateSpace::RightHanded, 
+					clipSpaceTypes[clipSpace]);
+				projDesc._worldToProjection = Combine(InvertOrthonormalTransform(sceneCamera._cameraToWorld), projDesc._cameraToProjection);
+				projDesc._cameraToWorld = sceneCamera._cameraToWorld;
+
+				auto subProjections = LightingEngine::Internal::TestResolutionNormalizedOrthogonalShadowProjections(
+					negativeLightDirection, projDesc, sunSourceFrustumSettings, clipSpaceTypes[clipSpace]);
+				if (clipSpace == 0) {
+					baseline = subProjections;
+				} else {
+					REQUIRE(baseline.size() == subProjections.size());
+					for (unsigned q=0; q<baseline.size(); ++q) {
+						auto lhs = baseline[q];
+						auto rhs = subProjections[q];
+						REQUIRE(Equivalent(lhs._leftTopFront, rhs._leftTopFront, 1e-3f));
+						REQUIRE(Equivalent(lhs._rightBottomBack, rhs._rightBottomBack, 1e-3f));
+					}
+				}
+			}
+		}
+	}
 }
