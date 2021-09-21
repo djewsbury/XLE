@@ -34,8 +34,8 @@
 #define NO_PATCHES_VERTEX_HLSL "xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl"
 #define NO_PATCHES_PIXEL_HLSL "xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl"
 
-#define DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL "xleres/Deferred/resolvelight.vertex.hlsl"
-#define DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL "xleres/Deferred/resolvelight.pixel.hlsl"
+#define DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL "xleres/Deferred/light-resolve-operator.vertex.hlsl"
+#define DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL "xleres/Deferred/light-resolve-operator.pixel.hlsl"
 
 #define FORWARD_PIPELINE "xleres/TechniqueLibrary/Config/forward.pipeline"
 

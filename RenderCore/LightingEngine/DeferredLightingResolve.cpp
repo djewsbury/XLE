@@ -128,7 +128,7 @@ namespace RenderCore { namespace LightingEngine
 			inputStates._topology = Topology::TriangleStrip;
 		} else {
 			inputStates._inputLayout = MakeIteratorRange(inputElements);
-			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":main";
+			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":main";
 			pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 			inputStates._topology = Topology::TriangleList;
 			pipelineDesc._depthStencil._depthBoundsTestEnable = true;
@@ -137,7 +137,7 @@ namespace RenderCore { namespace LightingEngine
 
 		pipelineDesc._rasterization = Techniques::CommonResourceBox::s_rsDefault;
 		pipelineDesc._blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
-		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_RESOLVE_LIGHT_PIXEL_HLSL ":main";
+		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
 
 		return pipelineCollection.CreateGraphicsPipeline(
 			pipelineLayout, pipelineDesc, selectors,

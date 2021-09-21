@@ -49,7 +49,7 @@ uint LaneIndexWithKey(uint key)
 
 #if 0
 
-#include "xleres/Deferred/resolveutil.hlsl"
+#include "xleres/Deferred/operator-util.hlsl"
 #include "xleres/TechniqueLibrary/Math/TextureAlgorithm.hlsl"
 #include "xleres/TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
@@ -109,7 +109,7 @@ float4 visualize(
 		1);
 #endif
 
-	ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
+	LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
 	if (resolvePixel.ndcDepth == 1) return 0;
 	// if (((uint(position.x)^uint(position.y))&3)!=0) return 0;
 

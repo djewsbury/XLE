@@ -140,6 +140,7 @@ namespace RenderCore { namespace LightingEngine
 						// that should be enough precision.
 						//      .. however, it possible some clients might prefer 10 or 16 bit albedo textures
 						//      In these cases, the first buffer should be a matching format.
+				auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
 				auto diffuse = createGBuffer->DefineAttachment(
 					Techniques::AttachmentSemantics::GBufferDiffuse,
 					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
@@ -156,7 +157,7 @@ namespace RenderCore { namespace LightingEngine
 						LoadStore::Clear, LoadStore::Retain });
 
 				Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-				subpass.AppendOutput(diffuse);
+				subpass.AppendOutput(diffuse, {diffuseAspect});
 				subpass.AppendOutput(normal);
 				if (gbufferType == GBufferType::PositionNormalParameters)
 					subpass.AppendOutput(parameter);
@@ -202,7 +203,7 @@ namespace RenderCore { namespace LightingEngine
 
 			// In the second subpass, the depth buffer is bound as stencil-only (so we can read the depth values as shader inputs)
 		subpasses[1].AppendOutput(lightResolveTarget);
-		subpasses[1].SetDepthStencil(depthTarget, justStencilWindow);
+		// subpasses[1].SetDepthStencil(depthTarget, justStencilWindow);
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
@@ -212,7 +213,6 @@ namespace RenderCore { namespace LightingEngine
 		subpasses[1].AppendInput(depthTarget, justDepthWindow);
 		subpasses[1].SetName("light-resolve");
 
-		// fragment.AddSubpasses(MakeIteratorRange(subpasses), std::move(fn));
 		fragment.AddSkySubpass(std::move(subpasses[0]));
 		fragment.AddSubpass(std::move(subpasses[1]), std::move(fn));
 		return fragment;
@@ -440,10 +440,10 @@ namespace RenderCore { namespace LightingEngine
 		const auto sampleDensitySemantic = Utility::Hash64("ShadowSampleDensity");
 		Techniques::FrameBufferDescFragment fbDesc;
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic + idx, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
-		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource }));
+		sp.AppendOutput(fbDesc.DefineAttachment(cascadeIndexSemantic + idx, AttachmentDesc { Format::R8_UINT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess }));
+		sp.AppendOutput(fbDesc.DefineAttachment(sampleDensitySemantic + idx, AttachmentDesc { Format::R32G32B32A32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess }));
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
-		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
 
 		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
@@ -460,6 +460,8 @@ namespace RenderCore { namespace LightingEngine
 
 		ParameterBox selectors;
 		Internal::MakeShadowResolveParam(shadowOpDesc).WriteShaderSelectors(selectors);
+		selectors.SetParameter("LIGHT_RESOLVE_SHADER", 1);
+		selectors.SetParameter("GBUFFER_SHADER_RESOURCE", 1);
 
 		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
 		op->StallWhilePending();

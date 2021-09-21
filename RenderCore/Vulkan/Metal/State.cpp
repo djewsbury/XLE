@@ -321,7 +321,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		samplerCreateInfo.mipLodBias = 0.f;
 		samplerCreateInfo.minLod = 0.f;
 		samplerCreateInfo.maxLod = (desc._flags & SamplerDescFlags::DisableMipmaps) ? 0.f : VK_LOD_CLAMP_NONE;
-		samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 		samplerCreateInfo.unnormalizedCoordinates = !!(desc._flags & SamplerDescFlags::UnnormalizedCoordinates);
 		if (samplerCreateInfo.unnormalizedCoordinates) {
 			// unnormalized coordinates is not compatible with mipmaps, so implicitly they are disabled

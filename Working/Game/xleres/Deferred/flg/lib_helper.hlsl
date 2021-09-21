@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "resolveutil.hlsl"
+#include "operator-util.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl" // for LightingScale
 
 #if HAS_SCREENSPACE_AO==1

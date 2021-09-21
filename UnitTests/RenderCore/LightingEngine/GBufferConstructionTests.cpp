@@ -43,7 +43,7 @@ namespace UnitTests
 			#define GBUFFER_SHADER_RESOURCE 1
 			#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 			#include "xleres/TechniqueLibrary/Utility/LoadGBuffer.hlsl"
-			#include "xleres/Deferred/resolveutil.hlsl"
+			#include "xleres/Deferred/operator-util.hlsl"
 
 			void main(	float4 position : SV_Position,
 						float2 texCoord : TEXCOORD0,
@@ -52,7 +52,7 @@ namespace UnitTests
 						out float4 out_position : SV_Target0,
 						out float4 out_normal : SV_Target1)
 			{
-				ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
+				LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
 				if (resolvePixel.ndcDepth == 0.0f) discard;
 
 				out_position = float4(resolvePixel.worldPosition, 1);

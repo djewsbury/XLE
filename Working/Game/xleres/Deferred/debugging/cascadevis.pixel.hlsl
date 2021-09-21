@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../resolveutil.hlsl"
+#include "../operator-util.hlsl"
 #include "../standardlighttypes.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/ShadowProjection.hlsl"
@@ -24,7 +24,7 @@ void color_visualisation(
     if (!(A||B)) { opacity = 0.125f; }
 
     GBufferValues sample = LoadGBuffer(position.xy, sys);
-    ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
+    LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
     CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
     if (cascade.cascadeIndex >= 0) {
         float4 cols[6]= {
@@ -50,7 +50,7 @@ void detailed_visualisation(
     out float4 outSampleDensity : SV_Target1)
 {
     GBufferValues sample = LoadGBuffer(position.xy, sys);
-    ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
+    LightOperatorInputs resolvePixel = LightOperatorInputs_Create(position, viewFrustumVector, sys);
     CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
     outCascadeIndex = cascade.cascadeIndex;
     outSampleDensity.x = 2048 * 0.5 * (ddx_fine(cascade.frustumCoordinates.x) + ddy_fine(cascade.frustumCoordinates.x));

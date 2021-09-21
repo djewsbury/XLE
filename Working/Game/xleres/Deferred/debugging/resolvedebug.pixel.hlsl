@@ -6,7 +6,7 @@
 
 #include "../standardlighttypes.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
-#include "../resolveutil.hlsl"
+#include "../operator-util.hlsl"
 #include "../../TechniqueLibrary/Utility/LoadGBuffer.hlsl"
 #include "../../TechniqueLibrary/Framework/Binding.hlsl"
 #include "../../TechniqueLibrary/Framework/SystemUniforms.hlsl"

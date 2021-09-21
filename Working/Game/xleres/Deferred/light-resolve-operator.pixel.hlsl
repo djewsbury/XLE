@@ -6,7 +6,7 @@
 #define RESOLVE_UNSHADOWED_PSH
 
 #include "standardlighttypes.hlsl"
-#include "resolveutil.hlsl"
+#include "operator-util.hlsl"
 #include "../TechniqueLibrary/Utility/LoadGBuffer.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl" // for LightingScale
 #include "../TechniqueLibrary/Framework/Binding.hlsl"
@@ -28,7 +28,7 @@ float4 main(
 	SystemInputs sys) : SV_Target0
 {
 	GBufferValues sample = LoadGBuffer(position.xy, sys);
-    ResolvePixelProperties resolvePixel = ResolvePixelProperties_Create(position, viewFrustumVector, sys);
+    LightOperatorInputs inputs = LightOperatorInputs_Create(position, viewFrustumVector, sys);
 
     LightSampleExtra sampleExtra;
     sampleExtra.screenSpaceOcclusion = 1.f;
@@ -37,13 +37,13 @@ float4 main(
     #endif
 
     float3 result = ResolveLight(
-        sample, sampleExtra, Light, resolvePixel.worldPosition,
-        normalize(-viewFrustumVector), resolvePixel.screenDest);
+        sample, sampleExtra, Light, inputs.worldPosition,
+        normalize(-viewFrustumVector), inputs.screenDest);
 
     // Also calculate the shadowing -- (though we could skip it if the lighting is too dim here)
-    CascadeAddress cascade = ResolveShadowsCascade(resolvePixel.worldPosition, sample.worldSpaceNormal, texCoord, resolvePixel.worldSpaceDepth);
-    float shadow = ResolveShadows(cascade, resolvePixel.screenDest);
-
+    CascadeAddress cascade = ResolveShadowsCascade(inputs.worldPosition, sample.worldSpaceNormal, texCoord, inputs.worldSpaceDepth);
+    float shadow = ResolveShadows(cascade, inputs.screenDest);
+    
     // return float4(cascade.frustumCoordinates.xyz, 1.0f);
     // return float4(shadow.xxx, 1.f);
 	return float4((LightingScale*shadow)*result, 1.f);

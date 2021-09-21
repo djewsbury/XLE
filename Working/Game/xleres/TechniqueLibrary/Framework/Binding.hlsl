@@ -95,4 +95,9 @@
 
 #pragma selector_filtering(pop)
 
+// We need to use this selector outside of the "pragma selector_filtering" to ensure that
+// that it's considered relevant
+#if defined(LIGHT_RESOLVE_SHADER)
+#endif
+
 #endif

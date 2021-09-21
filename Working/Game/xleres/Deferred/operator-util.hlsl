@@ -17,7 +17,7 @@
 #endif
 
 #if defined(GBUFFER_SHADER_RESOURCE)
-    Texture2D_MaybeMS<float>	DepthTexture	 	BIND_SEQ_T9;
+    Texture2D_MaybeMS<float>	DepthTexture	 	BIND_SEQ_T10;       // moved to T10 for GenerateShadowingDebugTextures()
     float LoadSubpassDepth(uint2 pixelCoords, uint sampleIndex)
     {
         return LoadFloat1(DepthTexture, pixelCoords.xy, sampleIndex);
@@ -30,7 +30,7 @@
     }
 #endif
 
-struct ResolvePixelProperties
+struct LightOperatorInputs
 {
 	float3 worldPosition;
 	LightScreenDest screenDest;
@@ -38,9 +38,9 @@ struct ResolvePixelProperties
 	float ndcDepth;
 };
 
-ResolvePixelProperties ResolvePixelProperties_Create(float4 position, float3 viewFrustumVector, SystemInputs sys)
+LightOperatorInputs LightOperatorInputs_Create(float4 position, float3 viewFrustumVector, SystemInputs sys)
 {
-	ResolvePixelProperties result;
+	LightOperatorInputs result;
 
 	int2 pixelCoords = position.xy;
 	

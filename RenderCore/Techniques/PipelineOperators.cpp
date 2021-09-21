@@ -129,6 +129,7 @@ namespace RenderCore { namespace Techniques
 				pipelineDesc._blend.push_back(CommonResourceBox::s_abStraightAlpha);
 				pipelineDesc._blend.push_back(CommonResourceBox::s_abStraightAlpha);
 			} else {
+				assert(subType == (unsigned)FullViewportOperatorSubType::MaxDepth);
 				pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector_deep";
 				pipelineDesc._depthStencil = CommonResourceBox::s_dsReadOnly;
 				pipelineDesc._blend.push_back(CommonResourceBox::s_abOpaque);

@@ -304,7 +304,7 @@ namespace RenderCore { namespace LightingEngine
 		const Configuration& config)
 	{
 		Techniques::GraphicsPipelineDesc pipelineDesc;
-		pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_RESOLVE_LIGHT_VERTEX_HLSL ":PrepareMany";
+		pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
 		pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
 		// pipelineDesc._manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
