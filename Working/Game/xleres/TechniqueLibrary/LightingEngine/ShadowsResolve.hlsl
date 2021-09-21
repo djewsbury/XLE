@@ -217,7 +217,7 @@ float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
     if (!useGatherCmpRed) {
         // SampleCmpLevelZero cannot be used when cross compiling via glsl, because there is no textureLod() override
         // for a a sampler2DArrayShadow 
-        #if defined(HLSLCC)
+        #if !defined(HLSLCC)
             return ShadowTextures.SampleCmpLevelZero(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
         #else
             return ShadowTextures.SampleCmp(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
