@@ -703,10 +703,16 @@ namespace RenderCore { namespace LightingEngine
             if (minAndMaxDepth[0] > minAndMaxDepth[1])
                 return {{}, closestUncoveredPart.second};
 
-            if (TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld))[2] > 0) {
-                // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
-                result._leftTopFront[2] = minAndMaxDepth[0];
-                result._rightBottomBack[2] = minAndMaxDepth[0] + newProjectionDimsZ;
+            bool entireViewFrustumCovered = (minAndMaxDepth[1] - newProjectionDimsZ) < minAndMaxDepth[0];
+            if (!entireViewFrustumCovered) {
+                if (TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld))[2] > 0) {
+                    // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
+                    result._leftTopFront[2] = minAndMaxDepth[0];
+                    result._rightBottomBack[2] = minAndMaxDepth[0] + newProjectionDimsZ;
+                } else {
+                    result._leftTopFront[2] = minAndMaxDepth[1] - newProjectionDimsZ;
+                    result._rightBottomBack[2] = minAndMaxDepth[1];
+                }
             } else {
                 result._leftTopFront[2] = minAndMaxDepth[1] - newProjectionDimsZ;
                 result._rightBottomBack[2] = minAndMaxDepth[1];
@@ -808,15 +814,24 @@ namespace RenderCore { namespace LightingEngine
         // We're assuming that geometry closer to the light than the view frustum will be clamped
         // to zero depth here -- so the shadow projection doesn't need to extend all the way to
         // the light
-        // However, we also have to consider when the camera is looking directly into the light
-        // ... in that case we may want to sometimes have shadow casters outside of the far clip
-        // still casting shadows in
+        // Most of the time we want the largest Z value to be sitting right on the edge of the view frustum
+        // and then extend the frustum as far negative as the precision depth allows (recalling that -Z is
+        // forward in view space). However, if the camera is facing directly into the light (ie, they are in
+        // opposite directions), that will pin the shadow projection to the far clip and it's possible that 
+        // the shadow frustum won't reach all of the way to the camera. In that case, we pin the positive side
+        // of the shadow frustum to the view and extend backwards
         auto minAndMaxDepth = MinAndMaxOrthoSpaceZ(mainSceneProjectionDesc._worldToProjection, absFrustumCorners, lightViewToWorld, Truncate(firstSubProjection._leftTopFront), Truncate(firstSubProjection._rightBottomBack), cameraMiniProj, depthRangeClosest, clipSpaceType);
         assert(projectionDimsZ > 0);
-        if (TransformDirectionVector(worldToLightView, cameraForward)[2] > 0) {
-            // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
-            firstSubProjection._leftTopFront[2] = minAndMaxDepth[0];
-            firstSubProjection._rightBottomBack[2] = minAndMaxDepth[0] + projectionDimsZ;
+        bool entireViewFrustumCovered = (minAndMaxDepth[1] - projectionDimsZ) < minAndMaxDepth[0];
+        if (!entireViewFrustumCovered) {
+            if (TransformDirectionVector(worldToLightView, cameraForward)[2] > 0) {
+                // This is a little awkward because of the way -Z in camera space is forward; we have to be very careful of polarity in all these equations
+                firstSubProjection._leftTopFront[2] = minAndMaxDepth[0];
+                firstSubProjection._rightBottomBack[2] = minAndMaxDepth[0] + projectionDimsZ;
+            } else {
+                firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - projectionDimsZ;
+                firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1];
+            }
         } else {
             firstSubProjection._leftTopFront[2] = minAndMaxDepth[1] - projectionDimsZ;
             firstSubProjection._rightBottomBack[2] = minAndMaxDepth[1];
