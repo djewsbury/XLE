@@ -66,7 +66,7 @@ namespace RenderCore { namespace LightingEngine
 
     namespace Internal
     {
-        std::vector<IOrthoShadowProjections::OrthoSubProjection> TestResolutionNormalizedOrthogonalShadowProjections(
+        std::pair<std::vector<IOrthoShadowProjections::OrthoSubProjection>, Float4x4> TestResolutionNormalizedOrthogonalShadowProjections(
             const Float3& negativeLightDirection,
             const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
             const SunSourceFrustumSettings& settings,

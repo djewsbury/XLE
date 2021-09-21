@@ -629,6 +629,12 @@ namespace RenderCore { namespace LightingEngine
             }
         }
 
+        if (result[0] < result[1]) {
+            const float precisionGraceDistance = 1e-3f;
+            result[0] -= std::abs(result[0]) * precisionGraceDistance;
+            result[1] += std::abs(result[1]) * precisionGraceDistance;
+        }
+
         return result;
     }
 
@@ -683,66 +689,11 @@ namespace RenderCore { namespace LightingEngine
             auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
             auto camPositionInOrtho = TransformPoint(worldToLightView, ExtractTranslation(mainSceneProjectionDesc._cameraToWorld));
 
-#if 0
-            float alpha = FLT_MAX;
-            float closestUncoveredDistance = FLT_MAX;
-
-            for (const auto& pt:closestUncoveredPart.first) {
-                auto basisPointInOrtho = TransformPoint(worldToLightView, pt);
-
-                if (Equivalent(camForwardInOrtho[0], 0.0f, 1e-6f)) {
-                } else if (camForwardInOrtho[0] > 0) {
-                    auto xAlpha = (basisPointInOrtho[0] - (camPositionInOrtho[0] - 0.5f * newProjectionDimsXY)) / camForwardInOrtho[0];
-                    alpha = std::min(alpha, xAlpha);
-                } else {
-                    auto xAlpha = (basisPointInOrtho[0] - (camPositionInOrtho[0] + 0.5f * newProjectionDimsXY)) / camForwardInOrtho[0];
-                    alpha = std::min(alpha, xAlpha);
-                }
-                
-                #if defined(_DEBUG)
-                    Float3 test = basisPointInOrtho - alpha * camForwardInOrtho;
-                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
-                #endif
-
-                if (Equivalent(camForwardInOrtho[1], 0.0f, 1e-6f)) {
-                } else if (camForwardInOrtho[1] > 0) {
-                    float yAlpha = (basisPointInOrtho[1] - (camPositionInOrtho[1] - 0.5f * newProjectionDimsXY)) / camForwardInOrtho[1];
-                    Float3 test = basisPointInOrtho - yAlpha * camForwardInOrtho;
-                    if (std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ)
-                        alpha = std::min(alpha, yAlpha);
-                } else {
-                    float yAlpha = (basisPointInOrtho[1] - (camPositionInOrtho[1] + 0.5f * newProjectionDimsXY)) / camForwardInOrtho[1];
-                    alpha = std::min(alpha, yAlpha);
-                }
-
-                #if defined(_DEBUG)
-                    test = basisPointInOrtho - alpha * camForwardInOrtho;
-                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
-                #endif
-
-                if (Equivalent(camForwardInOrtho[2], 0.0f, 1e-6f)) {
-                } else if (camForwardInOrtho[2] > 0) {
-                    float zAlpha = (basisPointInOrtho[2] - (camPositionInOrtho[2] - 0.5f * newProjectionDimsZ)) / camForwardInOrtho[2];
-                    alpha = std::min(alpha, zAlpha);
-                } else {
-                    float zAlpha = (basisPointInOrtho[2] - (camPositionInOrtho[2] + 0.5f * newProjectionDimsZ)) / camForwardInOrtho[2];
-                    alpha = std::min(alpha, zAlpha);
-                }
-
-                #if defined(_DEBUG)
-                    test = basisPointInOrtho - alpha * camForwardInOrtho;
-                    assert(std::abs(test[0]) <= newProjectionDimsXY && std::abs(test[1]) <= newProjectionDimsXY && std::abs(test[2]) <= newProjectionDimsZ);
-                #endif
-
-                float distance = Dot(pt - ExtractTranslation(mainSceneProjectionDesc._cameraToWorld), ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
-                closestUncoveredDistance = std::min(closestUncoveredDistance, distance);
-            }
-
-            Float3 focusPositionInOrtho = camPositionInOrtho + alpha * camForwardInOrtho;
-#endif
-
             Float3 closestUncoveredPartInOrtho = TransformPoint(worldToLightView, closestUncoveredPart.first[0]);
-            Float3 focusPositionInOrtho = camPositionInOrtho + (Dot(closestUncoveredPartInOrtho, camForwardInOrtho) + 0.5f * newProjectionDimsXY) * camForwardInOrtho;
+            // Allow for a tiny bit of overlap, both to cover for floating point creep errors, and allow the shader
+            // to cross-fade. 2% of the distance to the start of the projection, up to quarter unit max
+            float overlap = std::min(Dot(closestUncoveredPartInOrtho, camForwardInOrtho) * 0.02f, 0.25f);
+            Float3 focusPositionInOrtho = camPositionInOrtho + (Dot(closestUncoveredPartInOrtho, camForwardInOrtho) - overlap + 0.5f * newProjectionDimsXY) * camForwardInOrtho;
 
             IOrthoShadowProjections::OrthoSubProjection result;
             result._leftTopFront = Float3 { focusPositionInOrtho[0] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[1] - 0.5f * newProjectionDimsXY, focusPositionInOrtho[2] - 0.5f * newProjectionDimsZ };
@@ -770,7 +721,7 @@ namespace RenderCore { namespace LightingEngine
 
     static OrthoProjections BuildResolutionNormalizedOrthogonalShadowProjections(
         const Float3& negativeLightDirection,
-        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
+        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDescInit,
         const SunSourceFrustumSettings& settings,
         ClipSpaceType clipSpaceType)
     {
@@ -778,9 +729,18 @@ namespace RenderCore { namespace LightingEngine
         const unsigned shadowMapResolution = 2048;
         const unsigned shadowMapDepthResolution = (1 << 16) - 1;
 
-        Float3 cameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
+        // We remove the camera position from the projection desc, because it's not actually important for
+        // the calculations, and would just add floating point precision problems. Instead, let's do the
+        // calculations as if the camera is at the origin, and then translate the results back to the
+        // camera position at the end
+        auto mainSceneProjectionDesc = mainSceneProjectionDescInit;
+        Float3 extractedCameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
+        SetTranslation(mainSceneProjectionDesc._cameraToWorld, Float3{0.f, 0.f, 0.f});
+        mainSceneProjectionDesc._worldToProjection = 
+            Combine(InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), mainSceneProjectionDesc._cameraToProjection);
+
         Float3 cameraForward = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
-        Float3 focusPoint = cameraPos + settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
+        Float3 focusPoint = settings._focusDistance * ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
 
         assert(!IsOrthogonalProjection(mainSceneProjectionDesc._cameraToProjection));
         auto cameraMiniProj = ExtractMinimalProjection(mainSceneProjectionDesc._cameraToProjection);
@@ -804,7 +764,7 @@ namespace RenderCore { namespace LightingEngine
         float projectionDimsZ = viewSpacePixelDims * shadowMapDepthResolution;
 
         Float3 shadowAcross = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
-        auto lightViewToWorld = MakeOrientedShadowViewToWorld(-negativeLightDirection, shadowAcross, cameraPos);
+        auto lightViewToWorld = MakeOrientedShadowViewToWorld(-negativeLightDirection, shadowAcross, Float3{0.f, 0.f, 0.f});
         auto worldToLightView = InvertOrthonormalTransform(lightViewToWorld);
 
         // The first projection must include the near plane of the camera, as well as the focus point
@@ -824,32 +784,6 @@ namespace RenderCore { namespace LightingEngine
         }
 
         IOrthoShadowProjections::OrthoSubProjection firstSubProjection;
-        /*
-        if (focusLightView[0] > nearPlaneLightViewMaxs[0]) {
-            firstSubProjection._leftTopFront[0] = nearPlaneLightViewMins[0];
-            firstSubProjection._rightBottomBack[0] = nearPlaneLightViewMins[0] + projectionDimsXY;
-        } else {
-            firstSubProjection._leftTopFront[0] = nearPlaneLightViewMaxs[0];
-            firstSubProjection._rightBottomBack[0] = nearPlaneLightViewMaxs[0] - projectionDimsXY;
-        }
-
-        if (nearPlaneLightViewMins[1] < focusLightView[1] - 0.5f * projectionDimsXY) {
-            firstSubProjection._leftTopFront[1] = nearPlaneLightViewMins[1];
-            firstSubProjection._rightBottomBack[1] = nearPlaneLightViewMins[1] + projectionDimsXY;
-        } else if (nearPlaneLightViewMaxs[1] > focusLightView[1] + 0.5f * projectionDimsXY) {
-            firstSubProjection._leftTopFront[1] = nearPlaneLightViewMaxs[1] - projectionDimsXY;
-            firstSubProjection._rightBottomBack[1] = nearPlaneLightViewMins[1];
-        } else {
-            firstSubProjection._leftTopFront[1] = focusLightView[1] - 0.5f * projectionDimsXY;
-            firstSubProjection._rightBottomBack[1] = focusLightView[1] + 0.5f * projectionDimsXY;
-        }
-        
-        if (firstSubProjection._leftTopFront[0] > firstSubProjection._rightBottomBack[0])
-            std::swap(firstSubProjection._leftTopFront[0], firstSubProjection._rightBottomBack[0]);
-        if (firstSubProjection._leftTopFront[1] > firstSubProjection._rightBottomBack[1])
-            std::swap(firstSubProjection._leftTopFront[1], firstSubProjection._rightBottomBack[1]);
-        */
-
         auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
         Float3 centerProjectOrtho = 0.5f * projectionDimsXY * camForwardInOrtho;
 
@@ -891,6 +825,7 @@ namespace RenderCore { namespace LightingEngine
 
         OrthoProjections result;
         result._worldToView = worldToLightView;
+        Combine_IntoRHS(-extractedCameraPos, result._worldToView);        // note -- camera position added back here
         result._normalProjCount = 1;
         result._orthSubProjections[0] = firstSubProjection;
 
@@ -898,6 +833,8 @@ namespace RenderCore { namespace LightingEngine
         while (result._normalProjCount < settings._maxFrustumCount) {
             auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, depthRangeCovered, clipSpaceType);
             if (!next.first.has_value()) break;
+
+            // Log(Debug) << "DepthRangeCovered: " << depthRangeCovered << std::endl;
 
             result._orthSubProjections[result._normalProjCount] = next.first.value();
             ++result._normalProjCount;
@@ -927,14 +864,16 @@ namespace RenderCore { namespace LightingEngine
 
     namespace Internal
     {
-        std::vector<IOrthoShadowProjections::OrthoSubProjection> TestResolutionNormalizedOrthogonalShadowProjections(
+        std::pair<std::vector<IOrthoShadowProjections::OrthoSubProjection>, Float4x4> TestResolutionNormalizedOrthogonalShadowProjections(
             const Float3& negativeLightDirection,
             const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
             const SunSourceFrustumSettings& settings,
             ClipSpaceType clipSpaceType)
         {
             auto midway = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, clipSpaceType);
-            return {midway._orthSubProjections, &midway._orthSubProjections[midway._normalProjCount]};
+            return {
+                {midway._orthSubProjections, &midway._orthSubProjections[midway._normalProjCount]},
+                midway._worldToView};
         }
     }
 

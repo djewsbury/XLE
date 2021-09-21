@@ -598,12 +598,30 @@ namespace UnitTests
 		testHelper->EndFrameCapture();
 	}
 
+	static std::vector<Float4x4> AsWorldToProjs(IteratorRange<const RenderCore::LightingEngine::IOrthoShadowProjections::OrthoSubProjection*> subProjections, const Float4x4& worldToOrthoView)
+	{
+		std::vector<Float4x4> result;
+		for (const auto& subProj:subProjections) {
+			auto projMatrix = OrthogonalProjection(
+				subProj._leftTopFront[0], subProj._leftTopFront[1], 
+				subProj._rightBottomBack[0], subProj._rightBottomBack[1], 
+				subProj._leftTopFront[2], subProj._rightBottomBack[2],
+				RenderCore::Techniques::GetDefaultClipSpaceType());
+			result.push_back(Combine(worldToOrthoView, projMatrix));
+		}
+		return result;
+	}
+
 	TEST_CASE( "LightingEngine-SunSourceCascadesProjectionMath", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
 		using namespace RenderCore::LightingEngine;
 		// test "BuildResolutionNormalizedOrthogonalShadowProjections" to ensure that the results with
 		// different clip space types agree
+		// This is actually a great way to shake out precision errors in the projection math, because
+		// even though the different clip space types are equivalent, there's a large degree of floating
+		// point precision difference between them. So if the algorithm is too sensitive to creep, we will
+		// see differences appearing
 
 		RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceFrustumSettings;
 		sunSourceFrustumSettings._flags = 0;
@@ -616,15 +634,15 @@ namespace UnitTests
 		for (unsigned c=0; c<1000; ++c) {
 			RenderCore::Techniques::CameraDesc sceneCamera;
 			sceneCamera._cameraToWorld = MakeCameraToWorld(
-				SphericalToCartesian(Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f}), 
+				SphericalToCartesian(Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f}),
 				Normalize(Float3{0.0f, 1.0f, 0.0f}), 
-				Float3{5.0f, 10.0f, 5.0f});
+				Float3{std::uniform_real_distribution<>(-1000.f, 1000.f)(rng), std::uniform_real_distribution<>(-1000.f, 1000.f)(rng), std::uniform_real_distribution<>(-1000.f, 1000.f)(rng)});
 			sceneCamera._projection = Techniques::CameraDesc::Projection::Perspective;
 			sceneCamera._nearClip = 0.05f;
 			sceneCamera._farClip = 150.f;
 			sceneCamera._verticalFieldOfView = Deg2Rad(50.0f);
 
-			const Float3 negativeLightDirection = Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f};
+			const Float3 negativeLightDirection = SphericalToCartesian(Float3{std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), std::uniform_real_distribution<>(0.f, 2.f*M_PI)(rng), 1.f});
 
 			ClipSpaceType clipSpaceTypes[] = {
 				ClipSpaceType::PositiveRightHanded_ReverseZ,
@@ -633,7 +651,8 @@ namespace UnitTests
 				ClipSpaceType::Positive
 			};
 			std::vector<IOrthoShadowProjections::OrthoSubProjection> baseline;
-			for (unsigned clipSpace=0; c<dimof(clipSpaceTypes); ++clipSpace) {
+			Float4x4 baselineWorldToOrthoView;
+			for (unsigned clipSpace=0; clipSpace<dimof(clipSpaceTypes); ++clipSpace) {
 				Techniques::ProjectionDesc projDesc;
 				projDesc._verticalFov = sceneCamera._verticalFieldOfView;
 				projDesc._aspectRatio = 1920.f/1080.f;
@@ -647,17 +666,43 @@ namespace UnitTests
 				projDesc._worldToProjection = Combine(InvertOrthonormalTransform(sceneCamera._cameraToWorld), projDesc._cameraToProjection);
 				projDesc._cameraToWorld = sceneCamera._cameraToWorld;
 
-				auto subProjections = LightingEngine::Internal::TestResolutionNormalizedOrthogonalShadowProjections(
+				auto [subProjections, worldToOrthoView] = LightingEngine::Internal::TestResolutionNormalizedOrthogonalShadowProjections(
 					negativeLightDirection, projDesc, sunSourceFrustumSettings, clipSpaceTypes[clipSpace]);
 				if (clipSpace == 0) {
 					baseline = subProjections;
+					baselineWorldToOrthoView = worldToOrthoView;
 				} else {
+					/*if (c == 240) {
+						auto a = AsWorldToProjs(baseline, baselineWorldToOrthoView);
+						auto b = AsWorldToProjs(subProjections, worldToOrthoView);
+						a.push_back(projDesc._worldToProjection);
+						b.push_back(projDesc._worldToProjection);
+						{
+							auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / "sun-source-cascades-a.ply";
+							std::ofstream plyOut(outputName);
+							WriteFrustumListToPLY(plyOut, a);
+						}
+						{
+							auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / "sun-source-cascades-b.ply";
+							std::ofstream plyOut(outputName);
+							WriteFrustumListToPLY(plyOut, b);
+						}
+					}*/
+
 					REQUIRE(baseline.size() == subProjections.size());
 					for (unsigned q=0; q<baseline.size(); ++q) {
 						auto lhs = baseline[q];
 						auto rhs = subProjections[q];
-						REQUIRE(Equivalent(lhs._leftTopFront, rhs._leftTopFront, 1e-3f));
-						REQUIRE(Equivalent(lhs._rightBottomBack, rhs._rightBottomBack, 1e-3f));
+						// We should expect some differences, because we do loose a fair bit of precision with float projection matrices
+						// Meaningful differences should still show up
+						float precisionLeftTopFront = std::max(1e-3f, std::max(Magnitude(lhs._leftTopFront), Magnitude(rhs._leftTopFront))/100.f);
+						REQUIRE(std::abs(lhs._leftTopFront[0] - rhs._leftTopFront[0]) <= precisionLeftTopFront);
+						REQUIRE(std::abs(lhs._leftTopFront[1] - rhs._leftTopFront[1]) <= precisionLeftTopFront);
+						REQUIRE(std::abs(lhs._leftTopFront[2] - rhs._leftTopFront[2]) <= precisionLeftTopFront);
+						float precisionRightBottomBack = std::max(1e-3f, std::max(Magnitude(lhs._rightBottomBack), Magnitude(rhs._rightBottomBack))/100.f);
+						REQUIRE(std::abs(lhs._rightBottomBack[0] - rhs._rightBottomBack[0]) <= precisionRightBottomBack);
+						REQUIRE(std::abs(lhs._rightBottomBack[1] - rhs._rightBottomBack[1]) <= precisionRightBottomBack);
+						REQUIRE(std::abs(lhs._rightBottomBack[2] - rhs._rightBottomBack[2]) <= precisionRightBottomBack);
 					}
 				}
 			}
