@@ -140,21 +140,28 @@ namespace RenderCore { namespace Metal_Vulkan
 			dst._aspect = src._aspect;
 	}
 
-	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlags, Internal::AttachmentResourceUsageType::BitField usage)
+	static VkImageLayout LayoutFromBindFlagsAndUsage(BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife)
 	{
-		if (bindFlags == BindFlag::ShaderResource) {
+		const bool isDepthStencil = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::DepthStencil));
+		const bool isColorOutput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Output));
+		const bool isAttachmentInput = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::Input));
+		const bool hintGeneral = !!(usageOverFullLife & unsigned(Internal::AttachmentResourceUsageType::HintGeneral));
+
+		if (bindFlagInSubpass == BindFlag::ShaderResource) {
+			if (isDepthStencil) return VK_IMAGE_LAYOUT_GENERAL;
 			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		} else if (bindFlags == BindFlag::InputAttachment) {
+		} else if (bindFlagInSubpass == BindFlag::InputAttachment) {
+			if (isDepthStencil) return VK_IMAGE_LAYOUT_GENERAL;
 			return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		} else if (bindFlags == BindFlag::TransferSrc) {
+		} else if (bindFlagInSubpass == BindFlag::TransferSrc) {
 			return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		} else if (bindFlags == BindFlag::TransferDst) {
+		} else if (bindFlagInSubpass == BindFlag::TransferDst) {
 			return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		} else if (bindFlags == BindFlag::PresentationSrc) {
+		} else if (bindFlagInSubpass == BindFlag::PresentationSrc) {
 			return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		} else if (bindFlags == BindFlag::RenderTarget) {
+		} else if (bindFlagInSubpass == BindFlag::RenderTarget) {
 			return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		} else if (bindFlags == BindFlag::DepthStencil) {
+		} else if (bindFlagInSubpass == BindFlag::DepthStencil) {
 			//
 			// VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
 			// VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
@@ -166,13 +173,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			// are not accessible here -- but would it be useful?
 			//
 			return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		} else if (bindFlags != 0) {
+		} else if (bindFlagInSubpass != 0) {
 			return VK_IMAGE_LAYOUT_GENERAL;
 		} else {
-			bool isDepthStencil = !!(usage & unsigned(Internal::AttachmentResourceUsageType::DepthStencil));
-			bool isColorOutput = !!(usage & unsigned(Internal::AttachmentResourceUsageType::Output));
-			bool isAttachmentInput = !!(usage & unsigned(Internal::AttachmentResourceUsageType::Input));
-			bool hintGeneral = !!(usage & unsigned(Internal::AttachmentResourceUsageType::HintGeneral));
 			if (hintGeneral) {
 				return VK_IMAGE_LAYOUT_GENERAL;
 			} else if (isDepthStencil) {
@@ -195,13 +198,22 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VkImageAspectFlags GetAspectForTextureView(const TextureViewDesc& window);
 
-	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, Internal::AttachmentResourceUsageType::BitField usage, const TextureViewDesc& window)
+	static BindFlag::BitField AsBindFlags(Internal::AttachmentResourceUsageType::BitField usage)
+	{
+		BindFlag::BitField result = 0;
+		if (usage & Internal::AttachmentResourceUsageType::Input) result |= BindFlag::InputAttachment;
+		if (usage & Internal::AttachmentResourceUsageType::Output) result |= BindFlag::RenderTarget;
+		if (usage & Internal::AttachmentResourceUsageType::DepthStencil) result |= BindFlag::DepthStencil;
+		return result;
+	}
+
+	static VkAttachmentReference2 MakeAttachmentReference(uint32_t attachmentName, BindFlag::BitField bindFlagInSubpass, Internal::AttachmentResourceUsageType::BitField usageOverFullLife, const TextureViewDesc& window)
 	{
 		return VkAttachmentReference2 {
 			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 			nullptr,
 			attachmentName,
-			LayoutFromBindFlagsAndUsage(0, usage),
+			LayoutFromBindFlagsAndUsage(bindFlagInSubpass, usageOverFullLife),
 			GetAspectForTextureView(window)};
 	}
 
@@ -330,7 +342,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			return mipLevelOverlap && arrayLayerOverlap;
 		}
 
-		VkAttachmentReference2 CreateAttachmentReference(AttachmentName resourceName, const TextureViewDesc& view, Internal::AttachmentResourceUsageType::BitField subpassUsage, unsigned subpassIdx)
+		VkAttachmentReference2 CreateAttachmentReference(AttachmentName resourceName, const TextureViewDesc& view, Internal::AttachmentResourceUsageType::BitField subpassUsage, unsigned subpassIdx, bool inputAttachmentReference = false)
 		{
 			auto i = FindIf(_workingAttachments, [resourceName](auto& i) { return i.first == resourceName; });
 			if (i == _workingAttachments.end()) {
@@ -357,14 +369,27 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
-			uint64_t viewHash = view.GetHash();
-			auto i2 = std::find_if(
-				_workingViewedAttachments.begin(), _workingViewedAttachments.end(),
-				[viewHash, mappedAttachmentIdx](auto& i) { return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
-			if (i2 == _workingViewedAttachments.end()) {
-				i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash, firstViewOfResource, true});
+			std::vector<WorkingViewedAttachment>::iterator i2 = _workingViewedAttachments.end();
+			if (!inputAttachmentReference) {
+				uint64_t viewHash = view.GetHash();
+				i2 = std::find_if(
+					_workingViewedAttachments.begin(), _workingViewedAttachments.end(),
+					[viewHash, mappedAttachmentIdx](auto& i) { return i._mappedAttachmentIdx == mappedAttachmentIdx && i._viewHash == viewHash; });
+				if (i2 == _workingViewedAttachments.end()) {
+					i2 = _workingViewedAttachments.insert(_workingViewedAttachments.end(), WorkingViewedAttachment{mappedAttachmentIdx, view, viewHash, firstViewOfResource, true});
+				} else {
+					i2->_lastViewOfResource = true;
+				}
 			} else {
-				i2->_lastViewOfResource = true;
+				// For an input attachment, the properties of the view matter less -- because we bind a TextureView to the descriptor
+				// set that contains a lot of the important information. Instead we just want to find the most recent use of this physical
+				// attachment with an overlapping view. That will be considered the same "viewed attachment"
+				for (auto i=_workingViewedAttachments.rbegin(); i!=_workingViewedAttachments.rend(); ++i)
+					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == resourceName)
+						i2 = i.base();
+
+				if (i2 == _workingViewedAttachments.end())
+					Throw(std::runtime_error("Could not find earlier output operation for input attachment request when building Vulkan framebuffer"));
 			}
 
 			// check dependencies now. If there's a previous subpass that uses this resource and the view overlap, and the usages contain output somewhere, then we need a dependency
@@ -386,7 +411,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 			}
 
-			return MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), subpassUsage, view);
+			return MakeAttachmentReference((uint32_t)std::distance(_workingViewedAttachments.begin(), i2), AsBindFlags(subpassUsage), i->second._attachmentUsage, view);
 		}
 		
 		RenderPassHelper(const FrameBufferDesc& layout)
@@ -437,16 +462,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (spDesc.GetResolveDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::Output;*/
 
-            // Input attachments are going to be difficult, because they must be bound both
-            // by the sub passes and by the descriptor set! (and they must be explicitly listed as
-            // input attachments in the shader). Holy cow, the render pass, frame buffer, pipeline
-            // layout, descriptor set and shader must all agree!
-            auto beforeInputs = attachReferences.size();
-            for (auto& a:spDesc.GetInputs())
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
-            desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
-            desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
-
             auto beforeOutputs = attachReferences.size();
             for (auto& a:spDesc.GetOutputs())
 				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx));
@@ -463,6 +478,16 @@ namespace RenderCore { namespace Metal_Vulkan
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
+
+            // Input attachments are going to be difficult, because they must be bound both
+            // by the sub passes and by the descriptor set! (and they must be explicitly listed as
+            // input attachments in the shader). Holy cow, the render pass, frame buffer, pipeline
+            // layout, descriptor set and shader must all agree!
+            auto beforeInputs = attachReferences.size();
+            for (auto& a:spDesc.GetInputs())
+				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx, true));
+            desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
+            desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
 
 			// preserve & resolve attachments not supported currently
 
@@ -603,17 +628,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		result._layers = std::max(result._layers, layerCount);
 	}
 
-	static BindFlag::Enum AsBindFlag(Internal::AttachmentResourceUsageType::BitField usageType)
-	{
-		if (usageType & Internal::AttachmentResourceUsageType::Output)
-			return BindFlag::RenderTarget;
-
-		if (usageType & Internal::AttachmentResourceUsageType::DepthStencil)
-			return BindFlag::DepthStencil;
-
-		return BindFlag::InputAttachment;
-	}
-
     FrameBuffer::FrameBuffer(
         const ObjectFactory& factory,
         const FrameBufferDesc& fbDesc,
@@ -645,15 +659,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
 
-            for (auto& a:spDesc.GetInputs())
-				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
             for (auto& a:spDesc.GetOutputs())
 				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
-
             if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
 				const auto& a = spDesc.GetDepthStencil();
 				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx);
-            } 
+            }
+            for (auto& a:spDesc.GetInputs())
+				helper.CreateAttachmentReference(a._resourceName, a._window, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
 
         VkImageView rawViews[helper._workingViewedAttachments.size()];
@@ -668,7 +681,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// so we don't create unique views for each usage type
 			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
 			auto rtv = namedResources.GetResourceView(
-				res.first, AsBindFlag(res.second._attachmentUsage), a._view,
+				res.first, (BindFlag::Enum)AsBindFlags(res.second._attachmentUsage), a._view,
 				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
 
