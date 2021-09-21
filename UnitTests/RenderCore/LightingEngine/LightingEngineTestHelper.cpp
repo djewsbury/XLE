@@ -73,6 +73,7 @@ namespace UnitTests
 		_techniqueContext->_sequencerDescSetLayout = MakeSequencerDescriptorSetLayout().GetLayout();
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
+		_techniqueContext->_drawablesPacketsPool = std::make_shared<RenderCore::Techniques::DrawablesPacketPool>();
 	}
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()

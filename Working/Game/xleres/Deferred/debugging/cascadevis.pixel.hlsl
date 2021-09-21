@@ -59,11 +59,11 @@ void detailed_visualisation(
     outSampleDensity.w = 1.0f;
 }
 
-Texture2D<uint> PrebuildCascadeIndexTexture BIND_NUMERIC_T0;
+Texture2D<uint> PrebuiltCascadeIndexTexture : register(t3, space1);
 
 float4 col_vis_pass(float4 position : SV_Position) : SV_Target0
 {
-    uint cascadeIdx = PrebuildCascadeIndexTexture.Load(uint3(position.xy, 0));
+    uint cascadeIdx = PrebuiltCascadeIndexTexture.Load(uint3(position.xy, 0));
     if (cascadeIdx < 6) {
 
         int2 pixelCoords = position.xy;

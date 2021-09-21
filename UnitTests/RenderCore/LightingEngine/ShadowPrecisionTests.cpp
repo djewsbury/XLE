@@ -118,14 +118,17 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelineCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
+		std::shared_ptr<RenderCore::SamplerPool> _samplerPool;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
+			_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
 			auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";
-			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
+			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(
+				testHelper._shaderCompiler->GetShaderLanguage(), _samplerPool.get());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
 			auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
@@ -380,8 +383,8 @@ namespace UnitTests
 		auto rpi = Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
 		UniformsStreamInterface usi;
 		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
-		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView();
-		usi.BindResourceView(0, Hash64("PrebuildCascadeIndexTexture"));
+		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::UnorderedAccess);
+		usi.BindResourceView(0, Hash64("PrebuiltCascadeIndexTexture"));
 		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
@@ -467,8 +470,9 @@ namespace UnitTests
 
  		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
 // 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.0f});
-//		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
+// 		const Float3 negativeLightDirection = Normalize(Float3{0.8f, 2.0f, 0.7f});
 //		const Float3 negativeLightDirection = Normalize(Float3{-2.69884f, 0.696449f, -2.16482f});
+//		const Float3 negativeLightDirection = Normalize(ExtractForward_Cam(sceneCamera._cameraToWorld) + Float3{0.f, 0.1f, 0.f});	// almost exactly into the camera
 
 		testHelper->BeginFrameCapture();
 

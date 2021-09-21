@@ -131,14 +131,17 @@ namespace UnitTests
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
 		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelineCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
+		std::shared_ptr<RenderCore::SamplerPool> _samplerPool;
 
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
+			_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
 			auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";
-			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(testHelper._shaderCompiler->GetShaderLanguage());
+			auto pipelineInit = RenderCore::Assets::PredefinedPipelineLayout{*_pipelineLayoutFile, pipelineLayoutName}.MakePipelineLayoutInitializer(
+				testHelper._shaderCompiler->GetShaderLanguage(), _samplerPool.get());
 			_pipelineLayout = testHelper._device->CreatePipelineLayout(pipelineInit);
 
 			auto i = _pipelineLayoutFile->_descriptorSets.find("DMShadow");
