@@ -24,9 +24,10 @@ namespace Utility
 namespace Assets 
 { 
     class DirectorySearchRules; 
-    template<typename Formatter = InputStreamFormatter<utf8>>
-        class ConfigFileContainer; 
+    template<typename Formatter> class ConfigFileContainer; 
 }
+
+namespace EntityInterface { class IDynamicFormatter; }
 
 namespace SceneEngine
 {
@@ -77,38 +78,7 @@ namespace SceneEngine
     /// This provides implementations of the basic lighting related interfaces of
     /// ISceneParser that will hook into an EnvironmentSettings object.
     /// Derived classes should implement the accessor GetEnvSettings().
-    class BasicLightingStateDelegate : public ILightingStateDelegate
-    {
-    public:
-        void        PreRender(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
-
-        auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
-        auto        GetToneMapSettings() -> ToneMapSettings override;
-
-        Operators   GetOperators() override;        
-
-		BasicLightingStateDelegate(
-			std::shared_ptr<::Assets::ConfigFileContainer<>> configFileContainer,
-            std::string cfgSection);
-		~BasicLightingStateDelegate();
-
-		static void ConstructToFuture(
-			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
-			StringSection<> envSettingFileName);
-
-		::Assets::DependencyValidation GetDependencyValidation() const override;
-
-    protected:
-        std::shared_ptr<::Assets::ConfigFileContainer<>> _configFileContainer;
-        std::string _cfgSection;
-
-        std::vector<unsigned> _lightSourcesInBoundScene;
-        std::vector<unsigned> _shadowProjectionsInBoundScene;
-    };
+    ::Assets::PtrToFuturePtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
 
     LightDesc                   DefaultDominantLight();
     EnvironmentalLightingDesc   DefaultEnvironmentalLightingDesc();

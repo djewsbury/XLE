@@ -24,7 +24,7 @@ namespace SceneEngine
     class PlacementsEditor;
     class PlacementCellSet;
     class IIntersectionScene;
-    typedef std::pair<uint64, uint64> PlacementGUID;
+    using PlacementGUID = std::pair<uint64_t, uint64_t>;
 }
 
 namespace ToolsRig

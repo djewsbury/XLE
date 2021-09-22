@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "../../Assets/AssetFuture.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/ImpliedTyping.h"
 #include "../../Utility/StringUtils.h"
@@ -19,17 +20,17 @@ namespace Assets { class DependencyValidation; }
 
 namespace EntityInterface
 {
-    using ObjectTypeId = uint32;
-    using DocumentTypeId = uint32;
-    using PropertyId = uint32;
-    using ChildListId = uint32;
+    using EntityTypeId = uint32_t;
+    using PropertyId = uint32_t;
+    using ChildListId = uint32_t;
 
-    using DocumentId = uint64;
-    using ObjectId = uint64;
+    using DocumentId = uint64_t;
+    using EntityId = uint64_t;
 
     class IDynamicFormatter
     {
     public:
+        using InteriorSection = StringSection<>;
         virtual FormatterBlob PeekNext() = 0;
 
         virtual bool TryBeginElement() = 0;
@@ -39,6 +40,7 @@ namespace EntityInterface
 		virtual bool TryCharacterData(StringSection<>&) = 0;
 
         virtual StreamLocation GetLocation() const = 0;
+        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
         virtual ~IDynamicFormatter() = default;
     };
@@ -46,23 +48,19 @@ namespace EntityInterface
     class PropertyInitializer
     {
     public:
-        StringSection<> _name;
+        PropertyId _prop = 0;
         IteratorRange<const void*> _src;
         ImpliedTyping::TypeDesc _type;
-    };
-
-    class IMutableEntity
-    {
-    public:
-        virtual bool SetProperties(IteratorRange<const PropertyInitializer*> initializers) = 0;
-        virtual ~IMutableEntity() = default;
     };
 
     class IEntityDocument
     {
     public:
-        virtual std::shared_ptr<IDynamicFormatter> BeginFormatter();
-        virtual ::Assets::DependencyValidation GetDependencyValidation() const;
+        virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) = 0;
+        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+
+        virtual void Lock() = 0;
+        virtual void Unlock() = 0;
 
         virtual ~IEntityDocument() = default;
     };
@@ -70,53 +68,20 @@ namespace EntityInterface
     class IEntityMountingTree
     {
     public:
-        virtual DocumentId AttachDocument(
+        virtual DocumentId MountDocument(
             StringSection<> mountPount,
             std::shared_ptr<IEntityDocument>) = 0;
-        virtual bool DetachDocument(DocumentId doc, DocumentTypeId docType) = 0;
-
-        // todo -- how should this work with sequences? What if we want to add/remove
-        // modify objects within a sequence -- is that just not possible?
-        virtual std::shared_ptr<IMutableEntity> CreateMutableEntity(StringSection<> mountPount) = 0;
-        virtual void DetachMutations(const IMutableEntity&) = 0;
+        virtual bool UnmountDocument(DocumentId doc) = 0;
 
         // returns a dependency validation that advances if any properties at that mount point,
         // (or underneath) change 
-        virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const;
+        virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const = 0;
+        virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
     };
 
-    class Identifier
-    {
-    public:
-        DocumentId Document() const         { return _doc; }
-        ObjectTypeId ObjectType() const     { return _objType; }
-        ObjectId Object() const             { return _obj; }
-
-        Identifier(DocumentId doc = 0, ObjectId obj = 0, ObjectTypeId objType = 0)
-		: _doc(doc), _obj(obj), _objType(objType) {}
-
-		friend bool operator<(const Identifier& lhs, const Identifier& rhs)
-		{
-			if (lhs._doc < rhs._doc) return true;
-			if (lhs._doc > rhs._doc) return false;
-			if (lhs._objType < rhs._objType) return true;
-			if (lhs._objType > rhs._objType) return false;
-			if (lhs._obj < rhs._obj) return true;
-			return false;
-		}
-
-		friend bool operator==(const Identifier& lhs, const Identifier& rhs)
-		{
-			return (lhs._doc == rhs._doc) || (lhs._objType == rhs._objType) || (lhs._obj == rhs._obj);
-		}
-
-    protected:
-        DocumentId _doc;
-        ObjectId _obj;
-        ObjectTypeId _objType;
-    };
+    std::shared_ptr<IEntityMountingTree> CreateMountingTree();
 
     /// <summary>Defines rules for creation, deletion and update of entities</summary>
     ///
@@ -152,91 +117,35 @@ namespace EntityInterface
     /// But it also suggests other uses that require querying and setting values in
     /// various objects in the scene. Such as animation of objects in the scene 
     /// and for scripting purposes.
-    class IEntityInterface
+    class IMutableEntityDocument
     {
     public:
-        virtual DocumentId CreateDocument(DocumentTypeId docType, const char initializer[]) = 0;
-        virtual bool DeleteDocument(DocumentId doc, DocumentTypeId docType) = 0;
+        virtual std::optional<EntityId> CreateEntity(EntityTypeId objType, IteratorRange<const PropertyInitializer*>) = 0;
+        virtual bool DeleteEntity(EntityId id) = 0;
+        virtual bool SetProperty(EntityId id, IteratorRange<const PropertyInitializer*>) = 0;
+        virtual std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId id, PropertyId prop, IteratorRange<void*> destinationBuffer) const = 0;
+        virtual bool SetParent(EntityId child, EntityId parent, ChildListId childList, int insertionPosition) = 0;
 
-        virtual ObjectId AssignObjectId(DocumentId doc, ObjectTypeId objType) const = 0;
-        virtual bool CreateObject(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount) = 0;
-        virtual bool DeleteObject(const Identifier& id) = 0;
-        virtual bool SetProperty(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount) = 0;
-        virtual bool GetProperty(const Identifier& id, PropertyId prop, void* dest, unsigned* destSize) const = 0;
-        virtual bool SetParent(const Identifier& child, const Identifier& parent, ChildListId childList, int insertionPosition) = 0;
+        virtual EntityTypeId GetTypeId(StringSection<> name) const = 0;
+        virtual PropertyId GetPropertyId(EntityTypeId type, StringSection<> name) const = 0;
+        virtual ChildListId GetChildListId(EntityTypeId type, StringSection<> name) const = 0;
 
-        virtual ObjectTypeId GetTypeId(const char name[]) const = 0;
-        virtual DocumentTypeId GetDocumentTypeId(const char name[]) const = 0;
-        virtual PropertyId GetPropertyId(ObjectTypeId type, const char name[]) const = 0;
-        virtual ChildListId GetChildListId(ObjectTypeId type, const char name[]) const = 0;
-
-		virtual void PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const = 0;
-
-        virtual ~IEntityInterface();
+        virtual ~IMutableEntityDocument() = default;
     };
 
+#if 0
     class IEnumerableEntityInterface
     {
     public:
-        virtual std::vector<std::pair<ObjectTypeId, std::string>> FindObjectTypes() const = 0;
+        virtual std::vector<std::pair<EntityTypeId, std::string>> FindObjectTypes() const = 0;
         virtual std::vector<std::pair<DocumentTypeId, std::string>> FindDocumentTypes() const = 0;
 
         virtual std::vector<std::pair<DocumentId, DocumentTypeId>> FindDocuments(DocumentTypeId docType) const = 0;
-        virtual std::vector<ObjectId> FindEntities(DocumentId doc, ObjectTypeId objectType) const = 0;
-        virtual std::vector<std::pair<PropertyId, std::string>> FindProperties(ObjectTypeId objectType) const = 0;
-        virtual std::vector<std::pair<ChildListId, std::string>> FindChildLists(ObjectTypeId objectType) const = 0;
+        virtual std::vector<EntityId> FindEntities(DocumentId doc, EntityTypeId objectType) const = 0;
+        virtual std::vector<std::pair<PropertyId, std::string>> FindProperties(EntityTypeId objectType) const = 0;
+        virtual std::vector<std::pair<ChildListId, std::string>> FindChildLists(EntityTypeId objectType) const = 0;
 
         virtual ~IEnumerableEntityInterface();
     };
-
-    /// <summary>Holds a collection of IObjectType interface, and selects the appropriate interface for a given object</summary>
-    ///
-    /// Normally a scene will contain multiple different types of objects. Each object type
-    /// might have a different IObjectType implementation to access that data.
-    /// 
-    /// This class will keep a collection of interfaces, and will select the right interface
-    /// for any given operation.
-    class Switch
-    {
-    public:
-        IEntityInterface* GetInterface(
-            Identifier& translatedId, 
-            const Identifier& inputId) const;
-
-        DocumentId  CreateDocument(DocumentTypeId docType, const char initializer[]);
-        bool        DeleteDocument(DocumentId doc, DocumentTypeId docType);
-        ObjectId    AssignObjectId(DocumentId doc, ObjectTypeId objType) const;
-
-        ObjectTypeId    GetTypeId(const char name[]) const;
-        DocumentTypeId  GetDocumentTypeId(const char name[]) const;
-        PropertyId      GetPropertyId(ObjectTypeId type, const char name[]) const;
-        ChildListId     GetChildListId(ObjectTypeId type, const char name[]) const;
-
-        uint32  MapTypeId(ObjectTypeId type, const IEntityInterface& owner);
-        void    RegisterInterface(const std::shared_ptr<IEntityInterface>& type);
-		void	UnregisterInterface(const std::shared_ptr<IEntityInterface>& type);
-		void    RegisterDefaultInterface(const std::shared_ptr<IEntityInterface>& type);
-
-		void PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
-
-        Switch();
-        ~Switch();
-    protected:
-        std::vector<std::shared_ptr<IEntityInterface>> _types;
-		std::shared_ptr<IEntityInterface> _defaultType;
-
-        class KnownType
-        {
-        public:
-            std::shared_ptr<IEntityInterface> _owner;
-            std::string _name;
-            uint32 _mappedTypeId;
-        };
-        mutable std::vector<KnownType> _knownObjectTypes;
-        mutable std::vector<KnownType> _knownDocumentTypes;
-
-        mutable ObjectId _nextObjectId;
-    };
+#endif
 }
-
-

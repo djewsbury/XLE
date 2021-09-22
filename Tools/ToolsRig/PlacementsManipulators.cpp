@@ -509,7 +509,7 @@ namespace ToolsRig
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
     {
-        std::vector<std::pair<uint64, uint64>> activeSelection;
+        std::vector<std::pair<uint64_t, uint64_t>> activeSelection;
 
         if (_transaction) {
             activeSelection.reserve(_transaction->GetObjectCount());

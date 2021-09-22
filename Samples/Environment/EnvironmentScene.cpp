@@ -102,7 +102,7 @@ namespace Sample
             // containers of names and values called "entities".
 
         using namespace EntityInterface;
-        RetainedEntityInterface interf(_retainedEntities);
+        RetainedEntitiesAdapter interf(_retainedEntities);
         Deserialize(
             formatter, interf, 
             interf.GetDocumentTypeId("GameObjects"));

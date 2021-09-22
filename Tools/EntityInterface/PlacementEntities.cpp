@@ -18,7 +18,7 @@
 namespace EntityInterface
 {
     static const DocumentTypeId DocumentType_Placements = 1;
-    static const ObjectTypeId ObjectType_Placement = 1;
+    static const EntityTypeId ObjectType_Placement = 1;
     static const PropertyId Property_LocalToWorld = 100;
     static const PropertyId Property_Visible = 101;
     static const PropertyId Property_Model = 102;
@@ -52,7 +52,7 @@ namespace EntityInterface
 		return result;
 	}
 
-	ObjectId PlacementEntities::AssignObjectId(DocumentId doc, ObjectTypeId type) const
+	EntityId PlacementEntities::AssignObjectId(DocumentId doc, EntityTypeId type) const
 	{
 		if (type != ObjectType_Placement) { assert(0); return 0; }
 		return _editor->GenerateObjectGUID();
@@ -242,7 +242,7 @@ namespace EntityInterface
 		}
 
             // note --  This object search is quite slow! We might need a better way to
-            //          record a handle to the object. Perhaps the "ObjectId" should not
+            //          record a handle to the object. Perhaps the "EntityId" should not
             //          match the actual placements guid. Some short-cut will probably be
             //          necessary given that we could get there several thousand times during
             //          startup for an average scene.
@@ -314,7 +314,7 @@ namespace EntityInterface
         return false;
     }
 
-    ObjectTypeId PlacementEntities::GetTypeId(const char name[]) const
+    EntityTypeId PlacementEntities::GetTypeId(const char name[]) const
     {
         if (!XlCompareString(name, "PlacementObject")) return ObjectType_Placement;
         return 0;
@@ -326,7 +326,7 @@ namespace EntityInterface
         return 0;
     }
 
-    PropertyId PlacementEntities::GetPropertyId(ObjectTypeId type, const char name[]) const
+    PropertyId PlacementEntities::GetPropertyId(EntityTypeId type, const char name[]) const
     {
         if (!XlCompareString(name, "LocalToWorld"))     return Property_LocalToWorld;
         if (!XlCompareString(name, "VisibleHierarchy")) return Property_Visible;
@@ -338,7 +338,7 @@ namespace EntityInterface
         return 0;
     }
 
-    ChildListId PlacementEntities::GetChildListId(ObjectTypeId type, const char name[]) const
+    ChildListId PlacementEntities::GetChildListId(EntityTypeId type, const char name[]) const
     {
         return 0;
     }

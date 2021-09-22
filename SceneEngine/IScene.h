@@ -89,8 +89,8 @@ namespace SceneEngine
 
         struct Operators
         {
-            std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> lightResolveOperators;
-            std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> shadowResolveOperators;
+            std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> _lightResolveOperators;
+            std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowResolveOperators;
         };
         virtual Operators   GetOperators() = 0;
 

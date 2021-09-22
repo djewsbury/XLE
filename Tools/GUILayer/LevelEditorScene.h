@@ -35,7 +35,7 @@ namespace EntityInterface
 { 
     class Switch; 
     class RetainedEntities; 
-    class RetainedEntityInterface; 
+    class RetainedEntitiesAdapter; 
     class TerrainEntities; 
     class EnvEntitiesManager; 
 }
@@ -196,7 +196,7 @@ namespace GUILayer
         !EditorSceneManager();
     protected:
         clix::shared_ptr<EditorScene> _scene;
-        clix::shared_ptr<::EntityInterface::RetainedEntityInterface> _flexGobInterface;
+        clix::shared_ptr<::EntityInterface::RetainedEntitiesAdapter> _flexGobInterface;
         clix::shared_ptr<::EntityInterface::EnvEntitiesManager> _envEntitiesManager;
 #if defined(GUILAYER_SCENEENGINE)
         clix::shared_ptr<::EntityInterface::TerrainEntities> _terrainInterface;

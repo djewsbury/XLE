@@ -17,7 +17,7 @@ namespace GUILayer
     bool EntityLayer::DeleteDocument(DocumentId doc, DocumentTypeId docType)
         { return _switch->DeleteDocument(doc, docType); }
 
-    ObjectId EntityLayer::AssignObjectId(DocumentId doc, ObjectTypeId type)
+    EntityId EntityLayer::AssignObjectId(DocumentId doc, EntityTypeId type)
         { return _switch->AssignObjectId(doc, type); }
 
     static std::vector<PropertyInitializer> AsNative(
@@ -38,7 +38,7 @@ namespace GUILayer
         return std::move(native);
     }
 
-    bool EntityLayer::CreateObject(DocumentId doc, ObjectId obj, ObjectTypeId objType, IEnumerable<PropertyInitializer>^ initializers)
+    bool EntityLayer::CreateObject(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers)
     {
         auto native = AsNative(initializers);
         Identifier indentifier;
@@ -49,7 +49,7 @@ namespace GUILayer
         return false;
     }
 
-    bool EntityLayer::DeleteObject(DocumentId doc, ObjectId obj, ObjectTypeId objType)
+    bool EntityLayer::DeleteObject(DocumentId doc, EntityId obj, EntityTypeId objType)
     { 
         Identifier indentifier;
         auto intrf = _switch->GetInterface(
@@ -59,7 +59,7 @@ namespace GUILayer
         return false;
     }
 
-    bool EntityLayer::SetProperty(DocumentId doc, ObjectId obj, ObjectTypeId objType, IEnumerable<PropertyInitializer>^ initializers)
+    bool EntityLayer::SetProperty(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers)
     { 
         auto native = AsNative(initializers);
         Identifier indentifier;
@@ -70,7 +70,7 @@ namespace GUILayer
         return false;
     }
 
-    bool EntityLayer::GetProperty(DocumentId doc, ObjectId obj, ObjectTypeId objType, PropertyId prop, void* dest, unsigned* destSize)
+    bool EntityLayer::GetProperty(DocumentId doc, EntityId obj, EntityTypeId objType, PropertyId prop, void* dest, unsigned* destSize)
     { 
         Identifier indentifier;
         auto intrf = _switch->GetInterface(
@@ -81,14 +81,14 @@ namespace GUILayer
     }
 
     DocumentTypeId EntityLayer::GetDocumentTypeId(System::String^ name)                  { return _switch->GetDocumentTypeId(clix::marshalString<clix::E_UTF8>(name).c_str()); }
-    ObjectTypeId EntityLayer::GetTypeId(System::String^ name)                            { return _switch->GetTypeId(clix::marshalString<clix::E_UTF8>(name).c_str()); }
-    PropertyId EntityLayer::GetPropertyId(ObjectTypeId type, System::String^ name)       { return _switch->GetPropertyId(type, clix::marshalString<clix::E_UTF8>(name).c_str()); }
-    ChildListId EntityLayer::GetChildListId(ObjectTypeId type, System::String^ name)     { return _switch->GetChildListId(type, clix::marshalString<clix::E_UTF8>(name).c_str()); }
+    EntityTypeId EntityLayer::GetTypeId(System::String^ name)                            { return _switch->GetTypeId(clix::marshalString<clix::E_UTF8>(name).c_str()); }
+    PropertyId EntityLayer::GetPropertyId(EntityTypeId type, System::String^ name)       { return _switch->GetPropertyId(type, clix::marshalString<clix::E_UTF8>(name).c_str()); }
+    ChildListId EntityLayer::GetChildListId(EntityTypeId type, System::String^ name)     { return _switch->GetChildListId(type, clix::marshalString<clix::E_UTF8>(name).c_str()); }
 
     bool EntityLayer::SetObjectParent(
         DocumentId doc, 
-        ObjectId childId, ObjectTypeId childTypeId, 
-        ObjectId parentId, ObjectTypeId parentTypeId, 
+        EntityId childId, EntityTypeId childTypeId, 
+        EntityId parentId, EntityTypeId parentTypeId, 
 		ChildListId childList,
 		int insertionPosition)
     {

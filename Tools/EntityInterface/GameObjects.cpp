@@ -29,7 +29,7 @@ namespace EntityInterface
         obj._properties.SerializeWithCharType<CharType>(formatter);
 
         for (auto c=obj._children.cbegin(); c!=obj._children.cend(); ++c) {
-            const auto* child = entities.GetEntity(obj._doc, c->second);
+            const auto* child = entities.GetEntity(c->second);
             if (child)
                 SerializationOperator<CharType>(formatter, *child, entities);
         }
@@ -39,8 +39,7 @@ namespace EntityInterface
 
     void ExportGameObjects(
         OutputStreamFormatter& formatter,
-        const RetainedEntities& flexGobInterface,
-        uint64 docId)
+        const RetainedEntities& flexGobInterface)
     {
             // Export the registered game objects, in a generic format
             // We're just going to dump out everything we have. This is
@@ -51,11 +50,10 @@ namespace EntityInterface
             flexGobInterface.GetTypeId(EntityTypeName::GameObjectFolder);
         auto rootFolders = flexGobInterface.FindEntitiesOfType(typeGameObjectsFolder);
 
-        for (const auto& s : rootFolders)
-            if (s->_doc == docId) {
-                SerializationOperator<utf8>(formatter, *s, flexGobInterface);
-                break;
-            }
+        for (const auto& s : rootFolders) {
+            SerializationOperator<utf8>(formatter, *s, flexGobInterface);
+            break;
+        }
         
         formatter.Flush();
     }

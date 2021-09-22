@@ -5,175 +5,81 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "EntityInterface.h"
-#include "../../Utility/StringUtils.h"
+#include "../../Utility/Streams/PathUtils.h"
 
 namespace EntityInterface
 {
-    IEntityInterface::~IEntityInterface() {}
-    IEnumerableEntityInterface::~IEnumerableEntityInterface() {}
+	static FilenameRules s_fnRules('/', true);
 
-	void IEntityInterface::PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const {}
+	static std::string SimplifyMountPoint(StringSection<> input, const FilenameRules& fnRules)
+	{
+		auto split = MakeSplitPath(input);
+		split.BeginsWithSeparator() = false;
+		split.EndsWithSeparator() = true;
+		return split.Simplify().Rebuild(fnRules);
+	}
 
-    IEntityInterface* Switch::GetInterface(
-        Identifier& translatedId, 
-        const Identifier& inputId) const
-    {
-        if (inputId.ObjectType() > 0 && (inputId.ObjectType()-1) < _knownObjectTypes.size()) {
-            auto& reg = _knownObjectTypes[inputId.ObjectType()-1];
-            translatedId = Identifier(inputId.Document(), inputId.Object(), reg._mappedTypeId);
-            return reg._owner.get();
-        }
-        return nullptr;
-    }
+	class MountingTree : public IEntityMountingTree
+	{
+	public:
 
-    DocumentId Switch::CreateDocument(DocumentTypeId docType, const char initializer[])
-    {
-        if (docType > 0 && (docType-1) < _knownDocumentTypes.size()) {
-            auto& reg = _knownDocumentTypes[docType-1];
-            return reg._owner->CreateDocument(reg._mappedTypeId, initializer);
-        }
-        return 0;
-    }
-
-    bool Switch::DeleteDocument(DocumentId doc, DocumentTypeId docType)
-    {
-        if (docType > 0 && (docType-1) < _knownDocumentTypes.size()) {
-            auto& reg = _knownDocumentTypes[docType-1];
-            return reg._owner->DeleteDocument(doc, reg._mappedTypeId);
-        }
-        return false;
-    }
-            
-    ObjectId Switch::AssignObjectId(DocumentId doc, ObjectTypeId objType) const
-    {
-            // Our object id is must be unique for all objects of all types.
-            // Each sub-entity interface might have it's own algorithm for generating
-            // ids. But there is no guarantee that we won't get conflicts generated
-            // by 2 different sub-interfaces. So let's avoid calling the sub-interfaces
-            // and just generate an id that is unique for this entire switch.
-        return _nextObjectId++;
-    }
-
-    ObjectTypeId Switch::GetTypeId(const char name[]) const
-    {
-        for (auto i=_knownObjectTypes.begin(); i!=_knownObjectTypes.end(); ++i) {
-            if (!XlCompareString(i->_name.c_str(), name)) {
-                return 1+(ObjectTypeId)std::distance(_knownObjectTypes.begin(), i);
-            }
-        }
-        for (auto i=_types.cbegin(); i!=_types.cend(); ++i) {
-            auto id = (*i)->GetTypeId(name);
-            if (id != 0) {
-                KnownType t;
-                t._owner = *i;
-                t._mappedTypeId = id;
-                t._name = name;
-                _knownObjectTypes.push_back(std::move(t));
-                return 1+(ObjectTypeId)(_knownObjectTypes.size()-1);
-            }
-        }
+		DocumentId MountDocument(
+			StringSection<> mountPount,
+			std::shared_ptr<IEntityDocument> doc)
 		{
-			auto id = _defaultType->GetTypeId(name);
-            if (id != 0) {
-                KnownType t;
-                t._owner = _defaultType;
-                t._mappedTypeId = id;
-                t._name = name;
-                _knownObjectTypes.push_back(std::move(t));
-                return 1+(ObjectTypeId)(_knownObjectTypes.size()-1);
-            }
+			Mount mnt;
+			mnt._mountPoint = SimplifyMountPoint(mountPount.AsString(), s_fnRules);
+			mnt._mountPointSplit = MakeSplitPath(mnt._mountPoint);
+
+			auto hash = s_FNV_init64;
+			for (auto i:mnt._mountPointSplit.GetSections())
+				hash = HashFilename(i, s_fnRules, hash);
+			mnt._hash = hash;
+			mnt._depth = mnt._mountPointSplit.GetSectionCount();
+			mnt._document = std::move(doc);
+			auto result = mnt._documentId = _nextDocumentId++;
+			_mounts.push_back(std::move(mnt));
+			return result;
 		}
-        return 0;
-    }
 
-    DocumentTypeId Switch::GetDocumentTypeId(const char name[]) const
-    {
-        for (auto i=_knownDocumentTypes.begin(); i!=_knownDocumentTypes.end(); ++i) {
-            if (!XlCompareString(i->_name.c_str(), name)) {
-                return 1+(ObjectTypeId)std::distance(_knownDocumentTypes.begin(), i);
-            }
-        }
-        for (auto i=_types.cbegin(); i!=_types.cend(); ++i) {
-            auto id = (*i)->GetDocumentTypeId(name);
-            if (id != 0) {
-                KnownType t;
-                t._owner = *i;
-                t._mappedTypeId = id;
-                t._name = name;
-                _knownDocumentTypes.push_back(std::move(t));
-                return 1+(ObjectTypeId)(_knownDocumentTypes.size()-1);
-            }
-        }
-		if (_defaultType) {
-			auto id = _defaultType->GetDocumentTypeId(name);
-            if (id != 0) {
-                KnownType t;
-                t._owner = _defaultType;
-                t._mappedTypeId = id;
-                t._name = name;
-                _knownDocumentTypes.push_back(std::move(t));
-                return 1+(ObjectTypeId)(_knownDocumentTypes.size()-1);
-            }
+		bool UnmountDocument(DocumentId doc)
+		{
+			for (auto mnt=_mounts.begin(); mnt!=_mounts.end(); ++mnt)
+				if (mnt->_documentId == doc) {
+					_mounts.erase(mnt);
+					return true;
+				}
+			return false;
 		}
-        return 0;
-    }
 
-    PropertyId Switch::GetPropertyId(ObjectTypeId objType, const char name[]) const
-    {
-        if (objType > 0 && (objType-1) < _knownObjectTypes.size()) {
-            auto& reg = _knownObjectTypes[objType-1];
-            return reg._owner->GetPropertyId(reg._mappedTypeId, name);
-        }
-        return 0;
-    }
+		::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const
+		{
+			return {};
+		}
 
-    ChildListId Switch::GetChildListId(ObjectTypeId objType, const char name[]) const
-    {
-        if (objType > 0 && (objType-1) < _knownObjectTypes.size()) {
-            auto& reg = _knownObjectTypes[objType-1];
-            return reg._owner->GetChildListId(reg._mappedTypeId, name);
-        }
-        return 0;
-    }
+		::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> mountPoint) const
+		{
+			return nullptr;
+		}
 
-    uint32 Switch::MapTypeId(ObjectTypeId objType, const IEntityInterface& owner)
-    {
-        if (objType > 0 && (objType-1) < _knownObjectTypes.size())
-            if (_knownObjectTypes[objType-1]._owner.get() == &owner)
-                return _knownObjectTypes[objType-1]._mappedTypeId;
-        return 0;
-    }
+	private:
+		struct Mount
+		{
+			uint64_t _hash;
+			unsigned _depth;
 
-    void Switch::RegisterInterface(const std::shared_ptr<IEntityInterface>& type)
-    {
-        _types.push_back(type);
-    }
+			std::shared_ptr<IEntityDocument> _document;
 
-	void Switch::UnregisterInterface(const std::shared_ptr<IEntityInterface>& type)
+			std::string _mountPoint;
+			SplitPath<> _mountPointSplit;
+			DocumentId _documentId;
+		};
+		std::vector<Mount> _mounts;
+		DocumentId _nextDocumentId = 1;
+	};
+
+	std::shared_ptr<IEntityMountingTree> CreateMountingTree()
 	{
-		for (auto i=_types.begin(); i!=_types.end(); ++i)
-			if (*i == type) {
-				_types.erase(i);
-				return;
-			}
+		return std::make_shared<MountingTree>();
 	}
-
-	void Switch::RegisterDefaultInterface(const std::shared_ptr<IEntityInterface>& type)
-	{
-		_defaultType = type;
-	}
-
-	void Switch::PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const
-	{
-		for (const auto&t : _types)
-			t->PrintDocument(stream, doc, indent);
-		_defaultType->PrintDocument(stream, doc, indent);
-	}
-
-    Switch::Switch() : _nextObjectId(1) {}
-    Switch::~Switch() {}
-    
-
 }
-
-

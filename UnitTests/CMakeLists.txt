@@ -16,7 +16,6 @@ add_executable(
     Assets/MountingTreeTests.cpp
     Assets/AssetCompilerTests.cpp
     Assets/ArchiveCacheTests.cpp
-    Formatters/BinaryFormatterTests.cpp
     )
 
 xle_configure_executable(UnitTests-Core)
@@ -33,6 +32,22 @@ xle_configure_dll(UnitTestDynLibrary)
 target_link_libraries(UnitTestDynLibrary PRIVATE ConsoleRig Assets OSServices Utility ForeignMisc)
 
 add_dependencies(UnitTests-Core UnitTestDynLibrary)
+
+####################################################################################################
+    ## UnitTests-Formatters ##
+####################################################################################################
+
+add_executable(
+    UnitTests-Formatters
+    Formatters/BinaryFormatterTests.cpp
+    Formatters/EntityInterfaceTests.cpp
+    ../Tools/EntityInterface/EntityInterface.cpp
+    ../Tools/EntityInterface/RetainedEntities.cpp
+    )
+
+xle_configure_executable(UnitTests-Formatters)
+target_link_libraries(UnitTests-Formatters PRIVATE Catch2WithMain)
+target_link_libraries(UnitTests-Formatters PRIVATE Formatters ConsoleRig Assets OSServices Math Utility)
 
 ####################################################################################################
     ## UnitTests-RenderCore ##

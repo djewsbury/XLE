@@ -23,7 +23,7 @@ namespace ToolsRig
     public:
 		void BuildDrawables(const SceneEngine::ExecuteSceneContext& executeContext);
 
-        void AddAnnotation(EntityInterface::ObjectTypeId typeId, const std::string& geoType);
+        void AddAnnotation(EntityInterface::EntityTypeId typeId, const std::string& geoType);
 
         std::shared_ptr<SceneEngine::IIntersectionScene> CreateIntersectionTester();
 
@@ -37,7 +37,7 @@ namespace ToolsRig
         class Annotation
         {
         public:
-            EntityInterface::ObjectTypeId _typeId;
+            EntityInterface::EntityTypeId _typeId;
         };
         std::vector<Annotation> _cubeAnnotations;
 		std::vector<Annotation> _directionalAnnotations;

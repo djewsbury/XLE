@@ -37,7 +37,7 @@ namespace GUILayer
     {
     public:
         EntityInterface::DocumentId _document;
-        EntityInterface::ObjectId _object;
+        EntityInterface::EntityId _object;
         Vector3 _worldSpaceCollision;
         float _distance;
         uint64 _materialGuid;

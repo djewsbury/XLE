@@ -556,7 +556,7 @@ namespace GUILayer
         using namespace EntityInterface;
         auto placementsEditor = std::make_shared<PlacementEntities>(_scene->_placementsManager, _scene->_placementsEditor, _scene->_placementsHidden);
         auto terrainEditor = std::make_shared<TerrainEntities>(_scene->_terrainManager);
-        auto flexGobInterface = std::make_shared<RetainedEntityInterface>(_scene->_flexObjects);
+        auto flexGobInterface = std::make_shared<RetainedEntitiesAdapter>(_scene->_flexObjects);
 
         auto swtch = std::make_shared<Switch>();
         swtch->RegisterInterface(placementsEditor);
@@ -587,7 +587,7 @@ namespace GUILayer
 
         using namespace EntityInterface;
         auto placementsEditor = std::make_shared<PlacementEntities>(_scene->_placementsManager, _scene->_placementsEditor, _scene->_placementsHidden);
-        auto flexGobInterface = std::make_shared<RetainedEntityInterface>(_scene->_flexObjects);
+        auto flexGobInterface = std::make_shared<RetainedEntitiesAdapter>(_scene->_flexObjects);
 
         auto swtch = std::make_shared<Switch>();
         swtch->RegisterInterface(placementsEditor);

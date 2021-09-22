@@ -23,17 +23,17 @@ namespace EntityInterface
         DocumentId CreateDocument(DocumentTypeId docType, const char initializer[]);
         bool DeleteDocument(DocumentId doc, DocumentTypeId docType);
 
-        ObjectId AssignObjectId(DocumentId doc, ObjectTypeId type) const;
+        EntityId AssignObjectId(DocumentId doc, EntityTypeId type) const;
         bool CreateObject(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
         bool DeleteObject(const Identifier& id);
         bool SetProperty(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
         bool GetProperty(const Identifier& id, PropertyId prop, void* dest, unsigned* destSize) const;
         bool SetParent(const Identifier& child, const Identifier& parent, ChildListId childList, int insertionPosition);
 
-        ObjectTypeId GetTypeId(const char name[]) const;
+        EntityTypeId GetTypeId(const char name[]) const;
         DocumentTypeId GetDocumentTypeId(const char name[]) const;
-        PropertyId GetPropertyId(ObjectTypeId type, const char name[]) const;
-        ChildListId GetChildListId(ObjectTypeId type, const char name[]) const;
+        PropertyId GetPropertyId(EntityTypeId type, const char name[]) const;
+        ChildListId GetChildListId(EntityTypeId type, const char name[]) const;
 
 		void PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
 

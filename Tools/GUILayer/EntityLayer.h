@@ -19,10 +19,10 @@ namespace GUILayer
     public:
                 //// //// ////   G O B   I N T E R F A C E   //// //// ////
         using DocumentTypeId = EntityInterface::DocumentTypeId;
-        using ObjectTypeId = EntityInterface::ObjectTypeId;
+        using EntityTypeId = EntityInterface::EntityTypeId;
         using DocumentId = EntityInterface::DocumentId;
-        using ObjectId = EntityInterface::ObjectId;
-        using ObjectTypeId = EntityInterface::ObjectTypeId;
+        using EntityId = EntityInterface::EntityId;
+        using EntityTypeId = EntityInterface::EntityTypeId;
         using PropertyId = EntityInterface::PropertyId;
         using ChildListId = EntityInterface::ChildListId;
 
@@ -41,22 +41,22 @@ namespace GUILayer
                 : _prop(prop), _srcBegin(srcBegin), _srcEnd(srcEnd), _elementType(elementType), _arrayCount(arrayCount), _isString(isString) {}
         };
 
-        ObjectId AssignObjectId(DocumentId doc, ObjectTypeId type);
-        bool CreateObject(DocumentId doc, ObjectId obj, ObjectTypeId objType, IEnumerable<PropertyInitializer>^ initializers);
-        bool DeleteObject(DocumentId doc, ObjectId obj, ObjectTypeId objType);
-        bool SetProperty(DocumentId doc, ObjectId obj, ObjectTypeId objType, IEnumerable<PropertyInitializer>^ initializers);
-        bool GetProperty(DocumentId doc, ObjectId obj, ObjectTypeId objType, PropertyId prop, void* dest, unsigned* destSize);
+        EntityId AssignObjectId(DocumentId doc, EntityTypeId type);
+        bool CreateObject(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers);
+        bool DeleteObject(DocumentId doc, EntityId obj, EntityTypeId objType);
+        bool SetProperty(DocumentId doc, EntityId obj, EntityTypeId objType, IEnumerable<PropertyInitializer>^ initializers);
+        bool GetProperty(DocumentId doc, EntityId obj, EntityTypeId objType, PropertyId prop, void* dest, unsigned* destSize);
 
         bool SetObjectParent(DocumentId doc, 
-            ObjectId childId, ObjectTypeId childTypeId, 
-            ObjectId parentId, ObjectTypeId parentTypeId,
+            EntityId childId, EntityTypeId childTypeId, 
+            EntityId parentId, EntityTypeId parentTypeId,
 			ChildListId childList,
 			int insertionPosition);
 
-        ObjectTypeId GetTypeId(System::String^ name);
+        EntityTypeId GetTypeId(System::String^ name);
         DocumentTypeId GetDocumentTypeId(System::String^ name);
-        PropertyId GetPropertyId(ObjectTypeId type, System::String^ name);
-        ChildListId GetChildListId(ObjectTypeId type, System::String^ name);
+        PropertyId GetPropertyId(EntityTypeId type, System::String^ name);
+        ChildListId GetChildListId(EntityTypeId type, System::String^ name);
 
         EntityInterface::Switch& GetSwitch();
 

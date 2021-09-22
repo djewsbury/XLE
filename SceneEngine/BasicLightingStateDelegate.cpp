@@ -5,8 +5,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "BasicLightingStateDelegate.h"
+#include "LightSceneConfiguration.h"
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../Tools/EntityInterface/EntityInterface.h"       // todo -- more IDynamicFormatter out
 #include "../Assets/Assets.h"
 #include "../Assets/AssetFutureContinuation.h"
 #include "../Assets/ConfigFileContainer.h"
@@ -96,6 +98,39 @@ namespace SceneEngine
     static SwirlingPointLights s_swirlingLights;
     static unsigned s_swirlingLightsOp = ~0u;
 
+    class BasicLightingStateDelegate : public ILightingStateDelegate
+    {
+    public:
+        void        PreRender(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
+        auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
+
+        auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
+        auto        GetToneMapSettings() -> ToneMapSettings override;
+
+        Operators   GetOperators() override;        
+
+		BasicLightingStateDelegate(EntityInterface::IDynamicFormatter& formatter);
+		~BasicLightingStateDelegate();
+
+		static void ConstructToFuture(
+			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
+			StringSection<> envSettingFileName);
+
+		::Assets::DependencyValidation GetDependencyValidation() const override;
+
+    protected:
+        std::vector<ParameterBox> _lights;
+        LightOperatorResolveContext _operatorResolveContext;
+
+        std::vector<unsigned> _lightSourcesInBoundScene;
+        std::vector<unsigned> _shadowProjectionsInBoundScene;
+
+        ::Assets::DependencyValidation _depVal;
+    };
+
     void BasicLightingStateDelegate::PreRender(
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
         RenderCore::LightingEngine::ILightScene& lightScene)
@@ -109,7 +144,8 @@ namespace SceneEngine
 
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
-        auto lightOperators = GetLightResolveOperators();
+#if 0
+        auto lightOperators = _operatorResolveContext._lightSourceOperators;
 
         RenderCore::LightingEngine::ILightScene::LightSourceId lightIndexToId[_envSettings->_lights.size()];
 
@@ -160,6 +196,7 @@ namespace SceneEngine
                 distantIBLSource->SetEquirectangularSource(GetEnvSettings()._environmentalLightingDesc._skyTexture);
         }
         _lightSourcesInBoundScene.push_back(ambientLight);
+#endif
     }
 
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
@@ -176,33 +213,39 @@ namespace SceneEngine
         return nullptr;
     }
 
-    static void ParseOperators(InputStreamFormatter<> fmttr, ILightingStateDelegate::Operators& result)
+    static void DeserializeLightOperators(EntityInterface::IDynamicFormatter& formatter, LightOperatorResolveContext& operatorResolveContext)
     {
-        StringSection<> keyname;
-        while (fmttr.TryKeyedItem(keyname)) {
-            if (XlEqString(keyname, "LightOperators")) {
-            } else
-                SkipValueOrElement(fmttr);
+        StringSection<> name;
+        while (formatter.TryKeyedItem(name)) {
+            if (XlEqString(name, "LightSource")) {
+                RequireBeginElement(formatter);
+                operatorResolveContext.DeserializeLightSourceOperator(formatter);
+                RequireEndElement(formatter);
+            } else if (XlEqString(name, "Shadow")) {
+                RequireBeginElement(formatter);
+                operatorResolveContext.DeserializeShadowOperator(formatter);
+                RequireEndElement(formatter);
+            } else if (XlEqString(name, "Ambient")) {
+                RequireBeginElement(formatter);
+                operatorResolveContext.DeserializeAmbientOperator(formatter);
+                RequireEndElement(formatter);
+            } else {
+                SkipValueOrElement(formatter);
+            }
         }
-    }
+	}
 
     auto BasicLightingStateDelegate::GetOperators() -> Operators
     {
-        // we have to parse through the configuration file and discover all of the operators that it's going to need
         Operators result;
-        auto fmttr = _configFileContainer->GetFormatter(_cfgSection);
+        result._lightResolveOperators.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
+        result._shadowResolveOperators.reserve(_operatorResolveContext._shadowOperators._objects.size());
+        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects)
+            result._lightResolveOperators.push_back(c.second);
+        for (const auto& c:_operatorResolveContext._shadowOperators._objects)
+            result._shadowResolveOperators.push_back(c.second);
 
-        StringSection<> keyname;
-        while (fmttr.TryKeyedItem(keyname)) {
-            if (XlEqString(keyname, "LightOperators")) {
-                RequireBeginElement(fmttr);
-                ParseOperators(fmttr, result);
-                RequireEndElement(fmttr);
-            } else
-                SkipValueOrElement(fmttr);
-        }
-
-        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
+        /*std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
         for (const auto& light:_envSettings->_lights) {
             RenderCore::LightingEngine::LightSourceOperatorDesc opDesc { light._shape, light._diffuseModel };
             if (light._isDominantLight)
@@ -211,18 +254,20 @@ namespace SceneEngine
             auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
             if (i == result.end())
                 result.push_back(opDesc);
-        }
+        }*/
 
         {
             auto h = s_swirlingLights._operator.Hash();
-            auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
-            s_swirlingLightsOp = (unsigned)std::distance(result.begin(), i);
-            if (i == result.end())
-                result.push_back(s_swirlingLights._operator);
+            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            s_swirlingLightsOp = (unsigned)std::distance(result._lightResolveOperators.begin(), i);
+            if (i == result._lightResolveOperators.end())
+                result._lightResolveOperators.push_back(s_swirlingLights._operator);
         }
+
         return result;
     }
 
+#if 0
     std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> BasicLightingStateDelegate::GetShadowResolveOperators()
     {
         std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> result;
@@ -238,6 +283,7 @@ namespace SceneEngine
         }
         return result;
     }
+#endif
 
     auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() -> RenderCore::LightingEngine::EnvironmentalLightingDesc
     {
@@ -251,7 +297,7 @@ namespace SceneEngine
 
     ::Assets::DependencyValidation BasicLightingStateDelegate::GetDependencyValidation() const
     {
-        return _configFileContainer->GetDependencyValidation();
+        return _depVal;
     }
 
 	void BasicLightingStateDelegate::ConstructToFuture(
@@ -263,18 +309,39 @@ namespace SceneEngine
 		::Assets::WhenAll(envSettingsFuture).ThenConstructToFuture(
             future,
             [cfgName = splitName.Parameters().AsString()](auto cfg) {
-                return std::make_shared<BasicLightingStateDelegate>(std::move(cfg), std::move(cfgName));
+                // return std::make_shared<BasicLightingStateDelegate>(std::move(cfg));
+                // todo -- create a formatter adapter
+                return std::shared_ptr<BasicLightingStateDelegate>{nullptr};
             });
 	}
 
 	BasicLightingStateDelegate::BasicLightingStateDelegate(
-		std::shared_ptr<::Assets::ConfigFileContainer<>> configFileContainer,
-        std::string cfgSection)
-	: _configFileContainer(std::move(configFileContainer))
-    , _cfgSection(std::move(cfgSection))
-	{}
+		EntityInterface::IDynamicFormatter& formatter)
+    : _depVal(formatter.GetDependencyValidation())
+	{
+         // we have to parse through the configuration file and discover all of the operators that it's going to need
+        LightOperatorResolveContext operatorResolveContext;
+        StringSection<> keyname;
+        while (formatter.TryKeyedItem(keyname)) {
+            if (XlEqString(keyname, "LightOperators")) {
+                RequireBeginElement(formatter);
+                DeserializeLightOperators(formatter, operatorResolveContext);
+                RequireEndElement(formatter);
+            } else if (XlEqString(keyname, "LightScene")) {
+                // todo -- 
+            } else
+                SkipValueOrElement(formatter);
+        }
+    }
 
 	BasicLightingStateDelegate::~BasicLightingStateDelegate() {}
+
+    ::Assets::PtrToFuturePtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings)
+    {
+        auto result = std::make_shared<::Assets::FuturePtr<BasicLightingStateDelegate>>(envSettings.AsString());
+        BasicLightingStateDelegate::ConstructToFuture(*result, envSettings);
+        return std::reinterpret_pointer_cast<::Assets::FuturePtr<ILightingStateDelegate>>(result);
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -319,6 +386,7 @@ namespace SceneEngine
         return result;
     }
 
+#if 0
     EnvironmentSettings DefaultEnvironmentSettings()
     {
         EnvironmentSettings result;
@@ -352,6 +420,7 @@ namespace SceneEngine
 
         return std::move(result);
     }
+#endif
 
     SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
@@ -476,6 +545,7 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
     static void ReadTransform(LightDesc& light, const ParameterBox& props)
     {
         static const auto transformHash = ParameterBox::MakeParameterNameHash("Transform");
@@ -622,6 +692,7 @@ namespace SceneEngine
 
     EnvironmentSettings::EnvironmentSettings() {}
     EnvironmentSettings::~EnvironmentSettings() {}
+#endif
 
     /*std::vector<std::pair<std::string, SceneEngine::EnvironmentSettings>> 
         DeserializeEnvSettings(InputStreamFormatter<utf8>& formatter)

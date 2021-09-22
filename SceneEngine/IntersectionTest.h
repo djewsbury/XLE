@@ -32,14 +32,14 @@ namespace SceneEngine
             typedef unsigned BitField;
         };
         
-        Type::Enum						_type = Type::Enum(0);
-        Float3							_worldSpaceCollision;
+        Type::Enum					    _type = Type::Enum(0);
+        Float3						    _worldSpaceCollision;
         std::pair<uint64_t, uint64_t>   _objectGuid = {0ull, 0ull};
-        float							_distance = std::numeric_limits<float>::max();
-        unsigned						_drawCallIndex = ~0u;
-        uint64_t						_materialGuid = 0;
-        ::Assets::rstring				_materialName;
-        ::Assets::rstring				_modelName;
+        float						    _distance = std::numeric_limits<float>::max();
+        unsigned					    _drawCallIndex = ~0u;
+        uint64_t					    _materialGuid = 0;
+        ::Assets::rstring			    _materialName;
+        ::Assets::rstring			    _modelName;
     };
 
     class IIntersectionScene

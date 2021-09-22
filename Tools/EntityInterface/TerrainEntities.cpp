@@ -16,7 +16,7 @@
 
 namespace EntityInterface
 {
-    static const ObjectTypeId ObjectType_Terrain = 1;
+    static const EntityTypeId ObjectType_Terrain = 1;
     static const PropertyId Property_UberSurfaceDir = 201;
     static const PropertyId Property_Offset = 202;
 
@@ -25,12 +25,12 @@ namespace EntityInterface
 	DocumentId TerrainEntities::CreateDocument(DocumentTypeId docType, const char initializer[]) { return 0; }
 	bool TerrainEntities::DeleteDocument(DocumentId doc, DocumentTypeId docType) { return false; }
 
-	ObjectId TerrainEntities::AssignObjectId(DocumentId doc, ObjectTypeId type) const
+	EntityId TerrainEntities::AssignObjectId(DocumentId doc, EntityTypeId type) const
 	{
 		if (type == ObjectType_Terrain) {
 		    return 1;
         }
-        static ObjectId incrementalId = 100;
+        static EntityId incrementalId = 100;
         return incrementalId++;
 	}
 
@@ -102,7 +102,7 @@ namespace EntityInterface
         return false;
     }
 
-	ObjectTypeId TerrainEntities::GetTypeId(const char name[]) const
+	EntityTypeId TerrainEntities::GetTypeId(const char name[]) const
 	{
 		if (!XlCompareString(name, "Terrain")) return ObjectType_Terrain;
 		return 0;
@@ -113,7 +113,7 @@ namespace EntityInterface
 		return 0;
 	}
 
-	PropertyId TerrainEntities::GetPropertyId(ObjectTypeId type, const char name[]) const
+	PropertyId TerrainEntities::GetPropertyId(EntityTypeId type, const char name[]) const
 	{
         if (type == ObjectType_Terrain) {
             if (!XlCompareString(name, "UberSurfaceDir"))   return Property_UberSurfaceDir;
@@ -123,7 +123,7 @@ namespace EntityInterface
 		return 0;
 	}
 
-	ChildListId TerrainEntities::GetChildListId(ObjectTypeId type, const char name[]) const
+	ChildListId TerrainEntities::GetChildListId(EntityTypeId type, const char name[]) const
 	{
 		return 0;
 	}

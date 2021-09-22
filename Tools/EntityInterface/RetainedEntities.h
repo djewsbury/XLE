@@ -8,6 +8,7 @@
 
 #include "EntityInterface.h"
 #include "../../Utility/ParameterBox.h"
+#include "../../Utility/FunctionUtils.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -20,13 +21,12 @@ namespace EntityInterface
     class RetainedEntity
     {
     public:
-        ObjectId _id = 0;
-        DocumentId _doc = 0;
-        ObjectTypeId _type = 0;
+        EntityId _id = 0;
+        EntityTypeId _type = 0;
 
         ParameterBox _properties;
-        std::vector<std::pair<ChildListId, ObjectId>> _children;
-        ObjectId _parent = 0;
+        std::vector<std::pair<ChildListId, EntityId>> _children;
+        EntityId _parent = 0;
     };
 
     /// <summary>Stores entity data generically</summary>
@@ -43,9 +43,8 @@ namespace EntityInterface
     class RetainedEntities
     {
     public:
-        const RetainedEntity* GetEntity(DocumentId doc, ObjectId obj) const;
-        const RetainedEntity* GetEntity(const Identifier&) const;
-        std::vector<const RetainedEntity*> FindEntitiesOfType(ObjectTypeId typeId) const;
+        const RetainedEntity* GetEntity(EntityId) const;
+        std::vector<const RetainedEntity*> FindEntitiesOfType(EntityTypeId typeId) const;
 
         enum class ChangeType 
         {
@@ -71,20 +70,20 @@ namespace EntityInterface
 
         using OnChangeDelegate = 
             std::function<
-                void(const RetainedEntities& flexSys, const Identifier&, ChangeType)
+                void(const RetainedEntities& flexSys, EntityId, ChangeType)
             >;
-        unsigned RegisterCallback(ObjectTypeId typeId, OnChangeDelegate&& onChange);
+        unsigned RegisterCallback(EntityTypeId typeId, OnChangeDelegate&& onChange);
         void DeregisterCallback(unsigned callbackId);
 
-        ObjectTypeId    GetTypeId(const char name[]) const;
-		PropertyId      GetPropertyId(ObjectTypeId typeId, const char name[]) const;
-		ChildListId     GetChildListId(ObjectTypeId typeId, const char name[]) const;
+        EntityTypeId    GetTypeId(StringSection<> name) const;
+		PropertyId      GetPropertyId(EntityTypeId typeId, StringSection<> name) const;
+		ChildListId     GetChildListId(EntityTypeId typeId, StringSection<> name) const;
 
-        std::string		GetTypeName(ObjectTypeId id) const;
-		std::string		GetPropertyName(ObjectTypeId typeId, PropertyId id) const;
-		std::string		GetChildListName(ObjectTypeId typeId, ChildListId id) const;
+        std::string		GetTypeName(EntityTypeId id) const;
+		std::string		GetPropertyName(EntityTypeId typeId, PropertyId id) const;
+		std::string		GetChildListName(EntityTypeId typeId, ChildListId id) const;
 
-		void			PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
+		void			PrintDocument(std::ostream& stream, unsigned indent) const;
 
 		class ChildConstIterator
 		{
@@ -106,7 +105,7 @@ namespace EntityInterface
 			reference operator->() const;
 			reference operator[](size_t idx) const;
 
-			using UnderlyingIterator = std::vector<std::pair<ChildListId, ObjectId>>::const_iterator;
+			using UnderlyingIterator = std::vector<std::pair<ChildListId, EntityId>>::const_iterator;
 
 			ChildConstIterator(
 				const RetainedEntities& entitySystem,
@@ -120,13 +119,13 @@ namespace EntityInterface
 			ptrdiff_t _childIdx;
 		};
 
-		IteratorRange<ChildConstIterator> GetChildren(DocumentId doc, ObjectId parentObj, ChildListId childList) const;
+		IteratorRange<ChildConstIterator> GetChildren(EntityId parentObj, ChildListId childList) const;
 		IteratorRange<ChildConstIterator> GetChildren(const RetainedEntity& parent, ChildListId childList) const;
 
         RetainedEntities();
         ~RetainedEntities();
     protected:
-        mutable ObjectId _nextObjectId;
+        mutable EntityId _nextEntityId;
         mutable std::vector<RetainedEntity> _objects;
 
         class RegisteredObjectType
@@ -140,52 +139,45 @@ namespace EntityInterface
 
             RegisteredObjectType(const std::string& name) : _name(name) {}
         };
-        mutable std::vector<std::pair<ObjectTypeId, RegisteredObjectType>> _registeredObjectTypes;
+        mutable std::vector<std::pair<EntityTypeId, RegisteredObjectType>> _registeredObjectTypes;
 
-        mutable ObjectTypeId _nextObjectTypeId;
+        mutable EntityTypeId _nextObjectTypeId;
         unsigned _nextCallbackId;
 
-        RegisteredObjectType* GetObjectType(ObjectTypeId id) const;
+        RegisteredObjectType* GetObjectType(EntityTypeId id) const;
         void InvokeOnChange(RegisteredObjectType& type, RetainedEntity& obj, ChangeType changeType) const;
-        RetainedEntity* GetEntityInt(DocumentId doc, ObjectId obj) const;
         bool SetSingleProperties(RetainedEntity& dest, const RegisteredObjectType& type, const PropertyInitializer& initializer) const;
 		void PrintEntity(std::ostream& stream, const RetainedEntity& entity, StringSection<> childListName, unsigned indent) const;
+        RetainedEntity* GetEntityWriteable(EntityId);
 
-        friend class RetainedEntityInterface;
+        friend class RetainedEntitiesAdapter;
     };
 
-    /// <summary>Implements IEntityInterface for retained entities</summary>
+    /// <summary>Implements IMutableEntityDocument for retained entities</summary>
     /// This implementation will simply accept all incoming data, and store
     /// it in a generic data structure.
-    class RetainedEntityInterface : public IEntityInterface
+    class RetainedEntitiesAdapter : public IMutableEntityDocument
     {
     public:
-        DocumentId CreateDocument(DocumentTypeId docType, const char initializer[]);
-		bool DeleteDocument(DocumentId doc, DocumentTypeId docType);
+		std::optional<EntityId> CreateEntity(EntityTypeId, IteratorRange<const PropertyInitializer*>) override;
+		bool DeleteEntity(EntityId) override;
+		bool SetProperty(EntityId, IteratorRange<const PropertyInitializer*>) override;
+		std::optional<ImpliedTyping::TypeDesc> GetProperty(EntityId, PropertyId prop, IteratorRange<void*> destinationBuffer) const override;
+        bool SetParent(EntityId child, EntityId parent, ChildListId childList, int insertionPosition) override;
 
-		ObjectId AssignObjectId(DocumentId doc, ObjectTypeId type) const;
-		bool CreateObject(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
-		bool DeleteObject(const Identifier& id);
-		bool SetProperty(const Identifier& id, const PropertyInitializer initializers[], size_t initializerCount);
-		bool GetProperty(const Identifier& id, PropertyId prop, void* dest, unsigned* destSize) const;
-        bool SetParent(const Identifier& child, const Identifier& parent, ChildListId childList, int insertionPosition);
+		EntityTypeId    GetTypeId(StringSection<> name) const override;
+		PropertyId      GetPropertyId(EntityTypeId typeId, StringSection<> name) const override;
+		ChildListId     GetChildListId(EntityTypeId typeId, StringSection<> name) const override;
 
-		ObjectTypeId    GetTypeId(const char name[]) const;
-		DocumentTypeId  GetDocumentTypeId(const char name[]) const;
-		PropertyId      GetPropertyId(ObjectTypeId typeId, const char name[]) const;
-		ChildListId     GetChildListId(ObjectTypeId typeId, const char name[]) const;
-
-		void			PrintDocument(std::ostream& stream, DocumentId doc, unsigned indent) const;
-
-		RetainedEntityInterface(std::shared_ptr<RetainedEntities> scene);
-		~RetainedEntityInterface();
+		RetainedEntitiesAdapter(std::shared_ptr<RetainedEntities> scene);
+		~RetainedEntitiesAdapter();
     protected:
         std::shared_ptr<RetainedEntities> _scene;
     };
 
     void Deserialize(
         Utility::InputStreamFormatter<utf8>& formatter,
-        IEntityInterface& interf, DocumentTypeId docType);
+        IMutableEntityDocument& interf);
 }
 
 

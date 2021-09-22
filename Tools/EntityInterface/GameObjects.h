@@ -16,7 +16,6 @@ namespace EntityInterface
 
     void ExportGameObjects(
         Utility::OutputStreamFormatter& formatter,
-        const RetainedEntities& flexGobInterface,
-        uint64 docId);
+        const RetainedEntities& flexGobInterface);
 }
 

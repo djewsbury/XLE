@@ -406,7 +406,7 @@ namespace ToolsRig
 
         auto vbData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::VB, chld.size() * sizeof(Float3));
         for (size_t c=0; c<chld.size(); ++c) {
-            const auto* e = objs.GetEntity(obj._doc, chld[c].second);
+            const auto* e = objs.GetEntity(chld[c].second);
             if (e) {
                 vbData._data.Cast<Float3*>()[c] = ExtractTranslation(GetTransform(*e));
             } else {
@@ -513,7 +513,7 @@ namespace ToolsRig
 		}
 	}
 
-    void ObjectPlaceholders::AddAnnotation(EntityInterface::ObjectTypeId typeId, const std::string& geoType)
+    void ObjectPlaceholders::AddAnnotation(EntityInterface::EntityTypeId typeId, const std::string& geoType)
     {
         Annotation newAnnotation;
         newAnnotation._typeId = typeId;
@@ -555,7 +555,7 @@ namespace ToolsRig
 		result._type = SceneEngine::IntersectionTestResult::Type::Extra;
 		result._worldSpaceCollision = worldSpaceCollision;
 		result._distance = 0.f;
-		result._objectGuid = std::make_pair(o._doc, o._id);
+		result._objectGuid = {0ull, o._id};
 		result._drawCallIndex = 0;
 		result._materialGuid = 0;
 		return result;
