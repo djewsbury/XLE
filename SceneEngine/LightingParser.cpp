@@ -443,7 +443,7 @@ namespace SceneEngine
 		for (unsigned s=0; s<lightingDelegate.GetShadowProjectionCount(); ++s) {
 			executeContext.AddView(
 				SceneView{SceneView::Type::Other},
-				std::make_shared<ViewDelegate_Shadow>(ShadowProjectionDesc{}));
+				std::make_shared<ViewDelegate_Shadow>(StandardShadowProjection{}));
 		}
 
 		scene.ExecuteScene(threadContext, executeContext);

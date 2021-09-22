@@ -135,5 +135,4 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetProjection(const Float4x4&) = 0;
 		virtual ~INearShadowProjection();
 	};
-
 }}

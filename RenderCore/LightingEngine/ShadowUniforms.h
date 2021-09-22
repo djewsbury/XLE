@@ -145,8 +145,25 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float4      _specialNearMinimalProjection;
 	};
 
+	class IShadowProjectionDriver
+	{
+	public:
+		virtual void UpdateProjections(
+			const Techniques::ParsingContext&,
+			IPositionalLightSource& lightSource,
+			IOrthoShadowProjections& destination) = 0;
+		virtual ~IShadowProjectionDriver() = default;
+	};
+
+	class IAttachDriver
+	{
+	public:
+		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) = 0;
+		virtual ~IAttachDriver() = default;
+	};
+
 	/// <summary>Defines the projected shadows for a single light<summary>
-	class ShadowProjectionDesc : public Internal::ILightBase, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
+	class StandardShadowProjection : public Internal::ILightBase, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection, public IAttachDriver
 	{
 	public:
 		using Projections = MultiProjection<MaxShadowTexturesPerLight>;
@@ -159,6 +176,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float			_casterLookupExtraBias = 0.001f;
 
 		std::shared_ptr<ICompiledShadowPreparer> _preparer;
+		std::shared_ptr<Internal::ILightBase> _driver;
 
 		virtual void SetDesc(const Desc& newDesc) override
 		{
@@ -242,6 +260,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_projections._specialNearMinimalProjection = ExtractMinimalProjection(nearWorldToProjection);
 		}
 
+		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) override
+		{
+			_driver = std::move(driver);
+		}
+
 		virtual void* QueryInterface(uint64_t interfaceTypeCode) override
 		{
 			if (interfaceTypeCode == typeid(IDepthTextureResolve).hash_code()) {
@@ -255,8 +278,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			} else if (interfaceTypeCode == typeid(INearShadowProjection).hash_code()) {
 				if (_projections._useNearProj)
 					return (INearShadowProjection*)this;
-			} else if (interfaceTypeCode == typeid(ShadowProjectionDesc).hash_code()) {
+			} else if (interfaceTypeCode == typeid(IAttachDriver).hash_code()) {
+				return (IAttachDriver*)this;
+			} else if (interfaceTypeCode == typeid(StandardShadowProjection).hash_code()) {
 				return this;
+			} else if (_driver) {
+				return _driver->QueryInterface(interfaceTypeCode);
 			}
 			return nullptr;
 		}

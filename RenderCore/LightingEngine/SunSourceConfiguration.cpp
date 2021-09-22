@@ -4,7 +4,9 @@
 
 #include "SunSourceConfiguration.h"
 #include "ShadowPreparer.h"
+#include "ShadowUniforms.h"     // for the attach driver infrastructure
 #include "../Techniques/TechniqueUtils.h"
+#include "../Techniques/ParsingContext.h"
 #include "../Format.h"
 #include "../StateDesc.h"
 #include "../../ConsoleRig/Console.h"
@@ -937,44 +939,73 @@ namespace RenderCore { namespace LightingEngine
         result._dsRasterDepthBias = settings._dsRasterDepthBias;
         */
 
+        // result._projectionDriver = ProjectionDriver::SunSourceShadows;
+
 		return result;
 	}
 
-    ILightScene::ShadowProjectionId CreateShadowCascades(
-        ILightScene& lightScene,
-        ILightScene::ShadowOperatorId shadowOperatorId,
-        ILightScene::LightSourceId associatedLightId,
-        const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc,
-        const SunSourceFrustumSettings& settings)
+    class SunSourceFrustumDriver : public Internal::IShadowProjectionDriver, public ISunSourceShadows, public Internal::ILightBase
     {
-        auto* positionalLightSource = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
-        if (!positionalLightSource)
-            Throw(std::runtime_error("Could not find positional light source information in CreateShadowCascades for a sun light source"));
+    public:
+        virtual void UpdateProjections(
+			const Techniques::ParsingContext& parsingContext,
+            IPositionalLightSource& lightSource,
+			IOrthoShadowProjections& destination) override
+        {
+            auto mainSceneProjectionDesc = parsingContext.GetProjectionDesc();
+            if (_fixedCamera)
+                mainSceneProjectionDesc = _fixedCamera.value();
+            auto negativeLightDirection = Normalize(ExtractTranslation(lightSource.GetLocalToWorld()));
 
-        auto negativeLightDirection = Normalize(ExtractTranslation(positionalLightSource->GetLocalToWorld()));
-
-        auto shadowProjectionId = lightScene.CreateShadowProjection(shadowOperatorId, associatedLightId);
-
-        if (settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades) {
-            auto t = BuildBasicShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
-            assert(t._normalProjCount);
-            auto* cascades = lightScene.TryGetShadowProjectionInterface<IArbitraryShadowProjections>(shadowProjectionId);
-            if (cascades)
-                cascades->SetArbitrarySubProjections(
-                    MakeIteratorRange(t._worldToCamera, &t._worldToCamera[t._normalProjCount]),
-                    MakeIteratorRange(t._cameraToProjection, &t._cameraToProjection[t._normalProjCount]));
-        } else {
+            assert(!(_settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
             // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
-            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, RenderCore::Techniques::GetDefaultClipSpaceType());
+            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, _settings, RenderCore::Techniques::GetDefaultClipSpaceType());
             assert(t._normalProjCount);
-            auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
-            if (cascades) {
-                cascades->SetOrthoSubProjections(
-                    MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
-                cascades->SetWorldToOrthoView(t._worldToView);
-            }
+            destination.SetOrthoSubProjections(MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
+            destination.SetWorldToOrthoView(t._worldToView);
         }
 
+        SunSourceFrustumSettings GetSettings() const override
+        {
+            return _settings;
+        }
+
+        void SetSettings(const SunSourceFrustumSettings&) override
+        {
+            assert(0);      // not yet implemennted
+        }
+
+        void FixMainSceneCamera(const Techniques::ProjectionDesc& projDesc) override
+        {
+            _fixedCamera = projDesc;
+        }
+
+        void UnfixMainSceneCamera() override
+        {
+            _fixedCamera = {};
+        }
+
+        virtual void* QueryInterface(uint64_t interfaceTypeCode) override
+        {
+            if (interfaceTypeCode == typeid(Internal::IShadowProjectionDriver).hash_code()) {
+                return (Internal::IShadowProjectionDriver*)this;
+            } else if (interfaceTypeCode == typeid(ISunSourceShadows).hash_code()) {
+                return (ISunSourceShadows*)this;
+            }
+            return nullptr;
+        }
+
+        SunSourceFrustumDriver(const SunSourceFrustumSettings& settings) : _settings(settings) {}
+    private:
+        SunSourceFrustumSettings _settings;
+        std::optional<Techniques::ProjectionDesc> _fixedCamera;
+    };
+
+    static void ApplyNonFrustumSettings(
+        ILightScene& lightScene,
+        ILightScene::ShadowProjectionId shadowProjectionId,
+        const SunSourceFrustumSettings& settings)
+    {
         auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowProjectionId);
         if (preparer) {
             IDepthTextureResolve::Desc desc;
@@ -983,6 +1014,25 @@ namespace RenderCore { namespace LightingEngine
             desc._minBlurSearch = settings._minBlurSearch;
             desc._maxBlurSearch = settings._maxBlurSearch;
             preparer->SetDesc(desc);
+        }
+    }
+
+    ILightScene::ShadowProjectionId CreateSunSourceShadows(
+        ILightScene& lightScene,
+        ILightScene::ShadowOperatorId shadowOperatorId,
+        ILightScene::LightSourceId associatedLightId,
+        const SunSourceFrustumSettings& settings)
+    {
+        auto shadowProjectionId = lightScene.CreateShadowProjection(shadowOperatorId, associatedLightId);
+
+        ApplyNonFrustumSettings(lightScene, shadowProjectionId, settings);
+
+        auto* attachDriver = lightScene.TryGetShadowProjectionInterface<Internal::IAttachDriver>(shadowProjectionId);
+        if (attachDriver) {
+            attachDriver->AttachDriver(
+                std::make_shared<SunSourceFrustumDriver>(settings));
+        } else {
+            assert(0);
         }
 
 		/*result._shadowGeneratorDesc = CalculateShadowGeneratorDesc(settings);
@@ -993,6 +1043,33 @@ namespace RenderCore { namespace LightingEngine
         return result;*/
 
         return shadowProjectionId;
+    }
+
+    void ConfigureShadowProjectionImmediately(
+        ILightScene& lightScene,
+        ILightScene::ShadowProjectionId shadowProjectionId,
+        ILightScene::LightSourceId associatedLightId,
+        const SunSourceFrustumSettings& settings,
+        const Techniques::ProjectionDesc& mainSceneProjectionDesc)
+    {
+        auto* positionalLightSource = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
+        if (!positionalLightSource)
+            Throw(std::runtime_error("Could not find positional light source information in CreateShadowCascades for a sun light source"));
+
+        auto negativeLightDirection = Normalize(ExtractTranslation(positionalLightSource->GetLocalToWorld()));
+
+        assert(!(settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
+        // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
+        auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, RenderCore::Techniques::GetDefaultClipSpaceType());
+        assert(t._normalProjCount);
+        auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
+        if (cascades) {
+            cascades->SetOrthoSubProjections(
+                MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
+            cascades->SetWorldToOrthoView(t._worldToView);
+        }
+
+        ApplyNonFrustumSettings(lightScene, shadowProjectionId, settings);
     }
 
     SunSourceFrustumSettings::SunSourceFrustumSettings()

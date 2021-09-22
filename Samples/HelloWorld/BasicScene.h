@@ -34,7 +34,7 @@ namespace Sample
 	{
 	public:
         unsigned GetShadowProjectionCount() const override;
-        SceneEngine::ShadowProjectionDesc GetShadowProjectionDesc(
+        SceneEngine::StandardShadowProjection GetShadowProjectionDesc(
 			unsigned index, 
 			const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc) const override;
 

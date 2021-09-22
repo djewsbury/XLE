@@ -107,7 +107,7 @@ namespace SceneEngine
 		_general.Reset();
 	}
 
-	ViewDelegate_Shadow::ViewDelegate_Shadow(ShadowProjectionDesc shadowProjection)
+	ViewDelegate_Shadow::ViewDelegate_Shadow(StandardShadowProjection shadowProjection)
 	: _shadowProj(shadowProjection)
 	{
 	}
@@ -175,7 +175,7 @@ namespace SceneEngine
         Metal::DeviceContext& devContext, 
 		RenderCore::Techniques::ParsingContext& parserContext,
         MainTargets mainTargets,
-		const ShadowProjectionDesc& projectionDesc)
+		const StandardShadowProjection& projectionDesc)
     {
         devContext.Bind(Techniques::CommonResources()._dssDisable);
         devContext.Bind(Techniques::CommonResources()._blendAlphaPremultiplied);

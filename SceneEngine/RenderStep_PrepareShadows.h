@@ -33,11 +33,11 @@ namespace SceneEngine
 	{
 	public:
 		RenderCore::Techniques::DrawablesPacket _general;
-		RenderCore::LightingEngine::ShadowProjectionDesc _shadowProj;
+		RenderCore::LightingEngine::StandardShadowProjection _shadowProj;
 
 		RenderCore::Techniques::DrawablesPacket* GetDrawablesPacket(RenderCore::Techniques::BatchFilter batch) override;
 		void Reset() override;
-		ViewDelegate_Shadow(RenderCore::LightingEngine::ShadowProjectionDesc shadowProjection);
+		ViewDelegate_Shadow(RenderCore::LightingEngine::StandardShadowProjection shadowProjection);
 		~ViewDelegate_Shadow();
 	};
 }

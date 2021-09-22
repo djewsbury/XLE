@@ -29,7 +29,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
         return unsigned(shape);
     }
 
-    CB_Light MakeLightUniforms(const StandardLightDesc& light, const LightSourceOperatorDesc& operatorDesc)
+    CB_Light MakeLightUniforms(const StandardPositionalLight& light, const LightSourceOperatorDesc& operatorDesc)
     {
         return CB_Light 
             {

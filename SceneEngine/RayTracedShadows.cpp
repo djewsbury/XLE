@@ -159,7 +159,7 @@ namespace SceneEngine
 		if (!BatchHasContent(inputDrawables._general))
             return PreparedRTShadowFrustum();
 
-		const ShadowProjectionDesc& frustum = inputDrawables._shadowProj;
+		const StandardShadowProjection& frustum = inputDrawables._shadowProj;
 
         GPUAnnotation anno(threadContext, "Prepare-RTShadows");
 

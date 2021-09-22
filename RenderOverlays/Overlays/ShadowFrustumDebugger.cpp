@@ -33,7 +33,7 @@ namespace Overlays
         }
 
 		RenderCore::Techniques::ParsingContext& parserContext = /* ... */;
-        static SceneEngine::ShadowProjectionDesc projectionDesc;
+        static SceneEngine::StandardShadowProjection projectionDesc;
         if (!Tweakable("ShadowDebugLock", false)) {
             projectionDesc = _scene->GetShadowProjectionDesc(0, context.GetProjectionDesc());
         }

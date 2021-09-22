@@ -8,7 +8,7 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	void* StandardLightDesc::QueryInterface(uint64_t interfaceTypeCode)
+	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode)
 	{
 		if (interfaceTypeCode == typeid(IPositionalLightSource).hash_code()) {
 			return (IPositionalLightSource*)this;
@@ -17,7 +17,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		} else if (interfaceTypeCode == typeid(IFiniteLightSource).hash_code()) {
 			if (_flags & Flags::SupportFiniteRange)
 				return (IFiniteLightSource*)this;
-		} else if (interfaceTypeCode == typeid(StandardLightDesc).hash_code()) {
+		} else if (interfaceTypeCode == typeid(StandardPositionalLight).hash_code()) {
 			return this;
 		}
 		return nullptr;

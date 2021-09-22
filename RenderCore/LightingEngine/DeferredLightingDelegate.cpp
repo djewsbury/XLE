@@ -244,7 +244,10 @@ namespace RenderCore { namespace LightingEngine
 			_preparedShadows.push_back({
 				_lightScene->_dynamicShadowProjections[c]._lightId,
 				_lightScene->_dynamicShadowProjections[c]._operatorId,
-				Internal::SetupShadowPrepare(iterator, *_lightScene->_dynamicShadowProjections[c]._desc, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)});
+				Internal::SetupShadowPrepare(
+					iterator, *_lightScene->_dynamicShadowProjections[c]._desc, 
+					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
+					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)});
 
 			// shadow entries must be sorted by light id
 			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);

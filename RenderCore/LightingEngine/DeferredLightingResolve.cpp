@@ -35,10 +35,10 @@ namespace RenderCore { namespace LightingEngine
 {
 	std::unique_ptr<Internal::ILightBase> LightResolveOperators::CreateLightSource(ILightScene::LightOperatorId opId)
 	{
-		Internal::StandardLightDesc::Flags::BitField flags = 0;
+		Internal::StandardPositionalLight::Flags::BitField flags = 0;
 		if (_pipelines[opId]._stencilingGeoShape != LightSourceShape::Directional && !(_pipelines[opId]._flags & LightSourceOperatorDesc::Flags::NeverStencil))
-			flags |= Internal::StandardLightDesc::Flags::SupportFiniteRange;
-		return std::make_unique<Internal::StandardLightDesc>(flags);
+			flags |= Internal::StandardPositionalLight::Flags::SupportFiniteRange;
+		return std::make_unique<Internal::StandardPositionalLight>(flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -454,8 +454,8 @@ namespace RenderCore { namespace LightingEngine
 			for (unsigned l=0; l<set._lights.size(); ++l) {
 				const auto& i = set._lights[l];
 
-				assert(i._desc->QueryInterface(typeid(Internal::StandardLightDesc).hash_code()) == i._desc.get());
-				auto& standardLightDesc = *(Internal::StandardLightDesc*)i._desc.get();
+				assert(i._desc->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == i._desc.get());
+				auto& standardLightDesc = *(Internal::StandardPositionalLight*)i._desc.get();
 
 				if (lightShape == LightSourceShape::Sphere) {
 					// Lights can require a bit of setup and fiddling around on the GPU; so we'll try to

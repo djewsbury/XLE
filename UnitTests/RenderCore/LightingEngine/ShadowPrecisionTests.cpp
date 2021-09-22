@@ -521,7 +521,9 @@ namespace UnitTests
 				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 				auto lightId = lightScene.CreateLightSource(0);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
-				auto shadowProjectionId = LightingEngine::CreateShadowCascades(lightScene, 0, lightId, BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}), sunSourceFrustumSettings);
+				auto shadowProjectionId = LightingEngine::CreateSunSourceShadows(lightScene, 0, lightId, sunSourceFrustumSettings);
+				lightScene.TryGetShadowProjectionInterface<LightingEngine::ISunSourceShadows>(shadowProjectionId)->FixMainSceneCamera(
+					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
 
 				auto generalPipelineFuture = ::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, GENERAL_OPERATOR_PIPELINE ":GraphicsMain");
 				generalPipelineFuture->StallWhilePending();

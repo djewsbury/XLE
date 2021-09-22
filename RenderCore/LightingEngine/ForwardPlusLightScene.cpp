@@ -29,12 +29,12 @@ namespace RenderCore { namespace LightingEngine
 	static const uint64_t s_shadowTemplate = Utility::Hash64("ShadowTemplate");
 	static const unsigned s_shadowProbeShadowFlag = 1u<<31u;
 
-	class ForwardPlusLightDesc : public Internal::StandardLightDesc
+	class ForwardPlusLightDesc : public Internal::StandardPositionalLight
 	{
 	public:
 		unsigned _staticProbeDatabaseEntry = 0;
 
-		using StandardLightDesc::StandardLightDesc; 
+		using StandardPositionalLight::StandardPositionalLight; 
 	};
 
 	class ForwardPlusLightScene::AmbientLightConfig
@@ -137,7 +137,7 @@ namespace RenderCore { namespace LightingEngine
 			_ambientLight->_ambientLightEnabled = true;
 			return 0;
 		}
-		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardLightDesc::Flags::SupportFiniteRange);
+		auto desc = std::make_unique<ForwardPlusLightDesc>(Internal::StandardPositionalLight::Flags::SupportFiniteRange);
 		return AddLightSource(opId, std::move(desc));
 	}
 

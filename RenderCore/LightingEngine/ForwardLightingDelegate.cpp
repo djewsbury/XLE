@@ -57,7 +57,11 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned c=0; c<_lightScene->_dynamicShadowProjections.size(); ++c) {
 			_lightScene->_preparedShadows.push_back(std::make_pair(
 				_lightScene->_dynamicShadowProjections[c]._lightId,
-				Internal::SetupShadowPrepare(iterator, *_lightScene->_dynamicShadowProjections[c]._desc, *_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
+				Internal::SetupShadowPrepare(
+					iterator, 
+					*_lightScene->_dynamicShadowProjections[c]._desc, 
+					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
+					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
 
 			// shadow entries must be sorted by light id
 			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);

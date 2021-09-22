@@ -30,14 +30,15 @@ namespace SceneEngine
     {
     public:
         RenderCore::LightingEngine::LightSourceOperatorDesc _operator;
-        void WriteLights(RenderCore::LightingEngine::ILightScene& lightScene, unsigned opId)
+        std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSources;
+        void UpdateLights(RenderCore::LightingEngine::ILightScene& lightScene)
         {
             static float cutoffRadius = 7.5f;
             static float swirlingRadius = 15.0f;
             float startingAngle = 0.f + _time;
-            const auto tileLightCount = 32u;
+            const auto tileLightCount = _lightSources.size();
             for (unsigned c=0; c<tileLightCount; ++c) {
-                auto lightId = lightScene.CreateLightSource(opId);
+                auto lightId = _lightSources[c];
 
                 const float X = startingAngle + c / float(tileLightCount) * gPI * 2.f;
 				const float Y = 3.7397f * startingAngle + .7234f * c / float(tileLightCount) * gPI * 2.f;
@@ -66,6 +67,23 @@ namespace SceneEngine
             _time += 1.0f/60.f;
         }
 
+        void BindScene(RenderCore::LightingEngine::ILightScene& lightScene, unsigned opId)
+        {
+            assert(_lightSources.empty());
+            const auto tileLightCount = 32u;
+            for (unsigned c=0; c<tileLightCount; ++c) {
+                auto lightId = lightScene.CreateLightSource(opId);
+                _lightSources.push_back(lightId);
+            }
+        }
+
+        void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+        {
+            for (auto l:_lightSources)
+                lightScene.DestroyLightSource(l);
+            _lightSources.clear();
+        }
+
         SwirlingPointLights()
         {
             _operator._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
@@ -81,8 +99,16 @@ namespace SceneEngine
         const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
         RenderCore::LightingEngine::ILightScene& lightScene)
     {
+        s_swirlingLights.UpdateLights(lightScene);
+    }
+
+    void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
+    {
+    }
+
+    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+    {
         auto lightOperators = GetLightResolveOperators();
-        lightScene.Clear();
 
         RenderCore::LightingEngine::ILightScene::LightSourceId lightIndexToId[_envSettings->_lights.size()];
 
@@ -115,14 +141,15 @@ namespace SceneEngine
             }
         }
 
-        s_swirlingLights.WriteLights(lightScene, s_swirlingLightsOp);
-
         for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
             unsigned operatorId = 0;
-            auto shadowId = RenderCore::LightingEngine::CreateShadowCascades(
+            auto shadowId = RenderCore::LightingEngine::CreateSunSourceShadows(
                 lightScene, operatorId, lightIndexToId[shadow._lightIdx],
-                mainSceneCameraDesc, shadow._shadowFrustumSettings);
+                shadow._shadowFrustumSettings);
+            _shadowProjectionsInBoundScene.push_back(shadowId);
         }
+        
+        s_swirlingLights.BindScene(lightScene, s_swirlingLightsOp);
 
         // Create the "ambient/environment light"
         auto ambientLight = lightScene.CreateLightSource((unsigned)lightOperators.size());
@@ -131,18 +158,17 @@ namespace SceneEngine
             if (GetEnvSettings()._environmentalLightingDesc._skyTextureType == RenderCore::LightingEngine::SkyTextureType::Equirectangular)
                 distantIBLSource->SetEquirectangularSource(GetEnvSettings()._environmentalLightingDesc._skyTexture);
         }
+        _lightSourcesInBoundScene.push_back(ambientLight);
     }
-
-    void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
-    {
-        lightScene.Clear();
-    }
-
-    void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
-    {}
 
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
-    {}
+    {
+        s_swirlingLights.UnbindScene(lightScene);
+        for (auto shadowId:_shadowProjectionsInBoundScene)
+            lightScene.DestroyShadowProjection(shadowId);
+        for (auto lightSource:_lightSourcesInBoundScene)
+            lightScene.DestroyLightSource(lightSource);
+    }
 
     std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BasicLightingStateDelegate::BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)
     {

@@ -88,7 +88,7 @@ namespace RenderCore { namespace LightingEngine
 				}*/
 
 				for (auto light=lightSet._lights.begin(); light!=lightSet._lights.end(); ++light) {
-					auto& lightDesc = *(Internal::StandardLightDesc*)light->_desc.get();
+					auto& lightDesc = *(Internal::StandardPositionalLight*)light->_desc.get();
 					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
 					
 					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);

@@ -9,6 +9,8 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
 
+namespace RenderCore { namespace Techniques { class ParsingContext; }}
+
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase
@@ -69,7 +71,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		LightSet& GetLightSet(LightOperatorId, ShadowOperatorId);
 	};
 
-	class StandardLightDesc : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
+	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
 	{
 	public:
 		Float3x3    _orientation;
@@ -136,7 +138,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		Flags::BitField _flags;
 
-		StandardLightDesc(Flags::BitField flags)
+		StandardPositionalLight(Flags::BitField flags)
 		: _flags(flags)
 		{
 			_position = Normalize(Float3(-.1f, 0.33f, 1.f));

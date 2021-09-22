@@ -24,7 +24,7 @@ namespace Sample
             SceneEngine::LightingParserContext& parserContext);
         void Update(float deltaTime);
 
-        typedef SceneEngine::ShadowProjectionDesc   ShadowProjectionDesc;
+        typedef SceneEngine::StandardShadowProjection   StandardShadowProjection;
         typedef SceneEngine::LightingParserContext  LightingParserContext;
         typedef SceneEngine::SceneParseSettings     SceneParseSettings;
         typedef SceneEngine::LightDesc              LightDesc;

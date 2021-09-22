@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "ILightScene.h"
 #include "Assets/AssetFuture.h"
 #include <memory>
 
@@ -26,6 +27,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
     std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
 		ILightBase& proj,
+        ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool);
 

@@ -97,6 +97,9 @@ namespace SceneEngine
     protected:
         const EnvironmentSettings&  GetEnvSettings() const;
 		std::shared_ptr<EnvironmentSettings>	_envSettings;
+
+        std::vector<unsigned> _lightSourcesInBoundScene;
+        std::vector<unsigned> _shadowProjectionsInBoundScene;
     };
 
     LightDesc                   DefaultDominantLight();

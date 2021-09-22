@@ -20,10 +20,25 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
 		Internal::ILightBase& proj,
+		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
-		auto& preparer = *checked_cast<Internal::ShadowProjectionDesc*>(&proj)->_preparer;
+		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
+
+		// Call the driver if one exists
+		if (standardProj._driver) {
+			// Note the TryGetLightSourceInterface is expensive particular, and scales poorly with the number of
+			// lights in the scene
+			auto* positionalLight = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
+			if (positionalLight)
+				((Internal::IShadowProjectionDriver*)standardProj._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
+					*iterator._parsingContext, *positionalLight, standardProj);
+		}
+
+		// todo - cull out any offscreen projections
+
+		auto& preparer = *standardProj._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		iterator.PushFollowingStep(
 			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool](LightingTechniqueIterator& iterator) {

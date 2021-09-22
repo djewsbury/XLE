@@ -287,21 +287,27 @@ namespace ToolsRig
 			
 			parserContext.GetProjectionDesc() = sceneView._projection;
 			{
-				auto lightingIterator = SceneEngine::BeginLightingTechnique(
-					threadContext, parserContext,
-					*actualizedScene->_envSettings, *actualizedScene->_compiledLightingTechnique);
-
-				for (;;) {
-					auto next = lightingIterator.GetNextStep();
-					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
-					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
-						assert(next._pkt);
-						actualizedScene->_scene->ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
-					}
-				}
-
 				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
-				lightScene.Clear();
+				actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
+
+				TRY {
+					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { 
+						threadContext, parserContext, *actualizedScene->_compiledLightingTechnique };
+
+					for (;;) {
+						auto next = lightingIterator.GetNextStep();
+						if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
+						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
+							assert(next._pkt);
+							actualizedScene->_scene->ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
+						}
+					}
+				} CATCH(...) {
+					actualizedScene->_envSettings->PostRender(lightScene);
+					throw;
+				} CATCH_END
+
+				actualizedScene->_envSettings->PostRender(lightScene);
 			}
 
 			// Draw debugging overlays -- 
@@ -371,6 +377,11 @@ namespace ToolsRig
 					envSettings->GetShadowResolveOperators(),
 					ambientLightOperatorDesc,
 					targets, fbProps);
+				/*auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+					lightingApparatus,
+					envSettings->GetLightResolveOperators(),
+					envSettings->GetShadowResolveOperators(),
+					targets, fbProps);*/
 
 				::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToFuture(
 					thatFuture,
@@ -383,6 +394,9 @@ namespace ToolsRig
 						preparedScene->_depVal = ::Assets::GetDepValSys().Make();
 						preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
 						preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
+
+						auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
+						preparedScene->_envSettings->BindScene(lightScene);
 
 						auto pendingResources = SceneEngine::PrepareResources(
 							*RenderCore::Techniques::GetThreadContext(),

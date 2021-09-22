@@ -115,8 +115,8 @@ namespace RenderCore { namespace LightingEngine
 	static Internal::PreparedDMShadowFrustum SetupPreparedDMShadowFrustum(
 		Internal::ILightBase& projectionBase, float shadowTextureSize, unsigned operatorMaxFrustumCount)
 	{
-		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
-		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
+		assert(projectionBase.QueryInterface(typeid(Internal::StandardShadowProjection).hash_code()) == &projectionBase);
+		auto& projection = *(Internal::StandardShadowProjection*)&projectionBase;
 		auto projectionCount = std::min(projection._projections.Count(), Internal::MaxShadowTexturesPerLight);
 		if (!projectionCount)
 			return Internal::PreparedDMShadowFrustum{};
@@ -141,8 +141,8 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
-		assert(projectionBase.QueryInterface(typeid(Internal::ShadowProjectionDesc).hash_code()) == &projectionBase);
-		auto& projection = *(Internal::ShadowProjectionDesc*)&projectionBase;
+		assert(projectionBase.QueryInterface(typeid(Internal::StandardShadowProjection).hash_code()) == &projectionBase);
+		auto& projection = *(Internal::StandardShadowProjection*)&projectionBase;
 		_workingDMFrustum = SetupPreparedDMShadowFrustum(projection, _shadowTextureSize, _maxFrustumCount);
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
@@ -322,7 +322,7 @@ namespace RenderCore { namespace LightingEngine
 	std::unique_ptr<Internal::ILightBase> DynamicShadowPreparationOperators::CreateShadowProjection(unsigned operatorIdx)
 	{
 		assert(operatorIdx <= _operators.size());
-		auto result = std::make_unique<Internal::ShadowProjectionDesc>();
+		auto result = std::make_unique<Internal::StandardShadowProjection>();
 		auto& op = _operators[operatorIdx];
 		result->_projections._mode = op._desc._projectionMode;
 		result->_projections._useNearProj = op._desc._enableNearCascade;

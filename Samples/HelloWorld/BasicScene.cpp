@@ -336,9 +336,9 @@ namespace Sample
     auto SampleLightingDelegate::GetShadowProjectionDesc(
 		unsigned index, 
 		const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDesc) const 
-        -> SceneEngine::ShadowProjectionDesc
+        -> SceneEngine::StandardShadowProjection
     {
-            //  Shadowing lights can have a ShadowProjectionDesc object associated.
+            //  Shadowing lights can have a StandardShadowProjection object associated.
             //  This object determines the shadow "projections" or "cascades" we use 
             //  for calculating shadows.
             //

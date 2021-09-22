@@ -76,7 +76,7 @@ namespace SceneEngine
 
 	using EnvironmentalLightingDesc = RenderCore::LightingEngine::EnvironmentalLightingDesc;
 
-    class ShadowProjectionDesc
+    class StandardShadowProjection
     {
     public:
     };
