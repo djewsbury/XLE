@@ -154,10 +154,10 @@ namespace EntityInterface
         friend class RetainedEntityInterface;
     };
 
-    /// <summary>Implements IEntityInterface for retained entities</summary>
+    /// <summary>Implements IMutableEntityDocument for retained entities</summary>
     /// This implementation will simply accept all incoming data, and store
     /// it in a generic data structure.
-    class RetainedEntityInterface : public IEntityInterface
+    class RetainedEntityInterface : public IMutableEntityDocument
     {
     public:
         DocumentId CreateDocument(DocumentTypeId docType, const char initializer[]);
