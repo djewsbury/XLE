@@ -9,6 +9,7 @@
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetFutureContinuation.h"
+#include "../Assets/ConfigFileContainer.h"
 #include "../Math/Transformations.h"
 #include "../Math/MathSerialization.h"
 #include "../Utility/StringUtils.h"
@@ -175,8 +176,32 @@ namespace SceneEngine
         return nullptr;
     }
 
-    std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> BasicLightingStateDelegate::GetLightResolveOperators()
+    static void ParseOperators(InputStreamFormatter<> fmttr, ILightingStateDelegate::Operators& result)
     {
+        StringSection<> keyname;
+        while (fmttr.TryKeyedItem(keyname)) {
+            if (XlEqString(keyname, "LightOperators")) {
+            } else
+                SkipValueOrElement(fmttr);
+        }
+    }
+
+    auto BasicLightingStateDelegate::GetOperators() -> Operators
+    {
+        // we have to parse through the configuration file and discover all of the operators that it's going to need
+        Operators result;
+        auto fmttr = _configFileContainer->GetFormatter(_cfgSection);
+
+        StringSection<> keyname;
+        while (fmttr.TryKeyedItem(keyname)) {
+            if (XlEqString(keyname, "LightOperators")) {
+                RequireBeginElement(fmttr);
+                ParseOperators(fmttr, result);
+                RequireEndElement(fmttr);
+            } else
+                SkipValueOrElement(fmttr);
+        }
+
         std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
         for (const auto& light:_envSettings->_lights) {
             RenderCore::LightingEngine::LightSourceOperatorDesc opDesc { light._shape, light._diffuseModel };
@@ -216,34 +241,40 @@ namespace SceneEngine
 
     auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() -> RenderCore::LightingEngine::EnvironmentalLightingDesc
     {
-        return GetEnvSettings()._environmentalLightingDesc;
+        return {};
     }
 
     ToneMapSettings BasicLightingStateDelegate::GetToneMapSettings()
     {
-        return GetEnvSettings()._toneMapSettings;
+        return {};
+    }
+
+    ::Assets::DependencyValidation BasicLightingStateDelegate::GetDependencyValidation() const
+    {
+        return _configFileContainer->GetDependencyValidation();
     }
 
 	void BasicLightingStateDelegate::ConstructToFuture(
 		::Assets::FuturePtr<BasicLightingStateDelegate>& future,
-		StringSection<::Assets::ResChar> envSettingFileName)
+		StringSection<> envSettingFileName)
 	{
-		auto envSettingsFuture = ::Assets::MakeAsset<EnvironmentSettings>(envSettingFileName);
-		::Assets::WhenAll(envSettingsFuture).ThenConstructToFuture(future);
+        auto splitName = MakeFileNameSplitter(envSettingFileName);
+		auto envSettingsFuture = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(splitName.AllExceptParameters());
+		::Assets::WhenAll(envSettingsFuture).ThenConstructToFuture(
+            future,
+            [cfgName = splitName.Parameters().AsString()](auto cfg) {
+                return std::make_shared<BasicLightingStateDelegate>(std::move(cfg), std::move(cfgName));
+            });
 	}
 
 	BasicLightingStateDelegate::BasicLightingStateDelegate(
-		const std::shared_ptr<EnvironmentSettings>& envSettings)
-	: _envSettings(envSettings)
-	{
-	}
+		std::shared_ptr<::Assets::ConfigFileContainer<>> configFileContainer,
+        std::string cfgSection)
+	: _configFileContainer(std::move(configFileContainer))
+    , _cfgSection(std::move(cfgSection))
+	{}
 
 	BasicLightingStateDelegate::~BasicLightingStateDelegate() {}
-
-	const EnvironmentSettings&  BasicLightingStateDelegate::GetEnvSettings() const
-	{
-		return *_envSettings;
-	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

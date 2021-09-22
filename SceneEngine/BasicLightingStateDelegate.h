@@ -21,12 +21,18 @@ namespace Utility
 {
     template<typename Type> class InputStreamFormatter;
 }
-namespace Assets { class DirectorySearchRules; }
+namespace Assets 
+{ 
+    class DirectorySearchRules; 
+    template<typename Formatter = InputStreamFormatter<utf8>>
+        class ConfigFileContainer; 
+}
 
 namespace SceneEngine
 {
     using SunSourceFrustumSettings = RenderCore::LightingEngine::SunSourceFrustumSettings;
 
+#if 0
     /// <summary>Describes a lighting environment</summary>
     /// This contains all of the settings and properties required
     /// for constructing a basic lighting environment.
@@ -65,6 +71,7 @@ namespace SceneEngine
 	private:
 		::Assets::DependencyValidation _depVal;
     };
+#endif
 
     /// <summary>Simple & partial implementation of the ILightingStateDelegate interface<summary>
     /// This provides implementations of the basic lighting related interfaces of
@@ -78,25 +85,26 @@ namespace SceneEngine
         void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
         void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
         auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
+
         auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc override;
         auto        GetToneMapSettings() -> ToneMapSettings override;
 
-        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() override;
-		std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() override;
+        Operators   GetOperators() override;        
 
 		BasicLightingStateDelegate(
-			const std::shared_ptr<EnvironmentSettings>& envSettings);
+			std::shared_ptr<::Assets::ConfigFileContainer<>> configFileContainer,
+            std::string cfgSection);
 		~BasicLightingStateDelegate();
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
-			StringSection<::Assets::ResChar> envSettingFileName);
+			StringSection<> envSettingFileName);
 
-		::Assets::DependencyValidation GetDependencyValidation() const override { return _envSettings->GetDependencyValidation(); }
+		::Assets::DependencyValidation GetDependencyValidation() const override;
 
     protected:
-        const EnvironmentSettings&  GetEnvSettings() const;
-		std::shared_ptr<EnvironmentSettings>	_envSettings;
+        std::shared_ptr<::Assets::ConfigFileContainer<>> _configFileContainer;
+        std::string _cfgSection;
 
         std::vector<unsigned> _lightSourcesInBoundScene;
         std::vector<unsigned> _shadowProjectionsInBoundScene;
@@ -104,7 +112,7 @@ namespace SceneEngine
 
     LightDesc                   DefaultDominantLight();
     EnvironmentalLightingDesc   DefaultEnvironmentalLightingDesc();
-    EnvironmentSettings         DefaultEnvironmentSettings();
+    // EnvironmentSettings         DefaultEnvironmentSettings();
     SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
 
     EnvironmentalLightingDesc MakeEnvironmentalLightingDesc(const ParameterBox& props);

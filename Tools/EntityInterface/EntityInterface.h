@@ -7,10 +7,15 @@
 #pragma once
 
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/ImpliedTyping.h"
+#include "../../Utility/StringUtils.h"
+#include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Core/Types.h"
 #include <memory>
 #include <vector>
 #include <string>
+
+namespace Assets { class DependencyValidation; }
 
 namespace EntityInterface
 {
@@ -22,14 +27,64 @@ namespace EntityInterface
     using DocumentId = uint64;
     using ObjectId = uint64;
 
+    class IDynamicFormatter
+    {
+    public:
+        virtual FormatterBlob PeekNext() = 0;
+
+        virtual bool TryBeginElement() = 0;
+		virtual bool TryEndElement() = 0;
+		virtual bool TryKeyedItem(StringSection<>& name) = 0;
+		virtual bool TryValue(StringSection<>& value) = 0;
+		virtual bool TryCharacterData(StringSection<>&) = 0;
+
+        virtual StreamLocation GetLocation() const = 0;
+
+        virtual ~IDynamicFormatter() = default;
+    };
+
     class PropertyInitializer
     {
     public:
-        PropertyId _prop = 0;
+        StringSection<> _name;
         IteratorRange<const void*> _src;
-        unsigned _elementType = 0;
-        unsigned _arrayCount = 0;
-        bool _isString = false;
+        ImpliedTyping::TypeDesc _type;
+    };
+
+    class IMutableEntity
+    {
+    public:
+        virtual bool SetProperties(IteratorRange<const PropertyInitializer*> initializers) = 0;
+        virtual ~IMutableEntity() = default;
+    };
+
+    class IEntityDocument
+    {
+    public:
+        virtual std::shared_ptr<IDynamicFormatter> BeginFormatter();
+        virtual ::Assets::DependencyValidation GetDependencyValidation() const;
+
+        virtual ~IEntityDocument() = default;
+    };
+
+    class IEntityMountingTree
+    {
+    public:
+        virtual DocumentId AttachDocument(
+            StringSection<> mountPount,
+            std::shared_ptr<IEntityDocument>) = 0;
+        virtual bool DetachDocument(DocumentId doc, DocumentTypeId docType) = 0;
+
+        // todo -- how should this work with sequences? What if we want to add/remove
+        // modify objects within a sequence -- is that just not possible?
+        virtual std::shared_ptr<IMutableEntity> CreateMutableEntity(StringSection<> mountPount) = 0;
+        virtual void DetachMutations(const IMutableEntity&) = 0;
+
+        // returns a dependency validation that advances if any properties at that mount point,
+        // (or underneath) change 
+        virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const;
+
+        virtual ~IEntityMountingTree() = default;
     };
 
     class Identifier

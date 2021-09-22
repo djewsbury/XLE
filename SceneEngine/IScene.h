@@ -76,11 +76,6 @@ namespace SceneEngine
 
 	using EnvironmentalLightingDesc = RenderCore::LightingEngine::EnvironmentalLightingDesc;
 
-    class StandardShadowProjection
-    {
-    public:
-    };
-
 	class ILightingStateDelegate
 	{
 	public:
@@ -92,8 +87,12 @@ namespace SceneEngine
         virtual void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) = 0;
         virtual std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) = 0;
 
-        virtual std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> GetLightResolveOperators() = 0;
-		virtual std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> GetShadowResolveOperators() = 0;
+        struct Operators
+        {
+            std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> lightResolveOperators;
+            std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> shadowResolveOperators;
+        };
+        virtual Operators   GetOperators() = 0;
 
         virtual auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc = 0;
         virtual auto        GetToneMapSettings() -> ToneMapSettings = 0;
