@@ -81,7 +81,12 @@ namespace EntityInterface
         virtual ~IEntityMountingTree() = default;
     };
 
-    std::shared_ptr<IEntityMountingTree> CreateMountingTree();
+    namespace MountingTreeFlags {
+        enum Flags { LogMountPoints = 1<<0 };
+        using BitField = unsigned;
+    }
+
+    std::shared_ptr<IEntityMountingTree> CreateMountingTree(MountingTreeFlags::BitField = 0);
 
     /// <summary>Defines rules for creation, deletion and update of entities</summary>
     ///

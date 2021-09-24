@@ -39,7 +39,14 @@ namespace EntityInterface
 			StringSection<typename Formatter::value_type> internalSection)
 		: _cfgFile(cfgFile)
 		{
-			_fmttr = _cfgFile->GetFormatter(internalSection);
+			if (!internalSection.IsEmpty()) {
+				typename Formatter::value_type internalSectionCopy[internalSection.size()];
+				auto* c2 = &internalSectionCopy[0];
+				for (auto c:internalSection) *c2++ = (c=='/')?':':c;
+				_fmttr = _cfgFile->GetFormatter(MakeStringSection(internalSectionCopy, internalSectionCopy+internalSection.size()));
+			} else {
+				_fmttr = _cfgFile->GetRootFormatter();
+			}
 		}
 	private:
 		std::shared_ptr<::Assets::ConfigFileContainer<Formatter>> _cfgFile;
@@ -100,17 +107,21 @@ namespace UnitTests
 			"examplecfg1.dat",
 			::Assets::AsBlob(R"--(
 				SomeProperty=1
-				ASequence=~3
+				ASequence=~
 					1; 2; 3; 4
 				=~
 					value=one
 					value2=two
+				InternalPoint=~
+					A=B; C=D
+					SomethingInside=~
+						E=F
 		)--")),
 		std::make_pair(
 			"examplecfg2.dat",
 			::Assets::AsBlob(R"--(
 				ASequence=~
-					6, 3, 5, 6
+					6; 3; 5; 6
 				=~
 					value2=five
 				SomeProperty=5
@@ -144,30 +155,175 @@ namespace UnitTests
 
 		return casted.value();
 	}
+
+	static void RequireBlobsFromCfg1(EntityInterface::IDynamicFormatter& fmttr)
+	{
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
+		REQUIRE(RequireValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
+		RequireBeginElement(fmttr);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 2);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 4);
+		RequireEndElement(fmttr);
+		SkipValueOrElement(fmttr);		// skip unnamed element
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "InternalPoint");
+		SkipValueOrElement(fmttr);		// skip InternalPoint
+	}
+
+	static void RequireBlobsFromCfg2(EntityInterface::IDynamicFormatter& fmttr)
+	{
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
+		RequireBeginElement(fmttr);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 6);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 5);
+		REQUIRE(RequireValue<unsigned>(fmttr) == 6);
+		RequireEndElement(fmttr);
+		RequireBeginElement(fmttr);
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "value2");
+		REQUIRE(Utility::RequireValue(fmttr).AsString() == "five");
+		RequireEndElement(fmttr);
+		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
+		REQUIRE(RequireValue<unsigned>(fmttr) == 5);
+	}
+
+	template<typename Type>
+		static Type RequireActualize(::Assets::Future<Type>& future)
+	{
+		future.StallWhilePending();
+		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
+		return future.Actualize();
+	}
 	
 	TEST_CASE( "EntityInterface-Mount", "[formatters]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
-		auto mountingTree = EntityInterface::CreateMountingTree();
-		mountingTree->MountDocument("cfg", EntityInterface::CreateTextEntityDocument("ut-data/examplecfg1.dat"));
+		auto mountingTree = EntityInterface::CreateMountingTree(EntityInterface::MountingTreeFlags::LogMountPoints);
+		auto cfg1Document = EntityInterface::CreateTextEntityDocument("ut-data/examplecfg1.dat");
+		mountingTree->MountDocument("cfg", cfg1Document);
+
+		//
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// The mounting tree has to handle two types of overlapping
+		// So, for example if we have the mounts:
+		//		cfg -> TextEntityDocument A
+		//		cfg/one -> TextEntityDocument B
+		//		cfg/one/two -> TextEntityDocument C
+		//
+		// If we call BeginFormatter("cfg"), BeginFormatter("cfg/one") or BeginFormatter("cfg/one/two"), in case
+		// we will iterate through all 3 documents.
+		// In the middle case, BeginFormatter("cfg/one"):
+		//		TextEntityDocument A is partially visible (we see only a internal subset)
+		//		TextEntityDocument B is unchanged from reading it directly
+		//		TextEntityDocument C is entirely visible, but embedded within a "virtual" element called "two"
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//
 
 		SECTION("Read values through IDynamicFormatter") {
 			// ensure that the first few values we read match what we expect from the input file
+			auto fmttr = RequireActualize(*mountingTree->BeginFormatter("cfg"));
+			RequireBlobsFromCfg1(*fmttr);
+			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
+		}
+
+		SECTION("Internal section in IDynamicFormatter") {
+			// Begin a formatter from a start point within a document
+			// Ie, "InternalPoint" is just an element within a document, but we'll treat it as the start point for the formatter
+			auto fmttr = RequireActualize(*cfg1Document->BeginFormatter("InternalPoint"));
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "A");
+			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "B");
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "C");
+			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "D");
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "SomethingInside");
+			RequireBeginElement(*fmttr);
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
+			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "F");
+			RequireEndElement(*fmttr);
+			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
+		}
+
+		SECTION("Deep internal section in IDynamicFormatter") {
+			// Begin a formatter from a start point within a document
+			// this time, we're 2 sections deap
+			auto fmttr = RequireActualize(*cfg1Document->BeginFormatter("InternalPoint/SomethingInside"));
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
+			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "F");
+			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
+		}
+
+		SECTION("Simple external section in IDynamicFormatter") {
+			// Begin a formatter from a start point that isn't actually within a document, but
+			// a document is mounted somewhere below.
+			// In other words, we have to make a few virtual elements that will surround the
+			// document (in this case, one called "one" and one called "two")
+			auto cfg2Document = EntityInterface::CreateTextEntityDocument("ut-data/examplecfg2.dat");
+			auto mnt = mountingTree->MountDocument("mountPt/one/two", cfg2Document);
+
+			auto fmttrFuture = mountingTree->BeginFormatter("mountPt");
+			fmttrFuture->StallWhilePending();
+			auto fmttr = fmttrFuture->Actualize();
+
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "one");
+			RequireBeginElement(*fmttr);
+			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "two");
+			RequireBeginElement(*fmttr);
+			RequireBlobsFromCfg2(*fmttr);
+			RequireEndElement(*fmttr);
+			RequireEndElement(*fmttr);
+			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
+
+			auto str = ::Assets::AsString(fmttrFuture->GetActualizationLog());
+			REQUIRE(str == "[mountPt/one/two/] internal:  external: one/two\n");
+
+			mountingTree->UnmountDocument(mnt);
+		}
+
+		SECTION("Multi overlapping documents") {
+			auto cfg2Document = EntityInterface::CreateTextEntityDocument("ut-data/examplecfg2.dat");
+
+			mountingTree->MountDocument("overlap", cfg1Document);
+			mountingTree->MountDocument("overlap/one", cfg2Document);
+			mountingTree->MountDocument("overlap/one/two", cfg1Document);
+
+			auto fmttr0Future = mountingTree->BeginFormatter("overlap");
+			auto fmttr1Future = mountingTree->BeginFormatter("overlap/one");
+			auto fmttr2Future = mountingTree->BeginFormatter("overlap/one/two");
+
+			fmttr0Future->StallWhilePending();
+			fmttr1Future->StallWhilePending();
+			fmttr2Future->StallWhilePending();
+			auto str0 = ::Assets::AsString(fmttr0Future->GetActualizationLog());
+			auto str1 = ::Assets::AsString(fmttr1Future->GetActualizationLog());
+			auto str2 = ::Assets::AsString(fmttr2Future->GetActualizationLog());
+
+			REQUIRE(str0 == "[overlap/] internal:  external: \n[overlap/one/] internal:  external: one\n[overlap/one/two/] internal:  external: one/two\n");
+			REQUIRE(str1 == "[overlap/] internal: one external: \n[overlap/one/] internal:  external: \n[overlap/one/two/] internal:  external: two\n");
+			REQUIRE(str2 == "[overlap/] internal: one/two external: \n[overlap/one/] internal: two external: \n[overlap/one/two/] internal:  external: \n");
+		}
+
+		// overlapped documents  
+		SECTION("Simple overlapped text documents") {
+			auto cfg2Document = EntityInterface::CreateTextEntityDocument("ut-data/examplecfg2.dat");
+			mountingTree->MountDocument("cfg", cfg2Document);
+
 			auto fmttrFuture = mountingTree->BeginFormatter("cfg");
 			fmttrFuture->StallWhilePending();
 			auto fmttr = fmttrFuture->Actualize();
-			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "SomeProperty");
-			REQUIRE(RequireValue<unsigned>(*fmttr) == 1);
-			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "ASequence");
-			RequireBeginElement(*fmttr);
-			REQUIRE(RequireValue<unsigned>(*fmttr) == 1);
-			REQUIRE(RequireValue<unsigned>(*fmttr) == 2);
-			REQUIRE(RequireValue<unsigned>(*fmttr) == 3);
-			REQUIRE(RequireValue<unsigned>(*fmttr) == 4);
-			RequireEndElement(*fmttr);
+
+			// blobs from the first cfg come first
+			RequireBlobsFromCfg1(*fmttr);
+
+			// followed by blobs from the second
+			RequireBlobsFromCfg2(*fmttr);
+			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
 		}
 	}
+
+	// StreamLocation should tell us something about the document we're reading
+	// SkipValueOrElement might need to be specialized in IDynamicFormatter
 }
 

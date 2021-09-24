@@ -56,7 +56,7 @@ namespace Assets
                         if (immediateConfigName.begin() < configName.end())
                             immediateConfigName._end = std::find(immediateConfigName.begin(), configName.end(), ':');
                         if (immediateConfigName.begin() >= immediateConfigName.end())
-                            return formatter;
+                            return formatter.CreateChildFormatter();
                         // else continue searching for the next config name
                     }
                     continue;
@@ -81,7 +81,7 @@ namespace Assets
 			break;
 		}
 
-		return Formatter();
+		return Formatter {};
 	}
 
 	template<typename Formatter>

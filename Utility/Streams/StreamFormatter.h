@@ -74,6 +74,12 @@ namespace Utility
 
 		StreamLocation GetLocation() const;
 
+		// Create a "child" formatter that acts as if the current element in the stream is the
+		// root. Otherwise the formatter will return the same sequence of blobs
+		// This means that when the child formatter reaches the end of the current element, it
+		// will return FormatterBlob::None instead of FormatterBlob::EndElement
+		InputStreamFormatter<CharType> CreateChildFormatter();		
+
 		using value_type = CharType;
 		using InteriorSection = StringSection<CharType>;
 		using Blob = FormatterBlob;

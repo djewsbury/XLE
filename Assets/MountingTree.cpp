@@ -326,21 +326,22 @@ namespace Assets
 		return EnumerableLookup { std::move(request), EnumerableLookup::Encoding::UTF16, _pimpl.get() };
 	}
 
+	static std::string SimplifyMountPoint(StringSection<> input, const FilenameRules& fnRules)
+    {
+        auto split = MakeSplitPath(input);
+		// We should avoid beginning with a separator, because this would mean that the "mounted path" returned from GetDesc, or GetMountPoint will also begin with a separator
+		// The runs into issues with AbsolutePathMode::RawOS, because it means that those returned paths can't be fed back into the mounting tree 
+        split.BeginsWithSeparator() = false;
+        split.EndsWithSeparator() = true;
+        return split.Simplify().Rebuild(fnRules);
+    }
+
 	auto MountingTree::Mount(StringSection<utf8> mountPointInput, std::shared_ptr<IFileSystem> system) -> MountID
 	{
 			// Note that we're going to be ignoring slashs at the beginning or end. These have no effect 
 			// on how we interpret the mount point.
 			// Let's do some normalization of the input to avoid any edge cases
-		std::string mountPoint;
-		{
-			auto mountPointSplitPath = MakeSplitPath(mountPointInput);
-			// We should avoid beginning with a separator, because this would mean that the "mounted path" returned from GetDesc, or GetMountPoint will also begin with a separator
-			// The runs into issues with AbsolutePathMode::RawOS, because it means that those returned paths can't be fed back into the mounting tree 
-			mountPointSplitPath.BeginsWithSeparator() = false;
-			mountPointSplitPath.EndsWithSeparator() = true;
-			mountPoint = mountPointSplitPath.Simplify().Rebuild(_pimpl->_rules);
-		}
-
+		auto mountPoint = SimplifyMountPoint(mountPointInput, _pimpl->_rules);
 		auto split = MakeSplitPath(mountPoint);
 
 		uint64 hash = s_FNV_init64;

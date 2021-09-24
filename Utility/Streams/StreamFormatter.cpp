@@ -449,6 +449,8 @@ namespace Utility
                 // caller must follow with "TryEndElement" until _expectedLineSpaces matches _activeLineSpaces
                 if (_activeLineSpaces <= _parentBaseLine) {
                     _protectedStringMode = false;
+                    if (_baseLineStackPtr == 0)
+                        return _primed = FormatterBlob::None;       // ending early because the baseline was set inside of the stream via ResetBaseLine
                     return _primed = FormatterBlob::EndElement;
                 }
 
@@ -638,6 +640,17 @@ namespace Utility
         StreamLocation InputStreamFormatter<CharType>::GetLocation() const
     {
         return _marker.GetLocation();
+    }
+
+    template<typename CharType>
+        InputStreamFormatter<CharType> InputStreamFormatter<CharType>::CreateChildFormatter()
+    {
+        InputStreamFormatter<CharType> result = *this;
+        // reset the baseline to be where we are now
+        // _parentBaseLine must stay unchanged, because this still represents the indentation
+        // for the end of this element
+        result._baseLineStackPtr = 0;
+        return result;    
     }
 
     template<typename CharType>
