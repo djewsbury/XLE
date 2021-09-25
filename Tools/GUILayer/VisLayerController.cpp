@@ -15,6 +15,7 @@
 #include "../ToolsRig/IManipulator.h"
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
+#include "../ToolsRig/ToolsRigServices.h"
 #include "../../PlatformRig/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
@@ -87,7 +88,7 @@ namespace GUILayer
 	{
 		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
 		auto nativeName = clix::marshalString<clix::E_UTF8>(name);
-		_pimpl->_scene = ToolsRig::GetPreviewSceneRegistry()->CreateScene(MakeStringSection(nativeName), pipelineAcceleratorPool);
+		_pimpl->_scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), pipelineAcceleratorPool);
 		_pimpl->ApplyPatchCollection();
 		_pimpl->_modelLayer->Set(_pimpl->_scene);
 		_pimpl->_visOverlay->Set(_pimpl->_scene);

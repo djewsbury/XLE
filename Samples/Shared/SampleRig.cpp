@@ -20,6 +20,7 @@
 #include "../../RenderCore/IThreadContext.h"
 
 #include "../../Tools/ToolsRig/PreviewSceneRegistry.h"
+#include "../../Tools/EntityInterface/EntityInterface.h"
 
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
@@ -57,6 +58,7 @@ namespace Sample
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
         auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(sampleGlobals._renderDevice);
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
+        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> entityMountingTree = EntityInterface::CreateMountingTree();
 
 		::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
 

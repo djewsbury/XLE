@@ -7,6 +7,9 @@
 #include "../../Tools/ToolsRig/ModelVisualisation.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Tools/ToolsRig/BasicManipulators.h"
+#include "../../Tools/ToolsRig/ToolsRigServices.h"
+#include "../../Tools/EntityInterface/EntityInterface.h"
+#include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
@@ -34,9 +37,11 @@ namespace Sample
 
 		ToolsRig::ModelVisSettings visSettings {};
 
+		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.txt"));
+
 		auto scene = ToolsRig::MakeScene(pipelineAccelerators, visSettings);
 		modelLayer->Set(scene);
-		modelLayer->Set(ToolsRig::MakeLightingStateDelegate(ToolsRig::VisEnvSettings{"rawos/defaultenv.txt:environment"}));
+		modelLayer->Set(ToolsRig::MakeLightingStateDelegate("cfg/lighting"));
 		AddSystem(modelLayer);
 
 		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();

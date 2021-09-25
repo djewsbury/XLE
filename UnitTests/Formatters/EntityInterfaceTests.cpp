@@ -4,6 +4,7 @@
 
 #include "../UnitTestHelper.h"
 #include "../../Tools/EntityInterface/EntityInterface.h"
+#include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
 #include "../../../Assets/MountingTree.h"
@@ -12,117 +13,11 @@
 #include "../../../Assets/AssetFutureContinuation.h"
 #include "../../../Assets/Assets.h"
 #include "../../../ConsoleRig/GlobalServices.h"
+#include "../../../Utility/Streams/FormatterUtils.h"
 #include <string>
 #include <sstream>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
-
-namespace EntityInterface
-{
-	template<typename Formatter> 
-		class TextFormatterAdapter : public IDynamicFormatter
-	{
-	public:
-		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
-
-		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
-		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
-		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
-
-		virtual bool TryStringValue(StringSection<>& value) override
-		{ 
-			return _fmttr.TryValue(value);
-		}
-
-		virtual bool TryRawValue(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type) override
-		{ 
-			StringSection<> strSection;
-			auto res = _fmttr.TryValue(strSection);
-			if (res) {
-				value = {strSection.begin(), strSection.end()};
-				type = ImpliedType::TypeOf<const char*>();
-			}
-			return res;
-		}
-
-		virtual bool TryCastValue(IteratorRange<const void*> destinationBuffer, const ImpliedTyping::TypeDesc& type) override
-		{
-			StringSection<> strSection;
-			auto res = _fmttr.TryValue(strSection);
-			if (res)
-				type = ImpliedTyping::ParseFullMatch(strSection, destination);
-			return res;
-		}
-
-		virtual StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _cfgFile->GetDependencyValidation(); }
-
-		TextFormatterAdapter(
-			std::shared_ptr<::Assets::ConfigFileContainer<Formatter>> cfgFile,
-			StringSection<typename Formatter::value_type> internalSection)
-		: _cfgFile(cfgFile)
-		{
-			if (!internalSection.IsEmpty()) {
-				typename Formatter::value_type internalSectionCopy[internalSection.size()];
-				auto* c2 = &internalSectionCopy[0];
-				for (auto c:internalSection) *c2++ = (c=='/')?':':c;
-				_fmttr = _cfgFile->GetFormatter(MakeStringSection(internalSectionCopy, internalSectionCopy+internalSection.size()));
-			} else {
-				_fmttr = _cfgFile->GetRootFormatter();
-			}
-		}
-	private:
-		std::shared_ptr<::Assets::ConfigFileContainer<Formatter>> _cfgFile;
-		Formatter _fmttr;
-	};
-
-	class TextEntityDocument : public IEntityDocument
-	{
-	public:
-		virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
-		{
-			using UnderlyingFormatter = InputStreamFormatter<>;
-			auto result = std::make_shared<::Assets::FuturePtr<TextFormatterAdapter<UnderlyingFormatter>>>();
-			::Assets::WhenAll(_srcFile).ThenConstructToFuture(
-				*result,
-				[ip=internalPoint.AsString()](auto cfgFileContainer) {
-					return std::make_shared<TextFormatterAdapter<UnderlyingFormatter>>(std::move(cfgFileContainer), ip);
-				});
-			return std::reinterpret_pointer_cast<::Assets::FuturePtr<IDynamicFormatter>>(result);
-		}
-
-		virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override
-		{
-			return _srcFile->GetDependencyValidation();
-		}
-
-		virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const override
-		{
-			return _directorySearchRules;
-		}
-
-		virtual void Lock() override { _lock.lock(); }
-		virtual void Unlock() override { _lock.unlock(); }
-
-		TextEntityDocument(std::string src) 
-		: _src(src)
-		{
-			_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
-			_directorySearchRules.SetBaseFile(_src);
-		}
-
-	private:
-		Threading::Mutex _lock;
-		std::string _src;
-		::Assets::PtrToFuturePtr<::Assets::ConfigFileContainer<>> _srcFile;
-		::Assets::DirectorySearchRules _directorySearchRules;
-	};
-
-	std::shared_ptr<IEntityDocument> CreateTextEntityDocument(StringSection<> src)
-	{
-		return std::make_shared<TextEntityDocument>(src.AsString());
-	}
-}
 
 using namespace Catch::literals;
 namespace UnitTests
@@ -154,10 +49,10 @@ namespace UnitTests
 	};
 
 	template<typename Type, typename CharType>
-		Type RequireValue(InputStreamFormatter<CharType>& formatter)
+		Type RequireStringValue(InputStreamFormatter<CharType>& formatter)
 	{
 		StringSection<> stringValue;
-		if (!formatter.TryValue(stringValue))
+		if (!formatter.TryStringValue(stringValue))
 			Throw(std::runtime_error("Unexpected blob while looking for value in text formatter"));
 
 		auto casted = ImpliedTyping::ParseFullMatch<Type>(stringValue);
@@ -168,54 +63,45 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		Type RequireValue(EntityInterface::IDynamicFormatter& formatter)
+		Type RequireStringValue(EntityInterface::IDynamicFormatter& formatter)
 	{
-		ImpliedTyping::TypeDesc typeDesc;
-		auto data = formatter.TryValue(typeDesc);
-		if (data.empty())
-			Throw(std::runtime_error("Unexpected blob while looking for value in text formatter"));
-
-		Type result;
-		bool castSuccess = ImpliedTyping::Cast(
-			MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
-			data, typeDesc);
-		if (!castSuccess)
+		Type midwayBuffer;
+		if (!formatter.TryCastValue(MakeOpaqueIteratorRange(midwayBuffer), ImpliedTyping::TypeOf<Type>()))
 			Throw(std::runtime_error("Could not convert value to the required type in text formatter"));
-
-		return result;
+		return midwayBuffer;
 	}
 
 	static void RequireBlobsFromCfg1(EntityInterface::IDynamicFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
-		REQUIRE(RequireValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 1);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 1);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 2);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 3);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 4);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 2);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 4);
 		RequireEndElement(fmttr);
-		SkipValueOrElement(fmttr);		// skip unnamed element
+		fmttr.SkipValueOrElement();		// skip unnamed element
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "InternalPoint");
-		SkipValueOrElement(fmttr);		// skip InternalPoint
+		fmttr.SkipValueOrElement();		// skip InternalPoint
 	}
 
 	static void RequireBlobsFromCfg2(EntityInterface::IDynamicFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 6);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 3);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 5);
-		REQUIRE(RequireValue<unsigned>(fmttr) == 6);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 6);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 5);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 6);
 		RequireEndElement(fmttr);
 		RequireBeginElement(fmttr);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "value2");
-		REQUIRE(Utility::RequireValue(fmttr).AsString() == "five");
+		REQUIRE(Utility::RequireStringValue(fmttr).AsString() == "five");
 		RequireEndElement(fmttr);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
-		REQUIRE(RequireValue<unsigned>(fmttr) == 5);
+		REQUIRE(RequireStringValue<unsigned>(fmttr) == 5);
 	}
 
 	template<typename Type>
@@ -264,13 +150,13 @@ namespace UnitTests
 			// Ie, "InternalPoint" is just an element within a document, but we'll treat it as the start point for the formatter
 			auto fmttr = RequireActualize(*cfg1Document->BeginFormatter("InternalPoint"));
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "A");
-			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "B");
+			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "B");
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "C");
-			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "D");
+			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "D");
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "SomethingInside");
 			RequireBeginElement(*fmttr);
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
-			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "F");
+			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "F");
 			RequireEndElement(*fmttr);
 			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
@@ -280,7 +166,7 @@ namespace UnitTests
 			// this time, we're 2 sections deap
 			auto fmttr = RequireActualize(*cfg1Document->BeginFormatter("InternalPoint/SomethingInside"));
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
-			REQUIRE(Utility::RequireValue(*fmttr).AsString() == "F");
+			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "F");
 			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
 
@@ -352,8 +238,7 @@ namespace UnitTests
 		}
 	}
 
-	// StreamLocation should tell us something about the document we're reading
-	// SkipValueOrElement might need to be specialized in IDynamicFormatter
 	// locking & unlocking functionality
+	// DepVal triggering after mounting/unmounting events
 }
 

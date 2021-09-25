@@ -8,7 +8,8 @@
 #include "LightSceneConfiguration.h"
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
-#include "../Tools/EntityInterface/EntityInterface.h"       // todo -- more IDynamicFormatter out
+#include "../Tools/EntityInterface/EntityInterface.h"
+#include "../Tools/ToolsRig/ToolsRigServices.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetFutureContinuation.h"
 #include "../Assets/ConfigFileContainer.h"
@@ -16,6 +17,7 @@
 #include "../Math/MathSerialization.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/Meta/AccessorSerialize.h"
@@ -122,13 +124,26 @@ namespace SceneEngine
 		::Assets::DependencyValidation GetDependencyValidation() const override;
 
     protected:
-        std::vector<ParameterBox> _lights;
         LightOperatorResolveContext _operatorResolveContext;
+
+        struct PendingLightSource
+        {
+            uint64_t _operatorHash = 0;
+            std::string _name;
+            ParameterBox _parameters;
+        };
+        std::vector<PendingLightSource> _lightSourcesInCfgFile;
 
         std::vector<unsigned> _lightSourcesInBoundScene;
         std::vector<unsigned> _shadowProjectionsInBoundScene;
 
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _shadowOperatorHashToId;
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _ambientOperatorHashToId;
+
         ::Assets::DependencyValidation _depVal;
+
+        void DeserializeLightSources(EntityInterface::IDynamicFormatter& formatter);
     };
 
     void BasicLightingStateDelegate::PreRender(
@@ -144,6 +159,32 @@ namespace SceneEngine
 
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
+        for (const auto&light:_lightSourcesInCfgFile) {
+            if (!light._operatorHash) continue;
+
+            auto lightOperator = LowerBound(_lightOperatorHashToId, light._operatorHash);
+            if (lightOperator != _lightOperatorHashToId.end() && lightOperator->first == light._operatorHash) {
+
+                auto newLight = lightScene.CreateLightSource(lightOperator->second);
+                _lightSourcesInBoundScene.push_back(newLight);
+
+                continue;
+            }
+
+            lightOperator = LowerBound(_ambientOperatorHashToId, light._operatorHash);
+            if (lightOperator != _ambientOperatorHashToId.end() && lightOperator->first == light._operatorHash) {
+
+                auto newLight = lightScene.CreateLightSource(lightOperator->second);
+                _lightSourcesInBoundScene.push_back(newLight);
+
+                auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
+                if (distanceIBL) {
+                    distanceIBL->SetEquirectangularSource(light._parameters.GetParameterAsString("SkyTexture").value());
+                }
+                continue;
+            }
+        }
+
 #if 0
         auto lightOperators = _operatorResolveContext._lightSourceOperators;
 
@@ -230,20 +271,37 @@ namespace SceneEngine
                 operatorResolveContext.DeserializeAmbientOperator(formatter);
                 RequireEndElement(formatter);
             } else {
-                SkipValueOrElement(formatter);
+                formatter.SkipValueOrElement();
             }
         }
 	}
 
     auto BasicLightingStateDelegate::GetOperators() -> Operators
     {
+        _lightOperatorHashToId.clear();
+        _shadowOperatorHashToId.clear();
+        _ambientOperatorHashToId.clear();
+
         Operators result;
         result._lightResolveOperators.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         result._shadowResolveOperators.reserve(_operatorResolveContext._shadowOperators._objects.size());
-        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects)
-            result._lightResolveOperators.push_back(c.second);
-        for (const auto& c:_operatorResolveContext._shadowOperators._objects)
+        _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
+        _shadowOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
+        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
+            auto h = c.second.Hash();
+            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            if (i==result._lightResolveOperators.end())
+                i = result._lightResolveOperators.insert(i, c.second);
+            _lightOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._lightResolveOperators.begin(), i));
+        }
+        for (const auto& c:_operatorResolveContext._shadowOperators._objects) {
+            auto h = c.second.Hash();
+            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            if (i==result._shadowResolveOperators.end())
+                i = result._shadowResolveOperators.insert(i, c.second);
             result._shadowResolveOperators.push_back(c.second);
+            _shadowOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
+        }
 
         /*std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
         for (const auto& light:_envSettings->_lights) {
@@ -263,6 +321,12 @@ namespace SceneEngine
             if (i == result._lightResolveOperators.end())
                 result._lightResolveOperators.push_back(s_swirlingLights._operator);
         }
+
+        if (!_operatorResolveContext._ambientOperators._objects.empty())
+            _ambientOperatorHashToId.emplace_back(_operatorResolveContext._ambientOperators._objects[0].first, (unsigned)result._lightResolveOperators.size());
+
+        std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
+        std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
 
         return result;
     }
@@ -300,19 +364,55 @@ namespace SceneEngine
         return _depVal;
     }
 
+    void BasicLightingStateDelegate::DeserializeLightSources(EntityInterface::IDynamicFormatter& formatter)
+    {
+        StringSection<> keyname;
+        while (formatter.TryKeyedItem(keyname)) {
+            if (XlEqString(keyname, "Light")) {
+
+                RequireBeginElement(formatter);
+
+                ParameterBox lightProperties;
+                StringSection<> name;
+                uint64_t operatorHash = 0;
+
+                StringSection<> keyname;
+                while (formatter.TryKeyedItem(keyname)) {
+                    if (XlEqString(keyname, "Name")) name = RequireStringValue(formatter);
+                    else if (XlEqString(keyname, "Operator")) operatorHash = Hash64(RequireStringValue(formatter));
+                    else {
+                        IteratorRange<const void*> value;
+                        ImpliedTyping::TypeDesc type;
+                        if (!formatter.TryRawValue(value, type))
+                            Throw(FormatException("Expecting value", formatter.GetLocation()));
+                        lightProperties.SetParameter(keyname, value, type);
+                    }
+                }
+                RequireEndElement(formatter);
+
+                auto i = std::find_if(
+                    _lightSourcesInCfgFile.begin(), _lightSourcesInCfgFile.end(),
+                    [name](const auto& c) { return XlEqString(name, c._name); });
+                if (!name.IsEmpty() && i != _lightSourcesInCfgFile.end()) {
+                    i->_operatorHash = operatorHash ?: i->_operatorHash;
+                    i->_parameters.MergeIn(lightProperties);
+                } else {
+                    _lightSourcesInCfgFile.push_back(PendingLightSource{operatorHash, name.AsString(), std::move(lightProperties)});
+                }
+            } else {
+                SkipValueOrElement(formatter);
+            }
+        }
+    }
+
 	void BasicLightingStateDelegate::ConstructToFuture(
 		::Assets::FuturePtr<BasicLightingStateDelegate>& future,
 		StringSection<> envSettingFileName)
 	{
-        auto splitName = MakeFileNameSplitter(envSettingFileName);
-		auto envSettingsFuture = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(splitName.AllExceptParameters());
-		::Assets::WhenAll(envSettingsFuture).ThenConstructToFuture(
+        auto fmttrFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter(envSettingFileName);
+        ::Assets::WhenAll(fmttrFuture).ThenConstructToFuture(
             future,
-            [cfgName = splitName.Parameters().AsString()](auto cfg) {
-                // return std::make_shared<BasicLightingStateDelegate>(std::move(cfg));
-                // todo -- create a formatter adapter
-                return std::shared_ptr<BasicLightingStateDelegate>{nullptr};
-            });
+            [](auto fmttr) { return std::make_shared<BasicLightingStateDelegate>(*fmttr); });
 	}
 
 	BasicLightingStateDelegate::BasicLightingStateDelegate(
@@ -320,17 +420,18 @@ namespace SceneEngine
     : _depVal(formatter.GetDependencyValidation())
 	{
          // we have to parse through the configuration file and discover all of the operators that it's going to need
-        LightOperatorResolveContext operatorResolveContext;
         StringSection<> keyname;
         while (formatter.TryKeyedItem(keyname)) {
             if (XlEqString(keyname, "LightOperators")) {
                 RequireBeginElement(formatter);
-                DeserializeLightOperators(formatter, operatorResolveContext);
+                DeserializeLightOperators(formatter, _operatorResolveContext);
                 RequireEndElement(formatter);
             } else if (XlEqString(keyname, "LightScene")) {
-                // todo -- 
+                RequireBeginElement(formatter);
+                DeserializeLightSources(formatter);
+                RequireEndElement(formatter);
             } else
-                SkipValueOrElement(formatter);
+                formatter.SkipValueOrElement();
         }
     }
 
@@ -664,7 +765,7 @@ namespace SceneEngine
                 }
 
             case FormatterBlob::Value:
-                RequireValue(formatter);
+                RequireStringValue(formatter);
                 break;
 
             default:
@@ -732,3 +833,61 @@ template<> const ClassAccessors& Legacy_GetAccessors<SceneEngine::ToneMapSetting
     static ClassAccessors dummy(0);
     return dummy;
 }
+
+template<typename MemberType, const char* EnumToString(MemberType), std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
+	void AddStringToEnum(ClassAccessors& accessors, StringSection<> propName, MemberType ObjectType::*ptrToMember)
+{
+	accessors.Add(
+		propName,
+		[ptrToMember](const ObjectType& obj) {
+			return EnumToString(obj.*ptrToMember);
+		},
+		[ptrToMember](ObjectType& obj, StringSection<> newValue) {
+			auto conversion = StringToEnum(newValue);
+			if (!conversion.has_value())
+				Throw(std::runtime_error(std::string{"The enum value "} + newValue.AsString() + " was not understood"));
+			obj.*ptrToMember = conversion.value();
+		});
+}
+
+template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::LightSourceOperatorDesc>()
+{
+	using Obj = RenderCore::LightingEngine::LightSourceOperatorDesc;
+	static ClassAccessors props(typeid(Obj).hash_code());
+	static bool init = false;
+	if (!init) {
+		AddStringToEnum<RenderCore::LightingEngine::LightSourceShape, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsLightSourceShape>(props, "Shape", &Obj::_shape);
+		AddStringToEnum<RenderCore::LightingEngine::DiffuseModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsDiffuseModel>(props, "DiffuseModel", &Obj::_diffuseModel);
+		init = true;
+	}
+	return props;
+}
+
+template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::AmbientLightOperatorDesc>()
+{
+	using Obj = RenderCore::LightingEngine::AmbientLightOperatorDesc;
+	static ClassAccessors props(typeid(Obj).hash_code());
+	static bool init = false;
+	if (!init) {
+		init = true;
+	}
+	return props;
+}
+
+template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine::ShadowOperatorDesc>()
+{
+	using Obj = RenderCore::LightingEngine::ShadowOperatorDesc;
+	static ClassAccessors props(typeid(Obj).hash_code());
+	static bool init = false;
+	if (!init) {
+		AddStringToEnum<RenderCore::Format, RenderCore::AsString, RenderCore::AsFormat>(props, "Format", &Obj::_format);
+		AddStringToEnum<RenderCore::LightingEngine::ShadowResolveType, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowResolveType>(props, "ResolveType", &Obj::_resolveType);
+		AddStringToEnum<RenderCore::LightingEngine::ShadowProjectionMode, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowProjectionMode>(props, "ProjectionMode", &Obj::_projectionMode);
+		AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);
+		props.Add("Dims", [](const Obj& obj) { return obj._width; }, [](Obj& obj, uint32_t value) { obj._width = obj._height = value; });
+		props.Add("SlopeScaledBias", &Obj::_slopeScaledBias);
+		init = true;
+	}
+	return props;
+}
+

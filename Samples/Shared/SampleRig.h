@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../PlatformRig/OverlaySystem.h"
+#include "../../ConsoleRig/AttachablePtr.h"
 #include <memory>
 
 namespace RenderCore

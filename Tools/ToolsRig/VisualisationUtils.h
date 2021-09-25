@@ -66,19 +66,7 @@ namespace ToolsRig
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
     void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
 
-	class VisEnvSettings
-    {
-	public:
-		std::string _envConfigFile;
-
-		enum class LightingType { Deferred, Forward, Direct };
-		LightingType _lightingType;
-
-		VisEnvSettings();
-		VisEnvSettings(const std::string& envConfigFile);
-	};
-
-    Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(const VisEnvSettings& visSettings);
+    Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource);
 
 	class VisOverlaySettings
 	{
@@ -223,7 +211,7 @@ namespace ToolsRig
         RenderCore::Techniques::ParsingContext& parserContext,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		VisCameraSettings& cameraSettings,
-		VisEnvSettings& envSettings,
+		StringSection<> envSettings,
 		SceneEngine::IScene& scene,
 		const std::shared_ptr<SceneEngine::IRenderStep>& renderStep);
 

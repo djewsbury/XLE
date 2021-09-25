@@ -58,12 +58,6 @@ namespace ToolsRig
 		return std::make_shared<MainPreviewSceneRegistry>();
 	}
 
-	static ConsoleRig::WeakAttachablePtr<IPreviewSceneRegistry> s_previewSceneRegistry;
-	IPreviewSceneRegistry* GetPreviewSceneRegistry()
-	{
-		return s_previewSceneRegistry.lock().get();
-	}
-
 	IPreviewSceneRegistrySet::~IPreviewSceneRegistrySet() {}
 	IPreviewSceneRegistry::~IPreviewSceneRegistry() {}
 

@@ -70,7 +70,8 @@ namespace EntityInterface
     {
     public:
         virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) = 0;
-        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+        virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+        virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 
         virtual void Lock() = 0;
         virtual void Unlock() = 0;

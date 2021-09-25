@@ -43,6 +43,7 @@ add_executable(
     Formatters/EntityInterfaceTests.cpp
     ../Tools/EntityInterface/EntityInterface.cpp
     ../Tools/EntityInterface/RetainedEntities.cpp
+    ../Tools/EntityInterface/FormatterAdapters.cpp
     )
 
 xle_configure_executable(UnitTests-Formatters)

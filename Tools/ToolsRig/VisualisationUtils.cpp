@@ -39,6 +39,7 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Assets.h"
+#include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../Math/Transformations.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../OSServices/Log.h"
@@ -113,13 +114,9 @@ namespace ToolsRig
         return result;
     }
 
-	VisEnvSettings::VisEnvSettings() : _envConfigFile("defaultenv.txt:environment"), _lightingType(LightingType::Deferred) {}
-	VisEnvSettings::VisEnvSettings(const std::string& envConfigFile) : _envConfigFile(envConfigFile) {}
-
-	Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(const VisEnvSettings& visSettings)
+	Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource)
 	{
-		auto result = ::Assets::MakeFuture<std::shared_ptr<SceneEngine::BasicLightingStateDelegate>>(visSettings._envConfigFile);
-		return std::reinterpret_pointer_cast<Assets::FuturePtr<SceneEngine::ILightingStateDelegate>>(result);
+		return SceneEngine::CreateBasicLightingStateDelegate(cfgSource);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -371,16 +368,17 @@ namespace ToolsRig
 				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
 
 				RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
+				auto operators = envSettings->GetOperators();
 				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 					lightingApparatus,
-					envSettings->GetLightResolveOperators(),
-					envSettings->GetShadowResolveOperators(),
+					operators._lightResolveOperators,
+					operators._shadowResolveOperators,
 					ambientLightOperatorDesc,
 					targets, fbProps);
 				/*auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 					lightingApparatus,
-					envSettings->GetLightResolveOperators(),
-					envSettings->GetShadowResolveOperators(),
+					operators._lightResolveOperators,
+					operators._shadowResolveOperators,
 					targets, fbProps);*/
 
 				::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToFuture(
@@ -493,28 +491,13 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if 0
-	static SceneEngine::LightingModel AsLightingModel(VisEnvSettings::LightingType lightingType)
-	{
-		switch (lightingType) {
-		case VisEnvSettings::LightingType::Deferred:
-			return SceneEngine::LightingModel::Deferred;
-		case VisEnvSettings::LightingType::Forward:
-			return SceneEngine::LightingModel::Forward;
-		default:
-		case VisEnvSettings::LightingType::Direct:
-			return SceneEngine::LightingModel::Direct;
-		}
-	}
-#endif
-
 	std::pair<DrawPreviewResult, std::string> DrawPreview(
         RenderCore::IThreadContext& context,
 		const RenderCore::IResourcePtr& renderTarget,
         RenderCore::Techniques::ParsingContext& parserContext,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		VisCameraSettings& cameraSettings,
-		VisEnvSettings& envSettings,
+		StringSection<> envSettings,
 		SceneEngine::IScene& scene,
 		const std::shared_ptr<SceneEngine::IRenderStep>& renderStep)
     {
