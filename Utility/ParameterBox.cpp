@@ -544,7 +544,7 @@ namespace Utility
             // then we will stop reading and return
         while (stream.PeekNext() == InputStreamFormatter<CharType>::Blob::KeyedItem) {
             typename InputStreamFormatter<CharType>::InteriorSection name, value;
-            bool success = stream.TryKeyedItem(name) && stream.TryValue(value);
+            bool success = stream.TryKeyedItem(name) && stream.TryStringValue(value);
             if (!success)
                 Throw(::Exceptions::BasicLabel("Parsing exception while reading attribute in parameter box deserialization"));
 

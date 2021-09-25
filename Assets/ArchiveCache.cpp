@@ -219,7 +219,7 @@ namespace Assets
 			auto next = formatter.PeekNext();
 			if (next == FormatterBlob::KeyedItem) {
 				StringSection<> name, value;
-				if (!formatter.TryKeyedItem(name) || !formatter.TryValue(value))
+				if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
 					break;
 				result.push_back({name.AsString(), value.AsString()});
 			} else {
@@ -250,7 +250,7 @@ namespace Assets
 
 			while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 				StringSection<> name, value;
-				if (!formatter.TryKeyedItem(name) || !formatter.TryValue(value))
+				if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
 					return result;
 
 				if (XlEqString(value, "doesnotexist")) {

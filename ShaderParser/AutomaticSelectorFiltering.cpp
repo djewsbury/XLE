@@ -16,6 +16,7 @@
 #include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include "../Utility/Streams/PathUtils.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/FastParseValue.h"
@@ -156,7 +157,7 @@ namespace ShaderSourceParser
 			RequireBeginElement(formatter);
 			if (XlEqString(keyedItem, "TokenDictionary")) {
 				StringSection<> value;
-				while (formatter.TryValue(value)) {
+				while (formatter.TryStringValue(value)) {
 					auto colon = std::find(value.begin(), value.end(), ':');
 					if (colon == value.end())
 						Throw(Utility::FormatException("Missing colon in token", formatter.GetLocation()));
@@ -172,7 +173,7 @@ namespace ShaderSourceParser
 					Utility::Internal::ExpressionTokenList tokenList;
 					RequireBeginElement(formatter);
 					StringSection<> value;
-					while (formatter.TryValue(value))
+					while (formatter.TryStringValue(value))
 						tokenList.push_back(Conversion::Convert<unsigned>(value));
 					RequireEndElement(formatter);
 					_relevanceTable.insert(std::make_pair(

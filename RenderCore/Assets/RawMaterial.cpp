@@ -15,6 +15,7 @@
 #include "../../Utility/Streams/OutputStreamFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
 
@@ -255,7 +256,7 @@ namespace RenderCore { namespace Assets
     {
         std::vector<::Assets::rstring> result;
         while (formatter.PeekNext() == FormatterBlob::Value)
-            result.push_back(RequireValue(formatter).AsString());
+            result.push_back(RequireStringValue(formatter).AsString());
         return result;
     }
 

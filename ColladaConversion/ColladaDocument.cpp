@@ -14,6 +14,7 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/SerializationUtils.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../OSServices/Log.h"
 #include <queue>
 #include <cctype>
@@ -57,7 +58,7 @@ namespace ColladaConversion
             auto name = RequireKeyedItem(formatter);
             auto next = formatter.PeekNext();
             if (next == FormatterBlob::Value) {
-                RequireValue(formatter);
+                RequireStringValue(formatter);
             } else if (next == FormatterBlob::BeginElement) {
                 RequireBeginElement(formatter);
                 SkipElement(formatter);
@@ -81,7 +82,7 @@ namespace ColladaConversion
 
             case Formatter::Blob::Value:
                 {
-                    auto value = RequireValue(formatter);
+                    auto value = RequireStringValue(formatter);
                     if (Is(name, attribName)) return value;
                     break;
                 }
@@ -113,7 +114,7 @@ namespace ColladaConversion
                                                                     \
             case FormatterBlob::Value:                    \
                 {                                                   \
-                    auto value = RequireValue(formatter);       \
+                    auto value = RequireStringValue(formatter);       \
         /**/
 
     #define PARSE_END                                               \
@@ -217,7 +218,7 @@ namespace ColladaConversion
             case FormatterBlob::Value:
                 {
                     // we should scan for collada version here
-                    RequireValue(formatter);
+                    RequireStringValue(formatter);
                     break;
                 }
 
@@ -487,7 +488,7 @@ namespace ColladaConversion
         auto eleName = RequireKeyedItem(formatter);
         // there can be attributes in the containing element -- which should should skip now
         while (formatter.PeekNext() == FormatterBlob::Value) {
-            RequireValue(formatter);
+            RequireStringValue(formatter);
             eleName = RequireKeyedItem(formatter);
         }
 
@@ -533,7 +534,7 @@ namespace ColladaConversion
 
                 case FormatterBlob::Value:
                     {
-                        auto value = RequireValue(formatter);
+                        auto value = RequireStringValue(formatter);
                         if (Is(name, "texture")) _reference = value;
                         else if (Is(name, "texcoord")) _texCoord = value;
                         else Log(Warning) << "Unknown attribute for texture (" << name << ") at " << formatter.GetLocation() << std::endl;
@@ -552,7 +553,7 @@ namespace ColladaConversion
             if (!formatter.TryKeyedItem(name) || !Is(name, "ref")) {
                 Log(Warning) << "Expecting ref attribute in param technique value at " << formatter.GetLocation() << std::endl;
             } else {
-                _reference = RequireValue(formatter);
+                _reference = RequireStringValue(formatter);
                 _type = Type::Param;
             }
 
@@ -698,11 +699,11 @@ namespace ColladaConversion
                     while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
                         auto name = RequireKeyedItem(formatter);
                         if (Is(name, "name")) {
-                            newParam._name = RequireValue(formatter);
+                            newParam._name = RequireStringValue(formatter);
                         } else if (Is(name, "type")) {
-                            newParam._type = RequireValue(formatter);
+                            newParam._type = RequireStringValue(formatter);
                         } else if (Is(name, "semantic")) {
-                            newParam._semantic = RequireValue(formatter);
+                            newParam._semantic = RequireStringValue(formatter);
                         } else 
                             SkipValueOrElement(formatter);
                     }
@@ -812,10 +813,10 @@ namespace ColladaConversion
                         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
                             auto name = RequireKeyedItem(formatter);
                             if (Is(name, "count")) {
-                                auto value = RequireValue(formatter);
+                                auto value = RequireStringValue(formatter);
                                 _arrayCount = Parse(value, 0u);
                             } else if (Is(name, "id")) {
-                                _arrayId = RequireValue(formatter);
+                                _arrayId = RequireStringValue(formatter);
                             } else {
                                 // "name also valid
                                 SkipValueOrElement(formatter);
@@ -933,14 +934,14 @@ namespace ColladaConversion
             while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 if (Is(name, "offset")) {
-                    auto value = RequireValue(formatter);
+                    auto value = RequireStringValue(formatter);
                     _indexInPrimitive = Parse(value, _indexInPrimitive);
                 } else if (Is(name, "semantic")) {
-                    _semantic = RequireValue(formatter);
+                    _semantic = RequireStringValue(formatter);
                 } else if (Is(name, "source")) {
-                    _source = RequireValue(formatter);
+                    _source = RequireStringValue(formatter);
                 } else if (Is(name, "set")) {
-                    auto value = RequireValue(formatter);
+                    auto value = RequireStringValue(formatter);
                     _semanticIndex = Parse(value, _semanticIndex);
                 } else {
                     SkipValueOrElement(formatter);
@@ -957,9 +958,9 @@ namespace ColladaConversion
             while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 if (Is(name, "semantic")) {
-                    _semantic = RequireValue(formatter);
+                    _semantic = RequireStringValue(formatter);
                 } else if (Is(name, "source")) {
-                    _source = RequireValue(formatter);
+                    _source = RequireStringValue(formatter);
                 } else {
                     SkipValueOrElement(formatter);
                 }
@@ -1320,7 +1321,7 @@ namespace ColladaConversion
 
                 case FormatterBlob::Value:
                     {
-                        auto value = RequireValue(formatter);
+                        auto value = RequireStringValue(formatter);
                         if (inController) {
                             if (Is(name, "id")) controllerId = value;
                             else if (Is(name, "name")) controllerName = value;
@@ -1486,7 +1487,7 @@ namespace ColladaConversion
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
             auto attribName = RequireKeyedItem(formatter);
             if (Is(attribName, "sid")) {
-                newOp._sid = RequireValue(formatter);
+                newOp._sid = RequireStringValue(formatter);
             } else {
                 SkipValueOrElement(formatter);
             }
@@ -1885,7 +1886,7 @@ namespace ColladaConversion
 
                 case FormatterBlob::Value:
                     {
-                        auto value = RequireValue(formatter);
+                        auto value = RequireStringValue(formatter);
 
                         if (workingNodes.size() > 1) {
 

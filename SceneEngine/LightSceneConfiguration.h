@@ -46,11 +46,11 @@ namespace SceneEngine
 		uint64_t objectName = 0;
 		while (fmttr.TryKeyedItem(keyname)) {
 			if (XlEqString(keyname, "Name")) {
-				auto name = RequireValue(fmttr);
+				auto name = RequireStringValue(fmttr);
 				objectName = Hash64(name);
 			} else {
 				StringSection<> keyvalue;
-				if (fmttr.TryValue(keyvalue)) {
+				if (fmttr.TryStringValue(keyvalue)) {
 					properties.emplace_back(keyname, keyvalue);
 				} else
 					SkipValueOrElement(fmttr);
@@ -77,7 +77,7 @@ namespace SceneEngine
 		StringSection<> keyname;
 		while (fmttr.TryKeyedItem(keyname)) {
 			StringSection<> keyvalue;
-			if (fmttr.TryValue(keyvalue)) {
+			if (fmttr.TryStringValue(keyvalue)) {
 				accessors.SetFromString(&obj, keyname, keyvalue);
 			} else
 				SkipValueOrElement(fmttr);

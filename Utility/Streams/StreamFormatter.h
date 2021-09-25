@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "../Detail/API.h"
-#include "../UTFUtils.h"
 #include "../StringUtils.h"
 #include "../PtrUtils.h"
 #include "../IteratorUtils.h"
@@ -14,41 +12,10 @@
 
 namespace Utility
 {
-	class StreamLocation { public: unsigned _charIndex, _lineIndex; };
+	struct StreamLocation { unsigned _charIndex, _lineIndex; std::string _filename; };
 
 	template<typename CharType>
-		class TextStreamMarker
-	{
-	public:
-		CharType operator*() const                      { return *_ptr; }
-		CharType operator[](size_t offset) const        { assert((_ptr+offset) < _end); return *(_ptr+offset); }
-		ptrdiff_t Remaining() const                     { return (_end - _ptr); }
-		const TextStreamMarker<CharType>& operator++()  { _ptr++; assert(_ptr<=_end); return *this; }
-		const TextStreamMarker<CharType>& operator+=(size_t advancement)  { _ptr+=advancement; assert(_ptr<=_end); return *this; }
-		const CharType* Pointer() const                 { return _ptr; }
-		const CharType* End() const                     { return _end; }
-		void SetPointer(const CharType* newPtr)         { assert(newPtr <= _end); _ptr = newPtr; }
-
-		StreamLocation GetLocation() const;
-		void AdvanceCheckNewLine();
-
-		TextStreamMarker(StringSection<CharType> source);
-		TextStreamMarker(IteratorRange<const void*> source);
-		TextStreamMarker();
-		~TextStreamMarker();
-	protected:
-		const CharType* _ptr;
-		const CharType* _end;
-
-		unsigned _lineIndex;
-		const CharType* _lineStart;
-	};
-
-	class FormatException : public ::Exceptions::BasicLabel
-	{
-	public:
-		FormatException(const char message[], StreamLocation location);
-	};
+		class TextStreamMarker;
 
 	enum class FormatterBlob
 	{
@@ -69,7 +36,7 @@ namespace Utility
 		bool TryBeginElement();
 		bool TryEndElement();
 		bool TryKeyedItem(StringSection<CharType>& name);
-		bool TryValue(StringSection<CharType>& value);
+		bool TryStringValue(StringSection<CharType>& value);
 		bool TryCharacterData(StringSection<CharType>&);
 
 		StreamLocation GetLocation() const;
@@ -108,106 +75,41 @@ namespace Utility
 		void ReadHeader();
 	};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename Formatter>
-		void SkipElement(Formatter& formatter)
+	class FormatException : public ::Exceptions::BasicLabel
 	{
-		unsigned subtreeEle = 0;
-		typename Formatter::InteriorSection dummy0;
-		for (;;) {
-			switch(formatter.PeekNext()) {
-			case FormatterBlob::BeginElement:
-				if (!formatter.TryBeginElement())
-					Throw(FormatException(
-						"Malformed begin element while skipping forward", formatter.GetLocation()));
-				++subtreeEle;
-				break;
+	public:
+		FormatException(const char message[], StreamLocation location);
+	};
 
-			case FormatterBlob::EndElement:
-				if (!subtreeEle) return;    // end now, while the EndElement is primed
-
-				if (!formatter.TryEndElement())
-					Throw(FormatException(
-						"Malformed end element while skipping forward", formatter.GetLocation()));
-				--subtreeEle;
-				break;
-
-			case FormatterBlob::KeyedItem:
-				if (!formatter.TryKeyedItem(dummy0))
-					Throw(FormatException(
-						"Malformed keyed item while skipping forward", formatter.GetLocation()));
-				break;
-
-			case FormatterBlob::Value:
-				if (!formatter.TryValue(dummy0))
-					Throw(FormatException(
-						"Malformed value while skipping forward", formatter.GetLocation()));
-				break;
-
-			case FormatterBlob::CharacterData:
-				if (!formatter.TryCharacterData(dummy0))
-					Throw(FormatException(
-						"Malformed value while skipping forward", formatter.GetLocation()));
-				break;
-
-			default:
-				Throw(FormatException(
-					"Unexpected blob or end of stream hit while skipping forward", formatter.GetLocation()));
-			}
-		}
-	}
-
-	template<typename Formatter>
-		void SkipValueOrElement(Formatter& formatter)
+	template<typename CharType>
+		class TextStreamMarker
 	{
-		typename Formatter::InteriorSection dummy0;
-		if (formatter.PeekNext() == FormatterBlob::Value) {
-			if (!formatter.TryValue(dummy0))
-				Throw(FormatException(
-					"Malformed value while skipping forward", formatter.GetLocation()));
-		} else {
-			if (!formatter.TryBeginElement())
-				Throw(FormatException(
-					"Expected begin element while skipping forward", formatter.GetLocation()));
-			SkipElement(formatter);
-			if (!formatter.TryEndElement())
-				Throw(FormatException(
-					"Malformed end element while skipping forward", formatter.GetLocation()));
-		}
-	}
+	public:
+		CharType operator*() const                      { return *_ptr; }
+		CharType operator[](size_t offset) const        { assert((_ptr+offset) < _end); return *(_ptr+offset); }
+		ptrdiff_t Remaining() const                     { return (_end - _ptr); }
+		const TextStreamMarker<CharType>& operator++()  { _ptr++; assert(_ptr<=_end); return *this; }
+		const TextStreamMarker<CharType>& operator+=(size_t advancement)  { _ptr+=advancement; assert(_ptr<=_end); return *this; }
+		const CharType* Pointer() const                 { return _ptr; }
+		const CharType* End() const                     { return _end; }
+		void SetPointer(const CharType* newPtr)         { assert(newPtr <= _end); _ptr = newPtr; }
 
-	template<typename Formatter>
-		void RequireBeginElement(Formatter& formatter)
-	{
-		if (!formatter.TryBeginElement())
-			Throw(Utility::FormatException("Expecting begin element", formatter.GetLocation()));
-	}
+		StreamLocation GetLocation() const;
+		void AdvanceCheckNewLine();
 
-	template<typename Formatter>
-		void RequireEndElement(Formatter& formatter)
-	{
-		if (!formatter.TryEndElement())
-			Throw(Utility::FormatException("Expecting end element", formatter.GetLocation()));
-	}
+		TextStreamMarker(StringSection<CharType> source, const std::string& filename = {});
+		TextStreamMarker(IteratorRange<const void*> source, const std::string& filename = {});
+		TextStreamMarker();
+		~TextStreamMarker();
+	protected:
+		const CharType* _ptr;
+		const CharType* _end;
 
-	template<typename Formatter>
-		typename Formatter::InteriorSection RequireKeyedItem(Formatter& formatter)
-	{
-		typename Formatter::InteriorSection name;
-		if (!formatter.TryKeyedItem(name))
-			Throw(Utility::FormatException("Expecting keyed item", formatter.GetLocation()));
-		return name;
-	}
+		unsigned _lineIndex;
+		const CharType* _lineStart;
 
-	template<typename Formatter>
-		typename Formatter::InteriorSection RequireValue(Formatter& formatter)
-	{
-		typename Formatter::InteriorSection value;
-		if (!formatter.TryValue(value))
-			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
-		return value;
-	}
+		std::string _filename;
+	};
 }
 
 using namespace Utility;

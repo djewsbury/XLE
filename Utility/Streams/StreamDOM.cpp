@@ -50,7 +50,7 @@ namespace Utility
                     lastChild = newElement;
                 } else if (next == Formatter::Blob::Value) {
                     typename Formatter::InteriorSection value;
-                        if (!formatter.TryValue(value))
+                        if (!formatter.TryStringValue(value))
                         Throw(FormatException(
                             "Error while reading attribute in StreamDOM", formatter.GetLocation()));
 

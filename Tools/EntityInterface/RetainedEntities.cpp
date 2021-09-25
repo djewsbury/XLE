@@ -9,6 +9,7 @@
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
@@ -539,7 +540,7 @@ namespace EntityInterface
                     children.push_back(child);
                 RequireEndElement(formatter);
             } else {
-                auto value = RequireValue(formatter);
+                auto value = RequireStringValue(formatter);
 
                     // parse the value and add it as a property initializer
                 char intermediateBuffer[64];

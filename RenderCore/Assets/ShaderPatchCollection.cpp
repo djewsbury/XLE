@@ -8,6 +8,7 @@
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 
@@ -134,7 +135,7 @@ namespace RenderCore { namespace Assets
 	{
 		ShaderSourceParser::InstantiationRequest result;
 
-		auto archiveNameInput = RequireValue(formatter);		// Expecting only a single sequenced value in each fragment, which is the entry point name
+		auto archiveNameInput = RequireStringValue(formatter);		// Expecting only a single sequenced value in each fragment, which is the entry point name
 		result._archiveName = ResolveArchiveName(archiveNameInput, searchRules);
 		assert(!result._archiveName.empty());
 
@@ -143,7 +144,7 @@ namespace RenderCore { namespace Assets
 			if (XlEqString(bindingName, "Implements")) {
 				if (!result._implementsArchiveName.empty())
 					Throw(FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
-				result._implementsArchiveName = ResolveArchiveName(RequireValue(formatter), searchRules);
+				result._implementsArchiveName = ResolveArchiveName(RequireStringValue(formatter), searchRules);
 			} else {
 				RequireBeginElement(formatter);
 				result._parameterBindings.emplace(
@@ -169,7 +170,7 @@ namespace RenderCore { namespace Assets
 				auto name = RequireKeyedItem(formatter);
 				
 				if (XlEqString(name, "DescriptorSet")) {
-					_descriptorSet = RequireValue(formatter).AsString();
+					_descriptorSet = RequireStringValue(formatter).AsString();
 					continue;
 				}
 				

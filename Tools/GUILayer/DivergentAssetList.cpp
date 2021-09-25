@@ -350,7 +350,7 @@ namespace GUILayer
                 break;
 
             case Blob::Value:
-                RequireValue(formatter);
+                RequireStringValue(formatter);
                 break;
 
             default:

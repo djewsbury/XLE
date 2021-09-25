@@ -9,6 +9,7 @@
 #include "Assets.h"
 #include "IFileSystem.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include <regex>
 
 namespace Assets
@@ -71,7 +72,7 @@ namespace Assets
 			case Formatter::Blob::Value:
 				{
 					typename Formatter::InteriorSection value;
-					formatter.TryValue(value);
+					formatter.TryStringValue(value);
 					continue;
 				}
 

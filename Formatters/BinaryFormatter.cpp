@@ -546,7 +546,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryValue(IteratorRange<const void*>& resultData, ImpliedTyping::TypeDesc& resultTypeDesc, unsigned& evaluatedTypeId) 
+	bool BinaryFormatter::TryRawValue(IteratorRange<const void*>& resultData, ImpliedTyping::TypeDesc& resultTypeDesc, unsigned& evaluatedTypeId) 
 	{
 		if (_blockStack.empty()) return false;
 
@@ -722,7 +722,7 @@ namespace Formatters
 			IteratorRange<const void*> data;
 			ImpliedTyping::TypeDesc typeDesc; 
 			unsigned evaluatedTypeId;
-			TryValue(data, typeDesc, evaluatedTypeId);
+			TryRawValue(data, typeDesc, evaluatedTypeId);
 			return data;
 		} else if (next == BinaryFormatter::Blob::KeyedItem) {
 			StringSection<> name;
@@ -754,7 +754,7 @@ namespace Formatters
 			if (!formatter.TryEndBlock())
 				Throw(std::runtime_error("Expected end block"));
 			_members[newParentId].second._data.second = formatter.GetRemainingData().begin();
-		} else if (formatter.TryValue(valueData, valueTypeDesc, evaluatedTypeId)) {
+		} else if (formatter.TryRawValue(valueData, valueTypeDesc, evaluatedTypeId)) {
 			Member valueMember;
 			valueMember._data = valueData;
 			valueMember._type = evaluatedTypeId;
@@ -949,7 +949,7 @@ namespace Formatters
 			SerializeBlock(str, formatter, indent+4);
 			if (!formatter.TryEndBlock())
 				Throw(std::runtime_error("Expected end block"));
-		} else if (formatter.TryValue(valueData, valueTypeDesc, evaluatedTypeId)) {
+		} else if (formatter.TryRawValue(valueData, valueTypeDesc, evaluatedTypeId)) {
 			str << StreamIndent{indent};
 			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
 			str << " " << name << " = ";

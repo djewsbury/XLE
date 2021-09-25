@@ -14,6 +14,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../OSServices/RawFS.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
@@ -38,7 +39,7 @@ namespace RenderCore { namespace Techniques
 
 		while (formatter.PeekNext() == FormatterBlob::Value) {
 
-			auto value = RequireValue(formatter);
+			auto value = RequireStringValue(formatter);
 		
 			auto colon = std::find(value._start, value._end, ':');
 			if (colon != value._end) {
@@ -80,7 +81,7 @@ namespace RenderCore { namespace Techniques
 			if (formatter.PeekNext() == FormatterBlob::Value) {
 
 				// a selector name alone becomes a whitelist setting
-				auto selectorName = RequireValue(formatter);
+				auto selectorName = RequireStringValue(formatter);
 				dst._relevanceMap[selectorName.AsString()] = "1";
 
 			} else {
@@ -92,7 +93,7 @@ namespace RenderCore { namespace Techniques
 						if (formatter.PeekNext() == FormatterBlob::EndElement) break;
 
 						auto filterType = RequireKeyedItem(formatter);
-						auto value = RequireValue(formatter);
+						auto value = RequireStringValue(formatter);
 						if (XlEqStringI(filterType, "relevance")) {
 							dst._relevanceMap[selectorName.AsString()] = value.AsString();
 						} else if (XlEqStringI(filterType, "set")) {
@@ -104,7 +105,7 @@ namespace RenderCore { namespace Techniques
 
 					RequireEndElement(formatter);
 				} else {
-					auto value = RequireValue(formatter);
+					auto value = RequireStringValue(formatter);
 					dst._setValues.SetParameter(selectorName, value);
 				}
 			}
@@ -136,13 +137,13 @@ namespace RenderCore { namespace Techniques
 				LoadSelectorFiltering(formatter, result._selectorFiltering);
 				RequireEndElement(formatter);
 			}  else if (XlEqString(name, "VertexShader")) {
-				result._vertexShaderName = RequireValue(formatter).AsString();
+				result._vertexShaderName = RequireStringValue(formatter).AsString();
 			} else if (XlEqString(name, "PixelShader")) {
-				result._pixelShaderName = RequireValue(formatter).AsString();
+				result._pixelShaderName = RequireStringValue(formatter).AsString();
 			} else if (XlEqString(name, "GeometryShader")) {
-				result._geometryShaderName = RequireValue(formatter).AsString();
+				result._geometryShaderName = RequireStringValue(formatter).AsString();
 			} else if (XlEqString(name, "Preconfiguration")) {
-				result._preconfigurationFileName = RequireValue(formatter).AsString();
+				result._preconfigurationFileName = RequireStringValue(formatter).AsString();
 			} else {
 				Throw(FormatException("Unknown mapped item while reading technique", formatter.GetLocation()));
 			}
@@ -340,7 +341,7 @@ namespace RenderCore { namespace Techniques
 				
 				// we should find a list of other technique configuation files to inherit from
 				while (formatter.PeekNext() == FormatterBlob::Value) {
-					auto inheritSrc = RequireValue(formatter);
+					auto inheritSrc = RequireStringValue(formatter);
 					::Assets::ResChar resolvedFile[MaxPath];
 					XlCopyNString(resolvedFile, (const ::Assets::ResChar*)inheritSrc._start, inheritSrc._end-inheritSrc._start);
 					searchRules.ResolveFile(resolvedFile, resolvedFile);
@@ -364,7 +365,7 @@ namespace RenderCore { namespace Techniques
 				// the name of the technique itself
 				while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 					auto attribName = RequireKeyedItem(formatter);
-					auto value = RequireValue(formatter);
+					auto value = RequireStringValue(formatter);
 
 					if (XlEqString(attribName, "CBLayout")) {
 						_cbLayout = RenderCore::Assets::PredefinedCBLayout(value, searchRules, _validationCallback);

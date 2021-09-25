@@ -14,6 +14,7 @@
 #include "../Utility/StringUtils.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
 #include <set>
@@ -247,7 +248,7 @@ namespace RenderOverlays
 		while (formatter.TryKeyedItem(name)) {
             switch (formatter.PeekNext()) {
             case FormatterBlob::Value:
-				result.insert({name.AsString(), RequireValue(formatter).AsString()});
+				result.insert({name.AsString(), RequireStringValue(formatter).AsString()});
 				break;
 
 			case FormatterBlob::BeginElement:

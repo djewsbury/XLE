@@ -247,7 +247,7 @@ namespace Utility
 
     
     FormatException::FormatException(const char label[], StreamLocation location)
-        : ::Exceptions::BasicLabel("Format Exception: (%s) at line (%i), char (%i)", label, location._lineIndex, location._charIndex) {}
+        : ::Exceptions::BasicLabel("Format Exception: (%s) in file (%s) at line (%i), char (%i)", label, location._filename.c_str(), location._lineIndex, location._charIndex) {}
 
     template<typename CharType, int Count>
         bool TryEat(TextStreamMarker<CharType>& marker, const CharType (&pattern)[Count])
@@ -614,7 +614,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool InputStreamFormatter<CharType>::TryValue(StringSection<CharType>& value)
+        bool InputStreamFormatter<CharType>::TryStringValue(StringSection<CharType>& value)
     {
         if (PeekNext() != FormatterBlob::Value) return false;
 
@@ -725,6 +725,7 @@ namespace Utility
         StreamLocation result;
         result._charIndex = 1 + unsigned(_ptr - _lineStart);
         result._lineIndex = 1 + _lineIndex;
+        result._filename = _filename;
         return result;
     }
 
@@ -744,18 +745,20 @@ namespace Utility
     }
 
     template<typename CharType>
-        TextStreamMarker<CharType>::TextStreamMarker(StringSection<CharType> source)
+        TextStreamMarker<CharType>::TextStreamMarker(StringSection<CharType> source, const std::string& filename)
     : _ptr(source.begin())
     , _end(source.end())
+    , _filename(filename)
     {
         _lineIndex = 0;
         _lineStart = _ptr;
     }
 
     template<typename CharType>
-        TextStreamMarker<CharType>::TextStreamMarker(IteratorRange<const void*> source)
+        TextStreamMarker<CharType>::TextStreamMarker(IteratorRange<const void*> source, const std::string& filename)
     : _ptr((const CharType*)source.begin())
     , _end((const CharType*)source.end())
+    , _filename(filename)
     {
         assert((source.size() % sizeof(CharType)) == 0);
         _lineIndex = 0;

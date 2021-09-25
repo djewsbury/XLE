@@ -33,7 +33,7 @@ namespace Utility
         bool TryBeginElement();
         bool TryEndElement();
         bool TryKeyedItem(StringSection<CharType>& name);
-        bool TryValue(StringSection<CharType>& value);
+        bool TryStringValue(StringSection<CharType>& value);
         bool TryCharacterData(StringSection<CharType>& cdata);
 
         StreamLocation GetLocation() const;

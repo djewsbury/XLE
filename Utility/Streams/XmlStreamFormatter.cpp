@@ -419,7 +419,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryValue(InteriorSection& value)
+        bool XmlInputStreamFormatter<CharType>::TryStringValue(InteriorSection& value)
     {
         if (PeekNext() != Blob::Value) return false;
 

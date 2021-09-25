@@ -29,6 +29,7 @@
 #include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/OutputStreamFormatter.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Core/SelectConfiguration.h"
 
@@ -619,7 +620,7 @@ namespace ColladaConversion
 				auto next = formatter.PeekNext();
 				if (next == FormatterBlob::KeyedItem) {
 					auto name = RequireKeyedItem(formatter);
-					auto value = RequireValue(formatter);
+					auto value = RequireStringValue(formatter);
 					char foundFile[MaxPath];
 					searchRules.ResolveFile(foundFile, value);
 					sourceFiles.push_back(std::make_pair(foundFile, name.AsString()));

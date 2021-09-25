@@ -16,6 +16,7 @@
 #include "../Assets/IFileSystem.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Conversion.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include <regex>
 #include <tuple>
 #include <set>
@@ -38,7 +39,7 @@ namespace ShaderSourceParser
             const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal)
         {
-            _item = RequireValue(formatter).AsString();
+            _item = RequireStringValue(formatter).AsString();
 			_depVal = depVal;
         }
         TemplateItem() {}

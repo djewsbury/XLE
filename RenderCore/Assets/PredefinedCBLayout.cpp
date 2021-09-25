@@ -246,7 +246,7 @@ namespace RenderCore { namespace Assets
             uint8 buffer0[256], buffer1[256];
             auto defaultType = ImpliedTyping::ParseFullMatch(
                 MakeStringSection(value),
-                buffer0, dimof(buffer0));
+                MakeIteratorRange(buffer0));
 
             if (!(defaultType == result._type)) {
                     //  The initialiser isn't exactly the same type as the

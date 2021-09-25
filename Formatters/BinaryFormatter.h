@@ -29,7 +29,7 @@ namespace Formatters
 		bool TryEndBlock();
 		bool TryBeginArray(unsigned& count, unsigned& evaluatedTypeId);
 		bool TryEndArray();
-		bool TryValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc, unsigned& evaluatedTypeId);
+		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc, unsigned& evaluatedTypeId);
 
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
 		IteratorRange<const void*> SkipNextBlob();
@@ -72,7 +72,7 @@ namespace Formatters
 	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter&);
 	void RequireEndArray(BinaryFormatter&);
 	template<typename Type>
-		Type RequireValue(BinaryFormatter&);
+		Type RequireStringValue(BinaryFormatter&);
 	std::ostream& SerializeBlock(std::ostream& str, BinaryFormatter& formatter, unsigned indent = 0);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,12 +321,12 @@ namespace Formatters
 	inline BinaryMemberToken BinaryMemberIterator::operator*() const { return get(); }
 
 	template<typename Type>
-		Type RequireValue(BinaryFormatter& formatter)
+		Type RequireStringValue(BinaryFormatter& formatter)
 	{
 		IteratorRange<const void*> data;
 		ImpliedTyping::TypeDesc typeDesc;
 		unsigned evaluatedTypeId;
-		if (!formatter.TryValue(data, typeDesc, evaluatedTypeId))
+		if (!formatter.TryStringValue(data, typeDesc, evaluatedTypeId))
 			Throw(std::runtime_error("Unexpected blob while looking for value in binary formatter"));
 		Type result;
 		bool castSuccess = ImpliedTyping::Cast(

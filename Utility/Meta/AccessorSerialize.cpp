@@ -11,6 +11,7 @@
 #include "../../OSServices/Log.h"
 #include "../Streams/StreamFormatter.h"
 #include "../Streams/OutputStreamFormatter.h"
+#include "../Streams/FormatterUtils.h"
 #include "../StringFormat.h"
 #include "../ParameterBox.h"
 #include "../MemoryUtils.h"
@@ -39,7 +40,7 @@ namespace Utility
                     auto name = RequireKeyedItem(formatter);
 
                     if (formatter.PeekNext() == FormatterBlob::Value) {
-                        auto value = RequireValue(formatter);
+                        auto value = RequireStringValue(formatter);
                         if (!props.SetFromString(obj, name, value)) {
                             std::cout << "Failure while assigning property during deserialization -- " << name << std::endl;
                         }

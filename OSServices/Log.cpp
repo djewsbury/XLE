@@ -8,6 +8,7 @@
 #include "../Assets/DepVal.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"

@@ -18,6 +18,7 @@
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"
+#include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringFormat.h"
@@ -95,7 +96,7 @@ namespace Assets
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
-			if (!formatter.TryKeyedItem(name) || !formatter.TryValue(value))
+			if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
 				Throw(Utility::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
 			if (XlEqString(name, "Artifact")) {
 				result._intermediateArtifact = value.AsString();
@@ -108,7 +109,7 @@ namespace Assets
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
-			if (!formatter.TryKeyedItem(name) || !formatter.TryValue(value))
+			if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
 				Throw(Utility::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
 			if (XlEqString(value, "doesnotexist")) {
 				result._dependencies.push_back(DependentFileState {
@@ -128,7 +129,7 @@ namespace Assets
 	static StringSection<utf8> DeserializeValue(InputStreamFormatter<utf8>& formatter)
 	{
 		StringSection<utf8> value;
-		if (!formatter.TryValue(value))
+		if (!formatter.TryStringValue(value))
 			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
 		return value;
 	}
