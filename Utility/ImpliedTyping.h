@@ -59,6 +59,18 @@ namespace Utility
 
         // "template<typename Type> TypeDesc TypeOf()" is declared below
 
+        // Two similar breeds of functions below:
+        //      Parse / ParseFullMatch
+        //      Convert / ConvertFullMatch
+        //
+        // Parse does not take a type as a parameter and parses the string into
+        // its "implied type" -- in other words, the type that is implied by the string
+        // itself.
+        //
+        // Convert does take a type as a parameter, and attempts to convert the
+        // value in the string to that type. It will try to do this as efficiently as
+        // possible (ie, it's better than a Parse() followed by a Cast())
+
         template<typename CharType>
             struct ParseResult
         {
@@ -69,27 +81,53 @@ namespace Utility
         template<typename CharType>
             ParseResult<CharType> Parse(
                 StringSection<CharType> expression,
-                void* dest, size_t destSize);
+                IteratorRange<void*> destinationBuffer);
                 
         template<typename CharType>
             TypeDesc ParseFullMatch(
                 StringSection<CharType> expression,
-                void* dest, size_t destSize);
+                IteratorRange<void*> destinationBuffer);
+
+
+
+        template<typename CharType>
+            struct ConvertResult
+        {
+            const CharType*     _end = nullptr;
+            bool                _successfulConvert = false;
+        };
+
+        template<typename CharType>
+             ConvertResult<CharType> Convert(
+                StringSection<CharType> expression,
+                IteratorRange<void*> destinationBuffer,
+                const TypeDesc& destinationType);
+
+        template<typename CharType>
+             bool ConvertFullMatch(
+                StringSection<CharType> expression,
+                IteratorRange<void*> destinationBuffer,
+                const TypeDesc& destinationType);
 
         template <typename Type>
-            std::optional<Type> ParseFullMatch(StringSection<> expression);
+            const char* Convert(StringSection<> expression, Type& destination);
+            
+        template <typename Type>
+            std::optional<Type> ConvertFullMatch(StringSection<> expression);
+
+
+
+        std::string AsString(IteratorRange<const void*> data, const TypeDesc&, bool strongTyping = false);
+
+        template<typename Type>
+            inline std::string AsString(const Type& type, bool strongTyping = false);
+
 
         bool Cast(
             IteratorRange<void*> dest, TypeDesc destType,
             IteratorRange<const void*> src, TypeDesc srcType);
         
         CastType CalculateCastType(TypeCat testType, TypeCat againstType);
-
-        std::string AsString(const void* data, size_t dataSize, const TypeDesc&, bool strongTyping = false);
-        std::string AsString(IteratorRange<const void*> data, const TypeDesc&, bool strongTyping = false);
-
-        template<typename Type>
-            inline std::string AsString(const Type& type, bool strongTyping = false);
         
         void Cleanup();
 
@@ -97,7 +135,7 @@ namespace Utility
 
         //////////////////////////////////////////////////////////////////////////////////////
             // Template implementations //
-        /////////////////////////////``/////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////////////////
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(uint64_t const*)        { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt64}; }
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(int64_t const*)         { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Int64}; }
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(uint32_t const*)        { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32}; }
@@ -124,22 +162,14 @@ namespace Utility
         template<typename Type>
             inline std::string AsString(const Type& type, bool strongTyping)
             {
-                return AsString(&type, sizeof(Type), TypeOf<Type>(), strongTyping);
+                return AsString(MakeOpaqueIteratorRange(type), TypeOf<Type>(), strongTyping);
             }
 
-        template <typename Type> std::optional<Type> ParseFullMatch(StringSection<> expression) 
+        template <typename Type> std::optional<Type> ConvertFullMatch(StringSection<> expression) 
         {
-            char buffer[NativeRepMaxSize];
-            auto parseType = ParseFullMatch(expression, buffer, sizeof(buffer));
-            if (parseType == TypeOf<Type>()) {
-                return *(Type*)buffer;
-            } else {
-                Type casted;
-                if (Cast(MakeOpaqueIteratorRange(casted), TypeOf<Type>(),
-                    MakeIteratorRange(buffer), parseType)) {
-                    return casted;
-                }
-            }
+            Type casted;
+            if (ConvertFullMatch(expression, MakeOpaqueIteratorRange(casted), TypeOf<Type>()))
+                return casted;
             return {};
         }
 

@@ -395,15 +395,15 @@ namespace Utility { namespace ImpliedTyping
     template<typename CharType>
         ParseResult<CharType> Parse(
             StringSection<CharType> expression,
-            void* dest, size_t destSize)
+            IteratorRange<void*> dest)
     {
-        if (expression.IsEmpty())
-            return {expression.begin()};
-
-        unsigned integerBase = 10;
         auto* begin = expression.begin();
+        while (begin != expression.end() && (*begin == ' ' || *begin == '\t')) ++begin;
+        if (begin == expression.end()) return {begin};
+
         auto firstChar = *begin;
         bool negate = false;
+        unsigned integerBase = 10;
 
         unsigned boolCandidateLength = 0;
         bool boolValue = false;
@@ -448,8 +448,8 @@ namespace Utility { namespace ImpliedTyping
 
         finalizeBoolCandidate:
             if (boolCandidateLength && ((expression.begin() + boolCandidateLength) == expression.end() || IsTokenBreak(*(expression.begin()+boolCandidateLength)))) {
-                assert(destSize >= sizeof(bool));
-                *(bool*)dest = boolValue;
+                assert(dest.size() >= sizeof(bool));
+                *(bool*)dest.begin() = boolValue;
                 return { expression.begin() + boolCandidateLength, TypeDesc{TypeCat::Bool} };
             }
             return { expression.begin() };      // looks a little like a bool, but ultimately failed parse
@@ -506,18 +506,17 @@ namespace Utility { namespace ImpliedTyping
                     // Note that we reset back to the start of expression for the from_chars() below -- potentially meaning
                     // parsing over the same ground again
                     if (precision == 32) {
-                        assert(destSize >= sizeof(f32));
-                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f32*)dest);
+                        assert(dest.size() >= sizeof(f32));
+                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f32*)dest.begin());
                         if (a != endOfNumber)
                             return { expression.begin() }; // we didn't actually parse over everything we expected to read
                         return { fcr.ptr, TypeDesc{TypeCat::Float} };
                     } else {
                         assert(precision == 64);
-                        assert(destSize >= sizeof(f64));
-                        /*fcr = std::from_chars(expression.begin(), endOfNumber, *(f64*)dest);
-                        if (fcr.ec == std::errc{} || fcr.ptr != endOfNumber)
-                            return {TypeCat::Void};*/
-                        assert(0);
+                        assert(dest.size() >= sizeof(f64));
+                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f64*)dest.begin());
+                        if (a != endOfNumber)
+                            return { expression.begin() }; // we didn't actually parse over everything we expected to read
                         return { fcr.ptr, TypeDesc{TypeCat::Double} };
                     }
                 } else {
@@ -550,20 +549,20 @@ namespace Utility { namespace ImpliedTyping
                         return { expression.begin() };      // did not end on a token break
 
                     if (precision == 8) {
-                        assert(destSize >= sizeof(uint8_t));
-                        *(uint8_t*)dest = (uint8_t)value;
+                        assert(dest.size() >= sizeof(uint8_t));
+                        *(uint8_t*)dest.begin() = (uint8_t)value;
                         return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt8 : TypeCat::Int8} };
                     } else if (precision == 16) {
-                        assert(destSize >= sizeof(uint16_t));
-                        *(uint16_t*)dest = (uint16_t)value;
+                        assert(dest.size() >= sizeof(uint16_t));
+                        *(uint16_t*)dest.begin() = (uint16_t)value;
                         return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt16 : TypeCat::Int16} };
                     } else if (precision == 32) {
-                        assert(destSize >= sizeof(uint32_t));
-                        *(uint32_t*)dest = (uint32_t)value;
+                        assert(dest.size() >= sizeof(uint32_t));
+                        *(uint32_t*)dest.begin() = (uint32_t)value;
                         return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt32 : TypeCat::Int32} };
                     } else if (precision == 64) {
-                        assert(destSize >= sizeof(uint64_t));
-                        *(uint64_t*)dest = (uint64_t)value;
+                        assert(dest.size() >= sizeof(uint64_t));
+                        *(uint64_t*)dest.begin() = (uint64_t)value;
                         return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt64 : TypeCat::Int64} };
                     } else {
                         // assert(0);  // unknown precision, even though the integer itself parsed correctly
@@ -589,8 +588,8 @@ namespace Utility { namespace ImpliedTyping
                 bool needCastPass = false;
                 TypeCat widestArrayType = TypeCat::Void;
 
-                auto dstIterator = dest;
-                auto dstIteratorSize = ptrdiff_t(destSize);
+                auto dstIterator = dest.begin();
+                auto dstIteratorSize = ptrdiff_t(dest.size());
 
                 bool needSeparator = false;
                 for (;;) {
@@ -616,7 +615,7 @@ namespace Utility { namespace ImpliedTyping
                     auto currentElementBegin = i;
 
                     {
-                        auto subType = Parse(MakeStringSection(currentElementBegin, expression.end()), dstIterator, dstIteratorSize);
+                        auto subType = Parse(MakeStringSection(currentElementBegin, expression.end()), MakeIteratorRange(dstIterator, PtrAdd(dstIterator, dstIteratorSize)));
 
                         Element newElement;
                         newElement._section = MakeStringSection(currentElementBegin, subType._end);
@@ -681,16 +680,16 @@ namespace Utility { namespace ImpliedTyping
                 // elements get promoted to our final type
                 if (needCastPass) {
                     auto finalElementSize = TypeDesc{widestArrayType}.GetSize();
-                    const size_t cpySize = size_t(dstIterator) - ptrdiff_t(dest);
+                    const size_t cpySize = size_t(dstIterator) - ptrdiff_t(dest.begin());
                     std::unique_ptr<uint8_t[]> tempCpy = std::make_unique<uint8_t[]>(cpySize);
-                    std::memcpy(tempCpy.get(), dest, cpySize);
+                    std::memcpy(tempCpy.get(), dest.begin(), cpySize);
                     
-                    dstIterator = dest;
-                    dstIteratorSize = ptrdiff_t(destSize);
+                    dstIterator = dest.begin();
+                    dstIteratorSize = ptrdiff_t(dest.size());
                     for (const auto&e:elements) {
                         auto srcInCpyArray = MakeIteratorRange(
-                            tempCpy.get() + (ptrdiff_t)e._valueInDest.begin() - (ptrdiff_t)dest,
-                            tempCpy.get() + (ptrdiff_t)e._valueInDest.end() - (ptrdiff_t)dest);
+                            tempCpy.get() + (ptrdiff_t)e._valueInDest.begin() - (ptrdiff_t)dest.begin(),
+                            tempCpy.get() + (ptrdiff_t)e._valueInDest.end() - (ptrdiff_t)dest.begin());
                         bool castSuccess = Cast(
                             { dstIterator, PtrAdd(dstIterator, finalElementSize) }, TypeDesc{widestArrayType}, 
                             srcInCpyArray, TypeDesc{e._type});
@@ -704,8 +703,8 @@ namespace Utility { namespace ImpliedTyping
 
                 // check for trailing 'v' or 'c'
                 auto hint = TypeHint::None;
-                if (i != expression.end() && *i == 'v') { hint = TypeHint::Vector; ++i; }
-                else if (i != expression.end() && *i == 'c') { hint = TypeHint::Color; ++i; }
+                if (i != expression.end() && (*i == 'v' || *i == 'V')) { hint = TypeHint::Vector; ++i; }
+                else if (i != expression.end() && (*i == 'c' || *i == 'C')) { hint = TypeHint::Color; ++i; }
 
                 return { i, TypeDesc{widestArrayType, uint16_t(elements.size()), hint} };
             }
@@ -728,9 +727,9 @@ namespace Utility { namespace ImpliedTyping
     template<typename CharType>
         TypeDesc ParseFullMatch(
             StringSection<CharType> expression,
-            void* dest, size_t destSize)
+            IteratorRange<void*> destinationBuffer)
     {
-        auto parse = Parse(expression, dest, destSize);
+        auto parse = Parse(expression, destinationBuffer);
 
         #if defined(VERIFY_NEW_IMPLEMENTATION)
             {
@@ -745,24 +744,329 @@ namespace Utility { namespace ImpliedTyping
             }
         #endif
 
+        while (parse._end != expression.end() && (*parse._end == ' ' || *parse._end == '\t')) ++parse._end;
         if (parse._end == expression.end())
             return parse._type;
         return { TypeCat::Void };
     }
 
-    std::string AsString(const void* data, size_t dataSize, const TypeDesc& desc, bool strongTyping)
+    template<typename CharType>
+        const CharType* FastParseBool(
+            StringSection<CharType> expression,
+            bool& destination)
+    {
+        if (expression.IsEmpty()) return expression.begin();
+
+        unsigned boolCandidateLength = 0;
+        bool boolValue = false;
+        switch (*expression.begin()) {
+        case 't':
+        case 'T':
+            if (XlBeginsWith(expression, "true") || XlBeginsWith(expression, "True") || XlBeginsWith(expression, "TRUE")) {
+                boolValue = true;
+                boolCandidateLength = 4;
+            }
+            goto finalizeBoolCandidate;
+
+        case 'y':
+        case 'Y':
+            if (XlBeginsWith(expression, "yes") || XlBeginsWith(expression, "Yes") || XlBeginsWith(expression, "YES")) {
+                boolCandidateLength = 3;
+                boolValue = true;
+            } else {
+                boolCandidateLength = 1;
+                boolValue = true;
+            }
+            goto finalizeBoolCandidate;
+
+        case 'f':
+        case 'F':
+            if (XlEqString(expression, "false") || XlEqString(expression, "False") || XlEqString(expression, "FALSE")) {
+                boolValue = false;
+                boolCandidateLength = 5;
+            }
+            goto finalizeBoolCandidate;
+
+        case 'n':
+        case 'N':
+            if (XlEqString(expression, "no") || XlEqString(expression, "No") || XlEqString(expression, "NO")) {
+                boolCandidateLength = 2;
+                boolValue = false;
+            } else {
+                boolCandidateLength = 1;
+                boolValue = false;
+            }
+            goto finalizeBoolCandidate;
+
+        default:
+            return expression.begin();
+
+        finalizeBoolCandidate:
+            // we always require a token break after the bool here. This avoids odd situations like "nothing" begin considered a partial match against "no"
+            // when calling Convert(...)
+            if (boolCandidateLength && ((expression.begin() + boolCandidateLength) == expression.end() || IsTokenBreak(*(expression.begin()+boolCandidateLength)))) {
+                destination = boolValue;
+                return expression.begin() + boolCandidateLength;
+            }
+            return expression.begin();      // looks a little like a bool, but ultimately failed parse
+        }
+    }
+
+    template<typename CharType>
+        static bool IsIntegerTrailer(CharType chr) { return chr == 'u' || chr == 'U' || chr == 'i' || chr == 'I' || chr == 'f' || chr == 'F'; }
+
+    template<typename CharType>
+        static bool IsArrayTrailer(CharType chr) { return chr == 'v' || chr == 'V' || chr == 'c' || chr == 'C'; }
+
+    template<typename DestinationType, typename CharType>
+        ConvertResult<CharType> ConvertSignedIntegerHelper(StringSection<CharType> expression, DestinationType& destBuffer)
+    {
+        int64_t i64;
+        auto parseEnd = FastParseValue(expression, i64);
+
+        if (parseEnd != expression.end() && (*parseEnd == '.' || *parseEnd == 'e')) {
+            // This may actually a floating point number
+            double d;
+            parseEnd = FastParseValue(expression, d);
+            if (parseEnd != expression.begin())
+                i64 = int64_t(d); // fall through
+        } else if (parseEnd != expression.end() && (*parseEnd == 'x') && i64 == 0) {
+            // this was actually a "0x" hex prefix
+            if ((parseEnd+1) == expression.end() || *(parseEnd+1) == '+'  || *(parseEnd+1) == '-')      // can't follow this with either empty string, + or -
+                return {expression.begin(), false};
+            parseEnd = FastParseValue(MakeStringSection(parseEnd+1, expression.end()), i64, 16);
+            if (*expression.begin() == '-')      // "-0x" is still possible
+                i64 = -i64;
+        }
+
+        if (parseEnd != expression.begin()) {
+            //if (i64 > std::numeric_limits<DestinationType>::max() || i64 < std::numeric_limits<DestinationType>::min())
+                //return {parseEnd, false};       // overflow / underflow
+            if (parseEnd != expression.end() && IsIntegerTrailer(*parseEnd)) ++parseEnd;
+            destBuffer = i64;
+            return {parseEnd, true};
+        } else {
+
+            // attempt bool to integer version
+            bool b;
+            parseEnd = FastParseBool(expression, b);
+            if (parseEnd != expression.begin()) {
+                destBuffer = DestinationType(b);
+                return {parseEnd, true};
+            }
+
+            return {parseEnd, false};
+        }
+    }
+
+    template<typename DestinationType, typename CharType>
+        ConvertResult<CharType> ConvertUnsignedIntegerHelper(StringSection<CharType> expression, DestinationType& destBuffer)
+    {
+        uint64_t ui64;
+        auto parseEnd = FastParseValue(expression, ui64);
+
+        if (parseEnd != expression.end() && (*parseEnd == '.' || *parseEnd == 'e')) {
+            // This may actually a floating point number
+            double d;
+            parseEnd = FastParseValue(expression, d);
+            if (parseEnd != expression.begin())
+                ui64 = uint64_t(d); // fall through
+        } else if (parseEnd != expression.end() && (*parseEnd == '-')) {
+            // this could be a negative number read as unsigned
+            int64_t i64;
+            parseEnd = FastParseValue(expression, i64);
+            if (parseEnd != expression.begin())
+                ui64 = uint64_t(i64); // fall through
+        } else if (parseEnd != expression.end() && (*parseEnd == 'x') && ui64 == 0) {
+            // this was actually a "0x" hex prefix
+            if ((parseEnd+1) == expression.end() || *(parseEnd+1) == '+'  || *(parseEnd+1) == '-')      // can't follow this with either empty string, + or -
+                return {expression.begin(), false};
+            parseEnd = FastParseValue(MakeStringSection(parseEnd+1, expression.end()), ui64, 16);
+            if (*expression.begin() == '-')      // "-0x" is still possible
+                ui64 = -int64_t(ui64);
+        }
+
+        if (parseEnd != expression.begin()) {
+            //if (ui64 > std::numeric_limits<DestinationType>::max())
+                //return {parseEnd, false};       // overflow / underflow
+            if (parseEnd != expression.end() && IsIntegerTrailer(*parseEnd)) ++parseEnd;
+            destBuffer = ui64;
+            return {parseEnd, true};
+        } else {
+
+            // attempt bool to integer version
+            bool b;
+            parseEnd = FastParseBool(expression, b);
+            if (parseEnd != expression.begin()) {
+                destBuffer = DestinationType(b);
+                return {parseEnd, true};
+            }
+
+            return {parseEnd, false};
+        }
+    }
+
+    template<typename CharType>
+        ConvertResult<CharType> Convert(
+            StringSection<CharType> expression,
+            IteratorRange<void*> destinationBuffer,
+            const TypeDesc& destinationType)
+    {
+        assert(destinationBuffer.size() >= destinationType.GetSize());
+        assert(destinationType._arrayCount != 0);
+
+        auto i = expression.begin();
+        while (i < expression.end() && (*i == ' '|| *i == '\t')) ++i;
+        if (!expression.size()) return {expression.begin(), false};
+        if (*i == '{') {
+            i++;  // past '{'
+
+            auto elementType = destinationType;
+            elementType._arrayCount = 1;
+            unsigned elementsRead = 0;
+
+            auto destinationBufferIterator = destinationBuffer;
+            bool needSeparator = false;
+            for (;;) {
+                while (i < expression.end() && (*i == ' '|| *i == '\t')) ++i;
+                if (i == expression.end())
+                    return {expression.begin(), false};
+
+                if (*i == '}')  {
+                    return {expression.begin(), false};      // hit terminator at an unexpected time (empty array not supported)
+                }
+
+                if (needSeparator) {
+                    if (*i != ',')
+                        return { expression.begin() };
+                    ++i;
+                    while (i < expression.end() && (*i == ' '|| *i == '\t')) ++i;
+                }
+
+                if (destinationBufferIterator.size() < elementType.GetSize())
+                    return {expression.begin(), false};     // too many elements to fit in the destination buffer
+
+                auto elementConversion = Convert(MakeStringSection(i, expression.end()), destinationBufferIterator, elementType);
+                if (elementConversion._successfulConvert) {
+                    i = elementConversion._end;
+                    destinationBufferIterator.first = PtrAdd(destinationBufferIterator.first, elementType.GetSize());
+                    ++elementsRead;
+                    if (elementsRead == destinationType._arrayCount) {
+                        // we need a good terminator to follow
+                        while (i < expression.end() && (*i == ' '|| *i == '\t')) ++i;
+                        if (i == expression.end() || *i != '}')
+                            return {expression.begin(), false};     // no terminator
+                        ++i;
+                        if (i != expression.end() && IsArrayTrailer(*i)) ++i;
+                        return {i, true};
+                    }
+
+                    needSeparator = true;
+                } else {
+                    return {expression.begin(), false};  // element couldn't be understood
+                }
+            }
+        } else {
+            if (destinationType._arrayCount > 1)
+                return {i, false};
+
+            if (destinationType._type == TypeCat::Void)
+                return {i, true};
+
+            const CharType* parseEnd = nullptr;
+            int32_t i32; uint32_t ui32;
+            int64_t i64; uint64_t ui64;
+            switch (destinationType._type) {
+            case TypeCat::Bool:
+                {
+                    uint8_t midway;
+                    auto res = ConvertUnsignedIntegerHelper(MakeStringSection(i, expression.end()), midway);
+                    if (res._successfulConvert)
+                        *(bool*)destinationBuffer.begin() = midway;
+                    return res;
+                }
+
+            case TypeCat::Int8:
+                return ConvertSignedIntegerHelper<int8_t>(MakeStringSection(i, expression.end()), *(int8_t*)destinationBuffer.begin());
+
+            case TypeCat::UInt8:
+                return ConvertUnsignedIntegerHelper<uint8_t>(MakeStringSection(i, expression.end()), *(uint8_t*)destinationBuffer.begin());
+
+            case TypeCat::Int16:
+                return ConvertSignedIntegerHelper<int16_t>(MakeStringSection(i, expression.end()), *(int16_t*)destinationBuffer.begin());
+
+            case TypeCat::UInt16:
+                return ConvertUnsignedIntegerHelper<uint16_t>(MakeStringSection(i, expression.end()), *(uint16_t*)destinationBuffer.begin());
+                
+            case TypeCat::Int32:
+                return ConvertSignedIntegerHelper<int32_t>(MakeStringSection(i, expression.end()), *(int32_t*)destinationBuffer.begin());
+
+            case TypeCat::UInt32:
+                return ConvertUnsignedIntegerHelper<uint32_t>(MakeStringSection(i, expression.end()), *(uint32_t*)destinationBuffer.begin());
+                
+            case TypeCat::Int64:
+                return ConvertSignedIntegerHelper<int64_t>(MakeStringSection(i, expression.end()), *(int64_t*)destinationBuffer.begin());
+
+            case TypeCat::UInt64:
+                return ConvertUnsignedIntegerHelper<uint64_t>(MakeStringSection(i, expression.end()), *(uint64_t*)destinationBuffer.begin());
+
+            case TypeCat::Float:
+                {
+                    float f;
+                    parseEnd = FastParseValue(MakeStringSection(i, expression.end()), f);
+                    if (parseEnd != i) {
+                        *(float*)destinationBuffer.begin() = f;
+                        if (parseEnd != destinationBuffer.end() && (*parseEnd == 'f' || *parseEnd == 'F')) ++parseEnd;
+                        return {parseEnd, true};
+                    } else {
+                        return {parseEnd, false};
+                    }
+                }
+
+            case TypeCat::Double:
+                {
+                    double d;
+                    parseEnd = FastParseValue(MakeStringSection(i, expression.end()), d);
+                    if (parseEnd != i) {
+                        *(double*)destinationBuffer.begin() = d;
+                        if (parseEnd != destinationBuffer.end() && (*parseEnd == 'f' || *parseEnd == 'F')) ++parseEnd;
+                        return {parseEnd, true};
+                    } else {
+                        return {parseEnd, false};
+                    }
+                }
+
+            default:
+                assert(0);
+                return { parseEnd, false };
+            }
+        }
+    }
+
+    template<typename CharType>
+        bool ConvertFullMatch(
+            StringSection<CharType> expression,
+            IteratorRange<void*> destinationBuffer,
+            const TypeDesc& destinationType)
+    {
+        auto parse = Convert(expression, destinationBuffer, destinationType);
+        while (parse._end != expression.end() && (*parse._end == ' ' || *parse._end == '\t')) ++parse._end;
+        return parse._successfulConvert && (parse._end == expression.end());
+    }
+
+    std::string AsString(IteratorRange<const void*> data, const TypeDesc& desc, bool strongTyping)
     {
         if (desc._typeHint == TypeHint::String) {
             if (desc._type == TypeCat::UInt8 || desc._type == TypeCat::Int8) {
-                return std::string((const char*)data, (const char*)PtrAdd(data, desc._arrayCount * sizeof(char)));
+                return std::string((const char*)data.begin(), (const char*)PtrAdd(data.begin(), desc._arrayCount * sizeof(char)));
             }
             if (desc._type == TypeCat::UInt16 || desc._type == TypeCat::Int16) {
-                return Conversion::Convert<std::string>(std::basic_string<utf16>((const utf16*)data, (const utf16*)PtrAdd(data, desc._arrayCount * sizeof(utf16))));
+                return Conversion::Convert<std::string>(std::basic_string<utf16>((const utf16*)data.begin(), (const utf16*)PtrAdd(data.begin(), desc._arrayCount * sizeof(utf16))));
             }
         }
 
         std::stringstream result;
-        assert(dataSize >= desc.GetSize());
+        assert(data.size() >= desc.GetSize());
         auto arrayCount = unsigned(desc._arrayCount);
         if (arrayCount > 1) result << "{";
 
@@ -771,40 +1075,40 @@ namespace Utility { namespace ImpliedTyping
 
             if (strongTyping) {
                 switch (desc._type) {
-                case TypeCat::Bool:     if (*(bool*)data) { result << "true"; } else { result << "false"; }; break;
-                case TypeCat::Int8:     result << (int32_t)*(int8_t*)data << "i8"; break;
-                case TypeCat::UInt8:    result << (uint32_t)*(uint8_t*)data << "u8"; break;
-                case TypeCat::Int16:    result << *(int16_t*)data << "i16"; break;
-                case TypeCat::UInt16:   result << *(uint16_t*)data << "u16"; break;
-                case TypeCat::Int32:    result << *(int32_t*)data << "i"; break;
-                case TypeCat::UInt32:   result << *(uint32_t*)data << "u"; break;
-                case TypeCat::Int64:    result << *(int64_t*)data << "i64"; break;
-                case TypeCat::UInt64:   result << *(uint64_t*)data << "u64"; break;
-                case TypeCat::Float:    result << *(float*)data << "f"; break;
-                case TypeCat::Double:   result << *(double*)data << "f64"; break;
+                case TypeCat::Bool:     if (*(bool*)data.begin()) { result << "true"; } else { result << "false"; }; break;
+                case TypeCat::Int8:     result << (int32_t)*(int8_t*)data.begin() << "i8"; break;
+                case TypeCat::UInt8:    result << (uint32_t)*(uint8_t*)data.begin() << "u8"; break;
+                case TypeCat::Int16:    result << *(int16_t*)data.begin() << "i16"; break;
+                case TypeCat::UInt16:   result << *(uint16_t*)data.begin() << "u16"; break;
+                case TypeCat::Int32:    result << *(int32_t*)data.begin() << "i"; break;
+                case TypeCat::UInt32:   result << *(uint32_t*)data.begin() << "u"; break;
+                case TypeCat::Int64:    result << *(int64_t*)data.begin() << "i64"; break;
+                case TypeCat::UInt64:   result << *(uint64_t*)data.begin() << "u64"; break;
+                case TypeCat::Float:    result << *(float*)data.begin() << "f"; break;
+                case TypeCat::Double:   result << *(double*)data.begin() << "f64"; break;
                 case TypeCat::Void:     result << ""; break;
                 default:                result << "<<error>>"; break;
                 }
             } else {
                 switch (desc._type) {
-                case TypeCat::Bool:     result << *(bool*)data; break;
-                case TypeCat::Int8:     result << (int32_t)*(int8_t*)data; break;
-                case TypeCat::UInt8:    result << (uint32_t)*(uint8_t*)data; break;
-                case TypeCat::Int16:    result << *(int16_t*)data; break;
-                case TypeCat::UInt16:   result << *(uint16_t*)data; break;
-                case TypeCat::Int32:    result << *(int32_t*)data; break;
-                case TypeCat::UInt32:   result << *(uint32_t*)data; break;
-                case TypeCat::Int64:    result << *(int64_t*)data; break;
-                case TypeCat::UInt64:   result << *(uint64_t*)data; break;
-                case TypeCat::Float:    result << *(float*)data; break;
-                case TypeCat::Double:   result << *(double*)data; break;
+                case TypeCat::Bool:     result << *(bool*)data.begin(); break;
+                case TypeCat::Int8:     result << (int32_t)*(int8_t*)data.begin(); break;
+                case TypeCat::UInt8:    result << (uint32_t)*(uint8_t*)data.begin(); break;
+                case TypeCat::Int16:    result << *(int16_t*)data.begin(); break;
+                case TypeCat::UInt16:   result << *(uint16_t*)data.begin(); break;
+                case TypeCat::Int32:    result << *(int32_t*)data.begin(); break;
+                case TypeCat::UInt32:   result << *(uint32_t*)data.begin(); break;
+                case TypeCat::Int64:    result << *(int64_t*)data.begin(); break;
+                case TypeCat::UInt64:   result << *(uint64_t*)data.begin(); break;
+                case TypeCat::Float:    result << *(float*)data.begin(); break;
+                case TypeCat::Double:   result << *(double*)data.begin(); break;
                 case TypeCat::Void:     result << ""; break;
                 default:                result << "<<error>>"; break;
                 }
             }
 
                 // skip forward one element
-            data = PtrAdd(data, TypeDesc{desc._type}.GetSize());
+            data.first = PtrAdd(data.begin(), TypeDesc{desc._type}.GetSize());
         }
 
         if (arrayCount > 1) {
@@ -819,13 +1123,11 @@ namespace Utility { namespace ImpliedTyping
         return result.str();
     }
 
-    std::string AsString(IteratorRange<const void*> data, const TypeDesc& type, bool strongTyping)
-    {
-        return AsString(data.begin(), data.size(), type, strongTyping);
-    }
+    template TypeDesc ParseFullMatch(StringSection<utf8> expression, IteratorRange<void*> dest);
+    template ParseResult<utf8> Parse(StringSection<utf8> expression, IteratorRange<void*> dest);
 
-    template TypeDesc ParseFullMatch(StringSection<utf8> expression, void* dest, size_t destSize);
-    template ParseResult<utf8> Parse(StringSection<utf8> expression, void* dest, size_t destSize);
+    template bool ConvertFullMatch(StringSection<utf8> expression, IteratorRange<void*>, const TypeDesc&);
+    template ConvertResult<utf8> Convert(StringSection<utf8> expression, IteratorRange<void*>, const TypeDesc&);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
