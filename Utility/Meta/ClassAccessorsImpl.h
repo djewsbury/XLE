@@ -80,7 +80,7 @@ namespace Utility
                     // Setter does not take a string as input
                     using MidwayObjectType = std::decay_t<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>>;
                     if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
-                        auto midwayObject = ImpliedTyping::ParseFullMatch<MidwayObjectType>(MakeStringSection((const char*)src.begin(), (const char*)src.end()));
+                        auto midwayObject = ImpliedTyping::ConvertFullMatch<MidwayObjectType>(MakeStringSection((const char*)src.begin(), (const char*)src.end()));
                         if (!midwayObject.has_value()) return false;
                         capSetFn(*(ExpectedObjectType*)object, midwayObject.value());
                     } else {

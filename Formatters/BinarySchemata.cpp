@@ -299,7 +299,7 @@ namespace Formatters
 		auto token = tokenizer.GetNextToken();
 		alignas(uint64_t) char buffer[256];
 		*(uint64_t*)buffer = 0;
-		auto type = ImpliedTyping::ParseFullMatch(token._value, buffer, sizeof(buffer));
+		auto type = ImpliedTyping::ParseFullMatch(token._value, MakeIteratorRange(buffer));
 		if (type._arrayCount != 1 || 
 			(	type._type != ImpliedTyping::TypeCat::Int8 && type._type != ImpliedTyping::TypeCat::UInt8
 			&& 	type._type != ImpliedTyping::TypeCat::Int16 && type._type != ImpliedTyping::TypeCat::UInt16

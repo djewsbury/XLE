@@ -545,7 +545,7 @@ namespace EntityInterface
                 char intermediateBuffer[64];
                 auto type = ImpliedTyping::ParseFullMatch(
                     value,
-                    intermediateBuffer, dimof(intermediateBuffer));
+                    MakeIteratorRange(intermediateBuffer));
 
                 size_t bufferOffset = initsBuffer.size();
                 

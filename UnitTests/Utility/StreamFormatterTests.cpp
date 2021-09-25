@@ -422,7 +422,7 @@ EnvSettings=~
         auto mappingAttr = src.Attribute("Mapping").Value();
         auto parsedType = ImpliedTyping::ParseFullMatch(
             mappingAttr,
-            buffer, sizeof(buffer));
+            MakeIteratorRange(buffer));
         ImpliedTyping::Cast(
             MakeIteratorRange(mat._mappingConstant), 
             ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, dimof(mat._mappingConstant)},
@@ -489,7 +489,7 @@ EnvSettings=~
                         if (XlEqString(name, "EndHeight")) {
                             newStrata._endHeight = Conversion::Convert<decltype(newStrata._endHeight)>(value);
                         } else if (XlEqString(name, "Mapping")) {
-                            auto mappingConst = ImpliedTyping::ParseFullMatch<Float4>(value).value();
+                            auto mappingConst = ImpliedTyping::ConvertFullMatch<Float4>(value).value();
                             newStrata._mappingConstant[0] = mappingConst[0];
                             newStrata._mappingConstant[1] = mappingConst[1];
                             newStrata._mappingConstant[2] = mappingConst[2];
@@ -524,7 +524,7 @@ EnvSettings=~
             auto value = RequireValue(formatter);
 
             if (XlEqString(name, "MaterialId")) {
-                result._id = ImpliedTyping::ParseFullMatch<decltype(result._id)>(value).value();
+                result._id = ImpliedTyping::ConvertFullMatch<decltype(result._id)>(value).value();
             } else if (XlEqString(name, "Texture0")) {
                 result._texture[0] = value.AsString();
             } else if (XlEqString(name, "Texture1")) {
@@ -539,7 +539,7 @@ EnvSettings=~
                 uint8_t buffer[512];
                 auto parsedType = ImpliedTyping::ParseFullMatch(
                     value,
-                    buffer, sizeof(buffer));
+                    MakeIteratorRange(buffer));
                 ImpliedTyping::Cast(
                     MakeIteratorRange(result._mappingConstant), 
                     ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, dimof(result._mappingConstant)},
@@ -568,9 +568,9 @@ EnvSettings=~
             } else if (XlEqString(name, "Texture1")) {
                 result._texture[1] = value.AsString();
             } else if (XlEqString(name, "HGrid")) {
-                result._hgrid = ImpliedTyping::ParseFullMatch<decltype(result._hgrid)>(value).value();
+                result._hgrid = ImpliedTyping::ConvertFullMatch<decltype(result._hgrid)>(value).value();
             } else if (XlEqString(name, "Gain")) {
-                result._gain = ImpliedTyping::ParseFullMatch<decltype(result._gain)>(value).value();
+                result._gain = ImpliedTyping::ConvertFullMatch<decltype(result._gain)>(value).value();
             } else
                 Throw(FormatException("Unknown attribute encountered", formatter.GetLocation()));
         }
@@ -588,11 +588,11 @@ EnvSettings=~
             auto name = RequireKeyedItem(formatter);
 
             if (XlEqString(name, "DiffuseDims")) {
-                result._diffuseDims = ImpliedTyping::ParseFullMatch<UInt2>(RequireValue(formatter)).value();
+                result._diffuseDims = ImpliedTyping::ConvertFullMatch<UInt2>(RequireValue(formatter)).value();
             } else if (XlEqString(name, "NormalDims")) {
-                result._normalDims = ImpliedTyping::ParseFullMatch<UInt2>(RequireValue(formatter)).value();
+                result._normalDims = ImpliedTyping::ConvertFullMatch<UInt2>(RequireValue(formatter)).value();
             } else if (XlEqString(name, "ParamDims")) {
-                result._paramDims = ImpliedTyping::ParseFullMatch<UInt2>(RequireValue(formatter)).value();
+                result._paramDims = ImpliedTyping::ConvertFullMatch<UInt2>(RequireValue(formatter)).value();
             } else if (XlEqString(name, "StrataMaterial")) {
                 RequireBeginElement(formatter);
                 ExampleSerializableObject::StrataMaterial newMaterial;

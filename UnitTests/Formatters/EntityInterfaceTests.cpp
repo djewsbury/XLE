@@ -23,16 +23,39 @@ namespace EntityInterface
 		class TextFormatterAdapter : public IDynamicFormatter
 	{
 	public:
-		virtual FormatterBlob PeekNext() { return _fmttr.PeekNext(); }
+		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
 
-		virtual bool TryBeginElement() { return _fmttr.TryBeginElement(); }
-		virtual bool TryEndElement() { return _fmttr.TryEndElement(); }
-		virtual bool TryKeyedItem(StringSection<>& name) { return _fmttr.TryKeyedItem(name); }
-		virtual bool TryValue(StringSection<>& value) { return _fmttr.TryValue(value); }
-		virtual bool TryCharacterData(StringSection<>& cdata) { return _fmttr.TryCharacterData(cdata); }
+		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
+		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
+		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
 
-		virtual StreamLocation GetLocation() const { return _fmttr.GetLocation(); }
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const { return _cfgFile->GetDependencyValidation(); }
+		virtual bool TryStringValue(StringSection<>& value) override
+		{ 
+			return _fmttr.TryValue(value);
+		}
+
+		virtual bool TryRawValue(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type) override
+		{ 
+			StringSection<> strSection;
+			auto res = _fmttr.TryValue(strSection);
+			if (res) {
+				value = {strSection.begin(), strSection.end()};
+				type = ImpliedType::TypeOf<const char*>();
+			}
+			return res;
+		}
+
+		virtual bool TryCastValue(IteratorRange<const void*> destinationBuffer, const ImpliedTyping::TypeDesc& type) override
+		{
+			StringSection<> strSection;
+			auto res = _fmttr.TryValue(strSection);
+			if (res)
+				type = ImpliedTyping::ParseFullMatch(strSection, destination);
+			return res;
+		}
+
+		virtual StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _cfgFile->GetDependencyValidation(); }
 
 		TextFormatterAdapter(
 			std::shared_ptr<::Assets::ConfigFileContainer<Formatter>> cfgFile,
@@ -56,7 +79,7 @@ namespace EntityInterface
 	class TextEntityDocument : public IEntityDocument
 	{
 	public:
-		virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint)
+		virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
 			using UnderlyingFormatter = InputStreamFormatter<>;
 			auto result = std::make_shared<::Assets::FuturePtr<TextFormatterAdapter<UnderlyingFormatter>>>();
@@ -68,29 +91,31 @@ namespace EntityInterface
 			return std::reinterpret_pointer_cast<::Assets::FuturePtr<IDynamicFormatter>>(result);
 		}
 
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const
+		virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override
 		{
 			return _srcFile->GetDependencyValidation();
 		}
 
-		virtual void Lock()
+		virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const override
 		{
-			_lock.lock();
-		}
-		virtual void Unlock()
-		{
-			_lock.unlock();
+			return _directorySearchRules;
 		}
 
-		TextEntityDocument(std::string src) : _src(src)
+		virtual void Lock() override { _lock.lock(); }
+		virtual void Unlock() override { _lock.unlock(); }
+
+		TextEntityDocument(std::string src) 
+		: _src(src)
 		{
 			_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
+			_directorySearchRules.SetBaseFile(_src);
 		}
 
 	private:
 		Threading::Mutex _lock;
 		std::string _src;
 		::Assets::PtrToFuturePtr<::Assets::ConfigFileContainer<>> _srcFile;
+		::Assets::DirectorySearchRules _directorySearchRules;
 	};
 
 	std::shared_ptr<IEntityDocument> CreateTextEntityDocument(StringSection<> src)
@@ -145,15 +170,19 @@ namespace UnitTests
 	template<typename Type>
 		Type RequireValue(EntityInterface::IDynamicFormatter& formatter)
 	{
-		StringSection<> stringValue;
-		if (!formatter.TryValue(stringValue))
+		ImpliedTyping::TypeDesc typeDesc;
+		auto data = formatter.TryValue(typeDesc);
+		if (data.empty())
 			Throw(std::runtime_error("Unexpected blob while looking for value in text formatter"));
 
-		auto casted = ImpliedTyping::ParseFullMatch<Type>(stringValue);
-		if (!casted)
+		Type result;
+		bool castSuccess = ImpliedTyping::Cast(
+			MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
+			data, typeDesc);
+		if (!castSuccess)
 			Throw(std::runtime_error("Could not convert value to the required type in text formatter"));
 
-		return casted.value();
+		return result;
 	}
 
 	static void RequireBlobsFromCfg1(EntityInterface::IDynamicFormatter& fmttr)
@@ -325,5 +354,6 @@ namespace UnitTests
 
 	// StreamLocation should tell us something about the document we're reading
 	// SkipValueOrElement might need to be specialized in IDynamicFormatter
+	// locking & unlocking functionality
 }
 

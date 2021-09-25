@@ -58,7 +58,7 @@ namespace Utility
 
         uint8_t buffer[NativeRepMaxSize];
 		assert(stringData.size() < NativeRepMaxSize);
-        auto typeDesc = ParseFullMatch(stringData, buffer, sizeof(buffer));
+        auto typeDesc = ParseFullMatch(stringData, MakeIteratorRange(buffer));
         if (typeDesc._type != TypeCat::Void) {
 			SetParameter(name, {buffer, PtrAdd(buffer, std::min(sizeof(buffer), (size_t)typeDesc.GetSize()))}, typeDesc);
         } else {
@@ -504,7 +504,7 @@ namespace Utility
                 continue;
             }
 
-            auto stringFormat = ImpliedTyping::AsString(value, _values.size() - i->_valueBegin, type, true);
+            auto stringFormat = ImpliedTyping::AsString(MakeStringSection((const CharType*)value, (const CharType*)AsPointer(_values.end())), type, true);
             auto convertedString = Conversion::Convert<std::basic_string<CharType>>(stringFormat);
             stream.WriteKeyedValue(
                 MakeStringSection(AsPointer(nameBuffer.begin()), AsPointer(nameBuffer.begin()) + finalNameLen),
@@ -575,7 +575,7 @@ namespace Utility
 
                 nativeType = ParseFullMatch(
                     MakeStringSection((const char*)value._start, (const char*)value._end),
-                    nativeTypeBuffer, sizeof(nativeTypeBuffer));
+                    MakeIteratorRange(nativeTypeBuffer));
 
             } else {
 
@@ -588,7 +588,7 @@ namespace Utility
                 if (valueLen>=0) {
                     nativeType = ParseFullMatch(
                         MakeStringSection(AsPointer(valueBuffer.begin()), AsPointer(valueBuffer.begin()) + valueLen),
-                        nativeTypeBuffer, sizeof(nativeTypeBuffer));
+                        MakeIteratorRange(nativeTypeBuffer));
                 }
 
             }
@@ -646,8 +646,7 @@ namespace Utility
             const auto name = i.Name();
             auto value = i.RawValue();
             const auto& type = i.Type();
-            auto stringFormat = ImpliedTyping::AsString(
-                value.begin(), value.size(), type);
+            auto stringFormat = ImpliedTyping::AsString(value, type);
 
             auto insertPosition = std::lower_bound(
                 defines.begin(), defines.end(), name.begin(), StringTableComparison());
@@ -670,8 +669,7 @@ namespace Utility
                 defines.begin(), defines.end(), name.begin(), StringTableComparison());
 
             if (insertPosition!=defines.cend() && !XlCompareString(insertPosition->first, name)) {
-                insertPosition->second = ImpliedTyping::AsString(
-                    value.begin(), value.size(), type);
+                insertPosition->second = ImpliedTyping::AsString(value, type);
             }
         }
     }

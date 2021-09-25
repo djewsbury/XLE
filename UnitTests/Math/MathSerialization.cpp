@@ -35,17 +35,17 @@ namespace UnitTests
     TEST_CASE( "MathSerialization-StringToValues", "[math]" )
     {
         // parsing a vector with variable elements that require conversion
-        auto t0 = ImpliedTyping::ParseFullMatch<Float4>("{.5f, 10, true}");
+        auto t0 = ImpliedTyping::ConvertFullMatch<Float4>("{.5f, 10, true}");
         REQUIRE(t0.has_value());
         REQUIRE(Equivalent(t0.value(), Float4{.5f, 10.f, 1.f, 1.f}, 0.001f));
 
         // parsing a scalar as a vector (note the W component defaults to 1)
-        auto t1 = ImpliedTyping::ParseFullMatch<Float4>("23");
+        auto t1 = ImpliedTyping::ConvertFullMatch<Float4>("23");
         REQUIRE(t1.has_value());
         REQUIRE(Equivalent(t1.value(), Float4{23.f, 0.f, 0.f, 1.f}, 0.001f));
 
         // parsing some high precision values
-        auto t2 = ImpliedTyping::ParseFullMatch<Double3>("{1e5, 23e-3, 16}");
+        auto t2 = ImpliedTyping::ConvertFullMatch<Double3>("{1e5, 23e-3, 16}");
         REQUIRE(t2.has_value());
         REQUIRE(Equivalent(t2.value(), Double3{1e5, 23e-3, 16}, 1e-6));
     }

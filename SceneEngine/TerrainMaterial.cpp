@@ -214,7 +214,7 @@ namespace SceneEngine
                 auto mappingAttr = matCfg.Attribute("Mapping").Value();
                 auto parsedType = ImpliedTyping::ParseFullMatch(
                     mappingAttr,
-                    buffer, sizeof(buffer));
+                    MakeIteratorRange(buffer));
                 ImpliedTyping::Cast(
                     MakeIteratorRange(mat._mappingConstant), 
                     ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, dimof(mat._mappingConstant)},
