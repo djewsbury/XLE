@@ -13,180 +13,184 @@ namespace Utility
         const CharType* FastParseValue(StringSection<CharType> input, int32_t& dst)
     {
         bool positive = true;
-        dst = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
 
-        if (start >= input.end()) return start;
-        if (*start == '-') { positive = false; ++start; }
-        else if (*start == '+') ++start;
+        if (iterator >= input.end()) return iterator;
+        if (*iterator == '-') { positive = false; ++iterator; }
+        else if (*iterator == '+') ++iterator;
 
         uint32_t result = 0;
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start < '0' || *start > '9') break;
+            if (iterator >= input.end()) break;
+            if (*iterator < '0' || *iterator > '9') break;
 
-            result = (result * 10) + uint32_t((*start) - '0');
-            ++start;
+            result = (result * 10) + uint32_t((*iterator) - '0');
+            ++iterator;
         }
-        dst = positive ? result : -int32_t(result);
-        return start;
+        if (iterator != input.begin())
+            dst = positive ? result : -int32_t(result);
+        return iterator;
     }
     
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, int64_t& dst)
     {
         bool positive = true;
-        dst = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
 
-        if (start >= input.end()) return start;
-        if (*start == '-') { positive = false; ++start; }
-        else if (*start == '+') ++start;
+        if (iterator >= input.end()) return iterator;
+        if (*iterator == '-') { positive = false; ++iterator; }
+        else if (*iterator == '+') ++iterator;
 
         uint64_t result = 0;
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start < '0' || *start > '9') break;
+            if (iterator >= input.end()) break;
+            if (*iterator < '0' || *iterator > '9') break;
 
-            result = (result * 10ull) + uint64_t((*start) - '0');
-            ++start;
+            result = (result * 10ull) + uint64_t((*iterator) - '0');
+            ++iterator;
         }
-        dst = positive ? result : -int64_t(result);
-        return start;
+        if (iterator != input.begin())
+            dst = positive ? result : -int64_t(result);
+        return iterator;
     }
 
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, uint64_t& dst)
     {
         uint64_t result = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start < '0' || *start > '9') break;
+            if (iterator >= input.end()) break;
+            if (*iterator < '0' || *iterator > '9') break;
 
-            result = (result * 10ull) + uint64_t((*start) - '0');
-            ++start;
+            result = (result * 10ull) + uint64_t((*iterator) - '0');
+            ++iterator;
         }
-        dst = result;
-        return start;
+        if (iterator != input.begin())
+            dst = result;
+        return iterator;
     }
 
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, uint32_t& dst)
     {
         uint32_t result = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start < '0' || *start > '9') break;
+            if (iterator >= input.end()) break;
+            if (*iterator < '0' || *iterator > '9') break;
 
-            result = (result * 10u) + uint32_t((*start) - '0');
-            ++start;
+            result = (result * 10u) + uint32_t((*iterator) - '0');
+            ++iterator;
         }
-        dst = result;
-        return start;
+        if (iterator != input.begin())
+            dst = result;
+        return iterator;
     }
 
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, int32_t& dst, unsigned radix)
     {
         bool positive = true;
-        dst = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
 
-        if (start >= input.end()) return start;
-        if (*start == '-') { positive = false; ++start; }
-        else if (*start == '+') ++start;
+        if (iterator >= input.end()) return iterator;
+        if (*iterator == '-') { positive = false; ++iterator; }
+        else if (*iterator == '+') ++iterator;
 
         uint32_t result = 0;
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start >= '0' && *start <= '9') {
-                if (((*start) - '0') >= radix) break;
-                result = (result * radix) + uint32_t((*start) - '0');
-            } else if (*start >= 'a' && *start <= 'a'+radix-11) {
-                result = (result * radix) + uint32_t((*start) - 'a' + 10);
-            } else if (*start >= 'A' && *start <= 'A'+radix-11) {
-                result = (result * radix) + uint32_t((*start) - 'A' + 10);
+            if (iterator >= input.end()) break;
+            if (*iterator >= '0' && *iterator <= '9') {
+                if (((*iterator) - '0') >= radix) break;
+                result = (result * radix) + uint32_t((*iterator) - '0');
+            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+                result = (result * radix) + uint32_t((*iterator) - 'a' + 10);
+            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+                result = (result * radix) + uint32_t((*iterator) - 'A' + 10);
             } else
                 break;
-            ++start;
+            ++iterator;
         }
-        dst = positive ? result : -int32_t(result);
-        return start;
+        if (iterator != input.begin())
+            dst = positive ? result : -int32_t(result);
+        return iterator;
     }
     
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, int64_t& dst, unsigned radix)
     {
         bool positive = true;
-        dst = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
 
-        if (start >= input.end()) return start;
-        if (*start == '-') { positive = false; ++start; }
-        else if (*start == '+') ++start;
+        if (iterator >= input.end()) return iterator;
+        if (*iterator == '-') { positive = false; ++iterator; }
+        else if (*iterator == '+') ++iterator;
 
         uint64_t result = 0;
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start >= '0' && *start <= '9') {
-                if (((*start) - '0') >= radix) break;
-                result = (result * radix) + uint64_t((*start) - '0');
-            } else if (*start >= 'a' && *start <= 'a'+radix-11) {
-                result = (result * radix) + uint64_t((*start) - 'a' + 10);
-            } else if (*start >= 'A' && *start <= 'A'+radix-11) {
-                result = (result * radix) + uint64_t((*start) - 'A' + 10);
+            if (iterator >= input.end()) break;
+            if (*iterator >= '0' && *iterator <= '9') {
+                if (((*iterator) - '0') >= radix) break;
+                result = (result * radix) + uint64_t((*iterator) - '0');
+            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+                result = (result * radix) + uint64_t((*iterator) - 'a' + 10);
+            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+                result = (result * radix) + uint64_t((*iterator) - 'A' + 10);
             } else
                 break;
-            ++start;
+            ++iterator;
         }
-        dst = positive ? result : -int64_t(result);
-        return start;
+        if (iterator != input.begin())
+            dst = positive ? result : -int64_t(result);
+        return iterator;
     }
 
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, uint64_t& dst, unsigned radix)
     {
         uint64_t result = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start >= '0' && *start <= '9') {
-                if (((*start) - '0') >= radix) break;
-                result = (result * radix) + uint64_t((*start) - '0');
-            } else if (*start >= 'a' && *start <= 'a'+radix-11) {
-                result = (result * radix) + uint64_t((*start) - 'a' + 10);
-            } else if (*start >= 'A' && *start <= 'A'+radix-11) {
-                result = (result * radix) + uint64_t((*start) - 'A' + 10);
+            if (iterator >= input.end()) break;
+            if (*iterator >= '0' && *iterator <= '9') {
+                if (((*iterator) - '0') >= radix) break;
+                result = (result * radix) + uint64_t((*iterator) - '0');
+            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+                result = (result * radix) + uint64_t((*iterator) - 'a' + 10);
+            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+                result = (result * radix) + uint64_t((*iterator) - 'A' + 10);
             } else
                 break;
-            ++start;
+            ++iterator;
         }
-        dst = result;
-        return start;
+        if (iterator != input.begin())
+            dst = result;
+        return iterator;
     }
 
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, uint32_t& dst, unsigned radix)
     {
         uint32_t result = 0;
-        auto start = input.begin();
+        auto iterator = input.begin();
         for (;;) {
-            if (start >= input.end()) break;
-            if (*start >= '0' && *start <= '9') {
-                if (((*start) - '0') >= radix) break;
-                result = (result * radix) + uint32_t((*start) - '0');
-            } else if (*start >= 'a' && *start <= 'a'+radix-11) {
-                result = (result * radix) + uint32_t((*start) - 'a' + 10);
-            } else if (*start >= 'A' && *start <= 'A'+radix-11) {
-                result = (result * radix) + uint32_t((*start) - 'A' + 10);
+            if (iterator >= input.end()) break;
+            if (*iterator >= '0' && *iterator <= '9') {
+                if (((*iterator) - '0') >= radix) break;
+                result = (result * radix) + uint32_t((*iterator) - '0');
+            } else if (*iterator >= 'a' && *iterator <= 'a'+radix-11) {
+                result = (result * radix) + uint32_t((*iterator) - 'a' + 10);
+            } else if (*iterator >= 'A' && *iterator <= 'A'+radix-11) {
+                result = (result * radix) + uint32_t((*iterator) - 'A' + 10);
             } else
                 break;
-            ++start;
+            ++iterator;
         }
-        dst = result;
-        return start;
+        if (iterator != input.begin())
+            dst = result;
+        return iterator;
     }
 
     template<typename Type, typename Type2>
@@ -213,8 +217,8 @@ namespace Utility
             // deal with subnormal numbers, and check for overflow/underflow conditions.
             // This implementation is very imprecise -- but at least it's quick.
 
-        uint64_t beforePoint;
-        uint64_t afterPoint;
+        uint64_t beforePoint = 0;
+        uint64_t afterPoint = 0;
         unsigned afterPointPrec;
 
         bool positive;
@@ -239,16 +243,14 @@ namespace Utility
             iterator = FastParseValue(MakeStringSection(iterator, end), afterPoint);
             afterPointPrec = unsigned(iterator - t);
         } else {
-            afterPoint = 0;
             afterPointPrec = 0;
         }
 
-        int64_t explicitExponent;
+        int64_t explicitExponent = 0;
         if (iterator < end && (*iterator == 'e' || *iterator == 'E')) {
             ++iterator;
             iterator = FastParseValue(MakeStringSection(iterator, end), explicitExponent);
-        } else
-            explicitExponent = 0;
+        }
 
         if (iterator != end && !IsWhitespace(*iterator)) {
             // Simple parse failed ... We need to use standard library function
@@ -256,6 +258,8 @@ namespace Utility
             dst = std::strtof((const char*)start, &newEnd);
             return (const CharType*)newEnd;
         }
+
+        if (iterator == start) return iterator;
 
         auto sigBits = 64ll - (int32)xl_clz8(beforePoint);
         auto shift = (int32)sigBits - 24ll;
