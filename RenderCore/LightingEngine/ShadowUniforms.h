@@ -173,7 +173,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float           _worldSpaceResolveBias = 0.f;
 		float           _tanBlurAngle = 0.00436f;
 		float           _minBlurSearchPixels = 0.5f, _maxBlurSearchPixels = 25.f;
-		float			_casterLookupExtraBias = 0.001f;
+		float			_casterLookupExtraBias = 0.f;
 
 		std::shared_ptr<ICompiledShadowPreparer> _preparer;
 		std::shared_ptr<Internal::ILightBase> _driver;

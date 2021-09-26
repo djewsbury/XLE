@@ -203,7 +203,8 @@ namespace RenderCore { namespace LightingEngine
 
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
-		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate)
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
+		Techniques::DeferredShaderResource& balancedNoiseTexture)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare);
@@ -248,7 +249,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate());
+		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate(balancedNoiseTexture));
 		return result;
 	}
 
@@ -283,16 +284,19 @@ namespace RenderCore { namespace LightingEngine
 		ForwardPlusLightScene::ConstructToFuture(
 			*lightSceneFuture, pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
+
+		auto balancedNoiseTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 		
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		PreregisterAttachments(stitchingContext);
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		::Assets::WhenAll(lightSceneFuture).ThenConstructToFuture(
+		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToFuture(
 			*result,
 			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]
 			(	::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
-				std::shared_ptr<ForwardPlusLightScene> lightScene) {
+				std::shared_ptr<ForwardPlusLightScene> lightScene,
+				std::shared_ptr<Techniques::DeferredShaderResource> balancedNoiseTexture) {
 
 				auto captures = std::make_shared<ForwardLightingCaptures>();
 				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
@@ -347,7 +351,7 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Draw main scene
-				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite));
+				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture));
 
 				// Post processing
 				auto toneMapFragment = CreateToneMapFragment(

@@ -653,6 +653,7 @@ namespace RenderCore { namespace LightingEngine
         const Float4x4& lightViewToWorld,
         const IOrthoShadowProjections::OrthoSubProjection& prev,
         const Float4& cameraMiniProj,
+        const float maxProjectionDimsZ,
         float depthRangeCovered,
         ClipSpaceType clipSpaceType)
     {
@@ -686,6 +687,7 @@ namespace RenderCore { namespace LightingEngine
 
             auto newProjectionDimsXY = 3.f * (prev._rightBottomBack[0] - prev._leftTopFront[0]);
             auto newProjectionDimsZ = 3.f * (prev._rightBottomBack[2] - prev._leftTopFront[2]);
+            newProjectionDimsZ = std::min(newProjectionDimsZ, maxProjectionDimsZ);
 
             auto worldToLightView = InvertOrthonormalTransform(lightViewToWorld);
             auto camForwardInOrtho = TransformDirectionVector(worldToLightView, ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld));
@@ -733,9 +735,14 @@ namespace RenderCore { namespace LightingEngine
         const SunSourceFrustumSettings& settings,
         ClipSpaceType clipSpaceType)
     {
+        // Don't adjust normalizedScreenResolution with viewport to avoid moving the shadow distance back and forth with render resolution changes
         const UInt2 normalizedScreenResolution(1920, 1080);
-        const unsigned shadowMapResolution = 2048;
-        const unsigned shadowMapDepthResolution = (1 << 16) - 1;
+        const unsigned shadowMapResolution = settings._textureSize;
+        unsigned shadowMapDepthResolution;
+        if (settings._flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
+            shadowMapDepthResolution = (1 << 23) - 1;       // high precision depths are a little awkward because it's floating point. But let's just use the size of the mantissa as an underestimate here
+        } else
+            shadowMapDepthResolution = (1 << 16) - 1;
 
         // We remove the camera position from the projection desc, because it's not actually important for
         // the calculations, and would just add floating point precision problems. Instead, let's do the
@@ -752,6 +759,12 @@ namespace RenderCore { namespace LightingEngine
 
         assert(!IsOrthogonalProjection(mainSceneProjectionDesc._cameraToProjection));
         auto cameraMiniProj = ExtractMinimalProjection(mainSceneProjectionDesc._cameraToProjection);
+
+        // Limit the depth of the shadow projection to some reasonable fixed value. If we allow it to 
+        // get too large, we will get end up with a lot of floating point precision issues when building
+        // the frustum
+        // This will have an impact on the correct shadow bias values, etc, though
+        const float maxProjectionDimsZ = 1.5f * CalculateNearAndFarPlane(cameraMiniProj, clipSpaceType).second;
 
         // find the dimensions in view space for the focus point
         auto worldToMainCamera = InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld);
@@ -770,6 +783,7 @@ namespace RenderCore { namespace LightingEngine
 
         float projectionDimsXY = viewSpacePixelDims * shadowMapResolution;
         float projectionDimsZ = viewSpacePixelDims * shadowMapDepthResolution;
+        projectionDimsZ = std::min(maxProjectionDimsZ, projectionDimsZ);
 
         Float3 shadowAcross = ExtractForward_Cam(mainSceneProjectionDesc._cameraToWorld);
         auto lightViewToWorld = MakeOrientedShadowViewToWorld(-negativeLightDirection, shadowAcross, Float3{0.f, 0.f, 0.f});
@@ -848,7 +862,7 @@ namespace RenderCore { namespace LightingEngine
 
         float depthRangeCovered = depthRangeClosest;
         while (result._normalProjCount < settings._maxFrustumCount) {
-            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, depthRangeCovered, clipSpaceType);
+            auto next = CalculateNextFrustum_UnfilledSpace(mainSceneProjectionDesc, absFrustumCorners, lightViewToWorld, result._orthSubProjections[result._normalProjCount-1], cameraMiniProj, maxProjectionDimsZ, depthRangeCovered, clipSpaceType);
             if (!next.first.has_value()) break;
 
             // Log(Debug) << "DepthRangeCovered: " << depthRangeCovered << std::endl;
@@ -940,7 +954,9 @@ namespace RenderCore { namespace LightingEngine
         result._dsRasterDepthBias = settings._dsRasterDepthBias;
         */
 
-        // result._projectionDriver = ProjectionDriver::SunSourceShadows;
+        result._filterModel = settings._filterModel;
+        result._enableContactHardening = settings._enableContactHardening;
+        result._cullMode = settings._cullMode;
 
 		return result;
 	}
@@ -1099,6 +1115,9 @@ namespace RenderCore { namespace LightingEngine
         _tanBlurAngle = 0.00436f;
         _minBlurSearch = 0.5f;
         _maxBlurSearch = 25.f;
+        _filterModel = ShadowFilterModel::PoissonDisc;
+        _enableContactHardening = false;
+        _cullMode = CullMode::Back;
     }
 
 }}
@@ -1134,6 +1153,16 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
             [](Obj& obj, float value) { obj._tanBlurAngle = XlTan(Deg2Rad(value)); } );
         props.Add("MinBlurSearch", &Obj::_minBlurSearch);
         props.Add("MaxBlurSearch", &Obj::_maxBlurSearch);
+        props.Add("HighPrecisionDepths",
+            [](const Obj& obj) { return !!(obj._flags & Obj::Flags::HighPrecisionDepths); },
+            [](Obj& obj, bool value) { 
+                if (value) obj._flags |= Obj::Flags::HighPrecisionDepths; 
+                else obj._flags &= ~Obj::Flags::HighPrecisionDepths; 
+            });
+
+        props.Add("EnableContactHardening", &Obj::_enableContactHardening);
+        AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);
+        AddStringToEnum<RenderCore::CullMode, RenderCore::AsString, RenderCore::AsCullMode>(props, "CullMode", &Obj::_cullMode);
         init = true;
     }
     return props;

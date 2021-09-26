@@ -156,7 +156,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_shadowTextureSize = 1024.f;
 		_minBlurSearchNorm = 0.5f / _shadowTextureSize;
 		_maxBlurSearchNorm = 25.f / _shadowTextureSize;
-		_casterLookupExtraBias = 0.001f;
+		_casterLookupExtraBias = 0.f;
 		XlZeroMemory(_dummy);
 	}
 

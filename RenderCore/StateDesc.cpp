@@ -195,6 +195,16 @@ namespace RenderCore
 		}
 	}
 
+    const char* AsString(CullMode cullMode)
+    {
+        switch (cullMode) {
+        case CullMode::None: return "None";
+        case CullMode::Front: return "Front";
+        case CullMode::Back: return "Back";
+        default: return "<<unknown>>";
+        }
+    }
+
     std::optional<AddressMode> AsAddressMode(StringSection<> input)
     {
         if (XlEqString(input, "Wrap")) return AddressMode::Wrap;
@@ -231,6 +241,14 @@ namespace RenderCore
     {
         if (XlEqString(input, "DisableMipmaps")) return SamplerDescFlags::DisableMipmaps;
         if (XlEqString(input, "UnnormalizedCoordinates")) return SamplerDescFlags::UnnormalizedCoordinates;
+        return {};
+    }
+
+    std::optional<CullMode> AsCullMode(StringSection<> input)
+    {
+        if (XlEqString(input, "None")) return CullMode::None;
+        if (XlEqString(input, "Front")) return CullMode::Front;
+        if (XlEqString(input, "Back")) return CullMode::Back;
         return {};
     }
 }

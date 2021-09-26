@@ -455,7 +455,7 @@ namespace RenderCore { namespace LightingEngine
 				selectors.SetParameter("SHADOW_SUB_PROJECTION_COUNT", _normalProjCount);
 				selectors.SetParameter("SHADOW_ENABLE_NEAR_CASCADE", _shadowing == ShadowResolveParam::Shadowing::OrthShadowsNearCascade ? 1u : 0u);
 				selectors.SetParameter("SHADOW_FILTER_MODEL", unsigned(_filterModel));
-				selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING=", _enableContactHardening);
+				selectors.SetParameter("SHADOW_FILTER_CONTACT_HARDENING", _enableContactHardening);
 				selectors.SetParameter("SHADOW_RT_HYBRID=", unsigned(_shadowing == ShadowResolveParam::Shadowing::OrthHybridShadows));
 			}
 		}

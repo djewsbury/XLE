@@ -35,7 +35,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
 		std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
-		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
+		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate(Techniques::DeferredShaderResource& balanceNoiseTexture);
 
 		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;		// signaled on arbitrary thread
 

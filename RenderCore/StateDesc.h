@@ -315,10 +315,12 @@ namespace RenderCore
 	const char* AsString(FilterMode);
 	const char* AsString(CompareOp);
 	const char* AsString(Topology);
+    const char* AsString(CullMode);
 
     std::optional<AddressMode> AsAddressMode(StringSection<>);
 	std::optional<FilterMode> AsFilterMode(StringSection<>);
 	std::optional<CompareOp> AsCompareOp(StringSection<>);
     std::optional<SamplerDescFlags::Flag> AsSamplerDescFlag(StringSection<>);
+    std::optional<CullMode> AsCullMode(StringSection<>);
 }
 

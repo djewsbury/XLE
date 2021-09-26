@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "ShadowPreparer.h"
 #include "../../Math/ProjectionMath.h"
 
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
@@ -45,6 +46,9 @@ namespace RenderCore { namespace LightingEngine
         // float           _worldSpaceResolveBias;
         float           _tanBlurAngle;
         float           _minBlurSearch, _maxBlurSearch;
+        ShadowFilterModel   _filterModel;
+        bool            _enableContactHardening;
+        CullMode        _cullMode;
 
         SunSourceFrustumSettings();
     };

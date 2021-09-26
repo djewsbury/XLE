@@ -371,23 +371,34 @@ namespace RenderCore { namespace LightingEngine
 					dst[5] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
 				}
 			}
+			if (bindingFlags & (1ull<<6ull)) {
+				dst[6] = _noise.get();
+				context.RequireCommandList(_completionCmdList);
+			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
-		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
+		ShaderResourceDelegate(ForwardPlusLightScene& lightScene, Techniques::DeferredShaderResource& balanceNoiseTexture)
 		{
 			_lightScene = &lightScene;
-			BindResourceView(0, Utility::Hash64("LightDepthTable"));
-			BindResourceView(1, Utility::Hash64("LightList"));
-			BindResourceView(2, Utility::Hash64("TiledLightBitField"));
-			BindResourceView(3, Utility::Hash64("EnvironmentProps"));
-			BindResourceView(4, Utility::Hash64("SSR"));
-			BindResourceView(5, Utility::Hash64("StaticShadowProbeDatabase"));
+			BindResourceView(0, Hash64("LightDepthTable"));
+			BindResourceView(1, Hash64("LightList"));
+			BindResourceView(2, Hash64("TiledLightBitField"));
+			BindResourceView(3, Hash64("EnvironmentProps"));
+			BindResourceView(4, Hash64("SSR"));
+			BindResourceView(5, Hash64("StaticShadowProbeDatabase"));
+			BindResourceView(6, Hash64("NoiseTexture"));
+
+			_noise = balanceNoiseTexture.GetShaderResource();
+			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
 		}
+
+		std::shared_ptr<IResourceView> _noise;
+		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	std::shared_ptr<Techniques::IShaderResourceDelegate> ForwardPlusLightScene::CreateMainSceneResourceDelegate()
+	std::shared_ptr<Techniques::IShaderResourceDelegate> ForwardPlusLightScene::CreateMainSceneResourceDelegate(Techniques::DeferredShaderResource& balanceNoiseTexture)
 	{
-		return std::make_shared<ShaderResourceDelegate>(*this);
+		return std::make_shared<ShaderResourceDelegate>(*this, balanceNoiseTexture);
 	}
 
 	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const

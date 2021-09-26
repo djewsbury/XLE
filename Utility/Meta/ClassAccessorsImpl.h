@@ -257,6 +257,22 @@ namespace Utility
             };
         }
 
+    template<typename MemberType, const char* EnumToString(MemberType), std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
+        void AddStringToEnum(ClassAccessors& accessors, StringSection<> propName, MemberType ObjectType::*ptrToMember)
+    {
+        accessors.Add(
+            propName,
+            [ptrToMember](const ObjectType& obj) {
+                return EnumToString(obj.*ptrToMember);
+            },
+            [ptrToMember](ObjectType& obj, StringSection<> newValue) {
+                auto conversion = StringToEnum(newValue);
+                if (!conversion.has_value())
+                    Throw(std::runtime_error(std::string{"The enum value "} + newValue.AsString() + " was not understood"));
+                obj.*ptrToMember = conversion.value();
+            });
+    }
+
     namespace Legacy
     {
         template<typename ChildType, typename CreateFn, typename GetCountFn, typename GetByIndexFn, typename GetByKeyFn>
