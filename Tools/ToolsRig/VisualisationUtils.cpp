@@ -155,7 +155,6 @@ namespace ToolsRig
 			std::shared_ptr<SceneEngine::ILightingStateDelegate> _envSettings;
 			std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
 			::Assets::DependencyValidation _depVal;
-			bool _pendingCameraReset = false;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
@@ -179,6 +178,7 @@ namespace ToolsRig
 		void RebuildPreparedScene();
 		
 		unsigned _loadingIndicatorCounter = 0;
+		bool _pendingCameraReset = true;
 
 		uint64_t _lightingTechniqueTargetsHash = 0ull;
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> _lightingTechniqueTargets;
@@ -286,9 +286,9 @@ namespace ToolsRig
 		if (actualizedScene) {
 
 			// Have to do camera reset here after load to avoid therading issues
-			if (actualizedScene->_pendingCameraReset) {
+			if (_pendingCameraReset) {
 				ResetCamera();
-				actualizedScene->_pendingCameraReset = false;
+				_pendingCameraReset = false;
 			}
 
 			auto cam = AsCameraDesc(*_camera);
@@ -410,7 +410,6 @@ namespace ToolsRig
 						auto preparedScene = std::make_shared<PreparedScene>();
 						preparedScene->_envSettings = envSettings;
 						preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
-						preparedScene->_pendingCameraReset = true;
 						preparedScene->_scene = std::move(scene);
 
 						if (sceneIsRefreshable || envSettingsIsRefreshable) {
@@ -462,6 +461,7 @@ namespace ToolsRig
 	{
 		_sceneFuture = std::move(scene);
 		_refreshableSceneFuture = nullptr;
+		_pendingCameraReset = true;
 		RebuildPreparedScene();
 	}
 
@@ -476,6 +476,7 @@ namespace ToolsRig
 	{
 		_refreshableSceneFuture = std::move(scene);
 		_sceneFuture = nullptr;
+		_pendingCameraReset = true;
 		RebuildPreparedScene();
 	}
 
