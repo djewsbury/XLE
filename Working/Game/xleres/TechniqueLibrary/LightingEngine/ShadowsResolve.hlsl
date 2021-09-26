@@ -186,7 +186,10 @@ float CalculateShadowCasterDistance(
         float cDist2 = comparisonDistance + dot(rotatedFilter2, filterPlane);
         float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
 
-        float4 difference 		 = float4(cDist0, cDist1, cDist2, cDist3) - sampleDepth;
+        // Note that we have to flip this comparison for the ReserveZ projection modes, since
+        // larger values mean closer to the light in ReverseZ, while smaller numbers mean closer to the
+        // light in non-ReverseZ modes
+        float4 difference 		 = sampleDepth - float4(cDist0, cDist1, cDist2, cDist3);
         float4 sampleCount 		 = difference > 0.0f;					// array of 1s for pixels in the shadow texture closer to the light
         accumulatedSampleCount 	+= dot(sampleCount, 1.0.xxxx);			// count number of 1s in "sampleCount"
             // Clamp maximum distance considered here?
@@ -333,6 +336,12 @@ float CalculateFilterSize(
 
     float filterSizeNorm;
     if (!ShadowsPerspectiveProjection) {
+
+            // For ReverseZ modes, we need to negate casterDistance for the NDCDepthDifferenceToWorldSpace_Ortho call to
+            // make any sense. We've already reversed depth inside of CalculateShadowCasterDistance in order to get
+            // a positive casterDistance. But NDCDepthDifferenceToWorldSpace_Ortho expects two values directly from
+            // the projection calculation without any compensation for ReverseZ
+        casterDistance = -casterDistance;
 
             // In orthogonal projection mode, NDC depths are actually linear. So, we can convert a difference
             // of depths in NDC space (like casterDistance) into world space depth easily. Linear depth values

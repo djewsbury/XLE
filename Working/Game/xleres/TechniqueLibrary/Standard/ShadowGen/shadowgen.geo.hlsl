@@ -66,9 +66,11 @@
 				// for lights with infinite projections (ie, light from the sun). All geometry
 				// is assumed to be in front of the light -- so if there's any geometry that's
 				// actually behind the light, this won't actually give the correct result. 
-				p0.z = max(0, p0.z);
-				p1.z = max(0, p1.z);
-				p2.z = max(0, p2.z);
+				// 
+				// Note that we have to take into account ReverseZ modes here. 0 is on the near clip
+				// for non-ReverseZ, but 1 is on the near clip for ReverseZ
+				// p0.z = max(0, p0.z); p1.z = max(0, p1.z); p2.z = max(0, p2.z);
+				p0.z = min(1, p0.z); p1.z = min(1, p1.z); p2.z = min(1, p2.z);
 			#else
 				float4 p0 = 0.0.xxxx;
 				float4 p1 = 0.0.xxxx;
