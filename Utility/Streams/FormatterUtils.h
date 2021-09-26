@@ -5,9 +5,12 @@
 #pragma once
 
 #include "StreamFormatter.h"
+#include "../ImpliedTyping.h"
 
 namespace Utility
 {
+	namespace ImpliedTyping { class TypeDesc; }
+
 	namespace Internal
 	{
 		template<typename Type> static auto HasTryCharacterData_Helper(int) -> decltype(std::declval<Type>().TryCharacterData(std::declval<StringSection<typename Type::value_type>>()), std::true_type{});
@@ -18,11 +21,21 @@ namespace Utility
 		template<typename...> static auto HasSkipValueOrElement_Helper(...) -> std::false_type;
 		template<typename Type> struct HasSkipValueOrElement : decltype(HasSkipValueOrElement_Helper<Type>(0)) {};
 
+		template<typename Type> static auto HasTryStringValue_Helper(int) -> decltype(std::declval<Type>().SkipValueOrElement(), std::true_type{});
+		template<typename...> static auto HasTryStringValue_Helper(...) -> std::false_type;
+		template<typename Type> struct HasTryStringValue : decltype(HasTryStringValue_Helper<Type>(0)) {};
+
+		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().SkipValueOrElement(), std::true_type{});
+		template<typename...> static auto HasTryRawValue_Helper(...) -> std::false_type;
+		template<typename Type> struct HasTryRawValue : decltype(HasTryRawValue_Helper<Type>(0)) {};
+
 		template<typename Formatter>
 			struct FormatterTraits
 		{
 			static constexpr auto HasCharacterData = Internal::HasTryCharacterData<Formatter>::value;
 			static constexpr auto HasSkipValueOrElement = Internal::HasSkipValueOrElement<Formatter>::value;
+			static constexpr auto HasTryStringValue = Internal::HasTryStringValue<Formatter>::value;
+			static constexpr auto HasTryRawValue = Internal::HasTryRawValue<Formatter>::value;
 		};
 	}
 
@@ -56,9 +69,17 @@ namespace Utility
 				break;
 
 			case FormatterBlob::Value:
-				if (!formatter.TryStringValue(dummy0))
-					Throw(FormatException(
-						"Malformed value while skipping forward", formatter.GetLocation()));
+				if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+					ImpliedTyping::TypeDesc type;
+					IteratorRange<const void*> data;
+					if (!formatter.TryRawValue(data, type))
+						Throw(FormatException(
+							"Malformed value while skipping forward", formatter.GetLocation()));
+				} else {
+					if (!formatter.TryStringValue(dummy0))
+						Throw(FormatException(
+							"Malformed value while skipping forward", formatter.GetLocation()));
+				}
 				break;
 
 			case FormatterBlob::CharacterData:
@@ -123,6 +144,15 @@ namespace Utility
 		if (!formatter.TryKeyedItem(name))
 			Throw(Utility::FormatException("Expecting keyed item", formatter.GetLocation()));
 		return name;
+	}
+
+	template<typename Formatter>
+		IteratorRange<const void*> RequireRawValue(Formatter& formatter, ImpliedTyping::TypeDesc& typeDesc)
+	{
+		IteratorRange<const void*> value;
+		if (!formatter.TryRawValue(value, typeDesc))
+			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+		return value;
 	}
 
 	template<typename Formatter>
