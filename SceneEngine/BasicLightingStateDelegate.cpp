@@ -125,6 +125,7 @@ namespace SceneEngine
 
     protected:
         LightOperatorResolveContext _operatorResolveContext;
+        ObjectTable<RenderCore::LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettings;
 
         struct PendingLightSource
         {
@@ -139,7 +140,8 @@ namespace SceneEngine
 
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _shadowOperatorHashToId;
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _ambientOperatorHashToId;
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _sunSourceHashToShadowOperatorId;
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _ambientOperatorHashToId;        
 
         ::Assets::DependencyValidation _depVal;
 
@@ -159,6 +161,15 @@ namespace SceneEngine
 
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
+        const ParameterBox::ParameterName Transform = "Transform";
+        const ParameterBox::ParameterName Position = "Position";
+        const ParameterBox::ParameterName Brightness = "Brightness";
+        const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
+        const ParameterBox::ParameterName CutoffRange = "CutoffRange";
+        const ParameterBox::ParameterName SkyTexture = "SkyTexture";
+
+        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightSourceId>> lightNameToId;
+
         for (const auto&light:_lightSourcesInCfgFile) {
             if (!light._operatorHash) continue;
 
@@ -167,6 +178,40 @@ namespace SceneEngine
 
                 auto newLight = lightScene.CreateLightSource(lightOperator->second);
                 _lightSourcesInBoundScene.push_back(newLight);
+
+                auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(newLight);
+                if (positional) {
+                    auto transformValue = light._parameters.GetParameter<Float4x4>(Transform);
+                    if (transformValue) {
+                        positional->SetLocalToWorld(transformValue.value());
+                    } else {
+                        Float4x4 localToWorld = Identity<Float4x4>();
+                        auto positionValue = light._parameters.GetParameter<Float3>(Position);
+                        if (positionValue) {
+                            SetTranslation(localToWorld, positionValue.value());
+                            positional->SetLocalToWorld(localToWorld);
+                        }
+                    }                    
+                }
+
+                auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(newLight);
+                if (uniformEmittance) {
+                    auto brightness = light._parameters.GetParameter<Float3>(Brightness);
+                    if (brightness)
+                        uniformEmittance->SetBrightness(brightness.value());
+                }
+
+                auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(newLight);
+                if (finite) {
+                    auto cutoffBrightness = light._parameters.GetParameter<float>(CutoffBrightness);
+                    if (cutoffBrightness)
+                        finite->SetCutoffBrightness(cutoffBrightness.value());
+                    auto cutoffRange = light._parameters.GetParameter<float>(CutoffRange);
+                    if (cutoffRange)
+                        finite->SetCutoffRange(cutoffRange.value());
+                }
+
+                lightNameToId.emplace_back(Hash64(light._name), newLight);
 
                 continue;
             }
@@ -179,10 +224,20 @@ namespace SceneEngine
 
                 auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
                 if (distanceIBL) {
-                    distanceIBL->SetEquirectangularSource(light._parameters.GetParameterAsString("SkyTexture").value());
+                    distanceIBL->SetEquirectangularSource(light._parameters.GetParameterAsString(SkyTexture).value());
                 }
                 continue;
             }
+        }
+
+        for (const auto& sunSource:_sunSourceFrustumSettings._objects) {
+            auto op = LowerBound(_sunSourceHashToShadowOperatorId, sunSource.first);
+            if (op == _sunSourceHashToShadowOperatorId.end() || op->first != sunSource.first) continue;
+
+            // todo -- correct id for the associated light
+            auto newShadow = RenderCore::LightingEngine::CreateSunSourceShadows(
+                lightScene, op->second, 32, sunSource.second);
+            _shadowProjectionsInBoundScene.push_back(newShadow);
         }
 
 #if 0
@@ -227,8 +282,6 @@ namespace SceneEngine
             _shadowProjectionsInBoundScene.push_back(shadowId);
         }
         
-        s_swirlingLights.BindScene(lightScene, s_swirlingLightsOp);
-
         // Create the "ambient/environment light"
         auto ambientLight = lightScene.CreateLightSource((unsigned)lightOperators.size());
         auto* distantIBLSource = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(ambientLight);
@@ -238,6 +291,8 @@ namespace SceneEngine
         }
         _lightSourcesInBoundScene.push_back(ambientLight);
 #endif
+
+        s_swirlingLights.BindScene(lightScene, s_swirlingLightsOp);
     }
 
     void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
@@ -281,6 +336,7 @@ namespace SceneEngine
         _lightOperatorHashToId.clear();
         _shadowOperatorHashToId.clear();
         _ambientOperatorHashToId.clear();
+        _sunSourceHashToShadowOperatorId.clear();
 
         Operators result;
         result._lightResolveOperators.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
@@ -299,8 +355,15 @@ namespace SceneEngine
             auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
             if (i==result._shadowResolveOperators.end())
                 i = result._shadowResolveOperators.insert(i, c.second);
-            result._shadowResolveOperators.push_back(c.second);
             _shadowOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
+        }
+        for (const auto& c:_sunSourceFrustumSettings._objects) {
+            auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(c.second);
+            auto h = shadowOperator.Hash();
+            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            if (i==result._shadowResolveOperators.end())
+                i = result._shadowResolveOperators.insert(i, shadowOperator);
+            _sunSourceHashToShadowOperatorId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
         }
 
         /*std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
@@ -327,6 +390,7 @@ namespace SceneEngine
 
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
         std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
+        std::sort(_sunSourceHashToShadowOperatorId.begin(), _sunSourceHashToShadowOperatorId.end(), CompareFirst<uint64_t, unsigned>());
 
         return result;
     }
@@ -399,6 +463,26 @@ namespace SceneEngine
                 } else {
                     _lightSourcesInCfgFile.push_back(PendingLightSource{operatorHash, name.AsString(), std::move(lightProperties)});
                 }
+            } else if (XlEqString(keyname, "SunSourceShadow")) {
+                RequireBeginElement(formatter);
+
+                RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceShadows;
+                StringSection<> name, associatedLight;
+                
+                std::vector<decltype(_sunSourceFrustumSettings)::PendingProperty> properties; 
+                while (formatter.TryKeyedItem(keyname)) {
+                    if (XlEqString(keyname, "Name")) name = RequireStringValue(formatter);
+                    else if (XlEqString(keyname, "Light")) associatedLight = RequireStringValue(formatter);
+                    else {
+                        ImpliedTyping::TypeDesc typeDesc;
+                        auto data = RequireRawValue(formatter, typeDesc);
+                        properties.push_back({keyname, data, typeDesc});
+                    }
+                }
+
+                RequireEndElement(formatter);
+                _sunSourceFrustumSettings.DeserializeObject(name, properties);
+
             } else {
                 SkipValueOrElement(formatter);
             }
@@ -858,6 +942,16 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
 	if (!init) {
 		AddStringToEnum<RenderCore::LightingEngine::LightSourceShape, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsLightSourceShape>(props, "Shape", &Obj::_shape);
 		AddStringToEnum<RenderCore::LightingEngine::DiffuseModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsDiffuseModel>(props, "DiffuseModel", &Obj::_diffuseModel);
+        props.Add(
+            "DominantLight",
+            [](const Obj& obj) { return !!(obj._flags & RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight); },
+            [](Obj& obj, uint32_t value) { 
+                if (value) {
+                    obj._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                } else {
+                    obj._flags &= ~RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                }
+            });
 		init = true;
 	}
 	return props;
@@ -890,4 +984,3 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
 	}
 	return props;
 }
-
