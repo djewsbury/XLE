@@ -129,6 +129,7 @@ namespace RenderCore { namespace Techniques
 				newBinding._usiSlotsFilled_ImmediateDatas |= 1ull << uint64_t(finalUSISlot);
 
 				auto size = del.GetImmediateDataSize(parsingContext, nullptr, idx);
+				assert(size);
 				std::pair<size_t, size_t> beginAndEnd;
 				beginAndEnd.first = _workingTempBufferSize;
 				beginAndEnd.second = _workingTempBufferSize + size;

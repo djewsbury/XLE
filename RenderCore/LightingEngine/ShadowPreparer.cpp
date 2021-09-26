@@ -95,7 +95,9 @@ namespace RenderCore { namespace LightingEngine
 			size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 			{
 				switch (idx) {
-				case 0: return _preparer->_workingDMFrustum._cbSource.size();
+				case 0: 
+					assert(_preparer->_workingDMFrustum._cbSource.size());		// we can hit this when the subprojection count is 0
+					return _preparer->_workingDMFrustum._cbSource.size();
 				default:
 					assert(0);
 					return 0;

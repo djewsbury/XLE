@@ -102,6 +102,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				set._lights.erase(i);
 				GetLightSet(set._operatorId, shadowOperatorId)._lights.push_back(std::move(l));
 				break;
+			} else {
+				assert(0);		// could not find a light with the id "associatedLight"
 			}
 		}
 
