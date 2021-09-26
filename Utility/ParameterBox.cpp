@@ -63,9 +63,11 @@ namespace Utility
 			SetParameter(name, {buffer, PtrAdd(buffer, std::min(sizeof(buffer), (size_t)typeDesc.GetSize()))}, typeDesc);
         } else {
             // no conversion... just store a string
-            SetParameter(
-				name, MakeIteratorRange(stringData.begin(), stringData.end()),
-                TypeDesc{TypeCat::UInt8, (uint16_t)(stringData.size()), TypeHint::String});
+            auto hash = MakeParameterNameHash(name);
+            SetParameterHint(
+                std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
+				hash, name, MakeIteratorRange(stringData.begin(), stringData.end()),
+                TypeDesc{TypeCat::UInt8, (uint16_t)(stringData.size()), TypeHint::String}, false);
         }
     }
 
@@ -104,15 +106,32 @@ namespace Utility
         SetParameterHint(
             std::lower_bound(_hashNames.cbegin(), _hashNames.cend(), hash),
             hash, name,
-            value, insertType);
+            value, insertType, true);
     }
 
     auto ParameterBox::SetParameterHint(
         SerializableVector<ParameterNameHash>::const_iterator i,
         ParameterNameHash hash, StringSection<utf8> name, IteratorRange<const void*> value,
-        const ImpliedTyping::TypeDesc& insertType) -> SerializableVector<ParameterNameHash>::const_iterator
+        const ImpliedTyping::TypeDesc& insertType, bool checkStringConversion) -> SerializableVector<ParameterNameHash>::const_iterator
     {
 		assert(value.size() == insertType.GetSize());
+
+        // If the input is a string, and we can parse it into a simplier type, then let's store it as that simplier type instead
+        if (insertType._typeHint == ImpliedTyping::TypeHint::String && checkStringConversion) {
+            uint8_t parsedTypeBuffer[ImpliedTyping::NativeRepMaxSize];
+            if (insertType._type == ImpliedTyping::TypeCat::UInt8 || insertType._type == ImpliedTyping::TypeCat::Int8) {
+                auto parsedType = ImpliedTyping::ParseFullMatch(MakeStringSection((const char*)value.begin(), (const char*)value.end()), MakeIteratorRange(parsedTypeBuffer));
+                if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+                    assert(parsedType.GetSize() <= sizeof(parsedTypeBuffer));
+                    return SetParameterHint(i, hash, name, MakeIteratorRange(parsedTypeBuffer, parsedTypeBuffer+parsedType.GetSize()), parsedType, false);
+                }
+            } else if (insertType._type == ImpliedTyping::TypeCat::UInt16 || insertType._type == ImpliedTyping::TypeCat::Int16) {
+                assert(0);      // parsing for long char types not supported
+            } else if (insertType._type == ImpliedTyping::TypeCat::UInt32 || insertType._type == ImpliedTyping::TypeCat::Int32) {
+                assert(0);      // parsing for long char types not supported
+            }
+        }
+
         if (i==_hashNames.cend()) {
                 // push new value onto the end (including name & type info)
             _hashNames.push_back(hash);
@@ -432,7 +451,7 @@ namespace Utility
                 *srcHashNameI,
                 { PtrAdd(source._names.begin(), srcOffsets._nameBegin), PtrAdd(source._names.begin(), srcOffsets._nameBegin+srcOffsets._nameSize) },
                 { ValueTableOffset(source._values, srcOffsets._valueBegin), ValueTableOffset(source._values, srcOffsets._valueBegin+srcOffsets._valueSize) },
-                source._types[srcIdx]);
+                source._types[srcIdx], false);
             ++srcHashNameI;
             ++hashNameI;
         }

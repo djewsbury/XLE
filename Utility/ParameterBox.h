@@ -185,7 +185,7 @@ namespace Utility
         SerializableVector<ParameterNameHash>::const_iterator SetParameterHint(
             SerializableVector<ParameterNameHash>::const_iterator paramNameHash,
             ParameterNameHash hash, StringSection<utf8> name, IteratorRange<const void*> value,
-            const ImpliedTyping::TypeDesc& insertType);
+            const ImpliedTyping::TypeDesc& insertType, bool checkStringConversion);
 
 		template<typename Stream>
 			friend void SerializationOperator(Stream& serializer, const ParameterBox& box);

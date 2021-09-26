@@ -61,6 +61,10 @@ namespace Utility { namespace ImpliedTyping
         IteratorRange<void*> dest, TypeDesc destType,
         IteratorRange<const void*> rawSrc, TypeDesc srcType)
     {
+        // Casting from string types to non-string types can be unexpected -- beacuse it's a cast, not a parse
+        // it's very rare that we would want a cast in this case
+        assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
+
         assert(rawSrc.size() >= srcType.GetSize());
         assert(dest.size() >= destType.GetSize());
         IteratorRange<const void*> src = rawSrc;
@@ -477,25 +481,24 @@ namespace Utility { namespace ImpliedTyping
         case '9':
             {
                 uint64_t value = 0;
-                auto fcr = std::from_chars(begin, expression.end(), value, integerBase);
-                // ignore fcr.ec, because it will be a failure condition for things like ".5f"
+                auto parseEnd = FastParseValue(MakeStringSection(begin, expression.end()), value, integerBase);
 
-                if (fcr.ptr < expression.end() && (*fcr.ptr == '.' || *fcr.ptr == 'e' || *fcr.ptr == 'f' || *fcr.ptr == 'F')) {
+                if (parseEnd < expression.end() && (*parseEnd == '.' || *parseEnd == 'e' || *parseEnd == 'f' || *parseEnd == 'F')) {
                     // this might be a floating point number
                     // scan forward to try to find a precision specifier
                     // Note that this won't work correctly for special values written in the form "-1.#IND", etc
                     unsigned precision = 32;
-                    while (fcr.ptr < expression.end() && ((*fcr.ptr >= '0' && *fcr.ptr <= '9') || *fcr.ptr == 'e' || *fcr.ptr == 'E' || *fcr.ptr == '+' || *fcr.ptr == '-' || *fcr.ptr == '.'))
-                        ++fcr.ptr;
+                    while (parseEnd < expression.end() && ((*parseEnd >= '0' && *parseEnd <= '9') || *parseEnd == 'e' || *parseEnd == 'E' || *parseEnd == '+' || *parseEnd == '-' || *parseEnd == '.'))
+                        ++parseEnd;
 
-                    auto* endOfNumber = fcr.ptr;
+                    auto* endOfNumber = parseEnd;
                     bool precisionSpecifierFound = false;
-                    if (fcr.ptr != expression.end() && (*fcr.ptr == 'f' || *fcr.ptr == 'F')) {
+                    if (parseEnd != expression.end() && (*parseEnd == 'f' || *parseEnd == 'F')) {
                         precisionSpecifierFound = true;
-                        ++fcr.ptr;
-                        if (fcr.ptr != expression.end()) {
-                            fcr = std::from_chars(fcr.ptr, expression.end(), precision);
-                            bool endsOnATokenBreak = fcr.ptr == expression.end() || IsTokenBreak(*fcr.ptr);
+                        ++parseEnd;
+                        if (parseEnd != expression.end()) {
+                            parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), precision);
+                            bool endsOnATokenBreak = parseEnd == expression.end() || IsTokenBreak(*parseEnd);
                             if (!endsOnATokenBreak || (precision != 32 && precision != 64)) {
                                 assert(0);  // unknown precision
                                 return { expression.begin() };
@@ -503,21 +506,21 @@ namespace Utility { namespace ImpliedTyping
                         }
                     }
 
-                    // Note that we reset back to the start of expression for the from_chars() below -- potentially meaning
+                    // Note that we reset back to the start of expression for the FastParseValue() below -- potentially meaning
                     // parsing over the same ground again
                     if (precision == 32) {
                         assert(dest.size() >= sizeof(f32));
                         auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f32*)dest.begin());
                         if (a != endOfNumber)
                             return { expression.begin() }; // we didn't actually parse over everything we expected to read
-                        return { fcr.ptr, TypeDesc{TypeCat::Float} };
+                        return { parseEnd, TypeDesc{TypeCat::Float} };
                     } else {
                         assert(precision == 64);
                         assert(dest.size() >= sizeof(f64));
                         auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f64*)dest.begin());
                         if (a != endOfNumber)
                             return { expression.begin() }; // we didn't actually parse over everything we expected to read
-                        return { fcr.ptr, TypeDesc{TypeCat::Double} };
+                        return { parseEnd, TypeDesc{TypeCat::Double} };
                     }
                 } else {
                     // Didn't match a floating point number, try to match integer
@@ -530,40 +533,40 @@ namespace Utility { namespace ImpliedTyping
                     unsigned precision = 32;
                     bool isUnsigned = !negate;
 
-                    if (fcr.ptr < expression.end() &&
-                            (*fcr.ptr == 'u' || *fcr.ptr == 'U'
-                        ||  *fcr.ptr == 'i' || *fcr.ptr == 'I')) {
+                    if (parseEnd < expression.end() &&
+                            (*parseEnd == 'u' || *parseEnd == 'U'
+                        ||  *parseEnd == 'i' || *parseEnd == 'I')) {
                         
-                        if (*fcr.ptr == 'u' || *fcr.ptr == 'U') {
+                        if (*parseEnd == 'u' || *parseEnd == 'U') {
                             isUnsigned = true;
                         } else 
                             isUnsigned = false;
-                        ++fcr.ptr;
+                        ++parseEnd;
 
-                        // if the from_chars fails here, we will just keep the default precision
+                        // if the FastParseValue fails here, we will just keep the default precision
                         // that's ok so long as we still end up on a token break
-                        fcr = std::from_chars(fcr.ptr, expression.end(), precision);
+                        parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), precision);
                     }
 
-                    if (fcr.ptr != expression.end() && !IsTokenBreak(*fcr.ptr))
+                    if (parseEnd != expression.end() && !IsTokenBreak(*parseEnd))
                         return { expression.begin() };      // did not end on a token break
 
                     if (precision == 8) {
                         assert(dest.size() >= sizeof(uint8_t));
                         *(uint8_t*)dest.begin() = (uint8_t)value;
-                        return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt8 : TypeCat::Int8} };
+                        return { parseEnd, TypeDesc{isUnsigned ? TypeCat::UInt8 : TypeCat::Int8} };
                     } else if (precision == 16) {
                         assert(dest.size() >= sizeof(uint16_t));
                         *(uint16_t*)dest.begin() = (uint16_t)value;
-                        return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt16 : TypeCat::Int16} };
+                        return { parseEnd, TypeDesc{isUnsigned ? TypeCat::UInt16 : TypeCat::Int16} };
                     } else if (precision == 32) {
                         assert(dest.size() >= sizeof(uint32_t));
                         *(uint32_t*)dest.begin() = (uint32_t)value;
-                        return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt32 : TypeCat::Int32} };
+                        return { parseEnd, TypeDesc{isUnsigned ? TypeCat::UInt32 : TypeCat::Int32} };
                     } else if (precision == 64) {
                         assert(dest.size() >= sizeof(uint64_t));
                         *(uint64_t*)dest.begin() = (uint64_t)value;
-                        return { fcr.ptr, TypeDesc{isUnsigned ? TypeCat::UInt64 : TypeCat::Int64} };
+                        return { parseEnd, TypeDesc{isUnsigned ? TypeCat::UInt64 : TypeCat::Int64} };
                     } else {
                         // assert(0);  // unknown precision, even though the integer itself parsed correctly
                         return { expression.begin() };
