@@ -266,6 +266,8 @@ namespace SceneEngine
             lightScene.DestroyShadowProjection(shadowId);
         for (auto lightSource:_lightSourcesInBoundScene)
             lightScene.DestroyLightSource(lightSource);
+        _shadowProjectionsInBoundScene.clear();
+        _lightSourcesInBoundScene.clear();
     }
 
     std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BasicLightingStateDelegate::BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)

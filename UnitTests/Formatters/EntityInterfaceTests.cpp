@@ -49,7 +49,7 @@ namespace UnitTests
 	};
 
 	template<typename Type, typename CharType>
-		Type RequireStringValue(InputStreamFormatter<CharType>& formatter)
+		Type RequireCastValue(InputStreamFormatter<CharType>& formatter)
 	{
 		StringSection<> stringValue;
 		if (!formatter.TryStringValue(stringValue))
@@ -63,7 +63,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		Type RequireStringValue(EntityInterface::IDynamicFormatter& formatter)
+		Type RequireCastValue(EntityInterface::IDynamicFormatter& formatter)
 	{
 		Type midwayBuffer;
 		if (!formatter.TryCastValue(MakeOpaqueIteratorRange(midwayBuffer), ImpliedTyping::TypeOf<Type>()))
@@ -74,13 +74,13 @@ namespace UnitTests
 	static void RequireBlobsFromCfg1(EntityInterface::IDynamicFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 1);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 1);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 2);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 3);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 4);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 1);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 2);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 4);
 		RequireEndElement(fmttr);
 		fmttr.SkipValueOrElement();		// skip unnamed element
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "InternalPoint");
@@ -91,17 +91,17 @@ namespace UnitTests
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 6);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 3);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 5);
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 6);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 6);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 3);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 5);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 6);
 		RequireEndElement(fmttr);
 		RequireBeginElement(fmttr);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "value2");
-		REQUIRE(Utility::RequireStringValue(fmttr).AsString() == "five");
+		REQUIRE(RequireStringValue(fmttr).AsString() == "five");
 		RequireEndElement(fmttr);
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
-		REQUIRE(RequireStringValue<unsigned>(fmttr) == 5);
+		REQUIRE(RequireCastValue<unsigned>(fmttr) == 5);
 	}
 
 	template<typename Type>

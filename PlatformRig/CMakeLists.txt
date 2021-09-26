@@ -48,6 +48,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     add_library(PlatformRig-${metal_name} STATIC ${Src} ${WinSrc} ${DebuggingDisplaysSrc} ${MiniSceneEngineSrc})
     xle_configure_library(PlatformRig-${metal_name})
-    target_link_libraries(PlatformRig-${metal_name} PRIVATE RenderCoreLightingEngine-${metal_name} RenderCoreTechniques-${metal_name})
+    target_link_libraries(PlatformRig-${metal_name} PRIVATE ToolsRig-${metal_name} RenderCoreLightingEngine-${metal_name} RenderCoreTechniques-${metal_name})
 
 endforeach()

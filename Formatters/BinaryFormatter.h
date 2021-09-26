@@ -321,12 +321,12 @@ namespace Formatters
 	inline BinaryMemberToken BinaryMemberIterator::operator*() const { return get(); }
 
 	template<typename Type>
-		Type RequireStringValue(BinaryFormatter& formatter)
+		Type RequireCastValue(BinaryFormatter& formatter)
 	{
 		IteratorRange<const void*> data;
 		ImpliedTyping::TypeDesc typeDesc;
 		unsigned evaluatedTypeId;
-		if (!formatter.TryStringValue(data, typeDesc, evaluatedTypeId))
+		if (!formatter.TryRawValue(data, typeDesc, evaluatedTypeId))
 			Throw(std::runtime_error("Unexpected blob while looking for value in binary formatter"));
 		Type result;
 		bool castSuccess = ImpliedTyping::Cast(
