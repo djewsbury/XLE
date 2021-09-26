@@ -13,6 +13,7 @@
 #include "../../Utility/Optional.h"
 #include <string>
 #include <chrono>
+#include <functional>
 
 namespace RenderCore { namespace Techniques { 
 	class CameraDesc;
@@ -130,11 +131,18 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    template<typename AssetType>
+        using RefreshableFuture = std::function<::Assets::PtrToFuturePtr<AssetType>()>;
+
     class ISimpleSceneLayer : public PlatformRig::IOverlaySystem
     {
     public:
         virtual void Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
 		virtual void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) = 0;
+
+        virtual void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) = 0;
+		virtual void Set(RefreshableFuture<SceneEngine::IScene> scene) = 0;
+
         virtual std::shared_ptr<VisCameraSettings> GetCamera() = 0;
 		virtual void ResetCamera() = 0;
         virtual ~ISimpleSceneLayer() = default;

@@ -130,6 +130,8 @@ namespace ToolsRig
 
         void Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) override;
+		void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) override;
+		void Set(RefreshableFuture<SceneEngine::IScene> scene) override;
 
 		std::shared_ptr<VisCameraSettings> GetCamera() override;
 		void ResetCamera() override;
@@ -156,11 +158,24 @@ namespace ToolsRig
 			bool _pendingCameraReset = false;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+			~PreparedScene()
+			{
+				if (_envSettings && _compiledLightingTechnique) {
+					auto& lightScene = RenderCore::LightingEngine::GetLightScene(*_compiledLightingTechnique);
+					_envSettings->UnbindScene(lightScene);
+				}
+			}
+			PreparedScene() = default;
+			PreparedScene(PreparedScene&&) = default;
+			PreparedScene& operator=(PreparedScene&&) = default;
 		};
 		::Assets::PtrToFuturePtr<PreparedScene> _preparedSceneFuture;
 
 		::Assets::PtrToFuturePtr<SceneEngine::IScene> _sceneFuture;
 		::Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> _envSettingsFuture;
+		RefreshableFuture<SceneEngine::IScene> _refreshableSceneFuture;
+		RefreshableFuture<SceneEngine::ILightingStateDelegate> _refreshableEnvSettingsFuture;
 		void RebuildPreparedScene();
 		
 		unsigned _loadingIndicatorCounter = 0;
@@ -350,6 +365,12 @@ namespace ToolsRig
 
 	void SimpleSceneLayer::RebuildPreparedScene()
 	{
+		if ((!_envSettingsFuture || ::Assets::IsInvalidated(*_envSettingsFuture)) && _refreshableEnvSettingsFuture)
+			_envSettingsFuture = _refreshableEnvSettingsFuture();
+
+		if ((!_sceneFuture || ::Assets::IsInvalidated(*_sceneFuture)) && _refreshableSceneFuture)
+			_sceneFuture = _refreshableSceneFuture();
+
 		if (!_envSettingsFuture || _lightingTechniqueTargets.empty() || !_sceneFuture) {
 			_preparedSceneFuture = nullptr;
 			return;
@@ -363,7 +384,9 @@ namespace ToolsRig
 
 		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture(
 			*_preparedSceneFuture,
-			[targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, sceneFuture = _sceneFuture, pipelineAccelerators = _pipelineAccelerators](
+			[	targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
+				sceneFuture = _sceneFuture, pipelineAccelerators = _pipelineAccelerators,
+				sceneIsRefreshable = !!_refreshableSceneFuture, envSettingsIsRefreshable = !!_refreshableEnvSettingsFuture](
 				::Assets::FuturePtr<PreparedScene>& thatFuture, 
 				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
 
@@ -383,15 +406,23 @@ namespace ToolsRig
 
 				::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToFuture(
 					thatFuture,
-					[pipelineAccelerators, envSettings](Assets::FuturePtr<PreparedScene>& thatFuture, auto scene, auto compiledLightingTechnique) {
+					[pipelineAccelerators, envSettings, sceneIsRefreshable, envSettingsIsRefreshable, sceneDepVal=sceneFuture->GetDependencyValidation()](Assets::FuturePtr<PreparedScene>& thatFuture, auto scene, auto compiledLightingTechnique) {
 						auto preparedScene = std::make_shared<PreparedScene>();
 						preparedScene->_envSettings = envSettings;
 						preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
 						preparedScene->_pendingCameraReset = true;
 						preparedScene->_scene = std::move(scene);
-						preparedScene->_depVal = ::Assets::GetDepValSys().Make();
-						preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
-						preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
+
+						if (sceneIsRefreshable || envSettingsIsRefreshable) {
+							preparedScene->_depVal = ::Assets::GetDepValSys().Make();
+							if (envSettingsIsRefreshable)
+								preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
+							if (sceneIsRefreshable)
+								preparedScene->_depVal.RegisterDependency(sceneDepVal);
+							preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
+						} else {
+							preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
+						}
 
 						auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
 						preparedScene->_envSettings->BindScene(lightScene);
@@ -423,12 +454,28 @@ namespace ToolsRig
     void SimpleSceneLayer::Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings)
     {
 		_envSettingsFuture = std::move(envSettings);
+		_refreshableEnvSettingsFuture = nullptr;
 		RebuildPreparedScene();
     }
 
 	void SimpleSceneLayer::Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene)
 	{
 		_sceneFuture = std::move(scene);
+		_refreshableSceneFuture = nullptr;
+		RebuildPreparedScene();
+	}
+
+	void SimpleSceneLayer::Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings)
+	{
+		_refreshableEnvSettingsFuture = std::move(envSettings);
+		_envSettingsFuture = nullptr;
+		RebuildPreparedScene();
+	}
+
+	void SimpleSceneLayer::Set(RefreshableFuture<SceneEngine::IScene> scene)
+	{
+		_refreshableSceneFuture = std::move(scene);
+		_sceneFuture = nullptr;
 		RebuildPreparedScene();
 	}
 

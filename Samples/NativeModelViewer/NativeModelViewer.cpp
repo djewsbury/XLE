@@ -36,12 +36,11 @@ namespace Sample
 			lightingEngineApparatus);
 
 		ToolsRig::ModelVisSettings visSettings {};
-
 		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.txt"));
 
 		auto scene = ToolsRig::MakeScene(pipelineAccelerators, visSettings);
 		modelLayer->Set(scene);
-		modelLayer->Set(ToolsRig::MakeLightingStateDelegate("cfg/lighting"));
+		modelLayer->Set([]() { return ToolsRig::MakeLightingStateDelegate("cfg/lighting"); });
 		AddSystem(modelLayer);
 
 		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
