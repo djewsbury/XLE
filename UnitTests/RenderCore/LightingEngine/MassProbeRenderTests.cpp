@@ -172,7 +172,7 @@ namespace UnitTests
 			float4 ps_main(VSOUT geo) : SV_Target0
 			{
 				// output normal & tex coord to ensure they get passed down as attributes, but still keep a minimal shader
-				return float4(VSOUT_GetVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
+				return float4(VSOUT_GetWorldVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
 			}
 		)--")),
 
@@ -231,7 +231,7 @@ namespace UnitTests
 			float4 ps_main(VSOUT geo) : SV_Target0
 			{
 				// output normal & tex coord to ensure they get passed down as attributes, but still keep a minimal shader
-				return float4(VSOUT_GetVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
+				return float4(VSOUT_GetWorldVertexNormal(geo).xyz + VSOUT_GetTexCoord0(geo).xyx, 1);
 			}
 		)--"))
 	};

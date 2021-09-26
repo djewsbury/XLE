@@ -189,7 +189,7 @@ float3 VSOUT_GetWorldPosition(VSOUT geo)
 	}
 #endif
 
-float3 VSOUT_GetVertexNormal(VSOUT geo)
+float3 VSOUT_GetWorldVertexNormal(VSOUT geo)
 {
 	#if VSOUT_HAS_TANGENT_FRAME==1
 		return normalize(geo.normal);

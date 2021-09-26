@@ -85,7 +85,7 @@ uint MaskBitsUntil(uint bitIdx) { return (1u<<bitIdx)-1u; }
 
 float3 CalculateIllumination(
 	GBufferValues sample, float3 directionToEye,
-	float3 worldPosition, float linear0To1Depth,
+	float3 worldPosition, float3 worldGeometryNormal, float linear0To1Depth,
 	LightScreenDest screenDest, bool hasNormal)
 {
 	float3 result = 0.0.xxx;
@@ -105,11 +105,14 @@ float3 CalculateIllumination(
 					enableNearCascade = true;
 				#endif
 
-				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, sample.worldSpaceNormal);
+				// Lift the shadow sampling position just a tiny bit upwards along the geometry normal; just a simple way to 
+				// resolve a lot of sampling related problems
+				float3 worldPositionForShadows = worldPosition + 0.025f*worldGeometryNormal;
+				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPositionForShadows, sample.worldSpaceNormal);
 				if (cascade.cascadeIndex >= 0) {
 					shadowing = ResolveShadows_Cascade(
 						cascade.cascadeIndex, cascade.frustumCoordinates, cascade.frustumSpaceNormal, cascade.miniProjection,
-						screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_NoFilter());
+						screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
 				}
 
 				#if DOMINANT_LIGHT_SHAPE == 0

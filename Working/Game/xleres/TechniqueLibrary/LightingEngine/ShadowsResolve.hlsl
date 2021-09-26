@@ -58,9 +58,19 @@ struct ShadowResolveConfig
 ShadowResolveConfig ShadowResolveConfig_Default()
 {
     ShadowResolveConfig result;
-    result._filteringMode = SHADOW_FILTER_MODEL;
+    #if SHADOW_FILTER_MODEL == SHADOW_FILTER_MODEL_POISSONDISC
+        result._filteringMode = SHADOW_FILTER_MODEL_POISSONDISC;
+    #elif SHADOW_FILTER_MODEL == SHADOW_FILTER_MODEL_SMOOTH
+        result._filteringMode = SHADOW_FILTER_MODEL_SMOOTH;
+    #else
+        result._filteringMode = SHADOW_FILTER_MODEL_NONE;
+    #endif
     result._pcDoFilterRotation = true;
-    result._doContactHardening = SHADOW_FILTER_CONTACT_HARDENING;
+    #if SHADOW_FILTER_CONTACT_HARDENING == 1
+        result._doContactHardening = true;
+    #else
+        result._doContactHardening = false;
+    #endif
     result._hasHybridRT = false;
     return result;
 }
@@ -68,8 +78,15 @@ ShadowResolveConfig ShadowResolveConfig_Default()
 ShadowResolveConfig ShadowResolveConfig_NoFilter()
 {
     ShadowResolveConfig result;
-    result._filteringMode = SHADOW_FILTER_MODEL_NONE;
+    #if SHADOW_FILTER_MODEL == SHADOW_FILTER_MODEL_POISSONDISC
+        result._filteringMode = SHADOW_FILTER_MODEL_POISSONDISC;
+    #elif SHADOW_FILTER_MODEL == SHADOW_FILTER_MODEL_SMOOTH
+        result._filteringMode = SHADOW_FILTER_MODEL_SMOOTH;
+    #else
+        result._filteringMode = SHADOW_FILTER_MODEL_NONE;
+    #endif
     result._pcDoFilterRotation = false;
+    result._doContactHardening = false;
     result._hasHybridRT = false;
     return result;
 }
@@ -125,8 +142,8 @@ float CalculateShadowCasterDistance(
     float2 texCoords, float comparisonDistance,
     uint arrayIndex, float2 filterPlane, uint msaaSampleIndex, float noisyValue)
 {
-    float accumulatedDistance = 0.0f;
-    float accumulatedSampleCount = 0.0001f;
+    float accumulatedDistance = 0.f;
+    float accumulatedSampleCount = 0.f;
 
     float angle = 2.0f * pi * noisyValue;
     float2 filterRotation;
@@ -135,7 +152,7 @@ float CalculateShadowCasterDistance(
     const float searchSize = MaxBlurRadiusNorm;
     filterRotation *= searchSize;
 
-    float minDifference = 2.0f;
+    float minDifference = 100000.0f;
 
     // We need some tolerance here, because of precision issues
     // If the depth we sample from the depth texture is from the surface we're now drawing
@@ -205,7 +222,7 @@ float CalculateShadowCasterDistance(
 
         //
         //		finalDistance is the assumed distance to the shadow caster
-    float finalDistance = accumulatedDistance / accumulatedSampleCount;
+    float finalDistance = accumulatedDistance / max(accumulatedSampleCount, 1e-5f);
     return finalDistance;
 }
 
@@ -329,8 +346,6 @@ float CalculateFilterSize(
     float casterDistance = CalculateShadowCasterDistance(
         shadowTexCoord, comparisonDistance, cascadeIndex, filterPlane,
         msaaSampleIndex, GetNoisyValue(randomizerValue, 1));
-
-    if (casterDistance >= 1.0f) return -1.0f;
 
     float projectionScale = miniProjection.x;	// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
 

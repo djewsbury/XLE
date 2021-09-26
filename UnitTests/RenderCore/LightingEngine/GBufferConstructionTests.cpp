@@ -70,7 +70,7 @@ namespace UnitTests
 				out float4 out_normal : SV_Target1)
 			{
 				out_position = float4(VSOUT_GetWorldPosition(geo), 1);
-				out_normal = float4(VSOUT_GetVertexNormal(geo), 1);
+				out_normal = float4(VSOUT_GetWorldVertexNormal(geo), 1);
 			}
 		)--"))
 	};

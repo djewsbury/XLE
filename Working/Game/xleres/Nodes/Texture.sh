@@ -113,7 +113,7 @@ float3 MaybeMakeDoubleSided(VSOUT geo, float3 normal)
             // directly. Or we can flip the vertex normal that is used in the normal map
             // algorithm. Each way will express a different kind of underlying shape to the
             // geometry.
-        if (dot(VSOUT_GetVertexNormal(geo), geo.worldViewVector) < 0.f)
+        if (dot(VSOUT_GetWorldVertexNormal(geo), geo.worldViewVector) < 0.f)
             return -1.f * normal;
     #endif
     return normal;

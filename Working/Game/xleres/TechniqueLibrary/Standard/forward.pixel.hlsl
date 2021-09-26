@@ -28,7 +28,7 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	#endif
 	float4 result = float4(
 		CalculateIllumination(
-			sample, directionToEye, VSOUT_GetWorldPosition(geo),
+			sample, directionToEye, VSOUT_GetWorldPosition(geo), VSOUT_GetWorldVertexNormal(geo),
 			NDCDepthToLinear0To1(geo.position.z),
 			LightScreenDest_Create(int2(geo.position.xy), GetSampleIndex(sys)), 
 			hasNormal), 1.f);
