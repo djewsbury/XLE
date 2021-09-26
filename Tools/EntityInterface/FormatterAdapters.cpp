@@ -85,6 +85,9 @@ namespace EntityInterface
 	public:
 		virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
+			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
+				_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
+
 			using UnderlyingFormatter = InputStreamFormatter<>;
 			auto result = std::make_shared<::Assets::FuturePtr<IDynamicFormatter>>();
 			::Assets::WhenAll(_srcFile).ThenConstructToFuture(
@@ -111,7 +114,6 @@ namespace EntityInterface
 		TextEntityDocument(std::string src) 
 		: _src(src)
 		{
-			_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
 			_directorySearchRules.SetBaseFile(_src);
 		}
 
