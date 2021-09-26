@@ -223,14 +223,37 @@ namespace Utility
             };
             p._setter = [ptrToMember](void* object, IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) {
                 auto& member = ((ObjectType*)object)->*ptrToMember;
-                return ImpliedTyping::Cast(
-                    MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(),
-                    src, srcType);
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    // member is not a string
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        return ImpliedTyping::ConvertFullMatch(
+                            MakeStringSection((const char*)src.begin(), (const char*)src.end()),
+                            MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>());
+                    } else {
+                        return ImpliedTyping::Cast(
+                            MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(),
+                            src, srcType);
+                    }
+                } else {
+                    // member is a string
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        member = MakeStringSection((const char*)src.begin(), (const char*)src.end()).AsString();
+                    } else {
+                        assert(srcType._typeHint != ImpliedTyping::TypeHint::String);       // no support for wide char type strings here
+                        member = ImpliedTyping::AsString(src, srcType);
+                    }
+                }
             };
             p._getAsString = [ptrToMember](const void* object, bool strongTyping) {
                 auto& member = ((ObjectType*)object)->*ptrToMember;
-                return ImpliedTyping::AsString(
-                    MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(), strongTyping);
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    // member is not a string
+                    return ImpliedTyping::AsString(
+                        MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(), strongTyping);
+                } else {
+                    // member is a string
+                    return member;
+                }
             };
         }
 
