@@ -64,6 +64,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::shared_ptr<DynamicShadowPreparationOperators> _shadowPreparationOperators;
 		std::vector<std::pair<unsigned, std::shared_ptr<IPreparedShadowResult>>> _preparedShadows;
+		std::shared_ptr<IPreparedShadowResult> _preparedDominantShadow;
 
 	private:
 		std::vector<LightSourceOperatorDesc> _positionalLightOperators;
@@ -87,8 +88,6 @@ namespace RenderCore { namespace LightingEngine
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;
-
-		LightOperatorId _dominantLightOperatorId = ~0u;
 
 		Float4 _diffuseSHCoefficients[25];
 

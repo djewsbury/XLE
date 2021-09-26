@@ -79,14 +79,7 @@ namespace RenderCore { namespace LightingEngine
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
 			unsigned lightSetIdx = 0;
-			for (auto& lightSet:_lightScene->_lightSets) {
-				// For now, don't tile shadowed lights. Ideally we want to tile everything except the "dominant" light
-				// (if it exists) -- because that will have cascaded shadows
-				/*if (lightSet._shadowOperatorId != ~0u) {
-					++lightSetIdx;
-					continue;
-				}*/
-
+			for (auto& lightSet:_lightScene->_tileableLightSets) {
 				for (auto light=lightSet._lights.begin(); light!=lightSet._lights.end(); ++light) {
 					auto& lightDesc = *(Internal::StandardPositionalLight*)light->_desc.get();
 					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;

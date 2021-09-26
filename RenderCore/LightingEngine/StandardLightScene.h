@@ -30,20 +30,23 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		struct LightSet
 		{
-			LightOperatorId _operatorId;
-			ShadowOperatorId _shadowOperatorId;
+			LightOperatorId _operatorId = ~0u;
+			ShadowOperatorId _shadowOperatorId = ~0u;
 			std::vector<Light> _lights;
 		};
-		std::vector<LightSet> _lightSets;
+		std::vector<LightSet> _tileableLightSets;
 
 		struct DynamicShadowProjection
 		{
-			ShadowProjectionId _id;
-			ShadowOperatorId _operatorId;
-			LightSourceId _lightId;
+			ShadowProjectionId _id = ~0u;
+			ShadowOperatorId _operatorId = ~0u;
+			LightSourceId _lightId = ~0u;
 			std::unique_ptr<ILightBase> _desc;
 		};
 		std::vector<DynamicShadowProjection> _dynamicShadowProjections;
+		
+		LightSet _dominantLightSet;
+		DynamicShadowProjection _dominantShadowProjection;
 
 		LightSourceId _nextLightSource = 0;
 		ShadowProjectionId _nextShadow = 0;

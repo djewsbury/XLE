@@ -120,12 +120,19 @@ namespace RenderCore { namespace LightingEngine
 		_pingPongCounter = 0;
 
 		// Default to using the first light operator & first shadow operator for the dominant light
-		_dominantLightOperatorId = ~0u;
+		_dominantLightSet._operatorId = ~0u;
+		_dominantLightSet._shadowOperatorId = ~0u;
 		for (unsigned c=0; c<_positionalLightOperators.size(); ++c)
 			if (_positionalLightOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
-				if (_dominantLightOperatorId != ~0u)
+				if (_dominantLightSet._operatorId != ~0u)
 					Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
-				_dominantLightOperatorId = c;
+				_dominantLightSet._operatorId = c;
+			}
+		for (unsigned c=0; c<_shadowPreparationOperators->_operators.size(); ++c)
+			if (_shadowPreparationOperators->_operators[c]._desc._dominantLight) {
+				if (_dominantLightSet._shadowOperatorId != ~0u)
+					Throw(std::runtime_error("Multiple dominant shadow operators detected. This isn't supported -- there must be either 0 or 1"));
+				_dominantLightSet._shadowOperatorId = c;
 			}
 	}
 
@@ -267,7 +274,6 @@ namespace RenderCore { namespace LightingEngine
 
 		/////////////////
 		++_pingPongCounter;
-		LightSourceId dominantLightId = ~0u;
 
 		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 		auto& tilerOutputs = _lightTiler->_outputs;
@@ -288,8 +294,8 @@ namespace RenderCore { namespace LightingEngine
 			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto set = *idx >> 16, light = (*idx)&0xffff;
-				auto op = _lightSets[set]._operatorId;
-				auto& lightDesc = *(ForwardPlusLightDesc*)_lightSets[set]._lights[light]._desc.get();
+				auto op = _tileableLightSets[set]._operatorId;
+				auto& lightDesc = *(ForwardPlusLightDesc*)_tileableLightSets[set]._lights[light]._desc.get();
 				*i = MakeLightUniforms(lightDesc, _positionalLightOperators[op]);
 				i->_staticProbeDatabaseEntry = lightDesc._staticProbeDatabaseEntry;
 			}
@@ -302,19 +308,12 @@ namespace RenderCore { namespace LightingEngine
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
 
-			if (_dominantLightOperatorId != ~0u) {
-				auto dominantLightOperator = _lightSets.begin();
-				for (; dominantLightOperator!=_lightSets.end(); ++dominantLightOperator)
-					if (dominantLightOperator->_operatorId == _dominantLightOperatorId && !dominantLightOperator->_lights.empty())
-						break;
-				if (dominantLightOperator != _lightSets.end()) {
-					if (dominantLightOperator->_lights.size() > 1)
-						Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
-					i->_dominantLight = Internal::MakeLightUniforms(
-						*checked_cast<ForwardPlusLightDesc*>(dominantLightOperator->_lights[0]._desc.get()),
-						_positionalLightOperators[_dominantLightOperatorId]);
-					dominantLightId = dominantLightOperator->_lights[0]._id;
-				}
+			if (!_dominantLightSet._lights.empty()) {
+				if (_dominantLightSet._lights.size() > 1)
+					Throw(std::runtime_error("Multiple lights in the non-tiled dominant light category. There can be only one dominant light, but it can support more features than the tiled lights"));
+				i->_dominantLight = Internal::MakeLightUniforms(
+					*checked_cast<ForwardPlusLightDesc*>(_dominantLightSet._lights[0]._desc.get()),
+					_positionalLightOperators[_dominantLightSet._operatorId]);
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
@@ -325,14 +324,10 @@ namespace RenderCore { namespace LightingEngine
 		if (_completionCommandListID)
 			parsingContext.RequireCommandList(_completionCommandListID);
 
-		if (dominantLightId != ~0u) {
+		if (_preparedDominantShadow) {
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 			assert(!parsingContext._extraSequencerDescriptorSet.second);
-			for (unsigned c=0; c<_dynamicShadowProjections.size(); ++c)
-				if (_dynamicShadowProjections[c]._lightId == dominantLightId) {
-					assert(_dynamicShadowProjections[c]._operatorId == 0);		// we require the shadow op used with the dominant light to be 0 currently
-					parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedShadows[c].second->GetDescriptorSet().get()};
-				}
+			parsingContext._extraSequencerDescriptorSet = {s_shadowTemplate, _preparedDominantShadow->GetDescriptorSet().get()};
 		}
 	}
 
@@ -351,22 +346,30 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
-			assert(dst.size() >= 4);
 			auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_lightScene->_uniforms)];
-			dst[0] = uniforms._lightDepthTableUAV.get();
-			dst[1] = uniforms._lightListUAV.get();
-			dst[2] = uniforms._propertyCBView.get();
-			dst[3] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+			if (bindingFlags & 7) {
+				assert((bindingFlags & 7) == 7);
+				dst[0] = uniforms._lightDepthTableUAV.get();
+				dst[1] = uniforms._lightListUAV.get();
+				dst[2] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+			}
+
+			if (bindingFlags & (1ull<<3ull))
+				dst[3] = uniforms._propertyCBView.get();
+
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(context._rpi);
 				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
 			}
-			if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
-				dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
-			} else {
-				// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
-				assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
-				dst[5] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+
+			if (bindingFlags & (1ull<<5ull)) {
+				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
+					dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+				} else {
+					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
+					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
+					dst[5] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+				}
 			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
@@ -375,8 +378,8 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene = &lightScene;
 			BindResourceView(0, Utility::Hash64("LightDepthTable"));
 			BindResourceView(1, Utility::Hash64("LightList"));
-			BindResourceView(2, Utility::Hash64("EnvironmentProps"));
-			BindResourceView(3, Utility::Hash64("TiledLightBitField"));
+			BindResourceView(2, Utility::Hash64("TiledLightBitField"));
+			BindResourceView(3, Utility::Hash64("EnvironmentProps"));
 			BindResourceView(4, Utility::Hash64("SSR"));
 			BindResourceView(5, Utility::Hash64("StaticShadowProbeDatabase"));
 		}
@@ -389,17 +392,16 @@ namespace RenderCore { namespace LightingEngine
 
 	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const
 	{
-		if (_dominantLightOperatorId == ~0u)
+		if (_dominantLightSet._operatorId == ~0u)
 			return {};
-		return _positionalLightOperators[_dominantLightOperatorId];
+		return _positionalLightOperators[_dominantLightSet._operatorId];
 	}
 
 	std::optional<ShadowOperatorDesc> ForwardPlusLightScene::GetDominantShadowOperator() const
 	{
-		if (_shadowPreparationOperators->_operators.empty())
+		if (_dominantLightSet._shadowOperatorId == ~0u)
 			return {};
-		// assume the shadow operator that will be associated is index 0
-		return _shadowPreparationOperators->_operators[0]._desc;
+		return _shadowPreparationOperators->_operators[_dominantLightSet._shadowOperatorId]._desc;
 	}
 
 	ForwardPlusLightScene::ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)

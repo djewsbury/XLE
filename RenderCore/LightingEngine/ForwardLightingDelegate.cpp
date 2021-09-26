@@ -67,6 +67,16 @@ namespace RenderCore { namespace LightingEngine
 			assert(prevLightId == ~0u || prevLightId < _lightScene->_dynamicShadowProjections[c]._lightId);
 			prevLightId = _lightScene->_dynamicShadowProjections[c]._lightId;
 		}
+
+		if (_lightScene->_dominantShadowProjection._desc) {
+			assert(_lightScene->_dominantLightSet._lights.size() == 1);
+			_lightScene->_preparedDominantShadow =
+				Internal::SetupShadowPrepare(
+					iterator, 
+					*_lightScene->_dominantShadowProjection._desc, 
+					*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
+					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
+		}
 	}
 
 	class ToneMapStandin
@@ -350,6 +360,7 @@ namespace RenderCore { namespace LightingEngine
 					[captures](LightingTechniqueIterator& iterator) {
 						iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
 						captures->_lightScene->_preparedShadows.clear();
+						captures->_lightScene->_preparedDominantShadow = nullptr;
 					});
 
 				lightingTechnique->CompleteConstruction();

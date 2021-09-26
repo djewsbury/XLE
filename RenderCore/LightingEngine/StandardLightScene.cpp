@@ -25,26 +25,33 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
 	{
-		for (auto&set:_lightSets) {
+		for (auto&set:_tileableLightSets) {
 			auto i = std::find_if(
 				set._lights.begin(), set._lights.end(),
 				[sourceId](const auto& c) { return c._id == sourceId; });
 			if (i != set._lights.end())
 				return i->_desc->QueryInterface(interfaceTypeCode);
 		}
+
+		assert(_dominantLightSet._lights.size() <= 1);
+		if (!_dominantLightSet._lights.empty() && _dominantLightSet._lights[0]._id == sourceId)
+			return _dominantLightSet._lights[0]._desc->QueryInterface(interfaceTypeCode);
 		return nullptr;
 	}
 
 	auto StandardLightScene::AddLightSource(LightOperatorId operatorId, std::unique_ptr<ILightBase> desc) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
-		GetLightSet(operatorId, ~0u)._lights.push_back({result, std::move(desc)});
+		if (operatorId == _dominantLightSet._operatorId) {
+			_dominantLightSet._lights.push_back({result, std::move(desc)});
+		} else
+			GetLightSet(operatorId, ~0u)._lights.push_back({result, std::move(desc)});
 		return result;
 	}
 
 	void StandardLightScene::DestroyLightSource(LightSourceId sourceId)
 	{
-		for (auto&set:_lightSets) {
+		for (auto&set:_tileableLightSets) {
 			auto i = std::find_if(
 				set._lights.begin(), set._lights.end(),
 				[sourceId](const auto& c) { return c._id == sourceId; });
@@ -63,6 +70,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}				
 		}
 
+		{
+			auto i = std::find_if(
+				_dominantLightSet._lights.begin(), _dominantLightSet._lights.end(),
+				[sourceId](const auto& c) { return c._id == sourceId; });
+			if (i != _dominantLightSet._lights.end()) {
+				_dominantLightSet._lights.erase(i);
+				// as with above, we have to destroy the attached shadow projection
+				_dominantShadowProjection = {};
+				return;
+			}
+		}
+
 		Throw(std::runtime_error("Invalid light source id: " + std::to_string(sourceId)));
 	}
 
@@ -71,9 +90,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto i = std::find_if(
 			_dynamicShadowProjections.begin(), _dynamicShadowProjections.end(),
 			[preparerId](const auto& c) { return c._id == preparerId; });
-		if (i == _dynamicShadowProjections.end())
-			return nullptr;
-		return i->_desc->QueryInterface(interfaceTypeCode);
+		if (i != _dynamicShadowProjections.end())
+			return i->_desc->QueryInterface(interfaceTypeCode);
+
+		if (_dominantShadowProjection._id == preparerId)
+			return _dominantShadowProjection._desc->QueryInterface(interfaceTypeCode);
+
+		return nullptr;
 	}
 	
 	auto StandardLightScene::AddShadowProjection(
@@ -82,9 +105,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::unique_ptr<ILightBase> desc) -> ShadowProjectionId
 	{
 		auto result = _nextShadow++;
-		_dynamicShadowProjections.push_back({result, shadowOperatorId, associatedLight, std::move(desc)});
 
-		for (auto&set:_lightSets) {
+		// assuming just the one dominant light here
+		assert(_dominantLightSet._lights.size() <= 1);
+		if (!_dominantLightSet._lights.empty() && associatedLight == _dominantLightSet._lights[0]._id) {
+			assert(_dominantShadowProjection._id == ~0u);
+			assert(_dominantLightSet._shadowOperatorId == shadowOperatorId);		// the shadow operator is preset, and must agree with the shadow projection begin applied
+			_dominantShadowProjection = {result, shadowOperatorId, associatedLight, std::move(desc)};
+			return result;
+		}
+
+		_dynamicShadowProjections.push_back({result, shadowOperatorId, associatedLight, std::move(desc)});
+		for (auto&set:_tileableLightSets) {
 			if (set._shadowOperatorId != ~0u) {
 				#if defined(_DEBUG)
 					auto i = std::find_if(
@@ -118,7 +150,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (i != _dynamicShadowProjections.end()) {
 			auto associatedLight = i->_lightId;
 
-			for (auto&set:_lightSets) {
+			for (auto&set:_tileableLightSets) {
 				if (set._shadowOperatorId != i->_operatorId) continue;
 				auto i = std::find_if(
 					set._lights.begin(), set._lights.end(),
@@ -131,24 +163,33 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 			_dynamicShadowProjections.erase(i);
-		} else
-			Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
+			return;
+		}
+
+		if (_dominantShadowProjection._id == preparerId) {
+			_dominantShadowProjection = {};
+			return;
+		}
+			
+		Throw(std::runtime_error("Invalid shadow preparer id: " + std::to_string(preparerId)));
 	}
 
 	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> LightSet&
 	{
-		for (auto&s:_lightSets)
+		for (auto&s:_tileableLightSets)
 			if (s._operatorId == lightOperator && s._shadowOperatorId == shadowOperator)
 				return s;
-		_lightSets.push_back(LightSet{lightOperator, shadowOperator});
-		return *(_lightSets.end()-1);
+		_tileableLightSets.push_back(LightSet{lightOperator, shadowOperator});
+		return *(_tileableLightSets.end()-1);
 	}
 
 	void StandardLightScene::Clear()
 	{
-		for (auto& set:_lightSets)
+		for (auto& set:_tileableLightSets)
 			set._lights.clear();
 		_dynamicShadowProjections.clear();
+		_dominantShadowProjection = {};
+		_dominantLightSet._lights.clear();
 	}
 
 	void StandardLightScene::ReserveLightSourceIds(unsigned idCount)

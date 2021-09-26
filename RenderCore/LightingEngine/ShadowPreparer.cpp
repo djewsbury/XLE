@@ -420,6 +420,7 @@ namespace RenderCore { namespace LightingEngine
 			| (GetBits<4>(_cullMode)			<< 40ull)
 			| (GetBits<4>(_resolveType)			<< 44ull)
 			| (GetBits<1>(_enableNearCascade)  	<< 48ull)
+			| (GetBits<1>(_dominantLight)  		<< 49ull)
 			;
 
 		uint64_t h1 = 

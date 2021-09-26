@@ -428,7 +428,7 @@ namespace RenderCore { namespace LightingEngine
 		auto cameraPosition = ExtractTranslation(projectionDesc._cameraToWorld);
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
-		for (const auto&set:lightScene._lightSets) {
+		for (const auto&set:lightScene._tileableLightSets) {
 			auto lightShape = lightResolveOperators._pipelines[set._operatorId]._stencilingGeoShape;
 			auto shadowOperatorId = set._shadowOperatorId;
 			auto lightOperatorId = set._operatorId;

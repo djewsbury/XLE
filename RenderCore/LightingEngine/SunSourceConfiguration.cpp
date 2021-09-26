@@ -897,6 +897,7 @@ namespace RenderCore { namespace LightingEngine
 	ShadowOperatorDesc CalculateShadowOperatorDesc(const SunSourceFrustumSettings& settings)
 	{
 		ShadowOperatorDesc result;
+        result._dominantLight = true;
 		result._width   = settings._textureSize;
         result._height  = settings._textureSize;
         if (settings._flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
