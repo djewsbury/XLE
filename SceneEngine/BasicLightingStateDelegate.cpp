@@ -125,7 +125,8 @@ namespace SceneEngine
 
     protected:
         LightOperatorResolveContext _operatorResolveContext;
-        ObjectTable<RenderCore::LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettings;
+        ObjectTable<RenderCore::LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettingsInCfgFile;
+        std::vector<std::pair<uint64_t, uint64_t>> _shadowToAssociatedLight;
 
         struct PendingLightSource
         {
@@ -163,6 +164,7 @@ namespace SceneEngine
     {
         const ParameterBox::ParameterName Transform = "Transform";
         const ParameterBox::ParameterName Position = "Position";
+        const ParameterBox::ParameterName Radius = "Radius";
         const ParameterBox::ParameterName Brightness = "Brightness";
         const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
         const ParameterBox::ParameterName CutoffRange = "CutoffRange";
@@ -185,11 +187,16 @@ namespace SceneEngine
                     if (transformValue) {
                         positional->SetLocalToWorld(transformValue.value());
                     } else {
-                        Float4x4 localToWorld = Identity<Float4x4>();
                         auto positionValue = light._parameters.GetParameter<Float3>(Position);
-                        if (positionValue) {
-                            SetTranslation(localToWorld, positionValue.value());
-                            positional->SetLocalToWorld(localToWorld);
+                        auto radiusValue = light._parameters.GetParameter<Float3>(Radius);
+                        
+                        if (positionValue || radiusValue) {
+                            ScaleTranslation st;
+                            if (positionValue)
+                                st._translation = positionValue.value();
+                            if (radiusValue)
+                                st._scale = radiusValue.value();
+                            positional->SetLocalToWorld(AsFloat4x4(st));
                         }
                     }                    
                 }
@@ -230,67 +237,24 @@ namespace SceneEngine
             }
         }
 
-        for (const auto& sunSource:_sunSourceFrustumSettings._objects) {
+        for (const auto& sunSource:_sunSourceFrustumSettingsInCfgFile._objects) {
             auto op = LowerBound(_sunSourceHashToShadowOperatorId, sunSource.first);
             if (op == _sunSourceHashToShadowOperatorId.end() || op->first != sunSource.first) continue;
 
-            // todo -- correct id for the associated light
+            auto lightAssociation = std::find_if(
+                _shadowToAssociatedLight.begin(), _shadowToAssociatedLight.end(), 
+                [sunSource](const auto& c) { return c.first == sunSource.first; });
+            if (lightAssociation == _shadowToAssociatedLight.end()) continue;        // not tied to a specific light
+
+            auto lightId = std::find_if(
+                lightNameToId.begin(), lightNameToId.end(), 
+                [lightAssociation](const auto& c) { return c.first == lightAssociation->second; });
+            if (lightId == lightNameToId.end()) continue;        // couldn't find the associated light
+            
             auto newShadow = RenderCore::LightingEngine::CreateSunSourceShadows(
-                lightScene, op->second, 32, sunSource.second);
+                lightScene, op->second, lightId->second, sunSource.second);
             _shadowProjectionsInBoundScene.push_back(newShadow);
         }
-
-#if 0
-        auto lightOperators = _operatorResolveContext._lightSourceOperators;
-
-        RenderCore::LightingEngine::ILightScene::LightSourceId lightIndexToId[_envSettings->_lights.size()];
-
-        unsigned lightIdx=0;
-        for (const auto& light:_envSettings->_lights) {
-            unsigned operatorId = 0;
-            for (; operatorId != lightOperators.size(); ++operatorId)
-                if (lightOperators[operatorId]._diffuseModel == light._diffuseModel && lightOperators[operatorId]._shape == light._shape)
-                    break;
-
-            assert(operatorId < lightOperators.size());
-            auto lightId = lightScene.CreateLightSource(operatorId);
-            lightIndexToId[lightIdx++] = lightId;
-
-            auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
-            if (positional) {
-                ScaleRotationTranslationM srt { Expand(light._radii, 1.0f), light._orientation, light._position };
-                positional->SetLocalToWorld(AsFloat4x4(srt));
-            }
-
-            auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
-            if (emittance) {
-                emittance->SetBrightness(light._brightness);
-                emittance->SetDiffuseWideningFactors({light._diffuseWideningMin, light._diffuseWideningMax});
-            }
-
-            auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(lightId);
-            if (finite) {
-                finite->SetCutoffBrightness(light._cutoffBrightness);
-            }
-        }
-
-        for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
-            unsigned operatorId = 0;
-            auto shadowId = RenderCore::LightingEngine::CreateSunSourceShadows(
-                lightScene, operatorId, lightIndexToId[shadow._lightIdx],
-                shadow._shadowFrustumSettings);
-            _shadowProjectionsInBoundScene.push_back(shadowId);
-        }
-        
-        // Create the "ambient/environment light"
-        auto ambientLight = lightScene.CreateLightSource((unsigned)lightOperators.size());
-        auto* distantIBLSource = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(ambientLight);
-        if (distantIBLSource) {
-            if (GetEnvSettings()._environmentalLightingDesc._skyTextureType == RenderCore::LightingEngine::SkyTextureType::Equirectangular)
-                distantIBLSource->SetEquirectangularSource(GetEnvSettings()._environmentalLightingDesc._skyTexture);
-        }
-        _lightSourcesInBoundScene.push_back(ambientLight);
-#endif
 
         s_swirlingLights.BindScene(lightScene, s_swirlingLightsOp);
     }
@@ -357,7 +321,7 @@ namespace SceneEngine
                 i = result._shadowResolveOperators.insert(i, c.second);
             _shadowOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
         }
-        for (const auto& c:_sunSourceFrustumSettings._objects) {
+        for (const auto& c:_sunSourceFrustumSettingsInCfgFile._objects) {
             auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(c.second);
             auto h = shadowOperator.Hash();
             auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
@@ -365,17 +329,6 @@ namespace SceneEngine
                 i = result._shadowResolveOperators.insert(i, shadowOperator);
             _sunSourceHashToShadowOperatorId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
         }
-
-        /*std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> result;
-        for (const auto& light:_envSettings->_lights) {
-            RenderCore::LightingEngine::LightSourceOperatorDesc opDesc { light._shape, light._diffuseModel };
-            if (light._isDominantLight)
-                opDesc._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
-            auto h = opDesc.Hash();
-            auto i = std::find_if(result.begin(), result.end(), [h](const auto& c) { return c.Hash() == h; });
-            if (i == result.end())
-                result.push_back(opDesc);
-        }*/
 
         {
             auto h = s_swirlingLights._operator.Hash();
@@ -394,24 +347,6 @@ namespace SceneEngine
 
         return result;
     }
-
-#if 0
-    std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> BasicLightingStateDelegate::GetShadowResolveOperators()
-    {
-        std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> result;
-        std::vector<uint64_t> resultHashes;
-        for (const auto& shadow:_envSettings->_sunSourceShadowProj) {
-            RenderCore::LightingEngine::ShadowOperatorDesc opDesc;
-            opDesc = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow._shadowFrustumSettings);
-            auto h = opDesc.Hash();
-            if (std::find(resultHashes.begin(), resultHashes.end(), h) == resultHashes.end()) {
-                result.push_back(opDesc);
-                resultHashes.push_back(h);
-            }
-        }
-        return result;
-    }
-#endif
 
     auto BasicLightingStateDelegate::GetEnvironmentalLightingDesc() -> RenderCore::LightingEngine::EnvironmentalLightingDesc
     {
@@ -469,7 +404,7 @@ namespace SceneEngine
                 RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceShadows;
                 StringSection<> name, associatedLight;
                 
-                std::vector<decltype(_sunSourceFrustumSettings)::PendingProperty> properties; 
+                std::vector<decltype(_sunSourceFrustumSettingsInCfgFile)::PendingProperty> properties; 
                 while (formatter.TryKeyedItem(keyname)) {
                     if (XlEqString(keyname, "Name")) name = RequireStringValue(formatter);
                     else if (XlEqString(keyname, "Light")) associatedLight = RequireStringValue(formatter);
@@ -481,7 +416,9 @@ namespace SceneEngine
                 }
 
                 RequireEndElement(formatter);
-                _sunSourceFrustumSettings.DeserializeObject(name, properties);
+                auto hashName = _sunSourceFrustumSettingsInCfgFile.DeserializeObject(name, properties);
+                if (!associatedLight.IsEmpty())
+                    _shadowToAssociatedLight.emplace_back(hashName, Hash64(associatedLight));
 
             } else {
                 SkipValueOrElement(formatter);
@@ -546,18 +483,6 @@ namespace SceneEngine
         _isDominantLight = false;
     }
 
-    LightDesc DefaultDominantLight()
-    {
-        LightDesc light;
-        light._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-        light._position = Normalize(Float3(-0.15046243f, 0.97377890f, 0.17063323f));
-        light._cutoffBrightness = 0.01f;
-        light._brightness = Float3(3.2803922f, 2.2372551f, 1.9627452f);
-        light._diffuseWideningMax = .9f;
-        light._diffuseWideningMin = 0.2f;
-        return light;
-    }
-
     EnvironmentalLightingDesc DefaultEnvironmentalLightingDesc()
     {
         EnvironmentalLightingDesc result;
@@ -570,42 +495,6 @@ namespace SceneEngine
         result._doAtmosphereBlur = false;
         return result;
     }
-
-#if 0
-    EnvironmentSettings DefaultEnvironmentSettings()
-    {
-        EnvironmentSettings result;
-        result._environmentalLightingDesc = DefaultEnvironmentalLightingDesc();
-
-        auto defLight = DefaultDominantLight();
-        result._lights.push_back(defLight);
-
-        auto frustumSettings = DefaultSunSourceFrustumSettings();
-        result._sunSourceShadowProj.push_back(EnvironmentSettings::SunSourceShadowProj { 0, frustumSettings });
-
-        if (constant_expression<false>::result()) {
-            LightDesc secondaryLight;
-            secondaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-            secondaryLight._position = Normalize(Float3(0.71622938f, 0.48972201f, -0.49717990f));
-            secondaryLight._cutoffBrightness = 0.01f;
-            secondaryLight._brightness = Float3(3.2803922f, 2.2372551f, 1.9627452f);
-            secondaryLight._diffuseWideningMax = 2.f;
-            secondaryLight._diffuseWideningMin = 0.5f;
-            result._lights.push_back(secondaryLight);
-
-            LightDesc tertiaryLight;
-            tertiaryLight._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-            tertiaryLight._position = Normalize(Float3(-0.75507462f, -0.62672323f, 0.19256261f));
-            tertiaryLight._cutoffBrightness = 0.01f;
-            tertiaryLight._brightness = Float3(0.13725491f, 0.18666667f, 0.18745099f);
-            tertiaryLight._diffuseWideningMax = 2.f;
-            tertiaryLight._diffuseWideningMin = 0.5f;
-            result._lights.push_back(tertiaryLight);
-        }
-
-        return std::move(result);
-    }
-#endif
 
     SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
@@ -729,178 +618,6 @@ namespace SceneEngine
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#if 0
-    static void ReadTransform(LightDesc& light, const ParameterBox& props)
-    {
-        static const auto transformHash = ParameterBox::MakeParameterNameHash("Transform");
-        auto transform = Transpose(props.GetParameter(transformHash, Identity<Float4x4>()));
-
-        ScaleRotationTranslationM decomposed(transform);
-        light._position = decomposed._translation;
-        light._orientation = decomposed._rotation;
-        light._radii = Float2(decomposed._scale[0], decomposed._scale[1]);
-
-            // For directional lights we need to normalize the position (it will be treated as a direction)
-        if (light._shape == RenderCore::LightingEngine::LightSourceShape::Directional)
-            light._position = (MagnitudeSquared(light._position) > 1e-5f) ? Normalize(light._position) : Float3(0.f, 0.f, 0.f);
-    }
-    
-    namespace EntityTypeName
-    {
-        static const auto* EnvSettings = (const utf8*)"EnvSettings";
-        static const auto* AmbientSettings = (const utf8*)"AmbientSettings";
-        static const auto* DirectionalLight = (const utf8*)"DirectionalLight";
-        static const auto* AreaLight = (const utf8*)"AreaLight";
-        static const auto* ToneMapSettings = (const utf8*)"ToneMapSettings";
-        static const auto* ShadowFrustumSettings = (const utf8*)"ShadowFrustumSettings";
-
-        static const auto* OceanLightingSettings = (const utf8*)"OceanLightingSettings";
-        static const auto* OceanSettings = (const utf8*)"OceanSettings";
-        static const auto* FogVolumeRenderer = (const utf8*)"FogVolumeRenderer";
-    }
-    
-    namespace Attribute
-    {
-        static const auto AttachedLight = ParameterBox::MakeParameterNameHash("Light");
-        static const auto Name = ParameterBox::MakeParameterNameHash("Name");
-        static const auto Flags = ParameterBox::MakeParameterNameHash("Flags");
-    }
-
-    EnvironmentSettings::EnvironmentSettings(
-        InputStreamFormatter<utf8>& formatter, 
-        const ::Assets::DirectorySearchRules&,
-		const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
-    {
-        using namespace SceneEngine;
-
-        _environmentalLightingDesc = DefaultEnvironmentalLightingDesc();
-
-        std::vector<std::pair<uint64, SunSourceFrustumSettings>> shadowSettings;
-        std::vector<uint64> lightNames;
-        std::vector<std::pair<uint64, uint64>> lightFrustumLink;    // lightid to shadow settings map
-
-        utf8 buffer[256];
-
-        bool exit = false;
-        StringSection<> name;
-        while (formatter.TryKeyedItem(name)) {
-            switch(formatter.PeekNext()) {
-            case FormatterBlob::BeginElement:
-                {
-                    RequireBeginElement(formatter);
-
-                    if (XlEqString(name, EntityTypeName::AmbientSettings)) {
-                        _environmentalLightingDesc = MakeEnvironmentalLightingDesc(ParameterBox(formatter));
-                    } else if (XlEqString(name, EntityTypeName::ToneMapSettings)) {
-                        AccessorDeserialize(formatter, _toneMapSettings);
-                    } else if (XlEqString(name, EntityTypeName::DirectionalLight) || XlEqString(name, EntityTypeName::AreaLight)) {
-
-                        ParameterBox params(formatter);
-                        uint64 hashName = 0ull;
-                        auto paramValue = params.GetParameterAsString(Attribute::Name);
-                        if (paramValue.has_value())
-                            hashName = Hash64(paramValue.value());
-
-                        auto lightDesc = MakeLightDesc(params);
-                        if (XlEqString(name, EntityTypeName::DirectionalLight))
-                            lightDesc._shape = RenderCore::LightingEngine::LightSourceShape::Directional;
-                        ReadTransform(lightDesc, params);
-
-                        _lights.push_back(lightDesc);
-
-                        if (params.GetParameter(Attribute::Flags, 0u) & (1<<0)) {
-                            lightNames.push_back(hashName);
-                        } else {
-                            lightNames.push_back(0);    // dummy if shadows are disabled
-                        }
-                        
-                    } else if (XlEqString(name, EntityTypeName::ShadowFrustumSettings)) {
-
-                        ParameterBox params(formatter);
-                        uint64 hashName = 0ull;
-                        auto paramValue = params.GetParameterAsString(Attribute::Name);
-                        if (paramValue.has_value())
-                            hashName = Hash64(paramValue.value());
-
-                        shadowSettings.push_back(
-                            std::make_pair(hashName, CreateFromParameters<SunSourceFrustumSettings>(params)));
-
-                        uint64 frustumLink = 0;
-                        paramValue = params.GetParameterAsString(Attribute::AttachedLight);
-                        if (paramValue.has_value())
-                            frustumLink = Hash64(paramValue.value());
-                        lightFrustumLink.push_back(std::make_pair(frustumLink, hashName));
-
-#if 0
-                    } else if (XlEqString(name, EntityTypeName::OceanLightingSettings)) {
-                        _oceanLighting = OceanLightingSettings(ParameterBox(formatter));
-                    } else if (XlEqString(name, EntityTypeName::OceanSettings)) {
-                        _deepOceanSim = DeepOceanSimSettings(ParameterBox(formatter));
-                    } else if (XlEqString(name, EntityTypeName::FogVolumeRenderer)) {
-                        _volFogRenderer = VolumetricFogConfig::Renderer(formatter);
-#endif
-                    } else
-                        SkipElement(formatter);
-                    
-                    RequireEndElement(formatter);
-                    break;
-                }
-
-            case FormatterBlob::Value:
-                RequireStringValue(formatter);
-                break;
-
-            default:
-                Throw(FormatException("Expected value or element", formatter.GetLocation()));
-            }
-        }
-
-            // bind shadow settings (mapping via the light name parameter)
-        for (unsigned c=0; c<lightFrustumLink.size(); ++c) {
-            auto f = std::find_if(shadowSettings.cbegin(), shadowSettings.cend(), 
-                [&lightFrustumLink, c](const std::pair<uint64, SunSourceFrustumSettings>&i) { return i.first == lightFrustumLink[c].second; });
-
-            auto l = std::find(lightNames.cbegin(), lightNames.cend(), lightFrustumLink[c].first);
-
-            if (f != shadowSettings.end() && l != lightNames.end()) {
-                auto lightIndex = std::distance(lightNames.cbegin(), l);
-                assert(lightIndex < ptrdiff_t(_lights.size()));
-
-                _sunSourceShadowProj.push_back(
-                    EnvironmentSettings::SunSourceShadowProj { unsigned(lightIndex), f->second });
-                _lights[lightIndex]._isDominantLight = true;
-            }
-        }
-    }
-
-    EnvironmentSettings::EnvironmentSettings() {}
-    EnvironmentSettings::~EnvironmentSettings() {}
-#endif
-
-    /*std::vector<std::pair<std::string, SceneEngine::EnvironmentSettings>> 
-        DeserializeEnvSettings(InputStreamFormatter<utf8>& formatter)
-    {
-        std::vector<std::pair<std::string, SceneEngine::EnvironmentSettings>> result;
-        for (;;) {
-            switch(formatter.PeekNext()) {
-            case InputStreamFormatter<utf8>::Blob::BeginElement:
-                {
-                    InputStreamFormatter<utf8>::InteriorSection name;
-                    if (!formatter.TryBeginElement(name)) break;
-                    auto settings = DeserializeSingleSettings(formatter);
-                    if (!formatter.TryEndElement()) break;
-
-                    result.emplace_back(std::move(settings));
-                    break;
-                }
-
-            default:
-                return std::move(result);
-            }
-        }
-    }*/
 }
 
 #if 1
