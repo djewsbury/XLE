@@ -39,6 +39,29 @@ namespace SceneEngine
 			void DeserializeShadowOperator(Formatter& fmttr) { _shadowOperators.DeserializeObject(fmttr); }
 		template<typename Formatter>
 			void DeserializeAmbientOperator(Formatter& fmttr) { _ambientOperators.DeserializeObject(fmttr); }
+
+		template<typename Formatter>
+			void Deserialize(Formatter& fmttr) 
+		{ 
+			StringSection<> name;
+			while (fmttr.TryKeyedItem(name)) {
+				if (XlEqString(name, "LightSource")) {
+					RequireBeginElement(fmttr);
+					DeserializeLightSourceOperator(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "Shadow")) {
+					RequireBeginElement(fmttr);
+					DeserializeShadowOperator(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "Ambient")) {
+					RequireBeginElement(fmttr);
+					DeserializeAmbientOperator(fmttr);
+					RequireEndElement(fmttr);
+				} else {
+					SkipValueOrElement(fmttr);
+				}
+			}
+		}
 	};
 
 	template<typename Type>

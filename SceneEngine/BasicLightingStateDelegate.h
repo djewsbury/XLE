@@ -7,7 +7,6 @@
 #pragma once
 
 #include "IScene.h"
-#include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../SceneEngine/Tonemap.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
@@ -17,17 +16,8 @@
 #include "../SceneEngine/DeepOceanSim.h"
 #endif
 
-namespace Utility
-{
-    template<typename Type> class InputStreamFormatter;
-}
-namespace Assets 
-{ 
-    class DirectorySearchRules; 
-    template<typename Formatter> class ConfigFileContainer; 
-}
-
-namespace EntityInterface { class IDynamicFormatter; }
+namespace RenderCore { namespace LightingEngine { class SunSourceFrustumSettings; }}
+namespace Utility { class ParameterBox; }
 
 namespace SceneEngine
 {
@@ -44,5 +34,10 @@ namespace SceneEngine
 
     EnvironmentalLightingDesc MakeEnvironmentalLightingDesc(const ParameterBox& props);
     LightDesc MakeLightDesc(const Utility::ParameterBox& props);
+
+    void InitializeLight(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        const ParameterBox& parameters,
+        const Float3& offsetLocalToWorld);
 }
 

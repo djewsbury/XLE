@@ -160,14 +160,60 @@ namespace SceneEngine
     {
     }
 
+    void InitializeLight(
+        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        const ParameterBox& parameters,
+        const Float3& offsetLocalToWorld)
+    {
+        static const ParameterBox::ParameterName Transform = "Transform";
+        static const ParameterBox::ParameterName Position = "Position";
+        static const ParameterBox::ParameterName Radius = "Radius";
+        static const ParameterBox::ParameterName Brightness = "Brightness";
+        static const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
+        static const ParameterBox::ParameterName CutoffRange = "CutoffRange";
+
+        auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+        if (positional) {
+            auto transformValue = parameters.GetParameter<Float4x4>(Transform);
+            if (transformValue) {
+                Combine_IntoLHS(transformValue.value(), offsetLocalToWorld);
+                positional->SetLocalToWorld(transformValue.value());
+            } else {
+                auto positionValue = parameters.GetParameter<Float3>(Position);
+                auto radiusValue = parameters.GetParameter<Float3>(Radius);
+                
+                if (positionValue || radiusValue) {
+                    ScaleTranslation st;
+                    if (positionValue)
+                        st._translation = positionValue.value();
+                    if (radiusValue)
+                        st._scale = radiusValue.value();
+                    st._translation += offsetLocalToWorld;
+                    positional->SetLocalToWorld(AsFloat4x4(st));
+                }
+            }                    
+        }
+
+        auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
+        if (uniformEmittance) {
+            auto brightness = parameters.GetParameter<Float3>(Brightness);
+            if (brightness)
+                uniformEmittance->SetBrightness(brightness.value());
+        }
+
+        auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+        if (finite) {
+            auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness);
+            if (cutoffBrightness)
+                finite->SetCutoffBrightness(cutoffBrightness.value());
+            auto cutoffRange = parameters.GetParameter<float>(CutoffRange);
+            if (cutoffRange)
+                finite->SetCutoffRange(cutoffRange.value());
+        }
+    }
+
     void        BasicLightingStateDelegate::BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
     {
-        const ParameterBox::ParameterName Transform = "Transform";
-        const ParameterBox::ParameterName Position = "Position";
-        const ParameterBox::ParameterName Radius = "Radius";
-        const ParameterBox::ParameterName Brightness = "Brightness";
-        const ParameterBox::ParameterName CutoffBrightness = "CutoffBrightness";
-        const ParameterBox::ParameterName CutoffRange = "CutoffRange";
         const ParameterBox::ParameterName SkyTexture = "SkyTexture";
 
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightSourceId>> lightNameToId;
@@ -180,44 +226,7 @@ namespace SceneEngine
 
                 auto newLight = lightScene.CreateLightSource(lightOperator->second);
                 _lightSourcesInBoundScene.push_back(newLight);
-
-                auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(newLight);
-                if (positional) {
-                    auto transformValue = light._parameters.GetParameter<Float4x4>(Transform);
-                    if (transformValue) {
-                        positional->SetLocalToWorld(transformValue.value());
-                    } else {
-                        auto positionValue = light._parameters.GetParameter<Float3>(Position);
-                        auto radiusValue = light._parameters.GetParameter<Float3>(Radius);
-                        
-                        if (positionValue || radiusValue) {
-                            ScaleTranslation st;
-                            if (positionValue)
-                                st._translation = positionValue.value();
-                            if (radiusValue)
-                                st._scale = radiusValue.value();
-                            positional->SetLocalToWorld(AsFloat4x4(st));
-                        }
-                    }                    
-                }
-
-                auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(newLight);
-                if (uniformEmittance) {
-                    auto brightness = light._parameters.GetParameter<Float3>(Brightness);
-                    if (brightness)
-                        uniformEmittance->SetBrightness(brightness.value());
-                }
-
-                auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(newLight);
-                if (finite) {
-                    auto cutoffBrightness = light._parameters.GetParameter<float>(CutoffBrightness);
-                    if (cutoffBrightness)
-                        finite->SetCutoffBrightness(cutoffBrightness.value());
-                    auto cutoffRange = light._parameters.GetParameter<float>(CutoffRange);
-                    if (cutoffRange)
-                        finite->SetCutoffRange(cutoffRange.value());
-                }
-
+                InitializeLight(lightScene, newLight, light._parameters, Zero<Float3>());
                 lightNameToId.emplace_back(Hash64(light._name), newLight);
 
                 continue;
@@ -274,28 +283,6 @@ namespace SceneEngine
     {
         return nullptr;
     }
-
-    static void DeserializeLightOperators(EntityInterface::IDynamicFormatter& formatter, LightOperatorResolveContext& operatorResolveContext)
-    {
-        StringSection<> name;
-        while (formatter.TryKeyedItem(name)) {
-            if (XlEqString(name, "LightSource")) {
-                RequireBeginElement(formatter);
-                operatorResolveContext.DeserializeLightSourceOperator(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(name, "Shadow")) {
-                RequireBeginElement(formatter);
-                operatorResolveContext.DeserializeShadowOperator(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(name, "Ambient")) {
-                RequireBeginElement(formatter);
-                operatorResolveContext.DeserializeAmbientOperator(formatter);
-                RequireEndElement(formatter);
-            } else {
-                formatter.SkipValueOrElement();
-            }
-        }
-	}
 
     auto BasicLightingStateDelegate::GetOperators() -> Operators
     {
@@ -382,10 +369,8 @@ namespace SceneEngine
                     if (XlEqString(keyname, "Name")) name = RequireStringValue(formatter);
                     else if (XlEqString(keyname, "Operator")) operatorHash = Hash64(RequireStringValue(formatter));
                     else {
-                        IteratorRange<const void*> value;
                         ImpliedTyping::TypeDesc type;
-                        if (!formatter.TryRawValue(value, type))
-                            Throw(FormatException("Expecting value", formatter.GetLocation()));
+                        auto value = RequireRawValue(formatter, type);
                         lightProperties.SetParameter(keyname, value, type);
                     }
                 }
@@ -447,7 +432,7 @@ namespace SceneEngine
         while (formatter.TryKeyedItem(keyname)) {
             if (XlEqString(keyname, "LightOperators")) {
                 RequireBeginElement(formatter);
-                DeserializeLightOperators(formatter, _operatorResolveContext);
+                _operatorResolveContext.Deserialize(formatter);
                 RequireEndElement(formatter);
             } else if (XlEqString(keyname, "LightScene")) {
                 RequireBeginElement(formatter);
