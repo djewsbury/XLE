@@ -30,6 +30,7 @@ cbuffer ShadowProjection ShadowProjectionBinding
 		row_major float4x4 ShadowWorldToProj[SHADOW_SUB_PROJECTION_COUNT];
 		float4 ShadowMinimalProjection[SHADOW_SUB_PROJECTION_COUNT];
 		uint SubProjectionCount;
+		float ProjectionMaxBlurRadiusNorm;
 	#elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
 		row_major float3x4 OrthoShadowWorldToView;
 		float4 OrthoShadowMinimalProjection;
@@ -40,6 +41,7 @@ cbuffer ShadowProjection ShadowProjectionBinding
 			float4 OrthoShadowNearMinimalProjection;
 		#endif
 		uint SubProjectionCount;
+		float ProjectionMaxBlurRadiusNorm;
 	#endif
 }
 

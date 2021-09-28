@@ -18,6 +18,7 @@ struct CascadeAddress
     float3  frustumSpaceNormal;
 	int     cascadeIndex;
 	float4  miniProjection;
+    float   maxBlurNorm;
 };
 
 CascadeAddress CascadeAddress_Invalid()
@@ -27,16 +28,18 @@ CascadeAddress CascadeAddress_Invalid()
     result.frustumCoordinates = 0.0.xxxx;
     result.frustumSpaceNormal = 0.0.xxx;
 	result.miniProjection = 0.0.xxxx;
+    result.maxBlurNorm = 0;
 	return result;
 }
 
-CascadeAddress CascadeAddress_Create(float4 frustumCoordinates, float3 frustumSpaceNormal, int cascadeIndex, float4 miniProjection)
+CascadeAddress CascadeAddress_Create(float4 frustumCoordinates, float3 frustumSpaceNormal, int cascadeIndex, float4 miniProjection, float maxBlurNorm)
 {
 	CascadeAddress result;
 	result.cascadeIndex = cascadeIndex;
 	result.frustumCoordinates = frustumCoordinates;
     result.frustumSpaceNormal = frustumSpaceNormal;
 	result.miniProjection = miniProjection;
+    result.maxBlurNorm = maxBlurNorm;
 	return result;
 }
 
@@ -65,22 +68,49 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, 0), 1.f);
             return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
         #else
+            float4 prevFrustumCoords;
             [unroll] for (uint c=0; c<GetShadowSubProjectionCount(); c++) {
                 float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, c), 1.f);
-                if (PtInFrustumXY(frustumCoordinates))
-                    return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, c, ShadowProjection_GetMiniProj_NotNear(c));
+                // Expanding out the equation below to show how it works:
+                // const uint maxBlurSearchInPix = 32;
+    			// const uint halfTextureSize = 512;
+                // const float fullyInsidePoint = float(halfTextureSize-maxBlurSearchInPix) / float(halfTextureSize);
+                // maxBlurSearchInPix/halfTextureSize == 2*ProjectionMaxBlurRadiusNorm
+                const float fullyInsidePoint = 1.f-2.f*ProjectionMaxBlurRadiusNorm;
+                if (PtInFrustumXY(float4(frustumCoordinates.xy, 0, fullyInsidePoint))) {        // assuming w == 1
+                    float4 miniProj = ShadowProjection_GetMiniProj_NotNear(c);
+                    float maxBlurNorm = ProjectionMaxBlurRadiusNorm;
+                    if (c != 0) {
+                        float a = max(abs(prevFrustumCoords.x), abs(prevFrustumCoords.y)) / prevFrustumCoords.w;
+                        // a = (((a-1) * halfTextureSize) + maxBlurSearchInPix) / maxBlurSearchInPix;
+                        // a = (a*halfTextureSize - halfTextureSize + maxBlurSearchInPix) / maxBlurSearchInPix;
+                        // a = (a-1)*halfTextureSize/maxBlurSearchInPix + 1;
+                        a = (a-1.f)/(2.f*ProjectionMaxBlurRadiusNorm) + 1.f;
+                        // Little trick here -- crossfade the xy part of miniproj during the transition between cascades
+                        // Since we clamp the upper range of the blur in pixel coords, if we don't do this the cascade edge is visible
+                        // in the blurry parts, because we suddenly go from a dense pixel area to a less dense area. Effectively the
+                        // max blur radius in world space becomes larger in higher cascades
+                        // miniProj.xy is only used for the size of the blur radius, to transform from a world space radius into
+                        // a pixel space radius
+                        // In the cross fade, when a==0, want the blur radius in world space to be the same as the blur radius
+                        // would have been in the previous cascade. We'll then fade (pretty quickly) across the transition
+                        maxBlurNorm *= lerp(miniProj.x/ShadowProjection_GetMiniProj_NotNear(c-1).x, 1, saturate(a));
+                    }
+                    return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, c, miniProj, maxBlurNorm);
+                }
+                prevFrustumCoords = frustumCoordinates;
             }
         #endif
     #elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP)
 
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float4 frustumCoordinates = mul(ShadowWorldToProj[0], float4(worldPosition, 1));
-            return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), 0, ShadowProjection_GetMiniProj(0));
+            return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), 0, ShadowProjection_GetMiniProj(0), ProjectionMaxBlurRadiusNorm);
         #else
             [unroll] for (uint c=0; c<GetShadowSubProjectionCount(); c++) {
                 float4 frustumCoordinates = mul(ShadowWorldToProj[c], float4(worldPosition, 1));
                 if (PtInFrustumXY(frustumCoordinates))
-                    return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj(c));
+                    return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj(c), ProjectionMaxBlurRadiusNorm);
             }
         #endif
 
@@ -158,7 +188,7 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
         #if SHADOW_ENABLE_NEAR_CASCADE
             float4 nearCascadeCoord = float4(CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, OrthoNearCameraToShadow).xyz, 1.f);
             if (PtInFrustum(nearCascadeCoord))
-                return CascadeAddress_Create(nearCascadeCoord, float3(0,0,0), projectionCount, OrthoShadowNearMinimalProjection);
+                return CascadeAddress_Create(nearCascadeCoord, float3(0,0,0), projectionCount, OrthoShadowNearMinimalProjection, ProjectionMaxBlurRadiusNorm);
         #endif
 
             // in ortho mode, this is much simplier... Here is a
@@ -166,7 +196,7 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float3 baseCoord = CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, OrthoCameraToShadow).xyz;
             float4 t = float4(AdjustForOrthoCascade(baseCoord, 0), 1.f);
-            return CascadeAddress_Create(t, float3(0,0,0), 0, ShadowProjection_GetMiniProj_NotNear(0));
+            return CascadeAddress_Create(t, float3(0,0,0), 0, ShadowProjection_GetMiniProj_NotNear(0), ProjectionMaxBlurRadiusNorm);
         #else
             float3 baseCoord = CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, OrthoCameraToShadow).xyz;
             [branch] if (PtInFrustumZ(float4(baseCoord, 1.f))) {
@@ -174,7 +204,7 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
                 [unroll] for (int c=GetShadowSubProjectionCount()-1; c>=0; c--) {
                     float4 t = float4(AdjustForOrthoCascade(baseCoord, c), 1.f);
                     if (PtInFrustumXY(t))
-                        result = CascadeAddress_Create(t, float3(0,0,0), c, ShadowProjection_GetMiniProj_NotNear(c));
+                        result = CascadeAddress_Create(t, float3(0,0,0), c, ShadowProjection_GetMiniProj_NotNear(c), ProjectionMaxBlurRadiusNorm);
                 }
                 return result;
             }
@@ -184,12 +214,12 @@ CascadeAddress ResolveCascade_CameraToShadowMethod(float2 texCoord, float worldS
 
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float4 frustumCoordinates = CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, CameraToShadow[0]);
-            return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), 0, ShadowProjection_GetMiniProj(0));
+            return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), 0, ShadowProjection_GetMiniProj(0), ProjectionMaxBlurRadiusNorm);
         #else
             for (uint c=0; c<projectionCount; c++) {
                 float4 frustumCoordinates = CameraCoordinateToShadow(camCoordinate, worldSpaceDepth, CameraToShadow[c]);
                 if (PtInFrustum(frustumCoordinates))
-                    return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj(c));
+                    return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), c, ShadowProjection_GetMiniProj(c), ProjectionMaxBlurRadiusNorm);
             }
         #endif
 

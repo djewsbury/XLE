@@ -60,15 +60,31 @@ VSShadowOutput BuildVSShadowOutput(
 		float3 basePosition = mul(OrthoShadowWorldToView, float4(worldPosition, 1));
 
 		result.position = float4(basePosition, 1);
-		for (uint c=0; c<count; ++c) {
+		[unroll] for (uint c=0; c<count; ++c) {
 			float3 cascade = AdjustForOrthoCascade(basePosition, c);
 			bool	left	= cascade.x < -1.f,
 					right	= cascade.x >  1.f,
 					top		= cascade.y < -1.f,
 					bottom	= cascade.y >  1.f;
+			result.shadowFrustumFlags |= (left | (right<<1) | (top<<2) | (bottom<<3)) << (c*4);
 
-			result.shadowFrustumFlags |=
-				(left | (right<<1) | (top<<2) | (bottom<<3)) << (c*4);
+			if (c == (count-1)) {
+				// we use this to finish looping through frustums, by extinguishing all geometry 
+				// at the final frustum
+				result.shadowFrustumFlags |= 1<<(VSOUT_HAS_SHADOW_PROJECTION_COUNT*4+c);
+			} else {
+				// Shrink the edges of the frustum by (1*max blur radius for this cascade)+(1*max blur radius for next cascade)
+				// This will allow the next cascade to do a max blur right at the transition point, and the geometry will
+				// still be there for it. In practice we reduce the max blur during transition, but let's be conservative
+				// const uint maxBlurSearchInPix = 32;
+				// const uint halfTextureSize = 512;
+				// float borderRegionPix = maxBlurSearchInPix * (1 + OrthoShadowCascadeScale[c].x / OrthoShadowCascadeScale[c+1].x);		// assuming ratios in x & y are the same
+				// const float fullyInsidePoint = float(halfTextureSize-borderRegionPix) / float(halfTextureSize);
+				float borderRegionNorm = 2.f*ProjectionMaxBlurRadiusNorm * (1.f + OrthoShadowCascadeScale[c].x / OrthoShadowCascadeScale[c+1].x);		// assuming ratios in x & y are the same
+				const float fullyInsidePoint = 1.f - borderRegionNorm;
+				if (PtInFrustumXY(float4(cascade.xy, 0, fullyInsidePoint)))
+					result.shadowFrustumFlags |= 1<<(VSOUT_HAS_SHADOW_PROJECTION_COUNT*4+c);
+			}
 		}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

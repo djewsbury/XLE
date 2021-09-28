@@ -10,6 +10,7 @@
 #include "../../Math/ProjectionMath.hlsl"
 
 	// support up to 6 output frustums (for cube map point light source projections)
+	// Almost all triangles will only be written to one or two frustums, though
 [maxvertexcount(18)]
 	void main(	triangle VSShadowOutput input[3],
 				uint primitiveId : SV_PrimitiveID,
@@ -18,16 +19,18 @@
 		// todo -- perhaps do backface removal here to
 		//		quickly reject half of the triangles
 		//		-- but we have to enable/disable it for double sided geometry
-	//if (BackfaceSign(float4(input[0].position,1), float4(input[1].position,1), float4(input[2].position,1)) > 0)
-	//	return;
+	//if (BackfaceSign(float4(input[0].position.xyz,1), float4(input[1].position.xyz,1), float4(input[2].position.xyz,1)) < 0)
+		//return;
 
 	uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
 	uint mask = 0xf;
 	uint frustumFlagAnd = input[0].shadowFrustumFlags & input[1].shadowFrustumFlags & input[2].shadowFrustumFlags;
-	[unroll] for (uint c=0; c<count; ++c, mask <<= 4) {
+	[unroll] for (uint c=0; /*c<count*/; ++c, mask <<= 4) {		// we don't need the loop exit condition because the test at the end of the loop always succeeds for the final frustum
 		#if defined(FRUSTUM_FILTER)
-			if ((FRUSTUM_FILTER & (1u<<c)) == 0)
-				continue;
+			if ((FRUSTUM_FILTER & (1u<<c)) == 0) {
+				if (c+1 == count) break;
+				else continue;
+			}
 		#endif
 
 			//	do some basic culling
@@ -135,8 +138,10 @@
 		}
 
 			// if the triangle is entirely within this frustum, then skip other frustums
-			// note -- maybe this condition doesn't help enough to cover it's cost?
-		if (((input[0].shadowFrustumFlags | input[1].shadowFrustumFlags | input[2].shadowFrustumFlags) & mask) == 0)
+			// we actually reduce the size of the frustum by the max blur radius for this step
+			// This relates to the transition code in the resolve step, it means that triangles
+			// that intersect the transition area are still allowed to go to the next frustum up
+		if ((frustumFlagAnd & (1<<(VSOUT_HAS_SHADOW_PROJECTION_COUNT*4+c))) != 0)
 			break;
 	}
 

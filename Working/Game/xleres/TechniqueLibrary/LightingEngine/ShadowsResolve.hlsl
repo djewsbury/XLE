@@ -16,6 +16,10 @@
 
 #include "ShadowProjection.hlsl"
 
+#if !defined(CASCADE_RESOLVE_H)
+    #error Please include CascadeResolve.hlsl before this file
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +46,7 @@ cbuffer ShadowResolveParameters BIND_SHADOW_B1
     float ShadowWorldSpaceResolveBias;
     float TanBlurAngle;
     float MinBlurRadiusNorm;
-    float MaxBlurRadiusNorm;
+    float MaxBlurRadiusNorm;            // note that cascades can override this (particularly during the transition between cascades)
     float ShadowTextureSize;
     float CasterDistanceExtraBias;
 }
@@ -361,8 +365,7 @@ float CalculateFilterSize(
             // are more convenient for calculating the shadow filter radius
         float worldSpaceCasterDistance = NDCDepthDifferenceToWorldSpace_Ortho(casterDistance, AsMiniProjZW(miniProjection));
 
-        const float distanceToWideningScale = 10.0f / ShadowTextureSize * projectionScale;
-        filterSizeNorm = distanceToWideningScale * worldSpaceCasterDistance;
+        filterSizeNorm = TanBlurAngle * worldSpaceCasterDistance * projectionScale;
     } else {
             //	There are various ways to calculate the filtering distance here...
             //	For example, we can assume the light source is an area light source, and
@@ -371,12 +374,11 @@ float CalculateFilterSize(
         filterSizeNorm = TanBlurAngle * casterDistance * projectionScale;
     }
 
-    filterSizeNorm = min(max(filterSizeNorm, MinBlurRadiusNorm), MaxBlurRadiusNorm);
     return filterSizeNorm;
 }
 
 float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal,
-                        float4 miniProjection,
+                        float4 miniProjection, float maxBlurNorm,
                         float comparisonDistance,
                         int2 randomizerValue, uint msaaSampleIndex,
                         ShadowResolveConfig config)
@@ -418,6 +420,8 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
             searchSize, filterPlane, randomizerValue, msaaSampleIndex);
         if (filterSize < 0.0f)
             return TestShadow(shadowTexCoord, cascadeIndex, biasedDepth);
+
+        filterSize = min(max(filterSize, MinBlurRadiusNorm), maxBlurNorm);
     }
 
     return CalculateFilteredShadows(
@@ -430,23 +434,22 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ResolveShadows_Cascade(
-    int cascadeIndex, float4 cascadeNormCoords, float3 cascadeSpaceNormal,
-    float4 miniProjection,
+    CascadeAddress cascade,
     int2 randomizerValue, uint msaaSampleIndex,
     ShadowResolveConfig config)
 {
-    [branch] if (cascadeIndex < 0) return 1.0f;
+    [branch] if (cascade.cascadeIndex < 0) return 1.0f;
 
     float2 texCoords;
     float comparisonDistance;
-    texCoords = cascadeNormCoords.xy / cascadeNormCoords.w;
+    texCoords = cascade.frustumCoordinates.xy / cascade.frustumCoordinates.w;
     #if VULKAN      // hack for NDC handiness in Vulkan
         texCoords = 0.5.xx + 0.5f * texCoords.xy;
     #else
         texCoords = float2(0.5f + 0.5f * texCoords.x, 0.5f - 0.5f * texCoords.y);
     #endif
 
-    comparisonDistance = cascadeNormCoords.z / cascadeNormCoords.w;
+    comparisonDistance = cascade.frustumCoordinates.z / cascade.frustumCoordinates.w;
 
             // 	When hybrid shadows are enabled, the first cascade might be
             //	resolved using ray traced shadows. For convenience, we'll assume
@@ -454,11 +457,11 @@ float ResolveShadows_Cascade(
             //	of the depth map shadows...
             //	We could alternatively have a completely independent cascade; but
             //	that would make doing the hybrid blend more difficult
-    if (config._hasHybridRT && cascadeIndex==0) {
-        return SampleRTShadows(cascadeNormCoords.xyz/cascadeNormCoords.w, randomizerValue);
+    if (config._hasHybridRT && cascade.cascadeIndex==0) {
+        return SampleRTShadows(cascade.frustumCoordinates.xyz/cascade.frustumCoordinates.w, randomizerValue);
     }
 
-    return SampleDMShadows(cascadeIndex, texCoords, cascadeSpaceNormal, miniProjection, comparisonDistance, randomizerValue, msaaSampleIndex, config);
+    return SampleDMShadows(cascade.cascadeIndex, texCoords, cascade.frustumSpaceNormal, cascade.miniProjection, cascade.maxBlurNorm, comparisonDistance, randomizerValue, msaaSampleIndex, config);
 }
 
 float CubeMapComparisonDistance(float3 cubeMapSampleCoord, float4 miniProjection)
