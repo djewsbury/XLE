@@ -61,6 +61,7 @@
 
 #define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"
 #define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"
+#define BALANCED_NOISE_TEXTURE "xleres/DefaultResources/balanced_noise.dds:LT"
 
 #define SSR_CLASSIFY_TILES_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-classify-tiles.compute.hlsl"
 #define SSR_INTERSECT_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-intersect.compute.hlsl"
