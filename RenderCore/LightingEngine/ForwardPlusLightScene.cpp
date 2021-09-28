@@ -128,12 +128,14 @@ namespace RenderCore { namespace LightingEngine
 					Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
 				_dominantLightSet._operatorId = c;
 			}
-		for (unsigned c=0; c<_shadowPreparationOperators->_operators.size(); ++c)
-			if (_shadowPreparationOperators->_operators[c]._desc._dominantLight) {
+		for (unsigned c=0; c<_shadowOperatorIdMapping._operatorToDynamicShadowOperator.size(); ++c) {
+			if (_shadowOperatorIdMapping._operatorToDynamicShadowOperator[c] == ~0u) continue;
+			if (_shadowPreparationOperators->_operators[_shadowOperatorIdMapping._operatorToDynamicShadowOperator[c]]._desc._dominantLight) {
 				if (_dominantLightSet._shadowOperatorId != ~0u)
 					Throw(std::runtime_error("Multiple dominant shadow operators detected. This isn't supported -- there must be either 0 or 1"));
 				_dominantLightSet._shadowOperatorId = c;
 			}
+		}
 	}
 
 	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(ILightScene::LightOperatorId opId)
@@ -412,7 +414,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_dominantLightSet._shadowOperatorId == ~0u)
 			return {};
-		return _shadowPreparationOperators->_operators[_dominantLightSet._shadowOperatorId]._desc;
+		return _shadowPreparationOperators->_operators[_shadowOperatorIdMapping._operatorToDynamicShadowOperator[_dominantLightSet._shadowOperatorId]]._desc;
 	}
 
 	ForwardPlusLightScene::ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)
@@ -462,7 +464,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparationOperators(
-				MakeIteratorRange(dynShadowGens, &dynShadowGens[shadowGenerators.size()]),
+				MakeIteratorRange(dynShadowGens, &dynShadowGens[dynShadowCount]),
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
 
