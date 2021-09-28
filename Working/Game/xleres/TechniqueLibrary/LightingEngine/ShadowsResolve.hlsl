@@ -39,12 +39,12 @@ static const bool ShadowsPerspectiveProjection = false;
 
 cbuffer ShadowResolveParameters BIND_SHADOW_B1
 {
-    float ShadowBiasWorldSpace;
+    float ShadowWorldSpaceResolveBias;
     float TanBlurAngle;
     float MinBlurRadiusNorm;
     float MaxBlurRadiusNorm;
     float ShadowTextureSize;
-    float CasterLookupExtraBias;
+    float CasterDistanceExtraBias;
 }
 
 struct ShadowResolveConfig
@@ -140,7 +140,7 @@ float GetNoisyValue(int2 randomizerValue, uint idx)
 
 float CalculateShadowCasterDistance(
     float2 texCoords, float comparisonDistance,
-    uint arrayIndex, float2 filterPlane, uint msaaSampleIndex, float noisyValue)
+    uint arrayIndex, float searchSize, float2 filterPlane, uint msaaSampleIndex, float noisyValue)
 {
     float accumulatedDistance = 0.f;
     float accumulatedSampleCount = 0.f;
@@ -148,8 +148,6 @@ float CalculateShadowCasterDistance(
     float angle = 2.0f * pi * noisyValue;
     float2 filterRotation;
     sincos(angle, filterRotation.x, filterRotation.y);
-
-    const float searchSize = MaxBlurRadiusNorm;
     filterRotation *= searchSize;
 
     float minDifference = 100000.0f;
@@ -157,7 +155,7 @@ float CalculateShadowCasterDistance(
     // We need some tolerance here, because of precision issues
     // If the depth we sample from the depth texture is from the surface we're now drawing
     // shadows for, we have to be sure to not count it 
-    comparisonDistance -= CasterLookupExtraBias;
+    comparisonDistance -= CasterDistanceExtraBias;
 
     #if MSAA_SAMPLES <= 1
             //	Undersampling here can cause some horrible artefacts.
@@ -218,7 +216,7 @@ float CalculateShadowCasterDistance(
         minDifference = difference.w > 0.0f ? min(minDifference, difference.w) : minDifference;
     }
 
-    return minDifference + CasterLookupExtraBias;
+    return minDifference + CasterDistanceExtraBias;
 
         //
         //		finalDistance is the assumed distance to the shadow caster
@@ -340,11 +338,11 @@ float CalculateFilteredShadows(
 
 float CalculateFilterSize(
     uint cascadeIndex, float2 shadowTexCoord,
-    float4 miniProjection, float comparisonDistance, float2 filterPlane,
+    float4 miniProjection, float comparisonDistance, float searchSize, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
 {
     float casterDistance = CalculateShadowCasterDistance(
-        shadowTexCoord, comparisonDistance, cascadeIndex, filterPlane,
+        shadowTexCoord, comparisonDistance, cascadeIndex, searchSize, filterPlane,
         msaaSampleIndex, GetNoisyValue(randomizerValue, 1));
 
     float projectionScale = miniProjection.x;	// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
@@ -392,15 +390,15 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
     MiniProjZW miniP = AsMiniProjZW(miniProjection);
     if (ShadowsPerspectiveProjection) {
         float worldSpaceDepth = NDCDepthToWorldSpace_Perspective(comparisonDistance, miniP);
-        biasedDepth = WorldSpaceDepthToNDC_Perspective(worldSpaceDepth - ShadowBiasWorldSpace, miniP);
+        biasedDepth = WorldSpaceDepthToNDC_Perspective(worldSpaceDepth - ShadowWorldSpaceResolveBias, miniP);
     } else {
         #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowBiasWorldSpace * cascadeSpaceNormal.z, miniP);
+            biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowWorldSpaceResolveBias * cascadeSpaceNormal.z, miniP);
         #endif
     }
-
+    
     // float2 filterPlane = CalculateFilterPlane_ScreenSpaceDerivatives(comparisonDistance, shadowTexCoord);
-    cascadeSpaceNormal = normalize(cascadeSpaceNormal);
+    // cascadeSpaceNormal = normalize(cascadeSpaceNormal);
     float2 filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
     #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
         filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
@@ -411,11 +409,15 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
 
     float filterSize = MinBlurRadiusNorm;
     if (config._doContactHardening) {
+        // We need a world space maximum search distance here; even though we later clamp the
+        // maximum distance in pixel space. This is to get consistency between the cascades -- because
+        // if we search further in larger cascades, it emphasizes the differences between them
+        float searchSize = OrthoShadowCascadeScale[cascadeIndex].x * 8;
         filterSize = CalculateFilterSize(
-            cascadeIndex, shadowTexCoord,
-            miniProjection, comparisonDistance, filterPlane, randomizerValue, msaaSampleIndex);
+            cascadeIndex, shadowTexCoord, miniProjection, biasedDepth, 
+            searchSize, filterPlane, randomizerValue, msaaSampleIndex);
         if (filterSize < 0.0f)
-            return TestShadow(shadowTexCoord, cascadeIndex, comparisonDistance);
+            return TestShadow(shadowTexCoord, cascadeIndex, biasedDepth);
     }
 
     return CalculateFilteredShadows(

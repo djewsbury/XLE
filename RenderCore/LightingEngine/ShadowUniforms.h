@@ -21,11 +21,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class CB_ShadowResolveParameters
 	{
 	public:
-		float       _worldSpaceBias;
+		float       _worldSpaceResolveBias;
 		float       _tanBlurAngle;
 		float       _minBlurSearchNorm, _maxBlurSearchNorm;
 		float       _shadowTextureSize;
-		float 		_casterLookupExtraBias;
+		float 		_casterDistanceExtraBias;
 		unsigned    _dummy[2];
 		CB_ShadowResolveParameters();
 	};
@@ -168,12 +168,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		using Projections = MultiProjection<MaxShadowTexturesPerLight>;
 		Projections     _projections;
-		Float4x4        _worldToClip = Identity<Float4x4>();   ///< Intended for use in CPU-side culling. Objects culled by this transform will be culled from all projections
 
 		float           _worldSpaceResolveBias = 0.f;
 		float           _tanBlurAngle = 0.00436f;
 		float           _minBlurSearchPixels = 0.5f, _maxBlurSearchPixels = 25.f;
-		float			_casterLookupExtraBias = 0.f;
+		float			_casterDistanceExtraBias = 0.f;
 
 		std::shared_ptr<ICompiledShadowPreparer> _preparer;
 		std::shared_ptr<Internal::ILightBase> _driver;
@@ -184,11 +183,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_tanBlurAngle = newDesc._tanBlurAngle;
 			_minBlurSearchPixels = newDesc._minBlurSearch;
 			_maxBlurSearchPixels = newDesc._maxBlurSearch;
-			_casterLookupExtraBias = newDesc._casterLookupExtraBias;
+			_casterDistanceExtraBias = newDesc._casterDistanceExtraBias;
 		}
 		virtual Desc GetDesc() const override
 		{
-			return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearchPixels, _maxBlurSearchPixels, _casterLookupExtraBias };
+			return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearchPixels, _maxBlurSearchPixels, _casterDistanceExtraBias };
 		}
 
 		virtual void SetArbitrarySubProjections(

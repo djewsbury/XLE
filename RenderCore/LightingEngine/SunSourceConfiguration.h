@@ -43,7 +43,8 @@ namespace RenderCore { namespace LightingEngine
         float           _dsDepthBiasClamp;
         unsigned        _dsRasterDepthBias;*/
 
-        // float           _worldSpaceResolveBias;
+        float           _worldSpaceResolveBias;
+        float           _casterDistanceExtraBias;
         float           _tanBlurAngle;
         float           _minBlurSearch, _maxBlurSearch;
         ShadowFilterModel   _filterModel;

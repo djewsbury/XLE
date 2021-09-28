@@ -49,8 +49,8 @@ DescriptorSet SharedDescriptors
 	Sampler ShadowDepthSampler				// 3
 	{
 		Filter = Bilinear,
-		AddressU = Border,
-		AddressV = Border
+		AddressU = Clamp,
+		AddressV = Clamp
 	};
 };
 

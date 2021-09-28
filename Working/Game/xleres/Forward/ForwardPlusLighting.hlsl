@@ -105,10 +105,7 @@ float3 CalculateIllumination(
 					enableNearCascade = true;
 				#endif
 
-				// Lift the shadow sampling position just a tiny bit upwards along the geometry normal; just a simple way to 
-				// resolve a lot of sampling related problems
-				float3 worldPositionForShadows = worldPosition + 0.025f*worldGeometryNormal;
-				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPositionForShadows, sample.worldSpaceNormal);
+				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, worldGeometryNormal);
 				if (cascade.cascadeIndex >= 0) {
 					shadowing = ResolveShadows_Cascade(
 						cascade.cascadeIndex, cascade.frustumCoordinates, cascade.frustumSpaceNormal, cascade.miniProjection,

@@ -98,7 +98,7 @@ namespace RenderCore { namespace LightingEngine
 			float       _worldSpaceResolveBias = 0.f;
 			float       _tanBlurAngle = 0.f;
 			float       _minBlurSearch = 0.f, _maxBlurSearch = 0.f;
-			float		_casterLookupExtraBias = 0.f;
+			float		_casterDistanceExtraBias = 0.f;
 		};
 		virtual void SetDesc(const Desc&) = 0;
 		virtual Desc GetDesc() const = 0;

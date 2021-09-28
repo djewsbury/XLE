@@ -151,12 +151,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	CB_ShadowResolveParameters::CB_ShadowResolveParameters()
 	{
-		_worldSpaceBias = -0.03f;
+		_worldSpaceResolveBias = 0.f;
 		_tanBlurAngle = 0.00436f;		// tan(.25 degrees)
 		_shadowTextureSize = 1024.f;
 		_minBlurSearchNorm = 0.5f / _shadowTextureSize;
 		_maxBlurSearchNorm = 25.f / _shadowTextureSize;
-		_casterLookupExtraBias = 0.f;
+		_casterDistanceExtraBias = 0.f;
 		XlZeroMemory(_dummy);
 	}
 

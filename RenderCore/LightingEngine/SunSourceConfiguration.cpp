@@ -1026,10 +1026,11 @@ namespace RenderCore { namespace LightingEngine
         auto* preparer = lightScene.TryGetShadowProjectionInterface<IDepthTextureResolve>(shadowProjectionId);
         if (preparer) {
             IDepthTextureResolve::Desc desc;
-            // desc._worldSpaceResolveBias = settings._worldSpaceResolveBias;
+            desc._worldSpaceResolveBias = settings._worldSpaceResolveBias;
             desc._tanBlurAngle = settings._tanBlurAngle;
             desc._minBlurSearch = settings._minBlurSearch;
             desc._maxBlurSearch = settings._maxBlurSearch;
+            desc._casterDistanceExtraBias = settings._casterDistanceExtraBias;
             preparer->SetDesc(desc);
         }
     }
@@ -1111,10 +1112,11 @@ namespace RenderCore { namespace LightingEngine
         // _dsDepthBiasClamp = _depthBiasClamp;
         // _dsRasterDepthBias = _rasterDepthBias;
 
-        // _worldSpaceResolveBias = 0.f;   // (-.3f)
+        _worldSpaceResolveBias = 0.025f; // this is world space, so always positive, ReverseZ doesn't matter
         _tanBlurAngle = 0.00436f;
         _minBlurSearch = 0.5f;
         _maxBlurSearch = 25.f;
+        _casterDistanceExtraBias = -0.001f;     // note that this should be negative for ReverseZ modes, but positive for non-ReverseZ modes
         _filterModel = ShadowFilterModel::PoissonDisc;
         _enableContactHardening = false;
         _cullMode = CullMode::Back;
@@ -1147,7 +1149,7 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
         // props.Add("DoubleSidedSlopeScaledBias", &Obj::_dsSlopeScaledBias);
         // props.Add("DoubleSidedDepthBiasClamp", &Obj::_dsDepthBiasClamp);
         // props.Add("DoubleSidedRasterDepthBias", &Obj::_dsRasterDepthBias);
-        // props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
+        props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
         props.Add("BlurAngleDegrees",   
             [](const Obj& obj) { return Rad2Deg(XlATan(obj._tanBlurAngle)); },
             [](Obj& obj, float value) { obj._tanBlurAngle = XlTan(Deg2Rad(value)); } );
@@ -1159,6 +1161,7 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
                 if (value) obj._flags |= Obj::Flags::HighPrecisionDepths; 
                 else obj._flags &= ~Obj::Flags::HighPrecisionDepths; 
             });
+        props.Add("CasterDistanceExtraBias", &Obj::_casterDistanceExtraBias);
 
         props.Add("EnableContactHardening", &Obj::_enableContactHardening);
         AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);

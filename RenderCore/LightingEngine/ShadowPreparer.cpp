@@ -125,12 +125,12 @@ namespace RenderCore { namespace LightingEngine
 
 		Internal::PreparedDMShadowFrustum preparedResult;
 		preparedResult.InitialiseConstants(projection._projections, operatorMaxFrustumCount);
-		preparedResult._resolveParameters._worldSpaceBias = projection._worldSpaceResolveBias;
+		preparedResult._resolveParameters._worldSpaceResolveBias = projection._worldSpaceResolveBias;
 		preparedResult._resolveParameters._tanBlurAngle = projection._tanBlurAngle;
 		preparedResult._resolveParameters._minBlurSearchNorm = projection._minBlurSearchPixels / shadowTextureSize;
 		preparedResult._resolveParameters._maxBlurSearchNorm = projection._maxBlurSearchPixels / shadowTextureSize;
 		preparedResult._resolveParameters._shadowTextureSize = shadowTextureSize;
-		preparedResult._resolveParameters._casterLookupExtraBias = projection._casterLookupExtraBias;
+		preparedResult._resolveParameters._casterDistanceExtraBias = projection._casterDistanceExtraBias;
 		XlZeroMemory(preparedResult._resolveParameters._dummy);
 
 		return preparedResult;
@@ -149,7 +149,8 @@ namespace RenderCore { namespace LightingEngine
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
-		parsingContext.GetProjectionDesc()._worldToProjection = projection._worldToClip;
+		// todo -- we need a mechanism for complex shadow projection tests (does it cast a shadow into a frustum, does it cast a shadow into a sphere, etc)
+		parsingContext.GetProjectionDesc()._worldToProjection = OrthogonalProjection(-10000.f, 10000.f, 10000.f, -10000.f, -10000.f, -10000.f, Techniques::GetDefaultClipSpaceType());
 		return Techniques::RenderPassInstance{
 			threadContext,
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
