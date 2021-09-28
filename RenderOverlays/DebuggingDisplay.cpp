@@ -45,19 +45,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ScrollBar::Coordinates::Coordinates(const Rect& rect, float minValue, float maxValue, float visibleWindowSize, Flags::BitField flags)
     {
         const Coord buttonHeight = (flags&Flags::NoUpDown)?0:std::min(Coord(rect.Width()*.75f), rect.Height()/3);
-        _interactableRect    = rect;
-        if (!(flags&Flags::Horizontal)) {
-            _upArrowRect         = Rect(rect._topLeft, Coord2(rect._bottomRight[0], rect._topLeft[1]+buttonHeight));
-            _downArrowRect       = Rect(Coord2(rect._topLeft[0], rect._bottomRight[1]-buttonHeight), Coord2(rect._bottomRight[0], rect._bottomRight[1]));
-            _scrollAreaRect      = Rect(Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.2f), rect._topLeft[1]+buttonHeight), 
-                                        Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.8f), rect._bottomRight[1]-buttonHeight));
-        } else {
-            _upArrowRect         = Rect(rect._topLeft, Coord2(rect._topLeft[0]+buttonHeight, rect._bottomRight[1]));
-            _downArrowRect       = Rect(Coord2(rect._bottomRight[0]-buttonHeight, rect._topLeft[1]), rect._bottomRight);
-            _scrollAreaRect      = Rect(Coord2(rect._topLeft[0]+buttonHeight, rect._topLeft[1]), 
-                                        Coord2(rect._bottomRight[0]-buttonHeight, rect._bottomRight[1]));
-        }
-
+        _interactableRect = rect;
+        _scrollAreaRect = rect;
         _flags = flags;
 
         if (maxValue > minValue) {

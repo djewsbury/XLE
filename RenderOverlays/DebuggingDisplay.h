@@ -197,8 +197,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
             bool    Collapse() const;
             Rect    InteractableRect() const        { return _interactableRect; }
             Rect    ScrollArea() const              { return _scrollAreaRect; }
-            Rect    UpArrow() const                 { return _upArrowRect; }
-            Rect    DownArrow() const               { return _downArrowRect; }
 
             Rect    Thumb(float value) const;
 
@@ -217,8 +215,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
             Rect    _interactableRect;
             Rect    _scrollAreaRect;
-            Rect    _upArrowRect;
-            Rect    _downArrowRect;
             Flags::BitField _flags;
 
             Coord   ValueToPixels(float value) const;

@@ -46,20 +46,25 @@ namespace PlatformRig { namespace Overlays
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
 		{
-			Layout buttonsLayout(layout.AllocateFullWidth(3*lineHeight));
+			Layout buttonsLayout(layout.AllocateFullWidth(2*lineHeight));
+			buttonsLayout._paddingInternalBorder = 2;
             for (unsigned t=0; t<dimof(s_tabNames); ++t)
                 DrawButton(context, s_tabNames[t], buttonsLayout.AllocateFullHeightFraction(1.f/float(dimof(s_tabNames))), interactables, interfaceState);
 		}
 
     	auto records = _pipelineAccelerators->LogRecords();
 		if (_tab == 0 || _tab == 1) {
-			Layout tableArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 24);
-			auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
+			auto oldBetweenAllocations = layout._paddingBetweenAllocations;
+			layout._paddingBetweenAllocations = 0;
+			Layout tableArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 12);
+			tableArea._paddingInternalBorder = 2;
+			auto scrollBarLocation = layout.AllocateFullHeight(layout.GetWidthRemaining());
+			layout._paddingBetweenAllocations = oldBetweenAllocations;
 			unsigned entryCount = 0, sourceEntryCount = 0;
 
 			// fill in the background now, so it doesn't have to be interleaved with rendering the entry text elements
 			context.DrawQuad(
-				RenderOverlays::ProjectionMode::P2D, AsPixelCoords(tableArea.GetMaximumSize()._topLeft), AsPixelCoords(tableArea.GetMaximumSize()._bottomRight),
+				RenderOverlays::ProjectionMode::P2D, AsPixelCoords(tableArea.GetMaximumSize()._topLeft), AsPixelCoords(scrollBarLocation._bottomRight),
 				RenderOverlays::ColorB { 0, 0, 0, 145 });
                     
 			const auto headerColor = RenderOverlays::ColorB::Blue;
@@ -126,7 +131,7 @@ namespace PlatformRig { namespace Overlays
 			context.DrawLines(RenderOverlays::ProjectionMode::P2D, lines.data(), lines.size(), RenderOverlays::ColorB::White);
 			auto& scrollOffset = (_tab == 0) ? _paScrollOffset : _cfgScrollOffset;
 
-			ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
+			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
 			interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
