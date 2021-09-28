@@ -53,12 +53,20 @@ namespace SceneEngine
 			if (XlEqString(keyname, "Name")) {
 				objectName = RequireStringValue(fmttr);
 			} else {
-				ImpliedTyping::TypeDesc typeDesc;
-				IteratorRange<const void*> data;
-				if (fmttr.TryRawValue(data, typeDesc)) {
-					properties.push_back({keyname, data, typeDesc});
-				} else
-					SkipValueOrElement(fmttr);
+				if constexpr (Utility::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+					ImpliedTyping::TypeDesc typeDesc;
+					IteratorRange<const void*> data;
+					if (fmttr.TryRawValue(data, typeDesc)) {
+						properties.push_back({keyname, data, typeDesc});
+					} else
+						SkipValueOrElement(fmttr);
+				} else {
+					StringSection<> strValue;
+					if (fmttr.TryStringValue(strValue)) {
+						properties.push_back({keyname, strValue, ImpliedTyping::TypeDesc{ImpliedTyping::TypeOf<const char*>()._type, (uint16_t)strValue.size(), ImpliedTyping::TypeHint::String}});
+					} else
+						SkipValueOrElement(fmttr);
+				}
 			}
 		}
 		return DeserializeObject(objectName, MakeIteratorRange(properties));

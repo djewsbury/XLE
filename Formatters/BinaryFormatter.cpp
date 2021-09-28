@@ -582,10 +582,18 @@ namespace Formatters
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
-			int64_t asInt = 0;
-			bool castSuccess = ImpliedTyping::Cast(MakeOpaqueIteratorRange(asInt), ImpliedTyping::TypeOf<int64_t>(), resultData, resultTypeDesc);
-			if (castSuccess) {
-				workingBlock._localEvalContext.SetParameter(memberName, asInt);
+			// If the value can be interpretted as an integer, add it to our local eval context
+			// (we could also use ParseFullMatch here if we wanted to be able to work with more different types -- such as floats, etc)
+			std::optional<int64_t> asInt;
+			if (resultTypeDesc._typeHint == ImpliedTyping::TypeHint::String && (resultTypeDesc._type == ImpliedTyping::TypeCat::UInt8 || resultTypeDesc._type == ImpliedTyping::TypeCat::Int8)) {
+				asInt = ImpliedTyping::ConvertFullMatch<int64_t>(MakeStringSection((const char*)resultData.begin(), (const char*)resultData.end()));
+			} else {
+				int64_t buffer;
+				if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(buffer), ImpliedTyping::TypeOf<int64_t>(), resultData, resultTypeDesc))
+					asInt = buffer;
+			}
+			if (asInt) {
+				workingBlock._localEvalContext.SetParameter(memberName, asInt.value());
 			} else {
 				workingBlock._nonIntegerLocalVariables.push_back(Hash64(memberName));
 			}
