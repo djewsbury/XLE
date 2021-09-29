@@ -219,7 +219,7 @@ namespace Assets
 			}
 		}
 
-		void PropagateAssetChange(DependencyValidationMarker marker)
+		void IncreaseValidationIndex(DependencyValidationMarker marker) override
 		{
 			ScopedLock(_lock);
 			std::vector<DependencyValidationMarker> newMarkers;
@@ -326,6 +326,12 @@ namespace Assets
 	void            DependencyValidation::RegisterDependency(DependentFileState& state)
 	{
 		RegisterDependency(state._filename);
+	}
+
+	void            DependencyValidation::IncreaseValidationIndex()
+	{
+		assert(_marker != DependencyValidationMarker_Invalid);
+		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->IncreaseValidationIndex(_marker);
 	}
 
 	DependencyValidation::DependencyValidation() : _marker(DependencyValidationMarker_Invalid) {}

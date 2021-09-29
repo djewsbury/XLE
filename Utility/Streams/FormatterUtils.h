@@ -163,5 +163,47 @@ namespace Utility
 			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
 		return value;
 	}
-	
+
+	template<typename Formatter>
+		typename Formatter::InteriorSection RequireCharacterData(Formatter& formatter)
+	{
+		typename Formatter::InteriorSection value;
+		if (!formatter.TryCharacterData(value))
+			Throw(Utility::FormatException("Expecting character data", formatter.GetLocation()));
+		return value;
+	}
+
+	template<typename Formatter>
+		void LogFormatter(std::ostream& str, Formatter& formatter)
+	{
+		unsigned indent = 0;
+		for (;;) {
+			switch (formatter.PeekNext()) {
+			case FormatterBlob::KeyedItem:
+				str << StreamIndent(indent) << "[" << RequireKeyedItem(formatter) << "]: ";
+				break;
+			case FormatterBlob::Value:
+				str << RequireStringValue(formatter) << std::endl;
+				break;
+			case FormatterBlob::BeginElement:
+				RequireBeginElement(formatter);
+				str << "~" << std::endl;
+				indent += 4;
+				break;
+			case FormatterBlob::EndElement:
+				RequireEndElement(formatter);
+				indent -= 4;
+				break;
+			case FormatterBlob::CharacterData:
+				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
+					str << "<<" << RequireCharacterData(formatter) << ">>";
+				} else
+					assert(0);
+				break;
+			case FormatterBlob::None:
+				return;
+			}
+		}
+	}
+
 }

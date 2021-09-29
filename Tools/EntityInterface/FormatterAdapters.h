@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Utility/Streams/StreamTypes.h"
 
 namespace EntityInterface
 {
@@ -15,6 +16,9 @@ namespace EntityInterface
         std::shared_ptr<::Assets::ConfigFileContainer<>> cfgFile,
         StringSection<> internalSection);
 
+    std::shared_ptr<IDynamicFormatter> CreateDynamicFormatter(
+        MemoryOutputStream<>&& formatter,
+        ::Assets::DependencyValidation&& depVal);
+
     std::shared_ptr<IEntityDocument> CreateTextEntityDocument(StringSection<> filename);
 }
-

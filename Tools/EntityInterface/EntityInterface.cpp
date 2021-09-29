@@ -194,8 +194,21 @@ namespace EntityInterface
 			}
 		}
 
-        StreamLocation GetLocation() const override { assert(0); return {}; }
-        ::Assets::DependencyValidation GetDependencyValidation() const override { /*assert(0);*/ return {}; }
+        StreamLocation GetLocation() const override 
+		{
+			if (_activeMount == _mounts.end()) return {};
+			return _activeMount->_formatter->GetLocation();
+		}
+
+        ::Assets::DependencyValidation GetDependencyValidation() const override 
+		{
+			if (!_depVal) {
+				_depVal = ::Assets::GetDepValSys().Make();
+				for (unsigned c=0; c<_mounts.size(); ++c)
+					_depVal.RegisterDependency(_mounts[c]._formatter->GetDependencyValidation());
+			}
+			return _depVal;
+		}
 
 		FormatOverlappingDocuments(
 			IteratorRange<std::shared_ptr<IDynamicFormatter>*> mounts,
@@ -226,6 +239,7 @@ namespace EntityInterface
 		enum class State { BeginVirtualElements, Formatter, EndVirtualElements };
 		State _state;
 		bool _pendingVirtualBeginElement = false;
+		mutable ::Assets::DependencyValidation _depVal;
 
 		void BeginActiveFormatter()
 		{

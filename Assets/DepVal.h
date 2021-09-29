@@ -28,6 +28,8 @@ namespace Assets
         void            RegisterDependency(StringSection<>);
         void            RegisterDependency(DependentFileState& state);
 
+        void            IncreaseValidationIndex();      // (also increases validation index for any depvals dependent on this one)
+
         operator bool() const { return _marker != DependencyValidationMarker_Invalid; }
         friend bool operator==(const DependencyValidation& lhs, const DependencyValidation& rhs) { return lhs._marker == rhs._marker; }
         friend bool operator!=(const DependencyValidation& lhs, const DependencyValidation& rhs) { return lhs._marker != rhs._marker; }
@@ -107,6 +109,8 @@ namespace Assets
         virtual void RegisterAssetDependency(
             DependencyValidationMarker dependentResource, 
             DependencyValidationMarker dependency) = 0;
+
+        virtual void IncreaseValidationIndex(DependencyValidationMarker depVal) = 0;
 
         virtual void AddRef(DependencyValidationMarker) = 0;
         virtual void Release(DependencyValidationMarker) = 0;
