@@ -1442,7 +1442,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return rect;
     }
 
-    Coord Layout::GetWidthRemaining() const
+    Coord Layout::GetWidthRemaining()
     {
         auto maxSizeWidth = _maximumSize._bottomRight[0] - _maximumSize._topLeft[0];
 
@@ -1451,7 +1451,19 @@ namespace RenderOverlays { namespace DebuggingDisplay
             return maxSizeWidth - 2 * _paddingInternalBorder;
         }
 
-        return maxSizeWidth - _caretX - _paddingInternalBorder - _paddingBetweenAllocations;
+        auto attempt = maxSizeWidth - _caretX - _paddingInternalBorder - _paddingBetweenAllocations;
+        if (attempt > 0)
+            return attempt;
+
+        // no space left on the current row. We must implicitly move onto the next row
+        if (!_currentRowMaxHeight)
+            return attempt;
+
+        _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
+        _maxRowWidth = std::max( _maxRowWidth, _currentRowMaxHeight );
+        _currentRowMaxHeight = 0;
+        _caretX = 0;
+        return maxSizeWidth - 2 * _paddingInternalBorder;
     }
 
     Rect Layout::AllocateFullWidth(Coord height)

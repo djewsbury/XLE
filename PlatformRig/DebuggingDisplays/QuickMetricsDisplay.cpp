@@ -16,8 +16,11 @@ namespace PlatformRig { namespace Overlays
 		const unsigned lineHeight = 20;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-		Layout textArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 24);
+		auto oldBetweenAllocations = layout._paddingBetweenAllocations;
+		layout._paddingBetweenAllocations = 0;
+		Layout textArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 12);
 		auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
+		layout._paddingBetweenAllocations = oldBetweenAllocations;
 
 		ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
 		_scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, _scrollOffset);
