@@ -60,6 +60,13 @@ EmptySolidBorder=~
 			Implements=Interfaces.hlsl::IOutline_Calculate
 
 FillRoundedRect=~
+	Inherit=~; <.>:SolidNoBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RoundedRectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+FillAndOutlineRoundedRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~

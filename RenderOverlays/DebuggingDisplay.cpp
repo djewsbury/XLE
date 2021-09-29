@@ -10,6 +10,7 @@
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Assets/RawMaterial.h"
+#include "../RenderCore/UniformsStream.h"
 #include "../ConsoleRig/Console.h"
 #include "../Math/Transformations.h"
 #include "../Math/ProjectionMath.h"
@@ -184,6 +185,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRaisedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillAndOutlineRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillReverseRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
@@ -197,6 +199,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tagShaderMaterial,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> gridBackgroundMaterial,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRoundedRect,
+            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillAndOutlineRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineRoundedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRect,
             std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRoundedRect,
@@ -208,6 +211,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _tagShaderMaterial = BuildImmediateDrawableMaterial(*tagShaderMaterial);
             _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
             _fillRoundedRect = BuildImmediateDrawableMaterial(*fillRoundedRect);
+            _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(*fillAndOutlineRoundedRect);
             _outlineRoundedRect = BuildImmediateDrawableMaterial(*outlineRoundedRect);
             _fillRaisedRect = BuildImmediateDrawableMaterial(*fillRaisedRect);
             _fillRaisedRoundedRect = BuildImmediateDrawableMaterial(*fillRaisedRoundedRect);
@@ -215,11 +219,20 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillEllipse = BuildImmediateDrawableMaterial(*fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(*outlineEllipse);
 
+            auto roundedRectUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
+            roundedRectUSI->BindImmediateData(0, Hash64("RoundedRectSettings"));
+            _fillRoundedRect._uniformStreamInterface = roundedRectUSI;
+            _fillAndOutlineRoundedRect._uniformStreamInterface = roundedRectUSI;
+            _outlineRoundedRect._uniformStreamInterface = roundedRectUSI;
+            _fillRaisedRoundedRect._uniformStreamInterface = roundedRectUSI;
+            _fillReverseRaisedRoundedRect._uniformStreamInterface = roundedRectUSI;
+
             _depVal = ::Assets::GetDepValSys().Make();
             _depVal.RegisterDependency(horizTweakerBarMaterial->GetDependencyValidation());
             _depVal.RegisterDependency(tagShaderMaterial->GetDependencyValidation());
             _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
             _depVal.RegisterDependency(fillRoundedRect->GetDependencyValidation());
+            _depVal.RegisterDependency(fillAndOutlineRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(outlineRoundedRect->GetDependencyValidation());
             _depVal.RegisterDependency(fillRaisedRect->GetDependencyValidation());
             _depVal.RegisterDependency(fillRaisedRoundedRect->GetDependencyValidation());
@@ -234,6 +247,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
             auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
             auto fillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
+            auto fillAndOutlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
             auto outlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
             auto fillRaisedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
             auto fillRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
@@ -241,8 +255,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
         }
+    };
+
+    struct CB_RoundedRectSettings
+    {
+        float _roundedProportion;
+        unsigned _cornerFlags;
+        unsigned _dummy[2];
     };
 
     void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour)
@@ -252,6 +273,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!res) return;
 
         const float roundedProportion = 2.f/5.f;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRaisedRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, 0xf }));
+
         context.DrawQuad(
             ProjectionMode::P2D,
             AsPixelCoords(thumbRect._topLeft),
@@ -259,7 +283,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             fillColour, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(0.f, roundedProportion), Float2(0.f, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRoundedRect});
+            std::move(mat));
     }
 
     void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -303,13 +327,17 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect & rect, 
         ColorB colour, 
-        float width, float roundedProportion)
+        float width, float roundedProportion,
+        Corner::Flags cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_outlineRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -318,20 +346,49 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(width, roundedProportion), Float2(width, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineRoundedRect});
+            std::move(mat));
     }
 
-    void FillAndOutlineRoundedRectangle(
-        IOverlayContext& context, 
-        const Rect & rect,
-        ColorB fillColor, ColorB outlineColour,
-        float borderWidth, float roundedProportion)
+    void FillRoundedRectangle(
+        IOverlayContext& context, const Rect& rect, 
+        ColorB fillColor,
+        float roundedProportion,
+        Corner::Flags cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+
+        context.DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            fillColor, ColorB::Zero,
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            std::move(mat));
+    }
+
+    void FillAndOutlineRoundedRectangle(
+        IOverlayContext& context, 
+        const Rect & rect,
+        ColorB fillColor, ColorB outlineColour,
+        float borderWidth, float roundedProportion,
+        Corner::Flags cornerFlags)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillAndOutlineRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -340,19 +397,23 @@ namespace RenderOverlays { namespace DebuggingDisplay
             fillColor, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(borderWidth, roundedProportion), Float2(borderWidth, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRoundedRect});
+            std::move(mat));
     }
 
     void FillRaisedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion)
+        float roundedProportion,
+        Corner::Flags cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRaisedRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -361,19 +422,23 @@ namespace RenderOverlays { namespace DebuggingDisplay
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRoundedRect});
+            std::move(mat));
     }
 
     void FillDepressedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion)
+        float roundedProportion,
+        Corner::Flags cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
         auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
         if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillReverseRaisedRoundedRect;
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -382,7 +447,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillReverseRaisedRoundedRect});
+            std::move(mat));
     }
 
     void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)

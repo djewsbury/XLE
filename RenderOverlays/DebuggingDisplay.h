@@ -126,23 +126,41 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void        OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
     void        FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
 
+    namespace Corner
+    {
+        static const auto TopLeft = 1u;
+        static const auto TopRight = 2u;
+        static const auto BottomLeft = 4u;
+        static const auto BottomRight = 8u;
+        using Flags = unsigned;
+    }
+
+    void FillRoundedRectangle(
+        IOverlayContext& context, const Rect& rect, 
+        ColorB fillColor,
+        float roundedProportion = 1.f / 8.f,
+        Corner::Flags cornerFlags = 0xf);
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor, ColorB outlineColour,
-        float borderWidth = 1.f, float roundedProportion = 1.f / 8.f);
+        float borderWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        Corner::Flags cornerFlags = 0xf);
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
-        float width, float roundedProportion = 1.f / 8.f);
+        float width, float roundedProportion = 1.f / 8.f,
+        Corner::Flags cornerFlags = 0xf);
 
     void FillRaisedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion = 1.f / 8.f);
+        float roundedProportion = 1.f / 8.f,
+        Corner::Flags cornerFlags = 0xf);
     void FillDepressedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion = 1.f / 8.f);
+        float roundedProportion = 1.f / 8.f,
+        Corner::Flags cornerFlags = 0xf);
 
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour = ColorB(0xff000000));

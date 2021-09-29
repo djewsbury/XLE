@@ -8,6 +8,13 @@
 #define COMMON_SHAPES_H
 
 #include "Interfaces.hlsl"
+#include "../../Framework/Binding.hlsl"
+
+cbuffer RoundedRectSettings BIND_NUMERIC_B3
+{
+    float RoundedProportion;
+    uint CornerFlags;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ShapeResult RoundedRectShape_Calculate(
@@ -23,7 +30,7 @@ ShapeResult RoundedRectShape_Calculate(
     }
 
     float borderSizePix = shapeDesc._borderSizePix;
-    float roundedProportion = shapeDesc._param0;
+    float roundedProportion = RoundedProportion;
 
     float2 pixelSize = float2(GetUDDS(coords).x, GetVDDS(coords).y);
     float2 borderSize = borderSizePix * pixelSize;
@@ -37,7 +44,11 @@ ShapeResult RoundedRectShape_Calculate(
         min(maxCoords.x - texCoord.x, texCoord.x) - minCoords.x,
         min(maxCoords.y - texCoord.y, texCoord.y) - minCoords.y);
 
-    [branch] if (r.x < roundedWidth && r.y < roundedHeight) {
+    uint cidxX = texCoord.x >= (maxCoords.x - minCoords.x) * .5f;
+    uint cidxY = texCoord.y >= (maxCoords.y - minCoords.y) * .5f;
+    uint cidx = cidxX + cidxY*2;
+
+    [branch] if ((CornerFlags & 1<<cidx) &&  r.x < roundedWidth && r.y < roundedHeight) {
         float2 centre = float2(roundedWidth, roundedHeight);
 
         ////////////////
