@@ -124,7 +124,7 @@ namespace RenderCore { namespace LightingEngine
 			return Internal::PreparedDMShadowFrustum{};
 
 		Internal::PreparedDMShadowFrustum preparedResult;
-		preparedResult.InitialiseConstants(projection._projections, operatorMaxFrustumCount);
+		preparedResult.InitialiseConstants(projection._projections, operatorMaxFrustumCount, projection._maxBlurSearchPixels / shadowTextureSize);
 		preparedResult._resolveParameters._worldSpaceResolveBias = projection._worldSpaceResolveBias;
 		preparedResult._resolveParameters._tanBlurAngle = projection._tanBlurAngle;
 		preparedResult._resolveParameters._minBlurSearchNorm = projection._minBlurSearchPixels / shadowTextureSize;

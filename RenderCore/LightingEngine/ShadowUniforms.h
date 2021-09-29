@@ -52,9 +52,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ShadowProjectionMode	_mode;
 		SharedPkt				_cbSource;
 
+		// maxBlurRadiusNorm is used to leave room for the blur during cascade transitions
+		// it should be max blur in pix / texture size in pix
 		void InitialiseConstants(
 			const MultiProjection<MaxShadowTexturesPerLight>&,
-			unsigned operatorMaxFrustumCount);
+			unsigned operatorMaxFrustumCount,
+			float maxBlurRadiusNorm);
 
 		PreparedShadowFrustum();
 		PreparedShadowFrustum(PreparedShadowFrustum&& moveFrom) never_throws;

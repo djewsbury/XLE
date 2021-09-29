@@ -42,7 +42,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	SharedPkt BuildShadowConstantBuffers(
 		const MultiProjection<MaxShadowTexturesPerLight>& desc,
-		unsigned operatorMaxFrustumCount)
+		unsigned operatorMaxFrustumCount,
+		float maxBlurRadiusNorm)
 	{
 		if (desc._mode == ShadowProjectionMode::Arbitrary || desc._mode == ShadowProjectionMode::ArbitraryCubeMap) {
 
@@ -57,6 +58,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 			*subProjectionCount = UInt4(desc._normalProjCount, 0, 0, 0);
+			((float*)subProjectionCount)[1] = maxBlurRadiusNorm;		// used for transition between cascades
 			return result;
 
 		} else if (desc._mode == ShadowProjectionMode::Ortho) {
@@ -104,6 +106,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 			*subProjectionCount = UInt4(desc._normalProjCount, 0, 0, 0);
+			((float*)subProjectionCount)[1] = maxBlurRadiusNorm;		// used for transition between cascades
 
 			return result;
 
@@ -115,12 +118,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void PreparedShadowFrustum::InitialiseConstants(
 		const MultiProjection<MaxShadowTexturesPerLight>& desc,
-		unsigned operatorMaxFrustumCount)
+		unsigned operatorMaxFrustumCount, 
+		float maxBlurRadiusNorm)
 	{
 		_frustumCount = desc._normalProjCount;
 		_mode = desc._mode;
 		_enableNearCascade = desc._useNearProj;
-		_cbSource = BuildShadowConstantBuffers(desc, operatorMaxFrustumCount);
+		_cbSource = BuildShadowConstantBuffers(desc, operatorMaxFrustumCount, maxBlurRadiusNorm);
 	}
 
 	PreparedShadowFrustum::PreparedShadowFrustum()
@@ -155,7 +159,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_tanBlurAngle = 0.00436f;		// tan(.25 degrees)
 		_shadowTextureSize = 1024.f;
 		_minBlurSearchNorm = 0.5f / _shadowTextureSize;
-		_maxBlurSearchNorm = 25.f / _shadowTextureSize;
 		_casterDistanceExtraBias = 0.f;
 		XlZeroMemory(_dummy);
 	}
