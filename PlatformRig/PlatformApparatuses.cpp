@@ -8,7 +8,6 @@
 #include "OverlaySystem.h"
 #include "OverlappedWindow.h"
 #include "MainInputHandler.h"
-#include "InputTranslator.h"
 #include "DebugScreensOverlay.h"
 #include "DebugScreenRegistry.h"
 #include "DebuggingDisplays/GPUProfileDisplay.h"
@@ -17,7 +16,6 @@
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
-#include "../RenderOverlays/Font.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
@@ -65,9 +63,6 @@ namespace PlatformRig
 				l->Unregister(widget);
 			});
 
-		_debugFont0 = RenderOverlays::GetX2Font("Petra", 16);
-		_debugFont1 = RenderOverlays::GetX2Font("Vera", 16);
-
 		ConsoleRig::CrossModule::GetInstance()._services.Add(
 			Fn_ShowScreen,
 			[weakDebugScreens = std::weak_ptr<DebugScreensSystem>{_debugSystem}](StringSection<> screenName) {
@@ -96,7 +91,7 @@ namespace PlatformRig
 		_osWindow->AddWindowHandler(_windowHandler);
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
-		_osWindow->GetInputTranslator().AddListener(_mainInputHandler);
+		_osWindow->AddListener(_mainInputHandler);
 		
 		_immediateContext = _device->GetImmediateContext();
 	}

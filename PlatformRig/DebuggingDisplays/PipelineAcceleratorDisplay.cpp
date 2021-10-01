@@ -5,7 +5,6 @@
 #include "PipelineAcceleratorDisplay.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/OverlayUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -19,7 +18,7 @@ namespace PlatformRig { namespace Overlays
 		~PipelineAcceleratorPoolDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
 		
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 
@@ -34,7 +33,7 @@ namespace PlatformRig { namespace Overlays
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);
         DrawButtonBasic(context, buttonRect, name, FormatButton(interfaceState, id));
-        interactables.Register(Interactables::Widget(buttonRect, id));
+        interactables.Register({buttonRect, id});
     }
 
 	const char* s_tabNames[] = { "pipeline-accelerators", "sequencer-configs", "stats" };
@@ -134,20 +133,20 @@ namespace PlatformRig { namespace Overlays
 			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
-			interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
+			interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
 		} else if (_tab == 2) {
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Pipeline accelerator count: %u", (unsigned)records._pipelineAccelerators.size());
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Sequencer config count: %u", (unsigned)records._sequencerConfigs.size());
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Descriptor set accelerator count: %u", (unsigned)records._descriptorSetAcceleratorCount);
-			DrawFormatText(context, layout.AllocateFullWidth(lineHeight), nullptr, RenderOverlays::ColorB::White, "Metal pipeline count: %u", (unsigned)records._metalPipelineCount);
+			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Pipeline accelerator count: %u", (unsigned)records._pipelineAccelerators.size());
+			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Sequencer config count: %u", (unsigned)records._sequencerConfigs.size());
+			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Descriptor set accelerator count: %u", (unsigned)records._descriptorSetAcceleratorCount);
+			DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Metal pipeline count: %u", (unsigned)records._metalPipelineCount);
 		}
 	}
 
-	bool    PipelineAcceleratorPoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+	auto    PipelineAcceleratorPoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
 	{
 		using namespace RenderOverlays::DebuggingDisplay;
-		if (_scrollBar.ProcessInput(interfaceState, inputContext, input))
-			return true;
+		if (_scrollBar.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+			return ProcessInputResult::Consumed;
 
 		static KeyId pgdn       = KeyId_Make("page down");
         static KeyId pgup       = KeyId_Make("page up");
@@ -165,10 +164,10 @@ namespace PlatformRig { namespace Overlays
 				if (topMostWidget == InteractableId_Make(s_tabNames[t])) {
 					if (input.IsRelease_LButton())
 						_tab = t;
-					return true;
+					return ProcessInputResult::Consumed;
 				}
 
-		return false;
+		return ProcessInputResult::Passthrough;
 	}
 
 	PipelineAcceleratorPoolDisplay::PipelineAcceleratorPoolDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators)

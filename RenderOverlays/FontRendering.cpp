@@ -218,7 +218,7 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			FontRenderingManager& textureMan,
-			const Font& font, const TextStyle& style,
+			const Font& font, DrawTextFlags::BitField flags,
 			float x, float y, float maxX, float maxY,
 			StringSection<CharType> text,
 			float scale, float depth,
@@ -233,7 +233,7 @@ namespace RenderOverlays
 
 		float xAtLineStart = x, yAtLineStart = y;
 
-		if (style._options.snap) {
+		if (flags & DrawTextFlags::Snap) {
 			x = xScale * (int)(0.5f + x / xScale);
 			y = yScale * (int)(0.5f + y / yScale);
 		}
@@ -245,9 +245,9 @@ namespace RenderOverlays
 			
 		auto texDims = textureMan.GetTextureDimensions();
 		auto estimatedQuadCount = text.size();
-		if (style._options.shadow)
+		if (flags & DrawTextFlags::Shadow)
 			estimatedQuadCount += text.size();
-		if (style._options.outline)
+		if (flags & DrawTextFlags::Outline)
 			estimatedQuadCount += 8 * text.size();
 		WorkingVertexSetPCT workingVertices(immediateDrawables, textureMan.GetFontTexture().GetSRV(), estimatedQuadCount);
 
@@ -264,7 +264,7 @@ namespace RenderOverlays
 				x = xAtLineStart;
 				prevGlyph = 0;
 				y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
-				if (style._options.snap) {
+				if (flags & DrawTextFlags::Snap) {
 					x = xScale * (int)(0.5f + x / xScale);
 					y = yScale * (int)(0.5f + y / yScale);
 				}
@@ -306,7 +306,7 @@ namespace RenderOverlays
 			if (bitmap._width && bitmap._height) {
 				float baseX = x + bitmap._bitmapOffsetX * xScale;
 				float baseY = y + bitmap._bitmapOffsetY * yScale;
-				if (style._options.snap) {
+				if (flags & DrawTextFlags::Snap) {
 					baseX = xScale * (int)(0.5f + baseX / xScale);
 					baseY = yScale * (int)(0.5f + baseY / yScale);
 				}
@@ -319,7 +319,7 @@ namespace RenderOverlays
 					bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
 
 				if (__builtin_expect((maxX == 0.0f || pos.max[0] <= maxX) && (maxY == 0.0f || pos.max[1] <= maxY), true)) {
-					if (style._options.outline) {
+					if (flags & DrawTextFlags::Outline) {
 						Quad shadowPos;
 						shadowPos = pos;
 						shadowPos.min[0] -= xScale;
@@ -370,7 +370,7 @@ namespace RenderOverlays
 						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
 					}
 
-					if (style._options.shadow) {
+					if (flags & DrawTextFlags::Shadow) {
 						Quad shadowPos = pos;
 						shadowPos.min[0] += xScale;
 						shadowPos.max[0] += xScale;
@@ -385,7 +385,7 @@ namespace RenderOverlays
 
 			x += bitmap._xAdvance * xScale;
 			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
-			if (style._options.outline) {
+			if (flags & DrawTextFlags::Outline) {
 				x += 2 * xScale;
 			}
 		}
@@ -397,25 +397,25 @@ namespace RenderOverlays
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, const TextStyle& style,
+						const Font& font, DrawTextFlags::BitField flags,
                         float x, float y, float maxX, float maxY,
 						StringSection<> text,
                         float scale, float depth,
                         ColorB col)
 	{
-		return DrawTemplate<utf8>(threadContext, immediateDrawables, textureMan, font, style, x, y, maxX, maxY, text, scale, depth, col);
+		return DrawTemplate<utf8>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 	}
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, const TextStyle& style,
+						const Font& font, DrawTextFlags::BitField flags,
                         float x, float y, float maxX, float maxY,
 						StringSection<ucs4> text,
                         float scale, float depth,
                         ColorB col)
 	{
-		return DrawTemplate<ucs4>(threadContext, immediateDrawables, textureMan, font, style, x, y, maxX, maxY, text, scale, depth, col);
+		return DrawTemplate<ucs4>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////

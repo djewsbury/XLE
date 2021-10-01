@@ -53,7 +53,7 @@ namespace ToolsRig
         void    RenderToScene(  RenderCore::IThreadContext& context, 
                                 RenderCore::Techniques::ParsingContext& parserContext,
                                 RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
         PlacementsWidgets(
             const std::shared_ptr<SceneEngine::PlacementsEditor>& editor, 
@@ -1363,7 +1363,7 @@ namespace ToolsRig
         //     context, selectedRect, _selectedModel->_modelName.c_str(),
         //     FormatButton(interfaceState, Id_SelectedModel, 
         //         ButtonNormalState, ButtonMouseOverState, ButtonPressedState));
-        // interactables.Register(Interactables::Widget(selectedRect, Id_SelectedModel));
+        // interactables.Register({selectedRect, Id_SelectedModel});
         
         auto maxSize = layout.GetMaximumSize();
         int previewSize = 196;
@@ -1412,7 +1412,7 @@ namespace ToolsRig
                     AsPixelCoords(iconRect._bottomRight),
                     texture->GetShaderResource());
                 if (iconIds[c]) {
-                    interactables.Register(Interactables::Widget(iconRect, iconIds[c]));
+                    interactables.Register({iconRect, iconIds[c]});
                 }
             }
         
@@ -1455,7 +1455,7 @@ namespace ToolsRig
                 }
 				*/
 
-                interactables.Register(Interactables::Widget(previewRect, Id_SelectedModel));
+                interactables.Register({previewRect, Id_SelectedModel});
             }
 
         } else {
@@ -1469,29 +1469,29 @@ namespace ToolsRig
         }
     }
 
-    bool PlacementsWidgets::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto PlacementsWidgets::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         if (interfaceState.TopMostId() == Id_SelectedModel && input.IsRelease_LButton()) {
             _browserActive = !_browserActive;
-            return true;
+            return ProcessInputResult::Consumed;
         }
 
         if (_browser && _browserActive) {
                 // disable the browser when pressing escape
             if (input.IsPress(PlatformRig::KeyId_Make("escape"))) {
                 _browserActive = false;
-                return true;
+                return ProcessInputResult::Consumed;
             }
 
             auto browser = dynamic_cast<Overlays::IModelBrowser*>(_browser.get());
             if (browser) {
-                auto result = browser->SpecialProcessInput(interfaceState, inputContext, input);
+                auto result = browser->SpecialProcessInput(interfaceState, input);
                 if (!result._selectedModel.empty()) {
                     _selectedModel = result._selectedModel;
                     _browserActive = false; // dismiss browser on select
                 }
 
-                if (result._consumed) { return true; }
+                if (result._consumed) { return ProcessInputResult::Consumed; }
             }
         }
 
@@ -1511,31 +1511,32 @@ namespace ToolsRig
                 _manipulators[_activeManipulatorIndex]->SetActivationState(false);
                 _activeManipulatorIndex = newManipIndex;
                 _manipulators[_activeManipulatorIndex]->SetActivationState(true);
-                return true;
+                return ProcessInputResult::Consumed;
             }
 
             if (topMost._id == Id_PlacementsSave) {
                 _editor->WriteAllCells();
-                return true;
+                return ProcessInputResult::Consumed;
             }
         }
 
         if (HandleManipulatorsControls(interfaceState, input, *_manipulators[_activeManipulatorIndex])) {
-            return true;
+            return ProcessInputResult::Consumed;
         }
 
         if (interfaceState.GetMouseOverStack().empty()) {
 
+            const auto& inputContext = interfaceState.GetViewInputContext();
 			SceneEngine::IntersectionTestContext intersectionContext {
 				AsCameraDesc(*_camera),
 				inputContext._viewMins, inputContext._viewMaxs,
 				_drawingApparatus };
 
             if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))
-				return true;
+				return ProcessInputResult::Consumed;
         }
 
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     void PlacementsWidgets::RenderToScene(

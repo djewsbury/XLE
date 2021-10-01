@@ -5,7 +5,7 @@
 #include "QuickMetricsDisplay.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Techniques/Services.h"
-#include "../../RenderOverlays/Font.h"
+#include "../../Assets/AssetFuture.h"
 #include "../../Utility/MemoryUtils.h"
 
 namespace PlatformRig { namespace Overlays
@@ -25,7 +25,7 @@ namespace PlatformRig { namespace Overlays
 		ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
 		_scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, _scrollOffset);
 		DrawScrollBar(context, scrollCoordinates, _scrollOffset);
-		interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
+		interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
 
 		if (unsigned(_scrollOffset) < _lines.size()) {
 			auto l = _lines.begin() + unsigned(_scrollOffset);
@@ -35,29 +35,35 @@ namespace PlatformRig { namespace Overlays
 					if (!allocation.Height()) break;
 					FillRectangle(context, allocation, titleBkground);
 					allocation._topLeft[0] += 8;
-					RenderOverlays::TextStyle textStyle{RenderOverlays::DrawTextOptions{true, false}};
-					context.DrawText(
-						std::make_tuple(AsPixelCoords(allocation._topLeft), AsPixelCoords(allocation._bottomRight)),
-						_headingFont, textStyle, RenderOverlays::ColorB { 191, 123, 0 }, RenderOverlays::TextAlignment::Left, l->second);
+					auto* font = _headingFont->TryActualize();
+					if (font)
+						DrawText()
+							.Font(**font)
+							.Color({ 191, 123, 0 })
+							.Alignment(RenderOverlays::TextAlignment::Left)
+							.Flags(RenderOverlays::DrawTextFlags::Shadow)
+							.Draw(context, allocation, l->second);
 				} else {
 					auto allocation = textArea.AllocateFullWidth(lineHeight);
 					if (!allocation.Height()) break;
-					DrawText(context, allocation, nullptr, RenderOverlays::ColorB{0xcf, 0xcf, 0xcf}, l->second);
+					DrawText()
+						.Color(0xffcfcfcf)
+						.Draw(context, allocation, l->second);
 				}
 			}
 		}
 	}
 
-	bool    QuickMetricsDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+	auto    QuickMetricsDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
 	{
-		if (_scrollBar.ProcessInput(interfaceState, inputContext, input))
-			return true;
+		if (_scrollBar.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+			return ProcessInputResult::Consumed;
 
 		static KeyId pgdn       = KeyId_Make("page down");
         static KeyId pgup       = KeyId_Make("page up");
 		if (input.IsPress(pgdn)) _scrollOffset += 1.f;
 		if (input.IsPress(pgup)) _scrollOffset = std::max(0.f, _scrollOffset-1.f);
-		return false;
+		return ProcessInputResult::Passthrough;
 	}
 
 	void    QuickMetricsDisplay::Push(Style style, StringSection<> str)
@@ -91,7 +97,7 @@ namespace PlatformRig { namespace Overlays
 				this->_lines.clear();
 				this->_internalBufferIterator = this->_internalBuffer;
 			});
-		_headingFont = RenderOverlays::GetX2Font("DosisExtraBold", 20);
+		_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
 	}
 
 	QuickMetricsDisplay::~QuickMetricsDisplay()

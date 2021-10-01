@@ -22,7 +22,7 @@ namespace Overlays
         SharedBrowser(const char baseDirectory[], const std::string& headerName, unsigned itemDimensions, const std::string& fileFilter);
         ~SharedBrowser();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
     private:
         class Pimpl;
@@ -36,16 +36,16 @@ namespace Overlays
     class IModelBrowser
     {
     public:
-        class ProcessInputResult
+        class SpecialProcessInputResult
         {
         public:
             std::string _selectedModel;
             bool _consumed;
-            ProcessInputResult(bool consumed, const std::string& selected = std::string())
+            SpecialProcessInputResult(bool consumed, const std::string& selected = std::string())
                 : _consumed(consumed), _selectedModel(selected) {}
         };
-        virtual ProcessInputResult SpecialProcessInput(
-            InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) = 0;
+        virtual SpecialProcessInputResult SpecialProcessInput(
+            InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) = 0;
 
         virtual Coord2  GetPreviewSize() const = 0;
     };
@@ -56,8 +56,8 @@ namespace Overlays
         ModelBrowser(const char baseDirectory[]);
         ~ModelBrowser();
 
-        ProcessInputResult SpecialProcessInput(
-            InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        SpecialProcessInputResult SpecialProcessInput(
+            InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
         Coord2  GetPreviewSize() const;
         auto    GetSRV(RenderCore::IThreadContext& context, const std::basic_string<ucs2>&) -> std::pair<const RenderCore::IResourceView*, uint64>;

@@ -7,7 +7,6 @@
 #define _SILENCE_CXX17_NEGATORS_DEPRECATION_WARNING
 
 #include "TestDisplays.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderCore/Format.h"
 #include "../../Math/Geometry.h"
 #include "../../Math/Vector.h"
@@ -99,12 +98,12 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    bool    GridIteratorDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    GridIteratorDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (input.IsHeld_LButton()) {
             _currentMousePosition = input._mousePosition;
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     GridIteratorDisplay::GridIteratorDisplay() : _currentMousePosition(0,0) {}
@@ -550,11 +549,6 @@ namespace PlatformRig { namespace Overlays
 
     }
 
-    bool    DualContouringTest::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
-    {
-        return false;
-    }
-
     DualContouringTest::DualContouringTest()
     {
     }
@@ -671,7 +665,7 @@ namespace PlatformRig { namespace Overlays
                 &context, buttonRect,
                 "Randomize", 
                 FormatButton(interfaceState, Hash64("Randomize"), buttonNormalState, buttonMouseOverState, buttonPressedState));
-            interactables.Register(Interactables::Widget(buttonRect, Hash64("Randomize")));
+            interactables.Register({buttonRect, Hash64("Randomize"}));
         }
         {
             auto buttonRect = toolbar.Allocate(UInt2(256, 32));
@@ -679,7 +673,7 @@ namespace PlatformRig { namespace Overlays
                 &context, buttonRect,
                 "FillEfficiently", 
                 FormatButton(interfaceState, Hash64("FillEfficiently"), buttonNormalState, buttonMouseOverState, buttonPressedState));
-            interactables.Register(Interactables::Widget(buttonRect, Hash64("FillEfficiently")));
+            interactables.Register({buttonRect, Hash64("FillEfficiently"}));
         }
 
         auto remainingSpace = layout.AllocateFullHeightFraction(1.f);
@@ -703,16 +697,16 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    bool    RectanglePackerTest::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    RectanglePackerTest::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (input.IsRelease_LButton() && interfaceState.TopMostId() == Hash64("Randomize")) {
             _pimpl->FillRandomly();
-            return true;
+            return ProcessInputResult::Consumed;
         } else if (input.IsRelease_LButton() && interfaceState.TopMostId() == Hash64("FillEfficiently")) {
             _pimpl->FillEfficiently();
-            return true;
+            return ProcessInputResult::Consumed;
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     RectanglePackerTest::RectanglePackerTest() 
@@ -946,11 +940,6 @@ namespace PlatformRig { namespace Overlays
         metalContext->BindPS(MakeResourceList(commonResources._linearClampSampler));
         metalContext->Bind(commonResources._blendStraightAlpha);
 #endif
-    }
-
-    bool    ConservativeRasterTest::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
-    {
-        return false;
     }
 
     ConservativeRasterTest::ConservativeRasterTest() {}

@@ -32,8 +32,6 @@ namespace PlatformRig
 		std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> _debugSystem;
 		std::shared_ptr<OverlaySystemSet> _debugScreensOverlaySystem;
 
-		std::shared_ptr<RenderOverlays::Font> _debugFont0;
-		std::shared_ptr<RenderOverlays::Font> _debugFont1;
 		ConsoleRig::AttachablePtr<IDebugScreenRegistry> _debugScreenRegistry;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }

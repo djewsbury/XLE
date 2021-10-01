@@ -13,7 +13,7 @@
 
 namespace PlatformRig
 {
-    class InputTranslator;
+    class IInputListener;
 
     class IWindowHandler
     {
@@ -69,7 +69,7 @@ namespace PlatformRig
         void SetTitle(const char titleText[]);
         void Resize(unsigned width, unsigned height);
 
-        InputTranslator& GetInputTranslator();
+        void AddListener(std::weak_ptr<IInputListener> listener);
         void AddWindowHandler(std::shared_ptr<IWindowHandler> handler);
 
         enum class PumpResult { Continue, Background, Terminate };

@@ -10,10 +10,26 @@
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../ConsoleRig/Console.h"
+#include "../../ConsoleRig/ResourceBox.h"
 #include <assert.h>
 
 namespace PlatformRig { namespace Overlays
 {
+    class ConsoleDisplayResources
+    {
+    public:
+        std::shared_ptr<RenderOverlays::Font> _font;
+
+        ConsoleDisplayResources(std::shared_ptr<RenderOverlays::Font> font)
+        : _font(std::move(font))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<ConsoleDisplayResources>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("OrbitronBlack", 20)).ThenConstructToFuture(future);
+        }
+    };
 
             //////   C O N S O L E   D I S P L A Y   //////
 
@@ -24,9 +40,10 @@ namespace PlatformRig { namespace Overlays
         const unsigned height               = std::min(consoleMaxSize.Height() / 2, 512);
         consoleMaxSize._bottomRight[1]       = consoleMaxSize._topLeft[1] + height;
 
-		auto font = GetX2Font("OrbitronBlack", 20);
+		auto* res = ConsoleRig::TryActualizeCachedBox<ConsoleDisplayResources>();
+        if (!res) return;
 
-        const float         textHeight      = font->GetFontProperties()._lineHeight;
+        const float         textHeight      = res->_font->GetFontProperties()._lineHeight;
         const Coord         entryBoxHeight  = Coord(textHeight) + 2 * layout._paddingBetweenAllocations;
 
         const Rect          historyArea     = layout.AllocateFullWidth(consoleMaxSize.Height() - 2 * layout._paddingInternalBorder - layout._paddingBetweenAllocations - entryBoxHeight);
@@ -37,11 +54,9 @@ namespace PlatformRig { namespace Overlays
         unsigned            linesToRender   = (unsigned)XlFloor((historyArea.Height() - 2*historyAreaLayout._paddingInternalBorder) / (textHeight + historyAreaLayout._paddingBetweenAllocations));
 
         static ColorB       backColor       = ColorB(0x20, 0x20, 0x20, 0x90);
-        static ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
-        static ColorB       caretColor      = ColorB(0xaf, 0xaf, 0xaf);
-        static ColorB       selectionColor  = ColorB(0x7f, 0x7f, 0x7f, 0x7f);
         static ColorB       borderColor     = ColorB(0xff, 0xff, 0xff, 0x7f);
         static ColorB       entryBoxColor   = ColorB(0x00, 0x00, 0x00, 0x4f);
+        static ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
         FillRectangle(context, consoleMaxSize, backColor);
         FillRectangle(context, 
             Rect(   Coord2(consoleMaxSize._topLeft[0],      consoleMaxSize._bottomRight[1]-3),
@@ -58,48 +73,17 @@ namespace PlatformRig { namespace Overlays
         for (auto i=lines.cbegin(); i!=lines.cend(); ++i) {
             char buffer[1024];
             ucs2_2_utf8(AsPointer(i->begin()), i->size(), (utf8*)buffer, dimof(buffer));
-			context.DrawText(AsPixelCoords(historyAreaLayout.AllocateFullWidth(Coord(textHeight))), font, TextStyle{}, textColor, TextAlignment::Left, buffer);
+			DrawText()
+                .Alignment(TextAlignment::Left)
+                .Color(textColor)
+                .Font(*res->_font)
+                .Draw(context, historyAreaLayout.AllocateFullWidth(Coord(textHeight)), buffer);
         }
 
-        Coord caretOffset = 0;
-        Coord selStart = 0, selEnd = 0;
-        if (!_currentLine.empty()) {
-
-            size_t firstPart = std::min(_caret, _currentLine.size());
-            if (firstPart)
-                caretOffset = (Coord)StringWidth(*font, MakeStringSection(_currentLine.begin(), _currentLine.begin() + firstPart));
-
-            firstPart = std::min(_selectionStart, _currentLine.size());
-            if (firstPart) {
-                selStart = (Coord)StringWidth(*font, MakeStringSection(_currentLine.begin(), _currentLine.begin() + firstPart));
-            }
-
-            firstPart = std::min(_selectionEnd, _currentLine.size());
-            if (firstPart)
-                selEnd = (Coord)StringWidth(*font, MakeStringSection(_currentLine.begin(), _currentLine.begin() + firstPart));
-
-            if (selStart != selEnd) {
-                Rect rect(  Coord2(entryBoxArea._topLeft[0] + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
-                            Coord2(entryBoxArea._topLeft[0] + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
-                FillRectangle(context, rect, selectionColor);
-            }
-
-            char buffer[1024];
-			ucs2_2_utf8(AsPointer(_currentLine.begin()), _currentLine.size(), (utf8*)buffer, dimof(buffer));
-            buffer[dimof(buffer)-1] = '\0';
-			context.DrawText(AsPixelCoords(entryBoxArea), font, TextStyle{}, textColor, TextAlignment::Left, buffer);
-
-        }
-
-        if ((_renderCounter / 20) & 0x1) {
-            Rect rect(  Coord2(entryBoxArea._topLeft[0] + caretOffset - 1, entryBoxArea._topLeft[1]),
-                        Coord2(entryBoxArea._topLeft[0] + caretOffset + 2, entryBoxArea._bottomRight[1]));
-            FillRectangle(context, rect, caretColor);
-        }
-
-        ++_renderCounter;
+        Overlays::Render(context, entryBoxArea, res->_font, _textEntry);
     }
 
+#if 0
     static std::string      AsUTF8(const std::basic_string<ucs2>& input)
     {
         char buffer[1024];
@@ -113,41 +97,58 @@ namespace PlatformRig { namespace Overlays
         utf8_2_ucs2((utf8*)AsPointer(input.begin()), input.size(), buffer, dimof(buffer));
         return std::basic_string<ucs2>(buffer);
     }
+#endif
 
-    bool    ConsoleDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    static const KeyId left       = KeyId_Make("left");
+    static const KeyId right      = KeyId_Make("right");
+    static const KeyId home       = KeyId_Make("home");
+    static const KeyId end        = KeyId_Make("end");
+    static const KeyId enter      = KeyId_Make("enter");
+    static const KeyId escape     = KeyId_Make("escape");
+    static const KeyId backspace  = KeyId_Make("backspace");
+    static const KeyId del        = KeyId_Make("delete");
+    static const KeyId up         = KeyId_Make("up");
+    static const KeyId down       = KeyId_Make("down");
+    static const KeyId tab        = KeyId_Make("tab");
+    static const KeyId shift      = KeyId_Make("shift");
+    static const KeyId ctrl       = KeyId_Make("control");
+    static const KeyId pgdn       = KeyId_Make("page down");
+    static const KeyId pgup       = KeyId_Make("page up");
+
+    template<typename CharType>
+        static void DeleteSelectedPart(TextEntry<CharType>& textEntry)
+    {
+        if (textEntry._selectionStart != textEntry._selectionEnd) {
+            auto diff = std::abs(ptrdiff_t(textEntry._selectionEnd) - ptrdiff_t(textEntry._selectionStart));
+            auto start = std::min(textEntry._selectionStart, textEntry._selectionEnd);
+            textEntry._currentLine.erase(start, diff);
+            if (textEntry._caret > start) {
+                if (textEntry._caret <= (start+diff)) { textEntry._caret = start; }
+                else { textEntry._caret -= diff; }
+            }
+            textEntry._selectionStart = textEntry._selectionEnd = textEntry._caret;
+            textEntry._autoComplete.clear();
+        }
+    }
+
+    template<typename CharType>
+        ProcessInputResult TextEntry<CharType>::ProcessInput(
+            InterfaceState& interfaceState, const InputSnapshot& input,
+            const std::function<std::vector<std::basic_string<CharType>>(const std::basic_string<CharType>&)>& autocompleteFn)
     {
         bool consume = false;
         if (input._pressedChar) {
             if (input._pressedChar >= 0x20 && input._pressedChar != 0x7f && input._pressedChar != '~') {
-                DeleteSelectedPart();
+                DeleteSelectedPart(*this);
                 assert(_caret <= _currentLine.size());
                 if (_caret <= _currentLine.size()) {
-                    _currentLine.insert(_caret++, 1, (std::basic_string<ucs2>::value_type)input._pressedChar);
+                    _currentLine.insert(_caret++, 1, (CharType)input._pressedChar);
                     _autoComplete.clear();
                     _selectionStart = _selectionEnd = _caret;
                     consume = true;
                 }
             }
         }
-
-        static KeyId left       = KeyId_Make("left");
-        static KeyId right      = KeyId_Make("right");
-        static KeyId home       = KeyId_Make("home");
-        static KeyId end        = KeyId_Make("end");
-        static KeyId enter      = KeyId_Make("enter");
-        static KeyId escape     = KeyId_Make("escape");
-        static KeyId backspace  = KeyId_Make("backspace");
-        static KeyId del        = KeyId_Make("delete");
-        static KeyId up         = KeyId_Make("up");
-        static KeyId down       = KeyId_Make("down");
-        static KeyId tab        = KeyId_Make("tab");
-        static KeyId shift      = KeyId_Make("shift");
-        static KeyId ctrl       = KeyId_Make("control");
-        static KeyId pgdn       = KeyId_Make("page down");
-        static KeyId pgup       = KeyId_Make("page up");
-
-        auto beginI = input._activeButtons.cbegin();
-        auto endI = input._activeButtons.cend();
 
         auto startCaret = _caret;
 
@@ -181,7 +182,7 @@ namespace PlatformRig { namespace Overlays
             if (newHistoryCursor != _historyCursor) {
                 _historyCursor = newHistoryCursor;
                 if (!_historyCursor) {
-                    _currentLine = std::basic_string<ucs2>();
+                    _currentLine = {};
                     _caret = 0;
                 } else {
                     _currentLine = _history[_history.size() - _historyCursor];
@@ -195,15 +196,15 @@ namespace PlatformRig { namespace Overlays
 
         if (input.IsPress(tab)) {
             if (!_currentLine.empty()) {
-                if (_autoComplete.empty()) {
-                    _autoComplete = ConsoleRig::Console::GetInstance().AutoComplete(AsUTF8(_currentLine));
+                if (_autoComplete.empty() && autocompleteFn) {
+                    _autoComplete = autocompleteFn(_currentLine);
                     _autoCompleteCursor = 0;
                 } else {
                     _autoCompleteCursor = (_autoCompleteCursor+1) % _autoComplete.size();
                 }
 
                 if (_autoCompleteCursor < _autoComplete.size()) {
-                    _currentLine = AsUTF16(_autoComplete[_autoCompleteCursor]);
+                    _currentLine = _autoComplete[_autoCompleteCursor];
                     _selectionStart = _caret;
                     _selectionEnd = _currentLine.size();
                 }
@@ -213,7 +214,7 @@ namespace PlatformRig { namespace Overlays
 
         if (input.IsPress(backspace)) {
             if (_selectionStart != _selectionEnd) {
-                DeleteSelectedPart();
+                DeleteSelectedPart(*this);
             } else if (_caret>0) {
                 _currentLine.erase(_caret-1, 1);
                 _autoComplete.clear();
@@ -224,7 +225,7 @@ namespace PlatformRig { namespace Overlays
 
         if (input.IsPress(del)) {
             if (_selectionStart != _selectionEnd) {
-                DeleteSelectedPart();
+                DeleteSelectedPart(*this);
             } else if (_caret < _currentLine.size()) {
                 _currentLine.erase(_caret, 1);
                 _autoComplete.clear();
@@ -232,26 +233,93 @@ namespace PlatformRig { namespace Overlays
             consume = true;
         }
 
-        if (input.IsPress(enter)) {
-            if (!_currentLine.empty()) {
-                _console->Execute(AsUTF8(_currentLine));
+        return consume ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
+    }
+
+    template<typename CharType>
+        void TextEntry<CharType>::Reset(const std::basic_string<CharType>& currentLine)
+    {
+        _currentLine = currentLine;
+        _caret = _selectionEnd = _currentLine.size();
+        _selectionStart = 0;
+    }
+
+    template class TextEntry<char>;
+
+    void    Render(IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry)
+    {
+        const ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
+        const ColorB       caretColor      = ColorB(0xaf, 0xaf, 0xaf);
+        const ColorB       selectionColor  = ColorB(0x7f, 0x7f, 0x7f, 0x7f);
+
+        Coord caretOffset = 0;
+        Coord selStart = 0, selEnd = 0;
+        if (!textEntry._currentLine.empty()) {
+
+            size_t firstPart = std::min(textEntry._caret, textEntry._currentLine.size());
+            if (firstPart)
+                caretOffset = (Coord)StringWidth(*font, MakeStringSection(textEntry._currentLine.begin(), textEntry._currentLine.begin() + firstPart));
+
+            firstPart = std::min(textEntry._selectionStart, textEntry._currentLine.size());
+            if (firstPart) {
+                selStart = (Coord)StringWidth(*font, MakeStringSection(textEntry._currentLine.begin(), textEntry._currentLine.begin() + firstPart));
             }
-            _caret = 0;
-            _selectionStart = _selectionEnd = _caret;
-            _history.push_back(_currentLine);
-            _historyCursor = 0;
+
+            firstPart = std::min(textEntry._selectionEnd, textEntry._currentLine.size());
+            if (firstPart)
+                selEnd = (Coord)StringWidth(*font, MakeStringSection(textEntry._currentLine.begin(), textEntry._currentLine.begin() + firstPart));
+
+            if (selStart != selEnd) {
+                Rect rect(  Coord2(entryBoxArea._topLeft[0] + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
+                            Coord2(entryBoxArea._topLeft[0] + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
+                FillRectangle(context, rect, selectionColor);
+            }
+
+			DrawText()
+                .Font(*font)
+                .Color(textColor)
+                .Alignment(TextAlignment::Left)
+                .Draw(context, entryBoxArea, textEntry._currentLine);
+
+        }
+
+        static unsigned _renderCounter = 0;
+        if ((_renderCounter / 20) & 0x1) {
+            Rect rect(  Coord2(entryBoxArea._topLeft[0] + caretOffset - 1, entryBoxArea._topLeft[1]),
+                        Coord2(entryBoxArea._topLeft[0] + caretOffset + 2, entryBoxArea._bottomRight[1]));
+            FillRectangle(context, rect, caretColor);
+        }
+        ++_renderCounter;
+    }
+
+    auto    ConsoleDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
+    {
+        auto beginI = input._activeButtons.cbegin();
+        auto endI = input._activeButtons.cend();
+
+        bool consume = _textEntry.ProcessInput(
+            interfaceState, input,
+            [](auto currentline) { return ConsoleRig::Console::GetInstance().AutoComplete(currentline); }) == ProcessInputResult::Consumed;
+
+        if (input.IsPress(enter)) {
+            if (!_textEntry._currentLine.empty())
+                _console->Execute(_textEntry._currentLine);
+            _textEntry._caret = 0;
+            _textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
+            _textEntry._history.push_back(_textEntry._currentLine);
+            _textEntry._historyCursor = 0;
             _scrollBack = 0;        // reset scroll?
             _scrollBackFractional = 0;
-            _currentLine = std::basic_string<ucs2>();
-            _autoComplete.clear();
+            _textEntry._currentLine = {};
+            _textEntry._autoComplete.clear();
             consume = true;
         }
 
         if (input.IsPress(escape)) {
-            _caret = 0;
-            _selectionStart = _selectionEnd = _caret;
-            _currentLine = std::basic_string<ucs2>();
-            _autoComplete.clear();
+            _textEntry._caret = 0;
+            _textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
+            _textEntry._currentLine = {};
+            _textEntry._autoComplete.clear();
             consume = true;
         }
 
@@ -287,31 +355,13 @@ namespace PlatformRig { namespace Overlays
             _scrollBackFractional = 0;
         }
 
-        return consume;
-    }
-
-    void ConsoleDisplay::DeleteSelectedPart()
-    {
-        if (_selectionStart != _selectionEnd) {
-            auto diff = std::abs(ptrdiff_t(_selectionEnd) - ptrdiff_t(_selectionStart));
-            auto start = std::min(_selectionStart, _selectionEnd);
-            _currentLine.erase(start, diff);
-            if (_caret > start) {
-                if (_caret <= (start+diff)) { _caret = start; }
-                else { _caret -= diff; }
-            }
-            _selectionStart = _selectionEnd = _caret;
-            _autoComplete.clear();
-        }
+        return consume ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
     }
 
     ConsoleDisplay::ConsoleDisplay(ConsoleRig::Console& console)
     : _console(&console)
     {
-        _caret = 0;
-        _selectionStart = _selectionEnd = _caret;
         _renderCounter = 0;
-        _autoCompleteCursor = _historyCursor = 0;
         _scrollBack = 0;
         _scrollBackFractional = 0;
     }

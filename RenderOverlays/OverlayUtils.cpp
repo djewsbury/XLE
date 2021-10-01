@@ -7,6 +7,7 @@
 #include "OverlayUtils.h"
 #include "Font.h"
 #include "../ConsoleRig/ResourceBox.h"
+#include "../Assets/AssetFutureContinuation.h"
 
 namespace RenderOverlays { namespace DebuggingDisplay
 {
@@ -18,7 +19,17 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
     public:
         std::shared_ptr<RenderOverlays::Font> _buttonFont;
-        UtilFontBox() : _buttonFont(RenderOverlays::GetX2Font("DosisExtraBold", 20)) {}
+
+        UtilFontBox(
+            std::shared_ptr<RenderOverlays::Font> buttonFont)
+        : _buttonFont(std::move(buttonFont))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<UtilFontBox>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("DosisExtraBold", 20)).ThenConstructToFuture(future);
+        }
     };
 
     void DrawButtonBasic(
@@ -29,9 +40,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
             FillDepressedRoundedRectangle(context, rect, formatting._background);
         else
             FillRaisedRoundedRectangle(context, rect, formatting._background);
-        context.DrawText(
-            std::make_tuple(AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight)),
-			ConsoleRig::FindCachedBox<UtilFontBox>()._buttonFont, TextStyle{}, formatting._foreground, TextAlignment::Center, label);
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<UtilFontBox>();
+        if (!fonts) return;
+        DrawText()
+            .Alignment(TextAlignment::Center)
+            .Color(formatting._foreground)
+            .Font(*fonts->_buttonFont)
+            .Draw(context, rect, label);
     }
 
 }}

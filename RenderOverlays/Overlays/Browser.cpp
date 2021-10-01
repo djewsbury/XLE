@@ -294,7 +294,7 @@ namespace Overlays
                 DrawButtonBasic(
                     &context, directoryRect, baseName, 
                     FormatButton(interfaceState, Id_Directories+directoryIndex, buttonNormalState, buttonMouseOverState, buttonPressedState));
-                interactables.Register(Interactables::Widget(directoryRect, Id_Directories+directoryIndex));
+                interactables.Register({directoryRect, Id_Directories+directoryIndex});
             }
 
             const char back[] = "<up>";
@@ -303,7 +303,7 @@ namespace Overlays
             DrawButtonBasic(
                 &context, directoryRect, back, 
                 FormatButton(interfaceState, Id_BackDirectory, buttonNormalState, buttonMouseOverState, buttonPressedState));
-            interactables.Register(Interactables::Widget(directoryRect, Id_BackDirectory));
+            interactables.Register({directoryRect, Id_BackDirectory});
         }
 
         {
@@ -370,7 +370,7 @@ namespace Overlays
                     Float2(float(outputRect._bottomRight[0]), float(outputRect._bottomRight[1])),
                     float(browserLayout.GetMaximumSize()._topLeft[1]), float(browserLayout.GetMaximumSize()._bottomRight[1]));
 
-                interactables.Register(Interactables::Widget(outputRect, srv.second));
+                interactables.Register({outputRect, srv.second});
 
                 char baseName[MaxPath];
                 XlBasename(baseName, dimof(baseName), (const char*)utf8Filename);
@@ -408,11 +408,11 @@ namespace Overlays
 
     static const std::string Slashes("/\\");
 
-    bool    SharedBrowser::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    SharedBrowser::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         if (input._wheelDelta && interfaceState.HasMouseOver(Id_MainSurface)) {
             _mainScrollBar.ProcessDelta(float(-input._wheelDelta));
-            return true;
+            return ProcessInputResult::Consumed;
         }
 
         unsigned subDirCount = unsigned(_pimpl->_subDirectories ? _pimpl->_subDirectories->_directories.size() : 0);
@@ -455,13 +455,12 @@ namespace Overlays
                     _pimpl->_modelFiles.reset();
                 }
                 if (consume)
-                    return true;
+                    return ProcessInputResult::Consumed;
             }
 
         }
 
-
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     SharedBrowser::SharedBrowser(const char baseDirectory[], const std::string& headerName, unsigned itemDimensions, const std::string& fileFilter)
@@ -556,9 +555,9 @@ namespace Overlays
         return std::make_pair(&_pimpl->_srv, hashedName);   // note, here, the hashedName only considered the model name, not the material name
     }
 
-    auto ModelBrowser::SpecialProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
+    auto ModelBrowser::SpecialProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> SpecialProcessInputResult
     {
-        if (SharedBrowser::ProcessInput(interfaceState, inputContext, input)) {
+        if (SharedBrowser::ProcessInput(interfaceState, input)) {
             return true;
         }
 

@@ -242,7 +242,7 @@ namespace RenderOverlays
 	}
 
 	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad, 
-													const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
+													const Font& font, DrawTextFlags::BitField flags, 
 													ColorB col, 
 													TextAlignment alignment, StringSection<char> text)
 	{
@@ -251,12 +251,12 @@ namespace RenderOverlays
 		Quad q;
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
 		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
-		Float2 alignedPosition = AlignText(*_defaultFont, q, alignment, text);
+		Float2 alignedPosition = AlignText(font, q, alignment, text);
 		return Draw(
 			*_threadContext,
 			*_immediateDrawables, 
 			*_fontRenderingManager,
-			font ? *font : *_defaultFont, textStyle,
+			font, flags,
 			alignedPosition[0], alignedPosition[1],
 			0.f, 0.f, // q.max[0], q.max[1],
 			text,
@@ -459,10 +459,17 @@ namespace RenderOverlays
 	{
 	public:
 		std::shared_ptr<Font> _font;
-		DefaultFontBox()
-		{
-			_font = GetX2Font("Petra", 16);
-		}
+
+		DefaultFontBox(
+            std::shared_ptr<RenderOverlays::Font> font)
+        : _font(std::move(font))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<DefaultFontBox>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Petra", 16)).ThenConstructToFuture(future);
+        }
 	};
 
 	ImmediateOverlayContext::ImmediateOverlayContext(
@@ -484,8 +491,6 @@ namespace RenderOverlays
 	: ImmediateOverlayContext(threadContext, immediateDrawables)
 	{
 		_fontRenderingManager = fontRenderingManager;
-		if (_fontRenderingManager)
-			_defaultFont = ConsoleRig::FindCachedBox<DefaultFontBox>()._font;
 	}
 
 	ImmediateOverlayContext::~ImmediateOverlayContext()

@@ -58,7 +58,7 @@ namespace ToolsRig
         void    Render( RenderOverlays::IOverlayContext& context, RenderOverlays::DebuggingDisplay::Layout& layout, 
                         RenderOverlays::DebuggingDisplay::Interactables&interactables, 
                         RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState);
-        bool    ProcessInput(RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
         ManipulatorsDisplay(std::shared_ptr<ManipulatorsInterface> interf);
         ~ManipulatorsDisplay();

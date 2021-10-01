@@ -15,7 +15,6 @@
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
 #include <iomanip>

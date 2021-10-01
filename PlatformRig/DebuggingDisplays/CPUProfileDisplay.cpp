@@ -5,9 +5,9 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "CPUProfileDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../OSServices/TimeUtils.h"
+#include "../../Assets/AssetFutureContinuation.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"
@@ -87,11 +87,19 @@ namespace PlatformRig { namespace Overlays
 		std::shared_ptr<RenderOverlays::Font> _middleFont;
 		std::shared_ptr<RenderOverlays::Font> _rightFont;
 
-        DrawProfilerResources()
+        DrawProfilerResources(
+            std::shared_ptr<RenderOverlays::Font> leftFont,
+            std::shared_ptr<RenderOverlays::Font> middleFont,
+            std::shared_ptr<RenderOverlays::Font> rightFont)
+        : _leftFont(std::move(leftFont)), _middleFont(std::move(middleFont)), _rightFont(std::move(rightFont))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<DrawProfilerResources>& future)
         {
-            _leftFont = RenderOverlays::GetX2Font("DosisBook", 20);
-            _middleFont = RenderOverlays::GetX2Font("Shojumaru", 32);
-            _rightFont = RenderOverlays::GetX2Font("PoiretOne", 24);
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("DosisBook", 20),
+                RenderOverlays::MakeFont("Shojumaru", 32),
+                RenderOverlays::MakeFont("PoiretOne", 24)).ThenConstructToFuture(future);
         }
     };
 
@@ -159,10 +167,8 @@ namespace PlatformRig { namespace Overlays
         Float3 dividingLines[256];
         Float3* divingLinesIterator = dividingLines;
 
-        auto& res = ConsoleRig::FindCachedBox<DrawProfilerResources>();
-        TextStyle leftStyle; leftStyle._options.shadow = 0;
-        TextStyle middleStyle; middleStyle._options.outline = 1; middleStyle._options.shadow = 0;
-        TextStyle rightStyle;
+        auto* res = ConsoleRig::TryActualizeCachedBox<DrawProfilerResources>();
+        if (!res) return;
 
         while (!items.empty()) {
             unsigned treeDepth = items.top().second;
@@ -187,7 +193,7 @@ namespace PlatformRig { namespace Overlays
                 && (evnt._firstChild != HierarchicalCPUProfiler::ResolvedEvent::s_id_Invalid);
 
             Rect totalElement(leftPart._topLeft, rightPart._bottomRight);
-            interactables.Register(Interactables::Widget(totalElement, elementId));
+            interactables.Register({totalElement, elementId});
             bool highlighted = interfaceState.HasMouseOver(elementId);
 
                 //  Behind the text readout, we want to draw a bar that represents the "inclusive" time
@@ -202,14 +208,19 @@ namespace PlatformRig { namespace Overlays
                 LinearInterpolate(middlePart._topLeft[0], middlePart._bottomRight[0], 0.5f),
                 highlighted, barSize);
 
-            context.DrawText(
-                std::make_tuple(AsPixelCoords(leftPart._topLeft), AsPixelCoords(Coord2(leftPart._bottomRight - Coord2(treeDepth * 16, 0)))),
-                res._leftFont, leftStyle, settings._leftColor, TextAlignment::Right, evnt._label);
+            DrawText()
+                .Font(*res->_leftFont)
+                .Color(settings._leftColor)
+                .Alignment(TextAlignment::Right)
+                .Flags(0)
+                .Draw(context, {leftPart._topLeft, Coord2(leftPart._bottomRight - Coord2(treeDepth * 16, 0))}, evnt._label);
 
-            context.DrawText(
-                std::make_tuple(AsPixelCoords(middlePart._topLeft), AsPixelCoords(middlePart._bottomRight)),
-                res._middleFont, middleStyle, settings._middleColor, TextAlignment::Center,
-                StringMeld<32>() << std::setprecision(settings._precision) << std::fixed << AsMilliseconds(evnt._inclusiveTime));
+            DrawText()
+                .Font(*res->_middleFont)
+                .Color(settings._middleColor)
+                .Alignment(TextAlignment::Center)
+                .Flags(DrawTextFlags::Outline)
+                .Draw(context, {middlePart._topLeft, middlePart._bottomRight}, StringMeld<32>() << std::setprecision(settings._precision) << std::fixed << AsMilliseconds(evnt._inclusiveTime));
 
             StringMeld<64> workingBuffer;
             static const auto exclusiveThreshold = MillisecondsAsTimerValue(0.05f);
@@ -224,10 +235,11 @@ namespace PlatformRig { namespace Overlays
                 workingBuffer << " <<closed>>";
             }
 
-            context.DrawText(
-                std::make_tuple(AsPixelCoords(rightPart._topLeft), AsPixelCoords(rightPart._bottomRight)),
-                res._rightFont, rightStyle, settings._rightColor, TextAlignment::Left,
-                workingBuffer);
+            DrawText()
+                .Font(*res->_rightFont)
+                .Color(settings._rightColor)
+                .Alignment(TextAlignment::Left)
+                .Draw(context, {rightPart._topLeft, rightPart._bottomRight}, workingBuffer);
 
             if ((divingLinesIterator+2) <= &dividingLines[dimof(dividingLines)]) {
                 *divingLinesIterator++ = AsPixelCoords(Coord2(totalElement._topLeft[0], totalElement._bottomRight[1] + layout._paddingBetweenAllocations/2));
@@ -284,8 +296,8 @@ namespace PlatformRig { namespace Overlays
                             interactables, interfaceState);
     }
 
-    bool HierarchicalProfilerDisplay::ProcessInput(
-        InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto HierarchicalProfilerDisplay::ProcessInput(
+        InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (input.IsPress_LButton() || input.IsRelease_LButton()) {
             auto topId = interfaceState.TopMostWidget()._id;
@@ -299,7 +311,7 @@ namespace PlatformRig { namespace Overlays
                     }
                 }
 
-                return true;
+                return ProcessInputResult::Consumed;
             }
         }
         for (const auto& b:input._activeButtons) {
@@ -308,7 +320,7 @@ namespace PlatformRig { namespace Overlays
             } else if (b._name == KeyId_Make("down") && b._transition && b._state)
                 ++_pimpl->_rowOffset;
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     HierarchicalProfilerDisplay::HierarchicalProfilerDisplay(IHierarchicalProfiler* profiler)

@@ -91,7 +91,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    bool            ScrollBar::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto            ScrollBar::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> IWidget::ProcessInputResult
     {
         const bool overScrollBar = (interfaceState.TopMostId() == _id);
         _draggingScrollBar = (_draggingScrollBar || overScrollBar) && (input._mouseButtonsDown&1);
@@ -100,9 +100,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             if (!(input._mouseButtonsDown&1)) {
                 _draggingScrollBar = false;
             }
-            return true;
+            return IWidget::ProcessInputResult::Consumed;
         }
-        return false;
+        return IWidget::ProcessInputResult::Passthrough;
     }
 
     float           ScrollBar::CalculateCurrentOffset(const Coordinates& coordinates) const
@@ -176,6 +176,29 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return result;
     }
 
+    class DefaultFontsBox
+    {
+    public:
+        std::shared_ptr<RenderOverlays::Font> _defaultFont;
+        std::shared_ptr<RenderOverlays::Font> _tableHeaderFont;
+		std::shared_ptr<RenderOverlays::Font> _tableValuesFont;
+
+        DefaultFontsBox(
+            std::shared_ptr<RenderOverlays::Font> defaultFont,
+            std::shared_ptr<RenderOverlays::Font> headerFont,
+            std::shared_ptr<RenderOverlays::Font> valuesFont)
+        : _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<DefaultFontsBox>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Petra", 16),
+                RenderOverlays::MakeFont("DosisExtraBold", 20),
+                RenderOverlays::MakeFont("Petra", 20)).ThenConstructToFuture(future);
+        }
+    };
+
     class StandardResources
     {
     public:
@@ -241,7 +264,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
         }
 
-        static void ConstructToFuture(::Assets::Future<std::shared_ptr<StandardResources>>& future)
+        static void ConstructToFuture(::Assets::FuturePtr<StandardResources>& future)
         {
             auto horizTweakerBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
             auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
@@ -269,11 +292,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour)
     {
         const Rect thumbRect = coordinates.Thumb(thumbPosition);
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
         const float roundedProportion = 2.f/5.f;
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRaisedRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, 0xf }));
 
         context.DrawQuad(
@@ -291,7 +314,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
         const float borderWidthPix = 1.f;
@@ -302,7 +325,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_outlineEllipse});
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_outlineEllipse});
     }
 
     void FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -310,7 +333,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
         const float borderWidthPix = 1.f;
@@ -321,7 +344,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             colour, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillEllipse});
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillEllipse});
     }
 
     void OutlineRoundedRectangle(
@@ -333,10 +356,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_outlineRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
@@ -358,10 +381,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
@@ -384,10 +407,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillAndOutlineRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
@@ -409,10 +432,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillRaisedRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
@@ -434,10 +457,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = (*res)->_fillReverseRaisedRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
         context.DrawQuad(
@@ -469,11 +492,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1])), colour);
     }
 
-    void OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
+    void OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour, float outlineWidth)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
         }
+        assert(outlineWidth == 1.f);        // resizing border not currently supported
 
         Float3 lines[8];
         lines[0] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
@@ -487,21 +511,38 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 
+    void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth)
+    {
+        FillRectangle(context, rect, fillColour);
+        OutlineRectangle(context, rect, outlineColour, outlineWidth);
+    }
+
+#if 0
     Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
     {
-		return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
+        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+        if (res)
+		    return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
+        return {0,0};
     }
 
     Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
     {
-        return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
+        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+        if (res)
+            return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
+        return {0,0};
     }
 
     Coord2 DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
     {
-        char buffer[4096];
-        vsnprintf(buffer, dimof(buffer), text, args);
-        return context.DrawText(AsPixelCoords(rect), GetDefaultFont(), textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
+        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+        if (res) {
+            char buffer[4096];
+            vsnprintf(buffer, dimof(buffer), text, args);
+            return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
+        }
+        return {0,0};
     }
 
     Coord2 DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
@@ -518,6 +559,35 @@ namespace RenderOverlays { namespace DebuggingDisplay
         va_list args;
         va_start(args, text);
         auto result = DrawFormatText(context, rect, textStyle, colour, alignment, text, args);
+        va_end(args);
+        return result;
+    }
+#endif
+
+    Coord2 DrawText::Draw(IOverlayContext& context, const Rect& rect, StringSection<> text) const
+    {
+        if (_font) {
+            return context.DrawText(AsPixelCoords(rect), *_font, _flags, _color, _alignment, text);
+        } else {
+            auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+            if (__builtin_expect(res != nullptr, true))
+                return context.DrawText(AsPixelCoords(rect), *res->_defaultFont, _flags, _color, _alignment, text);
+            return {0,0};
+        }
+    }
+    
+    Coord2 DrawText::FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], va_list args) const
+    {
+        char buffer[4096];
+        vsnprintf(buffer, dimof(buffer), format, args);
+        return Draw(context, rect, buffer);
+    }
+
+    Coord2 DrawText::FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], ...) const
+    {
+        va_list args;
+        va_start(args, format);
+        auto result = FormatAndDraw(context, rect, format, args);
         va_end(args);
         return result;
     }
@@ -614,9 +684,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 Coord2 maxPos(graphArea._topLeft[0] + 14, graphArea._topLeft[1] + 8);
                 Coord2 minPos(graphArea._topLeft[0] + 14, graphArea._bottomRight[1] - 18);
 
-                DrawFormatText(context, Rect(peakPos, peakPos),  nullptr, GraphLabel, "%6.2f", values[peakIndex]);
-                DrawFormatText(context, Rect(minPos, minPos),    nullptr, GraphLabel, "%6.2f", minValue);
-                DrawFormatText(context, Rect(maxPos, maxPos),    nullptr, GraphLabel, "%6.2f", maxValue);
+                DrawText().Color(GraphLabel).FormatAndDraw(context, Rect(peakPos, peakPos),  "%6.2f", values[peakIndex]);
+                DrawText().Color(GraphLabel).FormatAndDraw(context, Rect(minPos, minPos),    "%6.2f", minValue);
+                DrawText().Color(GraphLabel).FormatAndDraw(context, Rect(maxPos, maxPos),    "%6.2f", maxValue);
             }
         }
     }
@@ -671,16 +741,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
         context.DrawLines(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), lineCount*2, lineColours);
     }
 
-    class TableFontBox
-    {
-    public:
-        std::shared_ptr<RenderOverlays::Font> _headerFont;
-		std::shared_ptr<RenderOverlays::Font> _valuesFont;
-        TableFontBox() 
-            : _headerFont(RenderOverlays::GetX2Font("DosisExtraBold", 20))
-            , _valuesFont(RenderOverlays::GetX2Font("Petra", 20)) {}
-    };
-
     ///////////////////////////////////////////////////////////////////////////////////
     void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables)
     {
@@ -689,7 +749,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const ColorB HeaderBkOutColor    ( 255, 255, 255, 255 );
         static const ColorB SepColor            ( 255, 255, 255, 255 );
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
         context.DrawQuad(
@@ -697,9 +757,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_fillRaisedRect});
-
-        TextStyle style{DrawTextOptions(false, true)};
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillRaisedRect});
 
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
@@ -714,15 +772,20 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 r._topLeft[0] += 8;
 
                 const ColorB colour = HeaderTextColor;
-                context.DrawText(AsPixelCoords(r), ConsoleRig::FindCachedBox<TableFontBox>()._headerFont, style, colour, TextAlignment::Left, MakeStringSection(i->first));
+                DrawText()
+                    .Font(*ConsoleRig::FindCachedBox<DefaultFontsBox>()._tableHeaderFont)
+                    .Alignment(TextAlignment::Left)
+                    .Color(colour)
+                    .Flags(DrawTextFlags::Outline)
+                    .Draw(context, r, MakeStringSection(i->first));
 
                 if (interactables)
-                    interactables->Register(Interactables::Widget(r, InteractableId_Make(MakeStringSection(i->first))));
+                    interactables->Register({r, InteractableId_Make(MakeStringSection(i->first))});
             }
         }
     }
 
-    float DrawTableEntry(       IOverlayContext& context,
+    Coord DrawTableEntry(       IOverlayContext& context,
                                 const Rect& rect, 
                                 const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, 
                                 const std::map<std::string, TableElement>& entry)
@@ -732,17 +795,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const ColorB BkOutColor  ( 255, 255, 255, 255 );
         static const ColorB SepColor    ( 255, 255, 255, 255 );
 
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
-        if (!res) return 0;
-
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+        if (!res || !fonts) return 0;
         
-
-        auto font = ConsoleRig::FindCachedBox<TableFontBox>()._valuesFont;
-        TextStyle style{DrawTextOptions(true, false)};
-
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
-        float heightUsed = 0;
+        Coord heightUsed = 0;
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
             if (i->second) {
                 auto s = entry.find(i->first);
@@ -751,7 +810,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
                     r._topLeft[0] += 8;
 
                     const ColorB colour = TextColor;
-                    auto textSpace = context.DrawText(AsPixelCoords(r), font, style, colour, TextAlignment::TopLeft, MakeStringSection(s->second._label));
+                    auto textSpace = DrawText()
+                        .Alignment(TextAlignment::TopLeft)
+                        .Color(colour)
+                        .Font(*fonts->_tableValuesFont)
+                        .Flags(DrawTextFlags::Shadow)
+                        .Draw(context, r, MakeStringSection(s->second._label));
                     heightUsed = std::max(textSpace[1] - r._topLeft[1], heightUsed);
                 }
             }
@@ -879,7 +943,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         const auto r = coordinates.InteractableRect();
         float t = Saturate((thumbPosition - coordinates.MinValue()) / float(coordinates.MaxValue() - coordinates.MinValue()));
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -887,12 +951,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(t, 0.f), Float2(t, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_horizTweakerBarMaterial});
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_horizTweakerBarMaterial});
     }
 
     void HTweakerBar_DrawLabel(IOverlayContext& context, const Rect& rect)
     {
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -900,12 +964,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_tagShaderMaterial});
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_tagShaderMaterial});
     }
 
     void HTweakerBar_DrawGridBackground(IOverlayContext& context, const Rect& rect)
     {
-        auto* res = ::Assets::MakeAsset<StandardResources>()->TryActualize();
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
         context.DrawQuad(
             ProjectionMode::P2D,
@@ -913,27 +977,41 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{(*res)->_gridBackgroundMaterial});
+            RenderCore::Techniques::ImmediateDrawableMaterial{res->_gridBackgroundMaterial});
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
     void    IWidget::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) {}
-    bool    IWidget::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) { return false; }
+    auto    IWidget::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult { return ProcessInputResult::Passthrough; }
     IWidget::~IWidget() {}
 
     InteractableId  InteractableId_Make(StringSection<char> name)   { return Hash64(name.begin(), name.end()); }
+
+    static InterfaceState BuildInterfaceState(Interactables& interactables, const PlatformRig::InputContext& viewInputContext, const Coord2& mousePosition, unsigned mouseButtonsHeld, InterfaceState::Capture capture)
+    {
+        auto i = std::find_if(interactables._widgets.begin(), interactables._widgets.end(), [capturingId=capture._widget._id](const auto& c) { return c._id == capturingId; });
+        if (i != interactables._widgets.end()) {
+            capture._widget = *i;
+        } else
+            capture = {};
+
+        return InterfaceState(viewInputContext, mousePosition, mouseButtonsHeld, interactables.Intersect(mousePosition), capture);
+    }
 
     bool DebugScreensSystem::OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt)
     {
         bool consumedEvent      = false;
         _currentMouseHeld       = evnt._mouseButtonsDown;
         if (_currentMouse[0] != evnt._mousePosition[0] || _currentMouse[1] != evnt._mousePosition[1]) {
+            Coord2 drift = evnt._mousePosition - _currentMouse;
             _currentMouse = evnt._mousePosition;
-            _currentInterfaceState  = _currentInteractables.BuildInterfaceState(_currentMouse, _currentMouseHeld);
+            auto capture = _currentInterfaceState.GetCapture();
+            capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
+            _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
         }
 
         for (auto i=_systemWidgets.begin(); i!=_systemWidgets.end() && !consumedEvent; ++i) {
-            consumedEvent |= i->_widget->ProcessInput(_currentInterfaceState, context, evnt);
+            consumedEvent |= (i->_widget->ProcessInput(_currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
         }
 
         for (auto i=_panels.begin(); i!=_panels.end() && !consumedEvent; ++i) {
@@ -945,7 +1023,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 }
                 
                 if (!alreadySeen) {
-                    consumedEvent |= _widgets[i->_widgetIndex]._widget->ProcessInput(_currentInterfaceState, context, evnt);
+                    consumedEvent |= (_widgets[i->_widgetIndex]._widget->ProcessInput(_currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
                 }
             }
         }
@@ -955,7 +1033,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
             consumedEvent |= ProcessInputPanelControls(_currentInterfaceState, context, evnt);
         }
 
-        _consumedInputEvent |= consumedEvent;
         return consumedEvent;
     }
 
@@ -979,7 +1056,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const InteractableId nameDropDownId           = InteractableId_Make("PanelControls_NameDropDown")   + panelIndex;
         const InteractableId nameDropDownWidgetId     = InteractableId_Make("PanelControls_NameDropDownWidget");
         const InteractableId backButtonId             = InteractableId_Make("PanelControls_BackButton")     + panelIndex;
-        interactables.Register(Interactables::Widget(buttonsRect, panelControlsId));
+        interactables.Register({buttonsRect, panelControlsId});
 
             //      panel controls are only visible when we've got a mouse over...
         if (interfaceState.HasMouseOver(panelControlsId) || interfaceState.HasMouseOver(nameDropDownId)) {
@@ -992,22 +1069,22 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 InteractableId id = InteractableId_Make(s_PanelControlsButtons[c])+panelIndex;
                 if (interfaceState.HasMouseOver(id)) {
                     OutlineEllipse(context, buttonRect, ColorB(0xff000000u));
-                    DrawText(context, buttonRect, nullptr, ColorB(0xff000000u), s_PanelControlsButtons[c]);
+                    DrawText().Color(0xff000000u).Draw(context, buttonRect, s_PanelControlsButtons[c]);
                 } else {
                     OutlineEllipse(context, buttonRect, ColorB(0xffffffffu));
-                    DrawText(context, buttonRect, nullptr, ColorB(0xffffffffu), s_PanelControlsButtons[c]);
+                    DrawText().Color(0xffffffffu).Draw(context, buttonRect, s_PanelControlsButtons[c]);
                 }
-                interactables.Register(Interactables::Widget(buttonRect, id));
+                interactables.Register({buttonRect, id});
             }
 
             Rect nameRect = buttonsLayout.Allocate(Coord2(nameSize, buttonSize));
-            DrawText(context, nameRect, nullptr, ColorB(0xffffffffu), MakeStringSection(name));
+            DrawText().Draw(context, nameRect, MakeStringSection(name));
 
                 //
                 //      If the mouse is over the name rect, we get a drop list list
                 //      of the screens available...
                 //
-            interactables.Register(Interactables::Widget(nameRect, nameRectId));
+            interactables.Register({nameRect, nameRectId});
             if (interfaceState.HasMouseOver(nameRectId) || interfaceState.HasMouseOver(nameDropDownId)) {
                     /////////////////////////////
                 const Coord dropDownSize = Coord(_widgets.size() * buttonSize + (_widgets.size()+1) * buttonPadding);
@@ -1015,7 +1092,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                             Coord2(nameRect._topLeft[0]+nameSize, nameRect._bottomRight[1]-3+dropDownSize));
                 FillRectangle(context, dropDownRect, RoundedRectBackgroundColour);
                 const Rect dropDownInteractableRect(Coord2(dropDownRect._topLeft[0], dropDownRect._topLeft[1]-8), Coord2(dropDownRect._bottomRight[0], dropDownRect._bottomRight[1]));
-                interactables.Register(Interactables::Widget(dropDownInteractableRect, nameDropDownId));
+                interactables.Register({dropDownInteractableRect, nameDropDownId});
 
                     /////////////////////////////
                 unsigned y = dropDownRect._topLeft[1] + buttonPadding;
@@ -1028,9 +1105,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
                     if (mouseOver) {
                         FillRectangle(context, partRect, ColorB(180, 200, 255, 64));
                     }
-                    DrawText(context, partRect, nullptr, ColorB(0xffffffffu), MakeStringSection(i->_name));
+                    DrawText().Draw(context, partRect, MakeStringSection(i->_name));
                     y += buttonSize + buttonPadding;
-                    interactables.Register(Interactables::Widget(partRect, thisId));
+                    interactables.Register({partRect, thisId});
                 }
                     /////////////////////////////
             }
@@ -1040,7 +1117,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (panelIndex < _panels.size() && !_panels[panelIndex]._backButton.empty()) {
             Rect backButtonRect(    Coord2(layout._maximumSize._topLeft[0] + 8, layout._maximumSize._topLeft[1] + 4),
                                     Coord2(layout._maximumSize._topLeft[0] + 8 + 100, layout._maximumSize._topLeft[1] + 4 + buttonSize));
-            interactables.Register(Interactables::Widget(backButtonRect, backButtonId));
+            interactables.Register({backButtonRect, backButtonId});
             const bool mouseOver = interfaceState.HasMouseOver(backButtonId);
             if (mouseOver) {
                 FillAndOutlineRoundedRectangle(context, backButtonRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
@@ -1048,7 +1125,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 if (interfaceState.IsMouseButtonHeld()) {
                     colour = ColorB(0xffffffffu);
                 }
-                DrawFormatText(context, backButtonRect, nullptr, colour, "%s", "Back");
+                DrawText().Color(colour).Draw(context, backButtonRect, "Back");
             }
         }
     }
@@ -1185,7 +1262,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         overlayContext.ReleaseState();
 
         //      Redo the current interface state, in case any of the interactables have moved during the render...
-        _currentInterfaceState = _currentInteractables.BuildInterfaceState(_currentMouse, _currentMouseHeld);
+        _currentInterfaceState = BuildInterfaceState(_currentInteractables, {}, _currentMouse, _currentMouseHeld, _currentInterfaceState.GetCapture());
     }
     
     bool DebugScreensSystem::IsAnythingVisible()
@@ -1355,28 +1432,53 @@ namespace RenderOverlays { namespace DebuggingDisplay
         _mouseButtonsHeld = 0;
     }
 
-    InterfaceState::InterfaceState(const Coord2& mousePosition, unsigned mouseButtonsHeld, const std::vector<Interactables::Widget>& mouseStack)
+    InterfaceState::InterfaceState(
+        const PlatformRig::InputContext& viewInputContext,
+        const Coord2& mousePosition, unsigned mouseButtonsHeld,
+        const std::vector<Interactables::Widget>& mouseStack,
+        const Capture& capture)
     :   _mousePosition(mousePosition)
     ,   _mouseButtonsHeld(mouseButtonsHeld)
     ,   _mouseOverStack(mouseStack)
+    ,   _viewInputContext(viewInputContext)
+    ,   _capture(capture)
     {}
 
     bool InterfaceState::HasMouseOver(InteractableId id) 
     { 
-        // return std::find(_mouseOverStack.begin(), _mouseOverStack.end(), id) != _mouseOverStack.end(); 
-        for(std::vector<Interactables::Widget>::iterator i=_mouseOverStack.begin(); i!=_mouseOverStack.end(); ++i) {
-            if (i->_id == id) {
+        for(auto i=_mouseOverStack.begin(); i!=_mouseOverStack.end(); ++i)
+            if (i->_id == id)
                 return true;
-            }
-        }
         return false;
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////
-    Interactables::Interactables()
-    {
+    InteractableId          InterfaceState::TopMostId() const
+    { 
+        // when a capture is set, it hides other widgets from being returned by this method
+        if (_capture._widget._id) return _capture._widget._id;
+        return (!_mouseOverStack.empty())?_mouseOverStack[_mouseOverStack.size()-1]._id:0;
     }
 
+    Interactables::Widget   InterfaceState::TopMostWidget() const
+    {
+        if (_capture._widget._id) return _capture._widget;  // unfortunately we only have the widget information for widgets under the cursor
+        if (!_mouseOverStack.empty())
+            return _mouseOverStack[_mouseOverStack.size()-1];
+        return {};
+    }
+
+    void InterfaceState::BeginCapturing(const Interactables::Widget& widget)
+    {
+        _capture._widget = widget;
+        _capture._driftDuringCapture = {0,0};
+    }
+    
+    void InterfaceState::EndCapturing()
+    {
+        _capture = {};
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////
     void Interactables::Register(const Widget& widget)
     {
         _widgets.push_back( widget );
@@ -1398,11 +1500,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
             }
         }
         return result;
-    }
-
-    InterfaceState Interactables::BuildInterfaceState(const Coord2& mousePosition, unsigned mouseButtonsHeld)
-    {
-        return InterfaceState(mousePosition, mouseButtonsHeld, Intersect(mousePosition));
     }
 
     ///////////////////////////////////////////////////////////////////////////////////

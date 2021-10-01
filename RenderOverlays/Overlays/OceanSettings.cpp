@@ -81,18 +81,18 @@ namespace Overlays
         }
     }
 
-    bool    OceanSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    OceanSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         for (unsigned c=0; c<dimof(_scrollers); ++c)
             if (_scrollers[c].IsDragging()) {
-                if (_scrollers[c].ProcessInput(interfaceState, inputContext, input))
-                    return true;
+                if (_scrollers[c].ProcessInput(interfaceState, input))
+                    return ProcessInputResult::Consumed;
                 break;
             }
 
         for (unsigned c=0; c<dimof(_scrollers); ++c) {
-            if (_scrollers[c].ProcessInput(interfaceState, inputContext, input)) {
-                return true;
+            if (_scrollers[c].ProcessInput(interfaceState, input)) {
+                return ProcessInputResult::Consumed;
             }
         }
 
@@ -102,26 +102,26 @@ namespace Overlays
                 for (unsigned c=0; c<dimof(GraphTabs::Names); ++c) {
                     if (topMostWidget == InteractableId_Make(GraphTabs::Names[c])) {
                         _graphsMode = c;
-                        return true;
+                        return ProcessInputResult::Consumed;
                     }
                 }
 
                 if (topMostWidget == InteractableId_Make("ShowUploadHistory")) {
                     _drawHistory = !_drawHistory;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }
 
                 const InteractableId framePicker = InteractableId_Make("FramePicker");
                 if (topMostWidget >= framePicker && topMostWidget < (framePicker+s_MaxGraphSegments)) {
                     unsigned graphIndex = unsigned(topMostWidget - framePicker);
                     _lockedFrameId = _frames[std::max(0,signed(_frames.size())-signed(graphIndex)-1)]._frameId;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }*/
 
-                return false;
+                return ProcessInputResult::Passthrough;
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     OceanSettingsDisplay::OceanSettingsDisplay(SceneEngine::DeepOceanSimSettings& oceanSettings)
@@ -199,22 +199,22 @@ namespace Overlays
         }
     }
 
-    bool    OceanLightingSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    OceanLightingSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         for (unsigned c=0; c<dimof(_scrollers); ++c)
             if (_scrollers[c].IsDragging()) {
-                if (_scrollers[c].ProcessInput(interfaceState, inputContext, input))
-                    return true;
+                if (_scrollers[c].ProcessInput(interfaceState, input))
+                    return ProcessInputResult::Consumed;
                 break;
             }
 
         for (unsigned c=0; c<dimof(_scrollers); ++c) {
-            if (_scrollers[c].ProcessInput(interfaceState, inputContext, input)) {
-                return true;
+            if (_scrollers[c].ProcessInput(interfaceState, input)) {
+                return ProcessInputResult::Consumed;
             }
         }
 
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     OceanLightingSettingsDisplay::OceanLightingSettingsDisplay(SceneEngine::OceanLightingSettings& oceanSettings)

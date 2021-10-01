@@ -5,7 +5,6 @@
 #include "ModelCacheDisplay.h"
 #include "../../RenderCore/Techniques/ModelCache.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/OverlayUtils.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Utility/MemoryUtils.h"
@@ -20,7 +19,7 @@ namespace PlatformRig { namespace Overlays
 		~ModelCacheDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
 		
 		std::shared_ptr<RenderCore::Techniques::ModelCache> _modelCache;
 
@@ -34,7 +33,7 @@ namespace PlatformRig { namespace Overlays
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);
         DrawButtonBasic(context, buttonRect, name, FormatButton(interfaceState, id));
-        interactables.Register(Interactables::Widget(buttonRect, id));
+        interactables.Register({buttonRect, id});
     }
 
     static const char* s_tabNames[] = { "ModelRenderers", "ModelScaffolds", "MaterialScaffolds" };
@@ -130,15 +129,15 @@ namespace PlatformRig { namespace Overlays
 			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
-			interactables.Register(Interactables::Widget(scrollCoordinates.InteractableRect(), _scrollBar.GetID()));
+			interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
 		}
 	}
 
-	bool    ModelCacheDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+	auto    ModelCacheDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
 	{
 		using namespace RenderOverlays::DebuggingDisplay;
-		if (_scrollBar.ProcessInput(interfaceState, inputContext, input))
-			return true;
+		if (_scrollBar.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+			return ProcessInputResult::Consumed;
 
 		static KeyId pgdn       = KeyId_Make("page down");
         static KeyId pgup       = KeyId_Make("page up");
@@ -151,10 +150,10 @@ namespace PlatformRig { namespace Overlays
 				if (topMostWidget == InteractableId_Make(s_tabNames[t])) {
 					if (input.IsRelease_LButton())
 						_tab = t;
-					return true;
+					return ProcessInputResult::Consumed;
 				}
 
-		return false;
+		return ProcessInputResult::Passthrough;
 	}
 
 	ModelCacheDisplay::ModelCacheDisplay(std::shared_ptr<RenderCore::Techniques::ModelCache> modelCache)

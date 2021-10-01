@@ -943,12 +943,6 @@ namespace SceneEngine
         }
     }
 
-    bool    PlacementsQuadTreeDebugger::ProcessInput(
-        InterfaceState& interfaceState, const InputSnapshot& input)
-    {
-        return false;
-    }
-
     PlacementsQuadTreeDebugger::PlacementsQuadTreeDebugger(
         std::shared_ptr<PlacementsManager> placementsManager, 
         std::shared_ptr<PlacementCellSet> cells)

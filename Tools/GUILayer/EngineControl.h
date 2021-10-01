@@ -55,8 +55,6 @@ namespace GUILayer
     private:
         clix::auto_ptr<EngineControlPimpl> _pimpl;
 		System::WeakReference^ _attachedControl;
-
-		PlatformRig::InputContext MakeInputContext(System::Windows::Forms::Control^ control);
     };
 
 	class WindowRig;

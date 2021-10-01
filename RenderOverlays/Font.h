@@ -7,6 +7,7 @@
 #pragma once
 
 #include "OverlayPrimitives.h"
+#include "../Assets/AssetsCore.h"
 #include "../Math/Vector.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
@@ -60,8 +61,7 @@ namespace RenderOverlays
 		uint64_t _hashCode;
     };
 
-	std::shared_ptr<Font> GetX2Font(StringSection<> path, int size);
-	std::shared_ptr<Font> GetDefaultFont(unsigned points=16);
+	::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size);
 
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev);
 
@@ -89,36 +89,5 @@ namespace RenderOverlays
 
     Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<ucs4> text);
 	Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text);
-
-	struct DrawTextOptions 
-    {
-        uint32 shadow : 1;
-        uint32 snap : 1;
-        uint32 outline : 1;
-        uint32 colorSetIndex : 1;
-        uint32 reserved : 28;
-
-        DrawTextOptions() 
-        {
-            shadow = 1;
-            snap = 0;
-            outline = 0;
-            colorSetIndex = 0;
-        }
-        DrawTextOptions(bool iShadow, bool iOutline)
-        {
-            shadow = iShadow;
-            snap = 1;
-            outline = iOutline;
-            colorSetIndex = 0;
-        }
-    };
-
-    class TextStyle
-    {
-    public:
-		DrawTextOptions			_options;
-	};
-
 }
 

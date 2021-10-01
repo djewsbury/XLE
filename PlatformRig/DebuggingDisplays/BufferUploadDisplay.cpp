@@ -7,8 +7,8 @@
 #include "BufferUploadDisplay.h"
 #include "../../BufferUploads/Metrics.h"
 #include "../../RenderOverlays/OverlayUtils.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
+#include "../../Assets/AssetFutureContinuation.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
@@ -25,7 +25,7 @@ namespace PlatformRig { namespace Overlays
     {
         InteractableId id = InteractableId_Make(name);
         DrawButtonBasic(context, buttonRect, name, FormatButton(interfaceState, id));
-        interactables.Register(Interactables::Widget(buttonRect, id));
+        interactables.Register({buttonRect, id});
     }
 
     BufferUploadDisplay::GPUMetrics::GPUMetrics()
@@ -153,9 +153,15 @@ namespace PlatformRig { namespace Overlays
     public:
         std::shared_ptr<RenderOverlays::Font> _font;
 		std::shared_ptr<RenderOverlays::Font> _smallFont;
-        FontBox() 
-            : _font(RenderOverlays::GetX2Font("OrbitronBlack", 18))
-            , _smallFont(RenderOverlays::GetX2Font("Vera", 16)) {}
+        FontBox(std::shared_ptr<RenderOverlays::Font> font, std::shared_ptr<RenderOverlays::Font> smallFont)
+        : _font(std::move(font)), _smallFont(std::move(smallFont)) {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<FontBox>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("OrbitronBlack", 18),
+                RenderOverlays::MakeFont("Vera", 16)).ThenConstructToFuture(future);
+        }
     };
 
     static void DrawTopLeftRight(IOverlayContext& context, const Rect& rect, const ColorB& col)
@@ -224,15 +230,17 @@ namespace PlatformRig { namespace Overlays
                     count * 20 + (count-1) * layout._paddingBetweenAllocations + 2 * dropDownInternalBorder);
                 dropDownRect._topLeft = Coord2(rect._topLeft[0], rect._bottomRight[1]);
                 dropDownRect._bottomRight = dropDownRect._topLeft + dropDownSize;
-                interactables.Register(Interactables::Widget(dropDownRect, hash));
+                interactables.Register({dropDownRect, hash});
             }
 
-            TextStyle style{DrawTextOptions{false, true}};
-            context.DrawText(
-                AsPixelCoords(rect), ConsoleRig::FindCachedBox<FontBox>()._font, style, text, 
-                TextAlignment::Center, g.first);
+            DrawText()
+                .Font(*ConsoleRig::FindCachedBox<FontBox>()._font)
+                .Flags(DrawTextFlags::Shadow)
+                .Alignment(TextAlignment::Center)
+                .Color(text)
+                .Draw(context, rect, g.first);
 
-            interactables.Register(Interactables::Widget(rect, hash));
+            interactables.Register({rect, hash});
         }
 
         if (dropDown) {
@@ -250,17 +258,19 @@ namespace PlatformRig { namespace Overlays
                 if (interfaceState.HasMouseOver(hash))
                     col = ColorB::White;
 
-				TextStyle style{DrawTextOptions{false, true}};
-                context.DrawText(
-                    AsPixelCoords(rect), ConsoleRig::FindCachedBox<FontBox>()._smallFont, style, col, 
-                    TextAlignment::Left, name);
+                DrawText()
+                    .Font(*ConsoleRig::FindCachedBox<FontBox>()._font)
+                    .Flags(DrawTextFlags::Shadow)
+                    .Alignment(TextAlignment::Left)
+                    .Color(col)
+                    .Draw(context, rect, name);
 
                 if ((c+1) != dropDown->size())
                     context.DrawLine(ProjectionMode::P2D,
                         AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), col,
                         AsPixelCoords(rect._bottomRight), col);
 
-                interactables.Register(Interactables::Widget(rect, hash));
+                interactables.Register({rect, hash});
             }
         }
     }
@@ -362,22 +372,20 @@ namespace PlatformRig { namespace Overlays
             size_t valuesCount2 = FillValuesBuffer(_graphsMode, c, valuesBuffer, dimof(valuesBuffer));
 
             if (graphCount == (unsigned)UploadDataType::Max) {
-                context.DrawText(
-					AsPixelCoords(labelRect), GetDefaultFont(), TextStyle{}, ColorB(0xffffffffu), 
-                    TextAlignment::Left,
-                    StringMeld<256>() << GraphTabs::Names[_graphsMode] << " (" << AsString(UploadDataType(c)) << ")");
+                DrawText()
+                    .Alignment(TextAlignment::Left)
+                    .Draw(context, labelRect, StringMeld<256>() << GraphTabs::Names[_graphsMode] << " (" << AsString(UploadDataType(c)) << ")");
             } else {
-                context.DrawText(
-                    AsPixelCoords(labelRect), GetDefaultFont(), TextStyle{}, ColorB(0xffffffffu), 
-                    TextAlignment::Left,
-                    GraphTabs::Names[_graphsMode]);
+                DrawText()
+                    .Alignment(TextAlignment::Left)
+                    .Draw(context, labelRect, GraphTabs::Names[_graphsMode]);
             }
 
 			if (valuesCount2 > 0) {
 				float mostRecentValue = valuesBuffer[dimof(valuesBuffer) - valuesCount2];
-				context.DrawText(AsPixelCoords(historyRect), GetDefaultFont(), TextStyle{}, ColorB(0xffffffffu), 
-                    TextAlignment::Top,
-                    XlDynFormatString("%6.3f", mostRecentValue).c_str());
+				DrawText()
+                    .Alignment(TextAlignment::Top)
+                    .Draw(context, historyRect, XlDynFormatString("%6.3f", mostRecentValue).c_str());
 			}
 
             DrawHistoryGraph(
@@ -426,7 +434,7 @@ namespace PlatformRig { namespace Overlays
                     } else if (i->_frameId == _lockedFrameId) {
                         FillRectangle(context, graphPart, ColorB(0x3f7f3f7fu));
                     }
-                    interactables.Register(Interactables::Widget(graphPart, id));
+                    interactables.Register({graphPart, id});
                     ++newValuesCount;
                 }
             }
@@ -637,7 +645,7 @@ namespace PlatformRig { namespace Overlays
         DrawMenuBar(context, menuBar, interactables, interfaceState);
     }
 
-    bool    BufferUploadDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    BufferUploadDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (interfaceState.TopMostId()) {
             if (input.IsRelease_LButton()) {
@@ -646,7 +654,7 @@ namespace PlatformRig { namespace Overlays
                     if (topMostWidget == InteractableId_Make(GraphTabs::Names[c])) {
                         _graphsMode = c;
                         _graphMinValueHistory = _graphMaxValueHistory = 0.f;
-                        return true;
+                        return ProcessInputResult::Consumed;
                     }
                 }
 
@@ -654,13 +662,13 @@ namespace PlatformRig { namespace Overlays
                 if (topMostWidget >= framePicker && topMostWidget < (framePicker+s_MaxGraphSegments)) {
                     unsigned graphIndex = unsigned(topMostWidget - framePicker);
                     _lockedFrameId = _frames[std::max(0,signed(_frames.size())-signed(graphIndex)-1)]._frameId;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }
 
-                return false;
+                return ProcessInputResult::Passthrough;
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     void    BufferUploadDisplay::AddCommandListToFrame(unsigned frameId, unsigned commandListIndex)
@@ -891,18 +899,18 @@ namespace PlatformRig { namespace Overlays
                             const auto& desc = i->_desc;
                             if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
                                 if (desc._bindFlags & BindFlag::IndexBuffer) {
-                                    DrawFormatText(context, textRect, nullptr, textColour, "IB %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
+                                    DrawText().Color(textColour).FormatAndDraw(context, textRect, "IB %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
                                 } else if (desc._bindFlags & BindFlag::VertexBuffer) {
-                                    DrawFormatText(context, textRect, nullptr, textColour, "VB %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
+                                    DrawText().Color(textColour).FormatAndDraw(context, textRect, "VB %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
                                 } else {
-                                    DrawFormatText(context, textRect, nullptr, textColour, "B %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
+                                    DrawText().Color(textColour).FormatAndDraw(context, textRect, "B %6.2fk", desc._linearBufferDesc._sizeInBytes / 1024.f);
                                 }
                             } else if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
-                                DrawFormatText(context, textRect, nullptr, textColour, "Tex %ix%i", desc._textureDesc._width, desc._textureDesc._height);
+                                DrawText().Color(textColour).FormatAndDraw(context, textRect, "Tex %ix%i", desc._textureDesc._width, desc._textureDesc._height);
                             }
                             textRect._topLeft[1] += 16; textRect._bottomRight[1] += 16;
                             if (i->_currentSize) {
-                                DrawFormatText(context, textRect, nullptr, textColour, "%i (%6.3fMB)", 
+                                DrawText().Color(textColour).FormatAndDraw(context, textRect, "%i (%6.3fMB)", 
                                     i->_currentSize, (i->_currentSize * RenderCore::ByteCount(i->_desc)) / (1024.f*1024.f));
                             }
                         }
@@ -911,7 +919,7 @@ namespace PlatformRig { namespace Overlays
                         if (_detailsIndex==c) {
                             detailsMetrics = &(*i);
                         }
-                        interactables.Register(Interactables::Widget(fullRect, id));
+                        interactables.Register({fullRect, id});
                         ++c;
                     }
                 }
@@ -919,7 +927,7 @@ namespace PlatformRig { namespace Overlays
                 if (detailsMetrics) {
                     _detailsHistory.push_back(*detailsMetrics);
                     Rect textRect = layout.AllocateFullWidth(32);
-                    DrawFormatText(context, textRect, nullptr, textColour, "Real size: %6.2fMB, Created size: %6.2fMB, Padding overhead: %6.2fMB, Count: %i",
+                    DrawText().Color(textColour).FormatAndDraw(context, textRect, "Real size: %6.2fMB, Created size: %6.2fMB, Padding overhead: %6.2fMB, Count: %i",
                         detailsMetrics->_totalRealSize/(1024.f*1024.f), detailsMetrics->_totalCreateSize/(1024.f*1024.f), (detailsMetrics->_totalCreateSize-detailsMetrics->_totalRealSize)/(1024.f*1024.f),
                         detailsMetrics->_totalCreateCount);
 
@@ -935,28 +943,28 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    bool    ResourcePoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    ResourcePoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (interfaceState.TopMostId()) {
             if (input.IsRelease_LButton()) {
                 InteractableId topMostWidget = interfaceState.TopMostId();
                 if (topMostWidget == InteractableId_Make(ResourcePoolDisplayTabs::Names[0])) {
                     _filter = 0;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 } else if (topMostWidget == InteractableId_Make(ResourcePoolDisplayTabs::Names[1])) {
                     _filter = 1;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 } else if (topMostWidget == InteractableId_Make(ResourcePoolDisplayTabs::Names[2])) {
                     _filter = 2;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 } else if (topMostWidget >= ResourcePoolDisplayGraph && topMostWidget < ResourcePoolDisplayGraph+100) {
                     _detailsIndex = unsigned(topMostWidget-ResourcePoolDisplayGraph);
                     _detailsHistory.clear();
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
 
@@ -990,11 +998,11 @@ namespace PlatformRig { namespace Overlays
             }
 
             {
-                DrawFormatText(context, layout.AllocateFullWidth(16), nullptr, textColour, "Heap count: %i / Total allocated: %7.3fMb / Total unallocated: %7.3fMb",
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Heap count: %i / Total allocated: %7.3fMb / Total unallocated: %7.3fMb",
                     metrics._heaps.size(), allocatedSpace/(1024.f*1024.f), unallocatedSpace/(1024.f*1024.f));
-                DrawFormatText(context, layout.AllocateFullWidth(16), nullptr, textColour, "Largest free block: %7.3fKb / Average unallocated: %7.3fKb",
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Largest free block: %7.3fKb / Average unallocated: %7.3fKb",
                     largestFreeBlock/1024.f, unallocatedSpace/(float(metrics._heaps.size())*1024.f));
-                DrawFormatText(context, layout.AllocateFullWidth(16), nullptr, textColour, "Block count: %i / Ave block size: %7.3fKb",
+                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), "Block count: %i / Ave block size: %7.3fKb",
                     totalBlockCount, allocatedSpace/float(totalBlockCount*1024.f));
             }
 
@@ -1005,7 +1013,7 @@ namespace PlatformRig { namespace Overlays
                 Rect outsideRect = layout.AllocateFullWidth(DebuggingDisplay::Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
                 Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
 
-                OutlineRectangle(context, outsideRect);
+                OutlineRectangle(context, outsideRect, 0xff000000);
 
                 std::vector<Float3> lines;
                 std::vector<ColorB> lineColors;
@@ -1111,9 +1119,9 @@ namespace PlatformRig { namespace Overlays
         return false;
     }
 
-    bool    BatchingDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto BatchingDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     BatchingDisplay::BatchingDisplay(BufferUploads::IManager* manager)

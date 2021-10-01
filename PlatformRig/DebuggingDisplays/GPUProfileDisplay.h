@@ -23,7 +23,7 @@ namespace PlatformRig { namespace Overlays
         GPUProfileDisplay(RenderCore::IAnnotator& profiler);
         ~GPUProfileDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
 		void    ProcessGPUEvents(const void* eventsBufferStart, const void* eventsBufferEnd);
 

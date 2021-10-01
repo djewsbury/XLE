@@ -28,20 +28,15 @@ namespace PlatformRig { namespace Overlays
 
 			auto titleRect = layout.AllocateFullWidth(lineHeight);
 			RenderOverlays::DebuggingDisplay::FillRectangle(context, titleRect, titleBkground);
-			RenderOverlays::DebuggingDisplay::DrawText(context, titleRect, nullptr, RenderOverlays::ColorB{0xff, 0xff, 0xff}, r._initializer);
+			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, titleRect, r._initializer);
 
 			auto msg = std::stringstream{AsString(r._actualizationLog)};
 			for (std::string line; std::getline(msg, line, '\n');) {
 				auto allocation = layout.AllocateFullWidth(lineHeight);
 				if (allocation.Height() <= 0) break;
-				RenderOverlays::DebuggingDisplay::DrawText(context, allocation, nullptr, RenderOverlays::ColorB{0xcf, 0xcf, 0xcf}, line);
+				RenderOverlays::DebuggingDisplay::DrawText().Color(0xffcfcfcf).Draw(context, allocation, line);
 			}
 		}
-	}
-
-	bool    InvalidAssetDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
-	{
-		return false;
 	}
 
 	InvalidAssetDisplay::InvalidAssetDisplay()

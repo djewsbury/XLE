@@ -114,15 +114,6 @@ namespace GUILayer
     {        
 	}
 
-	PlatformRig::InputContext EngineControl::MakeInputContext(System::Windows::Forms::Control^ control)
-	{
-		System::Drawing::Rectangle rect = control->ClientRectangle;
-		return PlatformRig::InputContext {
-			{ rect.Left, rect.Top },
-			{ rect.Right, rect.Bottom }
-		};
-	}
-
     void EngineControl::Evnt_Resize(Object^ sender, System::EventArgs^ e)
     {
         auto ctrl = dynamic_cast<Control^>(sender);
@@ -137,7 +128,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
 
-            _pimpl->_inputTranslator->OnKeyChange(MakeInputContext(ctrl), e->KeyValue, true); 
+            _pimpl->_inputTranslator->OnKeyChange(e->KeyValue, true); 
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -149,7 +140,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
 
-            _pimpl->_inputTranslator->OnKeyChange(MakeInputContext(ctrl), e->KeyValue, false); 
+            _pimpl->_inputTranslator->OnKeyChange(e->KeyValue, false); 
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -161,7 +152,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
             
-            _pimpl->_inputTranslator->OnChar(MakeInputContext(ctrl), e->KeyChar);
+            _pimpl->_inputTranslator->OnChar(e->KeyChar);
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -174,7 +165,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
             
-            _pimpl->_inputTranslator->OnMouseMove(MakeInputContext(ctrl), e->Location.X, e->Location.Y);
+            _pimpl->_inputTranslator->OnMouseMove(e->Location.X, e->Location.Y);
             ctrl->Invalidate();
         }
     }
@@ -195,7 +186,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
 
-            _pimpl->_inputTranslator->OnMouseButtonChange(MakeInputContext(ctrl), e->Location.X, e->Location.Y, AsIndex(e->Button), true);
+            _pimpl->_inputTranslator->OnMouseButtonChange(e->Location.X, e->Location.Y, AsIndex(e->Button), true);
             ctrl->Invalidate();
         }
     }
@@ -206,7 +197,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
             
-            _pimpl->_inputTranslator->OnMouseButtonChange(MakeInputContext(ctrl), e->Location.X, e->Location.Y, AsIndex(e->Button), false);
+            _pimpl->_inputTranslator->OnMouseButtonChange(e->Location.X, e->Location.Y, AsIndex(e->Button), false);
             ctrl->Invalidate();
         }
     }
@@ -217,7 +208,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
             
-            _pimpl->_inputTranslator->OnMouseWheel(MakeInputContext(ctrl), e->Delta);
+            _pimpl->_inputTranslator->OnMouseWheel(e->Delta);
             ctrl->Invalidate();
         }
     }
@@ -228,7 +219,7 @@ namespace GUILayer
             auto ctrl = dynamic_cast<Control^>(sender);
             if (!ctrl) return;
             
-            _pimpl->_inputTranslator->OnMouseButtonDblClk(MakeInputContext(ctrl), e->Location.X, e->Location.Y, AsIndex(e->Button));
+            _pimpl->_inputTranslator->OnMouseButtonDblClk(e->Location.X, e->Location.Y, AsIndex(e->Button));
             ctrl->Invalidate();
         }
     }
@@ -239,7 +230,7 @@ namespace GUILayer
         //  (because we might miss key up/down message when not focused)
         if (_pimpl.get() && _pimpl->_inputTranslator.get()) {       // (this can sometimes be called after the dispose, which ends up with an invalid _pimpl)
 			auto ctrl = dynamic_cast<Control^>(sender);
-            _pimpl->_inputTranslator->OnFocusChange(MakeInputContext(ctrl));
+            _pimpl->_inputTranslator->OnFocusChange();
         }
     }
 
@@ -294,7 +285,7 @@ namespace GUILayer
         _pimpl.reset(new EngineControlPimpl);
         auto engineDevice = EngineDevice::GetInstance();
         _pimpl->_windowRig = CreateWindowRig(engineDevice, control->Handle.ToPointer());
-        _pimpl->_inputTranslator = std::make_unique<PlatformRig::InputTranslator>();
+        _pimpl->_inputTranslator = std::make_unique<PlatformRig::InputTranslator>(control->Handle.ToPointer());
         _pimpl->_inputTranslator->AddListener(_pimpl->_windowRig->GetFrameRig().GetMainOverlaySystem()->GetInputListener());
 
         control->KeyDown    += gcnew System::Windows::Forms::KeyEventHandler(this, &EngineControl::Evnt_KeyDown);

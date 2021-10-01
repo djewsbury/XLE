@@ -228,16 +228,9 @@ namespace RenderOverlays
 		}
 	};
 
-	std::shared_ptr<Font> GetX2Font(StringSection<> path, int size)
+	::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size)
 	{
-		auto future = ::Assets::MakeAsset<FTFont>(path, size);
-		future->StallWhilePending();
-		return future->Actualize();
-	}
-
-	std::shared_ptr<Font> GetDefaultFont(unsigned size)
-	{
-		return GetX2Font("Petra", size);
+		return std::reinterpret_pointer_cast<::Assets::FuturePtr<Font>>(::Assets::MakeAsset<FTFont>(path, size));
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////

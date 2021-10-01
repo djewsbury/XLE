@@ -57,7 +57,7 @@ namespace RenderOverlays
 
         Float2   DrawText(
             const std::tuple<Float3, Float3>& quad, 
-            const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
+            const Font& font, DrawTextFlags::BitField, 
             ColorB col, TextAlignment alignment, StringSection<char> text) override;
 
         RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() override { return *_immediateDrawables; }
@@ -83,7 +83,6 @@ namespace RenderOverlays
         RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
         RenderCore::IThreadContext* _threadContext;
         FontRenderingManager* _fontRenderingManager;
-        std::shared_ptr<Font> _defaultFont;
         OverlayState _currentState;
         std::shared_ptr<RenderCore::UniformsStreamInterface> _texturedUSI;
         BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;

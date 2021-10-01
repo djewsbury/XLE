@@ -16,7 +16,7 @@ namespace PlatformRig { namespace Overlays
         typedef PlatformRig::InputSnapshot InputSnapshot;
 
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
         void    TrackLabel(const char label[]);
         void    UntrackLabel(const char label[]);

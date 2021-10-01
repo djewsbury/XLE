@@ -11,8 +11,8 @@
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../Tools/ToolsRig/IManipulator.h"
 #include "../../Tools/ToolsRig/ManipulatorsUtil.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/OverlayUtils.h"
+#include "../../Assets/AssetFutureContinuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/IntrusivePtr.h"
 
@@ -122,8 +122,8 @@ namespace ToolsRig
     {
         Rect manipulatorLeft(rect._topLeft, Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._bottomRight[1]));
         Rect manipulatorRight(Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._topLeft[1]), rect._bottomRight);
-        interactables.Register(Interactables::Widget(manipulatorLeft, left));
-        interactables.Register(Interactables::Widget(manipulatorRight, right));
+        interactables.Register({manipulatorLeft, left});
+        interactables.Register({manipulatorRight, right});
 
         if (interfaceState.HasMouseOver(left)) {
                 // draw a little triangle pointing to the left. It's only visible on mouse-over
@@ -160,13 +160,18 @@ namespace ToolsRig
     {
     public:
 		std::shared_ptr<RenderOverlays::Font> _headingFont;
-        WidgetResources();
-    };
+        
+        WidgetResources(
+            std::shared_ptr<RenderOverlays::Font> headingFont)
+        : _headingFont(std::move(headingFont))
+        {}
 
-    WidgetResources::WidgetResources()
-    {
-        _headingFont = GetX2Font("Raleway", 20);
-    }
+        static void ConstructToFuture(::Assets::FuturePtr<WidgetResources>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToFuture(future);
+        }
+    };
 
     Rect DrawManipulatorControls(
         IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState,
@@ -203,13 +208,14 @@ namespace ToolsRig
         
         FillRectangle(context, controlsRect, backgroundRectangleColour);
         OutlineRectangle(context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);
-        interactables.Register(Interactables::Widget(controlsRect, Id_TotalRect));
+        interactables.Register({controlsRect, Id_TotalRect});
 
         const auto headingRect = internalLayout.AllocateFullWidth(25);
-        context.DrawText(
-            std::make_tuple(Float3(float(headingRect._topLeft[0]), float(headingRect._topLeft[1]), 0.f), Float3(float(headingRect._bottomRight[0]), float(headingRect._bottomRight[1]), 0.f)),
-			res._headingFont, TextStyle{}, interfaceState.HasMouseOver(Id_TotalRect)?headerColourHighlight:headerColourNormal, TextAlignment::Center, 
-            title);
+        DrawText()
+            .Font(*res._headingFont)
+            .Color(interfaceState.HasMouseOver(Id_TotalRect)?headerColourHighlight:headerColourNormal)
+            .Alignment(TextAlignment::Center)
+            .Draw(context, headingRect, title);
 
             //
             //      Draw controls for parameters. Starting with the float parameters
@@ -220,7 +226,7 @@ namespace ToolsRig
             const auto rect = internalLayout.AllocateFullWidth(lineHeight);
             float* p = (float*)PtrAdd(&manipulator, parameter._valueOffset);
 
-            interactables.Register(Interactables::Widget(rect, Id_CurFloatParameters+c));
+            interactables.Register({rect, Id_CurFloatParameters+c});
             auto formatting = FormatButton(interfaceState, Id_CurFloatParameters+c);
 
                 // background (with special shader)
@@ -245,9 +251,10 @@ namespace ToolsRig
                 // text label (name and value)
             char buffer[256];
             _snprintf_s(buffer, _TRUNCATE, "%s = %5.1f", parameter._name, *p);
-            context.DrawText(
-                std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
-				nullptr, TextStyle{}, formatting._foreground, TextAlignment::Center, buffer);
+            DrawText()
+                .Color(formatting._foreground)
+                .Alignment(TextAlignment::Center)
+                .Draw(context, rect, buffer);
             
             DrawAndRegisterLeftRight(context, interactables, interfaceState, rect, Id_CurFloatParametersLeft+c, Id_CurFloatParametersRight+c);
         }
@@ -262,7 +269,7 @@ namespace ToolsRig
             unsigned* p = (unsigned*)PtrAdd(&manipulator, parameter._valueOffset);
             bool value = !!((*p) & (1<<parameter._bitIndex));
 
-            interactables.Register(Interactables::Widget(rect, Id_CurBoolParameters+c));
+            interactables.Register({rect, Id_CurBoolParameters+c});
             auto formatting = FormatButton(interfaceState, Id_CurBoolParameters+c);
 
             char buffer[256];
@@ -271,9 +278,10 @@ namespace ToolsRig
             } else 
                 _snprintf_s(buffer, _TRUNCATE, "%s", parameter._name);
 
-            context.DrawText(
-                std::make_tuple(Float3(float(rect._topLeft[0]), float(rect._topLeft[1]), 0.f), Float3(float(rect._bottomRight[0]), float(rect._bottomRight[1]), 0.f)),
-				nullptr, TextStyle{}, formatting._foreground, TextAlignment::Center, buffer);
+            DrawText()
+                .Color(formatting._foreground)
+                .Alignment(TextAlignment::Center)
+                .Draw(context, rect, buffer);
         }
 
             //
@@ -282,9 +290,10 @@ namespace ToolsRig
 
         if (!statusText.empty()) {
             const auto rect = internalLayout.AllocateFullWidth(lineHeight);
-            context.DrawText(
-                std::make_tuple(AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight)),
-				nullptr, TextStyle{}, headerColourNormal, TextAlignment::Center, statusText.c_str());
+            DrawText()
+                .Color(headerColourNormal)
+                .Alignment(TextAlignment::Center)
+                .Draw(context, rect, statusText);
         }
 
             //
@@ -293,7 +302,7 @@ namespace ToolsRig
             //
 
         Rect selectedManipulatorRect = internalLayout.AllocateFullWidth(lineHeight);
-        interactables.Register(Interactables::Widget(selectedManipulatorRect, Id_SelectedManipulator));
+        interactables.Register({selectedManipulatorRect, Id_SelectedManipulator});
         DrawButtonBasic(
             context, selectedManipulatorRect, manipulator.GetName(),
             FormatButton(interfaceState, Id_SelectedManipulator));
@@ -366,25 +375,25 @@ namespace ToolsRig
         DrawManipulatorControls(context, layout, interactables, interfaceState, *activeManipulator, "Terrain tools");
     }
 
-    bool    ManipulatorsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    ManipulatorsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         auto topMost = interfaceState.TopMostWidget();
         if (input.IsRelease_LButton()) {
             if (topMost._id == Id_SelectedManipulatorLeft) {
                     // go back one manipulator
                 _manipulatorsInterface->SelectManipulator(-1);
-                return true;
+                return ProcessInputResult::Consumed;
             }
             else if (topMost._id == Id_SelectedManipulatorRight) {
                     // go forward one manipulator
                 _manipulatorsInterface->SelectManipulator(1);
-                return true;
+                return ProcessInputResult::Consumed;
             }
         }
 
         return 
-            HandleManipulatorsControls(interfaceState, input, *_manipulatorsInterface->GetActiveManipulator())
-            || !interfaceState.GetMouseOverStack().empty();
+            (HandleManipulatorsControls(interfaceState, input, *_manipulatorsInterface->GetActiveManipulator())
+            || !interfaceState.GetMouseOverStack().empty()) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
     }
 
 

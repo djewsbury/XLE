@@ -75,22 +75,22 @@ namespace Overlays
         }
     }
 
-    bool    TestMaterialSettings::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    TestMaterialSettings::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
             // allow the scroller we're currently dragging to go first...
         for (unsigned c=0; c<dimof(_scrollers); ++c)
             if (_scrollers[c].IsDragging()) {
-                if (_scrollers[c].ProcessInput(interfaceState, inputContext, input))
-                    return true;
+                if (_scrollers[c].ProcessInput(interfaceState, input))
+                    return ProcessInputResult::Consumed;
                 break;
             }
 
         for (unsigned c=0; c<dimof(_scrollers); ++c) {
-            if (_scrollers[c].ProcessInput(interfaceState, inputContext, input)) {
-                return true;
+            if (_scrollers[c].ProcessInput(interfaceState, input)) {
+                return ProcessInputResult::Consumed;
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     TestMaterialSettings::TestMaterialSettings(SceneEngine::MaterialOverride& materialSettings)

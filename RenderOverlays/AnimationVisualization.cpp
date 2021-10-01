@@ -10,7 +10,6 @@
 #include "../RenderCore/Techniques/CommonResources.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
-#include "../RenderOverlays/Font.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
 #include "../Assets/Assets.h"
@@ -36,10 +35,17 @@ namespace RenderOverlays
 	{
 	public:
 		std::shared_ptr<Font> _font;
-		SkeletonPreviewResourceBox()
-		{
-			_font = RenderOverlays::GetX2Font("Vera", 12);
-		}
+
+		SkeletonPreviewResourceBox(
+            std::shared_ptr<RenderOverlays::Font> font)
+        : _font(std::move(font))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<SkeletonPreviewResourceBox>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Vera", 12)).ThenConstructToFuture(future);
+        }
 	};
 
 	void    RenderSkeleton(
@@ -50,8 +56,6 @@ namespace RenderOverlays
 		const Float4x4& localToWorld, 
 		bool drawBoneNames)
     {
-		auto& box = ConsoleRig::FindCachedBox<SkeletonPreviewResourceBox>();
-
 		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
         auto vertexCount = outputMatrixCount * 2 * 2 * 3;
 		Techniques::ImmediateDrawableMaterial material;
@@ -120,7 +124,8 @@ namespace RenderOverlays
 
 		assert(workingVertexIterator <= vertexCount); 
 
-		if (drawBoneNames) {
+		auto* box = ConsoleRig::TryActualizeCachedBox<SkeletonPreviewResourceBox>();
+		if (drawBoneNames && box) {
 			auto viewport = parserContext.GetViewport();
 			auto outputMatrixNames = skeleton.GetOutputMatrixNames();
 
@@ -158,7 +163,7 @@ namespace RenderOverlays
 					std::make_tuple(
 						Float3(screenSpace[0] - 100.f, screenSpace[1] - 20.f, 0.f), 
 						Float3(screenSpace[0] + 100.f, screenSpace[1] + 20.f, 0.f)),
-					box._font, {}, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::TextAlignment::Center, 
+					*box->_font, RenderOverlays::DrawTextFlags::Shadow, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::TextAlignment::Center, 
 					MakeStringSection(name));
 			}
 		}

@@ -56,7 +56,7 @@ namespace Overlays
             
             Rect textRect = windAngle0;
             textRect._topLeft[0] += 32;
-            /*Coord a = */DrawText(context, textRect, nullptr, ColorB(0xffffffff), TextAlignment::Left, objects[q]._name);
+            /*Coord a = */DrawText().Alignment(TextAlignment::Left).Draw(context, textRect, objects[q]._name);
 
             Rect scrollBar = windAngle0;
             scrollBar._topLeft[0] = labelRect._bottomRight[0];
@@ -67,28 +67,27 @@ namespace Overlays
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
             HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
-            interactables.Register(
-                Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
+            interactables.Register({scrollCoordinates.InteractableRect(), scrollBarId+q});
 
-            DrawFormatText(context, scrollBar, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
+            DrawText().Alignment(TextAlignment::Right).FormatAndDraw(context, scrollBar, "%.3f", *objects[q]._member);
         }
     }
 
-    bool    ToneMapSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    ToneMapSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         for (unsigned c=0; c<dimof(_scrollers); ++c)
             if (_scrollers[c].IsDragging()) {
-                if (_scrollers[c].ProcessInput(interfaceState, inputContext, input))
-                    return true;
+                if (_scrollers[c].ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+                    return ProcessInputResult::Consumed;
                 break;
             }
 
         for (unsigned c=0; c<dimof(_scrollers); ++c) {
-            if (_scrollers[c].ProcessInput(interfaceState, inputContext, input)) {
-                return true;
+            if (_scrollers[c].ProcessInput(interfaceState, input) == ProcessInputResult::Consumed) {
+                return ProcessInputResult::Consumed;
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     ToneMapSettingsDisplay::ToneMapSettingsDisplay(SceneEngine::ToneMapSettings& settings)
@@ -152,7 +151,7 @@ namespace Overlays
             
             Rect textRect = windAngle0;
             textRect._topLeft[0] += 32;
-            /*Coord a = */DrawFormatText(context, textRect, nullptr, ColorB(0xffffffff), objects[q]._name);
+            /*Coord a = */DrawText().FormatAndDraw(context, textRect, objects[q]._name);
 
             Rect scrollBar = windAngle0;
             scrollBar._topLeft[0] = labelRect._bottomRight[0];
@@ -163,29 +162,28 @@ namespace Overlays
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
             HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
-            interactables.Register(
-                Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
+            interactables.Register({scrollCoordinates.InteractableRect(), scrollBarId+q});
 
-            DrawFormatText(context, scrollBar, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
+            DrawText().Alignment(TextAlignment::Right).FormatAndDraw(context, scrollBar, "%.3f", *objects[q]._member);
         }
     }
 
-    bool    ColorGradingSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input)
+    auto    ColorGradingSettingsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
     {
         for (unsigned c=0; c<dimof(_scrollers); ++c)
             if (_scrollers[c].IsDragging()) {
-                if (_scrollers[c].ProcessInput(interfaceState, inputContext, input))
-                    return true;
+                if (_scrollers[c].ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+                    return ProcessInputResult::Consumed;
                 break;
             }
 
         for (unsigned c=0; c<dimof(_scrollers); ++c) {
-            if (_scrollers[c].ProcessInput(interfaceState, inputContext, input)) {
-                return true;
+            if (_scrollers[c].ProcessInput(interfaceState, input) == ProcessInputResult::Consumed) {
+                return ProcessInputResult::Consumed;
             }
         }
 
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     ColorGradingSettingsDisplay::ColorGradingSettingsDisplay(SceneEngine::ColorGradingSettings& settings)

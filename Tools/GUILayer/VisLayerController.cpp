@@ -20,7 +20,6 @@
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../SceneEngine/IScene.h"

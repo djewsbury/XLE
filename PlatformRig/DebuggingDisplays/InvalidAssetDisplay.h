@@ -22,7 +22,6 @@ namespace PlatformRig { namespace Overlays
 		using InputSnapshot = PlatformRig::InputSnapshot;
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-		bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const InputSnapshot& input);
 
 		InvalidAssetDisplay();
 		~InvalidAssetDisplay();

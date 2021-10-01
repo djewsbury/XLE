@@ -13,7 +13,6 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -645,23 +644,22 @@ namespace ToolsRig
     {
         using namespace RenderOverlays::DebuggingDisplay;
 
-        auto textHeight = (int)RenderOverlays::GetDefaultFont()->GetFontProperties()._lineHeight;
+        const auto textHeight = 20u;
         std::string matName;
 		auto* visContent = dynamic_cast<const ToolsRig::IVisContent*>(&scene);
 		if (visContent)
 			matName = visContent->GetDrawCallDetails(mouseOver._drawCallIndex, mouseOver._materialGuid)._materialName;
-        DrawText(
-            context,
-            Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-8), Coord2(viewport._bottomRight[0]-6, viewport._bottomRight[1]-8)),
-            nullptr, RenderOverlays::ColorB(0xffafafaf),
-            StringMeld<512>() 
-                << "Material: {Color:7f3faf}" << matName
-                << "{Color:afafaf}, Draw call: " << mouseOver._drawCallIndex
-                << std::setprecision(4)
-                << ", (" << mouseOver._intersectionPt[0]
-                << ", "  << mouseOver._intersectionPt[1]
-                << ", "  << mouseOver._intersectionPt[2]
-                << ")");
+        DrawText()
+			.Color(RenderOverlays::ColorB(0xffafafaf))
+			.Draw(context, Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-8), Coord2(viewport._bottomRight[0]-6, viewport._bottomRight[1]-8)),
+				StringMeld<512>() 
+					<< "Material: {Color:7f3faf}" << matName
+					<< "{Color:afafaf}, Draw call: " << mouseOver._drawCallIndex
+					<< std::setprecision(4)
+					<< ", (" << mouseOver._intersectionPt[0]
+					<< ", "  << mouseOver._intersectionPt[1]
+					<< ", "  << mouseOver._intersectionPt[2]
+					<< ")");
     }
 
     void VisualisationOverlay::Render(

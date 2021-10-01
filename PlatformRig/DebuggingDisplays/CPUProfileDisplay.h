@@ -21,7 +21,7 @@ namespace PlatformRig { namespace Overlays
         typedef RenderOverlays::DebuggingDisplay::InterfaceState InterfaceState;
         
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
         HierarchicalProfilerDisplay(IHierarchicalProfiler* profiler);
         ~HierarchicalProfilerDisplay();

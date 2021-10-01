@@ -129,12 +129,6 @@ namespace PlatformRig { namespace Overlays
 #endif
     }
 
-    bool DynamicImpostersDisplay::ProcessInput(
-        InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
-    {
-        return false;
-    }
-
     DynamicImpostersDisplay::DynamicImpostersDisplay(
         std::weak_ptr<SceneEngine::DynamicImposters> manager)
     : _manager(std::move(manager))

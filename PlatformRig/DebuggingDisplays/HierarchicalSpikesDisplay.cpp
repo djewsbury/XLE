@@ -3,8 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "HierarchicalSpikesDisplay.h"
-#include "../../RenderOverlays/Font.h"
 #include "../../ConsoleRig/ResourceBox.h"
+#include "../../Assets/AssetFutureContinuation.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"
@@ -163,6 +163,22 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
+    class SpikesProfilerResources
+    {
+    public:
+		std::shared_ptr<RenderOverlays::Font> _largeFont;
+
+        SpikesProfilerResources(
+            std::shared_ptr<RenderOverlays::Font> largeFont)
+        : _largeFont(std::move(largeFont))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<SpikesProfilerResources>& future)
+        {
+            ::Assets::WhenAll(RenderOverlays::MakeFont("Petra", 64)).ThenConstructToFuture(future);
+        }
+    };
+
     void HierarchicalSpikesDisplay::Render(
         IOverlayContext& context, Layout& layout,
         Interactables&interactables, InterfaceState& interfaceState)
@@ -190,7 +206,7 @@ namespace PlatformRig { namespace Overlays
                 Rect sectionNameRect(
                     Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                     Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-                DrawText(context, sectionNameRect, nullptr, ColorB(0xffffffffu), (const char*)i->first);
+                DrawText().Draw(context, sectionNameRect, (const char*)i->first);
 
                 if (section._durationHistoryLength) {
                     auto stats = Pimpl::CalculateDurationStats({section._durationHistory, &section._durationHistory[section._durationHistoryLength]});
@@ -200,12 +216,12 @@ namespace PlatformRig { namespace Overlays
                         Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.667f)) );
 
                     float recentCost = section._durationHistory[section._durationHistoryLength-1];
-                    DrawFormatText(context, durationRect, nullptr, ColorB(0xffffffffu), "%.2fms (%.2fms)", stats._mean, recentCost);
+                    DrawText().FormatAndDraw(context, durationRect, "%.2fms (%.2fms)", stats._mean, recentCost);
 
                     Rect varianceRect(
                         Coord2(labelRect._topLeft[0], durationRect._bottomRight[1]),
                         Coord2(labelRect._bottomRight[0], labelRect._bottomRight[1]) );
-                    DrawFormatText(context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", stats._variance);
+                    DrawText().FormatAndDraw(context, varianceRect, "%.2fms variance", stats._variance);
                 }
 
                 //  Then draw the graph in the main part of the widget
@@ -217,19 +233,15 @@ namespace PlatformRig { namespace Overlays
         }
 
 	    {
-		    context.DrawText(
-			    std::make_tuple(AsPixelCoords(Coord2(layout.GetMaximumSize()._bottomRight[0] - 100,
-			                                         layout.GetMaximumSize()._topLeft[1])),
-			                    AsPixelCoords(layout.GetMaximumSize()._bottomRight)),
-			    GetDefaultFont(64), TextStyle{}, ColorB{0xff, 0xff, 0xff}, TextAlignment::Left,
-			    StringMeld<64>() << std::setprecision(3) << g_fpsDisplay);
+            auto* res = ConsoleRig::TryActualizeCachedBox<SpikesProfilerResources>();
+            if (!res) return;
+		    DrawText()
+                .Font(*res->_largeFont)
+                .Alignment(TextAlignment::Left)
+                .Draw(
+                    context, {Coord2(layout.GetMaximumSize()._bottomRight[0] - 100, layout.GetMaximumSize()._topLeft[1]), layout.GetMaximumSize()._bottomRight},
+                    StringMeld<64>() << std::setprecision(3) << g_fpsDisplay);
 	    }
-    }
-
-    bool HierarchicalSpikesDisplay::ProcessInput(
-        InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const InputSnapshot& input)
-    {
-        return false;
     }
 
     HierarchicalSpikesDisplay::HierarchicalSpikesDisplay(IHierarchicalProfiler* profiler)

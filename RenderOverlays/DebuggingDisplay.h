@@ -18,8 +18,6 @@
 #include <vector>
 #include <map>
 
-namespace RenderOverlays { class TextStyle; }
-
 namespace RenderOverlays { namespace DebuggingDisplay
 {
     typedef int         Coord;
@@ -62,6 +60,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     typedef uint32 KeyId;
 
     class InterfaceState;
+    enum class ProcessInputResult { Passthrough, Consumed };
 
     ///////////////////////////////////////////////////////////////////////////////////
     class Interactables
@@ -70,38 +69,48 @@ namespace RenderOverlays { namespace DebuggingDisplay
         struct Widget
         {
             Rect _rect;
-            InteractableId _id;
-            Widget(const Rect& rect, InteractableId id) : _rect(rect), _id(id) {}
+            InteractableId _id = 0;
         };
+        std::vector<Widget> _widgets;
 
         void                Register(const Widget& widget);
         std::vector<Widget> Intersect(const Coord2& position) const;
-        InterfaceState      BuildInterfaceState(const Coord2& mousePosition, unsigned mouseButtonsHeld);
-        Interactables();
-    protected:
-        std::vector<Widget> _widgets;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
     class InterfaceState
     {
     public:
-        InterfaceState();
-        InterfaceState( const Coord2& mousePosition, unsigned mouseButtonsHeld, 
-                        const std::vector<Interactables::Widget>& mouseStack);
-
         bool                    HasMouseOver(InteractableId id);
-        InteractableId          TopMostId() const                                   { return (!_mouseOverStack.empty())?_mouseOverStack[_mouseOverStack.size()-1]._id:0; }
-        Interactables::Widget   TopMostWidget() const                               { return (!_mouseOverStack.empty())?_mouseOverStack[_mouseOverStack.size()-1]:Interactables::Widget(Rect(), 0); }
+        InteractableId          TopMostId() const;
+        Interactables::Widget   TopMostWidget() const;
         bool                    IsMouseButtonHeld(unsigned buttonIndex = 0) const   { return !!(_mouseButtonsHeld&(1<<buttonIndex)); }
         Coord2                  MousePosition() const                               { return _mousePosition; }
 
-        const std::vector<Interactables::Widget>& GetMouseOverStack() const         { return _mouseOverStack; }
+        void BeginCapturing(const Interactables::Widget& widget);
+        void EndCapturing();
 
+        struct Capture
+        {
+            Coord2 _driftDuringCapture = Coord2{0,0};
+            Interactables::Widget _widget;
+        };
+        const Capture& GetCapture() const                     { return _capture;  }
+
+        const std::vector<Interactables::Widget>& GetMouseOverStack() const         { return _mouseOverStack; }
+        const PlatformRig::InputContext& GetViewInputContext() const                { return _viewInputContext; }
+
+        InterfaceState();
+        InterfaceState( const PlatformRig::InputContext& viewInputContext,
+                        const Coord2& mousePosition, unsigned mouseButtonsHeld, 
+                        const std::vector<Interactables::Widget>& mouseStack,
+                        const Capture& capture);
     protected:
         std::vector<Interactables::Widget> _mouseOverStack;
+        Capture     _capture;
         Coord2      _mousePosition;
         unsigned    _mouseButtonsHeld;
+        PlatformRig::InputContext _viewInputContext;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -113,10 +122,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
 		using InputSnapshot = PlatformRig::InputSnapshot;
+        using ProcessInputResult = RenderOverlays::DebuggingDisplay::ProcessInputResult;
 
-        virtual void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
-        virtual bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
-        virtual         ~IWidget();
+        virtual void                    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
+        virtual ProcessInputResult      ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        virtual                         ~IWidget();
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -143,12 +153,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor, ColorB outlineColour,
-        float borderWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
         Corner::Flags cornerFlags = 0xf);
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
-        float width, float roundedProportion = 1.f / 8.f,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
         Corner::Flags cornerFlags = 0xf);
 
     void FillRaisedRoundedRectangle(
@@ -163,13 +173,28 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Corner::Flags cornerFlags = 0xf);
 
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
-    void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour = ColorB(0xff000000));
+    void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);
+    void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth = 1.f);
 
-    Coord2      DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text);
-    Coord2      DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text);
-    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, const char text[], ...);
-    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...);
-    Coord2      DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args);
+    struct DrawText
+    {
+        mutable DrawTextFlags::BitField _flags = DrawTextFlags::Shadow;
+        mutable Font* _font = nullptr;
+        mutable ColorB _color = ColorB::White;
+        mutable TextAlignment _alignment = TextAlignment::Left;
+
+        Coord2 Draw(IOverlayContext& context, const Rect& rect, StringSection<>) const;
+        Coord2 FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], ...) const;
+        Coord2 FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], va_list args) const;
+        
+        Coord2 operator()(IOverlayContext& context, const Rect& rect, StringSection<> text) { return Draw(context, rect, text); }
+
+        const DrawText& Alignment(TextAlignment alignment) const { _alignment = alignment; return *this; }
+        const DrawText& Flags(DrawTextFlags::BitField flags) const { _flags = flags; return *this; }
+        const DrawText& Color(ColorB color) const { _color = color; return *this; }
+        const DrawText& Font(Font& font) const { _font = &font; return *this; }
+    };
+
     void        DrawHistoryGraph(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
     void        DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
 
@@ -238,7 +263,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             Coord   ValueToPixels(float value) const;
         };
 
-        bool                ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        IWidget::ProcessInputResult                ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
         float               CalculateCurrentOffset(const Coordinates& coordinates) const;
         float               CalculateCurrentOffset(const Coordinates& coordinates, float oldValue) const;
         InteractableId      GetID() const;
@@ -271,7 +296,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement() : _bkColour(0xff000000) {}
     };
     void DrawTableHeaders(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, ColorB bkColor, Interactables* interactables=NULL);
-    float DrawTableEntry(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
+    Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, const IteratorRange<std::pair<std::string, unsigned>*>& fieldHeaders, const std::map<std::string, TableElement>& entry);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class DebugScreensSystem : public PlatformRig::IInputListener
@@ -304,9 +329,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
         unsigned AddWidgetChangeCallback(WidgetChangeCallback&& callback);
         void RemoveWidgetChangeCallback(unsigned callbackid);
 
-        bool    ConsumedInputEvent()       { return _consumedInputEvent; }
-        void    ResetConsumedInputEvent()  { _consumedInputEvent = false; }
-
         DebugScreensSystem();
         ~DebugScreensSystem();
 
@@ -333,7 +355,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         Coord2      _currentMouse;
         unsigned    _currentMouseHeld;
-        bool        _consumedInputEvent;
 
         void    RenderPanelControls(        IOverlayContext&    context,
                                             unsigned            panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
@@ -346,6 +367,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         return  rect._topLeft[0] < rect._bottomRight[0]
             &&  rect._topLeft[1] < rect._bottomRight[1];
+    }
+
+    inline bool IsInside(const Rect& rect, const Coord2& pt)
+    {
+        return  (pt[0] >= rect._topLeft[0])
+            &&  (pt[1] >= rect._topLeft[1])
+            &&  (pt[0] < rect._bottomRight[0])
+            &&  (pt[1] < rect._bottomRight[1]);
     }
 
 }}

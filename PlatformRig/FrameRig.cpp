@@ -10,9 +10,9 @@
 #include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
-#include "../RenderOverlays/Font.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayContext.h"
+#include "../RenderOverlays/Font.h"
 
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
@@ -96,19 +96,21 @@ namespace PlatformRig
         std::shared_ptr<RenderOverlays::Font> _smallFrameRateFont;
         std::shared_ptr<RenderOverlays::Font> _tabHeadingFont;
 
-        FrameRigResources();
+        FrameRigResources(
+            std::shared_ptr<RenderOverlays::Font> frameRateFont,
+            std::shared_ptr<RenderOverlays::Font> smallFrameRateFont,
+            std::shared_ptr<RenderOverlays::Font> tabHeadingFont)
+        : _frameRateFont(std::move(frameRateFont)), _smallFrameRateFont(std::move(smallFrameRateFont)), _tabHeadingFont(std::move(tabHeadingFont))
+        {}
+
+        static void ConstructToFuture(::Assets::FuturePtr<FrameRigResources>& future)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Shojumaru", 32),
+                RenderOverlays::MakeFont("PoiretOne", 14),
+                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToFuture(future);
+        }
     };
-
-    FrameRigResources::FrameRigResources()
-    {
-        auto frameRateFont = RenderOverlays::GetX2Font("Shojumaru", 32);
-        auto smallFrameRateFont = RenderOverlays::GetX2Font("PoiretOne", 14);
-        auto tabHeadingFont = RenderOverlays::GetX2Font("Raleway", 20);
-
-        _frameRateFont = std::move(frameRateFont);
-        _smallFrameRateFont = std::move(smallFrameRateFont);
-        _tabHeadingFont = std::move(tabHeadingFont);
-    }
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -454,7 +456,7 @@ namespace PlatformRig
     {
     public:
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
         FrameRigDisplay(
             std::shared_ptr<DebugScreensSystem> debugSystem,
@@ -471,7 +473,8 @@ namespace PlatformRig
     void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout, 
                                     Interactables&interactables, InterfaceState& interfaceState)
     {
-        auto& res = ConsoleRig::FindCachedBox<FrameRigResources>();
+        auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
+        if (!res) return;
 
         using namespace RenderOverlays;
         using namespace RenderOverlays::DebuggingDisplay;
@@ -480,9 +483,9 @@ namespace PlatformRig
         static Coord rectWidth = 175;
         static Coord padding = 12;
         static Coord margin = 8;
-        const auto bigLineHeight = Coord(res._frameRateFont->GetFontProperties()._lineHeight);
-        const auto smallLineHeight = Coord(res._smallFrameRateFont->GetFontProperties()._lineHeight);
-        const auto tabHeadingLineHeight = Coord(res._tabHeadingFont->GetFontProperties()._lineHeight);
+        const auto bigLineHeight = Coord(res->_frameRateFont->GetFontProperties()._lineHeight);
+        const auto smallLineHeight = Coord(res->_smallFrameRateFont->GetFontProperties()._lineHeight);
+        const auto tabHeadingLineHeight = Coord(res->_tabHeadingFont->GetFontProperties()._lineHeight);
         const Coord rectHeight = bigLineHeight + 3 * margin + smallLineHeight;
         Rect displayRect(
             Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
@@ -505,31 +508,24 @@ namespace PlatformRig
 
         auto f = _frameRate->GetPerformanceStats();
 
-		TextStyle bigStyle{};
-        context.DrawText(
-            AsPixelCoords(innerLayout.Allocate(Coord2(80, bigLineHeight))),
-            res._frameRateFont, bigStyle, ColorB(0xffffffff), TextAlignment::Left,
-			StringMeld<64>() << std::setprecision(1) << std::fixed << 1000.f / std::get<0>(f));
+        DrawText()
+            .Alignment(TextAlignment::Left)
+            .Font(*res->_frameRateFont)
+            .Draw(context, innerLayout.Allocate(Coord2(80, bigLineHeight)), StringMeld<64>() << std::setprecision(1) << std::fixed << 1000.f / std::get<0>(f));
 
-		TextStyle smallStyle{};
-        context.DrawText(
-            AsPixelCoords(innerLayout.Allocate(Coord2(rectWidth - 80 - innerLayout._paddingInternalBorder*2 - innerLayout._paddingBetweenAllocations, smallLineHeight * 2))),
-            res._smallFrameRateFont, smallStyle, ColorB(0xffffffff), TextAlignment::Left,
-			StringMeld<64>() << std::setprecision(1) << std::fixed << (1000.f / std::get<2>(f)) << "-" << (1000.f / std::get<1>(f)));
+        DrawText()
+            .Font(*res->_smallFrameRateFont)
+            .Alignment(TextAlignment::Left)
+			.Draw(context, innerLayout.Allocate(Coord2(rectWidth - 80 - innerLayout._paddingInternalBorder*2 - innerLayout._paddingBetweenAllocations, smallLineHeight * 2)), StringMeld<64>() << std::setprecision(1) << std::fixed << (1000.f / std::get<2>(f)) << "-" << (1000.f / std::get<1>(f)));
 
         auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
         auto frameAllocations = _prevFrameAllocationCount->_allocationCount;
 
-        DrawFormatText(
-            context, innerLayout.AllocateFullWidth(smallLineHeight),
-            &smallStyle, ColorB(0xffffffff), TextAlignment::Center,
-            "%.2fM (%i)", heapMetrics._usage / (1024.f*1024.f), frameAllocations);
+        DrawText()
+            .Alignment(TextAlignment::Center)
+            .FormatAndDraw(context, innerLayout.AllocateFullWidth(smallLineHeight), "%.2fM (%i)", heapMetrics._usage / (1024.f*1024.f), frameAllocations);
 
-        interactables.Register(Interactables::Widget(displayRect, Id_FrameRigDisplayMain));
-
-		TextStyle tabHeader{};
-        // tabHeader._options.shadow = 0;
-        // tabHeader._options.outline = 1;
+        interactables.Register({displayRect, Id_FrameRigDisplayMain});
 
         auto ds = _debugSystem.lock();
         if (ds) {
@@ -549,10 +545,10 @@ namespace PlatformRig
                     if ((_subMenuOpen-1) == unsigned(c) || highlight) {
 
                             //  Draw the text name for this icon under the icon
-                        Coord nameWidth = (Coord)StringWidth(*res._tabHeadingFont, MakeStringSection(categories[c]));
+                        Coord nameWidth = (Coord)StringWidth(*res->_tabHeadingFont, MakeStringSection(categories[c]));
                         rect = Rect(
                             pt - Coord2(std::max(iconSize[0], nameWidth), 0),
-                            pt + Coord2(0, Coord(iconSize[1] + res._tabHeadingFont->GetFontProperties()._lineHeight)));
+                            pt + Coord2(0, Coord(iconSize[1] + res->_tabHeadingFont->GetFontProperties()._lineHeight)));
 
                         auto iconLeft = Coord((rect._topLeft[0] + rect._bottomRight[0] - iconSize[0]) / 2.f);
                         Coord2 iconTopLeft(iconLeft, rect._topLeft[1]);
@@ -567,10 +563,10 @@ namespace PlatformRig
                             AsPixelCoords(iconRect._topLeft),
                             AsPixelCoords(iconRect._bottomRight),
                             texture->GetShaderResource());
-                        DrawText(
-                            context, rect,
-                            &tabHeader, tabHeaderColor, TextAlignment::Bottom,
-                            categories[c]);
+                        DrawText()
+                            .Color(tabHeaderColor)
+                            .Alignment(TextAlignment::Bottom)
+                            .Draw(context, rect, categories[c]);
 
                     } else {
 
@@ -585,7 +581,7 @@ namespace PlatformRig
 
                     }
 
-                    interactables.Register(Interactables::Widget(rect, Id_FrameRigDisplaySubMenu+c));
+                    interactables.Register({rect, Id_FrameRigDisplaySubMenu+c});
                     pt = rect._topLeft - Coord2(margin, 0);
                     menuHeight = std::max(menuHeight, unsigned(rect._bottomRight[1] - rect._topLeft[1]));
                 }
@@ -600,7 +596,7 @@ namespace PlatformRig
                 const auto screens = ds->GetWidgets();
                 for (auto i=screens.cbegin(); i!=screens.cend(); ++i) {
                     if (i->_name.find(categories[_subMenuOpen-1]) != std::string::npos) {
-                        unsigned width = (unsigned)StringWidth(*res._tabHeadingFont, MakeStringSection(i->_name));
+                        unsigned width = (unsigned)StringWidth(*res->_tabHeadingFont, MakeStringSection(i->_name));
                         auto rect = screenListLayout.AllocateFullWidth(lineHeight);
                         rect._topLeft[0] = rect._bottomRight[0] - width;
 
@@ -615,19 +611,19 @@ namespace PlatformRig
                             AsPixelCoords(Coord2(rect._topLeft - Coord2(smallIconSize[0] + margin, 0))),
                             AsPixelCoords(Coord2(rect._topLeft[0]-margin, rect._bottomRight[1])),
                             texture->GetShaderResource());
-                        DrawText(
-                            context, rect,
-                            &tabHeader, tabHeaderColor, TextAlignment::Left,
-                            i->_name.c_str());
+                        DrawText()
+                            .Color(tabHeaderColor)
+                            .Alignment(TextAlignment::Left)
+                            .Draw(context, rect, i->_name);
 
-                        interactables.Register(Interactables::Widget(rect, i->_hashCode));
+                        interactables.Register({rect, i->_hashCode});
                     }
                 }
             }
         }
     }
 
-    bool    FrameRigDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    FrameRigDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         auto topMost = interfaceState.TopMostWidget();
         if (input.IsPress_LButton() || input.IsRelease_LButton()) {
@@ -635,12 +631,12 @@ namespace PlatformRig
                 if (input.IsRelease_LButton()) {
                     _subMenuOpen = unsigned(!_subMenuOpen);
                 }
-                return true;
+                return ProcessInputResult::Consumed;
             } else if (topMost._id >= Id_FrameRigDisplaySubMenu && topMost._id < Id_FrameRigDisplaySubMenu + 32) {
                 if (input.IsRelease_LButton()) {
                     _subMenuOpen = unsigned(topMost._id - Id_FrameRigDisplaySubMenu + 1);
                 }
-                return true;
+                return ProcessInputResult::Consumed;
             }
 
             auto ds = _debugSystem.lock();
@@ -651,12 +647,12 @@ namespace PlatformRig
                     if (input.IsRelease_LButton() && ds->SwitchToScreen(0, topMost._id)) {
                         _subMenuOpen = 0;
                     }
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }
             }
         }
 
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     FrameRigDisplay::FrameRigDisplay(

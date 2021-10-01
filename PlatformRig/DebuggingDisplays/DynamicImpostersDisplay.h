@@ -20,7 +20,6 @@ namespace PlatformRig { namespace Overlays
     {
     public:
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
 
         DynamicImpostersDisplay(std::weak_ptr<SceneEngine::DynamicImposters> manager);
         ~DynamicImpostersDisplay();

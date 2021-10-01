@@ -18,7 +18,6 @@ namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderOverlays
 {
-	class TextStyle;
 	class Font;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +94,7 @@ namespace RenderOverlays
 
         virtual Float2   DrawText(
             const std::tuple<Float3, Float3>& quad,
-            const std::shared_ptr<Font>& font, const TextStyle& textStyle, 
+            const Font& font, DrawTextFlags::BitField, 
 			ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
 
         virtual void    CaptureState    () = 0;

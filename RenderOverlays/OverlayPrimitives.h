@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Assets/AssetsCore.h"
 #include "../Math/Vector.h"
 
 namespace RenderOverlays
@@ -13,6 +14,12 @@ namespace RenderOverlays
         TopLeft, Top, TopRight,
         Left, Center, Right,
         BottomLeft, Bottom, BottomRight
+    };
+
+    namespace DrawTextFlags
+    {
+        enum Flags { Shadow = 1u<<0u, Outline = 1u<<1u, Snap = 1u<<2u };
+        using BitField = unsigned;
     };
 
 	class ColorB
@@ -59,5 +66,8 @@ namespace RenderOverlays
 		float Length() const { return max[0] - min[0]; }
 		float Height() const { return max[1] - min[1]; }
 	};
+
+    class Font;
+    ::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size);
 
 }

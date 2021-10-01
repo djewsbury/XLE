@@ -204,7 +204,7 @@ namespace PlatformRig { namespace Overlays
                 Rect sectionNameRect( 
                     Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                     Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-                DrawText(context, sectionNameRect, nullptr, ColorB(0xffffffffu), section._id);
+                DrawText().Draw(context, sectionNameRect, section._id);
 
 				if (section._durationHistoryLength) {
                     Rect durationRect( 
@@ -213,12 +213,12 @@ namespace PlatformRig { namespace Overlays
 
                     float recentCost = section._durationHistory[section._durationHistoryLength-1];
                     float smoothedCost = smoothedSectionCosts[c2].first;
-                    DrawFormatText(context, durationRect, nullptr, ColorB(0xffffffffu), "%.2fms (%.2fms)", smoothedCost, recentCost);
+                    DrawText().FormatAndDraw(context, durationRect, "%.2fms (%.2fms)", smoothedCost, recentCost);
 
                     Rect varianceRect( 
                         Coord2(labelRect._topLeft[0], durationRect._bottomRight[1]),
                         Coord2(labelRect._bottomRight[0], labelRect._bottomRight[1]) );
-                    DrawFormatText(context, varianceRect, nullptr, ColorB(0xffffffffu), "%.2fms variance", sectionVariances[smoothedSectionCosts[c2].second]);
+                    DrawText().FormatAndDraw(context, varianceRect, "%.2fms variance", sectionVariances[smoothedSectionCosts[c2].second]);
                 }
 
                 //  Then draw the graph in the main part of the widget
@@ -230,7 +230,7 @@ namespace PlatformRig { namespace Overlays
                     Rect mouseOverRect(sectionRect._topLeft, Coord2(LinearInterpolate(labelRect._topLeft[0], labelRect._bottomRight[0], .12f), sectionRect._bottomRight[1]));
                     mouseOverRect._topLeft[0] += 4; mouseOverRect._topLeft[1] += 4;
                     mouseOverRect._bottomRight[0] -= 4; mouseOverRect._bottomRight[1] -= 4;
-                    interactables.Register(Interactables::Widget(mouseOverRect, sectionToolsId+sectionIndex));
+                    interactables.Register({mouseOverRect, sectionToolsId+sectionIndex});
 
                     if (interfaceState.HasMouseOver(sectionToolsId+smoothedSectionCosts[c2].second)) {
                         const char* buttonNames[] = {"P", "H", "R"};
@@ -253,12 +253,12 @@ namespace PlatformRig { namespace Overlays
                             InteractableId id = baseButtonIds[c]+sectionIndex;
                             if (interfaceState.HasMouseOver(id)) {
                                 OutlineEllipse(context, buttonRect, ColorB(0xff000000u));
-                                DrawText(context, buttonRect, nullptr, ColorB(0xff000000u), buttonNames[c]);
+                                DrawText().Color(0xff000000u).Draw(context, buttonRect, buttonNames[c]);
                             } else {
                                 OutlineEllipse(context, buttonRect, ColorB(0xffffffffu));
-                                DrawText(context, buttonRect, nullptr, ColorB(0xffffffffu), buttonNames[c]);
+                                DrawText().Color(0xffffffffu).Draw(context, buttonRect, buttonNames[c]);
                             }
-                            interactables.Register(Interactables::Widget(buttonRect, id));
+                            interactables.Register({buttonRect, id});
                         }
                     }
                 }
@@ -266,7 +266,7 @@ namespace PlatformRig { namespace Overlays
         }
     }
 
-    bool    GPUProfileDisplay::ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input)
+    auto    GPUProfileDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (interfaceState.TopMostId()) {
             if (input.IsRelease_LButton()) {
@@ -278,19 +278,19 @@ namespace PlatformRig { namespace Overlays
                 if (topMostWidget >= basePauseButton && topMostWidget < basePauseButton + dimof(_sections)) {
                     Section& section = _sections[topMostWidget-basePauseButton];
                     section._flags = section._flags ^ Section::Flag_Pause;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 } else if (topMostWidget >= baseHideButton && topMostWidget < baseHideButton + dimof(_sections)) {
                     Section& section = _sections[topMostWidget-baseHideButton];
                     section._flags = section._flags ^ Section::Flag_Hide;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 } else if (topMostWidget >= baseResetButton && topMostWidget < baseResetButton + dimof(_sections)) {
                     Section& section = _sections[topMostWidget-baseResetButton];
                     section._durationHistoryLength = 0;
-                    return true;
+                    return ProcessInputResult::Consumed;
                 }
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     float   GPUProfileDisplay::ToGPUDuration(GPUTime time, GPUTime frequency) 

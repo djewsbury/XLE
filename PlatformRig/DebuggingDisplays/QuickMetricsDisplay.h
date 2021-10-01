@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../Assets/AssetsCore.h"
 #include <vector>
 
 namespace Utility { class IHierarchicalProfiler; }
@@ -25,7 +26,7 @@ namespace PlatformRig { namespace Overlays
 		~QuickMetricsDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
 		
 		std::vector<std::pair<Style, StringSection<>>> _lines;
 		uint32_t _frameBarrierSignal = ~0u;
@@ -36,6 +37,6 @@ namespace PlatformRig { namespace Overlays
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _scrollOffset = 0.f;
 
-		std::shared_ptr<RenderOverlays::Font> _headingFont;
+		::Assets::PtrToFuturePtr<RenderOverlays::Font> _headingFont;
 	};
 }}

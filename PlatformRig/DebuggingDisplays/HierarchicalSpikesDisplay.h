@@ -20,7 +20,6 @@ namespace PlatformRig { namespace Overlays
         typedef PlatformRig::InputSnapshot InputSnapshot;
 
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const InputSnapshot& input);
 
         HierarchicalSpikesDisplay(IHierarchicalProfiler* profiler);
         ~HierarchicalSpikesDisplay();

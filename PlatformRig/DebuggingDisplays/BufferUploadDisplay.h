@@ -24,7 +24,7 @@ namespace PlatformRig { namespace Overlays
         BufferUploadDisplay(BufferUploads::IManager* manager);
         ~BufferUploadDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
     protected:
         std::deque<BufferUploads::CommandListMetrics> _recentHistory;
@@ -87,7 +87,7 @@ namespace PlatformRig { namespace Overlays
         ResourcePoolDisplay(BufferUploads::IManager* manager);
         ~ResourcePoolDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
     protected:
         unsigned _filter, _detailsIndex;
@@ -103,7 +103,7 @@ namespace PlatformRig { namespace Overlays
         BatchingDisplay(BufferUploads::IManager* manager);
         ~BatchingDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const InputContext& inputContext, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
     protected:
         BufferUploads::BatchingSystemMetrics _lastFrameMetrics;

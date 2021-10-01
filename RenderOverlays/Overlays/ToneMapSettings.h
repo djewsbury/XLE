@@ -21,7 +21,7 @@ namespace Overlays
         ToneMapSettingsDisplay(SceneEngine::ToneMapSettings& settings);
         ~ToneMapSettingsDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
     private:
         ScrollBar   _scrollers[11];
@@ -34,7 +34,7 @@ namespace Overlays
         ColorGradingSettingsDisplay(SceneEngine::ColorGradingSettings& settings);
         ~ColorGradingSettingsDisplay();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        bool    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
     private:
         ScrollBar   _scrollers[14];
