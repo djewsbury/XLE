@@ -68,38 +68,63 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, 0), 1.f);
             return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
         #else
-            float4 prevFrustumCoords;
-            [unroll] for (uint c=0; c<GetShadowSubProjectionCount(); c++) {
-                float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, c), 1.f);
-                // Expanding out the equation below to show how it works:
-                // const uint maxBlurSearchInPix = 32;
-    			// const uint halfTextureSize = 512;
-                // const float fullyInsidePoint = float(halfTextureSize-maxBlurSearchInPix) / float(halfTextureSize);
-                // maxBlurSearchInPix/halfTextureSize == 2*ProjectionMaxBlurRadiusNorm
-                const float fullyInsidePoint = 1.f-2.f*ProjectionMaxBlurRadiusNorm;
-                if (PtInFrustumXY(float4(frustumCoordinates.xy, 0, fullyInsidePoint))) {        // assuming w == 1
-                    float4 miniProj = ShadowProjection_GetMiniProj_NotNear(c);
-                    float maxBlurNorm = ProjectionMaxBlurRadiusNorm;
-                    if (c != 0) {
-                        float a = max(abs(prevFrustumCoords.x), abs(prevFrustumCoords.y)) / prevFrustumCoords.w;
-                        // a = (((a-1) * halfTextureSize) + maxBlurSearchInPix) / maxBlurSearchInPix;
-                        // a = (a*halfTextureSize - halfTextureSize + maxBlurSearchInPix) / maxBlurSearchInPix;
-                        // a = (a-1)*halfTextureSize/maxBlurSearchInPix + 1;
-                        a = (a-1.f)/(2.f*ProjectionMaxBlurRadiusNorm) + 1.f;
-                        // Little trick here -- crossfade the xy part of miniproj during the transition between cascades
-                        // Since we clamp the upper range of the blur in pixel coords, if we don't do this the cascade edge is visible
-                        // in the blurry parts, because we suddenly go from a dense pixel area to a less dense area. Effectively the
-                        // max blur radius in world space becomes larger in higher cascades
-                        // miniProj.xy is only used for the size of the blur radius, to transform from a world space radius into
-                        // a pixel space radius
-                        // In the cross fade, when a==0, want the blur radius in world space to be the same as the blur radius
-                        // would have been in the previous cascade. We'll then fade (pretty quickly) across the transition
-                        maxBlurNorm *= lerp(miniProj.x/ShadowProjection_GetMiniProj_NotNear(c-1).x, 1, saturate(a));
+
+            float4 frustumCoordinates;
+            int lowerCascadeIndex = 0, higherCascadeIndex = 0;
+            float cascadeAlpha = 1.;
+
+            // Expanding out the equation below to show how it works:
+            // const uint maxBlurSearchInPix = 32;
+            // const uint halfTextureSize = 512;
+            // const float fullyInsidePoint = float(halfTextureSize-maxBlurSearchInPix) / float(halfTextureSize);
+            // maxBlurSearchInPix/halfTextureSize == 2*ProjectionMaxBlurRadiusNorm
+            const float fullyInsidePoint = 1.f-2.f*ProjectionMaxBlurRadiusNorm;
+
+            [unroll] for (; ; lowerCascadeIndex++) {
+                if (lowerCascadeIndex==GetShadowSubProjectionCount())
+                    return CascadeAddress_Invalid();
+
+                frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, lowerCascadeIndex), 1.f);
+                
+                float insideDet = max(abs(frustumCoordinates.x), abs(frustumCoordinates.y));
+                if (insideDet < 1.f) {        // assuming w == 1
+                    // If we're inside this frustum, but in the transition zone, we need t check to see if we also fall
+                    // within the next frustum up. If so, we configure the cascade for transition
+                    // If we're inside the transition part, but not actually inside the next cascade, then we treat it
+                    // as if we're not transitioning. This can occur, but is only really common with very huge transition areas
+                    if (insideDet > fullyInsidePoint && (lowerCascadeIndex+1) != GetShadowSubProjectionCount()) {
+                        float4 nextCascadeFrustumCoordinates = float4(AdjustForOrthoCascade(basePosition, lowerCascadeIndex+1), 1.f);
+                        if (PtInFrustumXY(float4(nextCascadeFrustumCoordinates.xy, 0, fullyInsidePoint))) {
+                            float a = insideDet;
+                            // a = (((a-1) * halfTextureSize) + maxBlurSearchInPix) / maxBlurSearchInPix;
+                            // a = (a*halfTextureSize - halfTextureSize + maxBlurSearchInPix) / maxBlurSearchInPix;
+                            // a = (a-1)*halfTextureSize/maxBlurSearchInPix + 1;
+                            a = (a-1.f)/(2.f*ProjectionMaxBlurRadiusNorm) + 1.f;
+                            cascadeAlpha = saturate(a);
+                            higherCascadeIndex = lowerCascadeIndex+1;
+                            frustumCoordinates = nextCascadeFrustumCoordinates;
+                            break;
+                        }
                     }
-                    return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, c, miniProj, maxBlurNorm);
+
+                    higherCascadeIndex = lowerCascadeIndex;
+                    break;
                 }
-                prevFrustumCoords = frustumCoordinates;
             }
+
+            // Little trick here -- crossfade the xy part of miniproj during the transition between cascades
+            // Since we clamp the upper range of the blur in pixel coords, if we don't do this the cascade edge is visible
+            // in the blurry parts, because we suddenly go from a dense pixel area to a less dense area. Effectively the
+            // max blur radius in world space becomes larger in higher cascades
+            // miniProj.xy is only used for the size of the blur radius, to transform from a world space radius into
+            // a pixel space radius
+            // In the cross fade, when a==0, want the blur radius in world space to be the same as the blur radius
+            // would have been in the previous cascade. We'll then fade (pretty quickly) across the transition
+            float4 miniProj = ShadowProjection_GetMiniProj_NotNear(higherCascadeIndex);
+            float maxBlurNorm = ProjectionMaxBlurRadiusNorm;
+            maxBlurNorm *= lerp(miniProj.x/ShadowProjection_GetMiniProj_NotNear(lowerCascadeIndex).x, 1, cascadeAlpha);
+            return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, higherCascadeIndex, miniProj, maxBlurNorm);
+
         #endif
     #elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ARBITRARY) || (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_CUBEMAP)
 
