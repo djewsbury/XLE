@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Assets/AssetFuture.h"
+#include "../Assets/AssetTraits.h"
 #include "../Assets/InitializerPack.h"
 #include "../OSServices/Log.h"
 #include "../Utility/MemoryUtils.h"
@@ -18,7 +19,23 @@
 
 namespace ConsoleRig
 {
-
+	//
+	// This file implements 2 functions:
+	//
+	// 		FindCachedBox<Type>(...)
+	// 		TryActualizeCachedBox<Type>(...)
+	//
+	// Both will check the result of GetDependencyValidation() of the object and rebuild
+	// invalidated objects TryActualizeCachedBox() can only be used with classes that have
+	// a method like:
+	//
+	//		static void ConstructToFuture(::Assets::FuturePtr<Type>& future);
+	//
+	// implemented. This will invoke a background compile on first access and return nullptr
+	// until the object is aready to go.
+	// FindCachedBox<> can also be used with assets with a ConstructToFuture() method, but
+	// will throw ::Assets::Exceptions::PendingAsset if the asset is not ready
+	//
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
 	namespace Internal
@@ -28,7 +45,8 @@ namespace ConsoleRig
 
 		template <typename Box> struct BoxTable : public IBoxTable
 		{
-			std::vector<std::pair<uint64_t, std::unique_ptr<Box>>>    _internalTable;
+			std::vector<std::pair<uint64_t, std::unique_ptr<Box>>>    			_internalTable;
+			std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Box>>>		_internalFuturesTable;
 		};
 
 		template <typename Box> std::vector<std::pair<uint64_t, std::unique_ptr<Box>>>& GetBoxTable()
@@ -38,10 +56,20 @@ namespace ConsoleRig
 				table = (BoxTable<Box>*)GetOrRegisterBoxTable(typeid(Box).hash_code(), std::make_unique<Internal::BoxTable<Box>>());
 			return table->_internalTable;
 		}
+
+		template <typename Box> std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Box>>>& GetBoxFutureTable()
+		{
+			static BoxTable<Box>* table = nullptr;
+			if (!table)
+				table = (BoxTable<Box>*)GetOrRegisterBoxTable(typeid(Box).hash_code(), std::make_unique<Internal::BoxTable<Box>>());
+			return table->_internalFuturesTable;
+		}
 	}
 
 	template <typename Box, typename... Params> 
-		std::enable_if_t<::Assets::Internal::HasGetDependencyValidation<Box>::value, Box&> FindCachedBox(Params... params)
+		std::enable_if_t<
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
 		auto& boxTable = Internal::GetBoxTable<std::decay_t<Box>>();
@@ -61,7 +89,9 @@ namespace ConsoleRig
 	}
 
 	template <typename Box, typename... Params> 
-		std::enable_if_t<!::Assets::Internal::HasGetDependencyValidation<Box>::value, Box&> FindCachedBox(Params... params)
+		std::enable_if_t<
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
 		auto& boxTable = Internal::GetBoxTable<std::decay_t<Box>>();
@@ -73,6 +103,104 @@ namespace ConsoleRig
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(ptr)));
 		return *i2->second;
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> FindCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			if (::Assets::IsInvalidated(*i->second)) {
+				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
+				Box::ConstructToFuture(*i->second, std::forward<Params>(params)...);
+				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
+			}
+			return *i->second->Actualize();
+		}
+
+		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		return *i2->second->Actualize();
+	}
+
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> FindCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			return *i->second->Actualize();
+		}
+
+		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		return *i2->second->Actualize();
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box*> TryActualizeCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			if (::Assets::IsInvalidated(*i->second)) {
+				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
+				Box::ConstructToFuture(*i->second, std::forward<Params>(params)...);
+				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
+			}
+			auto* res = i->second->TryActualize();
+			if (!res) return nullptr;
+			return res->get();
+		}
+
+		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		auto* res = i2->second->TryActualize();
+		if (!res) return nullptr;
+		return res->get();
+	}
+
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			Box*> TryActualizeCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			auto* res = i->second->TryActualize();
+			if (!res) return nullptr;
+			return res->get();
+		}
+
+		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		auto* res = i2->second->TryActualize();
+		if (!res) return nullptr;
+		return res->get();
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
