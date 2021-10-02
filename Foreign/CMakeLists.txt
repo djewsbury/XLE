@@ -38,3 +38,22 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     target_compile_options(ForeignMisc PRIVATE /wd4100 /wd4244 /wd4996 /wd4706 /wd4127 /wd4267 /wd4018 /wd4702 /wd4324 /wd4310 /wd4701 /wd4703 /wd4099 /wd4068 /wd4101 /wd4180)
 endif()
+
+#############################################################################################
+
+file(GLOB_RECURSE yogacore_SRC "yoga/yoga/*.cpp")
+add_library(yogacore STATIC ${yogacore_SRC})
+
+target_compile_options(
+    yogacore
+    PRIVATE
+    -fno-omit-frame-pointer
+    -fexceptions
+    -fvisibility=hidden
+    -ffunction-sections
+    -fdata-sections
+    -Wall
+    -std=c++11)
+
+target_include_directories(yogacore PUBLIC "yoga/")
+set_target_properties(yogacore PROPERTIES CXX_STANDARD 11)
