@@ -142,35 +142,35 @@ namespace RenderOverlays { namespace DebuggingDisplay
         static const auto TopRight = 2u;
         static const auto BottomLeft = 4u;
         static const auto BottomRight = 8u;
-        using Flags = unsigned;
+        using BitField = unsigned;
     }
 
     void FillRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor,
         float roundedProportion = 1.f / 8.f,
-        Corner::Flags cornerFlags = 0xf);
+        Corner::BitField cornerFlags = 0xf);
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor, ColorB outlineColour,
         float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
-        Corner::Flags cornerFlags = 0xf);
+        Corner::BitField cornerFlags = 0xf);
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
         float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
-        Corner::Flags cornerFlags = 0xf);
+        Corner::BitField cornerFlags = 0xf);
 
     void FillRaisedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
         float roundedProportion = 1.f / 8.f,
-        Corner::Flags cornerFlags = 0xf);
+        Corner::BitField cornerFlags = 0xf);
     void FillDepressedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
         float roundedProportion = 1.f / 8.f,
-        Corner::Flags cornerFlags = 0xf);
+        Corner::BitField cornerFlags = 0xf);
 
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);

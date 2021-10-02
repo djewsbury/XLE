@@ -351,7 +351,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         IOverlayContext& context, const Rect & rect, 
         ColorB colour, 
         float width, float roundedProportion,
-        Corner::Flags cornerFlags)
+        Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -376,7 +376,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor,
         float roundedProportion,
-        Corner::Flags cornerFlags)
+        Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -402,7 +402,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const Rect & rect,
         ColorB fillColor, ColorB outlineColour,
         float borderWidth, float roundedProportion,
-        Corner::Flags cornerFlags)
+        Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -427,7 +427,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
         float roundedProportion,
-        Corner::Flags cornerFlags)
+        Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -452,7 +452,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
         float roundedProportion,
-        Corner::Flags cornerFlags)
+        Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
