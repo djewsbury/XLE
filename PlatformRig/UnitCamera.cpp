@@ -367,19 +367,19 @@ namespace PlatformRig { namespace Camera
         }
     }
 
-    static float GetCameraYawInput(float dt, RenderOverlays::DebuggingDisplay::Coord2 mouseMovement)
+    static float GetCameraYawInput(float dt, RenderOverlays::Coord2 mouseMovement)
     {
         const float limit = std::min(dt, 0.033f) * 10.0f * 2.f * gPI;
         return Clamp(-0.002f * float(mouseMovement[0]), -limit, limit);
     }
 
-    static float GetCameraPitchInput(float dt, RenderOverlays::DebuggingDisplay::Coord2 mouseMovement)
+    static float GetCameraPitchInput(float dt, RenderOverlays::Coord2 mouseMovement)
     {
         const float limit = std::min(dt, 0.033f) * 10.0f * 2.f * gPI;
         return Clamp(-0.002f * float(mouseMovement[1]), -limit, limit);
     }
 
-    static RenderOverlays::DebuggingDisplay::Coord2 prevMousePosition(0, 0);
+    static RenderOverlays::Coord2 prevMousePosition(0, 0);
 
     static Float3 GetCameraTargetPos(const ClientUnit& unit, float unitScaleFactor)
     {

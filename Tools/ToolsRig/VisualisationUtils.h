@@ -15,7 +15,8 @@
 #include <chrono>
 #include <functional>
 
-namespace RenderCore { namespace Techniques { 
+namespace RenderCore { namespace Techniques 
+{
 	class CameraDesc;
 	class ITechniqueDelegate;
 	class IPipelineAcceleratorPool;
@@ -25,8 +26,7 @@ namespace RenderCore { namespace Techniques {
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; }}
-namespace RenderOverlays { class IOverlayContext; }
-namespace RenderOverlays { namespace DebuggingDisplay { struct Rect; }}
+namespace RenderOverlays { class IOverlayContext; struct Rect; }
 namespace OSServices { class OnChangeCallback; }
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }
 

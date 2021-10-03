@@ -47,25 +47,21 @@ namespace RenderOverlays
         static const ColorB Zero;
     };
 
-	class Quad 
-	{
-	public:
-		Float2 min, max;
+    using Coord = int;
+    using Coord2 = Int2;
 
-		Quad() : min(0.f, 0.f), max(0.f, 0.f) {}
-		static Quad Empty();
-		static Quad MinMax(float minX, float minY, float maxX, float maxY);
-		static Quad MinMax(const Float2& min, const Float2& max);
-		static Quad CenterExtent(const Float2& center, const Float2& extent);
+    inline Coord2 AsCoord2(const Float2& input) { return Coord2(Coord(input[0]), Coord(input[1])); }
+    inline Float2 AsFloat2(const Coord2& input) { return Float2(float(input[0]), float(input[1])); }
 
-		bool operator == (const Quad& v) const;
-		bool operator != (const Quad& v) const;
+    struct Rect ///////////////////////////////////////////////////////////////////////
+    {
+        Coord2      _topLeft, _bottomRight;
+        Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
+        Rect() {}
 
-		Float2 Center() const;
-		Float2 Extent() const;
-		float Length() const { return max[0] - min[0]; }
-		float Height() const { return max[1] - min[1]; }
-	};
+        Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
+        Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+    };
 
     class Font;
     ::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size);

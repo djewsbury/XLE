@@ -7,6 +7,7 @@
 #pragma once
 
 #include "IOverlayContext.h"
+#include "OverlayPrimitives.h"
 #include "../PlatformRig/InputListener.h"
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
@@ -20,22 +21,6 @@
 
 namespace RenderOverlays { namespace DebuggingDisplay
 {
-    typedef int         Coord;
-    typedef Int2        Coord2;
-
-    inline Coord2 AsCoord2(const Float2& input) { return Coord2(Coord(input[0]), Coord(input[1])); }
-    inline Float2 AsFloat2(const Coord2& input) { return Float2(float(input[0]), float(input[1])); }
-
-    struct Rect ///////////////////////////////////////////////////////////////////////
-    {
-        Coord2      _topLeft, _bottomRight;
-        Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
-        Rect() {}
-
-        Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
-        Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
-    };
-
     struct Layout /////////////////////////////////////////////////////////////////////
     {
         Rect    _maximumSize;

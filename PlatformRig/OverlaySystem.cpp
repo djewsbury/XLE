@@ -271,7 +271,7 @@ namespace PlatformRig
 
         Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
         assert(viewportDims[0] * viewportDims[1]);
-        _screens->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ {0,0}, viewportDims });
+        _screens->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
         _immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);

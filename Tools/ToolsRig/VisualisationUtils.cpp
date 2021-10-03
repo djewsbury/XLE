@@ -197,7 +197,7 @@ namespace ToolsRig
 		return ::Assets::AssetState::Ready;
 	}
 
-	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::DebuggingDisplay::Rect& rect, RenderOverlays::ColorB colour)
+	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::Rect& rect, RenderOverlays::ColorB colour)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
             return;
@@ -220,14 +220,14 @@ namespace ToolsRig
 
 	static void RenderLoadingIndicator(
 		RenderOverlays::IOverlayContext& context,
-		const RenderOverlays::DebuggingDisplay::Rect& viewport,
+		const RenderOverlays::Rect& viewport,
 		unsigned animationCounter)
     {
         using namespace RenderOverlays::DebuggingDisplay;
 
 		const unsigned indicatorWidth = 80;
 		const unsigned indicatorHeight = 120;
-		RenderOverlays::DebuggingDisplay::Rect outerRect;
+		RenderOverlays::Rect outerRect;
 		outerRect._topLeft[0] = std::max(viewport._topLeft[0]+12u, viewport._bottomRight[0]-indicatorWidth-12u);
 		outerRect._topLeft[1] = std::max(viewport._topLeft[1]+12u, viewport._bottomRight[1]-indicatorHeight-12u);
 		outerRect._bottomRight[0] = viewport._bottomRight[0]-12u;
@@ -249,7 +249,7 @@ namespace ToolsRig
 			float a2 = std::fmodf(idx / 10.f, 1.0f);
 			a2 = 0.5f + 0.5f * a2;
 
-			Rect r;
+			RenderOverlays::Rect r;
 			r._topLeft[0] = unsigned(center[0] - a * 0.5f * (outerRect._bottomRight[0] - outerRect._topLeft[0]));
 			r._topLeft[1] = unsigned(center[1] - a * 0.5f * (outerRect._bottomRight[1] - outerRect._topLeft[1]));
 			r._bottomRight[0] = unsigned(center[0] + a * 0.5f * (outerRect._bottomRight[0] - outerRect._topLeft[0]));
@@ -329,6 +329,7 @@ namespace ToolsRig
 		} else {
 			// Draw a loading indicator, 
 			using namespace RenderOverlays::DebuggingDisplay;
+			using namespace RenderOverlays;
 			RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_immediateDrawables, _fontRenderingManager.get());
 			overlays.CaptureState();
 			auto viewportDims = Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
@@ -638,11 +639,12 @@ namespace ToolsRig
 
 	static void RenderTrackingOverlay(
         RenderOverlays::IOverlayContext& context,
-		const RenderOverlays::DebuggingDisplay::Rect& viewport,
+		const RenderOverlays::Rect& viewport,
 		const ToolsRig::VisMouseOver& mouseOver, 
 		const SceneEngine::IScene& scene)
     {
         using namespace RenderOverlays::DebuggingDisplay;
+		using namespace RenderOverlays;
 
         const auto textHeight = 20u;
         std::string matName;
@@ -650,7 +652,7 @@ namespace ToolsRig
 		if (visContent)
 			matName = visContent->GetDrawCallDetails(mouseOver._drawCallIndex, mouseOver._materialGuid)._materialName;
         DrawText()
-			.Color(RenderOverlays::ColorB(0xffafafaf))
+			.Color(ColorB(0xffafafaf))
 			.Draw(context, Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-8), Coord2(viewport._bottomRight[0]-6, viewport._bottomRight[1]-8)),
 				StringMeld<512>() 
 					<< "Material: {Color:7f3faf}" << matName
@@ -797,7 +799,8 @@ namespace ToolsRig
 			CATCH_ASSETS_BEGIN
 
 				using namespace RenderOverlays::DebuggingDisplay;
-				RenderOverlays::ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
+				using namespace RenderOverlays;
+				ImmediateOverlayContext overlays(threadContext, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 				overlays.CaptureState();
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
 				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, **scene);

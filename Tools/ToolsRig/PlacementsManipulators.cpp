@@ -1626,7 +1626,7 @@ namespace ToolsRig
     {
 		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(device, *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 		auto viewportDims = device.GetStateDesc()._viewportDimensions;
-		_pimpl->_screens->Render(*overlayContext, RenderOverlays::DebuggingDisplay::Rect{ { 0,0 },{ int(viewportDims[0]), int(viewportDims[1]) } });
+		_pimpl->_screens->Render(*overlayContext, RenderOverlays::Rect{ { 0,0 },{ int(viewportDims[0]), int(viewportDims[1]) } });
     }
 
     void PlacementsManipulatorsManager::RenderToScene(

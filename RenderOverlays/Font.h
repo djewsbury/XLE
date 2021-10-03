@@ -87,6 +87,26 @@ namespace RenderOverlays
 								float spaceExtra     = 0.0f,
 								bool outline         = false);
 
+	class Quad
+	{
+	public:
+		Float2 min, max;
+
+		Quad() : min(0.f, 0.f), max(0.f, 0.f) {}
+		static Quad Empty();
+		static Quad MinMax(float minX, float minY, float maxX, float maxY);
+		static Quad MinMax(const Float2& min, const Float2& max);
+		static Quad CenterExtent(const Float2& center, const Float2& extent);
+
+		bool operator == (const Quad& v) const;
+		bool operator != (const Quad& v) const;
+
+		Float2 Center() const;
+		Float2 Extent() const;
+		float Length() const { return max[0] - min[0]; }
+		float Height() const { return max[1] - min[1]; }
+	};
+
     Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<ucs4> text);
 	Float2		AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text);
 }

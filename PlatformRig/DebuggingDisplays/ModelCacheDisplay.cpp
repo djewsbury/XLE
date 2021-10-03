@@ -28,7 +28,7 @@ namespace PlatformRig { namespace Overlays
 		unsigned _tab = 0;
 	};
 
-	static void DrawButton(RenderOverlays::IOverlayContext& context, const char name[], const RenderOverlays::DebuggingDisplay::Rect&buttonRect, RenderOverlays::DebuggingDisplay::Interactables&interactables, RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState)
+	static void DrawButton(RenderOverlays::IOverlayContext& context, const char name[], const RenderOverlays::Rect&buttonRect, RenderOverlays::DebuggingDisplay::Interactables&interactables, RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState)
     {
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);

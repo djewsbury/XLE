@@ -45,7 +45,7 @@ namespace Sample
 
 		Float2 _rotations = { 0.5f * gPI, 0.5f * gPI };
 		float _zoomFactor = 0.f;
-		std::optional<RenderOverlays::DebuggingDisplay::Coord2> _mouseAnchor;
+		std::optional<RenderOverlays::Coord2> _mouseAnchor;
 	};
 
 	void HelloWorldOverlay::Render(

@@ -1010,7 +1010,7 @@ namespace PlatformRig { namespace Overlays
 
             {
                 const unsigned lineHeight = 4;
-                Rect outsideRect = layout.AllocateFullWidth(DebuggingDisplay::Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
+                Rect outsideRect = layout.AllocateFullWidth(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
                 Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
 
                 OutlineRectangle(context, outsideRect, 0xff000000);
