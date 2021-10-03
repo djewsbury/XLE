@@ -404,8 +404,8 @@ namespace SceneEngine
 
                 RequireEndElement(formatter);
                 auto hashName = _sunSourceFrustumSettingsInCfgFile.DeserializeObject(name, properties);
-                if (!associatedLight.IsEmpty())
-                    _shadowToAssociatedLight.emplace_back(hashName, Hash64(associatedLight));
+                if (!associatedLight.IsEmpty() && hashName.has_value())
+                    _shadowToAssociatedLight.emplace_back(hashName.value(), Hash64(associatedLight));
 
             } else {
                 SkipValueOrElement(formatter);

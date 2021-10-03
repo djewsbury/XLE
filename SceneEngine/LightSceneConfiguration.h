@@ -8,6 +8,7 @@
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Meta/ClassAccessorsImpl.h"
 #include <vector>
+#include <optional>
 
 namespace SceneEngine
 {
@@ -18,10 +19,10 @@ namespace SceneEngine
 		std::vector<std::pair<uint64_t, Type>> _objects;
 
 		template<typename Formatter>
-			uint64_t DeserializeObject(Formatter& fmttr);
+			std::optional<uint64_t> DeserializeObject(Formatter& fmttr);
 
 		struct PendingProperty { StringSection<> _name; IteratorRange<const void*> _data; ImpliedTyping::TypeDesc _typeDesc; };
-		uint64_t DeserializeObject(StringSection<> name, IteratorRange<const PendingProperty*> properties);
+		std::optional<uint64_t> DeserializeObject(StringSection<> name, IteratorRange<const PendingProperty*> properties);
 
 	private:
 		uint64_t _nextUnnamed = 1; 
@@ -66,7 +67,7 @@ namespace SceneEngine
 
 	template<typename Type>
 		template<typename Formatter>
-			uint64_t ObjectTable<Type>::DeserializeObject(Formatter& fmttr)
+			std::optional<uint64_t> ObjectTable<Type>::DeserializeObject(Formatter& fmttr)
 	{
 		StringSection<> keyname;
 		std::vector<PendingProperty> properties; 
@@ -96,7 +97,7 @@ namespace SceneEngine
 	}
 
 	template<typename Type>
-		uint64_t ObjectTable<Type>::DeserializeObject(StringSection<> name, IteratorRange<const PendingProperty*> properties)
+		std::optional<uint64_t> ObjectTable<Type>::DeserializeObject(StringSection<> name, IteratorRange<const PendingProperty*> properties)
 	{
 		uint64_t objectNameHash = 0;
 		if (!name.IsEmpty()) objectNameHash = Hash64(name);
@@ -107,8 +108,17 @@ namespace SceneEngine
 			existing = _objects.insert(existing, std::make_pair(objectNameHash, Type{}));
 
 		auto& accessors = Legacy_GetAccessors<Type>();
-		for (const auto& p:properties)
+		for (const auto& p:properties) {
+			if (__builtin_expect(XlEqString(p._name, "ObjectTableCmd") && p._typeDesc._typeHint == ImpliedTyping::TypeHint::String && (p._typeDesc._type == ImpliedTyping::TypeCat::UInt8 || p._typeDesc._type == ImpliedTyping::TypeCat::Int8), false)) {
+				auto value = MakeStringSection((const char*)p._data.begin(), (const char*)p._data.end());
+				if (XlEqString(value, "Delete")) {
+					_objects.erase(existing);
+					return {};
+				}
+				continue;
+			}
 			accessors.Set(&existing->second, p._name, p._data, p._typeDesc);
+		}
 		return objectNameHash;
 	}
 
