@@ -225,6 +225,9 @@ namespace RenderCore { namespace Techniques
 		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
 		if (!pipelineLayout) return;
 		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+		auto viewport = parserContext.GetViewport();
+		ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
 	}
 
@@ -239,6 +242,9 @@ namespace RenderCore { namespace Techniques
 		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
 		if (!pipelineLayout) return;
 		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+		auto viewport = parserContext.GetViewport();
+		ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 		SequencerUniformsHelper uniformsHelper { parserContext };
 		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
 	}
