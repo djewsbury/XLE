@@ -123,6 +123,11 @@ namespace XLEMath
         return int((rhs - lhs) * alpha + .5f) + lhs;
     }
 
+    inline int64_t LinearInterpolate(int64_t lhs, int64_t rhs, float alpha)
+    {
+        return int((rhs - lhs) * alpha + .5f) + lhs;
+    }
+
     #if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
         inline float BranchlessMin(float a, float b)
         {
