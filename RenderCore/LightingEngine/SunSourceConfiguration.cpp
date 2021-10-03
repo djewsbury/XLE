@@ -1133,7 +1133,7 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
     static ClassAccessors props(typeid(Obj).hash_code());
     static bool init = false;
     if (!init) {
-        props.Add("MaxFrustumCount",
+        props.Add("MaxCascadeCount",
             [](const Obj& obj) { return obj._maxFrustumCount; },
             [](Obj& obj, unsigned value) { obj._maxFrustumCount = Clamp(value, 1u, RenderCore::LightingEngine::s_staticMaxSubProjections); });
         props.Add("MaxDistanceFromCamera",  &Obj:: _maxDistanceFromCamera);
