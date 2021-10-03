@@ -33,5 +33,8 @@ namespace PlatformRig { namespace Camera
         Float3 _orbitFocus;
         float _charactersScale;
     };
+
+    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const InputSnapshot& input);
+    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const InputSnapshot& input);
 }}
 

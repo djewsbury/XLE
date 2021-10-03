@@ -13,8 +13,7 @@
 
 namespace PlatformRig { namespace Camera
 {
-    static void UpdateCamera_Slew(  RenderCore::Techniques::CameraDesc& camera, float dt, 
-                                    const InputSnapshot& input)
+    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const InputSnapshot& input)
     {
             // (Derived from Archeage/x2standalone camera mode)
         const float cl_sensitivity = 20.f;
@@ -109,8 +108,7 @@ namespace PlatformRig { namespace Camera
         camera._cameraToWorld = Expand(rotationPart, camPos);
     }
 
-    static void UpdateCamera_Orbit( RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint,
-                                    const InputSnapshot& input)
+    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const InputSnapshot& input)
     {
         const float cl_sensitivity   = 20.f;
         const float fr_fspeed_scale  = 1.f;
