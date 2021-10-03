@@ -8,8 +8,8 @@
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
 // #include "../TechniqueLibrary/SceneEngine/Lighting/AmbientResolve.hlsl"
-#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 
@@ -100,21 +100,17 @@ float3 CalculateIllumination(
 		#if defined(DOMINANT_LIGHT_SHAPE)
 			{
 				float shadowing = 1.f;
-				bool enableNearCascade = false;
-				#if SHADOW_ENABLE_NEAR_CASCADE != 0
-					enableNearCascade = true;
+
+				#if (DOMINANT_LIGHT_SHAPE & 0x20) == 0x20
+					CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, worldGeometryNormal);
+					if (cascade.cascadeIndex >= 0) {
+						shadowing = ResolveShadows_Cascade(cascade, screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
+					}
 				#endif
 
-				CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, worldGeometryNormal);
-				if (cascade.cascadeIndex >= 0) {
-					shadowing = ResolveShadows_Cascade(
-						cascade.cascadeIndex, cascade.frustumCoordinates, cascade.frustumSpaceNormal, cascade.miniProjection,
-						screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
-				}
-
-				#if DOMINANT_LIGHT_SHAPE == 0
+				#if (DOMINANT_LIGHT_SHAPE & 0x7) == 0
 					result += shadowing * DirectionalLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
-				#elif DOMINANT_LIGHT_SHAPE == 1
+				#elif (DOMINANT_LIGHT_SHAPE & 0x7) == 1
 					result += shadowing * SphereLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
 				#endif
 			}

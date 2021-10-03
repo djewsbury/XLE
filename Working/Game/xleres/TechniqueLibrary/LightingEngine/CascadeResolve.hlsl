@@ -58,7 +58,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
         #if SHADOW_ENABLE_NEAR_CASCADE
             float4 frustumCoordinates = float4(mul(OrthoNearCascade, float4(basePosition, 1)), 1.f);
             if (PtInFrustumXY(frustumCoordinates))
-                return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), SHADOW_SUB_PROJECTION_COUNT, OrthoShadowNearMinimalProjection);
+                return CascadeAddress_Create(frustumCoordinates, float3(0,0,0), SHADOW_SUB_PROJECTION_COUNT, OrthoShadowNearMinimalProjection, ProjectionMaxBlurRadiusNorm);
         #endif
 
             // In ortho mode, all frustums have the same near and far depth
@@ -66,7 +66,7 @@ CascadeAddress ResolveCascade_FromWorldPosition(float3 worldPosition, float3 wor
             // (except for the near cascade, which is focused on the near geometry)
         #if SHADOW_SUB_PROJECTION_COUNT == 1
             float4 frustumCoordinates = float4(AdjustForOrthoCascade(basePosition, 0), 1.f);
-            return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0));
+            return CascadeAddress_Create(frustumCoordinates, viewSpaceNormal, 0, ShadowProjection_GetMiniProj_NotNear(0), ProjectionMaxBlurRadiusNorm);
         #else
 
             float4 frustumCoordinates;

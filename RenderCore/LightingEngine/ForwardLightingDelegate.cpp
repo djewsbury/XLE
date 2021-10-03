@@ -240,12 +240,13 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox box;
 		auto dominantLightOp = captures->_lightScene->GetDominantLightOperator();
 		if (dominantLightOp) {
-			box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOp.value()._shape);
 			auto shdw = captures->_lightScene->GetDominantShadowOperator();
 			if (shdw) {
 				// assume the shadow operator that will be associated is index 0
-				auto resolveParam = Internal::MakeShadowResolveParam(shdw.value());
-				resolveParam.WriteShaderSelectors(box);
+				Internal::MakeShadowResolveParam(shdw.value()).WriteShaderSelectors(box);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOp.value()._shape | 0x20u);
+			} else {
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOp.value()._shape);
 			}
 		}
 
