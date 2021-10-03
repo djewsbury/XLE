@@ -106,6 +106,12 @@ namespace XLEMath
                           const Float4x4 &projectionMatrix,
                           ClipSpaceType clipSpaceType);
 
+    ArbitraryConvexVolumeTester ExtrudeFrustumOrthogonally(
+        const Float4x4& localToClipSpace,
+        Float3 extrusionDirectionLocal,
+        float extrusionLength,
+        ClipSpaceType clipSpaceType);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
         //   B U I L D I N G   P R O J E C T I O N   M A T R I C E S
 ///////////////////////////////////////////////////////////////////////////////////////////////////

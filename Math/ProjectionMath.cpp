@@ -736,23 +736,22 @@ namespace XLEMath
             // The bounding volume is on both sides of this plane -- but is the intersection point point actually within the finite face area?
             uint64_t surroundingFaceMask = 0;
             for (auto e:_edges)
-                if (e._faceBitMask & (1ull<<f)) surroundingFaceMask |= e._faceBitMask;
+                if (e._faceBitMask & (1ull<<f)) surroundingFaceMask |= e._faceBitMask;      // note -- this probably could be precalculated for each face
             surroundingFaceMask &= ~(1ull<<f);
             assert(surroundingFaceMask);
-            auto faceBegin = xl_ctz8(surroundingFaceMask);
-            auto faceEnd = 64 - xl_clz8(surroundingFaceMask);
-
             for (auto aabbEdge:aabbEdges) {
                 float A = SignedDistance(boxCornersLocalSpace[aabbEdge[0]], _planes[f]);
                 float B = SignedDistance(boxCornersLocalSpace[aabbEdge[1]], _planes[f]);
                 if ((A > 0.f) == (B > 0.f)) continue;
                 Float3 intr = LinearInterpolate(boxCornersLocalSpace[aabbEdge[0]], boxCornersLocalSpace[aabbEdge[1]], -A / (B-A));
                 // we're only checking the faces that share an edge here
-                uint64_t qf=faceBegin;
-                for (; qf!=faceEnd; ++qf)
-                    if ((surroundingFaceMask & (1ull<<qf)) && SignedDistance(intr, _planes[qf]) > 0.f) break;
-                if (qf == faceEnd)
-                    return CullTestResult::Boundary;
+                uint64_t qf=surroundingFaceMask;
+                for (;;) {
+                    if (!qf) return CullTestResult::Boundary;
+                    auto bit = xl_ctz8(qf);
+                    if (SignedDistance(intr, _planes[bit]) > 0.f) break;
+                    qf ^= 1<<bit;
+                }
             }
         }
 
@@ -782,6 +781,218 @@ namespace XLEMath
     {
         assert(_corners.size() == _cornerFaceBitMasks.size());
         assert(_planes.size() <= 64);    // using uint64_t bit masks, so only up to 64 faces supported
+    }
+
+    static unsigned MapIdx(std::vector<unsigned>& mapping, unsigned vertexIndex)
+    {
+        for (unsigned c=0; c<mapping.size(); ++c)
+            if (mapping[c] == vertexIndex) return c;
+        mapping.push_back(vertexIndex);   
+        return mapping.size()-1;
+    }
+
+    ArbitraryConvexVolumeTester ExtrudeFrustumOrthogonally(
+        const Float4x4& localToClipSpaceInit,
+        Float3 extrusionDirectionLocal,
+        float extrusionLength,
+        ClipSpaceType clipSpaceType)
+    {
+        // Create a convex hull that represents the given projection frustum, but extruded
+        // orthogonally in the given direction.
+        // The hull will begin on the faces of the frustum that are "against" the direction
+        // (or just facing the other way) and will end in a plane orthogonal to the extrusion
+        // direction and the given length away from the origin point of localToClipSpace (ie,
+        // typically the eye position)
+        // We could also make it open-ended, I guess, which would avoid the need for an extra
+        // clippping plane to test against
+
+        // todo - consider separating projection matrix from view matrix on input, because that
+        // would allow us to remove the eye position from the math, which would potentially be
+        // more stable in a lot of cases
+        // Alternatively, the client may be able to handle coordinates spaces even better
+
+        auto localToClipSpace = localToClipSpaceInit;
+        assert(Equivalent(Magnitude(extrusionDirectionLocal), 1.f, 1e-3f));     // expecting normalized input
+
+        // order of the frustum corners:
+        //  x=-1, yAtTop
+        //  x=-1, yAtBottom
+        //  x= 1, yAtTop
+        //  x= 1, yAtBottom
+        // and then corners for far plane in the same order
+        Float3 frustumCorners[8];
+        CalculateAbsFrustumCorners(frustumCorners, localToClipSpace, clipSpaceType);
+        struct Face { unsigned v0, v1, v2, v3; };
+        Face frustumFaces[] {       // vertices should be in CCW winding for facing away from the frustum
+            Face { 0, 1, 3, 2 },    // [0] front
+            Face { 4, 6, 7, 5 },    // [1] back
+            Face { 1, 0, 4, 5 },    // [2] x=-1
+            Face { 2, 3, 7, 6 },    // [3] x= 1
+            Face { 0, 2, 6, 4 },    // [4] top
+            Face { 3, 1, 5, 7 }     // [5] bottom
+        };
+        struct Edge { unsigned f0, f1, v0, v1; };
+        Edge frustumEdges[] {
+            { 0, 4, 2, 0 },        // front & top
+            { 0, 2, 0, 1 },        // front & x=-1
+            { 0, 5, 1, 3 },        // front & bottom
+            { 0, 3, 3, 2 },        // front & x=1
+
+            { 1, 4, 4, 6 },        // back & top
+            { 1, 3, 6, 7 },        // back & x=1
+            { 1, 5, 7, 5 },        // back & bottom
+            { 1, 2, 5, 4 },        // back & x=1
+
+            { 2, 4, 0, 4 },        // x=-1 & top
+            { 2, 5, 5, 1 },        // x=-1 & bottom
+
+            { 3, 4, 6, 2 },        // x=1 & top
+            { 3, 5, 3, 7 }         // x=1 & bottom
+        };
+
+        Float3 frustumCenter = frustumCorners[0];
+        for (unsigned c=1; c<8; ++c) frustumCenter += frustumCorners[c];
+        frustumCenter /= 8.f;
+
+        // 
+        bool faceDirections[6];
+        Float4 facePlanes[6];
+        {
+            unsigned fIdx = 0;
+            for (const auto& f:frustumFaces) {
+                Float3 pts[4];
+                pts[0] = frustumCorners[f.v0];
+                pts[1] = frustumCorners[f.v1];
+                pts[2] = frustumCorners[f.v2];
+                pts[3] = frustumCorners[f.v3];
+                // facePlanes[fIdx] = PlaneFit(pts, 4);
+                facePlanes[fIdx] = PlaneFit(pts[0], pts[1], pts[2]);
+                assert(SignedDistance(frustumCenter, facePlanes[fIdx]) < 0.f);
+                faceDirections[fIdx++] = Dot(Truncate(facePlanes[fIdx]), extrusionDirectionLocal) > 0;
+            }
+        }
+
+        std::vector<Float4> finalHullPlanes;
+        std::vector<unsigned> cornerMapping;        // cornerMapping[newIndex] == oldIndex
+        std::vector<unsigned> faceRevMapping;       // faceRevMapping[oldIndex] == newIndex
+        faceRevMapping.resize(6, ~0u);
+        std::vector<unsigned> finalHullCornerFaceBitMask;
+        std::vector<ArbitraryConvexVolumeTester::Edge> finalHullEdges;
+
+        for (unsigned fIdx=0; fIdx<6; ++fIdx)
+            if (!faceDirections[fIdx]) {
+                // facing away from the extrusion direction go directly into the final hull
+                finalHullPlanes.push_back(facePlanes[fIdx]);
+                unsigned newFaceIdx = unsigned(finalHullPlanes.size()-1);
+                faceRevMapping[fIdx] = newFaceIdx;
+            }
+
+        Float4 farExtrusionPlane = Expand(extrusionDirectionLocal, -extrusionLength);
+
+        struct PendingEdge { unsigned _oldV0, _oldV1, _newFace; };
+        std::vector<PendingEdge> pendingEdges;
+        pendingEdges.reserve(12);
+
+        for (unsigned eIdx=0; eIdx<12; ++eIdx) {
+            // edges along the equator get extruded and become planes
+            // correct ordering of the edge vertices is a little complicated, but we can take
+            // the easy approach and just ensure that the frustum center is on the right side
+            if (faceDirections[frustumEdges[eIdx].f0] != faceDirections[frustumEdges[eIdx].f1]) {
+                Float3 pts[4];
+                pts[0] = frustumCorners[frustumEdges[eIdx].v0];
+                pts[1] = frustumCorners[frustumEdges[eIdx].v1];
+                pts[2] = frustumCorners[frustumEdges[eIdx].v0] + extrusionDirectionLocal;
+                pts[3] = frustumCorners[frustumEdges[eIdx].v1] + extrusionDirectionLocal;
+                // Float4 newPlane = PlaneFit(pts, 4);
+                Float4 newPlane = PlaneFit(pts[0], pts[1], pts[2]);
+                if (SignedDistance(frustumCenter, newPlane) > 0.f)
+                    newPlane = -newPlane;
+                finalHullPlanes.push_back(newPlane);
+                pendingEdges.push_back({frustumEdges[eIdx].v0, frustumEdges[eIdx].v1, unsigned(finalHullPlanes.size()-1)});
+            }
+            if (faceDirections[frustumEdges[eIdx].f0] & faceDirections[frustumEdges[eIdx].f1])
+                continue;
+            // unless both faces are facing along the extrusion direction, we need to add the edge
+            // to the final hull. The vertices should already be added an mapped (since at least one
+            // face is facing against)
+            unsigned newFaceIndex = finalHullPlanes.size() - 1;
+            auto mappedEdge = frustumEdges[eIdx];
+            mappedEdge.v0 = MapIdx(cornerMapping, mappedEdge.v0);
+            mappedEdge.v1 = MapIdx(cornerMapping, mappedEdge.v1);
+            mappedEdge.f0 = faceRevMapping[mappedEdge.f0];
+            mappedEdge.f1 = faceRevMapping[mappedEdge.f1];
+            mappedEdge.f0 = (mappedEdge.f0 != ~0u) ? mappedEdge.f0 : newFaceIndex;
+            mappedEdge.f1 = (mappedEdge.f1 != ~0u) ? mappedEdge.f1 : newFaceIndex;
+            assert(mappedEdge.f0 != mappedEdge.f1);
+            finalHullEdges.push_back({mappedEdge.v0, mappedEdge.v1, (1u<<mappedEdge.f0)|(1u<<mappedEdge.f1)});
+
+            if (finalHullCornerFaceBitMask.size() < cornerMapping.size())
+                finalHullCornerFaceBitMask.resize(cornerMapping.size(), 0);
+            finalHullCornerFaceBitMask[mappedEdge.v0] |= (1u<<mappedEdge.f0)|(1u<<mappedEdge.f1);
+            finalHullCornerFaceBitMask[mappedEdge.v1] |= (1u<<mappedEdge.f0)|(1u<<mappedEdge.f1);
+        }
+
+        std::vector<Float3> finalHullCorners;
+        finalHullCorners.reserve(cornerMapping.size());
+        for (auto idx:cornerMapping)
+            finalHullCorners.push_back(frustumCorners[idx]);
+
+        // we should have a ring wrapping around the shape from where the new edges are created
+        assert(!pendingEdges.empty());
+        std::vector<PendingEdge> pendingEdgeRing;
+        pendingEdgeRing.reserve(pendingEdges.size());
+        pendingEdgeRing.push_back(*(pendingEdges.end()-1));
+        pendingEdges.erase(pendingEdges.end()-1);
+        while (!pendingEdges.empty()) {
+            auto i = std::find_if(pendingEdges.begin(), pendingEdges.end(), [search=(pendingEdgeRing.end()-1)->_oldV1](const auto& e) { return e._oldV0 == search; });
+            if (i != pendingEdges.end()) {
+                pendingEdgeRing.push_back(*i);
+                pendingEdges.erase(i);
+                continue;
+            }
+
+            i = std::find_if(pendingEdges.begin(), pendingEdges.end(), [search=(pendingEdgeRing.end()-1)->_oldV1](const auto& e) { return e._oldV1 == search; });
+            assert(i != pendingEdges.end());        // ring missing a link
+            auto swapped = *i;
+            std::swap(swapped._oldV0, swapped._oldV1);
+            pendingEdgeRing.push_back(swapped);
+            pendingEdges.erase(i);
+        }
+
+        // Create all of the vertices and edges, etc, related to the new corners on the farExtrusionPlane
+        // It would be nice if we could get away with some of this... Normally this plane is fairly far 
+        // away, and maybe perfect accuracy isn't required?
+        const unsigned extrusionLimitPlane = finalHullPlanes.size();
+        for (unsigned c=0; c<pendingEdgeRing.size(); ++c) {
+            auto f0 = pendingEdgeRing[(c+pendingEdgeRing.size()-1)%pendingEdgeRing.size()]._newFace;
+            auto f1 = pendingEdgeRing[c]._newFace;
+
+            ArbitraryConvexVolumeTester::Edge newEdge;
+            newEdge._cornerZero = MapIdx(cornerMapping, pendingEdgeRing[c]._oldV0);
+            newEdge._cornerOne = (unsigned)finalHullCorners.size();     // about to add
+            newEdge._faceBitMask = (1u<<f0)|(1u<<f1);
+            finalHullEdges.push_back(newEdge);
+
+            Float3 A = frustumCorners[pendingEdgeRing[c]._oldV0], B = frustumCorners[pendingEdgeRing[c]._oldV0] + extrusionDirectionLocal;
+            float a = RayVsPlane(A, B, farExtrusionPlane);
+            finalHullCorners.push_back(LinearInterpolate(A, B, a));
+            finalHullCornerFaceBitMask.push_back((1u<<f0)|(1u<<f1)|(1u<<extrusionLimitPlane));
+        }
+
+        finalHullPlanes.push_back(farExtrusionPlane);
+
+        // construct the inputs for the ArbitraryConvexVolumeTester
+        /*
+        If we could remove and later reapply the eye position, it would look like this
+        for (auto& corner:finalHullCorners) corner += eyePosition;
+        for (auto& pl:finalHullPlanes) pl[3] -= Dot(eyePosition, Truncate(pl));
+        */
+
+        return ArbitraryConvexVolumeTester{
+            std::move(finalHullPlanes),
+            std::move(finalHullCorners),
+            std::move(finalHullEdges),
+            std::move(finalHullCornerFaceBitMask)};
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

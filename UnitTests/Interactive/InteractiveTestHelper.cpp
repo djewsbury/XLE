@@ -137,6 +137,7 @@ namespace UnitTests
 		{
 			if (_xleresmnt != ~0u)
 				::Assets::MainFileSystem::GetMountingTree()->Unmount(_xleresmnt);
+			_globalServices->PrepareForDestruction();
 		}
 	private:
 		ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _globalServices;
