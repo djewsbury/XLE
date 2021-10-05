@@ -67,11 +67,10 @@ namespace XLEMath
     class ArbitraryConvexVolumeTester
     {
     public:
-        CullTestResult TestSphere(Float3 centerPoint, float radius);
+        CullTestResult TestSphere(Float3 centerPoint, float radius) const;
 
-        CullTestResult TestAABB(
-            const Float3x4& aabbToLocalSpace, 
-            Float3 mins, Float3 maxs);
+        CullTestResult TestAABB(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const;
+        CullTestResult TestAABB(Float3 mins, Float3 maxs) const;
 
         struct Edge { unsigned _cornerZero, _cornerOne; uint64_t _faceBitMask; }; 
         ArbitraryConvexVolumeTester(
@@ -87,6 +86,9 @@ namespace XLEMath
         std::vector<Float3> _corners;
         std::vector<Edge> _edges;
         std::vector<unsigned> _cornerFaceBitMasks;
+
+        template<bool IdentityAabbToLocalSpace>
+            CullTestResult TestAABBInternal(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const;
     };
 
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix);

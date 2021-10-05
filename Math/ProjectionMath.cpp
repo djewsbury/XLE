@@ -603,7 +603,7 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    CullTestResult ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius)
+    CullTestResult ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius) const
     {
         uint64_t straddlingFlags = 0;
         auto planeCount = (uint64_t)_planes.size();
@@ -662,9 +662,10 @@ namespace XLEMath
         return CullTestResult::Culled;
     }
 
-    CullTestResult ArbitraryConvexVolumeTester::TestAABB(
-        const Float3x4& aabbToLocalSpace, 
-        Float3 mins, Float3 maxs)
+    template<bool IdentityAabbToLocalSpace>
+        CullTestResult ArbitraryConvexVolumeTester::TestAABBInternal(
+            const Float3x4& aabbToLocalSpace, 
+            Float3 mins, Float3 maxs) const
     {
         assert(mins[0] <= maxs[0] && mins[1] <= maxs[1] && mins[2] <= maxs[2]);
 
@@ -675,17 +676,28 @@ namespace XLEMath
         // But then again, the box will usually be smaller, and we're far more likely to
         // get a full rejection if we compare the box vs all of the volume planes first...
 
-        Float3 boxCornersLocalSpace[] {
-            aabbToLocalSpace * Float4{mins[0], mins[1], mins[2], 1.0f},
-            aabbToLocalSpace * Float4{maxs[0], mins[1], mins[2], 1.0f},
-            aabbToLocalSpace * Float4{mins[0], maxs[1], mins[2], 1.0f},
-            aabbToLocalSpace * Float4{maxs[0], maxs[1], mins[2], 1.0f},
+        Float3 boxCornersLocalSpace[8];
+        if constexpr (!IdentityAabbToLocalSpace) {
+            boxCornersLocalSpace[0] = aabbToLocalSpace * Float4{mins[0], mins[1], mins[2], 1.0f};
+            boxCornersLocalSpace[1] = aabbToLocalSpace * Float4{maxs[0], mins[1], mins[2], 1.0f};
+            boxCornersLocalSpace[2] = aabbToLocalSpace * Float4{mins[0], maxs[1], mins[2], 1.0f};
+            boxCornersLocalSpace[3] = aabbToLocalSpace * Float4{maxs[0], maxs[1], mins[2], 1.0f};
                 
-            aabbToLocalSpace * Float4{mins[0], mins[1], maxs[2], 1.0f},
-            aabbToLocalSpace * Float4{maxs[0], mins[1], maxs[2], 1.0f},
-            aabbToLocalSpace * Float4{mins[0], maxs[1], maxs[2], 1.0f},
-            aabbToLocalSpace * Float4{maxs[0], maxs[1], maxs[2], 1.0f}
-        };
+            boxCornersLocalSpace[4] = aabbToLocalSpace * Float4{mins[0], mins[1], maxs[2], 1.0f};
+            boxCornersLocalSpace[5] = aabbToLocalSpace * Float4{maxs[0], mins[1], maxs[2], 1.0f};
+            boxCornersLocalSpace[6] = aabbToLocalSpace * Float4{mins[0], maxs[1], maxs[2], 1.0f};
+            boxCornersLocalSpace[7] = aabbToLocalSpace * Float4{maxs[0], maxs[1], maxs[2], 1.0f};
+        } else {
+            boxCornersLocalSpace[0] = Float3{mins[0], mins[1], mins[2]};
+            boxCornersLocalSpace[1] = Float3{maxs[0], mins[1], mins[2]};
+            boxCornersLocalSpace[2] = Float3{mins[0], maxs[1], mins[2]};
+            boxCornersLocalSpace[3] = Float3{maxs[0], maxs[1], mins[2]};
+                
+            boxCornersLocalSpace[4] = Float3{mins[0], mins[1], maxs[2]};
+            boxCornersLocalSpace[5] = Float3{maxs[0], mins[1], maxs[2]};
+            boxCornersLocalSpace[6] = Float3{mins[0], maxs[1], maxs[2]};
+            boxCornersLocalSpace[7] = Float3{maxs[0], maxs[1], maxs[2]};
+        }
 
         uint64_t straddlingFlags = 0;
         auto planeCount = (unsigned)_planes.size();
@@ -709,7 +721,7 @@ namespace XLEMath
             auto faceBitMask = _cornerFaceBitMasks[cIdx];
             if (__builtin_expect((straddlingFlags & faceBitMask) != faceBitMask, true)) continue;
 
-            Float3 aabbSpaceCorner = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[cIdx]);
+            Float3 aabbSpaceCorner = IdentityAabbToLocalSpace ? _corners[cIdx] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[cIdx]);
             bool inside = 
                   (aabbSpaceCorner[0] >= mins[0]) & (aabbSpaceCorner[0] <= maxs[0])
                 & (aabbSpaceCorner[1] >= mins[1]) & (aabbSpaceCorner[1] <= maxs[1])
@@ -759,14 +771,24 @@ namespace XLEMath
             if (__builtin_expect((straddlingFlags & e._faceBitMask) != e._faceBitMask, true)) continue;
             // the sphere is straddling both planes of this edge. Check the edge to see
             // if it intersects the sphere
-            Float3 aabbSpaceStart = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerZero]);
-            Float3 aabbSpaceEnd = TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerOne]);
+            Float3 aabbSpaceStart = IdentityAabbToLocalSpace ? _corners[e._cornerZero] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerZero]);
+            Float3 aabbSpaceEnd = IdentityAabbToLocalSpace ? _corners[e._cornerOne] : TransformPointByOrthonormalInverse(aabbToLocalSpace, _corners[e._cornerOne]);
             if (RayVsAABB({aabbSpaceStart, aabbSpaceEnd}, mins, maxs)) {
                 return CullTestResult::Boundary;
             }
         }
 
         return CullTestResult::Culled;
+    }
+
+    CullTestResult ArbitraryConvexVolumeTester::TestAABB(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const
+    {
+        return TestAABBInternal<false>(aabbToLocalSpace, mins, maxs);
+    }
+
+    CullTestResult ArbitraryConvexVolumeTester::TestAABB(Float3 mins, Float3 maxs) const
+    {
+        return TestAABBInternal<true>(Identity<Float3x4>(), mins, maxs);
     }
 
     ArbitraryConvexVolumeTester::ArbitraryConvexVolumeTester(
@@ -854,9 +876,12 @@ namespace XLEMath
         for (unsigned c=1; c<8; ++c) frustumCenter += frustumCorners[c];
         frustumCenter /= 8.f;
 
-        // 
-        bool faceDirections[6];
-        Float4 facePlanes[6];
+        //
+        const unsigned faceCount = 6;
+        const unsigned edgeCount = 12;
+        const unsigned cornerCount = 8;
+        bool faceDirections[faceCount];
+        Float4 facePlanes[faceCount];
         {
             unsigned fIdx = 0;
             for (const auto& f:frustumFaces) {
@@ -878,8 +903,14 @@ namespace XLEMath
         faceRevMapping.resize(6, ~0u);
         std::vector<unsigned> finalHullCornerFaceBitMask;
         std::vector<ArbitraryConvexVolumeTester::Edge> finalHullEdges;
+        std::vector<Float3> finalHullCorners;
 
-        for (unsigned fIdx=0; fIdx<6; ++fIdx)
+        finalHullPlanes.reserve(faceCount/2+edgeCount/2+1);     // rough size estimate
+        finalHullEdges.reserve(2*edgeCount);
+        finalHullCornerFaceBitMask.reserve(2*cornerCount);
+        finalHullCorners.reserve(2*cornerCount);
+
+        for (unsigned fIdx=0; fIdx<faceCount; ++fIdx)
             if (!faceDirections[fIdx]) {
                 // facing away from the extrusion direction go directly into the final hull
                 finalHullPlanes.push_back(facePlanes[fIdx]);
@@ -887,15 +918,14 @@ namespace XLEMath
                 faceRevMapping[fIdx] = newFaceIdx;
             }
 
-
         Float3 nearPlaneCenter = (frustumCorners[0] + frustumCorners[1] + frustumCorners[2] + frustumCorners[3]) / 4.f;
         Float4 farExtrusionPlane = Expand(extrusionDirectionLocal, -extrusionLength - Dot(nearPlaneCenter, extrusionDirectionLocal));
 
         struct PendingEdge { unsigned _oldV0, _oldV1, _newFace; };
         std::vector<PendingEdge> pendingEdges;
-        pendingEdges.reserve(12);
+        pendingEdges.reserve(edgeCount);
 
-        for (unsigned eIdx=0; eIdx<12; ++eIdx) {
+        for (unsigned eIdx=0; eIdx<edgeCount; ++eIdx) {
             // edges along the equator get extruded and become planes
             // correct ordering of the edge vertices is a little complicated, but we can take
             // the easy approach and just ensure that the frustum center is on the right side
@@ -934,8 +964,6 @@ namespace XLEMath
             finalHullCornerFaceBitMask[mappedEdge.v1] |= (1u<<mappedEdge.f0)|(1u<<mappedEdge.f1);
         }
 
-        std::vector<Float3> finalHullCorners;
-        finalHullCorners.reserve(cornerMapping.size());
         for (auto idx:cornerMapping)
             finalHullCorners.push_back(frustumCorners[idx]);
 
