@@ -153,10 +153,9 @@ namespace Assets
 				FutureResolution_BeginMoment(
 					&future,
 					[](void* inputFuture) {
-						Type actualized;
 						DependencyValidation depVal;
 						Blob actualizationLog;
-						return ((Future<Type>*)inputFuture)->CheckStatusBkgrnd(actualized, depVal, actualizationLog);
+						return ((Future<Type>*)inputFuture)->CheckStatusBkgrnd(depVal, actualizationLog);
 					});
 			}
 			~FutureResolutionMoment()
