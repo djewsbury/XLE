@@ -815,6 +815,7 @@ namespace XLEMath
 
     ArbitraryConvexVolumeTester ExtrudeFrustumOrthogonally(
         const Float4x4& localToClipSpaceInit,
+        Float3 eyePosition,
         Float3 extrusionDirectionLocal,
         float extrusionLength,
         ClipSpaceType clipSpaceType)
@@ -827,11 +828,6 @@ namespace XLEMath
         // typically the eye position)
         // We could also make it open-ended, I guess, which would avoid the need for an extra
         // clippping plane to test against
-
-        // todo - consider separating projection matrix from view matrix on input, because that
-        // would allow us to remove the eye position from the math, which would potentially be
-        // more stable in a lot of cases
-        // Alternatively, the client may be able to handle coordinates spaces even better
 
         auto localToClipSpace = localToClipSpaceInit;
         assert(Equivalent(Magnitude(extrusionDirectionLocal), 1.f, 1e-3f));     // expecting normalized input
@@ -1020,12 +1016,11 @@ namespace XLEMath
 
         finalHullPlanes.push_back(farExtrusionPlane);
 
-        // construct the inputs for the ArbitraryConvexVolumeTester
-        /*
-        If we could remove and later reapply the eye position, it would look like this
+        // The eye position is separated from 'localToClipSpace' so that we can do the frustum corners calculations
+        // relative to the origin -- which prevents accuracy deteriorating when the eye moves
+        // So now we must translate the planes & corners to correct eye position.
         for (auto& corner:finalHullCorners) corner += eyePosition;
         for (auto& pl:finalHullPlanes) pl[3] -= Dot(eyePosition, Truncate(pl));
-        */
 
         return ArbitraryConvexVolumeTester{
             std::move(finalHullPlanes),

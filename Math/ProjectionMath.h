@@ -69,7 +69,7 @@ namespace XLEMath
     public:
         CullTestResult TestSphere(Float3 centerPoint, float radius) const;
 
-        CullTestResult TestAABB(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const;
+        CullTestResult TestAABB(const Float3x4& aabbToTestSpace, Float3 mins, Float3 maxs) const;
         CullTestResult TestAABB(Float3 mins, Float3 maxs) const;
 
         struct Edge { unsigned _cornerZero, _cornerOne; uint64_t _faceBitMask; }; 
@@ -86,6 +86,7 @@ namespace XLEMath
         std::vector<Float3> _corners;
         std::vector<Edge> _edges;
         std::vector<unsigned> _cornerFaceBitMasks;
+        Float3 _testSpaceTranslation;
 
         template<bool IdentityAabbToLocalSpace>
             CullTestResult TestAABBInternal(const Float3x4& aabbToLocalSpace, Float3 mins, Float3 maxs) const;
@@ -110,6 +111,7 @@ namespace XLEMath
 
     ArbitraryConvexVolumeTester ExtrudeFrustumOrthogonally(
         const Float4x4& localToClipSpace,
+        Float3 eyePosition,       // separated from localToClipSpace to reduce floating point creep
         Float3 extrusionDirectionLocal,
         float extrusionLength,
         ClipSpaceType clipSpaceType);

@@ -996,9 +996,11 @@ namespace RenderCore { namespace LightingEngine
             // Here, we're assuming that the cascades will fill t._limitedMainCameraToProjection entirely
             // Which means the correct culling is to look for objects that can cast a shadow into
             // that frustum.
-            // todo -- remove camera translation at this point
-            auto worldToLimitedProj = Combine(InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), t._limitedMainCameraToProjection);
-            auto extrudedFrustum = ExtrudeFrustumOrthogonally(worldToLimitedProj, negativeLightDirection, _settings._maxDistanceFromCamera, clipSpaceType);
+            auto eyePosition = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
+            auto cameraToWorldNoTranslation = mainSceneProjectionDesc._cameraToWorld;
+            SetTranslation(cameraToWorldNoTranslation, Float3(0,0,0));
+            auto worldToLimitedProj = Combine(InvertOrthonormalTransform(cameraToWorldNoTranslation), t._limitedMainCameraToProjection);
+            auto extrudedFrustum = ExtrudeFrustumOrthogonally(worldToLimitedProj, eyePosition, negativeLightDirection, _settings._maxDistanceFromCamera, clipSpaceType);
             return std::make_shared<XLEMath::ArbitraryConvexVolumeTester>(std::move(extrudedFrustum));
         }
 

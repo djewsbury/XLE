@@ -1097,7 +1097,7 @@ namespace SceneEngine
                 _pimpl->CullCell(visibleObjects, volumeTester, i->_cellToWorld, *ovr->second.get(), nullptr, &cullMetrics);
 				_pimpl->BuildDrawables(executeContext, *ovr->second.get(), MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			} else {
-				auto* plc = _pimpl->CullCell(visibleObjects, view._projection._worldToProjection, *i, &cullMetrics);
+				auto* plc = _pimpl->CullCell(visibleObjects, volumeTester, *i, &cullMetrics);
 				if (plc)
 					_pimpl->BuildDrawables(executeContext, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld, nullptr, nullptr, &bdMetrics);
 			}

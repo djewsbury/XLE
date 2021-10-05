@@ -382,7 +382,11 @@ namespace UnitTests
 					cascadeView[c] = rightLayout.AllocateFullWidthFraction(1.0f/(float)dimof(cascadeView));
 
 				auto mainCamProjDesc = MakeProjDesc(_mainCamera, topDownRect);
-				_frustumTester = ExtrudeFrustumOrthogonally(mainCamProjDesc._worldToProjection, -_lightDirection, 40.f, Techniques::GetDefaultClipSpaceType());
+				auto eyePosition = ExtractTranslation(mainCamProjDesc._cameraToWorld);
+				auto cameraToWorldNoTranslation = mainCamProjDesc._cameraToWorld;
+            	SetTranslation(cameraToWorldNoTranslation, Float3(0,0,0));
+				auto worldToProj = Combine(InvertOrthonormalTransform(cameraToWorldNoTranslation), mainCamProjDesc._cameraToProjection);
+				_frustumTester = ExtrudeFrustumOrthogonally(worldToProj, eyePosition, -_lightDirection, 40.f, Techniques::GetDefaultClipSpaceType());
 
 				DrawTopDownView(threadContext, parserContext, testHelper, topDownRect, MakeProjDesc(_visCamera, topDownRect), mainCamProjDesc._worldToProjection);
 				DrawMainView(threadContext, parserContext, testHelper, mainCamRect, mainCamProjDesc);
