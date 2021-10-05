@@ -49,6 +49,11 @@ namespace RenderCore { namespace LightingEngine
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode) override;
 
+		bool IsCompatible(
+			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+			IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+			const AmbientLightOperatorDesc& ambientLightOperator);
+
 		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator);
 
 		static void ConstructToFuture(

@@ -417,6 +417,43 @@ namespace RenderCore { namespace LightingEngine
 		return _shadowPreparationOperators->_operators[_shadowOperatorIdMapping._operatorToDynamicShadowOperator[_dominantLightSet._shadowOperatorId]]._desc;
 	}
 
+	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
+	{
+		ShadowProbes::Configuration result;
+		result._staticFaceDims = opDesc._width;
+		result._staticFormat = opDesc._format;
+		return result;
+	}
+
+	bool ForwardPlusLightScene::IsCompatible(
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator)
+	{
+		// returns true iff the given operators are exactly compatible with ours, and in the same order
+		// this is typically used to determine when we need to rebuild the lighting techniques in response
+		// to a configuration change
+		if (_shadowOperatorIdMapping._operatorToDynamicShadowOperator.size() != shadowGenerators.size()) return false;
+		if (_positionalLightOperators.size() != resolveOperators.size()) return false;
+
+		for (unsigned c=0; c<_shadowOperatorIdMapping._operatorToDynamicShadowOperator.size(); ++c) {
+			auto dynShadowOp = _shadowOperatorIdMapping._operatorToDynamicShadowOperator[c];
+			if (dynShadowOp == ~0u) continue;
+			if (c >= shadowGenerators.size()) return false;
+			if (_shadowPreparationOperators->_operators[dynShadowOp]._desc.Hash() != shadowGenerators[c].Hash()) return false;
+		}
+		if (_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
+			if (_shadowOperatorIdMapping._operatorForStaticProbes >= shadowGenerators.size()) return false;
+			auto cfg = MakeShadowProbeConfiguration(shadowGenerators[_shadowOperatorIdMapping._operatorForStaticProbes]);
+			if (!(cfg == _shadowOperatorIdMapping._shadowProbesCfg)) return false;
+		}
+		for (unsigned c=0; c<_positionalLightOperators.size(); ++c) {
+			if (resolveOperators[c].Hash() != _positionalLightOperators[c].Hash())
+				return false;
+		}
+		return true;
+	}
+
 	ForwardPlusLightScene::ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator)
 	{
 		_ambientLight = std::make_shared<AmbientLightConfig>();
@@ -455,8 +492,7 @@ namespace RenderCore { namespace LightingEngine
 					if (shadowOperatorMapping._operatorForStaticProbes != ~0u)
 						Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
 					shadowOperatorMapping._operatorForStaticProbes = c;
-					shadowOperatorMapping._shadowProbesCfg._staticFaceDims = shadowGenerators[c]._width;
-					shadowOperatorMapping._shadowProbesCfg._staticFormat = shadowGenerators[c]._format;
+					shadowOperatorMapping._shadowProbesCfg = MakeShadowProbeConfiguration(shadowGenerators[c]);
 				} else {
 					dynShadowGens[dynShadowCount] = shadowGenerators[c];
 					shadowOperatorMapping._operatorToDynamicShadowOperator[c] = dynShadowCount;

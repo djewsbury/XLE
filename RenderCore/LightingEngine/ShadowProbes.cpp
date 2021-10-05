@@ -262,4 +262,12 @@ namespace RenderCore { namespace LightingEngine
 	ShadowProbes::~ShadowProbes()
 	{}
 
+	bool operator==(const ShadowProbes::Configuration& lhs, const ShadowProbes::Configuration& rhs)
+	{
+		return lhs._staticFaceDims == rhs._staticFaceDims
+		 	&& lhs._dynamicFaceDims == rhs._dynamicFaceDims
+			&& lhs._maxDynamicProbes == rhs._maxDynamicProbes
+			&& lhs._staticFormat == rhs._staticFormat;
+	}
+
 }}

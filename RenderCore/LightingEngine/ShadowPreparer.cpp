@@ -413,15 +413,17 @@ namespace RenderCore { namespace LightingEngine
 	uint64_t ShadowOperatorDesc::Hash(uint64_t seed) const
 	{
 		uint64_t h0 = 
-			  (GetBits<13>(_width)				<< 0ull)
-			| (GetBits<13>(_height)				<< 13ull)
-			| (GetBits<8>(_format)				<< 28ull)
-			| (GetBits<4>(_normalProjCount)		<< 34ull)
-			| (GetBits<4>(_projectionMode)		<< 38ull)
-			| (GetBits<4>(_cullMode)			<< 42ull)
-			| (GetBits<4>(_resolveType)			<< 46ull)
-			| (GetBits<1>(_enableNearCascade)  	<< 50ull)
-			| (GetBits<1>(_dominantLight)  		<< 51ull)
+			  (GetBits<13>(_width)					<< 0ull)
+			| (GetBits<13>(_height)					<< 13ull)
+			| (GetBits<8>(_format)					<< 28ull)
+			| (GetBits<4>(_normalProjCount)			<< 34ull)
+			| (GetBits<4>(_projectionMode)			<< 38ull)
+			| (GetBits<4>(_cullMode)				<< 42ull)
+			| (GetBits<4>(_resolveType)				<< 46ull)
+			| (GetBits<1>(_enableNearCascade)  		<< 50ull)
+			| (GetBits<1>(_dominantLight)  			<< 51ull)
+			| (GetBits<2>(_filterModel)  			<< 52ull)
+			| (GetBits<1>(_enableContactHardening)	<< 54ull)
 			;
 
 		uint64_t h1 = 

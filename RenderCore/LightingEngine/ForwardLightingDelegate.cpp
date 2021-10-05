@@ -389,5 +389,16 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+
+	bool ForwardLightingTechniqueIsCompatible(
+		CompiledLightingTechnique& technique,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator)
+	{
+		auto* lightScene = checked_cast<ForwardPlusLightScene*>(&technique.GetLightScene());
+		return lightScene->IsCompatible(resolveOperators, shadowGenerators, ambientLightOperator);
+	}
+
 }}
 

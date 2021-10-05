@@ -33,5 +33,11 @@ namespace RenderCore { namespace LightingEngine
 		const AmbientLightOperatorDesc& ambientLightOperator,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps);
+
+	bool ForwardLightingTechniqueIsCompatible(
+		CompiledLightingTechnique& technique,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+		const AmbientLightOperatorDesc& ambientLightOperator);
 }}
 

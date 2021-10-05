@@ -44,6 +44,8 @@ namespace RenderCore { namespace LightingEngine
 			unsigned _dynamicFaceDims = 128;
 			unsigned _maxDynamicProbes = 32;
 			Format _staticFormat = Format::D16_UNORM;
+
+			friend bool operator==(const Configuration& lhs, const Configuration& rhs);
 		};
 
 		using AABB = std::pair<Float3, Float3>;
