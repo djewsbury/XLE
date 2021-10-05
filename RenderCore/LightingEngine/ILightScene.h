@@ -2,13 +2,13 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
+
 #include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
 #include <cstdint>
-
-#pragma once
 
 namespace RenderCore { namespace LightingEngine
 {

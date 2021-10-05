@@ -37,6 +37,7 @@ namespace RenderCore { namespace LightingEngine
         Float4x4 _worldToView;
         unsigned _normalProjCount = 0;
         IOrthoShadowProjections::OrthoSubProjection _orthSubProjections[s_staticMaxSubProjections];
+        Float4x4 _limitedMainCameraToProjection;
     };
 
     struct ArbitraryProjections
@@ -751,6 +752,15 @@ namespace RenderCore { namespace LightingEngine
         auto mainSceneProjectionDesc = mainSceneProjectionDescInit;
         Float3 extractedCameraPos = ExtractTranslation(mainSceneProjectionDesc._cameraToWorld);
         SetTranslation(mainSceneProjectionDesc._cameraToWorld, Float3{0.f, 0.f, 0.f});
+
+        // Also limit the far clip plane by the _maxDistanceFromCamera setting -- this allows us to set
+        // a limit on how far in the distance the shadows go
+        {
+            auto mainSceneNearAndFar = CalculateNearAndFarPlane(ExtractMinimalProjection(mainSceneProjectionDesc._cameraToProjection), clipSpaceType);
+            if (mainSceneNearAndFar.second > settings._maxDistanceFromCamera)
+                ChangeFarClipPlane(mainSceneProjectionDesc._cameraToProjection, settings._maxDistanceFromCamera, clipSpaceType);
+        }
+
         mainSceneProjectionDesc._worldToProjection = 
             Combine(InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), mainSceneProjectionDesc._cameraToProjection);
 
@@ -890,6 +900,7 @@ namespace RenderCore { namespace LightingEngine
             is filled (though shadows may actually go deaper in some parts of the plane)
         */
 
+        result._limitedMainCameraToProjection = mainSceneProjectionDesc._cameraToProjection;
         return result;
     }
 
@@ -964,7 +975,7 @@ namespace RenderCore { namespace LightingEngine
     class SunSourceFrustumDriver : public Internal::IShadowProjectionDriver, public ISunSourceShadows, public Internal::ILightBase
     {
     public:
-        virtual void UpdateProjections(
+        virtual std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> UpdateProjections(
 			const Techniques::ParsingContext& parsingContext,
             IPositionalLightSource& lightSource,
 			IOrthoShadowProjections& destination) override
@@ -975,11 +986,20 @@ namespace RenderCore { namespace LightingEngine
             auto negativeLightDirection = Normalize(ExtractTranslation(lightSource.GetLocalToWorld()));
 
             assert(!(_settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
-            // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
-            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, _settings, RenderCore::Techniques::GetDefaultClipSpaceType());
+            auto clipSpaceType = RenderCore::Techniques::GetDefaultClipSpaceType();
+            auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, _settings, clipSpaceType);
             assert(t._normalProjCount);
             destination.SetOrthoSubProjections(MakeIteratorRange(t._orthSubProjections, &t._orthSubProjections[t._normalProjCount]));
             destination.SetWorldToOrthoView(t._worldToView);
+
+            // Generate a clipping volume by extruding the camera frustum along the light direction
+            // Here, we're assuming that the cascades will fill t._limitedMainCameraToProjection entirely
+            // Which means the correct culling is to look for objects that can cast a shadow into
+            // that frustum.
+            // todo -- remove camera translation at this point
+            auto worldToLimitedProj = Combine(InvertOrthonormalTransform(mainSceneProjectionDesc._cameraToWorld), t._limitedMainCameraToProjection);
+            auto extrudedFrustum = ExtrudeFrustumOrthogonally(worldToLimitedProj, negativeLightDirection, _settings._maxDistanceFromCamera, clipSpaceType);
+            return std::make_shared<XLEMath::ArbitraryConvexVolumeTester>(std::move(extrudedFrustum));
         }
 
         SunSourceFrustumSettings GetSettings() const override

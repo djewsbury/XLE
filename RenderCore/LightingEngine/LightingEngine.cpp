@@ -147,7 +147,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Step endStep;
 		endStep._type = Step::Type::EndRenderPassInstance;
-		_steps.push_back(endStep);
+		_steps.push_back(std::move(endStep));
 
 		_pendingCreateFragmentSteps.clear();
 	}
@@ -217,6 +217,17 @@ namespace RenderCore { namespace LightingEngine
 		_stepIterator = _steps.begin() + d0;
 	}
 
+	void LightingTechniqueIterator::PushFollowingStep(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume)
+	{
+		CompiledLightingTechnique::Step newStep;
+		newStep._type = CompiledLightingTechnique::Step::Type::ParseScene;
+		newStep._batch = batchFilter;
+		newStep._complexCullingVolume = std::move(complexCullingVolume);
+		size_t d0 = std::distance(_steps.begin(), _stepIterator);
+		_pushFollowingIterator = _steps.insert(_pushFollowingIterator, std::move(newStep)) + 1;
+		_stepIterator = _steps.begin() + d0;
+	}
+
 	void LightingTechniqueIterator::PushFollowingStep(std::shared_ptr<Techniques::SequencerConfig> seqConfig, std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate)
 	{
 		CompiledLightingTechnique::Step newStep;
@@ -262,7 +273,7 @@ namespace RenderCore { namespace LightingEngine
 			_iterator->_pushFollowingIterator = _iterator->_stepIterator;
 			switch (next->_type) {
 			case CompiledLightingTechnique::Step::Type::ParseScene:
-				return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt };
+				return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt, next->_complexCullingVolume.get() };
 
 			case CompiledLightingTechnique::Step::Type::CallFunction:
 				next->_function(*_iterator);

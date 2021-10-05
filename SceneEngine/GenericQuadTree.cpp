@@ -660,6 +660,116 @@ namespace SceneEngine
         return true;
     }
 
+    bool GenericQuadTree::CalculateVisibleObjects(
+        const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
+        const Float3x4& cellToClip,
+        const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
+        unsigned visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,
+        Metrics* metrics) const
+    {
+        visObjsCount = 0;
+
+        unsigned nodeAabbTestCount = 0, payloadAabbTestCount = 0;
+
+		const auto& pimpl = GetPimpl();
+
+            //  Traverse through the quad tree, and find do bounding box level 
+            //  culling on each object
+        static std::stack<unsigned> workingStack;
+        static std::vector<unsigned> entirelyVisibleStack;
+        assert(workingStack.empty() && entirelyVisibleStack.empty());
+        workingStack.push(0);
+        while (!workingStack.empty()) {
+            auto nodeIndex = workingStack.top();
+            workingStack.pop();
+            
+            auto& node = pimpl._nodes[nodeIndex];
+            auto test = volumeTester.TestAABB(cellToClip, node._boundary.first, node._boundary.second);
+            ++nodeAabbTestCount;
+            if (test == CullTestResult::Culled) {
+                continue;
+            }
+
+            if (test == CullTestResult::Within) {
+
+                    //  this node and all children are "visible" without
+                    //  any further culling tests
+                entirelyVisibleStack.push_back(nodeIndex);
+
+            } else {
+
+                for (unsigned c=0; c<4; ++c)
+                    if (node._children[c] < pimpl._nodes.size())
+                        workingStack.push(node._children[c]);
+
+                if (node._payloadID < pimpl._payloads.size()) {
+                    auto& payload = pimpl._payloads[node._payloadID];
+					if (objCellSpaceBoundingBoxes && payload._objects.size() > 1) {     // if only one object in the payload, assume that the node bounding test is a tight test for that object
+						for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
+
+								//  Test the "cell" space bounding box of the object itself
+								//  This must be done inside of this function, we can't
+								//  drop the responsibility to the caller. Because:
+								//      * sometimes we can skip it entirely, when quad tree
+								//          node bounding boxes are considered entirely within the frustum
+								//      * it's best to reduce the result arrays to as small as
+								//          possible (because the caller may need to sort them)
+
+							const auto& boundary = *PtrAdd(objCellSpaceBoundingBoxes, (*i) * objStride);
+							++payloadAabbTestCount;
+							if (volumeTester.TestAABB(cellToClip, boundary.first, boundary.second) != CullTestResult::Culled) {
+								if ((visObjsCount+1) > visObjMaxCount) {
+									return false;
+								}
+								visObjs[visObjsCount++] = *i; 
+							}
+						}
+					} else {
+						if ((visObjsCount + payload._objects.size()) > visObjMaxCount) {
+							return false;
+						}
+
+						for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
+							visObjs[visObjsCount++] = *i; 
+						}
+					}
+                }
+
+            }
+        }
+
+            //  some nodes might be "entirely visible" -- ie, the bounding box is completely
+            //  within the culling frustum. In these cases, we can skip the rest of the culling
+            //  checks and just add these objects as visible
+        for (unsigned c=0; c<entirelyVisibleStack.size(); ++c) {
+            auto& node = pimpl._nodes[entirelyVisibleStack[c]];
+            for (unsigned c=0; c<4; ++c)
+                if (node._children[c] < pimpl._nodes.size())
+                    entirelyVisibleStack.push_back(node._children[c]);
+
+            if (node._payloadID < pimpl._payloads.size()) {
+                auto& payload = pimpl._payloads[node._payloadID];
+
+                if ((visObjsCount + payload._objects.size()) > visObjMaxCount) {
+                    return false;
+                }
+
+                for (auto i=payload._objects.cbegin(); i!=payload._objects.cend(); ++i) {
+                    visObjs[visObjsCount++] = *i; 
+                }
+            }
+        }
+        entirelyVisibleStack.clear();
+
+        assert(visObjsCount <= visObjMaxCount);
+        if (metrics) {
+            metrics->_nodeAabbTestCount += nodeAabbTestCount; 
+            metrics->_payloadAabbTestCount += payloadAabbTestCount;
+        }
+
+        return true;
+    }
+
 	unsigned GenericQuadTree::GetMaxResults() const
     {
         return GetPimpl()._maxCullResults;

@@ -25,6 +25,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Techniques::AttachmentPool& shadowGenAttachmentPool)
 	{
 		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
+		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester;
 
 		// Call the driver if one exists
 		if (standardProj._driver) {
@@ -32,7 +33,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			// lights in the scene
 			auto* positionalLight = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(associatedLightId);
 			if (positionalLight)
-				((Internal::IShadowProjectionDriver*)standardProj._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
+				volumeTester = ((Internal::IShadowProjectionDriver*)standardProj._driver->QueryInterface(typeid(Internal::IShadowProjectionDriver).hash_code()))->UpdateProjections(
 					*iterator._parsingContext, *positionalLight, standardProj);
 		}
 
@@ -49,7 +50,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					shadowGenFrameBufferPool,
 					shadowGenAttachmentPool);
 			});
-		iterator.PushFollowingStep(Techniques::BatchFilter::General);
+		if (volumeTester) {
+			iterator.PushFollowingStep(Techniques::BatchFilter::General, std::move(volumeTester));
+		} else
+			iterator.PushFollowingStep(Techniques::BatchFilter::General);
 		auto cfg = preparer.GetSequencerConfig();
 		iterator.PushFollowingStep(std::move(cfg.first), std::move(cfg.second));
 		iterator.PushFollowingStep(

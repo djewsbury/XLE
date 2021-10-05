@@ -60,6 +60,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			unsigned _fbDescIdx = ~0u;
+			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
 
 			std::function<StepFnSig> _function;
 		};
@@ -95,6 +96,7 @@ namespace RenderCore { namespace LightingEngine
 
 		void PushFollowingStep(std::function<CompiledLightingTechnique::StepFnSig>&& fn);
         void PushFollowingStep(Techniques::BatchFilter batchFilter);
+		void PushFollowingStep(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 		void PushFollowingStep(std::shared_ptr<Techniques::SequencerConfig> seqConfig, std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
 		LightingTechniqueIterator(
 			IThreadContext& threadContext,

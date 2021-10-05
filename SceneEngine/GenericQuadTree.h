@@ -15,6 +15,7 @@ namespace Assets { class ChunkFileContainer; }
 namespace XLEMath { enum class ClipSpaceType; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace RenderOverlays { class IOverlayContext; }
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace SceneEngine
 {
@@ -60,6 +61,13 @@ namespace SceneEngine
             IteratorRange<const Float4x4*> cellToClipAligned, uint32_t viewMask, ClipSpaceType clipSpaceType,
             const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
             std::pair<unsigned, uint32_t> visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,
+            Metrics* metrics = nullptr) const;
+
+        bool CalculateVisibleObjects(
+            const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
+            const Float3x4& cellToClip,
+            const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,
+            unsigned visObjs[], unsigned& visObjsCount, unsigned visObjMaxCount,
             Metrics* metrics = nullptr) const;
 
         unsigned GetMaxResults() const;

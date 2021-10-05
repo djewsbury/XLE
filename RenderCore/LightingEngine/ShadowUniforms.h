@@ -151,7 +151,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class IShadowProjectionDriver
 	{
 	public:
-		virtual void UpdateProjections(
+		virtual std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> UpdateProjections(
 			const Techniques::ParsingContext&,
 			IPositionalLightSource& lightSource,
 			IOrthoShadowProjections& destination) = 0;

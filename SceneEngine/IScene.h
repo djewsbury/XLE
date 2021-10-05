@@ -12,6 +12,7 @@ namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; enum class BatchFilter; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace SceneEngine
 {
@@ -23,6 +24,7 @@ namespace SceneEngine
 		enum class Type { Normal, Shadow, PrepareResources, ShadowStatic, Other };
 		Type _type = SceneView::Type::Normal;
 		RenderCore::Techniques::ProjectionDesc _projection;
+        ArbitraryConvexVolumeTester* _complexVolumeTester = nullptr;
 	};
 #pragma warning(pop)
 

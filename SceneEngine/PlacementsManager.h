@@ -18,6 +18,7 @@ namespace RenderCore { namespace Techniques { class ParsingContext; class ModelC
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace SceneEngine
 {
@@ -80,6 +81,11 @@ namespace SceneEngine
         void BuildDrawables(
             const ExecuteSceneContext& executeContext,
             IteratorRange<const Float4x4*> worldToCullingFrustums,
+			const PlacementCellSet& cellSet);
+
+        void BuildDrawables(
+            const ExecuteSceneContext& executeContext,
+            const XLEMath::ArbitraryConvexVolumeTester& volumeTester,
 			const PlacementCellSet& cellSet);
 
             // -------------- Render filtered --------------

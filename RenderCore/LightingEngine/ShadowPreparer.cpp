@@ -149,12 +149,12 @@ namespace RenderCore { namespace LightingEngine
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
-		// todo -- we need a mechanism for complex shadow projection tests (does it cast a shadow into a frustum, does it cast a shadow into a sphere, etc)
-		parsingContext.GetProjectionDesc()._worldToProjection = OrthogonalProjection(-10000.f, 10000.f, 10000.f, -10000.f, -10000.f, -10000.f, Techniques::GetDefaultClipSpaceType());
-		return Techniques::RenderPassInstance{
+		auto rpi = Techniques::RenderPassInstance{
 			threadContext,
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
 			shadowGenFrameBufferPool, shadowGenAttachmentPool, {}};
+		parsingContext.GetViewport() = rpi.GetDefaultViewport();
+		return rpi;
 	}
 
 	void DMShadowPreparer::End(
