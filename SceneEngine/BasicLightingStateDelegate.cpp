@@ -121,7 +121,7 @@ namespace SceneEngine
 			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
 			StringSection<> envSettingFileName);
 
-		::Assets::DependencyValidation GetDependencyValidation() const override;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const override;
 
     protected:
         LightOperatorResolveContext _operatorResolveContext;
@@ -347,7 +347,7 @@ namespace SceneEngine
         return {};
     }
 
-    ::Assets::DependencyValidation BasicLightingStateDelegate::GetDependencyValidation() const
+    const ::Assets::DependencyValidation& BasicLightingStateDelegate::GetDependencyValidation() const
     {
         return _depVal;
     }

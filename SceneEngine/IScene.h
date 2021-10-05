@@ -99,7 +99,7 @@ namespace SceneEngine
         virtual auto        GetEnvironmentalLightingDesc() -> EnvironmentalLightingDesc = 0;
         virtual auto        GetToneMapSettings() -> ToneMapSettings = 0;
 
-        virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+        virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 
 		virtual ~ILightingStateDelegate() = default;
     };
