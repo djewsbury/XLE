@@ -1113,26 +1113,8 @@ namespace XLEMath
         return PerspectiveProjection(l, t, r, b, nearClipPlane, farClipPlane, clipSpaceType);
     }
 
-    Float4x4 PerspectiveProjection(
-        float l, float t, float r, float b,
-        float nearClipPlane, float farClipPlane,
-        ClipSpaceType clipSpaceType)
+    static void SetupYZ_Perspective(Float4x4& result, float n, float f, ClipSpaceType clipSpaceType)
     {
-        float n = nearClipPlane;
-        float f = farClipPlane;
-        assert(n > 0.f);
-
-            // Note --  there's a slight awkward thing here... l, t, r and b
-            //          are defined to mean values between -nearClipPlane and +nearClipPlane
-            //          it might seem more logical to define them on the range between -1 and 1...?
-
-        Float4x4 result = Identity<Float4x4>();
-        result(0,0) =  (2.f * n) / (r-l);
-        result(0,2) =  (r+l) / (r-l);
-
-        result(1,1) =  (2.f * n) / (t-b);
-        result(1,2) =  (t+b) / (t-b);
-
         if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
                 //  This is the D3D view of clip space
                 //      0<z/w<1
@@ -1153,6 +1135,29 @@ namespace XLEMath
 
         result(3,2) =   -1.f;    // (-1 required to flip space around from -Z camera forward to (z/w) increasing with distance)
         result(3,3) =   0.f;
+    }
+
+    Float4x4 PerspectiveProjection(
+        float l, float t, float r, float b,
+        float nearClipPlane, float farClipPlane,
+        ClipSpaceType clipSpaceType)
+    {
+        float n = nearClipPlane;
+        float f = farClipPlane;
+        assert(n > 0.f);
+
+            // Note --  there's a slight awkward thing here... l, t, r and b
+            //          are defined to mean values between -nearClipPlane and +nearClipPlane
+            //          it might seem more logical to define them on the range between -1 and 1...?
+
+        Float4x4 result = Identity<Float4x4>();
+        result(0,0) =  (2.f * n) / (r-l);
+        result(0,2) =  (r+l) / (r-l);
+
+        result(1,1) =  (2.f * n) / (t-b);
+        result(1,2) =  (t+b) / (t-b);
+
+        SetupYZ_Perspective(result, n, f, clipSpaceType);
 
             //
             //      Both OpenGL & DirectX expect a left-handed coordinate system post-projection
@@ -1168,6 +1173,15 @@ namespace XLEMath
             result(1,1) = -result(1,1);
 
         return result;
+    }
+
+    void ChangeFarClipPlane(Float4x4& perspectiveProjection, float newFarPlane, ClipSpaceType clipSpaceType)
+    {
+        assert(!IsOrthogonalProjection(perspectiveProjection));     // math here is for perspectiveProjection
+        float f, n;
+        std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(perspectiveProjection), clipSpaceType);
+        f = newFarPlane;
+        SetupYZ_Perspective(perspectiveProjection, n, f, clipSpaceType);
     }
     
     Float4x4 OrthogonalProjection(

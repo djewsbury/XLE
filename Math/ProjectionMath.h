@@ -157,6 +157,8 @@ namespace XLEMath
         Float3 absFrustumCorners[], 
         const std::pair<Float2, Float2>& viewport);
 
+    void ChangeFarClipPlane(Float4x4& perspectiveProjection, float newFarPlane, ClipSpaceType clipSpaceType);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     std::pair<Float4x4, Float4x4> CubemapViewAndProjection(
