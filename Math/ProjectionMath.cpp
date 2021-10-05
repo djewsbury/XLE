@@ -887,7 +887,9 @@ namespace XLEMath
                 faceRevMapping[fIdx] = newFaceIdx;
             }
 
-        Float4 farExtrusionPlane = Expand(extrusionDirectionLocal, -extrusionLength);
+
+        Float3 nearPlaneCenter = (frustumCorners[0] + frustumCorners[1] + frustumCorners[2] + frustumCorners[3]) / 4.f;
+        Float4 farExtrusionPlane = Expand(extrusionDirectionLocal, -extrusionLength - Dot(nearPlaneCenter, extrusionDirectionLocal));
 
         struct PendingEdge { unsigned _oldV0, _oldV1, _newFace; };
         std::vector<PendingEdge> pendingEdges;
@@ -962,7 +964,8 @@ namespace XLEMath
         // Create all of the vertices and edges, etc, related to the new corners on the farExtrusionPlane
         // It would be nice if we could get away with some of this... Normally this plane is fairly far 
         // away, and maybe perfect accuracy isn't required?
-        const unsigned extrusionLimitPlane = finalHullPlanes.size();
+        const unsigned extrusionLimitPlane = (unsigned)finalHullPlanes.size();
+        const unsigned startOfExtrusionLimitCorners = (unsigned)finalHullCorners.size();
         for (unsigned c=0; c<pendingEdgeRing.size(); ++c) {
             auto f0 = pendingEdgeRing[(c+pendingEdgeRing.size()-1)%pendingEdgeRing.size()]._newFace;
             auto f1 = pendingEdgeRing[c]._newFace;
@@ -977,6 +980,14 @@ namespace XLEMath
             float a = RayVsPlane(A, B, farExtrusionPlane);
             finalHullCorners.push_back(LinearInterpolate(A, B, a));
             finalHullCornerFaceBitMask.push_back((1u<<f0)|(1u<<f1)|(1u<<extrusionLimitPlane));
+
+            // edge along the extrustionLimitPlane
+            ArbitraryConvexVolumeTester::Edge extLimitEdge;
+            extLimitEdge._cornerZero = newEdge._cornerOne;
+            assert(pendingEdgeRing[(c+1)%pendingEdgeRing.size()]._oldV0 == pendingEdgeRing[c]._oldV1);
+            extLimitEdge._cornerOne = startOfExtrusionLimitCorners + ((c+1)%pendingEdgeRing.size());  // pendingEdgeRing[c]._oldV1
+            extLimitEdge._faceBitMask = (1u<<f1)|(1u<<extrusionLimitPlane);
+            finalHullEdges.push_back(extLimitEdge);
         }
 
         finalHullPlanes.push_back(farExtrusionPlane);
