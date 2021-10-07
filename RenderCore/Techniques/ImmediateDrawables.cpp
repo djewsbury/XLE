@@ -89,7 +89,7 @@ namespace RenderCore { namespace Techniques
 			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":frameworkEntry:vs_*";
 			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = BASIC_PIXEL_HLSL ":frameworkEntry:ps_*";
-			templateDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
+			templateDesc->_selectorPreconfigurationFile = RENDEROVERLAYS_SEL_PRECONFIG;
 
 			templateDesc->_rasterization = CommonResourceBox::s_rsDefault;
 			templateDesc->_blend.push_back(CommonResourceBox::s_abStraightAlpha);

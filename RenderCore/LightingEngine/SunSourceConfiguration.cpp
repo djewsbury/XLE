@@ -736,8 +736,11 @@ namespace RenderCore { namespace LightingEngine
         const SunSourceFrustumSettings& settings,
         ClipSpaceType clipSpaceType)
     {
-        // Don't adjust normalizedScreenResolution with viewport to avoid moving the shadow distance back and forth with render resolution changes
-        const UInt2 normalizedScreenResolution(1920, 1080);
+        // settings._resolutionScale is approximately the number of on-screen pixels per shadow map pixel 
+        // in each dimension (ie 2 means a shadow map pixel should cover about a 2x2 on screen pixel area)
+        // However, we don't adjust the base resolution with the viewport to avoid moving the shadow 
+        // distance back and forth with render resolution changes
+        const Float2 normalizedScreenResolution = Float2(1920, 1080) / settings._resolutionScale;
         const unsigned shadowMapResolution = settings._textureSize;
         unsigned shadowMapDepthResolution;
         if (settings._flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
@@ -1114,15 +1117,11 @@ namespace RenderCore { namespace LightingEngine
 
     SunSourceFrustumSettings::SunSourceFrustumSettings()
     {
-        const unsigned frustumCount = 5;
-        const float maxDistanceFromCamera = 500.f;        // need really large distance because some models have a 100.f scale factor!
-        const float frustumSizeFactor = 3.8f;
-        const float focusDistance = 3.f;
-
-        _maxFrustumCount = frustumCount;
-        _maxDistanceFromCamera = maxDistanceFromCamera;
-        _frustumSizeFactor = frustumSizeFactor;
-        _focusDistance = focusDistance;
+        _maxFrustumCount = 5;
+        _maxDistanceFromCamera = 500.f;
+        _frustumSizeFactor = 3.8f;
+        _focusDistance = 3.f;
+        _resolutionScale = 1.f;
         _flags = Flags::HighPrecisionDepths;
         _textureSize = 2048;
 
@@ -1161,6 +1160,7 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
         props.Add("MaxDistanceFromCamera",  &Obj:: _maxDistanceFromCamera);
         props.Add("FrustumSizeFactor", &Obj::_frustumSizeFactor);
         props.Add("FocusDistance", &Obj::_focusDistance);
+        props.Add("ResolutionScale", &Obj::_resolutionScale);
         props.Add("Flags", &Obj::_flags);
         props.Add("TextureSize",
             [](const Obj& obj) { return obj._textureSize; },

@@ -666,9 +666,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::UnorderedAccess)._pipelineStageFlags;
 		}
 		if (bindFlags & BindFlag::RenderTarget) {
-			_steadyStateLayout = (_steadyStateLayout == lyt::Undefined) ? lyt::ColorAttachmentOptimal : lyt::General;
-			_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._accessFlags;
-			_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._pipelineStageFlags;
+			// For BindFlag::RenderTarget|BindFlag::ShaderResource, we could pick either states to be the "steady state",
+			// but for now the shader resource state works better with the descriptor set binding in AsVkDescriptorImageInfo
+			// "General" is probably not really wanted in this case, though
+			if (_steadyStateLayout != lyt::ShaderReadOnlyOptimal) {
+				_steadyStateLayout = (_steadyStateLayout == lyt::Undefined) ? lyt::ColorAttachmentOptimal : lyt::General;
+				_steadyStateAccessMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._accessFlags;
+				_steadyStateAssociatedStageMask |= Internal::GetLayoutForBindType(BindFlag::RenderTarget)._pipelineStageFlags;
+			}
 		}
 		if (bindFlags & BindFlag::DepthStencil) {
 			// Note that DepthStencilReadOnlyOptimal can't be accessed here
@@ -866,7 +871,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				c.bufferImageHeight = std::max(height, minDims);
 				c.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, m, a, 1 };
 				c.imageOffset = VkOffset3D{0,0,0};
-				c.imageExtent = VkExtent3D{width, height, std::max(depth, 1u)};
+				c.imageExtent = VkExtent3D{std::max(width, 1u), std::max(height, 1u), std::max(depth, 1u)};
 
 				#if defined(_DEBUG)
 					auto end = c.bufferOffset + c.bufferRowLength*c.bufferImageHeight*BitsPerPixel(imageDesc._textureDesc._format)/8;

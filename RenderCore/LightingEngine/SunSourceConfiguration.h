@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
         float           _maxDistanceFromCamera;
         float           _frustumSizeFactor;
         float           _focusDistance;
+        float           _resolutionScale;   // approximately number of on-screen pixels per shadow map pixel in each dimension (ie 2 means a shadow map pixel should cover about a 2x2 on screen pixel area), normalized for 1080p
         Flags::BitField _flags;
         unsigned        _textureSize;
 

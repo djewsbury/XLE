@@ -407,6 +407,7 @@ namespace RenderCore { namespace ImplVulkan
 		// physicalDeviceFeatures.multiViewport = true;
 		physicalDeviceFeatures.shaderImageGatherExtended = true;
 		physicalDeviceFeatures.fragmentStoresAndAtomics = true;
+		physicalDeviceFeatures.imageCubeArray = true;
 
 		VkPhysicalDeviceTransformFeedbackFeaturesEXT transformFeedbackFeatures = {};
 		transformFeedbackFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT;

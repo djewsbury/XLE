@@ -336,7 +336,7 @@ namespace RenderCore { namespace Metal_Vulkan
         auto desc = CreateDesc(
             BindFlag::UnorderedAccess, 
             0, GPUAccess::Read|GPUAccess::Write, 
-            TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyTexture");
+            TextureDesc::Plain2D(32, 32, Format::R8G8B8A8_UNORM), "DummyUAVTexture");
         return Internal::CreateResource(factory, desc);
     }
 

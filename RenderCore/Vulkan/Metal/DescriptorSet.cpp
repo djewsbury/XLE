@@ -192,6 +192,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
+	static VkDescriptorImageInfo AsVkDescriptorImageInfo(const ResourceView& resourceView)
+	{
+		// todo -- unclear whether it's better for the image layout here to be a property of the descriptor
+		// set, or a property of the resource itself. Consider binding depthbuffers as read; they are always
+		// in General layout, rather that ShaderReadOnlyOptimal
+		return VkDescriptorImageInfo {
+			nullptr, 
+			resourceView.GetImageView(), 
+			(VkImageLayout)Internal::AsVkImageLayout(resourceView.GetVulkanResource()->_steadyStateLayout) 
+		};
+	}
+
 	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ResourceView& resourceView)
 	{
 		#if defined(VULKAN_VERBOSE_DEBUG)
@@ -218,7 +230,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			WriteBinding(
 				descriptorSetBindPoint,
 				AsVkDescriptorType(slotType),
-				VkDescriptorImageInfo { nullptr, resourceView.GetImageView(), (VkImageLayout)Internal::AsVkImageLayout(resourceView.GetVulkanResource()->_steadyStateLayout) }, true
+				AsVkDescriptorImageInfo(resourceView), true
 				VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			break;
 
@@ -275,7 +287,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				for (unsigned c=0; c<resources.size(); ++c) {
 					assert(resources[c]->GetType() == ResourceView::Type::ImageView);
 					assert(resources[c]->GetVulkanResource() && resources[c]->GetImageView());
-					imageInfos[c] = VkDescriptorImageInfo { nullptr, resources[c]->GetImageView(), (VkImageLayout)Internal::AsVkImageLayout(resources[c]->GetVulkanResource()->_steadyStateLayout) };
+					imageInfos[c] = AsVkDescriptorImageInfo(*resources[c]);
 				}
 				WriteArrayBinding<VkDescriptorImageInfo>(
 					descriptorSetBindPoint,
