@@ -11,7 +11,11 @@
 
 	// support up to 6 output frustums (for cube map point light source projections)
 	// Almost all triangles will only be written to one or two frustums, though
-[maxvertexcount(18)]
+#if (VSOUT_HAS_SHADOW_PROJECTION_COUNT == 1) && !SHADOW_ENABLE_NEAR_CASCADE
+	[maxvertexcount(3)]
+#else
+	[maxvertexcount(18)]
+#endif
 	void main(	triangle VSShadowOutput input[3],
 				uint primitiveId : SV_PrimitiveID,
 				inout TriangleStream<VSOUT> outputStream)
@@ -22,7 +26,11 @@
 	//if (BackfaceSign(float4(input[0].position.xyz,1), float4(input[1].position.xyz,1), float4(input[2].position.xyz,1)) < 0)
 		//return;
 
-	uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	#if VSOUT_HAS_SHADOW_PROJECTION_COUNT == 1
+		#undef FRUSTUM_FILTER
+	#else
+		uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	#endif
 	uint mask = 0xf;
 	uint frustumFlagAnd = input[0].shadowFrustumFlags & input[1].shadowFrustumFlags & input[2].shadowFrustumFlags;
 	[unroll] for (uint c=0; /*c<count*/; ++c, mask <<= 4) {		// we don't need the loop exit condition because the test at the end of the loop always succeeds for the final frustum
@@ -97,40 +105,40 @@
 
 			VSOUT output;
 			output.position = p0;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[0].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[0].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[0].alpha;
 			#endif
 			output.renderTargetIndex = c;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);
 
 			output.position = p1;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[1].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[1].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[1].alpha;
 			#endif
 			output.renderTargetIndex = c;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);
 
 			output.position = p2;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[2].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[2].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[2].alpha;
 			#endif
 			output.renderTargetIndex = c;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);
@@ -141,8 +149,12 @@
 			// we actually reduce the size of the frustum by the max blur radius for this step
 			// This relates to the transition code in the resolve step, it means that triangles
 			// that intersect the transition area are still allowed to go to the next frustum up
-		if ((frustumFlagAnd & (1<<(VSOUT_HAS_SHADOW_PROJECTION_COUNT*4+c))) != 0)
+		#if VSOUT_HAS_SHADOW_PROJECTION_COUNT == 1
 			break;
+		#else
+			if ((frustumFlagAnd & (1<<(VSOUT_HAS_SHADOW_PROJECTION_COUNT*4+c))) != 0)
+				break;
+		#endif
 	}
 
 	#if (SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ORTHOGONAL) && (SHADOW_ENABLE_NEAR_CASCADE==1)
@@ -165,40 +177,40 @@
 
 			VSOUT output;
 			output.position = p0;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[0].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[0].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[0].alpha;
 			#endif
 			output.renderTargetIndex = nearCascadeIndex;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);
 
 			output.position = p1;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[1].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[1].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[0].alpha;
 			#endif
 			output.renderTargetIndex = nearCascadeIndex;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);
 
 			output.position = p2;
-			#if VSOUT_HAS_TEXCOORD>=1
+			#if VSOUT_HAS_TEXCOORD
 				output.texCoord = input[2].texCoord;
 			#endif
-			#if VSOUT_HAS_COLOR>=1
-				output.color = input[2].color;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.alpha = input[0].alpha;
 			#endif
 			output.renderTargetIndex = nearCascadeIndex;
-			#if (VSOUT_HAS_PRIMITIVE_ID==1)
+			#if VSOUT_HAS_PRIMITIVE_ID
 				output.primitiveId = primitiveId;
 			#endif
 			outputStream.Append(output);

@@ -2,13 +2,13 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#undef VSOUT_HAS_COLOR
+#undef VSOUT_HAS_COLOR_LINEAR
 #undef VSOUT_HAS_LOCAL_TANGENT_FRAME
 #undef VSOUT_HAS_TANGENT_FRAME
 #undef VSOUT_HAS_NORMAL
 #undef VSOUT_HAS_RENDER_TARGET_INDEX
 
-#define VSOUT_HAS_COLOR 0
+#define VSOUT_HAS_COLOR_LINEAR 0
 #define VSOUT_HAS_LOCAL_TANGENT_FRAME 0
 #define VSOUT_HAS_TANGENT_FRAME 0
 #define VSOUT_HAS_NORMAL 0
@@ -20,7 +20,7 @@
 #endif
 #define VSOUT_HAS_RENDER_TARGET_INDEX 1
 
-//#if (GEO_HAS_TEXCOORD==1) && (MAT_ALPHA_DITHER_SHADOWS==1)
+//#if GEO_HAS_TEXCOORD && (MAT_ALPHA_DITHER_SHADOWS==1)
 //	#define VSOUT_HAS_PRIMITIVE_ID 1
 //#endif
 

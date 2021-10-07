@@ -29,13 +29,22 @@ VSShadowOutput BuildVSShadowOutput(
 
 	VSShadowOutput result;
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		result.texCoord = input.texCoord;
+	#endif
+	#if VSOUT_HAS_VERTEX_ALPHA
+		result.alpha = VSIN_GetColor0(input).a;
 	#endif
 
 	result.shadowFrustumFlags = 0;
 
-	uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	#if VSOUT_HAS_SHADOW_PROJECTION_COUNT == 0
+		#error Zero projection count in shadowgen.vertex.hlsl
+	#elif VSOUT_HAS_SHADOW_PROJECTION_COUNT == 1
+		uint count = 1;
+	#else
+		uint count = min(GetShadowSubProjectionCount(), VSOUT_HAS_SHADOW_PROJECTION_COUNT);
+	#endif
 
 	#if SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_ARBITRARY || SHADOW_CASCADE_MODE==SHADOW_CASCADE_MODE_CUBEMAP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
