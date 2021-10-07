@@ -33,12 +33,18 @@ namespace RenderCore { namespace Assets
 
 	static RenderCore::TextureDesc BuildTextureDesc(const DirectX::TexMetadata& metadata)
 	{
+		using namespace DirectX;
 		RenderCore::TextureDesc desc = RenderCore::TextureDesc::Empty();
 		
 		desc._width = uint32_t(metadata.width);
 		desc._height = uint32_t(metadata.height);
 		desc._depth = uint32_t(metadata.depth);
-		desc._arrayCount = uint8_t(metadata.arraySize);
+		// There's no explicit "array" flag on the input; so we'll consider anything with 1 2d texture
+		// as non-array. For a cubemap we'll never set array count to 0 to avoid confusion with a non-array 2d texture
+		if (metadata.miscFlags & TEX_MISC_TEXTURECUBE) {
+			desc._arrayCount = (metadata.arraySize == 6u) ? 0u : metadata.arraySize;
+		} else
+			desc._arrayCount = (metadata.arraySize > 1) ? uint16_t(metadata.arraySize) : 0u;
 		desc._mipCount = uint8_t(metadata.mipLevels);
 		desc._samples = TextureSamples::Create();
 
@@ -56,7 +62,6 @@ namespace RenderCore { namespace Assets
 			desc._format = srcFormat;
 		}
 
-		using namespace DirectX;
 		switch (metadata.dimension) {
 		case TEX_DIMENSION_TEXTURE1D: desc._dimensionality = TextureDesc::Dimensionality::T1D; break;
 		default:
@@ -72,7 +77,7 @@ namespace RenderCore { namespace Assets
 			desc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 
 		if (desc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
-			assert(desc._arrayCount == 6u);		// arrays of cubemaps not supported; we consider this to be the face count
+			assert(ActualArrayLayerCount(desc) == 6u);		// arrays of cubemaps not supported; we consider this to be the face count
 		}
 
 		return desc;
@@ -84,8 +89,8 @@ namespace RenderCore { namespace Assets
 		result.width = srcDesc._width;
 		result.height = std::max(1u, (unsigned)srcDesc._height);
 		result.depth = std::max(1u, (unsigned)srcDesc._depth);
-		result.arraySize = std::max(1u, (unsigned)srcDesc._arrayCount);
-		result.mipLevels = std::max(1u, (unsigned)srcDesc._mipCount);
+		result.arraySize = ActualArrayLayerCount(srcDesc);
+		result.mipLevels = srcDesc._mipCount;
 		result.miscFlags = result.miscFlags2 = 0;
 		result.format = (DXGI_FORMAT)srcDesc._format;
 		switch (srcDesc._dimensionality) {

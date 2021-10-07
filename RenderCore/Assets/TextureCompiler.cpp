@@ -134,8 +134,8 @@ namespace RenderCore { namespace Assets
 
 			assert(_srcTexture.format != CMP_FORMAT_Unknown);
 
-			auto mipCount = std::max(1u, (unsigned)desc._textureDesc._mipCount);
-			auto arrayLayerCount = std::max(1u, (unsigned)desc._textureDesc._arrayCount);
+			auto mipCount = desc._textureDesc._mipCount;
+			auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
 			BufferUploads::IAsyncDataSource::SubResource subres[mipCount*arrayLayerCount];
 			for (unsigned a=0; a<arrayLayerCount; ++a)
 				for (unsigned m=0; m<mipCount; ++m) {
@@ -255,7 +255,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._width = request._faceDim;
 				targetDesc._height = request._faceDim;
 				targetDesc._depth = 1;
-				targetDesc._arrayCount = 6;
+				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 				auto processed = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap);
@@ -268,7 +268,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._width = request._faceDim;
 				targetDesc._height = request._faceDim;
 				targetDesc._depth = 1;
-				targetDesc._arrayCount = 6;
+				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
@@ -307,8 +307,8 @@ namespace RenderCore { namespace Assets
 			if (comprDstFormat == CMP_FORMAT_Unknown)
 				Throw(std::runtime_error("Cannot write to the request texture pixel format because it is not supported by the compression library: " + srcFN));
 
-			auto mipCount = std::max(1u, (unsigned)dstDesc._mipCount);
-			auto arrayLayerCount = std::max(1u, (unsigned)dstDesc._arrayCount);
+			auto mipCount = dstDesc._mipCount;
+			auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
 			for (unsigned a=0; a<arrayLayerCount; ++a)
 				for (unsigned m=0; m<mipCount; ++m) {
 					auto dstOffset = GetSubResourceOffset(dstDesc, m, a);
@@ -445,7 +445,7 @@ namespace RenderCore { namespace Assets
 			[pkt](auto descFuture) {
 				auto desc = descFuture.get();
 				assert(desc._type == ResourceDesc::Type::Texture);
-				auto mipCount = std::max((unsigned)desc._textureDesc._mipCount, 1u), elementCount = std::max((unsigned)desc._textureDesc._arrayCount, 1u);
+				auto mipCount = (unsigned)desc._textureDesc._mipCount, elementCount = ActualArrayLayerCount(desc._textureDesc);
 				std::vector<uint8_t> data;
 				data.resize(ByteCount(desc._textureDesc));
 				BufferUploads::IAsyncDataSource::SubResource srs[mipCount*elementCount];

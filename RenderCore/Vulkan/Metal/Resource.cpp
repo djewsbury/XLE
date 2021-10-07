@@ -478,8 +478,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			image_create_info.extent.width = tDesc._width;
 			image_create_info.extent.height = tDesc._height;
 			image_create_info.extent.depth = tDesc._depth;
-			image_create_info.mipLevels = std::max(1u, unsigned(tDesc._mipCount));
-			image_create_info.arrayLayers = std::max(1u, unsigned(tDesc._arrayCount));
+			image_create_info.mipLevels = tDesc._mipCount;
+			image_create_info.arrayLayers = ActualArrayLayerCount(tDesc);
 			image_create_info.samples = (VkSampleCountFlagBits)AsSampleCountFlagBits(tDesc._samples);
 			image_create_info.queueFamilyIndexCount = 0;
 			image_create_info.pQueueFamilyIndices = nullptr;
@@ -837,8 +837,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		// considered the "buffer" while the other is considered the "image"
 		assert(imageDesc._type == Resource::Desc::Type::Texture);
 
-		auto arrayCount = std::max(1u, (unsigned)imageDesc._textureDesc._arrayCount);
-		auto mips = std::max(1u, (unsigned)std::min(imageDesc._textureDesc._mipCount, bufferDesc._textureDesc._mipCount));
+		auto arrayCount = ActualArrayLayerCount(imageDesc._textureDesc);
+		auto mips = (unsigned)std::min(imageDesc._textureDesc._mipCount, bufferDesc._textureDesc._mipCount);
 		unsigned width = imageDesc._textureDesc._width, height = imageDesc._textureDesc._height, depth = imageDesc._textureDesc._depth;
 		auto minDims = (GetCompressionType(imageDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
 		auto dstAspectMask = AsImageAspectMask(imageDesc._textureDesc._format);
@@ -905,9 +905,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		    auto dstAspectMask = AsImageAspectMask(dstDesc._textureDesc._format);
 		    auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
 
-		    assert(std::max(1u, (unsigned)srcDesc._textureDesc._arrayCount) == std::max(1u, (unsigned)dstDesc._textureDesc._arrayCount));
+		    assert(ActualArrayLayerCount(srcDesc._textureDesc) == ActualArrayLayerCount(dstDesc._textureDesc));
 		
-		    auto mips = std::max(1u, (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount));
+		    auto mips = (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount);
 		    assert(mips <= dimof(copyOps));
 		    auto width = srcDesc._textureDesc._width, height = srcDesc._textureDesc._height, depth = srcDesc._textureDesc._depth;
 		    for (unsigned m = 0; m < mips; ++m) {
@@ -1150,8 +1150,8 @@ namespace RenderCore { namespace Metal_Vulkan
         ResourceMap map(device, mem);
         unsigned bytesUploaded = 0;
 
-		auto mipCount = std::max(1u, unsigned(desc._mipCount));
-		auto arrayCount = std::max(1u, unsigned(desc._arrayCount));
+		auto mipCount = unsigned(desc._mipCount);
+		auto arrayCount = ActualArrayLayerCount(desc);
 		auto aspectFlags = AsImageAspectMask(desc._format);
 		for (unsigned m = 0; m < mipCount; ++m) {
             auto mipDesc = CalculateMipMapDesc(desc, m);
@@ -1225,17 +1225,19 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto& resource = *checked_cast<Resource*>(&iresource);
 
 		auto desc = resource.GetDesc();
-		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap)
-			assert(desc._textureDesc._arrayCount == 6u);
-		result.reserve(std::max(1u, (unsigned)desc._textureDesc._arrayCount) * std::max(1u, (unsigned)desc._textureDesc._mipCount));
+		auto actualArrayCount = ActualArrayLayerCount(desc._textureDesc);
+		if (desc._textureDesc._dimensionality == TextureDesc::Dimensionality::CubeMap) {
+			assert(actualArrayCount == 6u);
+		}
+		result.reserve(actualArrayCount * desc._textureDesc._mipCount);
 
 		auto* image = resource.GetImage();
         if (image) {
 			assert(desc._type == ResourceDesc::Type::Texture);
             auto aspectMask = AsImageAspectMask(desc._textureDesc._format);
 
-			for (unsigned arrayLayer=0; arrayLayer<std::max(1u, (unsigned)desc._textureDesc._arrayCount); ++arrayLayer)
-				for (unsigned mip=0; mip<std::max(1u, (unsigned)desc._textureDesc._mipCount); ++mip) {
+			for (unsigned arrayLayer=0; arrayLayer<actualArrayCount; ++arrayLayer)
+				for (unsigned mip=0; mip<(unsigned)desc._textureDesc._mipCount; ++mip) {
 					VkImageSubresource sub = { aspectMask, mip, arrayLayer };
 					VkSubresourceLayout layout = {};
 					vkGetImageSubresourceLayout(dev, image, &sub, &layout);
@@ -1249,8 +1251,8 @@ namespace RenderCore { namespace Metal_Vulkan
         } else if (desc._type == ResourceDesc::Type::Texture) {
 			// This is the staging texture case. We can use GetSubResourceOffset to
 			// calculate the arrangement of subresources
-			for (unsigned arrayLayer=0; arrayLayer<std::max(1u, (unsigned)desc._textureDesc._arrayCount); ++arrayLayer)
-				for (unsigned mip=0; mip<std::max(1u, (unsigned)desc._textureDesc._mipCount); ++mip) {
+			for (unsigned arrayLayer=0; arrayLayer<actualArrayCount; ++arrayLayer)
+				for (unsigned mip=0; mip<(unsigned)desc._textureDesc._mipCount; ++mip) {
 					auto subResOffset = GetSubResourceOffset(desc._textureDesc, mip, arrayLayer);
 					result.push_back(std::make_pair(SubResourceId{mip, arrayLayer}, subResOffset));
 				}

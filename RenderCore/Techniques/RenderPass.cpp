@@ -812,7 +812,7 @@ namespace RenderCore { namespace Techniques
 		return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, completeView);*/
     }
 
-    static unsigned GetArrayCount(unsigned arrayCount) { return (arrayCount == 0) ? 1 : arrayCount; }
+    static unsigned GetArrayCount(unsigned arrayCount) { return arrayCount; }           // { return (arrayCount == 0) ? 1 : arrayCount; }
 
     static bool MatchRequest(const ResourceDesc& preregisteredDesc, const ResourceDesc& concreteObjectDesc)
     {

@@ -183,7 +183,7 @@ namespace RenderCore
     {
         return 
             ByteCount(tDesc._width, tDesc._height, tDesc._depth, tDesc._mipCount, tDesc._format) 
-            * std::max(1u, unsigned(tDesc._arrayCount));
+            * ActualArrayLayerCount(tDesc);
     }
 
     unsigned ByteCount(const ResourceDesc& desc)
@@ -208,8 +208,8 @@ namespace RenderCore
         // Could also perhaps align the start of each array layer to some convenient boundary
         // (eg, 16 bytes?)
 
-        assert(mipIndex < std::max(1u, (unsigned)tDesc._mipCount));
-        assert(arrayLayer < std::max(1u, (unsigned)tDesc._arrayCount));
+        assert(mipIndex < tDesc._mipCount);
+        assert(arrayLayer < ActualArrayLayerCount(tDesc));
 
         SubResourceOffset mipOffset = { 0, 0, {} };
         if (tDesc._format == Format::Unknown)
@@ -219,7 +219,7 @@ namespace RenderCore
         const auto bbp = BitsPerPixel(tDesc._format);
 
         auto width = tDesc._width, height = tDesc._height, depth = tDesc._depth;
-        auto mipCount = std::max(1u, (unsigned)tDesc._mipCount);
+        auto mipCount = tDesc._mipCount;
 
         auto workingOffset = 0;
         if (compressionParam._blockWidth > 1 || compressionParam._blockHeight > 1) {
@@ -281,6 +281,15 @@ namespace RenderCore
 
         return result;
     }
+
+    unsigned ActualArrayLayerCount(const TextureDesc& desc)
+	{
+		if (desc._arrayCount == 0u && desc._dimensionality == TextureDesc::Dimensionality::CubeMap)
+			return 6u;
+		else if (desc._arrayCount == 0u)
+			return 1u;
+		return desc._arrayCount;
+	}
 
     static const char* AsString(TextureDesc::Dimensionality dims)
     {

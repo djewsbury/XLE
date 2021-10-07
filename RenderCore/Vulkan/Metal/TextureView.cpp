@@ -95,7 +95,10 @@ namespace RenderCore { namespace Metal_Vulkan
         view_info.subresourceRange.baseMipLevel = window._mipRange._min;
         view_info.subresourceRange.levelCount = std::max(1u, (unsigned)window._mipRange._count);
         view_info.subresourceRange.baseArrayLayer = window._arrayLayerRange._min;
-        view_info.subresourceRange.layerCount = std::max(1u, (unsigned)window._arrayLayerRange._count);
+        if (window._dimensionality == TextureDesc::Dimensionality::CubeMap) {
+            view_info.subresourceRange.layerCount = (window._arrayLayerRange._count == 0) ? 6u : window._arrayLayerRange._count;
+        } else
+            view_info.subresourceRange.layerCount = std::max(1u, (unsigned)window._arrayLayerRange._count);
 
         if (window._mipRange._count == TextureViewDesc::Unlimited)
             view_info.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
@@ -157,7 +160,8 @@ namespace RenderCore { namespace Metal_Vulkan
             if (adjWindow._dimensionality == TextureDesc::Dimensionality::Undefined)
                 adjWindow._dimensionality = tDesc._dimensionality;
 
-            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), tDesc._arrayCount > 1u);
+            bool isArray = tDesc._arrayCount != 0u;
+            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), isArray);
             if (createInfo.viewType == VK_IMAGE_VIEW_TYPE_CUBE) {
                 if (formatUsage != BindFlag::ShaderResource) {
                     createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;

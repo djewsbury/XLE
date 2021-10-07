@@ -493,7 +493,7 @@ namespace RenderCore { namespace Techniques
         auto desc = descFuture.get();
         auto device = threadContext.GetDevice();
         std::vector<uint8_t> data(ByteCount(desc._textureDesc));
-        auto arrayCount = std::max(1u, (unsigned)desc._textureDesc._arrayCount), mipCount = std::max(1u, (unsigned)desc._textureDesc._mipCount);
+        auto arrayCount = ActualArrayLayerCount(desc._textureDesc), mipCount = (unsigned)desc._textureDesc._mipCount;
         BufferUploads::IAsyncDataSource::SubResource srs[arrayCount*mipCount];
         for (unsigned a=0; a<arrayCount; ++a)
             for (unsigned m=0; m<mipCount; ++m) {

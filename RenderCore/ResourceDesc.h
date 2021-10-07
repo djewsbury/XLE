@@ -153,7 +153,7 @@ namespace RenderCore
         static TextureDesc Plain3D(
             uint32_t width, uint32_t height, uint32_t depth, Format format, uint8_t mipCount=1);
         static TextureDesc PlainCube(
-            uint32_t width, uint32_t height, Format format, uint8_t mipCount=1, uint16_t arrayCount=6);
+            uint32_t width, uint32_t height, Format format, uint8_t mipCount=1, uint16_t arrayCount=0);
         static TextureDesc Empty();
 
         uint64_t CalculateHash() const;
@@ -394,4 +394,6 @@ namespace RenderCore
 		SubResourceInitData(IteratorRange<const void*> data) : _data(data) {}
 		SubResourceInitData(IteratorRange<const void*> data, TexturePitches pitches) : _data(data), _pitches(pitches) {}
 	};
+
+    unsigned ActualArrayLayerCount(const TextureDesc& desc);
 }

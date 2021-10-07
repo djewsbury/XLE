@@ -43,8 +43,8 @@ namespace BufferUploads { namespace PlatformInterface
         // We will iterate through the subresources an mip a single one
         auto dev = _renderCoreContext->GetDevice();
         auto copiedBytes = 0u;
-        for (unsigned mip=0; mip<std::max(1u, unsigned(desc._textureDesc._mipCount)); ++mip)
-            for (unsigned arrayLayer=0; arrayLayer<std::max(1u, unsigned(desc._textureDesc._arrayCount)); ++arrayLayer) {
+        for (unsigned mip=0; mip<desc._textureDesc._mipCount; ++mip)
+            for (unsigned arrayLayer=0; arrayLayer<ActualArrayLayerCount(desc._textureDesc); ++arrayLayer) {
                 auto srd = data({mip, arrayLayer});
                 if (!srd._data.size()) continue;
 

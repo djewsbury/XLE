@@ -624,7 +624,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		unsigned layerCount = view._arrayLayerRange._count;
 		if (layerCount == TextureViewDesc::All._count)
-			layerCount = (unsigned)desc._textureDesc._arrayCount;
+			layerCount = ActualArrayLayerCount(desc._textureDesc);
 		result._layers = std::max(result._layers, layerCount);
 	}
 

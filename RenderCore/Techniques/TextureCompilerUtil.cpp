@@ -67,7 +67,7 @@ namespace RenderCore { namespace Techniques
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
 		if (filter != EquRectFilterMode::ProjectToSphericalHarmonic)
-			assert(targetDesc._arrayCount == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
+			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 		auto threadContext = GetThreadContext();
 		
 		ProcessedTexture result;
@@ -120,7 +120,7 @@ namespace RenderCore { namespace Techniques
 		auto computeOp = computeOpFuture->Actualize();
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
-		for (unsigned mip=0; mip<std::max(1u, (unsigned)targetDesc._mipCount); ++mip) {
+		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 			TextureViewDesc view;
 			view._mipRange = {mip, 1};
 			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
@@ -138,7 +138,7 @@ namespace RenderCore { namespace Techniques
 					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 				}
 			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
-				auto pixelCount = mipDesc._width * mipDesc._height * std::max(1u, (unsigned)targetDesc._arrayCount);
+				auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
 				auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 				auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
 				auto dispatchCount = passesPerPixel*pixelCount;
@@ -206,7 +206,7 @@ namespace RenderCore { namespace Techniques
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
-		for (unsigned mip=0; mip<std::max(1u, (unsigned)targetDesc._mipCount); ++mip) {
+		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 			TextureViewDesc view;
 			view._mipRange = {mip, 1};
 			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
