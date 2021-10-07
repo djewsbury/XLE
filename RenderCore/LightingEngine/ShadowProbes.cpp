@@ -66,7 +66,7 @@ namespace RenderCore { namespace LightingEngine
 				SubpassDesc sp;
 				TextureViewDesc viewDesc;
 				viewDesc._arrayLayerRange = {firstSlice, sliceCount};
-				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource), viewDesc);
+				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
 

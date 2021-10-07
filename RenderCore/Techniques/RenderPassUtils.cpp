@@ -21,7 +21,7 @@ namespace RenderCore { namespace Techniques
 	{
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR, loadOperation));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation, 0));
 		frag.AddSubpass(std::move(subpass));
         return RenderPassInstance{context, parserContext, frag};
 	}
@@ -47,8 +47,8 @@ namespace RenderCore { namespace Techniques
 
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR, loadOperation));
-		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth, loadOperation));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation, 0));
+		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation, 0));
 		frag.AddSubpass(std::move(subpass));
 
         return RenderPassInstance{ context, parserContext, frag };

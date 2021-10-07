@@ -23,13 +23,8 @@ namespace RenderCore { namespace LightingEngine
 	class RenderStepFragmentInterface
 	{
 	public:
-		AttachmentName DefineAttachment(
-            uint64_t semantic,
-            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain,
-			BindFlag::BitField initialLayout = 0, BindFlag::BitField finalLayout = 0);
-		AttachmentName DefineAttachment(
-			uint64_t semantic,
-            const AttachmentDesc& request);
+		Techniques::FrameBufferDescFragment::DefineAttachmentHelper DefineAttachment(uint64_t semantic);
+		Techniques::FrameBufferDescFragment::DefineAttachmentHelper DefineAttachment(uint64_t semantic, const AttachmentDesc& request);
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,

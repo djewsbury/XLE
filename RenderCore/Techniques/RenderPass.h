@@ -37,13 +37,22 @@ namespace RenderCore { namespace Techniques
     class FrameBufferDescFragment
     {
     public:
-        AttachmentName DefineAttachment(
-            uint64_t semantic,
-            LoadStore loadOp = LoadStore::Retain, LoadStore storeOp = LoadStore::Retain,
-            BindFlag::BitField initialLayout = 0, BindFlag::BitField finalLayout = 0);
-		AttachmentName DefineAttachment(
-			uint64_t semantic,
-            const AttachmentDesc& request);
+        struct DefineAttachmentHelper
+        {
+            AttachmentName GetAttachmentName() const { return _attachmentName; }
+            operator AttachmentName() const { return _attachmentName; }
+            DefineAttachmentHelper& Clear();
+            DefineAttachmentHelper& Discard();
+            DefineAttachmentHelper& NoInitialState();
+            DefineAttachmentHelper& InitialState(BindFlag::BitField);
+            DefineAttachmentHelper& FinalState(BindFlag::BitField);
+            DefineAttachmentHelper& InitialState(LoadStore, BindFlag::BitField);
+            DefineAttachmentHelper& FinalState(LoadStore, BindFlag::BitField);
+            FrameBufferDescFragment* _fragment = nullptr;
+            AttachmentName _attachmentName = ~0u;
+        };
+        DefineAttachmentHelper DefineAttachment(uint64_t semantic);
+		DefineAttachmentHelper DefineAttachment(uint64_t semantic, const AttachmentDesc& request);
         
         struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
         struct SubpassDesc : public RenderCore::SubpassDesc

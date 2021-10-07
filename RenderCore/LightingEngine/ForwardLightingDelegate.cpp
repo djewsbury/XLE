@@ -114,11 +114,14 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	static RenderStepFragmentInterface CreateToneMapFragment(
-		std::function<void(LightingTechniqueIterator&)>&& fn)
+		std::function<void(LightingTechniqueIterator&)>&& fn,
+		bool keepHDRForNextFrame = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain, LoadStore::DontCare);
-		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::DontCare, LoadStore::Retain);
+		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
+		if (keepHDRForNextFrame)
+			hdrInput.FinalState(BindFlag::ShaderResource);
+		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 		subpass.AppendOutput(ldrOutput);
@@ -150,7 +153,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::InputAttachment | BindFlag::ShaderResource, 0, 0, 
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
 					"color-hdr")
 			},
@@ -178,8 +181,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
-		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
-		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).Clear().FinalState(BindFlag::ShaderResource));
+		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
 		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFilter::General);
 		return result;
@@ -190,9 +193,9 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		Techniques::FrameBufferDescFragment::SubpassDesc preDepthSubpass;
-		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion, LoadStore::Clear));
-		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear));
-		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Clear));
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).Clear().FinalState(BindFlag::ShaderResource));
+		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).Clear().FinalState(BindFlag::ShaderResource));
+		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
 
 		auto srDelegateFuture = Internal::CreateBuildGBufferResourceDelegate();
@@ -207,7 +210,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::DeferredShaderResource& balancedNoiseTexture)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
-		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::DontCare);
+		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth);
 		
 		Techniques::FrameBufferDescFragment::SubpassDesc skySubpass;
@@ -232,7 +235,7 @@ namespace RenderCore { namespace LightingEngine
 
 		const bool hasSSR = true;
 		if (hasSSR) {
-			auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections"), LoadStore::Retain, LoadStore::DontCare);
+			auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections")).NoInitialState();
 			mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
 		}
 		mainSubpass.SetName("MainForward");

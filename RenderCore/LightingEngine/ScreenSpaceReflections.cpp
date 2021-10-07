@@ -278,7 +278,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto outputReflections = result.DefineAttachment(Hash64("SSRReflections"), LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::ShaderResource);
+		auto outputReflections = result.DefineAttachment(Hash64("SSRReflections")).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);

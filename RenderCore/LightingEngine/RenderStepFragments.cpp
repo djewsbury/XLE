@@ -7,12 +7,12 @@
 namespace RenderCore { namespace LightingEngine 
 {
 
-	RenderCore::AttachmentName RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, LoadStore loadOp, LoadStore storeOp, BindFlag::BitField initialLayout, BindFlag::BitField finalLayout)
+	RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper RenderStepFragmentInterface::DefineAttachment(uint64_t semantic)
 	{
-		return _frameBufferDescFragment.DefineAttachment(semantic, loadOp, storeOp, initialLayout, finalLayout);
+		return _frameBufferDescFragment.DefineAttachment(semantic);
 	}
 
-	AttachmentName RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
+	RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper RenderStepFragmentInterface::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
 	{
 		return _frameBufferDescFragment.DefineAttachment(semantic, request);
 	}

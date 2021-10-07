@@ -357,8 +357,8 @@ namespace UnitTests
 		SimpleRendering(const LightingEngineTestApparatus& testApparatus)
 		{
 			using namespace RenderCore;
-			_fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-			_fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+			_fragment.DefineAttachment(s_attachmentProbeTarget).Clear();
+			_fragment.DefineAttachment(s_attachmentProbeDepth).Clear();
 			for (unsigned c=0; c<s_probesToRender; ++c) {
 				TextureViewDesc viewDesc;
 				viewDesc._arrayLayerRange._min = c;
@@ -386,8 +386,8 @@ namespace UnitTests
 			batchRange.second = std::min(batchRange.second, batchRange.first+maxViewsPerDraw);
 
 			Techniques::FrameBufferDescFragment fragment;
-			fragment.DefineAttachment(s_attachmentProbeTarget, LoadStore::Clear);
-			fragment.DefineAttachment(s_attachmentProbeDepth, LoadStore::Clear);
+			fragment.DefineAttachment(s_attachmentProbeTarget).Clear();
+			fragment.DefineAttachment(s_attachmentProbeDepth).Clear();
 			TextureViewDesc viewDesc;
 			viewDesc._arrayLayerRange._min = batchRange.first;
 			viewDesc._arrayLayerRange._count = batchRange.second-batchRange.first;

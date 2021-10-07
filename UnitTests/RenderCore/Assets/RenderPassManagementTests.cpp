@@ -67,9 +67,9 @@ namespace UnitTests
 
 			FrameBufferDescFragment fragment;
 			SubpassDesc subpass[3];
-			auto colorLDR = fragment.DefineAttachment(AttachmentSemantics::ColorLDR, LoadStore::Clear);
-			auto depthAttachment = fragment.DefineAttachment(AttachmentSemantics::MultisampleDepth, LoadStore::Clear);
-			subpass[0].AppendInput(fragment.DefineAttachment(AttachmentSemantics::ShadowDepthMap, LoadStore::Retain, LoadStore::DontCare));
+			auto colorLDR = fragment.DefineAttachment(AttachmentSemantics::ColorLDR).Clear();
+			auto depthAttachment = fragment.DefineAttachment(AttachmentSemantics::MultisampleDepth).Clear();
+			subpass[0].AppendInput(fragment.DefineAttachment(AttachmentSemantics::ShadowDepthMap).Discard());
 			subpass[0].AppendOutput(colorLDR);
 			subpass[0].SetDepthStencil(depthAttachment);
 			
@@ -114,11 +114,11 @@ namespace UnitTests
 				//		Write and retain ColorLDR
 				//		Write and discard tempAttach2 & tempAttach3
 				SubpassDesc subpass[2];
-				auto colorLDR = fragments[0].DefineAttachment(AttachmentSemantics::ColorLDR, LoadStore::Clear);
+				auto colorLDR = fragments[0].DefineAttachment(AttachmentSemantics::ColorLDR).Clear();
 				auto tempAttach0 = fragments[0].DefineAttachment(0, AttachmentDesc{Format::R8G8B8A8_UNORM_SRGB, 0, LoadStore::DontCare, LoadStore::DontCare});
 				auto tempAttach2 = fragments[0].DefineAttachment(0, AttachmentDesc{Format::R32_FLOAT, 0, LoadStore::DontCare, LoadStore::DontCare});
 				auto tempAttach3 = fragments[0].DefineAttachment(0, AttachmentDesc{Format::R32_FLOAT, 0, LoadStore::DontCare, LoadStore::DontCare});
-				subpass[0].AppendInput(fragments[0].DefineAttachment(AttachmentSemantics::ShadowDepthMap, LoadStore::Retain, LoadStore::DontCare));
+				subpass[0].AppendInput(fragments[0].DefineAttachment(AttachmentSemantics::ShadowDepthMap).Discard());
 				subpass[0].AppendOutput(colorLDR);
 				subpass[0].AppendOutput(tempAttach0);
 
@@ -137,7 +137,7 @@ namespace UnitTests
 				SubpassDesc subpass[1];
 				auto tempAttach0 = fragments[1].DefineAttachment(0, AttachmentDesc{Format::R8G8B8A8_UNORM_SRGB, 0, LoadStore::DontCare, LoadStore::DontCare});
 				auto tempAttach2 = fragments[1].DefineAttachment(0, AttachmentDesc{Format::R32_FLOAT, 0, LoadStore::DontCare, LoadStore::Retain});
-				subpass[0].AppendInput(fragments[1].DefineAttachment(AttachmentSemantics::ShadowDepthMap, LoadStore::Retain, LoadStore::Retain));
+				subpass[0].AppendInput(fragments[1].DefineAttachment(AttachmentSemantics::ShadowDepthMap));
 				subpass[0].AppendOutput(tempAttach0);
 				subpass[0].AppendOutput(tempAttach2);
 				for (auto& sp:subpass) fragments[1].AddSubpass(std::move(sp));

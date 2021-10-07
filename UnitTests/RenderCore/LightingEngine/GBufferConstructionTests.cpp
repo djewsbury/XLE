@@ -391,9 +391,9 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment fbFrag;
 					SubpassDesc subpass;
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
-					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).Clear().FinalState(BindFlag::ShaderResource));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).Clear().FinalState(BindFlag::ShaderResource));
+					subpass.AppendOutput(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).Clear().FinalState(BindFlag::ShaderResource));
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
 					depthAttachmentDesc._finalLayout = BindFlag::ShaderResource;
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
@@ -434,8 +434,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					RenderCore::Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition"), LoadStore::Clear));
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal"), LoadStore::Clear));
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldPosition")).Clear());
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("ReconstructedWorldNormal")).Clear());
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
@@ -467,8 +467,8 @@ namespace UnitTests
 				{
 					RenderCore::Techniques::FrameBufferDescFragment frag;
 					SubpassDesc subpass;
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition"), LoadStore::Clear));
-					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal"), LoadStore::Clear));
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldPosition")).Clear());
+					subpass.AppendOutput(frag.DefineAttachment(Hash64("DirectWorldNormal")).Clear());
 					AttachmentDesc depthAttachmentDesc = {s_depthStencilFormat};
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
 					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));

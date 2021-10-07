@@ -162,7 +162,7 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Graphics};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::ShaderResource);
+		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		TextureViewDesc depthBufferView;
 		depthBufferView._mipRange._min = IntegerLog2(s_gridDims);
@@ -184,7 +184,7 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess);
+		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		/*spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Hash64("LowRezDepthBuffer")), BindFlag::DepthStencil);*/

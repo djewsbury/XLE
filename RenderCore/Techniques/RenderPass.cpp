@@ -117,32 +117,76 @@ namespace RenderCore { namespace Techniques
         return str;
     }
 
-    AttachmentName FrameBufferDescFragment::DefineAttachment(
-        uint64_t semantic, 
-        LoadStore loadOp, LoadStore storeOp,
-        BindFlag::BitField initialLayout, BindFlag::BitField finalLayout)
+    FrameBufferDescFragment::DefineAttachmentHelper FrameBufferDescFragment::DefineAttachment(uint64_t semantic)
     {
         auto name = (AttachmentName)_attachments.size();
         Attachment attachment;
         attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
-        attachment._desc._loadFromPreviousPhase = loadOp;
-        attachment._desc._storeToNextPhase = storeOp;
-        attachment._desc._initialLayout = initialLayout;
-        attachment._desc._finalLayout = finalLayout;
+        attachment._desc._loadFromPreviousPhase = LoadStore::Retain;
+        attachment._desc._storeToNextPhase = LoadStore::Retain;
+        attachment._desc._initialLayout = 0;
+        attachment._desc._finalLayout = 0;
         _attachments.push_back(attachment);
-        return name;
+        return DefineAttachmentHelper{this, name};
     }
 
-    AttachmentName FrameBufferDescFragment::DefineAttachment(
-        uint64_t semantic,
-        const AttachmentDesc& request)
+    FrameBufferDescFragment::DefineAttachmentHelper FrameBufferDescFragment::DefineAttachment(uint64_t semantic, const AttachmentDesc& request)
     {
         auto name = (AttachmentName)_attachments.size();
         Attachment attachment;
         attachment._inputSemanticBinding = attachment._outputSemanticBinding = semantic;
         attachment._desc = request;
         _attachments.push_back(attachment);
-        return name;
+        return DefineAttachmentHelper{this, name};
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::Clear()
+    {
+        _fragment->_attachments[_attachmentName]._desc._initialLayout = 0;
+        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::Clear;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::Discard()
+    {
+        _fragment->_attachments[_attachmentName]._desc._finalLayout = 0;
+        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = LoadStore::DontCare;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::InitialState(BindFlag::BitField flags)
+    {
+        _fragment->_attachments[_attachmentName]._desc._initialLayout = flags;
+        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::Retain;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::FinalState(BindFlag::BitField flags)
+    {
+        _fragment->_attachments[_attachmentName]._desc._finalLayout = flags;
+        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = LoadStore::Retain;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::NoInitialState()
+    {
+        _fragment->_attachments[_attachmentName]._desc._initialLayout = 0;
+        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = LoadStore::DontCare;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::InitialState(LoadStore loadStore, BindFlag::BitField flags)
+    {
+        _fragment->_attachments[_attachmentName]._desc._initialLayout = flags;
+        _fragment->_attachments[_attachmentName]._desc._loadFromPreviousPhase = loadStore;
+        return *this;
+    }
+
+    FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::FinalState(LoadStore loadStore, BindFlag::BitField flags)
+    {
+        _fragment->_attachments[_attachmentName]._desc._finalLayout = flags;
+        _fragment->_attachments[_attachmentName]._desc._storeToNextPhase = loadStore;
+        return *this;
     }
 
     void FrameBufferDescFragment::AddSubpass(SubpassDesc&& subpass)

@@ -179,7 +179,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, LoadStore::Retain_StencilClear, LoadStore::Retain);
+		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0);
 		auto lightResolveTarget = fragment.DefineAttachment(
 			Techniques::AttachmentSemantics::ColorHDR,
 			{ (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled, LoadStore::Clear, LoadStore::DontCare });
@@ -207,9 +207,9 @@ namespace RenderCore { namespace LightingEngine
 
 		auto gbufferStore = LoadStore::Retain;	// (technically only need retain when we're going to use these for debugging)
 		auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse, LoadStore::Retain, gbufferStore), {diffuseAspect});
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal, LoadStore::Retain, gbufferStore));
-		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter, LoadStore::Retain, gbufferStore));
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).InitialState(gbufferStore, 0), {diffuseAspect});
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).InitialState(gbufferStore, 0));
+		subpasses[1].AppendInput(fragment.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).InitialState(gbufferStore, 0));
 		subpasses[1].AppendInput(depthTarget, justDepthWindow);
 		subpasses[1].SetName("light-resolve");
 
@@ -223,8 +223,8 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR, LoadStore::Retain, LoadStore::DontCare);
-		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, LoadStore::DontCare, LoadStore::Retain);
+		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
+		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 		subpass.AppendOutput(ldrOutput);
