@@ -6,14 +6,14 @@
 #include "../Math/TextureAlgorithm.hlsl"		// for SystemInputs
 #include "../../Objects/IllumShader/PerPixel.h"
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 GBufferEncoded deferred(VSOUT geo)
 {
 	DoAlphaTest(geo, GetAlphaThreshold());
 
-	#if (VIS_ANIM_PARAM!=0) && (VSOUT_HAS_COLOR==1)
+	#if (VIS_ANIM_PARAM!=0) && VSOUT_HAS_COLOR_LINEAR
 		{
 			GBufferValues visResult = GBufferValues_Default();
 			#if VIS_ANIM_PARAM==1
@@ -35,7 +35,7 @@ GBufferEncoded deferred(VSOUT geo)
 	return Encode(result);
 }
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
     [earlydepthstencil] void depthonly() {}
 #else
 	void depthonly(VSOUT geo) 
@@ -44,7 +44,7 @@ GBufferEncoded deferred(VSOUT geo)
 	}
 #endif
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
@@ -53,7 +53,7 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 	GBufferValues sample = IllumShader_PerPixel(geo);
 
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
@@ -66,7 +66,7 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 	return EncodeDepthMotionNormal(sample, int2(prevPos.xy));
 }
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 DepthMotionEncoded depthMotion(VSOUT geo)
@@ -74,7 +74,7 @@ DepthMotionEncoded depthMotion(VSOUT geo)
 	DoAlphaTest(geo, GetAlphaThreshold());
 
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
@@ -87,7 +87,7 @@ DepthMotionEncoded depthMotion(VSOUT geo)
 	return EncodeDepthMotion(int2(prevPos.xy));
 }
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 float4 flatColor(VSOUT geo) : SV_Target0

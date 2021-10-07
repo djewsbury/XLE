@@ -10,8 +10,8 @@
 float3 SRGBToLinear_Fast(float3 input)		{ return input*input; }
 float3 LinearToSRGB_Fast(float3 input)		{ return sqrt(input); }
 
-float3 LinearToSRGB(float3 input)		    { return pow(max(0.0.xxx, input), 1.f/2.2f); }
-float3 SRGBToLinear(float3 input)		    { return pow(max(0.0.xxx, input), 2.2f); }
+float3 LinearToSRGB(float3 input)		    { return pow(input, 1.f/2.4f)*1.055f-0.055f; }
+float3 SRGBToLinear(float3 input)		    { return pow((input+0.055f)/1.055f, 2.4f); }
 
 float SRGBToLinear_Formal(float input)		    
 {

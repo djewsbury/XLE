@@ -31,7 +31,7 @@ struct PSInput
     float2 texCoord : TEXCOORD0;
     float2 dhdxy : DHDXY;
 
-    #if (VSOUT_HAS_WORLD_POSITION==1)
+    #if VSOUT_HAS_WORLD_POSITION
         float3 worldPosition : WORLDPOSITION;
     #endif
 };
@@ -40,7 +40,7 @@ struct PSInput
     float3 BlendWireframe(PSInput geo, float3 baseColour);
 #endif
 
-#if VSOUT_HAS_WORLD_POSITION==1
+#if VSOUT_HAS_WORLD_POSITION
     float3 VSOUT_GetWorldPosition(PSInput geo) { return geo.worldPosition; }
 #else
     float3 VSOUT_GetWorldPosition(PSInput geo) { return 0.0.xxx; }
@@ -48,7 +48,7 @@ struct PSInput
 
 float TerrainResolve_AngleBasedShadows(PSInput geo)
 {
-    #if (VSOUT_HAS_TEXCOORD>=1) && (SOLIDWIREFRAME_TEXCOORD==1)
+    #if VSOUT_HAS_TEXCOORD && (SOLIDWIREFRAME_TEXCOORD==1)
 
             // "COVERAGE_2" is the angle based shadows layer.
         #if defined(COVERAGE_2)
@@ -216,7 +216,7 @@ TerrainPixel CalculateTerrainPixel(PSInput geo)
         p.diffuseAlbedo = BlendWireframe(geo, p.diffuseAlbedo);
     #endif
 
-    #if (VSOUT_HAS_TEXCOORD>=1) && defined(VISUALIZE_COVERAGE)
+    #if VSOUT_HAS_TEXCOORD && defined(VISUALIZE_COVERAGE)
         if ((dot(uint2(geo.position.xy), uint2(1,1))/4)%4 == 0) {
             float2 coverageTC = lerp(CoverageCoordMins[VISUALIZE_COVERAGE].xy, CoverageCoordMaxs[VISUALIZE_COVERAGE].xy, geo.texCoord.xy);
             uint sample = MakeCoverageTileSet(VISUALIZE_COVERAGE).Load(uint4(uint2(coverageTC.xy), CoverageOrigin[VISUALIZE_COVERAGE].z, 0));

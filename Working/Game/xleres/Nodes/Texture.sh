@@ -39,7 +39,7 @@ float4 LoadAbsolute(Texture2D inputTexture, uint2 pixelCoords)
 void SampleTextureDiffuse(VSOUT geo, out float3 rgb, out float alpha)
 {
     float4 diffuseTextureSample = 1.0.xxxx;
-    #if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_DiffuseTexture!=0)
+    #if VSOUT_HAS_TEXCOORD && (RES_HAS_DiffuseTexture!=0)
         #if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
             diffuseTextureSample = DiffuseTexture.Sample(ClampingSampler, geo.texCoord);
         #else
@@ -53,11 +53,11 @@ void SampleTextureDiffuse(VSOUT geo, out float3 rgb, out float alpha)
 float SampleTextureAO(VSOUT geo)
 {
     float result = 1.f;
-    #if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_Occlusion==1)
+    #if VSOUT_HAS_TEXCOORD && RES_HAS_Occlusion
         result *= Occlusion.Sample(DefaultSampler, geo.texCoord).r;
     #endif
 
-    #if (MAT_AO_IN_NORMAL_BLUE!=0) && (RES_HAS_NormalsTexture!=0) && (RES_HAS_NormalsTexture_DXT==0) && (VSOUT_HAS_TEXCOORD>=1)
+    #if (MAT_AO_IN_NORMAL_BLUE!=0) && (RES_HAS_NormalsTexture!=0) && (RES_HAS_NormalsTexture_DXT==0) && VSOUT_HAS_TEXCOORD
         result *= NormalsTexture.Sample(DefaultSampler, geo.texCoord).z;
     #endif
     return result;
@@ -65,7 +65,7 @@ float SampleTextureAO(VSOUT geo)
 
 float3 GetParametersTexture(VSOUT geo)
 {
-    #if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_ParametersTexture!=0)
+    #if VSOUT_HAS_TEXCOORD && (RES_HAS_ParametersTexture!=0)
         return ParametersTexture.Sample(DefaultSampler, geo.texCoord).rgb;
     #else
         return float3(1.f, 1.f, 1.f);
@@ -74,8 +74,8 @@ float3 GetParametersTexture(VSOUT geo)
 
 float GetVertexOpacityMultiplier(VSOUT geo)
 {
-    #if (VSOUT_HAS_COLOR==1) && MAT_MODULATE_VERTEX_ALPHA
-        return geo.color.a;
+    #if VSOUT_HAS_VERTEX_ALPHA && MAT_MODULATE_VERTEX_ALPHA
+        return VSOUT_GetColor0(geo).a;
     #else
         return 1.f;
     #endif
@@ -83,7 +83,7 @@ float GetVertexOpacityMultiplier(VSOUT geo)
 
 float GetVertexAOMultiplier(VSOUT geo)
 {
-    #if (VSOUT_HAS_PER_VERTEX_AO==1)
+    #if VSOUT_HAS_PER_VERTEX_AO
         return geo.ambientOcclusion;
     #else
         return 1.f;
@@ -92,7 +92,7 @@ float GetVertexAOMultiplier(VSOUT geo)
 
 float GetVertexMainLightMultiplier(VSOUT geo)
 {
-    #if (VSOUT_HAS_PER_VERTEX_MLO==1)
+    #if VSOUT_HAS_PER_VERTEX_MLO
         return geo.mainLightOcclusion;
     #else
         return 1.f;
@@ -101,7 +101,7 @@ float GetVertexMainLightMultiplier(VSOUT geo)
 
 float3 MaybeMakeDoubleSided(VSOUT geo, float3 normal)
 {
-    #if (MAT_DOUBLE_SIDED_LIGHTING==1) && (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+    #if (MAT_DOUBLE_SIDED_LIGHTING==1) && VSOUT_HAS_WORLD_VIEW_VECTOR
             // We can use either the per-pixel normal or the vertex normal
             // in this calculation.
             // Using the vertex normal might add some complication to the shader
@@ -121,7 +121,7 @@ float3 MaybeMakeDoubleSided(VSOUT geo, float3 normal)
 
 float MaybeDoAlphaTest(float alpha, float alphaThreshold)
 {
-    #if (VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1))
+    #if VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1))
         if (alpha < alphaThreshold) discard;
     #endif
     return alpha;

@@ -8,7 +8,7 @@
 
 #include "../../Forward/ForwardPlusLighting.hlsl"       // this variable is in a separate shader file because this include brings in so much stuff
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1)) && (VULKAN!=1)
 	[earlydepthstencil]
 #endif
 float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
@@ -18,11 +18,11 @@ float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
 	GBufferValues sample = IllumShader_PerPixel(geo);
 
 	float3 directionToEye = 0.0.xxx;
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 
-	#if VSOUT_HAS_NORMAL==1
+	#if VSOUT_HAS_NORMAL
 		const bool hasNormal = true;
 	#else
 		const bool hasNormal = false;
@@ -40,7 +40,7 @@ float4 forward(VSOUT geo, SystemInputs sys) : SV_Target0
 
 	result.a = sample.blendingAlpha;
 
-	#if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
+	#if VSOUT_HAS_COLOR_LINEAR && (MAT_VCOLOR_IS_ANIM_PARAM==0)
 		result.rgb *= geo.color.rgb;
 	#endif
 

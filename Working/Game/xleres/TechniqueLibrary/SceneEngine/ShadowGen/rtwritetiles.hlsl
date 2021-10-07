@@ -20,11 +20,11 @@ struct RTS_VSOutput
 {
     float4 position : POSITION;
 
-    #if VSOUT_HAS_TEXCOORD>=1
+    #if VSOUT_HAS_TEXCOORD
         float2 texCoord : TEXCOORD;
     #endif
 
-    #if (VSOUT_HAS_WORLD_POSITION==1)
+    #if VSOUT_HAS_WORLD_POSITION
         float3 worldPosition : WORLDPOSITION;
     #endif
 };
@@ -33,7 +33,7 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
 {
     float3 localPosition	= VSIN_GetLocalPosition(input);
 
-    #if GEO_HAS_INSTANCE_ID==1
+    #if GEO_HAS_INSTANCE_ID
         float3 objectCentreWorld;
         float3 worldNormal;
         float3 worldPosition = InstanceWorldPosition(input, worldNormal, objectCentreWorld);
@@ -43,12 +43,12 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
         float3 worldNormal = LocalToWorldUnitVector(VSIN_GetLocalNormal(input));
     #endif
 
-    #if VSOUT_HAS_TEXCOORD>=1
+    #if VSOUT_HAS_TEXCOORD
         output.texCoord = VSIN_GetTexCoord0(input);
     #endif
 
-    #if (GEO_HAS_NORMAL==1) || (GEO_HAS_TEXTANGENT==1)
-        #if (GEO_HAS_NORMAL==0) && (GEO_HAS_TEXTANGENT==1)
+    #if GEO_HAS_NORMAL || GEO_HAS_TEXTANGENT
+        #if (GEO_HAS_NORMAL==0) && GEO_HAS_TEXTANGENT
             worldNormal =  VSIN_GetWorldTangentFrame(input).normal;
         #endif
 
@@ -63,7 +63,7 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
         output.position = float4(cascadePos, 1.f);
     #endif
 
-    #if VSOUT_HAS_WORLD_POSITION==1
+    #if VSOUT_HAS_WORLD_POSITION
         output.worldPosition = worldPosition.xyz;
     #endif
 }

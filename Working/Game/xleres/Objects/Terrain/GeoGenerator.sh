@@ -281,7 +281,7 @@ PatchOutputControlPoint hs_main(
     VSOUT output;
     output.position = clipPosition;
     output.texCoord = UV.xy;
-    #if (VSOUT_HAS_WORLD_POSITION==1)
+    #if VSOUT_HAS_WORLD_POSITION
         output.worldPosition = worldPosition;
     #endif
         // output height derivatives from domain shader (instead of normals

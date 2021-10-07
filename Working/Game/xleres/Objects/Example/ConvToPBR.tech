@@ -51,7 +51,7 @@ attributes visualNode23(PreviewGeometry:"plane2d", X:"-181.000000", Y:"-344.0000
 #include "TechniqueLibrary/Math/TextureAlgorithm.hlsl" 	// for SystemInputs
 #include "Lighting/Forward.h"
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 float4 forward_main(auto Opacity, auto AlphaThreshold, auto SpecularColorTexture, auto MetalMin, auto MetalMax, auto RoughnessMin, auto RoughnessMax, auto SpecularMin, auto SpecularMax, auto MaterialDiffuse, SystemInputs sys) : SV_Target0
@@ -68,7 +68,7 @@ float4 forward_main(auto Opacity, auto AlphaThreshold, auto SpecularColorTexture
     main(Opacity, AlphaThreshold, SpecularColorTexture, MetalMin, MetalMax, RoughnessMin, RoughnessMax, SpecularMin, SpecularMax, MaterialDiffuse, sample);
 
 	float3 directionToEye = 0.0.xxx;
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 
@@ -83,7 +83,7 @@ float4 forward_main(auto Opacity, auto AlphaThreshold, auto SpecularColorTexture
 
 	result.a = sample.blendingAlpha;
 
-    #if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
+    #if VSOUT_HAS_COLOR_LINEAR && (MAT_VCOLOR_IS_ANIM_PARAM==0)
         result.rgb *= geo.color.rgb;
     #endif
 
@@ -95,7 +95,7 @@ float4 forward_main(auto Opacity, auto AlphaThreshold, auto SpecularColorTexture
 
 
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 GBufferEncoded deferred_main(auto Opacity, auto AlphaThreshold, auto SpecularColorTexture, auto MetalMin, auto MetalMax, auto RoughnessMin, auto RoughnessMax, auto SpecularMin, auto SpecularMax, auto MaterialDiffuse)
@@ -211,12 +211,12 @@ float4 stochastic_main(VSOUT geo,
 
 #else
 
-	#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+	#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 		[earlydepthstencil]
 	#endif
 	void depthonly_main(VSOUT geo)
 	{
-		#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+		#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 				// execute sampling only for discard() events
 			GBufferValues sample;
 			main(Opacity, AlphaThreshold, SpecularColorTexture, MetalMin, MetalMax, RoughnessMin, RoughnessMax, SpecularMin, SpecularMax, MaterialDiffuse, sample);

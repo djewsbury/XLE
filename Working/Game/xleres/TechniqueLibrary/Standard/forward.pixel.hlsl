@@ -17,11 +17,11 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	GBufferValues sample = PerPixel(geo);
 
 	float3 directionToEye = 0.0.xxx;
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 
-	#if VSOUT_HAS_NORMAL==1
+	#if VSOUT_HAS_NORMAL
 		const bool hasNormal = true;
 	#else
 		const bool hasNormal = false;
@@ -38,10 +38,6 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	#endif
 
 	result.a = sample.blendingAlpha;
-
-    #if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
-        // result.rgb *= geo.color.rgb;
-    #endif
 
 	#if MAT_SKIP_LIGHTING_SCALE==0
 		result.rgb *= LightingScale;		// (note -- should we scale by this here? when using this shader with a basic lighting pipeline [eg, for material preview], the scale is unwanted)

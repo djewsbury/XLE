@@ -58,12 +58,12 @@ VSSprite vs_main(VSSprite input)
     float3 bitangent = input[0].yAxis;
     float3 normal = NormalFromTangents(tangent, bitangent, -1.f);    // (assuming orthogonal tangent & bitangent)
 
-    #if VSOUT_HAS_TANGENT_FRAME==1
+    #if VSOUT_HAS_TANGENT_FRAME
         output.tangent = tangent;
         output.bitangent = bitangent;
     #endif
 
-    #if VSOUT_HAS_NORMAL==1
+    #if VSOUT_HAS_NORMAL
         output.normal = normal;
     #endif
 
@@ -74,21 +74,21 @@ VSSprite vs_main(VSSprite input)
         float3 localPosition = input[0].position + o.x * xAxis + o.y * yAxis;
         float3 worldPosition = localPosition; // mul(SysUniform_GetLocalToWorld(), float4(localPosition,1)).xyz;
 
-        #if VSOUT_HAS_TEXCOORD>=1
+        #if VSOUT_HAS_TEXCOORD
             output.texCoord = texCoord[c];
         #endif
 
         output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-        #if VSOUT_HAS_LOCAL_VIEW_VECTOR==1
+        #if VSOUT_HAS_LOCAL_VIEW_VECTOR
             output.localViewVector = SysUniform_GetLocalSpaceView().xyz - localPosition.xyz;
         #endif
 
-        #if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+        #if VSOUT_HAS_WORLD_VIEW_VECTOR
             output.worldViewVector = SysUniform_GetWorldSpaceView().xyz - worldPosition.xyz;
         #endif
 
-        #if VSOUT_HAS_WORLD_POSITION==1
+        #if VSOUT_HAS_WORLD_POSITION
             output.worldPosition = worldPosition.xyz;
         #endif
 

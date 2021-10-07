@@ -9,7 +9,11 @@ struct VSShadowOutput /////////////////////////////////////////////////////
 {
 	float4 position : SV_Position;
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_VERTEX_ALPHA
+		float alpha : ALPHA0;
+	#endif
+	
+	#if VSOUT_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD0;
 	#endif
 

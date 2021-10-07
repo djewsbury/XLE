@@ -116,7 +116,7 @@ namespace UnitTests
 
 				float2 GetSphericalCoord(VSOUT geo)
 				{
-					#if VSOUT_HAS_TEXCOORD>=1
+					#if VSOUT_HAS_TEXCOORD
 						return float2(geo.texCoord.x, geo.texCoord.y);
 					#else
 						return float2(0,0);

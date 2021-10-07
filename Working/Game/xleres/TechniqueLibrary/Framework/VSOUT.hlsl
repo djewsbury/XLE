@@ -10,90 +10,92 @@
 struct VSOUT /////////////////////////////////////////////////////
 {
 	float4 position : SV_Position;
-	#if VSOUT_HAS_COLOR>=2
-		float3 color : COLOR0;
-	#elif VSOUT_HAS_COLOR>=1
+	#if VSOUT_HAS_COLOR_LINEAR && VSOUT_HAS_VERTEX_ALPHA
 		float4 color : COLOR0;
+	#elif VSOUT_HAS_COLOR_LINEAR
+		float3 color : COLOR0;
+	#elif VSOUT_HAS_VERTEX_ALPHA
+		float alpha : ALPHA0;
 	#endif
 
-	#if VSOUT_HAS_COLOR1>=1
+	#if VSOUT_HAS_COLOR_LINEAR1
 		float4 color1 : COLOR1;
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD0;
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD1>=1
+	#if VSOUT_HAS_TEXCOORD1
 		float2 texCoord1 : TEXCOORD1;
 	#endif
 
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		float3 tangent : TEXTANGENT;
 		float3 bitangent : TEXBITANGENT;
 	#endif
 
-	#if VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 		float4 localTangent : LOCALTANGENT;
 		float3 localBitangent : LOCALBITANGENT;
 	#endif
 
-	#if (VSOUT_HAS_NORMAL==1)
+	#if VSOUT_HAS_NORMAL
 		float3 normal : NORMAL;
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_NORMAL==1)
+	#if VSOUT_HAS_LOCAL_NORMAL
 		float3 localNormal : LOCALNORMAL;
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_VIEW_VECTOR==1)
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
 		float3 localViewVector : LOCALVIEWVECTOR;
 	#endif
 
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		float3 worldViewVector : WORLDVIEWVECTOR;
 	#endif
 
-	#if (VSOUT_HAS_PRIMITIVE_ID==1)
+	#if VSOUT_HAS_PRIMITIVE_ID
 		nointerpolation uint primitiveId : SV_PrimitiveID;
 	#endif
 
-	#if (VSOUT_HAS_RENDER_TARGET_INDEX==1)
+	#if VSOUT_HAS_RENDER_TARGET_INDEX
 		nointerpolation uint renderTargetIndex : SV_RenderTargetArrayIndex;
 	#endif
 
-	#if (VSOUT_HAS_WORLD_POSITION==1)
+	#if VSOUT_HAS_WORLD_POSITION
 		float3 worldPosition : WORLDPOSITION;
 	#endif
 
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		float4 prevPosition : PREVPOSITION;
 	#endif
 
-	#if (VSOUT_HAS_BLEND_TEXCOORD==1)
+	#if VSOUT_HAS_BLEND_TEXCOORD
 		float3 blendTexCoord : TEXCOORD1;
 	#endif
 
-	#if (VSOUT_HAS_FOG_COLOR==1)
+	#if VSOUT_HAS_FOG_COLOR
 		float4 fogColor : FOGCOLOR;
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_AO==1)
+	#if VSOUT_HAS_PER_VERTEX_AO
 		float ambientOcclusion : AMBIENTOCCLUSION;
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_MLO==1)
+	#if VSOUT_HAS_PER_VERTEX_MLO
 		float mainLightOcclusion : MAINLIGHTOCCLUSION;
 	#endif
 
-	#if (VSOUT_HAS_INSTANCE_ID==1)
+	#if VSOUT_HAS_INSTANCE_ID
 		uint instanceId : SV_InstanceID;
 	#endif
 }; //////////////////////////////////////////////////////////////////
 
 float2 VSOUT_GetTexCoord0(VSOUT geo)
 {
-	#if VSOUT_HAS_TEXCOORD>=1 /////////////////////////////////////////////
+	#if VSOUT_HAS_TEXCOORD /////////////////////////////////////////////
 		return geo.texCoord;
 	#else
 		return 0.0.xx;
@@ -102,20 +104,22 @@ float2 VSOUT_GetTexCoord0(VSOUT geo)
 
 float4 VSOUT_GetColor0(VSOUT geo)
 {
-	#if VSOUT_HAS_COLOR>=2 ////////////////////////////////////////////////
-		return float4(geo.color.rgb, 1.f);
-	#elif VSOUT_HAS_COLOR>=1
+	#if VSOUT_HAS_COLOR_LINEAR && VSOUT_HAS_VERTEX_ALPHA
 		return geo.color;
+	#elif VSOUT_HAS_COLOR_LINEAR
+		return float4(geo.color.rgb, 1.f);
+	#elif VSOUT_HAS_VERTEX_ALPHA
+		return float4(1, 1, 1, geo.alpha);
 	#else
 		return 1.0.xxxx;
-	#endif //////////////////////////////////////////////////////////////
+	#endif
 }
 
 float3 VSOUT_GetWorldViewVector(VSOUT geo)
 {
-	#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		return geo.worldViewVector;
-	#elif VSOUT_HAS_WORLD_POSITION==1
+	#elif VSOUT_HAS_WORLD_POSITION
 		return SysUniform_GetWorldSpaceView().xyz - geo.worldPosition;	// if we have either the world-view-world or world-position it's a bit redundant to have the other
 	#else
 		return 0.0.xxx;
@@ -124,7 +128,7 @@ float3 VSOUT_GetWorldViewVector(VSOUT geo)
 
 float3 VSOUT_GetLocalViewVector(VSOUT geo)
 {
-	#if VSOUT_HAS_LOCAL_VIEW_VECTOR==1
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
 		return geo.localViewVector;
 	#else
 		return 0.0.xxx;
@@ -133,16 +137,16 @@ float3 VSOUT_GetLocalViewVector(VSOUT geo)
 
 float3 VSOUT_GetWorldPosition(VSOUT geo)
 {
-	#if VSOUT_HAS_WORLD_POSITION==1
+	#if VSOUT_HAS_WORLD_POSITION
 		return geo.worldPosition;
-	#elif VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#elif VSOUT_HAS_WORLD_VIEW_VECTOR
 		return SysUniform_GetWorldSpaceView().xyz - geo.worldViewVector;	// if we have either the world-view-world or world-position it's a bit redundant to have the other
 	#else
 		return 0.0.xxx;
 	#endif
 }
 
-#if (VSOUT_HAS_TANGENT_FRAME==1)
+#if VSOUT_HAS_TANGENT_FRAME
 	TangentFrame VSOUT_GetWorldTangentFrame(VSOUT geo)
 	{
 		TangentFrame result;
@@ -167,7 +171,7 @@ float3 VSOUT_GetWorldPosition(VSOUT geo)
 	}
 #endif
 
-#if (VSOUT_HAS_LOCAL_TANGENT_FRAME==1)
+#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 	TangentFrame VSOUT_GetLocalTangentFrame(VSOUT geo)
 	{
 		TangentFrame result;
@@ -191,11 +195,11 @@ float3 VSOUT_GetWorldPosition(VSOUT geo)
 
 float3 VSOUT_GetWorldVertexNormal(VSOUT geo)
 {
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		return normalize(geo.normal);
-	#elif VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#elif VSOUT_HAS_LOCAL_TANGENT_FRAME
 		return VSOUT_GetLocalTangentFrame(geo).normal;
-	#elif (VSOUT_HAS_NORMAL==1)
+	#elif VSOUT_HAS_NORMAL
 		return normalize(geo.normal);
 	#else
 		return 0.0.xxx;
@@ -204,13 +208,13 @@ float3 VSOUT_GetWorldVertexNormal(VSOUT geo)
 
 float3 TransformTangentSpaceToWorld(float3 normalTextureSample, VSOUT geo)
 {
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 
 		TangentFrame tangentFrame = VSOUT_GetWorldTangentFrame(geo);
 		float3x3 normalsTextureToWorld = float3x3(tangentFrame.tangent.xyz, tangentFrame.bitangent, tangentFrame.normal);
 		return mul(normalTextureSample, normalsTextureToWorld);
 
-    #elif VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+    #elif VSOUT_HAS_LOCAL_TANGENT_FRAME
 
 		TangentFrame localTangentFrame = VSOUT_GetLocalTangentFrame(geo);
 		float3x3 normalsTextureToLocal = float3x3(localTangentFrame.tangent.xyz, localTangentFrame.bitangent, localTangentFrame.normal);
@@ -222,19 +226,19 @@ float3 TransformTangentSpaceToWorld(float3 normalTextureSample, VSOUT geo)
             //          or at least a "uniform scale" scalar to remove the scaling
         return normalize(mul(GetLocalToWorldUniformScale(), localNormal));
 
-	#elif (VSOUT_HAS_NORMAL==1) && ((VSOUT_HAS_WORLD_VIEW_VECTOR==1) || (VSOUT_HAS_WORLD_VIEW_VECTOR==1)) && (VSOUT_HAS_TEXCOORD > 0)
+	#elif VSOUT_HAS_NORMAL && (VSOUT_HAS_WORLD_VIEW_VECTOR || VSOUT_HAS_WORLD_VIEW_VECTOR) && (VSOUT_HAS_TEXCOORD > 0)
 
 	    float3x3 normalsTextureToWorld = AutoCotangentFrame(normalize(geo.normal), VSOUT_GetWorldViewVector(geo), geo.texCoord);
 			// Note -- matrix multiply opposite from normal (so we can initialise normalsTextureToWorld easily)
 		return mul(normalTextureSample, normalsTextureToWorld);
 
-    #elif (VSOUT_HAS_LOCAL_NORMAL==1) && (VSOUT_HAS_LOCAL_VIEW_VECTOR==1) && (VSOUT_HAS_TEXCOORD > 0)
+    #elif VSOUT_HAS_LOCAL_NORMAL && VSOUT_HAS_LOCAL_VIEW_VECTOR && (VSOUT_HAS_TEXCOORD > 0)
 
 		float3x3 normalsTextureToWorld = AutoCotangentFrame(normalize(geo.localNormal), VSOUT_GetLocalViewVector(geo), geo.texCoord);
 			// Note -- matrix multiply opposite from normal (so we can initialise normalsTextureToWorld easily)
 		return mul(normalTextureSample, normalsTextureToWorld);
 
-    #elif (VSOUT_HAS_NORMAL==1)
+    #elif VSOUT_HAS_NORMAL
 
         return normalize(geo.normal);
 

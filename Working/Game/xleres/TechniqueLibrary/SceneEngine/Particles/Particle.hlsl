@@ -11,18 +11,18 @@ struct ParticleVStoGS
 {
     float3 position : POSITION0;
 	
-	#if GEO_HAS_COLOR==1
+	#if GEO_HAS_COLOR
 		float4 color : COLOR0;
 	#endif
 
-	#if GEO_HAS_TEXCOORD>=1
+	#if GEO_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD;
 	#endif
 
     float4 texCoordScale : TEXCOORDSCALE;
 	float4 screenRot : PARTICLEROTATION;
 
-    #if (VSOUT_HAS_FOG_COLOR==1)
+    #if VSOUT_HAS_FOG_COLOR
         float4 fogColor : FOGCOLOR;
     #endif
 };

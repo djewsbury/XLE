@@ -186,7 +186,7 @@ VSOUT main(uint vertexId : SV_VertexId)
 
 	output.position = mul(LocalToClip, float4(finalLocalPosition,1));
 
-	#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		output.worldViewVector = LocalSpaceView2.xyz - finalLocalPosition.xyz;
 	#endif
 

@@ -122,7 +122,7 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 		// used for "picking" tests in tools. Without this alpha test check,
 		// the alpha tested triangles will behave like opaque triangles, which
 		// will give a confusing result for the user.
-		#if defined(PATCH_EARLY_REJECTION) && (VSOUT_HAS_TEXCOORD>=1)
+		#if defined(PATCH_EARLY_REJECTION) && VSOUT_HAS_TEXCOORD
 			float2 texCoord =
 				  barycentric.x * VSOUT_GetTexCoord0(input[0])
 				+ barycentric.y * VSOUT_GetTexCoord0(input[1])
@@ -130,7 +130,7 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 				;
 			input[0].texCoord = texCoord;
 			isOpaquePart = !EarlyRejectionTest(input[0]);
-		#elif (VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1)
+		#elif VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1)
 			float2 texCoord =
 				  barycentric.x * VSOUT_GetTexCoord0(input[0])
 				+ barycentric.y * VSOUT_GetTexCoord0(input[1])

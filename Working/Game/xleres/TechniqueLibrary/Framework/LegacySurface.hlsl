@@ -15,7 +15,7 @@ Texture2D		NormalsTexture          BIND_MAT_T4;
 float3 SampleDefaultNormalMap(VSOUT geo)
 {
 	#if defined(RES_HAS_NormalsTexture_DXT)
-		bool dxtNormalMap = RES_HAS_NormalsTexture_DXT==1;
+		bool dxtNormalMap = RES_HAS_NormalsTexture_DXT;
 	#else
 		bool dxtNormalMap = false;
 	#endif
@@ -25,7 +25,7 @@ float3 SampleDefaultNormalMap(VSOUT geo)
 
 void DoAlphaTest(VSOUT geo, float alphaThreshold)
 {
-	#if (VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1))
+	#if VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1))
 		#if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
 			AlphaTestAlgorithm(DiffuseTexture, ClampingSampler, geo.texCoord, alphaThreshold);
 		#else
@@ -36,11 +36,11 @@ void DoAlphaTest(VSOUT geo, float alphaThreshold)
 
 float3 VSOUT_GetNormal(VSOUT geo)
 {
-	#if (RES_HAS_NormalsTexture==1) && (VSOUT_HAS_TEXCOORD>=1)
+	#if RES_HAS_NormalsTexture && VSOUT_HAS_TEXCOORD
 		return TransformTangentSpaceToWorld(SampleDefaultNormalMap(geo), geo);
-	#elif (VSOUT_HAS_NORMAL==1)
+	#elif VSOUT_HAS_NORMAL
 		return normalize(geo.normal);
-	#elif VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#elif VSOUT_HAS_LOCAL_TANGENT_FRAME
 		return normalize(mul(GetLocalToWorldUniformScale(), VSOUT_GetLocalTangentFrame(geo).normal));
 	#else
 		return 0.0.xxx;

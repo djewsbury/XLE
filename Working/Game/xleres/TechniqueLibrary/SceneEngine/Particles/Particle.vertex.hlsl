@@ -12,11 +12,11 @@ ParticleVStoGS main(VSIN input)
 	ParticleVStoGS output;
 	output.position = input.position;
 
-	#if GEO_HAS_COLOR==1
+	#if GEO_HAS_COLOR
 		output.color 		= VSIN_GetColor0(input);
 	#endif
 
-	#if GEO_HAS_TEXCOORD>=1
+	#if GEO_HAS_TEXCOORD
 		output.texCoord 	= VSIN_GetTexCoord0(input);
 	#endif
 
@@ -47,15 +47,15 @@ VSOUT nogs(VSIN input)
 		;
 	output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-	#if VSOUT_HAS_COLOR>=1
+	#if VSOUT_HAS_COLOR_LINEAR
 		output.color 		= input.color;
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		output.texCoord 	= input.texCoord;
 	#endif
 
-	#if (VSOUT_HAS_TANGENT_FRAME==1)
+	#if VSOUT_HAS_TANGENT_FRAME
 		// build the correct tangent frame for the vertex, assuming
 		// texturing over the full surface, as normal
 		output.tangent = normalize(rotatedRight);
@@ -63,15 +63,15 @@ VSOUT nogs(VSIN input)
 		output.normal = normalize(cross(output.tangent, output.bitangent));
 	#endif
 
-	#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		output.worldViewVector = SysUniform_GetWorldSpaceView().xyz - worldPosition.xyz;
 	#endif
 
-	#if (VSOUT_HAS_BLEND_TEXCOORD==1)
+	#if VSOUT_HAS_BLEND_TEXCOORD
 		output.blendTexCoord = input.blendTexCoord.xyz;
 	#endif
 
-    #if (VSOUT_HAS_FOG_COLOR==1)
+    #if VSOUT_HAS_FOG_COLOR
         output.fogColor = CalculateFog(worldPosition.z, SysUniform_GetWorldSpaceView() - worldPosition, NegativeDominantLightDirection);
     #endif
 

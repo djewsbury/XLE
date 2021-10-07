@@ -15,7 +15,7 @@ cbuffer TerrainTile
 	float4 TerrainLayerMapping_Params;
 }
 
-#if (RES_HAS_NormalsTexture==1)
+#if RES_HAS_NormalsTexture
 	#undef VSOUT_HAS_TANGENT_FRAME
 	#define VSOUT_HAS_TANGENT_FRAME 1
 	#define VSOUT_HAS_NORMAL 1

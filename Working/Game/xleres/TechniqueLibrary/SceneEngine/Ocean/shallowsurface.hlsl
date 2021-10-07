@@ -52,7 +52,7 @@ VSOUT vs_main(uint vertexId : SV_VertexId)
             localPosition.z = ShallowWaterHeights.Load(uint4(coord, 0)) - 3e-1f;
     #endif
 
-    #if GEO_HAS_INSTANCE_ID==1
+    #if GEO_HAS_INSTANCE_ID
         float3 worldNormal;
         float3 worldPosition = InstanceWorldPosition(input, worldNormal, objectCentreWorld);
     #else
@@ -61,11 +61,11 @@ VSOUT vs_main(uint vertexId : SV_VertexId)
 
     output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-    #if (VSOUT_HAS_TEXCOORD>=1)
+    #if VSOUT_HAS_TEXCOORD
         output.texCoord = localPosition.xy;
     #endif
 
-    #if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+    #if VSOUT_HAS_WORLD_VIEW_VECTOR
         output.worldViewVector = SysUniform_GetWorldSpaceView().xyz - worldPosition.xyz;
     #endif
 
@@ -118,7 +118,7 @@ float CalculateFoamFromFoamQuantity(float2 texCoord, float foamQuantity)
     float4 ps_main(VSOUT geo) : SV_Target0
 {
     float3 directionToEye = 0.0.xxx;
-    #if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+    #if VSOUT_HAS_WORLD_VIEW_VECTOR
         directionToEye = normalize(geo.worldViewVector);
     #endif
 

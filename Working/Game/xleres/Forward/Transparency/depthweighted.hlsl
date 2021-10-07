@@ -56,7 +56,7 @@ DepthWeightedOutput main_depth_weighted_oi(VSOUT geo, SystemInputs sys)
     GBufferValues sample = IllumShader_PerPixel(geo);
 
     float3 directionToEye = 0.0.xxx;
-    #if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+    #if VSOUT_HAS_WORLD_VIEW_VECTOR
         directionToEye = normalize(geo.worldViewVector);
     #endif
 
@@ -71,7 +71,7 @@ DepthWeightedOutput main_depth_weighted_oi(VSOUT geo, SystemInputs sys)
 
 	result.a = sample.blendingAlpha;
 
-	#if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
+	#if VSOUT_HAS_COLOR_LINEAR && (MAT_VCOLOR_IS_ANIM_PARAM==0)
 		result.rgb *= geo.color.rgb;
 	#endif
 

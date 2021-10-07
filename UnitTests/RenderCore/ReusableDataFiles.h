@@ -24,7 +24,7 @@ static const char* s_examplePerPixelShaderFile = R"--(
 		GBufferValues result = GBufferValues_Default();
 
 		float4 diffuseTextureSample = 1.0.xxxx;
-		#if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_Texture0!=0)
+		#if VSOUT_HAS_TEXCOORD && (RES_HAS_Texture0!=0)
 			diffuseTextureSample = Texture0.Sample(MaybeAnisotropicSampler, geo.texCoord);
 			result.diffuseAlbedo = diffuseTextureSample.rgb;
 			result.blendingAlpha = diffuseTextureSample.a;

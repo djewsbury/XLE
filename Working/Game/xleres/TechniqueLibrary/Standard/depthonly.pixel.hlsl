@@ -18,7 +18,7 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 	GBufferValues sample = PerPixel(geo);
 
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
@@ -39,7 +39,7 @@ DepthMotionNormalEncoded depthMotionNormalWithEarlyRejection(VSOUT geo)
 	GBufferValues sample = PerPixel(geo);
 
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
@@ -58,7 +58,7 @@ DepthMotionNormalEncoded depthMotionNormalWithEarlyRejection(VSOUT geo)
 DepthMotionEncoded depthMotion(VSOUT geo)
 {
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;
@@ -79,7 +79,7 @@ DepthMotionEncoded depthMotionWithEarlyRejection(VSOUT geo)
 	GBufferValues sample = PerPixel(geo);
 
 	float3 prevPos;
-	#if (VSOUT_HAS_PREV_POSITION==1)
+	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
 		prevPos.x = prevPos.x * 0.5 + 0.5;
 		prevPos.y = prevPos.y * 0.5 + 0.5;

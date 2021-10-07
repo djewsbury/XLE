@@ -7,7 +7,7 @@
 #include "util.hlsl"
 #include "../illum.pixel.hlsl"
 
-//#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+//#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 //	[earlydepthstencil]	// (this has a big effect, because otherwise UAV output wouldn't be occluded by depth buffer)
 //#endif
 float4 main_oi(VSOUT geo, SystemInputs sys) : SV_Target

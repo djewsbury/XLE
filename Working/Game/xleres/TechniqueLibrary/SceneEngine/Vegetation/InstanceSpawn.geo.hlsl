@@ -234,7 +234,7 @@ float MinDistanceSq(float3 pt0, float3 pt1, float3 pt2)
 		//
 
 	WorkingTriangle tri;
-	#if (VSOUT_HAS_WORLD_POSITION==1)
+	#if VSOUT_HAS_WORLD_POSITION
 		tri.pts[0] = input[0].worldPosition.xyz;
 		tri.pts[1] = input[1].worldPosition.xyz;
 		tri.pts[2] = input[2].worldPosition.xyz;
@@ -245,7 +245,7 @@ float MinDistanceSq(float3 pt0, float3 pt1, float3 pt2)
 	#endif
 
 	float2 tc0 = 0.0.xx, tc1 = 0.0.xx, tc2 = 0.0.xx;
-	#if (VSOUT_HAS_TEXCOORD>=1)
+	#if VSOUT_HAS_TEXCOORD
 		tc0 = input[0].texCoord.xy;
 		tc1 = input[1].texCoord.xy;
 		tc2 = input[2].texCoord.xy;

@@ -774,7 +774,7 @@ void Basic(VSOUT geo, out GBufferValues result)
 
 
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 GBufferEncoded deferred_main(VSOUT geo)
@@ -890,12 +890,12 @@ float4 stochastic_main(VSOUT geo,
 
 #else
 
-	#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+	#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 		[earlydepthstencil]
 	#endif
 	void depthonly_main(VSOUT geo)
 	{
-		#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+		#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 				// execute sampling only for discard() events
 			GBufferValues sample;
 			Basic(geo, sample);

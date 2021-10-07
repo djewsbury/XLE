@@ -64,7 +64,7 @@ static const char* s_colorFromSelectorShaderFile = R"--(
 	GBufferValues PerPixel(VSOUT geo)
 	{
 		GBufferValues result = GBufferValues_Default();
-		#if (VSOUT_HAS_TEXCOORD>=1)
+		#if VSOUT_HAS_TEXCOORD
 			#if defined(COLOR_RED)
 				result.diffuseAlbedo = float3(1,0,0);
 			#elif defined(COLOR_GREEN)

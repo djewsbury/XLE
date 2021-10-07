@@ -149,16 +149,16 @@ namespace UnitTests
 					result.material = DefaultMaterialValues();
 
 					float4 diffuseTextureSample = 1.0.xxxx;
-					#if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_TextureDif!=0)
+					#if VSOUT_HAS_TEXCOORD && (RES_HAS_TextureDif!=0)
 						diffuseTextureSample = TextureDif.Sample(MaybeAnisotropicSampler, geo.texCoord);
 						result.diffuseAlbedo = diffuseTextureSample.rgb;
 						result.blendingAlpha = diffuseTextureSample.a;
 					#endif
 
-					#if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_TextureNorm!=0)
+					#if VSOUT_HAS_TEXCOORD && (RES_HAS_TextureNorm!=0)
 						float3 normalMapSample = SampleNormalMap(TextureNorm, DefaultSampler, true, geo.texCoord);
 						result.worldSpaceNormal = normalMapSample; // TransformTangentSpaceToWorld(normalMapSample, geo);
-					#elif (VSOUT_HAS_NORMAL==1)
+					#elif VSOUT_HAS_NORMAL
 						result.worldSpaceNormal = normalize(geo.normal);
 					#endif
 

@@ -18,7 +18,7 @@ float4 frameworkEntry(VSOUT vsin) : SV_Target0
 {
 	float4 result = 1.0.rrrr;
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		#if defined(FONT_RENDERER)
 			result.a *= InputTexture.Sample(DefaultSampler, VSOUT_GetTexCoord0(vsin)).r;
 		#else
@@ -26,10 +26,7 @@ float4 frameworkEntry(VSOUT vsin) : SV_Target0
 		#endif
 	#endif
 
-	#if VSOUT_HAS_COLOR>=1
-		result *= VSOUT_GetColor0(vsin);
-	#endif
-
+	result *= VSOUT_GetColor0(vsin);
 	return result;
 }
 

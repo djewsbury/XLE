@@ -86,27 +86,27 @@ struct VSIN //////////////////////////////////////////////////////
 		float3 position : POSITION0;
 	#endif
 
-	#if GEO_HAS_COLOR>=1
+	#if GEO_HAS_COLOR
 		float4 color : COLOR0;
 	#endif
 
-	#if GEO_HAS_TEXCOORD>=1
+	#if GEO_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD;
 	#endif
 
-	#if GEO_HAS_TEXTANGENT==1
+	#if GEO_HAS_TEXTANGENT
 		float4 tangent : TEXTANGENT;
 	#endif
 
-	#if GEO_HAS_TEXBITANGENT==1
+	#if GEO_HAS_TEXBITANGENT
 		float3 bitangent : TEXBITANGENT;
 	#endif
 
-	#if GEO_HAS_NORMAL==1
+	#if GEO_HAS_NORMAL
 		float3 normal : NORMAL;
 	#endif
 
-	#if GEO_HAS_BONEWEIGHTS==1
+	#if GEO_HAS_BONEWEIGHTS
 		uint4 boneIndices : BONEINDICES;
 		float4 boneWeights : BONEWEIGHTS;
 	#endif
@@ -118,11 +118,11 @@ struct VSIN //////////////////////////////////////////////////////
 		#define VSOUT_HAS_BLEND_TEXCOORD 1
 	#endif
 
-	#if GEO_HAS_VERTEX_ID==1
+	#if GEO_HAS_VERTEX_ID
 		uint vertexId : SV_VertexID;
 	#endif
 	
-	#if GEO_HAS_INSTANCE_ID==1
+	#if GEO_HAS_INSTANCE_ID
 		uint instanceId : SV_InstanceID;
 	#endif
 
@@ -143,29 +143,29 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 #endif
 
-#if GEO_HAS_COLOR>=1
+#if GEO_HAS_COLOR
 		// vertex is used only in the vertex shader when
 		// "MAT_VCOLOR_IS_ANIM_PARAM" is set. So, in this case,
 		// don't output to further pipeline stages.
 	#if MAT_VCOLOR_IS_ANIM_PARAM!=1 || VIS_ANIM_PARAM!=0
-		#if !defined(VSOUT_HAS_COLOR)
+		#if !defined(VSOUT_HAS_COLOR_LINEAR)
 			#if MAT_MODULATE_VERTEX_ALPHA
-				#define VSOUT_HAS_COLOR 1
+				#define VSOUT_HAS_COLOR_LINEAR 1
 			#else
-				#define VSOUT_HAS_COLOR 2
+				#define VSOUT_HAS_COLOR_LINEAR 2
 			#endif
 		#endif
 	#endif
 #endif
 
-#if GEO_HAS_TEXCOORD>=1
+#if GEO_HAS_TEXCOORD
 	#if !defined(VSOUT_HAS_TEXCOORD)
 		#define VSOUT_HAS_TEXCOORD 1
 	#endif
 #endif
 
-#if GEO_HAS_TEXTANGENT==1
-	#if RES_HAS_NormalsTexture==1
+#if GEO_HAS_TEXTANGENT
+	#if RES_HAS_NormalsTexture
 		#if defined(TANGENT_PROCESS_IN_PS) && TANGENT_PROCESS_IN_PS==1
 			#if !defined(VSOUT_HAS_LOCAL_TANGENT_FRAME)
 				#define VSOUT_HAS_LOCAL_TANGENT_FRAME 1
@@ -178,7 +178,7 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 #endif
 
-#if GEO_HAS_NORMAL==1
+#if GEO_HAS_NORMAL
 	#if !defined(VSOUT_HAS_NORMAL)
 		#define VSOUT_HAS_NORMAL 1
 	#endif
@@ -194,29 +194,29 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 #endif
 
-#if (MAT_DO_PARTICLE_LIGHTING==1) && (GEO_HAS_TEXCOORD>=1) && (RES_HAS_NormalsTexture==1)
+#if (MAT_DO_PARTICLE_LIGHTING==1) && GEO_HAS_TEXCOORD && RES_HAS_NormalsTexture
 	#undef VSOUT_HAS_TANGENT_FRAME
 	#define VSOUT_HAS_TANGENT_FRAME 1
 
-	#if (RES_HAS_CUSTOM_MAP==1)
+	#if RES_HAS_CUSTOM_MAP
 		#undef VSOUT_HAS_WORLD_VIEW_VECTOR
 		#define VSOUT_HAS_WORLD_VIEW_VECTOR 1
 	#endif
 #endif
 
-#if GEO_HAS_COLOR>=1 ///////////////////////////////////////////////
+#if GEO_HAS_COLOR ///////////////////////////////////////////////
 	float4 VSIN_GetColor0(VSIN input) { return input.color; }
 #else
 	float4 VSIN_GetColor0(VSIN input) { return 1.0.xxxx; }
 #endif //////////////////////////////////////////////////////////////
 
-#if GEO_HAS_TEXCOORD>=1 /////////////////////////////////////////////
+#if GEO_HAS_TEXCOORD /////////////////////////////////////////////
 	float2 VSIN_GetTexCoord0(VSIN input) { return input.texCoord; }
 #else
 	float2 VSIN_GetTexCoord0(VSIN input) { return 0.0.xx; }
 #endif //////////////////////////////////////////////////////////////
 
-#if (GEO_HAS_NORMAL==1 || GEO_HAS_TEXTANGENT==1) && (AUTO_COTANGENT==1)
+#if (GEO_HAS_NORMAL || GEO_HAS_TEXTANGENT) && (AUTO_COTANGENT==1)
 	#undef VSOUT_HAS_TANGENT_FRAME
 	#undef VSOUT_HAS_LOCAL_TANGENT_FRAME
 
@@ -236,71 +236,71 @@ struct VSIN //////////////////////////////////////////////////////
 struct VSOUT /////////////////////////////////////////////////////
 {
 	float4 position : SV_Position;
-	#if VSOUT_HAS_COLOR>=2
+	#if VSOUT_HAS_COLOR_LINEAR>=2
 		float3 color : COLOR0;
-	#elif VSOUT_HAS_COLOR>=1
+	#elif VSOUT_HAS_COLOR_LINEAR
 		float4 color : COLOR0;
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD0;
 	#endif
 
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		float3 tangent : TEXTANGENT;
 		float3 bitangent : TEXBITANGENT;
 	#endif
 
-	#if VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 		float4 localTangent : LOCALTANGENT;
 		float3 localBitangent : LOCALBITANGENT;
 	#endif
 
-	#if (VSOUT_HAS_NORMAL==1)
+	#if VSOUT_HAS_NORMAL
 		float3 normal : NORMAL;
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_NORMAL==1)
+	#if VSOUT_HAS_LOCAL_NORMAL
 		float3 localNormal : LOCALNORMAL;
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_VIEW_VECTOR==1)
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
 		float3 localViewVector : LOCALVIEWVECTOR;
 	#endif
 
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		float3 worldViewVector : WORLDVIEWVECTOR;
 	#endif
 
-	#if (VSOUT_HAS_PRIMITIVE_ID==1)
+	#if VSOUT_HAS_PRIMITIVE_ID
 		nointerpolation uint primitiveId : SV_PrimitiveID;
 	#endif
 
-	#if (VSOUT_HAS_RENDER_TARGET_INDEX==1)
+	#if VSOUT_HAS_RENDER_TARGET_INDEX
 		nointerpolation uint renderTargetIndex : SV_RenderTargetArrayIndex;
 	#endif
 
-	#if (VSOUT_HAS_WORLD_POSITION==1)
+	#if VSOUT_HAS_WORLD_POSITION
 		float3 worldPosition : WORLDPOSITION;
 	#endif
 
-	#if (VSOUT_HAS_BLEND_TEXCOORD==1)
+	#if VSOUT_HAS_BLEND_TEXCOORD
 		float3 blendTexCoord : TEXCOORD1;
 	#endif
 
-	#if (VSOUT_HAS_FOG_COLOR==1)
+	#if VSOUT_HAS_FOG_COLOR
 		float4 fogColor : FOGCOLOR;
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_AO==1)
+	#if VSOUT_HAS_PER_VERTEX_AO
 		float ambientOcclusion : AMBIENTOCCLUSION;
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_MLO==1)
+	#if VSOUT_HAS_PER_VERTEX_MLO
 		float mainLightOcclusion : MAINLIGHTOCCLUSION;
 	#endif
 
-	#if (VSOUT_HAS_INSTANCE_ID==1)
+	#if VSOUT_HAS_INSTANCE_ID
 		uint instanceId : SV_InstanceID;
 	#endif
 
@@ -314,7 +314,7 @@ struct VSOUT /////////////////////////////////////////////////////
 	{
 		auto preprocAnalysis = GeneratePreprocessorAnalysisFromString(s_testFile);
 
-		// We only care about AUTO_COTANGENT is GEO_HAS_NORMAL==1 or GEO_HAS_TEXTANGENT==1
+		// We only care about AUTO_COTANGENT is GEO_HAS_NORMAL or GEO_HAS_TEXTANGENT
 		auto autoCotangentRelevance = preprocAnalysis._relevanceTable[
 			preprocAnalysis._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, "AUTO_COTANGENT")];
 

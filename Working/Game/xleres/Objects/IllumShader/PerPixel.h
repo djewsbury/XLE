@@ -37,14 +37,14 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
 {
     GBufferValues result = GBufferValues_Default();
 
-    //#if (VSOUT_HAS_PER_VERTEX_AO==1)
+    //#if VSOUT_HAS_PER_VERTEX_AO
     //    result.diffuseAlbedo = geo.ambientOcclusion.xxx;
     //    result.worldSpaceNormal = VSOUT_GetNormal(geo);
     //    return result;
     //#endif
 
     float4 diffuseTextureSample = 1.0.xxxx;
-    #if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_DiffuseTexture!=0)
+    #if VSOUT_HAS_TEXCOORD && (RES_HAS_DiffuseTexture!=0)
         #if (USE_CLAMPING_SAMPLER_FOR_DIFFUSE==1)
             diffuseTextureSample = DiffuseTexture.Sample(ClampingSampler, geo.texCoord);
         #else
@@ -54,8 +54,8 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         result.blendingAlpha = diffuseTextureSample.a;
     #endif
 
-    #if (VSOUT_HAS_COLOR>=1) && MAT_MODULATE_VERTEX_ALPHA
-        result.blendingAlpha *= geo.color.a;
+    #if VSOUT_HAS_VERTEX_ALPHA && MAT_MODULATE_VERTEX_ALPHA
+        result.blendingAlpha *= VSOUT_GetColor0(geo).a;
     #endif
 
     #if (SKIP_MATERIAL_DIFFUSE!=1)
@@ -72,7 +72,7 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
 
     result.material = DefaultMaterialValues();
 
-    #if (VSOUT_HAS_TEXCOORD>=1)
+    #if VSOUT_HAS_TEXCOORD
         #if (RES_HAS_ParametersTexture!=0)
                 //	Just using a trilinear sample for this. Anisotropy disabled.
             result.material = DecodeParametersTexture_RMS(
@@ -88,11 +88,11 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         result.diffuseAlbedo *= SRGBToLinear(MaterialDiffuse);
     #endif
 
-    #if (VSOUT_HAS_COLOR>=1)
+    #if VSOUT_HAS_COLOR_LINEAR
         result.diffuseAlbedo.rgb *= geo.color.rgb;
     #endif
 
-    #if (VSOUT_HAS_TEXCOORD>=1) && (RES_HAS_Occlusion==1)
+    #if VSOUT_HAS_TEXCOORD && RES_HAS_Occlusion
             // use the "custom map" slot for a parameters texture (ambient occlusion, gloss, etc)
         result.cookedAmbientOcclusion = Occlusion.Sample(DefaultSampler, geo.texCoord).r;
 
@@ -113,16 +113,16 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         // }
     #endif
 
-    #if (VSOUT_HAS_PER_VERTEX_AO==1)
+    #if VSOUT_HAS_PER_VERTEX_AO
         result.cookedAmbientOcclusion *= geo.ambientOcclusion;
         result.cookedLightOcclusion *= geo.ambientOcclusion;
     #endif
 
-    #if (VSOUT_HAS_PER_VERTEX_MLO==1)
+    #if VSOUT_HAS_PER_VERTEX_MLO
         result.cookedLightOcclusion *= geo.mainLightOcclusion;
     #endif
 
-    #if (MAT_AO_IN_NORMAL_BLUE!=0) && (RES_HAS_NormalsTexture!=0) && (RES_HAS_NormalsTexture_DXT==0) && (VSOUT_HAS_TEXCOORD>=1)
+    #if (MAT_AO_IN_NORMAL_BLUE!=0) && (RES_HAS_NormalsTexture!=0) && (RES_HAS_NormalsTexture_DXT==0) && VSOUT_HAS_TEXCOORD
             // some pipelines put a AO term in the blue channel of the normal map
             // we can factor it in here...
         float cookedAO = NormalsTexture.Sample(DefaultSampler, geo.texCoord).z;
@@ -130,7 +130,7 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         result.cookedAmbientOcclusion *= cookedAO;
     #endif
 
-    #if (VSOUT_HAS_TANGENT_FRAME==1) && (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+    #if VSOUT_HAS_TANGENT_FRAME && VSOUT_HAS_WORLD_VIEW_VECTOR
         // const bool scratchMapTest = false;
         // if (scratchMapTest) {
         //
@@ -168,7 +168,7 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
     // result.diffuseAlbedo.xyz = geo.localTangent.www;
 
     #if RES_HAS_NormalsTexture && CLASSIFY_NORMAL_MAP
-        #if (RES_HAS_NormalsTexture_DXT==1)
+        #if RES_HAS_NormalsTexture_DXT
             result.diffuseAlbedo = float3(1,0,0);
         #else
             result.diffuseAlbedo = float3(0,1,0);
@@ -180,7 +180,7 @@ GBufferValues IllumShader_PerPixel(VSOUT geo)
         //		an approximation of the variation in the normals used to
         //		generate each mipmap cell.
         //
-    #if (RES_HAS_NormalsTexture_DXT==1)		// only really valid when using DXT textures (3DX format normals are always unit length)
+    #if RES_HAS_NormalsTexture_DXT		// only really valid when using DXT textures (3DX format normals are always unit length)
         result.normalMapAccuracy = dot(result.worldSpaceNormal, result.worldSpaceNormal);
     #endif
 

@@ -32,7 +32,7 @@ attributes visualNode4(PreviewGeometry:"sphere", X:"213.000000", Y:"634.000000",
 #include "TechniqueLibrary/Math/TextureAlgorithm.hlsl" 	// for SystemInputs
 #include "Lighting/Forward.h"
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 float4 forward_main(, SystemInputs sys) : SV_Target0
@@ -49,7 +49,7 @@ float4 forward_main(, SystemInputs sys) : SV_Target0
     main(, sample);
 
 	float3 directionToEye = 0.0.xxx;
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 
@@ -64,7 +64,7 @@ float4 forward_main(, SystemInputs sys) : SV_Target0
 
 	result.a = sample.blendingAlpha;
 
-    #if (VSOUT_HAS_COLOR>=1) && (MAT_VCOLOR_IS_ANIM_PARAM==0)
+    #if VSOUT_HAS_COLOR_LINEAR && (MAT_VCOLOR_IS_ANIM_PARAM==0)
         result.rgb *= geo.color.rgb;
     #endif
 
@@ -76,7 +76,7 @@ float4 forward_main(, SystemInputs sys) : SV_Target0
 
 
 
-#if !((VSOUT_HAS_TEXCOORD>=1) && (MAT_ALPHA_TEST==1))
+#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
 GBufferEncoded deferred_main()
@@ -192,12 +192,12 @@ float4 stochastic_main(VSOUT geo,
 
 #else
 
-	#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+	#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 		[earlydepthstencil]
 	#endif
 	void depthonly_main(VSOUT geo)
 	{
-		#if !((VSOUT_HAS_TEXCOORD>=1) && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
+		#if !(VSOUT_HAS_TEXCOORD && ((MAT_ALPHA_TEST==1)||(MAT_ALPHA_TEST_PREDEPTH==1)))
 				// execute sampling only for discard() events
 			GBufferValues sample;
 			main(, sample);

@@ -6,7 +6,7 @@
 
 #define VSOUT_HAS_TEXCOORD 1
 #define MAT_ALPHA_TEST 1
-#define VSOUT_HAS_COLOR 2
+#define VSOUT_HAS_COLOR_LINEAR 2
 
 #include "../../Framework/CommonResources.hlsl"
 #include "../../Framework/MainGeometry.hlsl"

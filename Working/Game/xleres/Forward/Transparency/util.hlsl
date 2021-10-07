@@ -66,7 +66,7 @@ void OutputFragmentNode(uint2 position, float4 color, float depth)
 float4 LightSample(GBufferValues sample, VSOUT geo, SystemInputs sys)
 {
 	float3 directionToEye = 0.0.xxx;
-	#if (VSOUT_HAS_WORLD_VIEW_VECTOR==1)
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		directionToEye = normalize(geo.worldViewVector);
 	#endif
 

@@ -43,11 +43,11 @@
 			;
 		output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-		#if VSOUT_HAS_COLOR>=1
+		#if VSOUT_HAS_COLOR_LINEAR
 			output.color 		= input[0].color;
 		#endif
 
-		#if VSOUT_HAS_TEXCOORD>=1
+		#if VSOUT_HAS_TEXCOORD
 					// (not tested in X3; but it theory it should look like this)
 				// output.texCoord 	= input[0].texCoord + (input[0].texCoordScale.yz*2.f-1.0.xx) * texCoords[c];
 			output.texCoord = input[0].texCoord + input[0].texCoordScale.xy * texCoords[c];
@@ -55,11 +55,11 @@
 
 			// todo -- can also output tangent space (if we need it)
 
-		#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+		#if VSOUT_HAS_WORLD_VIEW_VECTOR
 			output.worldViewVector = SysUniform_GetWorldSpaceView().xyz - worldPosition.xyz;
 		#endif
 
-		#if VSOUT_HAS_FOG_COLOR==1
+		#if VSOUT_HAS_FOG_COLOR
 			output.fogColor 		= input[0].fogColor;
 		#endif
 

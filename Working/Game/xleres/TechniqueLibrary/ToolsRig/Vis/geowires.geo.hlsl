@@ -36,11 +36,11 @@ void WriteWire(inout LineStream<PCOut> outputStream, float3 worldStart, float3 w
     for (uint c=0; c<3; ++c) {
         float3 pos = input[c].worldPosition;
         // pos += 0.01f * input[c].normal;
-        #if VSOUT_HAS_TANGENT_FRAME==1
+        #if VSOUT_HAS_TANGENT_FRAME
             WriteWire(outputStream, pos, pos + wireLength * input[c].tangent, tangentColor);
             WriteWire(outputStream, pos, pos + wireLength * input[c].bitangent, bitangentColor);
         #endif
-        #if (VSOUT_HAS_NORMAL==1)
+        #if VSOUT_HAS_NORMAL
             WriteWire(outputStream, pos, pos + wireLength * input[c].normal, normalColor);
         #endif
     }

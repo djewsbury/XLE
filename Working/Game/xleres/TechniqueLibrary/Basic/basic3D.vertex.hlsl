@@ -31,29 +31,36 @@ VSOUT frameworkEntry(VSIN vsin)
 	VSOUT output;
 	output.position = TransformPosition(VSIN_GetLocalPosition(vsin));
 
-	#if VSOUT_HAS_COLOR>=1
-		output.color = VSIN_GetColor0(vsin);
+	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
+	// assuming 8 bit color inputs	
+	#if VSOUT_HAS_COLOR_LINEAR
+		output.color.rgb = SRGBToLinear(VSIN_GetColor0(vsin).rgb);
+		#if VSOUT_HAS_VERTEX_ALPHA
+			output.color.a = VSIN_GetColor0(vsin).a;
+		#endif
+	#elif VSOUT_HAS_VERTEX_ALPHA
+		output.alpha = VSIN_GetColor0(vsin).a;
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		output.texCoord = VSIN_GetTexCoord0(vsin);
 	#endif
 	
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		output.tangent = VSIN_GetLocalTangent(vsin);
 		output.bitangent = VSIN_GetLocalBitangent(vsin);
 	#endif
 
-	#if (VSOUT_HAS_NORMAL==1)
+	#if VSOUT_HAS_NORMAL
 		output.normal = VSIN_GetLocalNormal(vsin);
 	#endif
 
-	#if VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 		output.localTangent = VSIN_GetLocalTangent(vsin);
 		output.localBitangent = VSIN_GetLocalBitangent(vsin);
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_NORMAL==1)
+	#if VSOUT_HAS_LOCAL_NORMAL
 		output.localNormal = VSIN_GetLocalNormal(vsin);
 	#endif
 

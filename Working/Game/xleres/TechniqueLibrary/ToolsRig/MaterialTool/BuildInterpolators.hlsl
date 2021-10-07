@@ -62,18 +62,18 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 	float3 worldPosition = BuildInterpolator_WORLDPOSITION(input);
 	float3 worldNormal = LocalToWorldUnitVector(VSIN_GetLocalNormal(input));
 
-	#if VSOUT_HAS_COLOR>=1
+	#if VSOUT_HAS_COLOR_LINEAR
 		output.color = BuildInterpolator_COLOR0(input);
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		output.texCoord = VSIN_GetTexCoord0(input);
 	#endif
 
-	#if GEO_HAS_TEXTANGENT==1
+	#if GEO_HAS_TEXTANGENT
 		TangentFrame worldSpaceTangentFrame = VSIN_GetWorldTangentFrame(input);
 
-		#if VSOUT_HAS_TANGENT_FRAME==1
+		#if VSOUT_HAS_TANGENT_FRAME
 			output.tangent = worldSpaceTangentFrame.tangent;
 			output.bitangent = worldSpaceTangentFrame.bitangent;
 		#endif
@@ -93,7 +93,7 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 		}
 	#endif
 
-	#if (VSOUT_HAS_NORMAL==1)
+	#if VSOUT_HAS_NORMAL
 		output.normal = worldNormal;
 	#endif
 
@@ -103,24 +103,24 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 		output.position = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 	#endif
 
-	#if VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 		output.localTangent = BuildInterpolator_LOCALTANGENT(input);
 		output.localBitangent = BuildInterpolator_LOCALBITANGENT(input);
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_NORMAL==1)
+	#if VSOUT_HAS_LOCAL_NORMAL
 		output.localNormal = localNormal;
 	#endif
 
-	#if VSOUT_HAS_LOCAL_VIEW_VECTOR==1
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
 		output.localViewVector = SysUniform_GetLocalSpaceView().xyz - localPosition.xyz;
 	#endif
 
-	#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		output.worldViewVector = worldViewVector;
 	#endif
 
-	#if VSOUT_HAS_WORLD_POSITION==1
+	#if VSOUT_HAS_WORLD_POSITION
 		output.worldPosition = worldPosition.xyz;
 	#endif
 
@@ -128,11 +128,11 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 		output.fogColor = ResolveOutputFogColor(worldPosition.xyz, SysUniform_GetWorldSpaceView().xyz);
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_AO==1) && (SPAWNED_INSTANCE==1)
+	#if VSOUT_HAS_PER_VERTEX_AO && (SPAWNED_INSTANCE==1)
 		output.ambientOcclusion = 1.f; // GetInstanceShadowing(input);
 	#endif
 
-	#if (VSOUT_HAS_INSTANCE_ID==1) && (GEO_HAS_INSTANCE_ID==1)
+	#if VSOUT_HAS_INSTANCE_ID && GEO_HAS_INSTANCE_ID
 		output.instanceId = input.instanceId;
 	#endif
 

@@ -15,20 +15,20 @@ struct TerrainLayerVSOutput /////////////////////////////////////////
 	float2 baseTexCoord : TEXCOORD1;
 	float3 normal		: NORMAL;
 
-	#if VSOUT_HAS_LOCAL_VIEW_VECTOR==1
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
         float3 localViewVector 	: LOCALVIEWVECTOR;
     #endif
 
-    #if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+    #if VSOUT_HAS_WORLD_VIEW_VECTOR
         float3 worldViewVector 	: WORLDVIEWVECTOR;
     #endif
 	
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		float3 tangent : TEXTANGENT;
 		float3 bitangent : TEXBITANGENT;
 	#endif
 
-    #if (VSOUT_HAS_FOG_COLOR==1)
+    #if VSOUT_HAS_FOG_COLOR
         float4 fogColor : FOGCOLOR;
     #endif
 }; //////////////////////////////////////////////////////////////////

@@ -7,6 +7,7 @@
 #include "../Framework/VSIN.hlsl"
 #include "../Framework/DeformVertex.hlsl"
 #include "../SceneEngine/Lighting/resolvefog.hlsl"
+#include "../Utility/Colour.hlsl"
 
 #if VERTEX_ID_VIEW_INSTANCING
 	cbuffer MultiViewProperties BIND_SEQ_B3
@@ -53,7 +54,7 @@ VSOUT BuildVSOUT(
 		uint viewIdx = GetMultiViewIndex(input.instanceId);
 		output.position = mul(MultiViewWorldToClip[viewIdx], float4(worldPosition,1));
 
-		#if (VSOUT_HAS_RENDER_TARGET_INDEX==1)
+		#if VSOUT_HAS_RENDER_TARGET_INDEX
 			output.renderTargetIndex = viewIdx;
 		#endif
 
@@ -64,36 +65,43 @@ VSOUT BuildVSOUT(
 		#endif
 	#endif
 
-	#if VSOUT_HAS_COLOR>=1
-		output.color = VSIN_GetColor0(input);
+	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
+	// assuming 8 bit color inputs	
+	#if VSOUT_HAS_COLOR_LINEAR
+		output.color.rgb = SRGBToLinear(VSIN_GetColor0(input).rgb);
+		#if VSOUT_HAS_VERTEX_ALPHA
+			output.color.a = VSIN_GetColor0(input).a;
+		#endif
+	#elif VSOUT_HAS_VERTEX_ALPHA
+		output.alpha = VSIN_GetColor0(input).a;
 	#endif
 
-	#if VSOUT_HAS_COLOR1>=1
+	#if VSOUT_HAS_COLOR_LINEAR1
 		output.color1 = VSIN_GetColor1(input);
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD>=1
+	#if VSOUT_HAS_TEXCOORD
 		output.texCoord = VSIN_GetTexCoord0(input);
 	#endif
 
-	#if VSOUT_HAS_TEXCOORD1>=1
+	#if VSOUT_HAS_TEXCOORD1
 		output.texCoord1 = VSIN_GetTexCoord1(input);
 	#endif
 
-	#if VSOUT_HAS_TANGENT_FRAME==1
+	#if VSOUT_HAS_TANGENT_FRAME
 		output.tangent = worldSpaceTangentFrame.tangent;
 		output.bitangent = worldSpaceTangentFrame.bitangent;
 	#endif
 
-	#if (VSOUT_HAS_NORMAL==1)
+	#if VSOUT_HAS_NORMAL
 		output.normal = worldSpaceTangentFrame.normal;
 	#endif
 
-	#if VSOUT_HAS_WORLD_POSITION==1
+	#if VSOUT_HAS_WORLD_POSITION
 		output.worldPosition = worldPosition;
 	#endif
 
-	#if VSOUT_HAS_LOCAL_TANGENT_FRAME==1
+	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
 		if (deformedVertex.coordinateSpace == 0) {
 			output.localTangent = deformedVertex.tangentFrame.tangent;
 			output.localBitangent = deformedVertex.tangentFrame.bitangent;
@@ -103,7 +111,7 @@ VSOUT BuildVSOUT(
 		}
 	#endif
 
-	#if (VSOUT_HAS_LOCAL_NORMAL==1)
+	#if VSOUT_HAS_LOCAL_NORMAL
 		if (deformedVertex.coordinateSpace == 0) {
 			output.localNormal = deformedVertex.tangentFrame.normal;
 		} else {
@@ -111,22 +119,22 @@ VSOUT BuildVSOUT(
 		}
 	#endif
 
-	#if VSOUT_HAS_LOCAL_VIEW_VECTOR==1
+	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
 		output.localViewVector = SysUniform_GetLocalSpaceView().xyz - deformedVertex.localPosition.xyz;
 	#endif
 
-	#if VSOUT_HAS_WORLD_VIEW_VECTOR==1
+	#if VSOUT_HAS_WORLD_VIEW_VECTOR
 		output.worldViewVector = SysUniform_GetWorldSpaceView().xyz - worldPosition.xyz;
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_AO==1)
+	#if VSOUT_HAS_PER_VERTEX_AO
 		output.ambientOcclusion = 1.f;
-		#if (GEO_HAS_PER_VERTEX_AO==1)
+		#if GEO_HAS_PER_VERTEX_AO
 			output.ambientOcclusion = input.ambientOcclusion;
 		#endif
 	#endif
 
-	#if (VSOUT_HAS_PER_VERTEX_MLO==1)
+	#if VSOUT_HAS_PER_VERTEX_MLO
 		output.mainLightOcclusion = 1.f;
 		#if (SPAWNED_INSTANCE==1)
 			output.mainLightOcclusion *= GetInstanceShadowing(input);

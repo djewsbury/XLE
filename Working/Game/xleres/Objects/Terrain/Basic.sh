@@ -28,11 +28,11 @@ VSOUT vs_basic(uint vertexIndex : SV_VertexId)
     worldPosition        = AddNoise(worldPosition);
     output.position		 = mul( SysUniform_GetWorldToClip(), float4(worldPosition,1));
 
-    #if (VSOUT_HAS_WORLD_POSITION==1)
+    #if VSOUT_HAS_WORLD_POSITION
         output.worldPosition = worldPosition;
     #endif
 
-    #if (VSOUT_HAS_TEXCOORD>=1)
+    #if VSOUT_HAS_TEXCOORD
         output.texCoord = 0.0.xx;
     #endif
 

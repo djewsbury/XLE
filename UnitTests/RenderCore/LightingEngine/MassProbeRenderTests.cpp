@@ -153,15 +153,15 @@ namespace UnitTests
 
 				output.position = mul(MultiProbeViews[viewIndex], float4(worldPosition,1));
 
-				#if VSOUT_HAS_TEXCOORD>=1
+				#if VSOUT_HAS_TEXCOORD
 					output.texCoord = VSIN_GetTexCoord0(input);
 				#endif
 
-				#if (VSOUT_HAS_NORMAL==1)
+				#if VSOUT_HAS_NORMAL
 					output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
 				#endif
 
-				#if VSOUT_HAS_WORLD_POSITION==1
+				#if VSOUT_HAS_WORLD_POSITION
 					output.worldPosition = worldPosition;
 				#endif
 
@@ -214,15 +214,15 @@ namespace UnitTests
 				VSOUT output;
 				output.position = mul(MultiProbeViews[viewId], float4(worldPosition,1));
 
-				#if VSOUT_HAS_TEXCOORD>=1
+				#if VSOUT_HAS_TEXCOORD
 					output.texCoord = VSIN_GetTexCoord0(input);
 				#endif
 
-				#if (VSOUT_HAS_NORMAL==1)
+				#if VSOUT_HAS_NORMAL
 					output.normal = worldSpaceTangentFrame.normal;
 				#endif
 
-				#if VSOUT_HAS_WORLD_POSITION==1
+				#if VSOUT_HAS_WORLD_POSITION
 					output.worldPosition = worldPosition;
 				#endif
 				return output;
