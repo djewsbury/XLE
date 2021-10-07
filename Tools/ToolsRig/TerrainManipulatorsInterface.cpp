@@ -11,7 +11,7 @@
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../Tools/ToolsRig/IManipulator.h"
 #include "../../Tools/ToolsRig/ManipulatorsUtil.h"
-#include "../../RenderOverlays/OverlayUtils.h"
+#include "../../RenderOverlays/CommonWidgets.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/IntrusivePtr.h"
@@ -173,6 +173,14 @@ namespace ToolsRig
         }
     };
 
+    static RenderOverlays::ColorB ButtonForegroundColor(
+        DebuggingDisplay::InterfaceState& interfaceState, DebuggingDisplay::InteractableId id)
+    {
+        if (interfaceState.HasMouseOver(id))
+            return interfaceState.IsMouseButtonHeld(0)?ColorB(196, 196, 196):ColorB(255, 255, 255);
+        return ColorB(191, 123, 0);
+    }
+
     Rect DrawManipulatorControls(
         IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState,
         IManipulator& manipulator, const char title[])
@@ -227,7 +235,7 @@ namespace ToolsRig
             float* p = (float*)PtrAdd(&manipulator, parameter._valueOffset);
 
             interactables.Register({rect, Id_CurFloatParameters+c});
-            auto formatting = FormatButton(interfaceState, Id_CurFloatParameters+c);
+            auto formatting = ButtonForegroundColor(interfaceState, Id_CurFloatParameters+c);
 
                 // background (with special shader)
             float alpha;
@@ -252,7 +260,7 @@ namespace ToolsRig
             char buffer[256];
             _snprintf_s(buffer, _TRUNCATE, "%s = %5.1f", parameter._name, *p);
             DrawText()
-                .Color(formatting._foreground)
+                .Color(formatting)
                 .Alignment(TextAlignment::Center)
                 .Draw(context, rect, buffer);
             
@@ -270,7 +278,7 @@ namespace ToolsRig
             bool value = !!((*p) & (1<<parameter._bitIndex));
 
             interactables.Register({rect, Id_CurBoolParameters+c});
-            auto formatting = FormatButton(interfaceState, Id_CurBoolParameters+c);
+            auto formatting = ButtonForegroundColor(interfaceState, Id_CurBoolParameters+c);
 
             char buffer[256];
             if (value) {
@@ -279,7 +287,7 @@ namespace ToolsRig
                 _snprintf_s(buffer, _TRUNCATE, "%s", parameter._name);
 
             DrawText()
-                .Color(formatting._foreground)
+                .Color(formatting)
                 .Alignment(TextAlignment::Center)
                 .Draw(context, rect, buffer);
         }
@@ -303,9 +311,7 @@ namespace ToolsRig
 
         Rect selectedManipulatorRect = internalLayout.AllocateFullWidth(lineHeight);
         interactables.Register({selectedManipulatorRect, Id_SelectedManipulator});
-        DrawButtonBasic(
-            context, selectedManipulatorRect, manipulator.GetName(),
-            FormatButton(interfaceState, Id_SelectedManipulator));
+        RenderOverlays::CommonWidgets::Draw{context, interactables, interfaceState}.ButtonBasic(selectedManipulatorRect, Id_SelectedManipulator, manipulator.GetName());
 
             //  this button is a left/right selector. Create interactable rectangles for the left and right sides
         DrawAndRegisterLeftRight(

@@ -11,7 +11,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         HighlightEffects.cpp
         OverlayContext.cpp
         OverlayPrimitives.cpp
-        OverlayUtils.cpp
+        CommonWidgets.cpp
         SimpleVisualization.cpp)
     set(OverlaysSrc
         #Overlays/Browser.cpp

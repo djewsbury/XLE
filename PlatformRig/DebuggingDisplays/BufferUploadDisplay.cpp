@@ -6,7 +6,7 @@
 
 #include "BufferUploadDisplay.h"
 #include "../../BufferUploads/Metrics.h"
-#include "../../RenderOverlays/OverlayUtils.h"
+#include "../../RenderOverlays/CommonWidgets.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../OSServices/TimeUtils.h"
@@ -24,7 +24,7 @@ namespace PlatformRig { namespace Overlays
     static void DrawButton(IOverlayContext& context, const char name[], const Rect&buttonRect, Interactables&interactables, InterfaceState& interfaceState)
     {
         InteractableId id = InteractableId_Make(name);
-        DrawButtonBasic(context, buttonRect, name, FormatButton(interfaceState, id));
+        RenderOverlays::CommonWidgets::Draw{context, interactables, interfaceState}.ButtonBasic(buttonRect, id, name);
         interactables.Register({buttonRect, id});
     }
 

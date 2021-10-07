@@ -5,7 +5,7 @@
 #include "ModelCacheDisplay.h"
 #include "../../RenderCore/Techniques/ModelCache.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderOverlays/OverlayUtils.h"
+#include "../../RenderOverlays/CommonWidgets.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -32,7 +32,7 @@ namespace PlatformRig { namespace Overlays
     {
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);
-        DrawButtonBasic(context, buttonRect, name, FormatButton(interfaceState, id));
+		RenderOverlays::CommonWidgets::Draw{context, interactables, interfaceState}.ButtonBasic(buttonRect, id, name);
         interactables.Register({buttonRect, id});
     }
 
