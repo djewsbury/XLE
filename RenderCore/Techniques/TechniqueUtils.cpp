@@ -337,8 +337,13 @@ namespace RenderCore { namespace Techniques
         projDesc._cameraToWorld = cameraToWorld;
         return projDesc;
     }
+    
+    GeometricCoordinateSpace GetGeometricCoordinateSpaceForCubemaps()
+    {
+        return GeometricCoordinateSpace::LeftHanded;
+    }
 
-    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip)
+    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip, ClipSpaceType clipSpaceType)
     {
         // Slightly awkward here -- because we usually want to query the final cubemaps in world space
         // we need to follow the GFX API's cubemap specifications very closely. For Vulkan, that requires
@@ -348,8 +353,8 @@ namespace RenderCore { namespace Techniques
         // with a 3d vector input
         auto m = CubemapViewAndProjection(
             cubeFace, centerLocation, nearClip, farClip,
-            GeometricCoordinateSpace::LeftHanded,
-            GetDefaultClipSpaceType());
+            GetGeometricCoordinateSpaceForCubemaps(),
+            clipSpaceType);
         Techniques::ProjectionDesc projDesc;
         projDesc._verticalFov = gPI/2.0f;
         projDesc._aspectRatio = 1.f;
@@ -360,6 +365,8 @@ namespace RenderCore { namespace Techniques
         projDesc._cameraToWorld = InvertOrthonormalTransform(m.first);
         return projDesc;
     }
+
+    
 
 }}
 

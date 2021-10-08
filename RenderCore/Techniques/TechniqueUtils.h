@@ -88,6 +88,13 @@ namespace RenderCore { namespace Techniques
         unsigned _dummy[2];
     };
 
+    struct RSDepthBias
+    {
+        int _depthBias = 0;
+        float _depthBiasClamp = 0.f;
+        float _slopeScaledBias = 0.f;
+    };
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     Float4x4 Projection(const CameraDesc& sceneCamera, float viewportAspect);
@@ -124,7 +131,8 @@ namespace RenderCore { namespace Techniques
         float l, float t, float r, float b,
         float nearClip, float farClip);
 
-    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip);
+    ProjectionDesc BuildCubemapProjectionDesc(unsigned cubeFace, Float3 centerLocation, float nearClip, float farClip, ClipSpaceType clipSpaceType = GetDefaultClipSpaceType());
+    GeometricCoordinateSpace GetGeometricCoordinateSpaceForCubemaps();
 
 }}
 

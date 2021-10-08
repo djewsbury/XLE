@@ -1,24 +1,25 @@
 
 DescriptorSet ForwardLighting
 {
-	UniformBuffer EnvironmentProps;					// 0
-	UnorderedAccessBuffer LightList;				// 1
-	UnorderedAccessBuffer LightDepthTable;			// 2
-	SampledTexture TiledLightBitField;				// 3
+	UniformBuffer EnvironmentProps;						// 0
+	UnorderedAccessBuffer LightList;					// 1
+	UnorderedAccessBuffer LightDepthTable;				// 2
+	SampledTexture TiledLightBitField;					// 3
 
-	SampledTexture SSR;								// 4
-	SampledTexture StaticShadowProbeDatabase;		// 5
+	SampledTexture SSR;									// 4
+	SampledTexture StaticShadowProbeDatabase;			// 5
+	UnorderedAccessBuffer StaticShadowProbeProperties;	// 6
 
-	SampledTexture NoiseTexture;					// 6
+	SampledTexture NoiseTexture;						// 7
 
-	Sampler ShadowSampler							// 7
+	Sampler ShadowSampler								// 8
 	{
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
 		Comparison = GreaterEqual
 	};
-	Sampler ShadowDepthSampler						// 8
+	Sampler ShadowDepthSampler							// 9
 	{
 		Filter = Bilinear,
 		AddressU = Border,
@@ -28,6 +29,6 @@ DescriptorSet ForwardLighting
 
 DescriptorSet ProbePrepareLighting
 {
-	UniformBuffer EnvironmentProps;					// 0
+	UniformBuffer EnvironmentProps;						// 0
 };
 

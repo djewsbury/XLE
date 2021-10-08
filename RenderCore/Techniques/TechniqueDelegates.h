@@ -5,15 +5,15 @@
 #pragma once
 
 #include "CompiledShaderPatchCollection.h"
-#include "RenderStateResolver.h"				// (for RSDepthBias)
+#include "TechniqueUtils.h"						// (for RSDepthBias)
 #include "../../ShaderParser/ShaderAnalysis.h"	// (for ManualSelectorFiltering)
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
 
 namespace RenderCore { class StreamOutputInitializers; class IDevice; }
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; class RenderStateSet; }}
 namespace ShaderSourceParser { class SelectorFilteringRules; }
-namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; }}
 
 namespace RenderCore { namespace Techniques
 {
@@ -65,17 +65,19 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
-		const RSDepthBias& singleSidedBias = RSDepthBias(),
-        const RSDepthBias& doubleSidedBias = RSDepthBias(),
-        CullMode cullMode = CullMode::Back);
+		const RSDepthBias& singleSidedBias = RSDepthBias{},
+        const RSDepthBias& doubleSidedBias = RSDepthBias{},
+        CullMode cullMode = CullMode::Back,
+		FaceWinding faceWinding = FaceWinding::CCW);
 
 	enum class ShadowGenType { GSAmplify, VertexIdViewInstancing };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		ShadowGenType shadowGenType = ShadowGenType::GSAmplify,
-		const RSDepthBias& singleSidedBias = RSDepthBias(),
-        const RSDepthBias& doubleSidedBias = RSDepthBias(),
-        CullMode cullMode = CullMode::Back);
+		const RSDepthBias& singleSidedBias = RSDepthBias{},
+        const RSDepthBias& doubleSidedBias = RSDepthBias{},
+        CullMode cullMode = CullMode::Back,
+		FaceWinding faceWinding = FaceWinding::CCW);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,

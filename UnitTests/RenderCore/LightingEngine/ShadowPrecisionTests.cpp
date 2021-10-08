@@ -191,12 +191,12 @@ namespace UnitTests
 			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
-			shadowOp._rasterDepthBias = (int)std::ceil(ratio1);
+			shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
 			// shadowOp._rasterDepthBias += 256;
 			// const float worldSpaceExtraBias = 0.2f;
 			// shadowOp._rasterDepthBias += worldSpaceExtraBias / wsDepthResolution;
 			shadowOp._enableContactHardening = true;
-			shadowOp._slopeScaledBias = 0.5f;
+			shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp
 			};

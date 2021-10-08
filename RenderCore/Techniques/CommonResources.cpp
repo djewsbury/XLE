@@ -95,6 +95,7 @@ namespace RenderCore { namespace Techniques
         _blackCubeSRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM), "blackCube"))->CreateTextureView();
         _blackCubeArraySRV = CreateBlackResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::PlainCube(32, 32, Format::R8_UNORM, 1, 6), "blackCubeArray"))->CreateTextureView();
         _blackCB = CreateBlackResource(device, CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc{256}, "blackbuffer"));
+        _blackBufferUAV = CreateBlackResource(device, CreateDesc(BindFlag::UnorderedAccess, 0, GPUAccess::Read, LinearBufferDesc{256, 16}, "blackbufferuav"))->CreateBufferView(BindFlag::UnorderedAccess);
 
         _white2DSRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM), "white2d"))->CreateTextureView();
         _white2DArraySRV = CreateWhiteResource(device, CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, 0, GPUAccess::Read, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1), "white2darray"))->CreateTextureView();

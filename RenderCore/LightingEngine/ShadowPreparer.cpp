@@ -233,13 +233,9 @@ namespace RenderCore { namespace LightingEngine
 		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap)
 			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
 
-		Techniques::RSDepthBias singleSidedBias {
-			desc._rasterDepthBias, desc._depthBiasClamp, desc._slopeScaledBias };
-		Techniques::RSDepthBias doubleSidedBias {
-			desc._dsRasterDepthBias, desc._dsDepthBiasClamp, desc._dsSlopeScaledBias };
 		auto shadowGenDelegate = delegatesBox->GetShadowGenTechniqueDelegate(
 			Techniques::ShadowGenType::GSAmplify,
-			singleSidedBias, doubleSidedBias, desc._cullMode);
+			desc._singleSidedBias, desc._doubleSidedBias, desc._cullMode);
 
 		ParameterBox sequencerSelectors;
 		if (desc._projectionMode == ShadowProjectionMode::Ortho) {
@@ -427,18 +423,18 @@ namespace RenderCore { namespace LightingEngine
 			;
 
 		uint64_t h1 = 
-				uint64_t(FloatBits(_slopeScaledBias))
-			|  (uint64_t(FloatBits(_depthBiasClamp)) << 32ull)
+				uint64_t(FloatBits(_singleSidedBias._slopeScaledBias))
+			|  (uint64_t(FloatBits(_singleSidedBias._depthBiasClamp)) << 32ull)
 			;
 
 		uint64_t h2 = 
-				uint64_t(FloatBits(_dsSlopeScaledBias))
-			|  (uint64_t(FloatBits(_dsDepthBiasClamp)) << 32ull)
+				uint64_t(FloatBits(_doubleSidedBias._slopeScaledBias))
+			|  (uint64_t(FloatBits(_doubleSidedBias._depthBiasClamp)) << 32ull)
 			;
 
 		uint64_t h3 = 
-				uint64_t(_rasterDepthBias)
-			|  (uint64_t(_dsRasterDepthBias) << 32ull)
+				uint64_t(_singleSidedBias._depthBias)
+			|  (uint64_t(_doubleSidedBias._depthBias) << 32ull)
 			;
 
 		return HashCombine(h0, HashCombine(h1, HashCombine(h2, HashCombine(h3, seed))));

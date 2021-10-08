@@ -666,8 +666,20 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
 		AddStringToEnum<RenderCore::LightingEngine::ShadowResolveType, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowResolveType>(props, "ResolveType", &Obj::_resolveType);
 		AddStringToEnum<RenderCore::LightingEngine::ShadowProjectionMode, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowProjectionMode>(props, "ProjectionMode", &Obj::_projectionMode);
 		AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);
+        AddStringToEnum<RenderCore::CullMode, RenderCore::AsString, RenderCore::AsCullMode>(props, "CullMode", &Obj::_cullMode);
 		props.Add("Dims", [](const Obj& obj) { return obj._width; }, [](Obj& obj, uint32_t value) { obj._width = obj._height = value; });
-		props.Add("SlopeScaledBias", &Obj::_slopeScaledBias);
+		props.Add(
+            "SlopeScaledBias", 
+            [](const Obj& obj) { return obj._singleSidedBias._slopeScaledBias; },
+            [](Obj& obj, float slopeScaledBias) { obj._doubleSidedBias._slopeScaledBias = obj._singleSidedBias._slopeScaledBias = slopeScaledBias; });
+        props.Add(
+            "DepthBias", 
+            [](const Obj& obj) { return obj._singleSidedBias._depthBias; },
+            [](Obj& obj, float depthBias) { obj._doubleSidedBias._depthBias = obj._singleSidedBias._depthBias = depthBias; });
+        props.Add(
+            "DepthBiasClamp", 
+            [](const Obj& obj) { return obj._singleSidedBias._depthBiasClamp; },
+            [](Obj& obj, float depthBiasClamp) { obj._doubleSidedBias._depthBiasClamp = obj._singleSidedBias._depthBiasClamp = depthBiasClamp; });
 		init = true;
 	}
 	return props;

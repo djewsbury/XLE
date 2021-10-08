@@ -508,7 +508,7 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
-			CullMode cullMode,
+			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
@@ -516,8 +516,8 @@ namespace RenderCore { namespace Techniques
 				*_techniqueFileHelper, 
 				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
 
-			_rs[0x0] = RasterizationDesc{cullMode,        FaceWinding::CCW, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
-            _rs[0x1] = RasterizationDesc{CullMode::None,  FaceWinding::CCW, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
+			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
+            _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
@@ -528,9 +528,9 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
-        CullMode cullMode)
+        CullMode cullMode, FaceWinding faceWinding)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, std::optional<ShadowGenType>{});
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
@@ -538,9 +538,9 @@ namespace RenderCore { namespace Techniques
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
-        CullMode cullMode)
+        CullMode cullMode, FaceWinding faceWinding)
 	{
-		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, shadowGenType);
+		return std::make_shared<TechniqueDelegate_DepthOnly>(techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

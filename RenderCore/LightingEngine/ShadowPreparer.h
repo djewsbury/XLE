@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"		// for IShadowProjectionFactory
+#include "../Techniques/TechniqueUtils.h"
 #include "../StateDesc.h"
 #include "../Format.h"
 #include "../../Assets/AssetsCore.h"
@@ -43,9 +44,7 @@ namespace RenderCore { namespace LightingEngine
 
 			/// @{
 			/// single sided depth bias
-		float				_slopeScaledBias = 0.f;
-		float				_depthBiasClamp = 0.f;
-		int					_rasterDepthBias = 0;
+		Techniques::RSDepthBias _singleSidedBias;
 			/// @}
 
 			/// @{
@@ -54,9 +53,7 @@ namespace RenderCore { namespace LightingEngine
 			/// gen. In this case single sided geometry doesn't cause acne
 			/// (so we can have very small bias values). But double sided 
 			/// geometry still gets acne, so needs a larger bias!
-		float				_dsSlopeScaledBias = 0.f;
-		float				_dsDepthBiasClamp = 0.f;
-		int					_dsRasterDepthBias = 0;
+		Techniques::RSDepthBias _doubleSidedBias;
 			/// @}
 
 		ShadowProjectionMode	_projectionMode = ShadowProjectionMode::Arbitrary;

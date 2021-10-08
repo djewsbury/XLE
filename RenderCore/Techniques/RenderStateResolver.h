@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "TechniqueUtils.h"
 #include "../StateDesc.h"
 #include "../../Core/Types.h"
 #include <memory>
@@ -40,15 +41,9 @@ namespace RenderCore { namespace Techniques
     std::shared_ptr<IRenderStateDelegate> CreateRenderStateDelegate_Forward();
     std::shared_ptr<IRenderStateDelegate> CreateRenderStateDelegate_Deferred();
 
-    struct RSDepthBias
-    {
-        int _depthBias = 0;
-        float _depthBiasClamp = 0.f;
-        float _slopeScaledBias = 0.f;
-    };
     std::shared_ptr<IRenderStateDelegate> CreateRenderStateDelegate_DepthOnly(
-        const RSDepthBias& singleSidedBias = RSDepthBias(),
-        const RSDepthBias& doubleSidedBias = RSDepthBias(),
+        const RSDepthBias& singleSidedBias = RSDepthBias{},
+        const RSDepthBias& doubleSidedBias = RSDepthBias{},
         CullMode cullMode = CullMode::Back);
     
 }}

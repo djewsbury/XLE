@@ -239,8 +239,8 @@ namespace UnitTests
 			float wsXYRange = shadowFrustumWidth / 2048.f;
 			float ratio0 = wsXYRange / wsDepthResolution;
 			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
-			shadowOp._rasterDepthBias = (int)std::ceil(ratio1);
-			shadowOp._slopeScaledBias = 0.5f;
+			shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
+			shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
 
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				shadowOp

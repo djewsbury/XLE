@@ -20,14 +20,18 @@
 
 namespace RenderCore { namespace LightingEngine
 {
+	struct CB_StaticShadowProbeDesc
+	{
+		float _miniProjZ, _miniProjW;
+	};
+
 	class ShadowProbes::Pimpl
 	{
 	public:
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<IResource> _staticTable;
 		std::shared_ptr<IResourceView> _staticTableSRV;
-		std::shared_ptr<IResource> _dynamicTable;
-		std::shared_ptr<IResource> _lookupTable;
+		std::shared_ptr<IResourceView> _probeUniformsUAV;
 		std::vector<Probe> _probes;
 		Configuration _config;
 		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
@@ -45,6 +49,7 @@ namespace RenderCore { namespace LightingEngine
 			: _pimpl(&pimpl)
 			{
 				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
+				// auto staticDatabaseDesc = TextureDesc::Plain2D(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
 				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
 				Techniques::PreregisteredAttachment preregisteredAttachments[] {
 					semanticProbePrepare,
@@ -70,7 +75,8 @@ namespace RenderCore { namespace LightingEngine
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
 
-				return Techniques::RenderPassInstance{threadContext, *_parsingContext, fragment};
+				Techniques::RenderPassBeginDesc beginInfo;
+				return Techniques::RenderPassInstance{threadContext, *_parsingContext, fragment, beginInfo};
 			}
 		};
 	};
@@ -84,9 +90,9 @@ namespace RenderCore { namespace LightingEngine
 		result.reserve(count);
 		for (unsigned c=0; c<count; ++c) {
 			const auto& p = probes[c/6];
-			result.push_back(
-				Techniques::BuildCubemapProjectionDesc(
-					c%6, p._position, p._radius / 1024.f, p._radius));
+			float near = p._nearRadius;
+			float far = p._farRadius;
+			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near, far));
 		}
 		return result;
 	}
@@ -197,17 +203,32 @@ namespace RenderCore { namespace LightingEngine
 
 	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareStaticProbes(IThreadContext& threadContext)
 	{
-		if (_pimpl->_probes.empty())
-			return nullptr;
-
 		_pimpl->_staticTable = nullptr;
 		_pimpl->_staticTableSRV = nullptr;
+		_pimpl->_probeUniformsUAV = nullptr;
 		_pimpl->_pendingRebuild = false;
+
+		if (_pimpl->_probes.empty())
+			return nullptr;
 
 		auto result = std::make_shared<ProbeRenderingInstance>();
 		result->_threadContext = &threadContext;
 		result->_pimpl = _pimpl.get();
 		result->_staticPrepareHelper = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext.GetDevice(), *_pimpl);
+
+		// Build the StaticShadowProbeDesc table
+		std::vector<CB_StaticShadowProbeDesc> probeUniforms;
+		auto projDescs = CreateProjectionDescs(_pimpl->_probes);
+		probeUniforms.reserve(projDescs.size());
+		for (const auto& projDesc:projDescs) {
+			auto miniProj = ExtractMinimalProjection(projDesc._cameraToProjection);
+			probeUniforms.push_back(CB_StaticShadowProbeDesc{miniProj[2], miniProj[3]});
+		}
+		auto& device = *threadContext.GetDevice();
+		auto probeUniformsRes = device.CreateResource(
+			CreateDesc(BindFlag::UnorderedAccess, 0, 0, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*probeUniforms.size(), sizeof(CB_StaticShadowProbeDesc)), "shadow-probe-list"),
+			SubResourceInitData{probeUniforms});
+		_pimpl->_probeUniformsUAV = probeUniformsRes->CreateBufferView(BindFlag::UnorderedAccess);
 		return result;
 	}
 
@@ -216,6 +237,13 @@ namespace RenderCore { namespace LightingEngine
 		assert(_pimpl->_staticTableSRV);
 		assert(!_pimpl->_pendingRebuild);
 		return *_pimpl->_staticTableSRV;
+	}
+
+	IResourceView& ShadowProbes::GetShadowProbeUniforms() const
+	{
+		assert(_pimpl->_probeUniformsUAV);
+		assert(!_pimpl->_pendingRebuild);
+		return *_pimpl->_probeUniformsUAV;
 	}
 
 	bool ShadowProbes::IsReady() const
@@ -248,9 +276,18 @@ namespace RenderCore { namespace LightingEngine
 			FrameBufferDesc fbDesc {
 				std::vector<AttachmentDesc>{attachmentDesc},
 				std::vector<SubpassDesc>{spDesc}};
+
+			// Coordinate space for cubemap rendering is defined by the API to make shader lookups simple
+			// However, if it's not the same as our typical conventions, we may need to flip the winding
+			// direction
+			bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
 			_pimpl->_probePrepareCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig(
 				"shadow-probe",
-				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(Techniques::ShadowGenType::VertexIdViewInstancing),
+				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
+					Techniques::ShadowGenType::VertexIdViewInstancing, 
+					_pimpl->_config._singleSidedBias, 
+					_pimpl->_config._doubleSidedBias, 
+					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW),
 				{}, fbDesc, 0);
 		}
 	}
@@ -267,7 +304,14 @@ namespace RenderCore { namespace LightingEngine
 		return lhs._staticFaceDims == rhs._staticFaceDims
 		 	&& lhs._dynamicFaceDims == rhs._dynamicFaceDims
 			&& lhs._maxDynamicProbes == rhs._maxDynamicProbes
-			&& lhs._staticFormat == rhs._staticFormat;
+			&& lhs._staticFormat == rhs._staticFormat
+			&& lhs._singleSidedBias._slopeScaledBias == rhs._singleSidedBias._slopeScaledBias
+			&& lhs._singleSidedBias._depthBiasClamp == rhs._singleSidedBias._depthBiasClamp
+			&& lhs._singleSidedBias._depthBias == rhs._singleSidedBias._depthBias
+			&& lhs._doubleSidedBias._slopeScaledBias == rhs._doubleSidedBias._slopeScaledBias
+			&& lhs._doubleSidedBias._depthBiasClamp == rhs._doubleSidedBias._depthBiasClamp
+			&& lhs._doubleSidedBias._depthBias == rhs._doubleSidedBias._depthBias
+			;
 	}
 
 }}

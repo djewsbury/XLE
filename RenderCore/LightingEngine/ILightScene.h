@@ -135,4 +135,12 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetProjection(const Float4x4&) = 0;
 		virtual ~INearShadowProjection();
 	};
+
+	class IShadowProbeDatabase
+	{
+	public:
+		virtual void SetNearRadius(float) = 0;
+		virtual float GetNearRadius(float) = 0;
+		virtual ~IShadowProbeDatabase();
+	};
 }}

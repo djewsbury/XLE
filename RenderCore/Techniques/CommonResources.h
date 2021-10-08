@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<IResourceView> _whiteCubeSRV;
         std::shared_ptr<IResourceView> _whiteCubeArraySRV;
         std::shared_ptr<IResource> _blackCB;
+        std::shared_ptr<IResourceView> _blackBufferUAV;
 
 		///////////////////////////////////////
 

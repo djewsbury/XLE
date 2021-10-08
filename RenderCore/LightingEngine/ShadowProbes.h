@@ -5,6 +5,7 @@
 #pragma once
 
 #include "LightingEngine.h"
+#include "../Techniques/TechniqueUtils.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
@@ -35,7 +36,7 @@ namespace RenderCore { namespace LightingEngine
 		struct Probe
 		{
 			Float3 _position;
-			float _radius;
+			float _nearRadius, _farRadius;
 		};
 
 		struct Configuration
@@ -44,6 +45,9 @@ namespace RenderCore { namespace LightingEngine
 			unsigned _dynamicFaceDims = 128;
 			unsigned _maxDynamicProbes = 32;
 			Format _staticFormat = Format::D16_UNORM;
+
+			Techniques::RSDepthBias _singleSidedBias;
+			Techniques::RSDepthBias _doubleSidedBias;
 
 			friend bool operator==(const Configuration& lhs, const Configuration& rhs);
 		};
@@ -57,6 +61,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IProbeRenderingInstance> PrepareStaticProbes(
 			IThreadContext& threadContext);
 		IResourceView& GetStaticProbesTable() const;
+		IResourceView& GetShadowProbeUniforms() const;
 		bool IsReady() const;
 
 		void AddProbes(IteratorRange<const Probe*>);

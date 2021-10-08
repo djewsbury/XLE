@@ -75,31 +75,6 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
-	static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights)
-	{
-		std::vector<ShadowProbes::Probe> result;
-		result.reserve(lights.size());
-		for (auto pending:lights) {
-			ShadowProbes::Probe probe;
-			probe._position = Zero<Float3>();
-			probe._radius = 1024;
-			auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
-			if (positional)
-				probe._position = ExtractTranslation(positional->GetLocalToWorld());
-			auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
-			if (finite)
-				probe._radius = finite->GetCutoffRange();
-
-			auto& internalLightDesc = *dynamic_cast<ForwardPlusLightDesc*>(positional);
-			assert(internalLightDesc._staticProbeDatabaseEntry == 0);
-			// we use zero as a sentinal, so add one to the actual index
-			internalLightDesc._staticProbeDatabaseEntry = unsigned(result.size()+1);
-
-			result.push_back(probe);
-		}
-		return result;
-	}
-
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
 		auto& device = *_pipelineAccelerators->GetDevice();
@@ -179,15 +154,56 @@ namespace RenderCore { namespace LightingEngine
 		return ~0u;
 	}
 
-	class ForwardPlusLightScene::ShadowProbePrepareDelegate : public IPreparable
+	class ForwardPlusLightScene::ShadowProbePrepareDelegate : public IPreparable, public IShadowProbeDatabase
 	{
 	public:
+		static std::vector<ShadowProbes::Probe> MakeProbes(ILightScene& lightScene, IteratorRange<const ILightScene::LightSourceId*> lights, float defaultNearRadius)
+		{
+			std::vector<ShadowProbes::Probe> result;
+			result.reserve(lights.size());
+			for (auto pending:lights) {
+				ShadowProbes::Probe probe;
+				probe._position = Zero<Float3>();
+				probe._nearRadius = 1.f;
+				probe._farRadius = 1024.f;
+				float lightSourceRadius = 0.f;
+				auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(pending);
+				if (positional) {
+					probe._position = ExtractTranslation(positional->GetLocalToWorld());
+					lightSourceRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
+				}
+				auto* finite = lightScene.TryGetLightSourceInterface<IFiniteLightSource>(pending);
+				if (finite) {
+					probe._nearRadius = std::max(lightSourceRadius, defaultNearRadius);
+					probe._farRadius = finite->GetCutoffRange();
+				}
+
+				auto& internalLightDesc = *dynamic_cast<ForwardPlusLightDesc*>(positional);
+				assert(internalLightDesc._staticProbeDatabaseEntry == 0);
+				// we use zero as a sentinal, so add one to the actual index
+				internalLightDesc._staticProbeDatabaseEntry = unsigned(result.size()+1);
+
+				result.push_back(probe);
+			}
+			return result;
+		}
+
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext) override
 		{
+			auto probes = MakeProbes(*_lightScene, _associatedLights, _defaultNearRadius);
+			_shadowProbes->AddProbes(probes);
 			return _shadowProbes->PrepareStaticProbes(threadContext);
 		}
+
+		void SetNearRadius(float nearRadius) override { _defaultNearRadius = nearRadius; }
+		float GetNearRadius(float) override { return _defaultNearRadius; }
+
 		std::shared_ptr<ShadowProbes> _shadowProbes;
-		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes) : _shadowProbes(std::move(shadowProbes)) {}
+		ShadowProbePrepareDelegate(std::shared_ptr<ShadowProbes> shadowProbes, IteratorRange<const LightSourceId*> associatedLights, ForwardPlusLightScene* lightScene) 
+		: _shadowProbes(std::move(shadowProbes)), _associatedLights(associatedLights.begin(), associatedLights.end()), _lightScene(lightScene) {}
+		std::vector<LightSourceId> _associatedLights;
+		ForwardPlusLightScene* _lightScene;
+		float _defaultNearRadius = 1.f;
 	};
 
 	ILightScene::ShadowProjectionId ForwardPlusLightScene::CreateShadowProjection(ShadowOperatorId opId, IteratorRange<const LightSourceId*> associatedLights)
@@ -198,9 +214,7 @@ namespace RenderCore { namespace LightingEngine
 			
 			_shadowProbes = std::make_shared<ShadowProbes>(
 				_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
-			auto probes = MakeProbes(*this, associatedLights);
-			_shadowProbes->AddProbes(probes);
-			_spPrepareDelegate = std::make_shared<ShadowProbePrepareDelegate>(_shadowProbes);
+			_spPrepareDelegate = std::make_shared<ShadowProbePrepareDelegate>(_shadowProbes, associatedLights, this);
 			return s_shadowProbeShadowFlag;
 		} else {
 			Throw(std::runtime_error("This shadow projection operation can't be used with the multi-light constructor variation"));
@@ -232,7 +246,8 @@ namespace RenderCore { namespace LightingEngine
 	void* ForwardPlusLightScene::TryGetShadowProjectionInterface(ShadowProjectionId projectionid, uint64_t interfaceTypeCode)
 	{
 		if (projectionid == s_shadowProbeShadowFlag) {
-			if (interfaceTypeCode == typeid(IPreparable).hash_code()) return _spPrepareDelegate.get();
+			if (interfaceTypeCode == typeid(IPreparable).hash_code()) return (IPreparable*)_spPrepareDelegate.get();
+			else if (interfaceTypeCode == typeid(IShadowProbeDatabase).hash_code()) return (IShadowProbeDatabase*)_spPrepareDelegate.get();
 			return nullptr;
 		} else {
 			return Internal::StandardLightScene::TryGetShadowProjectionInterface(projectionid, interfaceTypeCode);
@@ -365,16 +380,19 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			if (bindingFlags & (1ull<<5ull)) {
+				// assert(bindingFlags & (1ull<<6ull));
 				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady()) {
 					dst[5] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+					dst[6] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
 				} else {
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
 					dst[5] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+					dst[6] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
 				}
 			}
-			if (bindingFlags & (1ull<<6ull)) {
-				dst[6] = _noise.get();
+			if (bindingFlags & (1ull<<7ull)) {
+				dst[7] = _noise.get();
 				context.RequireCommandList(_completionCmdList);
 			}
 		}
@@ -388,7 +406,8 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(3, Hash64("EnvironmentProps"));
 			BindResourceView(4, Hash64("SSR"));
 			BindResourceView(5, Hash64("StaticShadowProbeDatabase"));
-			BindResourceView(6, Hash64("NoiseTexture"));
+			BindResourceView(6, Hash64("StaticShadowProbeProperties"));
+			BindResourceView(7, Hash64("NoiseTexture"));
 
 			_noise = balanceNoiseTexture.GetShaderResource();
 			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
@@ -422,6 +441,8 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProbes::Configuration result;
 		result._staticFaceDims = opDesc._width;
 		result._staticFormat = opDesc._format;
+		result._singleSidedBias = opDesc._singleSidedBias;
+		result._doubleSidedBias = opDesc._doubleSidedBias;
 		return result;
 	}
 
