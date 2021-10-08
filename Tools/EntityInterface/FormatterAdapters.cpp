@@ -108,8 +108,13 @@ namespace EntityInterface
 			return _directorySearchRules;
 		}
 
-		virtual void Lock() override { _lock.lock(); }
-		virtual void Unlock() override { _lock.unlock(); }
+		virtual void Lock() override { _lock = std::unique_lock<Threading::Mutex>{_readMutex}; }
+		virtual bool TryLock() override 
+		{
+			_lock = std::unique_lock<Threading::Mutex>{_readMutex, std::defer_lock};
+			return _lock.try_lock();
+		}
+		virtual void Unlock() override { _lock = {}; }
 
 		TextEntityDocument(std::string src) 
 		: _src(src)
@@ -118,7 +123,8 @@ namespace EntityInterface
 		}
 
 	private:
-		Threading::Mutex _lock;
+		Threading::Mutex _readMutex;
+		std::unique_lock<Threading::Mutex> _lock;
 		std::string _src;
 		::Assets::PtrToFuturePtr<::Assets::ConfigFileContainer<>> _srcFile;
 		::Assets::DirectorySearchRules _directorySearchRules;

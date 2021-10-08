@@ -24,8 +24,10 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		ToolsRigServices.cpp
 		../EntityInterface/EntityInterface.cpp
 		../EntityInterface/FormatterAdapters.cpp
-		#../EntityInterface/GameObjects.cpp
 		../EntityInterface/RetainedEntities.cpp
+		../EntityInterface/TweakableEntityDocument.cpp
+		../EntityInterface/TweakableWidgets.cpp
+		#../EntityInterface/GameObjects.cpp
 		#../EntityInterface/PlacementEntities.cpp
 		#../EntityInterface/EnvironmentSettings.cpp
 		)

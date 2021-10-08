@@ -4,6 +4,7 @@
 
 #pragma once
 #include "DebuggingDisplay.h"
+#include "../Utility/StringFormat.h"
 
 namespace RenderOverlays { namespace CommonWidgets
 {

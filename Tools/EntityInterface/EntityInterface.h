@@ -74,6 +74,7 @@ namespace EntityInterface
         virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 
         virtual void Lock() = 0;
+        virtual bool TryLock() = 0;
         virtual void Unlock() = 0;
 
         virtual ~IEntityDocument() = default;
