@@ -30,6 +30,7 @@ namespace Formatters
 		bool TryBeginArray(unsigned& count, unsigned& evaluatedTypeId);
 		bool TryEndArray();
 		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc, unsigned& evaluatedTypeId);
+		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc);
 
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
 		IteratorRange<const void*> SkipNextBlob();
@@ -319,6 +320,12 @@ namespace Formatters
 
 	inline BinaryMemberToken BinaryMemberIterator::get() const { return BinaryMemberToken{_i, _containingRange, *_evalContext}; }
 	inline BinaryMemberToken BinaryMemberIterator::operator*() const { return get(); }
+
+	inline bool BinaryFormatter::TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc)
+	{
+		unsigned evaluatedTypeId;
+		return TryRawValue(data, typeDesc, evaluatedTypeId);
+	}
 
 	template<typename Type>
 		Type RequireCastValue(BinaryFormatter& formatter)

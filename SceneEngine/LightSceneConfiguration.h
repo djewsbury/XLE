@@ -144,7 +144,7 @@ namespace SceneEngine
 		while (fmttr.TryKeyedItem(keyname)) {
 			ImpliedTyping::TypeDesc typeDesc;
 			IteratorRange<const void*> data;
-			if (fmttr.TryRawValue(typeDesc, data)) {
+			if (fmttr.TryRawValue(data, typeDesc)) {
 				accessors.Set(&obj, keyname, data, typeDesc);
 			} else
 				SkipValueOrElement(fmttr);

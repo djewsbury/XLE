@@ -405,14 +405,14 @@ namespace EntityInterface
 					draw.Bounded(frame, interactable, nameStr, state->GetWorkingValue<Type>(interactable), leftSideValue, rightSideValue);
 				};
 				sliderNode->_ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](CommonWidgets::Input& input, Rect frame, Rect content) {
-					if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !IsInside(input.GetInterfaceState().GetCapture()._widget._rect, input.GetEvent()._mousePosition)) {
-						input._madeChange |= state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine);
-						input.GetInterfaceState().EndCapturing();
-						input.GetHoverings()._hoveringCtrl = 0;
-						return IODelegateResult::Consumed;
-					} 
-
 					if (input.GetHoverings()._hoveringCtrl) {
+						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !IsInside(input.GetInterfaceState().GetCapture()._widget._rect, input.GetEvent()._mousePosition)) {
+							input._madeChange |= state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine);
+							input.GetInterfaceState().EndCapturing();
+							input.GetHoverings()._hoveringCtrl = 0;
+							return IODelegateResult::Consumed;
+						} 
+
 						if (input.GetEvent().IsPress(enter)) {
 							input._madeChange |= state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine);
 							input.GetInterfaceState().EndCapturing();

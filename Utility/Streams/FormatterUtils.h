@@ -21,13 +21,17 @@ namespace Utility
 		template<typename...> static auto HasSkipValueOrElement_Helper(...) -> std::false_type;
 		template<typename Type> struct HasSkipValueOrElement : decltype(HasSkipValueOrElement_Helper<Type>(0)) {};
 
-		template<typename Type> static auto HasTryStringValue_Helper(int) -> decltype(std::declval<Type>().SkipValueOrElement(), std::true_type{});
+		template<typename Type> static auto HasTryStringValue_Helper(int) -> decltype(std::declval<Type>().TryStringValue(std::declval<StringSection<typename Type::value_type>>()), std::true_type{});
 		template<typename...> static auto HasTryStringValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryStringValue : decltype(HasTryStringValue_Helper<Type>(0)) {};
 
-		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().SkipValueOrElement(), std::true_type{});
+		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().TryRawValue(std::declval<IteratorRange<const void*>&>(), std::declval<ImpliedTyping::TypeDesc&>()), std::true_type{});
 		template<typename...> static auto HasTryRawValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryRawValue : decltype(HasTryRawValue_Helper<Type>(0)) {};
+
+		template<typename Type> static auto HasTryCastValue_Helper(int) -> decltype(std::declval<Type>().TryCastValue(std::declval<IteratorRange<const void*>>(), std::declval<const ImpliedTyping::TypeDesc&>()), std::true_type{});
+		template<typename...> static auto HasTryCastValue_Helper(...) -> std::false_type;
+		template<typename Type> struct HasTryCastValue : decltype(HasTryCastValue_Helper<Type>(0)) {};
 
 		template<typename Formatter>
 			struct FormatterTraits
@@ -36,6 +40,7 @@ namespace Utility
 			static constexpr auto HasSkipValueOrElement = Internal::HasSkipValueOrElement<Formatter>::value;
 			static constexpr auto HasTryStringValue = Internal::HasTryStringValue<Formatter>::value;
 			static constexpr auto HasTryRawValue = Internal::HasTryRawValue<Formatter>::value;
+			static constexpr auto HasTryCastValue = Internal::HasTryRawValue<Formatter>::value;
 		};
 	}
 
@@ -162,6 +167,32 @@ namespace Utility
 		if (!formatter.TryStringValue(value))
 			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
 		return value;
+	}
+
+	template<typename Type, typename Formatter>
+		Type RequireCastValue(Formatter& formatter)
+	{
+		if constexpr(Internal::FormatterTraits<Formatter>::HasTryCastValue) {
+			Type result;
+			if (!formatter.TryCastValue(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>()))
+				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+			return result;
+		} else if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+			IteratorRange<const void*> value;
+			ImpliedTyping::TypeDesc typeDesc;
+			if (!formatter.TryRawValue(value, typeDesc))
+				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+			Type result;
+			ImpliedTyping::Cast(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(), value, typeDesc);
+			return result;
+		} else {
+			typename Formatter::InteriorSection value;
+			Type result;
+			if (	!formatter.TryStringValue(value)
+				|| 	!ImpliedTyping::ConvertFullMatch(value, MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>()))
+				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+			return result;
+		}
 	}
 
 	template<typename Formatter>
