@@ -304,12 +304,13 @@ namespace ShaderSourceParser
 
 	ParameterBox FilterSelectors(
 		IteratorRange<const ParameterBox* const*> selectors,
-		const ManualSelectorFiltering& manualFiltering,
+		const std::unordered_map<std::string, std::string>& manualRevelanceMap,
 		IteratorRange<const SelectorFilteringRules**> automaticFiltering)
 	{
-		ParameterBox filteredBox = manualFiltering._setValues;
-		for (const auto&s:selectors)
-			filteredBox.MergeIn(*s);
+		assert(!selectors.empty());
+		ParameterBox filteredBox = **selectors.begin();
+		for (auto i=selectors.begin()+1; i!=selectors.end(); ++i)
+			filteredBox.MergeIn(**i);
 
 		if (filteredBox.GetCount() == 0)
 			return filteredBox;
@@ -326,8 +327,8 @@ namespace ShaderSourceParser
 
 			// If we're listed in the technique filtering relevance map, then we treat that as an override
 			// of the automatic filtering
-			auto relevanceI = manualFiltering._relevanceMap.find(evaluating->Name().AsString());
-			if (relevanceI != manualFiltering._relevanceMap.end()) {
+			auto relevanceI = manualRevelanceMap.find(evaluating->Name().AsString());
+			if (relevanceI != manualRevelanceMap.end()) {
 				// Set a key called "value" to the new value we want to set
 				ParameterBox pBoxValue;
 				pBoxValue.SetParameter("value", evaluating->RawValue(), evaluating->Type());
@@ -353,8 +354,8 @@ namespace ShaderSourceParser
 		const ManualSelectorFiltering& manualFiltering,
 		const SelectorFilteringRules& automaticFiltering)
 	{
-		const ParameterBox* boxes[] = { &selectors };
+		const ParameterBox* boxes[] = { &manualFiltering._setValues, &selectors };
 		const SelectorFilteringRules* filtering[] = { &automaticFiltering };
-		return FilterSelectors(MakeIteratorRange(boxes), manualFiltering, MakeIteratorRange(filtering));
+		return FilterSelectors(MakeIteratorRange(boxes), manualFiltering._relevanceMap, MakeIteratorRange(filtering));
 	}
 }

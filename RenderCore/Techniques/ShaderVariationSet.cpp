@@ -47,7 +47,10 @@ namespace RenderCore { namespace Techniques
 		const ShaderSourceParser::SelectorPreconfiguration* preconfiguration)
 	{
 		if (!preconfiguration) {
-			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors(selectors, techniqueFiltering, automaticFiltering));
+			const ParameterBox* p[selectors.size()+1];
+			p[0] = &techniqueFiltering._setValues;
+			for (unsigned c=0; c<selectors.size(); ++c) p[c+1] = selectors[c];
+			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({p, p+selectors.size()+1}, techniqueFiltering._relevanceMap, automaticFiltering));
 		} else {
 			// If we have a preconfiguration file, we need to run that over the selectors first. It will define or undefine
 			// selectors based on it's script. Because it can also undefine, we need to be working with non-const parameter boxes
@@ -59,13 +62,14 @@ namespace RenderCore { namespace Techniques
 				return MakeFilteredDefinesTable({&p, &p+1}, techniqueFiltering, automaticFiltering, preconfiguration);
 			}
 
-			ParameterBox mergedSelectors = *selectors[0];
-			for (auto i=selectors.begin()+1; i!=selectors.end(); ++i)
+			// Merge in the "_setValues" from technique filtering, so it can be available to the preconfiguration operation
+			ParameterBox mergedSelectors = techniqueFiltering._setValues;
+			for (auto i=selectors.begin(); i!=selectors.end(); ++i)
 				mergedSelectors.MergeIn(**i);
 
 			mergedSelectors = preconfiguration->Preconfigure(std::move(mergedSelectors));
 			ParameterBox* p = &mergedSelectors;
-			return MakeFilteredDefinesTable({&p, &p+1}, techniqueFiltering, automaticFiltering, nullptr);
+			return BuildFlatStringTable(ShaderSourceParser::FilterSelectors({&p, &p+1}, techniqueFiltering._relevanceMap, automaticFiltering));
 		}
 	}
 
