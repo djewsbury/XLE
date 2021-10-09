@@ -41,11 +41,9 @@ Forward=~
 		SKY_PROJECTION
 		HAS_DIFFUSE_IBL
 		HAS_SPECULAR_IBL
-		MAT_BLEND_FOG=1
 		MAT_SKIP_LIGHTING_SCALE=~; relevance=<:(value!=0):>
 		MAT_TRANSMITTED_SPECULAR=~; relevance=<:(value!=0):>
 		MAT_CLAMP_SPEC=~; relevance=<:(value!=0):>
-		BASIC_LIGHT_COUNT=1
 		SHADOW_CASCADE_MODE=2
 
 Deferred=~

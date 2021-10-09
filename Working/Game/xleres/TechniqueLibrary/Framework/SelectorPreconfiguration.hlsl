@@ -79,18 +79,6 @@
 	#define VSOUT_HAS_WORLD_VIEW_VECTOR 1
 #endif
 
-#if MAT_REFLECTIVENESS
-	#define VSOUT_HAS_WORLD_VIEW_VECTOR 1       // (need world view vector for the fresnel calculation)
-#endif
-
-#if MAT_BLEND_FOG
-	#define VSOUT_HAS_FOG_COLOR 1
-#endif
-
-#if GEO_HAS_PARTICLE_INPUTS
-	#define VSOUT_HAS_BLEND_TEXCOORD 1
-#endif
-
 #if (SPAWNED_INSTANCE==1)
 	#define GEO_HAS_INSTANCE_ID 1
 	#if !defined(VSOUT_HAS_SHADOW_PROJECTION_COUNT)

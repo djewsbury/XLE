@@ -140,18 +140,21 @@ DepthMotionNormal_NoPatches=~
 	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
+		DEPTH_MOTION_NORMAL=1
 	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthMotionNormal
 
 DepthMotionNormal_PerPixel=~
 	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
+		DEPTH_MOTION_NORMAL=1
 	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionNormal
 
 DepthMotionNormal_PerPixelAndEarlyRejection=~
 	Inherit=~; DepthOnly
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
+		DEPTH_MOTION_NORMAL=1
 	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthMotionNormalWithEarlyRejection
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
