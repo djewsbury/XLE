@@ -86,12 +86,12 @@ float3 FFX_DNSR_Reflections_LoadNormalHistory(int2 pixel_coordinate)
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 {
-    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 1) ? 1.0f : 0.15f);
+    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
 }
 
 float FFX_DNSR_Reflections_LoadRoughnessHistory(int2 pixel_coordinate)
 {
-    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 1) ? 1.0f : 0.15f);
+    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
 }
 
 float3 FFX_DNSR_Reflections_LoadRadianceHistory(int2 pixel_coordinate)

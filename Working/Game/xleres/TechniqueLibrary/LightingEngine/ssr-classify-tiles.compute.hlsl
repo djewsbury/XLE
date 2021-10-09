@@ -87,7 +87,7 @@ void FFX_DNSR_Reflections_StoreTileMetaDataMask(uint index, uint mask)
     uint2 dispatch_thread_id = group_id * 8 + group_thread_id;
 
     // float roughness = g_roughness.Load(int3(dispatch_thread_id, 0)).w;
-    float roughness = (DownsampleDepths.Load(uint3(dispatch_thread_id.xy, 0)) == 1) ? 1.0f : 0.15f;
+    float roughness = (DownsampleDepths.Load(uint3(dispatch_thread_id.xy, 0)) == 0) ? 1.0f : 0.125f;
 
     if (WaveActiveCountBits(FFX_DNSR_Reflections_IsGlossyReflection(roughness))) {
         FFX_DNSR_Reflections_ClassifyTiles(dispatch_thread_id, group_thread_id, roughness, screen_size, g_samples_per_quad, g_temporal_variance_guided_tracing_enabled);

@@ -229,7 +229,8 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     // todo -- this needs a lot of optimization
     float D = TrowReitzD(NdotH, alphad);
     weight = (4.f * VdotH) / (D * NdotH);
-    weight *= ReferenceSpecularGGX(normal, V, L, H, roughness, 0.1f, false);
+    const float3 F0 = 0.1.xxx;
+    weight *= ReferenceSpecularGGX(normal, V, L, H, roughness, F0, false).r;
     return L;
 #endif
 
@@ -258,6 +259,7 @@ bool IsMirrorReflection(float roughness)
     return false; // roughness < 0.0001;
 }
 
+#define FFX_SSSR_INVERTED_DEPTH_RANGE       // note -- set in ReverseZ modes
 #include "xleres/Foreign/ffx-sssr/ffx_sssr.h"
 
 void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal, out bool copy_vertical, out bool copy_diagonal) {
@@ -293,7 +295,7 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
 
     float3 world_space_normal = FFX_SSSR_LoadNormal(coords);
     // float roughness = g_roughness.Load(int3(coords, 0));
-    float roughness = (DownsampleDepths.Load(uint3(coords, 0))==1) ? 1.0f : 0.125f;
+    float roughness = (DownsampleDepths.Load(uint3(coords, 0))==0) ? 1.0f : 0.125f;
     bool is_mirror = IsMirrorReflection(roughness);
 
     float world_ray_length = 0;
@@ -321,7 +323,11 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
         float3 world_space_hit      = ScreenSpaceToWorldSpace(hit);
         float3 world_space_ray      = world_space_hit - world_space_origin.xyz;
 
-        float confidence = valid_hit ? FFX_SSSR_ValidateHit(hit, uv, world_space_ray, screen_size, g_depth_buffer_thickness) : 0;
+        float depthBufferThickness = g_depth_buffer_thickness;
+        #ifdef FFX_SSSR_INVERTED_DEPTH_RANGE
+            depthBufferThickness = -depthBufferThickness;
+        #endif
+        float confidence = valid_hit ? FFX_SSSR_ValidateHit(hit, uv, world_space_ray, screen_size, depthBufferThickness) : 0;
         world_ray_length = length(world_space_ray);
         
         if (confidence > 0) {

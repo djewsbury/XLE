@@ -85,7 +85,7 @@ void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radianc
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 {
-    return 0.15f; // (DownsampleDepths.Load(uint3(pixel_coordinate, 0))==1) ? 1.0f : 0.15f;
+    return 0.125f; // (DownsampleDepths.Load(uint3(pixel_coordinate, 0))==0) ? 1.0f : 0.125f;
 }
 
 min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)

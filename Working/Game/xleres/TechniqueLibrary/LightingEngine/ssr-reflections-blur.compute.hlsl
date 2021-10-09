@@ -74,7 +74,7 @@ min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
 
 min16float FFX_DNSR_Reflections_LoadRoughnessFP16(int2 pixel_coordinate)
 {
-	return (min16float) ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 1) ? 1.0f : 0.15f);
+	return (min16float) ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
 }
 
 void FFX_DNSR_Reflections_StoreDenoisedReflectionResult(int2 pixel_coordinate, min16float3 value)
