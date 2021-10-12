@@ -603,8 +603,8 @@ namespace Assets
 
 		bool needsFrameBufferCallback = moveFrom._frameBarrierCallbackMarker != nullptr;
 		moveFrom.ClearFrameBarrierCallbackAlreadyLocked();
-		_state = moveFrom.state;
-		moveFrom.state = AssetState::Pending;
+		_state = moveFrom._state;
+		moveFrom._state = AssetState::Pending;
 		_actualized = std::move(moveFrom._actualized);
 		_actualizationLog = std::move(moveFrom._actualizationLog);
 		_actualizedDepVal = std::move(moveFrom._actualizedDepVal);

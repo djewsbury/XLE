@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "RenderPass.h"
 #include "../FrameBufferDesc.h"		// (for LoadStore)
 #include <memory>
 

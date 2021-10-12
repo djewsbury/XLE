@@ -16,12 +16,15 @@
 #include "../../xleres/FileList.h"
 #include <memory>
 
+/*#include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
+#include "../Vulkan/Metal/IncludeVulkan.h"*/
+
 namespace RenderCore { namespace LightingEngine
 {
-	static const auto Hash_AODownres = Hash64("ao-downres");
-	static const auto Hash_AOOutput = Hash64("ao-output");
-	static const auto Hash_AOAccumulation0 = Hash64("ao-accumulation0");
-	static const auto Hash_AOAccumulation1 = Hash64("ao-accumulation1");
+	static const auto Hash_AOOutput = ConstHash64<'ao-o', 'utpu', 't'>::Value;
+	static const auto Hash_AOAccumulation0 = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion0'>::Value;
+	static const auto Hash_AOAccumulation1 = ConstHash64<'ao-a', 'ccum', 'ulat', 'ion1'>::Value;
 
 	static const auto s_downresDepthsFormat = Format::R16_UNORM;
 	static const auto s_aoFormat = Format::R8_UNORM;
@@ -52,11 +55,11 @@ namespace RenderCore { namespace LightingEngine
         
         _computeOp->Dispatch(
             *iterator._threadContext, *iterator._parsingContext, uniformsHelper,
-            outputDims[0] / (2*8), outputDims[1] / (2*8), 1,
+            (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
             us);
         _upsampleOp->Dispatch(
             *iterator._threadContext, *iterator._parsingContext, uniformsHelper,
-            outputDims[0] / (2*8), outputDims[1] / (2*8), 1,
+            (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
             us);
 
         ++_pingPongCounter;
@@ -66,17 +69,9 @@ namespace RenderCore { namespace LightingEngine
     {
         LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
-        auto accumulation0 = result.DefineAttachment(
-            Hash_AOAccumulation0,
-            AttachmentDesc{s_aoFormat, 0, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess});
-
-        auto accumulation1 = result.DefineAttachment(
-            Hash_AOAccumulation1,
-            AttachmentDesc{s_aoFormat, 0, LoadStore::Retain, LoadStore::Retain, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess});
-
-        auto aoOutput = result.DefineAttachment(
-            Hash_AOOutput,
-            AttachmentDesc{s_aoFormat, 0, LoadStore::DontCare, LoadStore::Retain, 0, BindFlag::UnorderedAccess});
+        auto accumulation0 = result.DefineAttachment(Hash_AOAccumulation0).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
+        auto accumulation1 = result.DefineAttachment(Hash_AOAccumulation1).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
+        auto aoOutput = result.DefineAttachment(Hash_AOOutput);
 
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
@@ -126,6 +121,15 @@ namespace RenderCore { namespace LightingEngine
                     TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat),
                     "ao-accumulation-1"),
                 Techniques::PreregisteredAttachment::State::Initialized
+            },
+
+            Techniques::PreregisteredAttachment {
+                Hash_AOOutput,
+                CreateDesc(
+                    BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+                    TextureDesc::Plain2D(fbSize[0], fbSize[1], s_aoFormat),
+                    "ao-output"),
+                Techniques::PreregisteredAttachment::State::Uninitialized
             }
         };
         for (auto a:preGeneratedAttachments)

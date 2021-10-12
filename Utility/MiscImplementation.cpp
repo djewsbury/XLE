@@ -24,7 +24,7 @@ namespace Utility
 
         uint64_t result = ConstHash64<0>::Seed;
         const char* i = begin;
-        while (*i) {
+        while (i != end) {
             const auto* s = i;
             unsigned newValue = 0;
             while (i != end && (i-s) < 4) {

@@ -6,6 +6,7 @@
 
 #include "StreamFormatter.h"
 #include "../ImpliedTyping.h"
+#include "../StreamUtils.h"		// for StreamIndent
 
 namespace Utility
 {
@@ -13,7 +14,7 @@ namespace Utility
 
 	namespace Internal
 	{
-		template<typename Type> static auto HasTryCharacterData_Helper(int) -> decltype(std::declval<Type>().TryCharacterData(std::declval<StringSection<typename Type::value_type>>()), std::true_type{});
+		template<typename Type> static auto HasTryCharacterData_Helper(int) -> decltype(std::declval<Type>().TryCharacterData(std::declval<StringSection<typename Type::value_type>&>()), std::true_type{});
 		template<typename...> static auto HasTryCharacterData_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryCharacterData : decltype(HasTryCharacterData_Helper<Type>(0)) {};
 
@@ -154,10 +155,18 @@ namespace Utility
 	template<typename Formatter>
 		IteratorRange<const void*> RequireRawValue(Formatter& formatter, ImpliedTyping::TypeDesc& typeDesc)
 	{
-		IteratorRange<const void*> value;
-		if (!formatter.TryRawValue(value, typeDesc))
-			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
-		return value;
+		if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+			IteratorRange<const void*> value;
+			if (!formatter.TryRawValue(value, typeDesc))
+				Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+			return value;
+		} else {
+			typename Formatter::InteriorSection stringValue;
+			if (!formatter.TryStringValue(stringValue, typeDesc))
+				Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+			typeDesc = {ImpliedTyping::TypeOf<Formatter::InteriorSection::value_type>()._typeCat, (uint16_t)stringValue.size(), ImpliedTyping::TypeHint::String};
+			return {stringValue.begin(), stringValue.end()};
+		}
 	}
 
 	template<typename Formatter>
@@ -204,6 +213,18 @@ namespace Utility
 		return value;
 	}
 
+	template<typename EnumType, std::optional<EnumType> StringToEnum(StringSection<>), typename Formatter>
+		EnumType RequireEnum(Formatter& formatter)
+	{
+		typename Formatter::InteriorSection value;
+		if (!formatter.TryStringValue(value))
+			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+		auto result = StringToEnum(value);
+		if (!result.has_value())
+			Throw(Utility::FormatException(StringMeld<256>() << "Could not interpret (" << value << ") as (" << typeid(EnumType).name() << ")", formatter.GetLocation()));
+		return result.value();
+	}
+
 	template<typename Formatter>
 		void LogFormatter(std::ostream& str, Formatter& formatter)
 	{
@@ -228,6 +249,41 @@ namespace Utility
 			case FormatterBlob::CharacterData:
 				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "<<" << RequireCharacterData(formatter) << ">>";
+				} else
+					assert(0);
+				break;
+			case FormatterBlob::None:
+				return;
+			}
+		}
+	}
+
+	template<typename Formatter>
+		void LogFormatter2(std::ostream& str, Formatter& formatter)
+	{
+		bool first = true;
+		for (;;) {
+			if (!first) str << ", ";
+			first = false;
+			switch (formatter.PeekNext()) {
+			case FormatterBlob::KeyedItem:
+				str << "KeyedItem[" << RequireKeyedItem(formatter) << "]";
+				break;
+			case FormatterBlob::Value:
+				str << "Value[" << RequireStringValue(formatter) << "]";
+				break;
+			case FormatterBlob::BeginElement:
+				RequireBeginElement(formatter);
+				str << "BeginElement";
+				break;
+			case FormatterBlob::EndElement:
+				RequireEndElement(formatter);
+				str << "EndElement" << std::endl;
+				first = true;
+				break;
+			case FormatterBlob::CharacterData:
+				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
+					str << "CharacterData[" << RequireCharacterData(formatter) << "]";
 				} else
 					assert(0);
 				break;

@@ -52,11 +52,11 @@ namespace RenderCore { namespace Techniques
         constexpr uint64_t GBufferParameter = ConstHash64<'GBuf', 'ferP', 'aram', 'eter'>::Value;
         constexpr uint64_t GBufferMotion    = ConstHash64<'GBuf', 'ferM', 'otio', 'n'>::Value;
 
-        constexpr uint64_t ColorLDR         = ConstHash64<'post', 'resc', 'olor'>::Value;
-        constexpr uint64_t ColorHDR         = ConstHash64<'prer', 'esco', 'lor'>::Value;
-        constexpr uint64_t Depth            = ConstHash64<'dept', 'h'>::Value;
+        constexpr uint64_t ColorLDR         = ConstHash64<'Colo', 'rLDR'>::Value;
+        constexpr uint64_t ColorHDR         = ConstHash64<'Colo', 'rHDR'>::Value;
+        constexpr uint64_t Depth            = ConstHash64<'Dept', 'h'>::Value;
 
-		constexpr uint64_t ShadowDepthMap	= ConstHash64<'shad', 'owdm'>::Value;
+		constexpr uint64_t ShadowDepthMap	= ConstHash64<'Shad', 'owDe', 'pthM', 'ap'>::Value;
 
         constexpr uint64_t HierarchicalDepths	= ConstHash64<'Hier', 'arch', 'ical', 'Dept'>::Value;
         constexpr uint64_t TiledLightBitField	= ConstHash64<'Tile', 'dLig', 'htBi', 'tFie'>::Value;

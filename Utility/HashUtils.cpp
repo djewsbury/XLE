@@ -7,6 +7,7 @@
 #include "MemoryUtils.h"
 #include "PtrUtils.h"
 #include "StringUtils.h"
+#include "IteratorUtils.h"
 #include "../Core/SelectConfiguration.h"
 #include "../Foreign/Hash/MurmurHash2.h"
 #include "../Foreign/Hash/MurmurHash3.h"
@@ -18,7 +19,7 @@
 
 namespace Utility
 {
-    uint64 Hash64(const void* begin, const void* end, uint64 seed)
+    uint64_t Hash64(const void* begin, const void* end, uint64_t seed)
     {
                 //
                 //      Use MurmurHash2 to generate a 64 bit value.
@@ -53,22 +54,27 @@ namespace Utility
         }
     }
 
-    uint64 Hash64(const char str[], uint64 seed)
+    uint64_t Hash64(const char str[], uint64_t seed)
     {
         return Hash64(str, XlStringEnd(str), seed);
     }
 
-    uint64 Hash64(const std::string& str, uint64 seed)
+    uint64_t Hash64(const std::string& str, uint64_t seed)
     {
         return Hash64(AsPointer(str.begin()), AsPointer(str.end()), seed);
     }
 
-	uint64 Hash64(StringSection<char> str, uint64 seed)
+	uint64_t Hash64(StringSection<char> str, uint64_t seed)
 	{
 		return Hash64(str.begin(), str.end(), seed);
 	}
+    
+    uint64_t Hash64(IteratorRange<const void*> data, uint64_t seed)
+    {
+        return Hash64(data.begin(), data.end(), seed);
+    }
 
-    uint32 Hash32(const void* begin, const void* end, uint32 seed)
+    uint32_t Hash32(const void* begin, const void* end, uint32_t seed)
     {
         #if ENFORCE_ALIGNED_READS
             // We must ensure that we're only performing aligned reads
@@ -82,17 +88,17 @@ namespace Utility
             assert((size_t(begin) & 0x3) == 0);
         #endif
 
-        uint32 temp;
+        uint32_t temp;
         MurmurHash3_x86_32(begin, int(size_t(end)-size_t(begin)), seed, &temp);
         return temp;
     }
     
-    uint32 Hash32(const std::string& str, uint32 seed)
+    uint32_t Hash32(const std::string& str, uint32_t seed)
     {
         return Hash32(AsPointer(str.begin()), AsPointer(str.end()), seed);
     }
 
-    uint32 IntegerHash32(uint32 key)
+    uint32_t IntegerHash32(uint32_t key)
     {
             // taken from https://gist.github.com/badboy/6267743
             // See also http://burtleburtle.net/bob/hash/integer.html
@@ -105,7 +111,7 @@ namespace Utility
         return key;
     }
     
-    uint64 IntegerHash64(uint64 key)
+    uint64_t IntegerHash64(uint64_t key)
     {
             // taken from https://gist.github.com/badboy/6267743
         key = (~key) + (key << 21); // key = (key << 21) - key - 1;
