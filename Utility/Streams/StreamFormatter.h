@@ -65,6 +65,7 @@ namespace Utility
 
 		signed _baseLineStack[32];
 		unsigned _baseLineStackPtr;
+		unsigned _terminatingBaseLineStackPtr;
 
 		bool _protectedStringMode;
 

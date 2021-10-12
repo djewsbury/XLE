@@ -449,7 +449,7 @@ namespace Utility
                 // caller must follow with "TryEndElement" until _expectedLineSpaces matches _activeLineSpaces
                 if (_activeLineSpaces <= _parentBaseLine) {
                     _protectedStringMode = false;
-                    if (_baseLineStackPtr == 0)
+                    if (_baseLineStackPtr == _terminatingBaseLineStackPtr)
                         return _primed = FormatterBlob::None;       // ending early because the baseline was set inside of the stream via ResetBaseLine
                     return _primed = FormatterBlob::EndElement;
                 }
@@ -475,7 +475,7 @@ namespace Utility
 
             // we've reached the end of the stream...
             // while there are elements on our stack, we need to end them
-        if (_baseLineStackPtr > 0) return _primed = FormatterBlob::EndElement;
+        if (_baseLineStackPtr > _terminatingBaseLineStackPtr) return _primed = FormatterBlob::EndElement;
         return FormatterBlob::None;
     }
 
@@ -556,7 +556,7 @@ namespace Utility
     {
         if (PeekNext() != FormatterBlob::EndElement) return false;
 
-        if (_baseLineStackPtr != 0) {
+        if (_baseLineStackPtr != _terminatingBaseLineStackPtr) {
             _parentBaseLine = (_baseLineStackPtr > 1) ? _baseLineStack[_baseLineStackPtr-2] : -1;
             --_baseLineStackPtr;
         }
@@ -649,7 +649,7 @@ namespace Utility
         // reset the baseline to be where we are now
         // _parentBaseLine must stay unchanged, because this still represents the indentation
         // for the end of this element
-        result._baseLineStackPtr = 0;
+        result._terminatingBaseLineStackPtr = result._baseLineStackPtr;
         return result;    
     }
 
@@ -660,7 +660,7 @@ namespace Utility
         _primed = FormatterBlob::None;
         _activeLineSpaces = 0;
         _parentBaseLine = -1;
-        _baseLineStackPtr = 0;
+        _terminatingBaseLineStackPtr = _baseLineStackPtr = 0;
         _protectedStringMode = false;
         _tabWidth = TabWidth;
         _pendingHeader = true;
@@ -677,7 +677,7 @@ namespace Utility
 		_activeLineSpaces = _parentBaseLine = 0;
 
 		for (signed& s:_baseLineStack) s = 0;
-		_baseLineStackPtr = 0u;
+		_terminatingBaseLineStackPtr = _baseLineStackPtr = 0u;
 
 		_protectedStringMode = false;
 		_format = _tabWidth = 0u;
@@ -691,6 +691,7 @@ namespace Utility
 	, _activeLineSpaces(cloneFrom._activeLineSpaces)
 	, _parentBaseLine(cloneFrom._parentBaseLine)
 	, _baseLineStackPtr(cloneFrom._baseLineStackPtr)
+    , _terminatingBaseLineStackPtr(cloneFrom._terminatingBaseLineStackPtr)
 	, _protectedStringMode(cloneFrom._protectedStringMode)
 	, _format(cloneFrom._format)
 	, _tabWidth(cloneFrom._tabWidth)
@@ -708,6 +709,7 @@ namespace Utility
 		_activeLineSpaces = cloneFrom._activeLineSpaces;
 		_parentBaseLine = cloneFrom._parentBaseLine;
 		_baseLineStackPtr = cloneFrom._baseLineStackPtr;
+        _terminatingBaseLineStackPtr = cloneFrom._terminatingBaseLineStackPtr;
 		for (unsigned c=0; c<dimof(_baseLineStack); ++c)
 			_baseLineStack[c] = cloneFrom._baseLineStack[c];
 		_protectedStringMode = cloneFrom._protectedStringMode;
