@@ -76,54 +76,56 @@ namespace Sample
         sampleGlobals._windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE sample [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
         sampleGlobals._windowApparatus->_osWindow->Resize(1920, 1080);
 
-            //  Create the debugging system, and add any "displays"
-            //  If we have any custom displays to add, we can add them here. Often it's 
-            //  useful to create a debugging display to go along with any new feature. 
-            //  It just provides a convenient architecture for visualizing important information.
-        Log(Verbose) << "Setup tools and debugging" << std::endl;
-        PlatformRig::FrameRig frameRig(sampleGlobals._frameRenderingApparatus->GetSubFrameEvents());
-        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-        PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
-        frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
-        frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
-        techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+        {
+                //  Create the debugging system, and add any "displays"
+                //  If we have any custom displays to add, we can add them here. Often it's 
+                //  useful to create a debugging display to go along with any new feature. 
+                //  It just provides a convenient architecture for visualizing important information.
+            Log(Verbose) << "Setup tools and debugging" << std::endl;
+            PlatformRig::FrameRig frameRig(sampleGlobals._frameRenderingApparatus->GetSubFrameEvents());
+            sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
+            PlatformRig::InitProfilerDisplays(*sampleGlobals._debugOverlaysApparatus->_debugSystem, &sampleGlobals._windowApparatus->_immediateContext->GetAnnotator(), *sampleGlobals._frameRenderingApparatus->_frameCPUProfiler);
+            frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
+            frameRig.SetMainOverlaySystem(sampleOverlay); // (disabled temporarily)
+            techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
-        Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
-        sampleOverlay->OnStartup(sampleGlobals);
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.txt"));
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
-        auto sampleListener = sampleOverlay->GetInputListener();
-        if (sampleListener)
-            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
+            Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
+            sampleOverlay->OnStartup(sampleGlobals);
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.txt"));
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
+            auto sampleListener = sampleOverlay->GetInputListener();
+            if (sampleListener)
+                sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
 
-        frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
-        sampleGlobals._windowApparatus->_windowHandler->_onResize.Bind(
-            [fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{sampleGlobals._frameRenderingApparatus},
-             ps = std::weak_ptr<RenderCore::IPresentationChain>(sampleGlobals._windowApparatus->_presentationChain), &frameRig](unsigned, unsigned) {
-                auto apparatus = fra.lock();
-                if (apparatus) {
-                    RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
-                    apparatus->_attachmentPool->ResetActualized();
-                }
-                auto presChain = ps.lock();
-                if (presChain)
-                    frameRig.UpdatePresentationChain(*presChain);
-            });
+            frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
+            sampleGlobals._windowApparatus->_windowHandler->_onResize.Bind(
+                [fra = std::weak_ptr<RenderCore::Techniques::FrameRenderingApparatus>{sampleGlobals._frameRenderingApparatus},
+                ps = std::weak_ptr<RenderCore::IPresentationChain>(sampleGlobals._windowApparatus->_presentationChain), &frameRig](unsigned, unsigned) {
+                    auto apparatus = fra.lock();
+                    if (apparatus) {
+                        RenderCore::Techniques::ResetFrameBufferPool(*apparatus->_frameBufferPool);
+                        apparatus->_attachmentPool->ResetActualized();
+                    }
+                    auto presChain = ps.lock();
+                    if (presChain)
+                        frameRig.UpdatePresentationChain(*presChain);
+                });
 
-        RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
-        techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+            RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
+            techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
-            //  Finally, we execute the frame loop
-        while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
-                // ------- Render ----------------------------------------
-            auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus, *sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get());
-                // ------- Update ----------------------------------------
-            sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
-            sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
+                //  Finally, we execute the frame loop
+            while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
+                    // ------- Render ----------------------------------------
+                auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus, *sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get());
+                    // ------- Update ----------------------------------------
+                sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
+                sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
+            }
+
+            RenderCore::Techniques::SetThreadContext(nullptr);
+            sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
         }
-
-		RenderCore::Techniques::SetThreadContext(nullptr);
-        sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
 
             //  There are some manual destruction operations we need to perform...
             //  (note that currently some shutdown steps might get skipped if we get 
