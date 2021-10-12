@@ -365,7 +365,7 @@ static const uint FrameWrap = 6;
 	float gtoa2 = cosGamma + 2 * maxTheta2 * sinGamma - cos(2*maxTheta2 - gamma);	// 0.25f * reciprocalMagProjectedWorldSpaceNormal below
 
 	float final = gtoa + gtoa2;
-	final *= 0.25 * magProjectedWorldSpaceNormal;
+	final *= 0.25; // / reciprocalMagProjectedWorldSpaceNormal;
 #else
 		// Jimenez et al divide by reciprocalMagProjectedWorldSpaceNormal here, but that creates extra darkening on surfaces sloped
 		// relative to the camera. It's also not completely clear what the motivation is, given that gamma is just an angle on the
@@ -820,66 +820,66 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center0 = AccumulationAO[base.xy + int2(0,0)];
 	float center0Depth = DownsampleDepths[base.xy + int2(0,0)];
-	AccumulateSample(center0, center0Depth, out0, out0TotalWeight, outDepth0, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out1, out1TotalWeight, outDepth1, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out2, out2TotalWeight, outDepth2, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out3, out3TotalWeight, outDepth3, weightVeryStrong);
+	AccumulateSample(center0, center0Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightVeryStrong);
+	AccumulateSample(center0, center0Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightVeryStrong);
+	AccumulateSample(center0, center0Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightVeryStrong);
+	AccumulateSample(center0, center0Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightVeryStrong);
 
 	float center1 = AccumulationAO[base.xy + int2(1,0)];
 	float center1Depth = DownsampleDepths[base.xy + int2(1,0)];
-	AccumulateSample(center1, center1Depth, out0, out0TotalWeight, outDepth0, weightWeak);
-	AccumulateSample(center1, center1Depth, out1, out1TotalWeight, outDepth1, weightStrong);
-	AccumulateSample(center1, center1Depth, out2, out2TotalWeight, outDepth2, weightWeak);
-	AccumulateSample(center1, center1Depth, out3, out3TotalWeight, outDepth3, weightStrong);
+	AccumulateSample(center1, center1Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
+	AccumulateSample(center1, center1Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
+	AccumulateSample(center1, center1Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
+	AccumulateSample(center1, center1Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
 
 	float center2 = AccumulationAO[base.xy + int2(-1,0)];
 	float center2Depth = DownsampleDepths[base.xy + int2(-1,0)];
-	AccumulateSample(center2, center2Depth, out0, out0TotalWeight, outDepth0, weightStrong);
-	AccumulateSample(center2, center2Depth, out1, out1TotalWeight, outDepth1, weightWeak);
-	AccumulateSample(center2, center2Depth, out2, out2TotalWeight, outDepth2, weightStrong);
-	AccumulateSample(center2, center2Depth, out3, out3TotalWeight, outDepth3, weightWeak);
+	AccumulateSample(center2, center2Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
+	AccumulateSample(center2, center2Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
+	AccumulateSample(center2, center2Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
+	AccumulateSample(center2, center2Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
 
 	float center3 = AccumulationAO[base.xy + int2(0,1)];
 	float center3Depth = DownsampleDepths[base.xy + int2(0,1)];
-	AccumulateSample(center3, center3Depth, out0, out0TotalWeight, outDepth0, weightWeak);
-	AccumulateSample(center3, center3Depth, out1, out1TotalWeight, outDepth1, weightWeak);
-	AccumulateSample(center3, center3Depth, out2, out2TotalWeight, outDepth2, weightStrong);
-	AccumulateSample(center3, center3Depth, out3, out3TotalWeight, outDepth3, weightStrong);
+	AccumulateSample(center3, center3Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
+	AccumulateSample(center3, center3Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
+	AccumulateSample(center3, center3Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
+	AccumulateSample(center3, center3Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
 
 	float center4 = AccumulationAO[base.xy + int2(1,1)];
 	float center4Depth = DownsampleDepths[base.xy + int2(1,1)];
-	AccumulateSample(center4, center4Depth, out0, out0TotalWeight, outDepth0, weightVeryWeak);
-	AccumulateSample(center4, center4Depth, out1, out1TotalWeight, outDepth1, weightWeak);
-	AccumulateSample(center4, center4Depth, out2, out2TotalWeight, outDepth2, weightWeak);
-	AccumulateSample(center4, center4Depth, out3, out3TotalWeight, outDepth3, weightStrong);
+	AccumulateSample(center4, center4Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightVeryWeak);
+	AccumulateSample(center4, center4Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
+	AccumulateSample(center4, center4Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
+	AccumulateSample(center4, center4Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
 
 	float center5 = AccumulationAO[base.xy + int2(-1,1)];
 	float center5Depth = DownsampleDepths[base.xy + int2(-1,1)];
-	AccumulateSample(center5, center5Depth, out0, out0TotalWeight, outDepth0, weightWeak);
-	AccumulateSample(center5, center5Depth, out1, out1TotalWeight, outDepth1, weightVeryWeak);
-	AccumulateSample(center5, center5Depth, out2, out2TotalWeight, outDepth2, weightStrong);
-	AccumulateSample(center5, center5Depth, out3, out3TotalWeight, outDepth3, weightWeak);
+	AccumulateSample(center5, center5Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
+	AccumulateSample(center5, center5Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightVeryWeak);
+	AccumulateSample(center5, center5Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
+	AccumulateSample(center5, center5Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
 
 	float center6 = AccumulationAO[base.xy + int2(0,-1)];
 	float center6Depth = DownsampleDepths[base.xy + int2(0,-1)];
-	AccumulateSample(center6, center6Depth, out0, out0TotalWeight, outDepth0, weightStrong);
-	AccumulateSample(center6, center6Depth, out1, out1TotalWeight, outDepth1, weightStrong);
-	AccumulateSample(center6, center6Depth, out2, out2TotalWeight, outDepth2, weightWeak);
-	AccumulateSample(center6, center6Depth, out3, out3TotalWeight, outDepth3, weightWeak);
+	AccumulateSample(center6, center6Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
+	AccumulateSample(center6, center6Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
+	AccumulateSample(center6, center6Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
+	AccumulateSample(center6, center6Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
 
 	float center7 = AccumulationAO[base.xy + int2(1,-1)];
 	float center7Depth = DownsampleDepths[base.xy + int2(1,-1)];
-	AccumulateSample(center7, center7Depth, out0, out0TotalWeight, outDepth0, weightWeak);
-	AccumulateSample(center7, center7Depth, out1, out1TotalWeight, outDepth1, weightStrong);
-	AccumulateSample(center7, center7Depth, out2, out2TotalWeight, outDepth2, weightVeryWeak);
-	AccumulateSample(center7, center7Depth, out3, out3TotalWeight, outDepth3, weightWeak);
+	AccumulateSample(center7, center7Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
+	AccumulateSample(center7, center7Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
+	AccumulateSample(center7, center7Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightVeryWeak);
+	AccumulateSample(center7, center7Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
 
 	float center8 = AccumulationAO[base.xy + int2(-1,-1)];
 	float center8Depth = DownsampleDepths[base.xy + int2(-1,-1)];
-	AccumulateSample(center8, center8Depth, out0, out0TotalWeight, outDepth0, weightStrong);
-	AccumulateSample(center8, center8Depth, out1, out1TotalWeight, outDepth1, weightWeak);
-	AccumulateSample(center8, center8Depth, out2, out2TotalWeight, outDepth2, weightWeak);
-	AccumulateSample(center8, center8Depth, out3, out3TotalWeight, outDepth3, weightVeryWeak);
+	AccumulateSample(center8, center8Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
+	AccumulateSample(center8, center8Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
+	AccumulateSample(center8, center8Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
+	AccumulateSample(center8, center8Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightVeryWeak);
 
 #endif
 
