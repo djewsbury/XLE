@@ -404,24 +404,27 @@ static const uint FrameWrap = 6;
 #endif
 }
 
-float Weight(float downsampleDepth, float originalDepth)
+float Weight(float downsampleDepth, float originalDepth, float2 depthRangeScale)
 {
-#if 1
-	float diff = NDCDepthDifferenceToWorldSpace_Ortho(downsampleDepth - originalDepth, GlobalMiniProjZW());
-	const float graceDepth = 0.2f;		// considered continous surface within this range ()
-	// todo -- consider using the surface normal in this weighting... That would help us distinquish between a discontuity and a very sloped surface
-	float d = 1+3*max(0.0,abs(diff) - graceDepth);
-	d = saturate(1/d);
-	return d;
-#else
-	return 1;
-#endif
+	// This calculation is extremely important for the sharpness of the final image
+	// We're comparing a nearby pixel in the *downsampled* AO buffer to a full resolution pixel
+	// and we want to know if they lie on the same plane in 3d space. If they don't lie on the same
+	// plane, we don't want to use this AO sample, beause that would mean bleeding the AO values
+	// across a discontuity. That will end up desharpening the image, and it can be quite dramatic
+	const float baseAccuracyValue = 8.f/65535.f; 	// assuming 16 bit depth buffer (in the downsampled depths); this is enough for a 4x4 sampling kernel
+
+	// We have to expand the "accurate" range by some factor of the depth derivatives. This is because
+	// when we downsample to the reduced depth buffer, we take the min/max of several pixels. So we don't know where
+	// in side the downsamples pixel that particular height really occurs -- it could be nearer or further away from 
+	// from the "originalDepth" pixel
+	float accuracy = 2*max(abs(depthRangeScale.x), abs(depthRangeScale.y)) + baseAccuracyValue;
+	return abs(downsampleDepth - originalDepth) <= accuracy;
 }
 
 void AccumulateSample(
-	float value, float depth, inout float outValue, inout float outWeight, float dstDepth, float weightMultiplier)
+	float value, float depth, inout float outValue, inout float outWeight, float dstDepth, float2 depthRangeScale, float weightMultiplier)
 {
-	float w = Weight(depth, dstDepth);
+	float w = Weight(depth, dstDepth, depthRangeScale);
 	w *= weightMultiplier;
 	outValue += w * value;
 	outWeight += w;
@@ -566,21 +569,12 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	base = groupThreadId.xy;
 
-#if 0
+#if 1
 	float2 depth0divs = float2(outDepth1 - outDepth0, outDepth2 - outDepth0);
 	float2 depth1divs = float2(outDepth1 - outDepth0, outDepth3 - outDepth1);
 	float2 depth2divs = float2(outDepth3 - outDepth2, outDepth2 - outDepth0);
 	float2 depth3divs = float2(outDepth3 - outDepth2, outDepth3 - outDepth1);
 #elif 0
-	float depthDDX = lerp(outDepth1 - outDepth0, outDepth3 - outDepth2, 0.5);
-	float depthDDY = lerp(outDepth2 - outDepth0, outDepth3 - outDepth1, 0.5);
-	float2 depth0divs = float2(depthDDX, depthDDY), depth1divs = float2(depthDDX, depthDDY), depth2divs = float2(depthDDX, depthDDY), depth3divs = float2(depthDDX, depthDDY);
-#elif 0
-	float2 depth0divs = 0.25f * float2(LoadGroupSharedDepth(base.xy, int2(2,0)) - LoadGroupSharedDepth(base.xy, int2(0,0)), LoadGroupSharedDepth(base.xy, int2(0,2)) - LoadGroupSharedDepth(base.xy, int2(0,0)));
-	float2 depth1divs = depth0divs;
-	float2 depth2divs = depth0divs;
-	float2 depth3divs = depth0divs;
-#elif 1
 	float3 worldSpaceNormal = normalize(InputNormals.Load(uint3(outputPixel.xy*2, 0)).rgb);
 	float3 cameraRight = float3(SysUniform_GetCameraBasis()[0].x, SysUniform_GetCameraBasis()[1].x, SysUniform_GetCameraBasis()[2].x);
 	float3 cameraUp = float3(SysUniform_GetCameraBasis()[0].y, SysUniform_GetCameraBasis()[1].y, SysUniform_GetCameraBasis()[2].y);
@@ -591,8 +585,6 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	float2 depth1divs = depth0divs;
 	float2 depth2divs = depth0divs;
 	float2 depth3divs = depth0divs;
-#else
-	float2 depth0divs = float2(0, 0), depth1divs = float2(0, 0), depth2divs = float2(0, 0), depth3divs = float2(0, 0);
 #endif
 
 	float out0 = 0, out1 = 0, out2 = 0, out3 = 0;
@@ -600,15 +592,19 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 #if !defined(DITHER3x3)
 
-	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, saturate(outDepth##N + dot(depth##N##divs, X##ExpectedDepth)), W)
-// 	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, outDepth##N, W)
+	const float2 offsetHighRes0 = float2(0,0);
+	const float2 offsetHighRes1 = float2(1,0);
+	const float2 offsetHighRes2 = float2(0,1);
+	const float2 offsetHighRes3 = float2(1,1);
+
+	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, outDepth##N + dot(depth##N##divs, X##OffsetHighRes - offsetHighRes##N + float2(1, 1)), depth##N##divs, W)
 
 	const float weightCenter = 1, weightNearEdge = .75, weightFarEdge = .25;
 	const float weightNearCorner = weightNearEdge*weightNearEdge, weightMidCorner = weightNearEdge*weightFarEdge, weightFarCorner = weightFarEdge*weightFarEdge;
 
 	float topLeft10 = LoadGroupSharedAO(base.xy, int2(-2,-2));
 	float topLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,-2));
-	float2 topLeft10ExpectedDepth = float2(-4, -4);
+	float2 topLeft10OffsetHighRes = float2(-4, -4);
 	ACC(topLeft10, 0, weightNearCorner);
 	ACC(topLeft10, 1, weightMidCorner);
 	ACC(topLeft10, 2, weightMidCorner);
@@ -616,7 +612,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float top11 = LoadGroupSharedAO(base.xy, int2(-1,-2));
 	float top11Depth = LoadGroupSharedDepth(base.xy, int2(-1,-2));
-	float2 top11ExpectedDepth = float2(-2, -4);
+	float2 top11OffsetHighRes = float2(-2, -4);
 	ACC(top11, 0, weightNearEdge);
 	ACC(top11, 1, weightNearEdge);
 	ACC(top11, 2, weightFarEdge);
@@ -624,7 +620,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float top8 = LoadGroupSharedAO(base.xy, int2(0,-2));
 	float top8Depth = LoadGroupSharedDepth(base.xy, int2(0,-2));
-	float2 top8ExpectedDepth = float2(0, -4);
+	float2 top8OffsetHighRes = float2(0, -4);
 	ACC(top8, 0, weightNearEdge);
 	ACC(top8, 1, weightNearEdge);
 	ACC(top8, 2, weightFarEdge);
@@ -632,7 +628,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float top9 = LoadGroupSharedAO(base.xy, int2(1,-2));
 	float top9Depth = LoadGroupSharedDepth(base.xy, int2(1,-2));
-	float2 top9ExpectedDepth = float2(2, -4);
+	float2 top9OffsetHighRes = float2(2, -4);
 	ACC(top9, 0, weightNearEdge);
 	ACC(top9, 1, weightNearEdge);
 	ACC(top9, 2, weightFarEdge);
@@ -640,7 +636,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float topRight10 = LoadGroupSharedAO(base.xy, int2(2,-2));
 	float topRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,-2));
-	float2 topRight10ExpectedDepth = float2(4, -4);
+	float2 topRight10OffsetHighRes = float2(4, -4);
 	ACC(topRight10, 0, weightMidCorner);
 	ACC(topRight10, 1, weightNearCorner);
 	ACC(topRight10, 2, weightFarCorner);
@@ -650,7 +646,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float left14 = LoadGroupSharedAO(base.xy, int2(-2,-1));
 	float left14Depth = LoadGroupSharedDepth(base.xy, int2(-2,-1));
-	float2 left14ExpectedDepth = float2(-4, -2);
+	float2 left14OffsetHighRes = float2(-4, -2);
 	ACC(left14, 0, weightNearEdge);
 	ACC(left14, 1, weightFarEdge);
 	ACC(left14, 2, weightNearEdge);
@@ -658,7 +654,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center15 = LoadGroupSharedAO(base.xy, int2(-1,-1));
 	float center15Depth = LoadGroupSharedDepth(base.xy, int2(-1,-1));
-	float2 center15ExpectedDepth = float2(-2, -2);
+	float2 center15OffsetHighRes = float2(-2, -2);
 	ACC(center15, 0, weightCenter);
 	ACC(center15, 1, weightCenter);
 	ACC(center15, 2, weightCenter);
@@ -666,7 +662,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center12 = LoadGroupSharedAO(base.xy, int2(0,-1));
 	float center12Depth = LoadGroupSharedDepth(base.xy, int2(0,-1));
-	float2 center12ExpectedDepth = float2(0, -2);
+	float2 center12OffsetHighRes = float2(0, -2);
 	ACC(center12, 0, weightCenter);
 	ACC(center12, 1, weightCenter);
 	ACC(center12, 2, weightCenter);
@@ -674,7 +670,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center13 = LoadGroupSharedAO(base.xy, int2(1,-1));
 	float center13Depth = LoadGroupSharedDepth(base.xy, int2(1,-1));
-	float2 center13ExpectedDepth = float2(2, -2);
+	float2 center13OffsetHighRes = float2(2, -2);
 	ACC(center13, 0, weightCenter);
 	ACC(center13, 1, weightCenter);
 	ACC(center13, 2, weightCenter);
@@ -682,7 +678,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float right14 = LoadGroupSharedAO(base.xy, int2(2,-1));
 	float right14Depth = LoadGroupSharedDepth(base.xy, int2(2,-1));
-	float2 right14ExpectedDepth = float2(4, -2);
+	float2 right14OffsetHighRes = float2(4, -2);
 	ACC(right14, 0, weightFarEdge);
 	ACC(right14, 1, weightNearEdge);
 	ACC(right14, 2, weightFarEdge);
@@ -692,7 +688,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float left2 = LoadGroupSharedAO(base.xy, int2(-2,0));
 	float left2Depth = LoadGroupSharedDepth(base.xy, int2(-2,0));
-	float2 left2ExpectedDepth = float2(-4, 0);
+	float2 left2OffsetHighRes = float2(-4, 0);
 	ACC(left2, 0, weightNearEdge);
 	ACC(left2, 1, weightFarEdge);
 	ACC(left2, 2, weightNearEdge);
@@ -700,7 +696,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center3 = LoadGroupSharedAO(base.xy, int2(-1,0));
 	float center3Depth = LoadGroupSharedDepth(base.xy, int2(-1,0));
-	float2 center3ExpectedDepth = float2(-2, 0);
+	float2 center3OffsetHighRes = float2(-2, 0);
 	ACC(center3, 0, weightCenter);
 	ACC(center3, 1, weightCenter);
 	ACC(center3, 2, weightCenter);
@@ -708,15 +704,15 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center0 = LoadGroupSharedAO(base.xy, int2(0,0));
 	float center0Depth = LoadGroupSharedDepth(base.xy, int2(0,0));
-	float2 center0ExpectedDepth = float2(0, 0);
-	ACC(center0, 0, weightCenter);
-	ACC(center0, 1, weightCenter);
-	ACC(center0, 2, weightCenter);
-	ACC(center0, 3, weightCenter);
+	float2 center0OffsetHighRes = float2(0, 0);
+	out0 += center0; out0TotalWeight += weightCenter;
+	out1 += center0; out1TotalWeight += weightCenter;
+	out2 += center0; out2TotalWeight += weightCenter;
+	out3 += center0; out3TotalWeight += weightCenter;
 
 	float center1 = LoadGroupSharedAO(base.xy, int2(1,0));
 	float center1Depth = LoadGroupSharedDepth(base.xy, int2(1,0));
-	float2 center1ExpectedDepth = float2(2, 0);
+	float2 center1OffsetHighRes = float2(2, 0);
 	ACC(center1, 0, weightCenter);
 	ACC(center1, 1, weightCenter);
 	ACC(center1, 2, weightCenter);
@@ -724,7 +720,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float right2 = LoadGroupSharedAO(base.xy, int2(2,0));
 	float right2Depth = LoadGroupSharedDepth(base.xy, int2(2,0));
-	float2 right2ExpectedDepth = float2(4, 0);
+	float2 right2OffsetHighRes = float2(4, 0);
 	ACC(right2, 0, weightFarEdge);
 	ACC(right2, 1, weightNearEdge);
 	ACC(right2, 2, weightFarEdge);
@@ -734,7 +730,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float left6 = LoadGroupSharedAO(base.xy, int2(-2,1));
 	float left6Depth = LoadGroupSharedDepth(base.xy, int2(-2,1));
-	float2 left6ExpectedDepth = float2(-4, 2);
+	float2 left6OffsetHighRes = float2(-4, 2);
 	ACC(left6, 0, weightNearEdge);
 	ACC(left6, 1, weightFarEdge);
 	ACC(left6, 2, weightNearEdge);
@@ -742,7 +738,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center7 = LoadGroupSharedAO(base.xy, int2(-1,1));
 	float center7Depth = LoadGroupSharedDepth(base.xy, int2(-1,1));
-	float2 center7ExpectedDepth = float2(-2, 2);
+	float2 center7OffsetHighRes = float2(-2, 2);
 	ACC(center7, 0, weightCenter);
 	ACC(center7, 1, weightCenter);
 	ACC(center7, 2, weightCenter);
@@ -750,7 +746,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center4 = LoadGroupSharedAO(base.xy, int2(0,1));
 	float center4Depth = LoadGroupSharedDepth(base.xy, int2(0,1));
-	float2 center4ExpectedDepth = float2(0, 2);
+	float2 center4OffsetHighRes = float2(0, 2);
 	ACC(center4, 0, weightCenter);
 	ACC(center4, 1, weightCenter);
 	ACC(center4, 2, weightCenter);
@@ -758,7 +754,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float center5 = LoadGroupSharedAO(base.xy, int2(1,1));
 	float center5Depth = LoadGroupSharedDepth(base.xy, int2(1,1));
-	float2 center5ExpectedDepth = float2(2, 2);
+	float2 center5OffsetHighRes = float2(2, 2);
 	ACC(center5, 0, weightCenter);
 	ACC(center5, 1, weightCenter);
 	ACC(center5, 2, weightCenter);
@@ -766,7 +762,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float right6 = LoadGroupSharedAO(base.xy, int2(2,1));
 	float right6Depth = LoadGroupSharedDepth(base.xy, int2(2,1));
-	float2 right6ExpectedDepth = float2(4, 2);
+	float2 right6OffsetHighRes = float2(4, 2);
 	ACC(right6, 0, weightFarEdge);
 	ACC(right6, 1, weightNearEdge);
 	ACC(right6, 2, weightFarEdge);
@@ -776,7 +772,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float bottomLeft10 = LoadGroupSharedAO(base.xy, int2(-2,2));
 	float bottomLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,2));
-	float2 bottomLeft10ExpectedDepth = float2(-4, 4);
+	float2 bottomLeft10OffsetHighRes = float2(-4, 4);
 	ACC(bottomLeft10, 0, weightMidCorner);
 	ACC(bottomLeft10, 1, weightFarCorner);
 	ACC(bottomLeft10, 2, weightNearCorner);
@@ -784,7 +780,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float bottom11 = LoadGroupSharedAO(base.xy, int2(-1,2));
 	float bottom11Depth = LoadGroupSharedDepth(base.xy, int2(-1,2));
-	float2 bottom11ExpectedDepth = float2(-2, 4);
+	float2 bottom11OffsetHighRes = float2(-2, 4);
 	ACC(bottom11, 0, weightFarEdge);
 	ACC(bottom11, 1, weightFarEdge);
 	ACC(bottom11, 2, weightNearEdge);
@@ -792,7 +788,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float bottom8 = LoadGroupSharedAO(base.xy, int2(0,2));
 	float bottom8Depth = LoadGroupSharedDepth(base.xy, int2(0,2));
-	float2 bottom8ExpectedDepth = float2(0, 4);
+	float2 bottom8OffsetHighRes = float2(0, 4);
 	ACC(bottom8, 0, weightFarEdge);
 	ACC(bottom8, 1, weightFarEdge);
 	ACC(bottom8, 2, weightNearEdge);
@@ -800,7 +796,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float bottom9 = LoadGroupSharedAO(base.xy, int2(1,2));
 	float bottom9Depth = LoadGroupSharedDepth(base.xy, int2(1,2));
-	float2 bottom9ExpectedDepth = float2(2, 4);
+	float2 bottom9OffsetHighRes = float2(2, 4);
 	ACC(bottom9, 0, weightFarEdge);
 	ACC(bottom9, 1, weightFarEdge);
 	ACC(bottom9, 2, weightNearEdge);
@@ -808,7 +804,7 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 
 	float bottomRight10 = LoadGroupSharedAO(base.xy, int2(2,2));
 	float bottomRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,2));
-	float2 bottomRight10ExpectedDepth = float2(4, 4);
+	float2 bottomRight10OffsetHighRes = float2(4, 4);
 	ACC(bottomRight10, 0, weightFarCorner);
 	ACC(bottomRight10, 1, weightMidCorner);
 	ACC(bottomRight10, 2, weightMidCorner);
