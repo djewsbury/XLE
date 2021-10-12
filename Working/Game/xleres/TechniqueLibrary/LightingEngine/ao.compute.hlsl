@@ -263,6 +263,9 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 static const uint FrameWrap = 6;
 // static const uint FrameWrap = 12;
 
+// todo -- consider putting "ditherTable" into a shader resource
+static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 25, 61, 91, 7, 73, 13, 43, 55, 1, 85, 67, 31, 49, 37, 19, 79, 50, 2, 74, 26, 38, 86, 14, 62, 20, 68, 44, 92, 80, 32, 56, 8, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 82, 22, 40, 52, 34, 70, 88, 4, 58, 46, 16, 76, 10, 94, 64, 28, 11, 95, 65, 29, 59, 47, 17, 77, 35, 71, 89, 5, 83, 23, 41, 53};
+
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -298,9 +301,10 @@ static const uint FrameWrap = 6;
 #if !defined(DITHER3x3)
 	// The cost of looking up the dither pattern here is not trivially cheap; but you have a big impact
 	// on the visual result... If we had a way of doing this without a table lookup it might be a bit faster
-	// uint ditherValue = (pixelId.x%4)+(pixelId.y%4)*4;
-	uint ditherValue = DitherPatternInt(pixelId.xy);
-	uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 16 + ditherValue * FrameWrap;
+	// uint ditherValue = DitherPatternInt(pixelId.xy);
+	// uint idx = frameIdxOrder[FrameIdx%FrameWrap] * 16 + ditherValue * FrameWrap;
+	// uint idx = (frameIdxOrder[FrameIdx%FrameWrap] + ditherValue * 6u) % 96u;
+	uint idx = ditherTable[(pixelId.x%4)+(pixelId.y%4)*4+(FrameIdx%6)*16];
 	#if BOTH_WAYS
 		float phi = idx / 96.0 * 3.14159;
 	#else
