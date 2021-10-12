@@ -493,6 +493,8 @@ void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
 	uint D = (uint)(255.f*GroupAO[groupThreadId.y+8][groupThreadId.x+8]);
 	uint T = A+B+C+D;
 	uint T2 = A*A+B*B+C*C+D*D;
+	// I think WaveActiveSum() won't necessarily work here, because we want values from every thread
+	// in the entire thread group (as opposed to just whatever lanes are running the current group)
 	InterlockedAdd(AccumulationTemporary, T);
 	InterlockedAdd(AccumulationTemporary2, T2);
 	GroupMemoryBarrierWithGroupSync();
@@ -500,7 +502,7 @@ void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
 	float valueSumSq = float(AccumulationTemporary2);
 
 	const float sampleCount = 16*16;
-	float valueStd = (valueSumSq - valueSum * valueSum / sampleCount) / (sampleCount - 1.0);
+	float valueStd = sqrt((valueSumSq - valueSum * valueSum / sampleCount) / (sampleCount - 1.0));
     float valueMean = valueSum / sampleCount;
 	valueStd /= 255.f;
 	valueMean /= 255.f;
@@ -509,7 +511,7 @@ void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
 	// values we see in the spatial neighbourhood, we'll consider it to be a filtering artifact. Since for the most part the temporal distribution of
 	// values should match the spatial distribution of values, this tends to do a really good job. However it can also introduce flickering and artifacts of
 	// it's own in areas of high frequency changes. 
-	const float clampingRange = 3.5;		
+	const float clampingRange = 1.5;
 	const float minV = valueMean - clampingRange*valueStd, maxV = valueMean + clampingRange*valueStd;
 
 	DoTemporalAccumulation(groupThreadId, dispatchThreadId+int2(-4,-4), minV, maxV);
