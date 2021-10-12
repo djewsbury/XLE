@@ -1316,14 +1316,11 @@ namespace BufferUploads
 
             using namespace RenderCore;
 
+            auto actualArrayCount = ActualArrayLayerCount(desc._textureDesc);
             auto dstLodLevelMax = std::min(stagingToFinalMapping._dstLodLevelMax, (unsigned)desc._textureDesc._mipCount-1);
-            auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, (unsigned)desc._textureDesc._arrayCount-1);
+            auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, actualArrayCount-1);
             auto mipCount = dstLodLevelMax - stagingToFinalMapping._dstLodLevelMin + 1;
             auto arrayCount = dstArrayLayerMax - stagingToFinalMapping._dstArrayLayerMin + 1;
-            if (desc._textureDesc._arrayCount == 0) {
-                dstArrayLayerMax = 0;
-                arrayCount = 1;
-            }
             assert(mipCount >= 1);
             assert(arrayCount >= 1);
 
