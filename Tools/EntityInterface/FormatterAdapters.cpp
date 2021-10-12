@@ -4,6 +4,7 @@
 
 #include "FormatterAdapters.h"
 #include "EntityInterface.h"
+#include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/Streams/FormatterUtils.h"
@@ -12,7 +13,7 @@ namespace EntityInterface
 {
 
     template<typename Formatter> 
-		class TextFormatterAdapter : public IDynamicFormatter
+		class TextFormatterAdapter : public Formatters::IDynamicFormatter
 	{
 	public:
 		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
@@ -73,7 +74,7 @@ namespace EntityInterface
 		Formatter _fmttr;
 	};
 
-    std::shared_ptr<IDynamicFormatter> CreateDynamicFormatter(
+    std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
         std::shared_ptr<::Assets::ConfigFileContainer<>> cfgFile,
         StringSection<> internalSection)
     {
@@ -83,13 +84,13 @@ namespace EntityInterface
     class TextEntityDocument : public IEntityDocument
 	{
 	public:
-		virtual ::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
+		virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
 				_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
 
 			using UnderlyingFormatter = InputStreamFormatter<>;
-			auto result = std::make_shared<::Assets::FuturePtr<IDynamicFormatter>>();
+			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
 			::Assets::WhenAll(_srcFile).ThenConstructToFuture(
 				*result,
 				[ip=internalPoint.AsString()](auto cfgFileContainer) {
@@ -135,7 +136,7 @@ namespace EntityInterface
 		return std::make_shared<TextEntityDocument>(filename.AsString());
 	}
 
-	class MemoryStreamTextFormatterAdapter : public IDynamicFormatter
+	class MemoryStreamTextFormatterAdapter : public Formatters::IDynamicFormatter
 	{
 	public:
 		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
@@ -190,7 +191,7 @@ namespace EntityInterface
 		::Assets::DependencyValidation _depVal;
 	};
 
-	std::shared_ptr<IDynamicFormatter> CreateDynamicFormatter(
+	std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
         MemoryOutputStream<>&& formatter,
 		::Assets::DependencyValidation&& depVal)
 	{

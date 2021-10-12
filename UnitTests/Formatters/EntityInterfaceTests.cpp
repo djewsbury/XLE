@@ -5,6 +5,7 @@
 #include "../UnitTestHelper.h"
 #include "../../Tools/EntityInterface/EntityInterface.h"
 #include "../../Tools/EntityInterface/FormatterAdapters.h"
+#include "../../../Formatters/IDynamicFormatter.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
 #include "../../../Assets/MountingTree.h"
@@ -63,7 +64,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		Type RequireCastValue(EntityInterface::IDynamicFormatter& formatter)
+		Type RequireCastValue(Formatters::IDynamicFormatter& formatter)
 	{
 		Type midwayBuffer;
 		if (!formatter.TryCastValue(MakeOpaqueIteratorRange(midwayBuffer), ImpliedTyping::TypeOf<Type>()))
@@ -71,7 +72,7 @@ namespace UnitTests
 		return midwayBuffer;
 	}
 
-	static void RequireBlobsFromCfg1(EntityInterface::IDynamicFormatter& fmttr)
+	static void RequireBlobsFromCfg1(Formatters::IDynamicFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
 		REQUIRE(RequireCastValue<unsigned>(fmttr) == 1);
@@ -87,7 +88,7 @@ namespace UnitTests
 		fmttr.SkipValueOrElement();		// skip InternalPoint
 	}
 
-	static void RequireBlobsFromCfg2(EntityInterface::IDynamicFormatter& fmttr)
+	static void RequireBlobsFromCfg2(Formatters::IDynamicFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);

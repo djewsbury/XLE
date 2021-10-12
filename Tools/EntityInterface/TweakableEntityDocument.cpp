@@ -167,7 +167,7 @@ namespace EntityInterface
 		void IncreaseValidationIndex() override { _depVal.IncreaseValidationIndex(); }
 		std::shared_ptr<ArbiterState> GetArbiterState() override { return _arbiterState; }
 
-		virtual ::Assets::PtrToFuturePtr<EntityInterface::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
+		virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
 			MemoryOutputStream<> outputStream;
 			{
@@ -175,7 +175,7 @@ namespace EntityInterface
 				ExecuteOnFormatter(fmttr);
 			}
 
-			auto result = std::make_shared<::Assets::FuturePtr<EntityInterface::IDynamicFormatter>>();
+			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
 			result->SetAsset(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}), {});
 			return result;
 		}

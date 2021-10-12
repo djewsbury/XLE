@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "EntityInterface.h"
+#include "../../Formatters/IDynamicFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/Mutex.h"
 
@@ -12,7 +13,7 @@ namespace EntityInterface
 {
 	static FilenameRules s_fnRules('/', true);
 
-	class FormatOverlappingDocuments : public IDynamicFormatter
+	class FormatOverlappingDocuments : public Formatters::IDynamicFormatter
 	{
 	public:
 		FormatterBlob PeekNext() override
@@ -211,7 +212,7 @@ namespace EntityInterface
 		}
 
 		FormatOverlappingDocuments(
-			IteratorRange<std::shared_ptr<IDynamicFormatter>*> mounts,
+			IteratorRange<std::shared_ptr<Formatters::IDynamicFormatter>*> mounts,
 			IteratorRange<const std::string*> externalMountPoints)
 		{
 			assert(mounts.size() == externalMountPoints.size());
@@ -229,7 +230,7 @@ namespace EntityInterface
 	private:
 		struct Mount
 		{
-			std::shared_ptr<IDynamicFormatter> _formatter;
+			std::shared_ptr<Formatters::IDynamicFormatter> _formatter;
 			std::string _externalMountPoint;
 		};
 		std::vector<Mount> _mounts;
@@ -310,7 +311,7 @@ namespace EntityInterface
 			return {};
 		}
 
-		::Assets::PtrToFuturePtr<IDynamicFormatter> BeginFormatter(StringSection<> inputMountPoint) const
+		::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> inputMountPoint) const
 		{
 			ScopedLock(_mountsLock);
 
@@ -376,7 +377,7 @@ namespace EntityInterface
 				actualizationLog = ::Assets::AsBlob(str.str());
 			}
 
-			std::vector<Assets::PtrToFuturePtr<IDynamicFormatter>> futureFormatters;
+			std::vector<Assets::PtrToFuturePtr<Formatters::IDynamicFormatter>> futureFormatters;
 			std::vector<std::string> externalPosition;
 			futureFormatters.reserve(overlappingMounts.size());
 			externalPosition.reserve(overlappingMounts.size());
@@ -385,10 +386,10 @@ namespace EntityInterface
 				externalPosition.push_back(o._externalPosition);
 			}
 
-			auto future = std::make_shared<::Assets::FuturePtr<IDynamicFormatter>>();
+			auto future = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
 			future->SetPollingFunction(
-				[futureFormatters=std::move(futureFormatters), externalPosition=std::move(externalPosition), actualizationLog](::Assets::FuturePtr<IDynamicFormatter>& thatFuture) {
-					std::shared_ptr<IDynamicFormatter> actualized[futureFormatters.size()];
+				[futureFormatters=std::move(futureFormatters), externalPosition=std::move(externalPosition), actualizationLog](::Assets::FuturePtr<Formatters::IDynamicFormatter>& thatFuture) {
+					std::shared_ptr<Formatters::IDynamicFormatter> actualized[futureFormatters.size()];
 					auto a=actualized;
 					::Assets::Blob queriedLog;
 					::Assets::DependencyValidation queriedDepVal;

@@ -4,6 +4,7 @@
 
 #include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../../Formatters/IDynamicFormatter.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Meta/ClassAccessorsImpl.h"

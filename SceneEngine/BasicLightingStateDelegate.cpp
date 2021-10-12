@@ -8,6 +8,7 @@
 #include "LightSceneConfiguration.h"
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../Formatters/IDynamicFormatter.h"
 #include "../Tools/EntityInterface/EntityInterface.h"
 #include "../Tools/ToolsRig/ToolsRigServices.h"
 #include "../Assets/Assets.h"
@@ -114,7 +115,7 @@ namespace SceneEngine
 
         Operators   GetOperators() override;        
 
-		BasicLightingStateDelegate(EntityInterface::IDynamicFormatter& formatter);
+		BasicLightingStateDelegate(Formatters::IDynamicFormatter& formatter);
 		~BasicLightingStateDelegate();
 
 		static void ConstructToFuture(
@@ -146,7 +147,7 @@ namespace SceneEngine
 
         ::Assets::DependencyValidation _depVal;
 
-        void DeserializeLightSources(EntityInterface::IDynamicFormatter& formatter);
+        void DeserializeLightSources(Formatters::IDynamicFormatter& formatter);
     };
 
     void BasicLightingStateDelegate::PreRender(
@@ -352,7 +353,7 @@ namespace SceneEngine
         return _depVal;
     }
 
-    void BasicLightingStateDelegate::DeserializeLightSources(EntityInterface::IDynamicFormatter& formatter)
+    void BasicLightingStateDelegate::DeserializeLightSources(Formatters::IDynamicFormatter& formatter)
     {
         StringSection<> keyname;
         while (formatter.TryKeyedItem(keyname)) {
@@ -424,7 +425,7 @@ namespace SceneEngine
 	}
 
 	BasicLightingStateDelegate::BasicLightingStateDelegate(
-		EntityInterface::IDynamicFormatter& formatter)
+		Formatters::IDynamicFormatter& formatter)
     : _depVal(formatter.GetDependencyValidation())
 	{
          // we have to parse through the configuration file and discover all of the operators that it's going to need
