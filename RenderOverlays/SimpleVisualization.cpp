@@ -6,12 +6,16 @@
 
 #include "SimpleVisualization.h"
 #include "OverlayContext.h"
+#include "Font.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/RenderPassUtils.h"
+#include "../RenderCore/Techniques/Apparatuses.h"
 #include "../Math/ProjectionMath.h"
 #include "../Math/Transformations.h"
+#include "../Assets/AssetFuture.h"
 
 namespace RenderOverlays
 {
@@ -123,6 +127,27 @@ namespace RenderOverlays
 		}
 
 		assert(i == workingVertices.end());
+	}
+
+	void FillScreenWithMsg(
+		RenderCore::IThreadContext& threadContext, 
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
+		StringSection<> msg)
+	{
+		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, immediateDrawingApparatus);
+		Int2 viewportDims{ parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
+
+		auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
+		if (font) {
+			overlayContext->DrawText(
+				std::make_tuple(Float3{0.f, 0.f, 0.f}, Float3{viewportDims[0], viewportDims[1], 0.f}),
+				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, msg);
+		}
+
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parsingContext, RenderCore::LoadStore::Clear);
+		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
+		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(threadContext, parsingContext, rpi);
 	}
 }
 

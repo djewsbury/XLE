@@ -22,6 +22,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		VisualisationUtils.cpp
 		DrawablesWriter.cpp
 		ToolsRigServices.cpp
+		ShaderLab.cpp
 		../EntityInterface/EntityInterface.cpp
 		../EntityInterface/FormatterAdapters.cpp
 		../EntityInterface/RetainedEntities.cpp

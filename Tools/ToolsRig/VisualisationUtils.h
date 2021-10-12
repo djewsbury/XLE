@@ -60,6 +60,9 @@ namespace ToolsRig
         VisCameraSettings();
     };
 
+    const char* AsString(VisCameraSettings::Projection);
+    std::optional<VisCameraSettings::Projection> AsProjection(StringSection<>);
+
     VisCameraSettings AlignCameraToBoundingBox(
         float verticalFieldOfView, 
         const std::pair<Float3, Float3>& boxIn);

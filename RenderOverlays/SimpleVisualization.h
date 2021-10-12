@@ -7,8 +7,10 @@
 #pragma once
 
 #include "../Math/Vector.h"
+#include "../Utility/StringFormat.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; }}
+namespace RenderCore { class IThreadContext; }
 
 namespace RenderOverlays
 {
@@ -20,5 +22,11 @@ namespace RenderOverlays
 	void DrawGrid(
 		IOverlayContext& overlayContext, RenderCore::Techniques::ParsingContext& parserContext, 
 		float gridScale = 1.0f, Float3 origin = Float3(0,0,0));
+
+	void FillScreenWithMsg(
+		RenderCore::IThreadContext& threadContext, 
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
+		StringSection<> msg);
 }
 

@@ -1165,5 +1165,21 @@ namespace ToolsRig
 
 	IVisContent::~IVisContent() {}
 
+	const char* AsString(VisCameraSettings::Projection proj)
+	{
+		switch (proj) {
+		case VisCameraSettings::Projection::Perspective: return "Perspective";
+		case VisCameraSettings::Projection::Orthogonal: return "Orthogonal";
+		}
+		return nullptr;
+	}
+
+    std::optional<VisCameraSettings::Projection> AsProjection(StringSection<> str)
+	{
+		if (XlEqString(str, "Perspective")) return VisCameraSettings::Projection::Perspective;
+		else if (XlEqString(str, "Orthogonal")) return VisCameraSettings::Projection::Orthogonal;
+		return {};
+	}
+
 }
 
