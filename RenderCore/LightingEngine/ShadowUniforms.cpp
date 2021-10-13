@@ -93,7 +93,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 				//  Also fill in the constants for ortho projection mode
-			baseCB->_minimalProjection = desc._minimalProjection[0];
+			baseCB->_minimalProjection = Float4(1,1,1,0);
 			baseCB->_worldToView = AsFloat3x4(baseWorldToView);
 
 				// the special "near" cascade is reached via the main transform

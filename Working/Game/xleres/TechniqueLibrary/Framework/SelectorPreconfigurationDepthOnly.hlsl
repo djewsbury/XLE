@@ -2,16 +2,25 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#if DEPTH_MOTION_NORMAL && GEO_HAS_TEXCOORD && GEO_HAS_NORMAL && (RES_HAS_NormalsTexture || RES_HAS_Texture1)
+#if DEPTH_MOTION_NORMAL
 	// we need the tangent frame for normal map lookup
-	#if !defined(VSOUT_HAS_TANGENT_FRAME)
-		#define VSOUT_HAS_TANGENT_FRAME 1
+	#if GEO_HAS_TEXCOORD && GEO_HAS_NORMAL && (RES_HAS_NormalsTexture || RES_HAS_Texture1)
+		#if !defined(VSOUT_HAS_TANGENT_FRAME)
+			#define VSOUT_HAS_TANGENT_FRAME 1
+		#endif
+		#if !defined(VSOUT_HAS_TEXCOORD)
+			#define VSOUT_HAS_TEXCOORD 1
+		#endif
+	#else
+		#undef VSOUT_HAS_TANGENT_FRAME
+		#undef VSOUT_HAS_TEXCOORD
 	#endif
-	#if !defined(VSOUT_HAS_TEXCOORD)
-		#define VSOUT_HAS_TEXCOORD 1
-	#endif
-	#if !defined(VSOUT_HAS_NORMAL)
-		#define VSOUT_HAS_NORMAL 1
+	#if GEO_HAS_NORMAL
+		#if !defined(VSOUT_HAS_NORMAL)
+			#define VSOUT_HAS_NORMAL 1
+		#endif
+	#else
+		#undef VSOUT_HAS_NORMAL
 	#endif
 	#undef GEO_HAS_TEXBITANGENT
 #else

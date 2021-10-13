@@ -105,6 +105,7 @@ float4 ShadowProjection_GetMiniProj_NotNear(uint cascadeIndex)
 	#elif (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
 		float4 result = OrthoShadowMinimalProjection;
 		result.xy = OrthoShadowCascadeScale[cascadeIndex].xy;
+		result.z = OrthoShadowCascadeScale[cascadeIndex].z;
 		return result;
 	#else
 		return 1.0.xxxx;

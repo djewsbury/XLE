@@ -33,19 +33,15 @@ namespace RenderCore { namespace LightingEngine
         float           _frustumSizeFactor;
         float           _focusDistance;
         float           _resolutionScale;   // approximately number of on-screen pixels per shadow map pixel in each dimension (ie 2 means a shadow map pixel should cover about a 2x2 on screen pixel area), normalized for 1080p
+        float           _expectedVerticalFOV;   // approximate vertical FOV we expect the main scene camera will use
         Flags::BitField _flags;
         unsigned        _textureSize;
 
-        /*float           _slopeScaledBias;
-        float           _depthBiasClamp;
-        unsigned        _rasterDepthBias;
-
-        float           _dsSlopeScaledBias;
-        float           _dsDepthBiasClamp;
-        unsigned        _dsRasterDepthBias;*/
-
+        float           _slopeScaledBias;
         float           _worldSpaceResolveBias;
         float           _casterDistanceExtraBias;
+        float           _baseBias;
+
         float           _tanBlurAngle;
         float           _minBlurSearch, _maxBlurSearch;
         ShadowFilterModel   _filterModel;

@@ -9,8 +9,8 @@
 
 #include "../Framework/Binding.hlsl"
 
-SamplerComparisonState		ShadowSampler   BIND_SHARED_LIGHTING_S2;
-SamplerState				ShadowDepthSampler    BIND_SHARED_LIGHTING_S3;
+SamplerComparisonState		ShadowSampler           BIND_SHARED_LIGHTING_S2;
+SamplerState				ShadowDepthSampler      BIND_SHARED_LIGHTING_S3;
 
 ////////////////////////////////////////////////////////////////////////////
         //   A M D   s h a d o w   f i l t e r i n g   //
@@ -205,60 +205,45 @@ float AbsMax(float lhs, float rhs)
 
 float2 CalculateFilterPlane_ScreenSpaceDerivatives(float comparisonDistance, float2 texCoords)
 {
-            //	Using the chain rule, we can find an approximation for the change in sample depth
-			//	as test texture coordinates change. We can use to to bias the depth sample and avoid
-			//	a lot of acne artefacts with large sampling filters.
-			//	It really does help to reduce acne artefacts greatly. But it maybe adding some artefacts of
-			//	it's own (particularly along cascade edges and in areas with large depth discontinuities)
-			//	So there might be a trade-off
+    //	Using the chain rule, we can find an approximation for the change in sample depth
+    //	as test texture coordinates change. We can use to to bias the depth sample and avoid
+    //	a lot of acne artefacts with large sampling filters.
     float2 depthddTC = 0.0.xx;
     float2 depthDDXY = float2(ddx(comparisonDistance), ddy(comparisonDistance));
     float2 tcxDDXY = float2(ddx(texCoords.x), ddy(texCoords.x));
     float2 tcyDDXY = float2(ddx(texCoords.y), ddy(texCoords.y));
 
-        //  On areas of large depth discrepancy, this method can create weird outlines
-        //  We need to disable this on areas with large changes in depth.
-    // float t = max(abs(depthDDXY.x), abs(depthDDXY.y));
-    /*if (t < 0.00005f)*/ {
+    const bool simpleChain = false;
+    if (simpleChain) {
+        if (abs(tcxDDXY.x) > abs(tcxDDXY.y)){ depthddTC.x = depthDDXY.x / tcxDDXY.x; }
+        else								{ depthddTC.x = depthDDXY.y / tcxDDXY.y; }
 
-        int method = 2;
-        if (method==0) {
-                // we need to protect against d4ivide by zero
-                // this constant makes a big difference. We can get some very wierd artefacts
-                // when the texture coordinate derivatives are very small, but the larger the
-                // clamping constant, the less improvement this method provides.
-            const float zeroClampConstant = 1e-4f;
-            if (abs(tcxDDXY.x) < zeroClampConstant) tcxDDXY.x = zeroClampConstant;
-            if (abs(tcxDDXY.y) < zeroClampConstant) tcxDDXY.y = zeroClampConstant;
-            if (abs(tcyDDXY.x) < zeroClampConstant) tcyDDXY.x = zeroClampConstant;
-            if (abs(tcyDDXY.y) < zeroClampConstant) tcyDDXY.y = zeroClampConstant;
-            float depthddTCX = AbsMax(depthDDXY.x / tcxDDXY.x, depthDDXY.y / tcxDDXY.y);
-            float depthddTCY = AbsMax(depthDDXY.x / tcyDDXY.x, depthDDXY.y / tcyDDXY.y);
-            depthddTC = float2(depthddTCX, depthddTCY);
-        } else if (method == 1) {
-                //	use the largest texture coordinate difference to try to get the most
-                //	accurate answer. This seems to give a much more accurate result than
-                //	the above in a wider range of cases.
-            if (abs(tcxDDXY.x) > abs(tcxDDXY.y)){ depthddTC.x = depthDDXY.x / tcxDDXY.x; }
-            else								{ depthddTC.x = depthDDXY.y / tcxDDXY.y; }
-
-            if (abs(tcyDDXY.x) > abs(tcyDDXY.y)){ depthddTC.y = depthDDXY.x / tcyDDXY.x; }
-            else								{ depthddTC.y = depthDDXY.y / tcyDDXY.y; }
+        if (abs(tcyDDXY.x) > abs(tcyDDXY.y)){ depthddTC.y = depthDDXY.x / tcyDDXY.x; }
+        else								{ depthddTC.y = depthDDXY.y / tcyDDXY.y; }
+    } else {
+        if (abs(tcxDDXY.x) > abs(tcxDDXY.y)) {
+            if (abs(tcyDDXY.y) > abs(tcyDDXY.x) || abs(tcxDDXY.x) > abs(tcyDDXY.x)) {
+                depthddTC.x = depthDDXY.x / tcxDDXY.x;
+                depthddTC.y = depthDDXY.y / tcyDDXY.y;
+            } else {
+                depthddTC.x = depthDDXY.y / tcxDDXY.y;
+                depthddTC.y = depthDDXY.x / tcyDDXY.x;
+            }
         } else {
-            depthddTC = 0.5f * float2(
-                depthDDXY.x / tcxDDXY.x + depthDDXY.y / tcxDDXY.y, 
-                depthDDXY.x / tcyDDXY.x + depthDDXY.y / tcyDDXY.y);
+            if (abs(tcyDDXY.x) > abs(tcyDDXY.y) || abs(tcxDDXY.y) > abs(tcyDDXY.y)) {
+                depthddTC.x = depthDDXY.y / tcxDDXY.y;
+                depthddTC.y = depthDDXY.x / tcyDDXY.x;
+            } else {
+                depthddTC.x = depthDDXY.y / tcxDDXY.y;
+                depthddTC.y = depthDDXY.x / tcyDDXY.x;
+            }
         }
     }
-
-    // if (max(abs(ddx(arrayIndex)), abs(ddy(arrayIndex))) != 0) {
-    // 	depthddTC = 0.0.xx;		// discontinuity when adjacent pixels are in a different shadow split
-    // }
 
     return depthddTC;
 }
 
-float FixedSizeShadowFilter(Texture2DArray samplingTexture, float3 baseTC, float comparisonDepth, float fRatio, float2 filterPlane)
+float FixedSizeShadowFilter(Texture2DArray<float> samplingTexture, float3 baseTC, float comparisonDepth, float fRatio, float2 filterPlane)
 {
     float w = 0.f, s = 0.0f;
     int row, col;

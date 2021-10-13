@@ -730,6 +730,16 @@ namespace RenderCore { namespace LightingEngine
         return {{}, depthRangeCovered};
     }
 
+    static Float2 s_normalizedScreenResolution(1920, 1080);
+
+    static unsigned ShadowMapDepthResolution(SunSourceFrustumSettings::Flags::BitField flags)
+    {
+        if (flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
+            return (1 << 23) - 1;       // high precision depths are a little awkward because it's floating point. But let's just use the size of the mantissa as an underestimate here
+        } else
+            return (1 << 16) - 1;
+    }
+
     static OrthoProjections BuildResolutionNormalizedOrthogonalShadowProjections(
         const Float3& negativeLightDirection,
         const RenderCore::Techniques::ProjectionDesc& mainSceneProjectionDescInit,
@@ -740,13 +750,9 @@ namespace RenderCore { namespace LightingEngine
         // in each dimension (ie 2 means a shadow map pixel should cover about a 2x2 on screen pixel area)
         // However, we don't adjust the base resolution with the viewport to avoid moving the shadow 
         // distance back and forth with render resolution changes
-        const Float2 normalizedScreenResolution = Float2(1920, 1080) / settings._resolutionScale;
+        const Float2 normalizedScreenResolution = s_normalizedScreenResolution / settings._resolutionScale;
         const unsigned shadowMapResolution = settings._textureSize;
-        unsigned shadowMapDepthResolution;
-        if (settings._flags & SunSourceFrustumSettings::Flags::HighPrecisionDepths) {
-            shadowMapDepthResolution = (1 << 23) - 1;       // high precision depths are a little awkward because it's floating point. But let's just use the size of the mantissa as an underestimate here
-        } else
-            shadowMapDepthResolution = (1 << 16) - 1;
+        auto shadowMapDepthResolution = ShadowMapDepthResolution(settings._flags);
 
         // We remove the camera position from the projection desc, because it's not actually important for
         // the calculations, and would just add floating point precision problems. Instead, let's do the
@@ -958,15 +964,33 @@ namespace RenderCore { namespace LightingEngine
             result._cullMode = RenderCore::CullMode::Back;
         }
 
-        // todo -- setup some configuration settings for these
-        /*
-        result._slopeScaledBias = settings._slopeScaledBias;
-        result._depthBiasClamp = settings._depthBiasClamp;
-        result._rasterDepthBias = settings._rasterDepthBias;
-        result._dsSlopeScaledBias = settings._dsSlopeScaledBias;
-        result._dsDepthBiasClamp = settings._dsDepthBiasClamp;
-        result._dsRasterDepthBias = settings._dsRasterDepthBias;
-        */
+        // We need to know the approximate height in world space units for the first
+        // projection. This is an approximation of projectionDimsXY in BuildResolutionNormalizedOrthogonalShadowProjections
+        // Imagine we're looking straight on at a plane in front of the camera, and the is behind and pointing in the 
+        // same direction as the camera.
+        const Float2 normalizedScreenResolution = s_normalizedScreenResolution / settings._resolutionScale;
+        const unsigned shadowMapResolution = settings._textureSize;
+        const float h = XlTan(.5f * settings._expectedVerticalFOV);
+        float wsFrustumHeight = settings._focusDistance * h * settings._textureSize / s_normalizedScreenResolution[1];
+        auto shadowMapDepthResolution = ShadowMapDepthResolution(settings._flags);
+        float projectionDimsXY = wsFrustumHeight;
+        float projectionDimsZ = wsFrustumHeight * shadowMapDepthResolution / settings._textureSize;     // this has an upper range, maxProjectionDimsZ, above -- but it's harder to estimate
+
+        // We calculate the radius in world space of the blurring kernel, and compare this to the difference
+        // in world space between 2 adjacent depth values possible in the depth buffer. Since we're using
+        // an orthogonal projection, the depth values are equally spaced throughout the entire range.
+        // From this, we can estimate how much bias we'll need to avoid acne with the given blur range
+        // A base sloped scaled bias value of 0.5 is often enough to handle cases where there is no blur kernel
+        // Generally we should have an excess of depth resolution, even without HighPrecisionDepths, when using
+        // cascades -- since the first cascade tends to end up pretty tightly arranged just in front of the camera
+        const float wsDepthResolution = projectionDimsZ / float(shadowMapDepthResolution);
+        const float wsXYRange = settings._maxBlurSearch * wsFrustumHeight / settings._textureSize;
+        const float ratio0 = wsXYRange / wsDepthResolution;
+        const float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
+
+        result._singleSidedBias._depthBias = result._doubleSidedBias._depthBias = (int)-settings._baseBias * std::ceil(ratio1);      // note -- negative for ReverseZ modes
+        result._singleSidedBias._depthBiasClamp = result._doubleSidedBias._depthBiasClamp = 0.f;
+        result._singleSidedBias._slopeScaledBias = result._doubleSidedBias._slopeScaledBias = settings._slopeScaledBias;
 
         result._filterModel = settings._filterModel;
         result._enableContactHardening = settings._enableContactHardening;
@@ -1102,7 +1126,6 @@ namespace RenderCore { namespace LightingEngine
         auto negativeLightDirection = Normalize(ExtractTranslation(positionalLightSource->GetLocalToWorld()));
 
         assert(!(settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
-        // auto t = BuildSimpleOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings);
         auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, settings, RenderCore::Techniques::GetDefaultClipSpaceType());
         assert(t._normalProjCount);
         auto* cascades = lightScene.TryGetShadowProjectionInterface<IOrthoShadowProjections>(shadowProjectionId);
@@ -1124,20 +1147,16 @@ namespace RenderCore { namespace LightingEngine
         _resolutionScale = 1.f;
         _flags = Flags::HighPrecisionDepths;
         _textureSize = 2048;
+        _expectedVerticalFOV = Deg2Rad(34.8246f);
 
-        // _slopeScaledBias = Tweakable("ShadowSlopeScaledBias", 1.f);
-        // _depthBiasClamp = Tweakable("ShadowDepthBiasClamp", 0.f);
-        // _rasterDepthBias = Tweakable("ShadowRasterDepthBias", 600);
-
-        // _dsSlopeScaledBias = _slopeScaledBias;
-        // _dsDepthBiasClamp = _depthBiasClamp;
-        // _dsRasterDepthBias = _rasterDepthBias;
-
-        _worldSpaceResolveBias = 0.025f; // this is world space, so always positive, ReverseZ doesn't matter
+        _worldSpaceResolveBias = 0.025f;        // this is world space, so always positive, ReverseZ doesn't matter
+        _casterDistanceExtraBias = -0.001f;     // note that this should be negative for ReverseZ modes, but positive for non-ReverseZ modes
+        _slopeScaledBias = -0.5f;               // also should be native for ReverseZ modes
+        _baseBias = 1.f;                        // this multiples the calculated base bias values, so should be positive
+    
         _tanBlurAngle = 0.00436f;
         _minBlurSearch = 0.5f;
         _maxBlurSearch = 25.f;
-        _casterDistanceExtraBias = -0.001f;     // note that this should be negative for ReverseZ modes, but positive for non-ReverseZ modes
         _filterModel = ShadowFilterModel::PoissonDisc;
         _enableContactHardening = false;
         _cullMode = CullMode::Back;
@@ -1165,13 +1184,6 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
         props.Add("TextureSize",
             [](const Obj& obj) { return obj._textureSize; },
             [](Obj& obj, unsigned value) { obj._textureSize = 1<<(IntegerLog2(value-1)+1); });  // ceil to a power of two
-        // props.Add("SingleSidedSlopeScaledBias", &Obj::_slopeScaledBias);
-        // props.Add("SingleSidedDepthBiasClamp", &Obj::_depthBiasClamp);
-        // props.Add("SingleSidedRasterDepthBias", &Obj::_rasterDepthBias);
-        // props.Add("DoubleSidedSlopeScaledBias", &Obj::_dsSlopeScaledBias);
-        // props.Add("DoubleSidedDepthBiasClamp", &Obj::_dsDepthBiasClamp);
-        // props.Add("DoubleSidedRasterDepthBias", &Obj::_dsRasterDepthBias);
-        props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
         props.Add("BlurAngleDegrees",   
             [](const Obj& obj) { return Rad2Deg(XlATan(obj._tanBlurAngle)); },
             [](Obj& obj, float value) { obj._tanBlurAngle = XlTan(Deg2Rad(value)); } );
@@ -1184,6 +1196,9 @@ template<> const ClassAccessors& Legacy_GetAccessors<RenderCore::LightingEngine:
                 else obj._flags &= ~Obj::Flags::HighPrecisionDepths; 
             });
         props.Add("CasterDistanceExtraBias", &Obj::_casterDistanceExtraBias);
+        props.Add("WorldSpaceResolveBias", &Obj::_worldSpaceResolveBias);
+        props.Add("SlopeScaledBias", &Obj::_slopeScaledBias);
+        props.Add("BaseBias", &Obj::_baseBias);
 
         props.Add("EnableContactHardening", &Obj::_enableContactHardening);
         AddStringToEnum<RenderCore::LightingEngine::ShadowFilterModel, RenderCore::LightingEngine::AsString, RenderCore::LightingEngine::AsShadowFilterModel>(props, "FilterModel", &Obj::_filterModel);
