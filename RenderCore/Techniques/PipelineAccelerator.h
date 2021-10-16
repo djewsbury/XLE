@@ -72,14 +72,16 @@ namespace RenderCore { namespace Techniques
 
 		class Pipeline;
 
-		virtual const ::Assets::PtrToFuturePtr<Pipeline>& GetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-
-		virtual const std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>>& GetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual const Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
 		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
-
-		virtual const ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset>& GetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
 		virtual std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
+
+		// These "Get...Future" functions are less optimal than the "TryGet..." ones, and should not be called frequently
+		// They are find to use during construction tasks (eg, stalling until a pipeline is ready, etc), but during the render
+		// loop use the "TryGet..." versions
+		virtual std::shared_ptr<::Assets::Future<Pipeline>> GetPipelineFuture(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> GetDescriptorSetFuture(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutFuture(const SequencerConfig& sequencerConfig) const = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
@@ -87,6 +89,9 @@ namespace RenderCore { namespace Techniques
 
 		virtual void	RebuildAllOutOfDatePipelines() = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
+
+		virtual void 	LockForReading() const = 0;
+		virtual void 	UnlockForReading() const = 0;
 
 		virtual std::shared_ptr<UniformsStreamInterface> CombineWithLike(std::shared_ptr<UniformsStreamInterface> input) = 0;
 

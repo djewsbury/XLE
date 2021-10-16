@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<Metal::GraphicsPipeline> _metalPipeline;
-		BoundUniformsPool _boundUniformsPool;
+		mutable BoundUniformsPool _boundUniformsPool;
 		
 		::Assets::DependencyValidation _depVal;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }

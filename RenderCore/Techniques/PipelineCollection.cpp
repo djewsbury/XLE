@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 		} else
 			_graphicsPipelines.insert(i, std::make_pair(hash, result));
 		lk = {};
-		ConstructToFuture(result, pipelineLayout, pipelineDesc, selectors, inputStates, fbTarget);
+		ConstructToFuture(*result, pipelineLayout, pipelineDesc, selectors, inputStates, fbTarget);
 		return result;
 	}
 
@@ -103,7 +103,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void PipelinePool::ConstructToFuture(
-		std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
+		::Assets::FuturePtr<Metal::GraphicsPipeline>& future,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDescInit,
 		const ParameterBox& selectors,
@@ -112,7 +112,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescInit);
 		::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
-			*future,
+			future,
 			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_sharedPools, 
 			 pipelineLayout=pipelineLayout,
 			 inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
@@ -209,12 +209,12 @@ namespace RenderCore { namespace Techniques
 		} else
 			_computePipelines.insert(i, std::make_pair(hash, result));
 		lk = {};
-		ConstructToFuture(result, pipelineLayout, shader, selectors);
+		ConstructToFuture(*result, pipelineLayout, shader, selectors);
 		return result;
 	}
 
 	void PipelinePool::ConstructToFuture(
-		std::shared_ptr<::Assets::FuturePtr<Metal::ComputePipeline>> future,
+		::Assets::FuturePtr<Metal::ComputePipeline>& future,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<> shader,
 		const ParameterBox& selectors)
@@ -222,7 +222,7 @@ namespace RenderCore { namespace Techniques
 		auto filteringFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
 
 		::Assets::WhenAll(filteringFuture).ThenConstructToFuture(
-			*future,
+			future,
 			[selectorsCopy = selectors, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout=pipelineLayout]( 
 				::Assets::FuturePtr<Metal::ComputePipeline>& resultFuture,
 				std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {

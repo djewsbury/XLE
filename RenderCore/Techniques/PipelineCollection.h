@@ -67,7 +67,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid = ~0ull;
 
 		void ConstructToFuture(
-			std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> future,
+			::Assets::FuturePtr<Metal::GraphicsPipeline>& future,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget);
 
 		void ConstructToFuture(
-			std::shared_ptr<::Assets::FuturePtr<Metal::ComputePipeline>> future,
+			::Assets::FuturePtr<Metal::ComputePipeline>& future,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			StringSection<> shader,
 			const ParameterBox& selectors);

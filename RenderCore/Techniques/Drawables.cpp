@@ -70,7 +70,7 @@ namespace RenderCore { namespace Techniques
 		UniformsStreamInterface emptyUSI;
 		DrawableGeo* currentGeo = nullptr;
 		PipelineAccelerator* currentPipelineAccelerator = nullptr;
-		IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
+		const IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
 		uint64_t currentSequencerUniformRules = 0;
 		UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
 		Metal::BoundUniforms* currentBoundUniforms = nullptr;
@@ -221,14 +221,24 @@ namespace RenderCore { namespace Techniques
 		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt)
 	{
-		auto& metalContext = *Metal::DeviceContext::Get(context);
-		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
-		if (!pipelineLayout) return;
-		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
-		auto viewport = parserContext.GetViewport();
-		ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
-		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+		pipelineAccelerators.LockForReading();
+		TRY {
+			auto& metalContext = *Metal::DeviceContext::Get(context);
+			auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
+			if (!pipelineLayout) {
+				pipelineAccelerators.UnlockForReading();
+				return;
+			}
+			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+			auto viewport = parserContext.GetViewport();
+			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+		} CATCH (...) {
+			pipelineAccelerators.UnlockForReading();
+			throw;
+		} CATCH_END
+		pipelineAccelerators.UnlockForReading();
 	}
 
 	void Draw(
@@ -238,15 +248,25 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt)
 	{
-		auto& metalContext = *Metal::DeviceContext::Get(context);
-		auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
-		if (!pipelineLayout) return;
-		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
-		auto viewport = parserContext.GetViewport();
-		ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
-		encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-		SequencerUniformsHelper uniformsHelper { parserContext };
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+		pipelineAccelerators.LockForReading();
+		TRY {
+			auto& metalContext = *Metal::DeviceContext::Get(context);
+			auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
+			if (!pipelineLayout) {
+				pipelineAccelerators.UnlockForReading();
+				return;
+			}
+			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
+			auto viewport = parserContext.GetViewport();
+			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
+			SequencerUniformsHelper uniformsHelper { parserContext };
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+		} CATCH (...) {
+			pipelineAccelerators.UnlockForReading();
+			throw;
+		} CATCH_END
+		pipelineAccelerators.UnlockForReading();
 	}
 
 	static const std::string s_graphicsPipeline { "graphics-pipeline" };
@@ -262,16 +282,16 @@ namespace RenderCore { namespace Techniques
 		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
 			const auto& drawable = *(Drawable*)d.get();
 			assert(drawable._pipeline);
-			auto pipelineFuture = pipelineAccelerators.GetPipeline(*drawable._pipeline, sequencerConfig);
-			if (pipelineFuture->GetAssetState() != ::Assets::AssetState::Ready) {
+			auto pipelineFuture = pipelineAccelerators.GetPipelineFuture(*drawable._pipeline, sequencerConfig);
+			if (pipelineFuture && pipelineFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 				if (!result)
 					result = std::make_shared<::Assets::AsyncMarkerGroup>();
 				result->Add(pipelineFuture, s_graphicsPipeline);
 			}
 
 			if (drawable._descriptorSet) {
-				auto descriptorSetFuture = pipelineAccelerators.GetDescriptorSet(*drawable._descriptorSet);
-				if (descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
+				auto descriptorSetFuture = pipelineAccelerators.GetDescriptorSetFuture(*drawable._descriptorSet);
+				if (descriptorSetFuture && descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 					if (!result)
 						result = std::make_shared<::Assets::AsyncMarkerGroup>();
 					result->Add(pipelineFuture, s_descriptorSet);
