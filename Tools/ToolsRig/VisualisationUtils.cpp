@@ -435,7 +435,10 @@ namespace ToolsRig
 									auto state = pendingResources->GetAssetState();
 									if (state == ::Assets::AssetState::Pending) return true;
 									if (state == ::Assets::AssetState::Invalid) {
-										thatFuture.SetInvalidAsset({}, ::Assets::AsBlob("Invalid asset during prepare resources"));
+										// We should still actually set the asset here. Some resources might be valid, and might still render
+										// Also, if we don't set the asset, there will be no dependency validation chain for hot reloading a fix
+										Log(Warning) << "Got invalid asset during PrepareResources for scene." << std::endl;
+										thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
 									} else {
 										thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
 									}
