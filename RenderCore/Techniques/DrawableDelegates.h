@@ -14,6 +14,7 @@
 #include "../../Utility/StringUtils.h"
 
 namespace Utility { class ParameterBox; }
+namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -43,6 +44,27 @@ namespace RenderCore { namespace Techniques
 		void BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements = {});
 		void BindSampler(unsigned slot, uint64_t hashName);
     };
+
+    class ISemiConstantDescriptorSet
+    {
+    public:
+        virtual void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>&) = 0;
+		virtual void RemoveShaderResourceDelegate(IShaderResourceDelegate&) = 0;
+        
+        virtual void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>&) = 0;
+		virtual void RemoveUniformDelegate(IUniformBufferDelegate&) = 0;
+
+        virtual void InvalidateUniforms() = 0;
+        virtual const UniformsStreamInterface& GetInterface(IThreadContext&, ParsingContext& parsingContext) = 0;
+        virtual ~ISemiConstantDescriptorSet();
+    };
+
+    class CommonResources;
+    std::shared_ptr<ISemiConstantDescriptorSet> CreateSemiConstantDescriptorSet(
+        IDevice& device,
+        uint64_t descriptorSetName,
+        const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+        const CommonResources&);
 
     XLE_DEPRECATED_ATTRIBUTE class IMaterialDelegate
     {

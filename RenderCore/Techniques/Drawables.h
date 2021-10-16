@@ -178,33 +178,6 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt);
 
-	class IShaderResourceDelegate;
-	class IUniformBufferDelegate;
-
-	/** <summary>Utility class to manage sequencer uniforms</summary>
-	During the lifetime of this class, the values for sequencer uniforms are not expected
-	to change. This class can cache uniform buffers and descriptor sets, thereby freezing
-	the values.
-	In other words, this is a short lifetime class, created and used within a single frame
-	*/
-	class SequencerUniformsHelper
-	{
-	public:
-		const UniformsStreamInterface& GetLooseUniformsStreamInterface() const;
-		std::pair<std::shared_ptr<IDescriptorSet>, DescriptorSetSignature> CreateDescriptorSet(
-			IDevice& device,
-			ParsingContext& parsingContext);
-
-		SequencerUniformsHelper(
-			ParsingContext& parsingContext,
-			IteratorRange<const std::shared_ptr<IShaderResourceDelegate>*> resourceDelegates = {},
-			IteratorRange<const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>*> uniformBufferDelegates = {});
-		~SequencerUniformsHelper();
-
-		class Pimpl;
-		std::unique_ptr<Pimpl> _pimpl;
-	};
-
 	enum class BatchFilter
     {
         General,                // general rendering batch

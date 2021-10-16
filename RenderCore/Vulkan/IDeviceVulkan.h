@@ -16,7 +16,7 @@ namespace Assets { class DependentFileState; }
 
 namespace RenderCore
 {
-	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class PipelineLayout; class CommandList; }
+	namespace Metal_Vulkan { class DeviceContext; class GlobalPools; class PipelineLayout; class CommandList; class IAsyncTracker; }
 
 	enum class VulkanShaderMode
 	{
@@ -42,6 +42,7 @@ namespace RenderCore
 		virtual Metal_Vulkan::GlobalPools& GetGlobalPools() = 0;
 		virtual std::shared_ptr<ILowLevelCompiler> CreateShaderCompiler(
 			const VulkanCompilerConfiguration&) = 0;
+		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() = 0;
 		~IDeviceVulkan();
 	};
 

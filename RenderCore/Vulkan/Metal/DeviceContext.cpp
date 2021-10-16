@@ -343,6 +343,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	inline void GraphicsEncoder_Optimized::BindPipeline(const GraphicsPipeline& pipeline)
 	{
+		assert(pipeline.get());
 		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(_sharedState->_commandList.GetUnderlying());
 		if (_capturedStates) {

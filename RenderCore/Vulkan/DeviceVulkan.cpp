@@ -776,6 +776,11 @@ namespace RenderCore { namespace ImplVulkan
 		return Metal_Vulkan::CreateLowLevelShaderCompiler(*this, cfg);
 	}
 
+	std::shared_ptr<Metal_Vulkan::IAsyncTracker> Device::GetAsyncTracker()
+	{
+		return _graphicsQueue->GetTracker();
+	}
+
 	void Device::Stall()
 	{
 		assert(0);	// unimplemented

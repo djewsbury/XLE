@@ -880,6 +880,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		return (slotIdx < _fixedSamplers.size()) && (_fixedSamplers[slotIdx] != nullptr);
 	}
 
+	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors)
+	{
+		assert(0);
+	}
+
 	CompiledDescriptorSet::CompiledDescriptorSet(
 		ObjectFactory& factory,
 		GlobalPools& globalPools,

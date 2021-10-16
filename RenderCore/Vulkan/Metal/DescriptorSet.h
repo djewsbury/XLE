@@ -158,6 +158,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		VkDescriptorSet GetUnderlying() const { return _underlying.get(); }
 		VkDescriptorSetLayout GetUnderlyingLayout() const { return _layout->GetUnderlying(); }
+		void Write(const DescriptorSetInitializer& newDescriptors);
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			const DescriptorSetDebugInfo& GetDescription() const { return _description; }

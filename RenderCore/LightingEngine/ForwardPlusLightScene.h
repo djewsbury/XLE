@@ -11,7 +11,7 @@
 #include "../../Utility/FunctionUtils.h"
 #include <optional>
 
-namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class DeferredShaderResource; } }
+namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class DeferredShaderResource; class IShaderResourceDelegate; } }
 
 namespace RenderCore { namespace LightingEngine
 {

@@ -178,6 +178,7 @@ namespace RenderCore { namespace ImplVulkan
         Metal_Vulkan::GlobalPools&              GetGlobalPools() override { return _pools; }
 		Metal_Vulkan::ObjectFactory&			GetObjectFactory() { return _objectFactory; }
         VkDevice	                            GetUnderlyingDevice() override { return _underlying.get(); }
+        std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() override;
 
 		IResourcePtr CreateResource(
 			const ResourceDesc& desc, 
