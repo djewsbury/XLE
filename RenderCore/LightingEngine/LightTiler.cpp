@@ -59,7 +59,7 @@ namespace RenderCore { namespace LightingEngine
 
 	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
 
-	void RasterizationLightTileOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
+	void RasterizationLightTileOperator::Execute(LightingTechniqueIterator& iterator)
 	{
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
 
@@ -157,7 +157,7 @@ namespace RenderCore { namespace LightingEngine
 		_outputs._tiledLightBitFieldSRV = iterator._rpi.GetNonFrameBufferAttachmentView(2);
 	}
 
-	RenderCore::LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
+	LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Graphics};
 
@@ -179,7 +179,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	RenderCore::LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateInitFragment(const FrameBufferProperties& fbProps)
+	LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateInitFragment(const FrameBufferProperties& fbProps)
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
@@ -215,7 +215,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void RasterizationLightTileOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
+	void RasterizationLightTileOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
 		unsigned planesRequired = _config._maxLightsPerView/32;
@@ -246,7 +246,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	RasterizationLightTileOperator::RasterizationLightTileOperator(
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
 		std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
 		std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
 		const Configuration& config)
@@ -293,7 +293,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RasterizationLightTileOperator::ConstructToFuture(
 		::Assets::FuturePtr<RasterizationLightTileOperator>& future,
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
 		const Configuration& config)
 	{
 		Techniques::GraphicsPipelineDesc pipelineDesc;
@@ -327,7 +327,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(futurePipeline).ThenConstructToFuture(
 			future,
 			[pipelinePool, pipelineLayout=pipelineLayout.GetPipelineLayout(), config](auto pipeline) {
-				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline), std::move(pipelineLayout), config);
+				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), pipeline, std::move(pipelineLayout), config);
 			});
 	}
 
@@ -339,10 +339,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void RasterizationLightTileOperator::Visualize(
-		RenderCore::IThreadContext& threadContext, 
-		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::SequencerUniformsHelper& uniformHelper,
-		const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool)
+		IThreadContext& threadContext, 
+		Techniques::ParsingContext& parsingContext,
+		Techniques::SequencerUniformsHelper& uniformHelper,
+		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool)
 	{
 #if 0
 		if (!s_lastLightBufferResView) return;

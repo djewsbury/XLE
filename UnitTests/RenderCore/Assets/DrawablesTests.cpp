@@ -160,8 +160,6 @@ namespace UnitTests
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto testHelper = MakeTestHelper();
 
-		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
-
 		TechniqueTestApparatus techniqueTestApparatus(*testHelper);
 		auto pipelineAcceleratorPool = techniqueTestApparatus._pipelineAccelerators;
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
@@ -210,10 +208,17 @@ namespace UnitTests
 				Topology::TriangleList,
 				RenderCore::Assets::RenderStateSet{});
 
-			StallForDescriptorSet(*threadContext, *pipelineAcceleratorPool->GetDescriptorSet(*descriptorSetAccelerator));
-			RequireReady(*pipelineAcceleratorPool->GetDescriptorSet(*descriptorSetAccelerator));
-			pipelineAcceleratorPool->GetPipeline(*pipelineWithTexCoord, *cfgId)->StallWhilePending();
-			RequireReady(*pipelineAcceleratorPool->GetPipeline(*pipelineWithTexCoord, *cfgId));
+			auto descSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+			REQUIRE(descSetFuture);
+			StallForDescriptorSet(*threadContext, *descSetFuture);
+			RequireReady(*descSetFuture);
+
+			auto pipelineFuture = pipelineAcceleratorPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgId);
+			REQUIRE(pipelineFuture);
+			pipelineFuture->StallWhilePending();
+			RequireReady(*pipelineFuture);
+
+			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
 
 			struct CustomDrawable : public Techniques::Drawable { unsigned _vertexCount; };
 			Techniques::DrawablesPacket pkt;
@@ -233,6 +238,7 @@ namespace UnitTests
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
 				parsingContext.AddShaderResourceDelegate(globalDelegate);
+				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
 				if (prepare) {
 					prepare->StallWhilePending();
@@ -290,17 +296,22 @@ namespace UnitTests
 				}
 			}
 
-			for (unsigned c=0; c<32; ++c) {
+			pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();		// must call this to flip completed pipelines, etc, to visible
+
+			for (unsigned c=0; c<1; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
 					Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
+					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 					parsingContext.AddShaderResourceDelegate(globalDelegate);
 					
 					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
-					auto future = pipelineAcceleratorPool->GetPipeline(*d->_pipeline, *cfgId);
-					future->StallWhilePending();
-					INFO(::Assets::AsString(future->GetActualizationLog()));
-					REQUIRE(future->GetAssetState() == ::Assets::AssetState::Ready);
+					auto future = pipelineAcceleratorPool->GetPipelineFuture(*d->_pipeline, *cfgId);
+					if (future) {
+						future->StallWhilePending();
+						INFO(::Assets::AsString(future->GetActualizationLog()));
+						REQUIRE(future->GetAssetState() == ::Assets::AssetState::Ready);
+					}
 
 					for (const auto&pkt:pkts)
 						Techniques::Draw(
@@ -314,7 +325,6 @@ namespace UnitTests
 						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				}
 				fbHelper.SaveImage(*threadContext, "drawables-render-model");
-				std::this_thread::sleep_for(16ms);
 			}
 
 			testHelper->EndFrameCapture();

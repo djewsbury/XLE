@@ -299,7 +299,7 @@ namespace SceneEngine
 				{}, box._fbDesc);
 		}
 
-		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayout(*_pimpl->_sequencerConfig);
+		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayoutFuture(*_pimpl->_sequencerConfig);
 		pipelineLayout->StallWhilePending();
 
 		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
@@ -354,7 +354,14 @@ namespace SceneEngine
 		Techniques::SequencerUniformsHelper uniformsHelper {
 			parsingContext, MakeIteratorRange(uniformDelegates)
 		};
-		RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, *_pimpl->_sequencerConfig, uniformsHelper, drawablePkt);
+		_pimpl->_pipelineAccelerators->LockForReading();
+		TRY {
+			RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, *_pimpl->_sequencerConfig, uniformsHelper, drawablePkt);
+		} CATCH(...) {
+			_pimpl->_pipelineAccelerators->UnlockForReading();
+			throw;
+		} CATCH_END
+		_pimpl->_pipelineAccelerators->UnlockForReading();
 	}
 
 	static const InputElementDesc s_soEles[] = {

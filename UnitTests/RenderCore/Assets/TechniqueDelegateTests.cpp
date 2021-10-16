@@ -363,7 +363,7 @@ namespace UnitTests
 		const std::shared_ptr<RenderCore::Techniques::SequencerConfig>& cfg,		
 		const RenderCore::IResource& vb, size_t vertexCount)
 	{
-		auto pipelineFuture = pipelinePool->GetPipeline(*pipelineAccelerator, *cfg);
+		auto pipelineFuture = pipelinePool->GetPipelineFuture(*pipelineAccelerator, *cfg);
 		REQUIRE(pipelineFuture != nullptr);
 		pipelineFuture->StallWhilePending();
 		if (pipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
@@ -373,7 +373,7 @@ namespace UnitTests
 
 		std::shared_ptr<RenderCore::IDescriptorSet> descriptorSet;
 		if (descriptorSetAccelerator) {
-			auto descSetFuture = pipelinePool->GetDescriptorSet(*descriptorSetAccelerator);
+			auto descSetFuture = pipelinePool->GetDescriptorSetFuture(*descriptorSetAccelerator);
 			REQUIRE(descSetFuture != nullptr);
 			descSetFuture->StallWhilePending();
 			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
@@ -395,7 +395,7 @@ namespace UnitTests
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayout(*cfg);
+			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayoutFuture(*cfg);
 			pipelineLayoutAsset->StallWhilePending();
 			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize()->GetPipelineLayout());
 
