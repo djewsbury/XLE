@@ -9,6 +9,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
@@ -431,9 +432,6 @@ namespace UnitTests
 		parsingContext.AddUniformDelegate(Hash64("GlobalTransform"), udel0);
 		parsingContext.AddUniformDelegate(Hash64("LocalTransform"), udel0);
 		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
-		
-		auto pipelineAccelerators = testApparatus._pipelineAccelerators;
-		// testHelper->_pipelineLayout, seqDescSet
 		
 		// When multiple delegate bind to the same slot, we should only query the one
 		// with the highest priority. Delegates in the SequencerContext override the

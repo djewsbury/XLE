@@ -369,8 +369,7 @@ namespace UnitTests
 		if (pipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
 			INFO(::Assets::AsString(pipelineFuture->GetActualizationLog()));
 		}
-		auto pipeline = pipelineFuture->Actualize();
-		REQUIRE(pipeline != nullptr);
+		auto& pipeline = pipelineFuture->Actualize();
 
 		std::shared_ptr<RenderCore::IDescriptorSet> descriptorSet;
 		if (descriptorSetAccelerator) {
@@ -390,7 +389,7 @@ namespace UnitTests
 		usi.BindImmediateData(0, Hash64("GlobalTransform"));
 		if (descriptorSet)
 			usi.BindFixedDescriptorSet(0, Hash64("Material"));
-		Metal::BoundUniforms uniforms { *pipeline->_metalPipeline, usi };
+		Metal::BoundUniforms uniforms { *pipeline._metalPipeline, usi };
 
 		{
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -410,7 +409,7 @@ namespace UnitTests
 
 			VertexBufferView vbvs[] = { &vb };
 			encoder.Bind(MakeIteratorRange(vbvs), {});
-			encoder.Draw(*pipeline->_metalPipeline, (unsigned)vertexCount);
+			encoder.Draw(*pipeline._metalPipeline, (unsigned)vertexCount);
 		}
 
 		static unsigned counter = 0;
@@ -440,8 +439,6 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto mnt1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_techDelUTData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
-
-		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
@@ -604,14 +601,6 @@ namespace UnitTests
 
 			SECTION("Graph based technique with resources")
 			{
-				auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-				auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-				thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
-				auto textureLoader0 = techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-				auto textureLoader1 = techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
-				std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
-				techniqueServices->SetBufferUploads(bufferUploads);
-
 				static const char sphericalCollectionFragments[] = R"--(
 				main=~
 					ut-data/spherical.graph::PerPixelImplementation
@@ -649,9 +638,6 @@ namespace UnitTests
 					threadContext, fbHelper, globalTransform, pipelinePool,
 					pipelineAccelerator, descriptorSetAccelerator, cfg, 
 					*sphereVb, sphereGeo.size());
-
-				techniqueServices->DeregisterTextureLoader(textureLoader1);
-				techniqueServices->DeregisterTextureLoader(textureLoader0);
 			}
 		}
 

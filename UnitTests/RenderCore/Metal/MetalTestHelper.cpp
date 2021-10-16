@@ -456,16 +456,14 @@ namespace UnitTests
 			{DescriptorType::SampledTexture},				// 8
 			{DescriptorType::SampledTexture},				// 9
 			{DescriptorType::SampledTexture},				// 10
-			{DescriptorType::SampledTexture},				// 11
-			{DescriptorType::SampledTexture},				// 12
 
+			{DescriptorType::Sampler},						// 11
+			{DescriptorType::Sampler},						// 12
 			{DescriptorType::Sampler},						// 13
-			{DescriptorType::Sampler},						// 14
-			{DescriptorType::Sampler},						// 15
-			{DescriptorType::Sampler}						// 16
+			{DescriptorType::Sampler}						// 14
 		};
 
-		sequencerSet._fixedSamplers.resize(13, 0);
+		sequencerSet._fixedSamplers.resize(11, 0);
 		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Wrap, AddressMode::Wrap}));
 		// sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Trilinear, AddressMode::Clamp, AddressMode::Clamp}));
 		sequencerSet._fixedSamplers.push_back(device.CreateSampler(SamplerDesc{FilterMode::Bilinear, AddressMode::Clamp, AddressMode::Clamp}));
@@ -506,6 +504,7 @@ namespace UnitTests
 		desc.AppendDescriptorSet("Sequencer", sequencerSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Material", materialSet, RenderCore::PipelineType::Graphics);
 		desc.AppendDescriptorSet("Numeric", numericSet, RenderCore::PipelineType::Graphics);
+		desc.AppendPushConstants("LocalTransform", 64, ShaderStage::Vertex);
 		return device.CreatePipelineLayout(desc);
 	}
 

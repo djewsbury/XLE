@@ -128,8 +128,9 @@ namespace RenderCore { namespace Techniques
 				assert(finalUSISlot < 64);
 				newBinding._usiSlotsFilled_ImmediateDatas |= 1ull << uint64_t(finalUSISlot);
 
-				auto size = del.GetImmediateDataSize(parsingContext, nullptr, idx);
-				assert(size);
+				// Note that we need to support GetImmediateDataSize() returning zero. Here we're querying the size of everything
+				// from the delegate interface, not just the ones that are actually bound
+				auto size = del.GetImmediateDataSize(parsingContext, nullptr, idx);	
 				std::pair<size_t, size_t> beginAndEnd;
 				beginAndEnd.first = _workingTempBufferSize;
 				beginAndEnd.second = _workingTempBufferSize + size;

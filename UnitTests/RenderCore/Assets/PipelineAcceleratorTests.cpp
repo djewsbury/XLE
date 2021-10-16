@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Metal/State.h"
@@ -165,6 +166,7 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::IResource& vb, unsigned vertexCount,
 		const RenderCore::Metal::GraphicsPipeline& pipeline,
+		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::IDescriptorSet* descSet = nullptr);
 
 	static std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> GetPatchCollectionFromText(StringSection<> techniqueText)
@@ -222,8 +224,7 @@ namespace UnitTests
 			auto finalPipeline = mainPool->GetPipeline(*pipelineAccelerator, *cfgId);
 			finalPipeline->StallWhilePending();
 			RequireReady(*finalPipeline);
-			auto pipelineActual = finalPipeline->Actualize();
-			REQUIRE(pipelineActual != nullptr);
+			finalPipeline->Actualize();
 		}
 
 			//
@@ -292,7 +293,10 @@ namespace UnitTests
 				RequireReady(*finalPipeline);
 
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline);
+				RenderQuad(
+					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
+					*finalPipeline->Actualize()._metalPipeline,
+					mainPool->GetCompiledPipelineLayout(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
 			}
 
 			// We should have filled the entire framebuffer with red 
@@ -314,7 +318,10 @@ namespace UnitTests
 				RequireReady(*finalPipeline);
 
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline);
+				RenderQuad(
+					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
+					*finalPipeline->Actualize()._metalPipeline,
+					mainPool->GetCompiledPipelineLayout(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
 			}
 
 			auto breakdown1 = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -348,24 +355,8 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto testHelper = MakeTestHelper();
-
-		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
-
-		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
-		techniqueServices->SetBufferUploads(bufferUploads);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
-
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
-
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
-		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, {}, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-		// testHelper->_pipelineLayout
+		TechniqueTestApparatus techniqueTestHelper(*testHelper);
+		auto pipelineAcceleratorPool = techniqueTestHelper._pipelineAccelerators;
 
 		SECTION("FindShaderUniformBindings")
 		{
@@ -500,7 +491,11 @@ namespace UnitTests
 				REQUIRE(!boundTextureI->_binding.empty());
 				
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize()._descriptorSet.get());
+				RenderQuad(
+					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
+					*finalPipeline->Actualize()._metalPipeline, 
+					pipelineAcceleratorPool->GetCompiledPipelineLayout(*cfgId)->Actualize()->GetPipelineLayout(),
+					descriptorSetFuture->Actualize()._descriptorSet.get());
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -531,24 +526,8 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto testHelper = MakeTestHelper();
-
-		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
-
-		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
-		techniqueServices->SetBufferUploads(bufferUploads);
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*\.[dD][dD][sS])"), RenderCore::Assets::CreateDDSTextureLoader());
-		techniqueServices->RegisterTextureLoader(std::regex(R"(.*)"), RenderCore::Assets::CreateWICTextureLoader());
-
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
-
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
-		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
-		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper->_shaderSource, compilers);
-		auto shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);
-		auto pipelineAcceleratorPool = Techniques::CreatePipelineAcceleratorPool(testHelper->_device, {}, Techniques::PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-		// testHelper->_pipelineLayout
+		TechniqueTestApparatus techniqueTestHelper(*testHelper);
+		auto pipelineAcceleratorPool = techniqueTestHelper._pipelineAccelerators;
 
 		////////////////////////////////////////
 
@@ -600,7 +579,11 @@ namespace UnitTests
 				
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
-					RenderQuad(*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), *finalPipeline->Actualize()->_metalPipeline, descriptorSetFuture->Actualize()._descriptorSet.get());
+					RenderQuad(
+						*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
+						*finalPipeline->Actualize()._metalPipeline,
+						pipelineAcceleratorPool->GetCompiledPipelineLayout(*cfgId)->Actualize()->GetPipelineLayout(),
+						descriptorSetFuture->Actualize()._descriptorSet.get());
 				}
 
 				auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -639,7 +622,7 @@ namespace UnitTests
 				// Pass in invalid inputs for shader constants. They will get casted and converted as much as possible,
 				// and we'll still get a valid descriptor set at the end
 				ParameterBox constantBindings;
-				constantBindings.SetParameter("Multiplier", "not a float");
+				constantBindings.SetParameter("Multiplier", "{50, 23, 100}");
 				constantBindings.SetParameter("Adder", -40);	// too few elements
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
@@ -736,11 +719,12 @@ namespace UnitTests
 		RenderCore::IThreadContext& threadContext,
 		const RenderCore::IResource& vb, unsigned vertexCount,
 		const RenderCore::Metal::GraphicsPipeline& pipeline,
+		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::IDescriptorSet* descSet)
 	{
 		auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
 
-		auto encoder = metalContext.BeginGraphicsEncoder(testHelper._pipelineLayout);
+		auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
 		RenderCore::VertexBufferView vbv { &vb };
 		encoder.Bind(MakeIteratorRange(&vbv, &vbv+1), RenderCore::IndexBufferView{});
 		BindPassThroughTransform(metalContext, encoder, pipeline, descSet);

@@ -252,7 +252,7 @@ namespace RenderCore { namespace Techniques
     }
     void IShaderResourceDelegate::BindSampler(unsigned slot, uint64_t hashName)
     {
-        _interface.BindImmediateData(slot, hashName);
+        _interface.BindSampler(slot, hashName);
     }
 
 	IUniformBufferDelegate::~IUniformBufferDelegate() {}
