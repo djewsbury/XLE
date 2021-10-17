@@ -107,7 +107,8 @@ namespace UnitTests
 
 	static RenderCore::Techniques::ParsingContext InitializeParsingContext(
 		RenderCore::Techniques::TechniqueContext& techniqueContext,
-		const RenderCore::Techniques::CameraDesc& camera)
+		const RenderCore::Techniques::CameraDesc& camera,
+		RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
 
@@ -178,7 +179,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
-		Techniques::ParsingContext parsingContext{techniqueContext};
+		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, s_testResolution);
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -245,7 +246,6 @@ namespace UnitTests
 	};
 
 	static void RunSimpleFullscreen(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
@@ -256,8 +256,7 @@ namespace UnitTests
 	{
 		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
-		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
-		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);
+		op->Actualize()->Draw(parsingContext, us);
 	}
 
 	static void CalculateSimularity(IteratorRange<const Float4*> A, IteratorRange<const Float4*> B)
@@ -373,10 +372,10 @@ namespace UnitTests
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				INFO("Camera: " + std::to_string(c));
 				const auto& camera = cameras[c];
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, camera);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, camera, *threadContext);
 
 				auto globalDelegate = std::make_shared<GBufferConstructionUnitTestGlobalUniforms>();
-				parsingContext.AddShaderResourceDelegate(globalDelegate);
+				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 
 				std::shared_ptr<IResource> diffuseResource, normalResource, parameterResource, depthResource;
 				std::shared_ptr<IResource> reconstructedWorldPosition, reconstructedWorldNormal;
@@ -400,7 +399,7 @@ namespace UnitTests
 					subpass.SetDepthStencil(fbFrag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));
 					fbFrag.AddSubpass(std::move(subpass));
 
-					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, fbFrag);
+					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, fbFrag);
 					diffuseResource = rpi.GetOutputAttachmentResource(0);
 					normalResource = rpi.GetOutputAttachmentResource(1);
 					parameterResource = rpi.GetOutputAttachmentResource(2);
@@ -422,7 +421,6 @@ namespace UnitTests
 						}
 
 						Techniques::Draw(
-							*threadContext,
 							parsingContext, 
 							*testApparatus._pipelineAcceleratorPool,
 							*gbufferWriteCfg,
@@ -441,7 +439,7 @@ namespace UnitTests
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter));
 					subpass.AppendNonFrameBufferAttachmentView(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 					frag.AddSubpass(std::move(subpass));
-					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
+					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
 					reconstructedWorldPosition = rpi.GetOutputAttachmentResource(0);
 					reconstructedWorldNormal = rpi.GetOutputAttachmentResource(1);
 
@@ -458,7 +456,7 @@ namespace UnitTests
 						rpi.GetNonFrameBufferAttachmentView(3).get()
 					};
 					us._resourceViews = MakeIteratorRange(srvs);
-					RunSimpleFullscreen(*threadContext, parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
+					RunSimpleFullscreen(parsingContext, pipelinePool, testHelper->_pipelineLayout, rpi, "ut-data/reconstruct_from_gbuffer.pixel.hlsl:main", usi, us);
 
 					attachmentReservation = rpi.GetAttachmentReservation();
 				}
@@ -473,7 +471,7 @@ namespace UnitTests
 					depthAttachmentDesc._loadFromPreviousPhase = LoadStore::Clear;
 					subpass.SetDepthStencil(frag.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth, depthAttachmentDesc));
 					frag.AddSubpass(std::move(subpass));
-					RenderCore::Techniques::RenderPassInstance rpi(*threadContext, parsingContext, frag);
+					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
 
 					auto writeDirectCfg = testApparatus._pipelineAcceleratorPool->CreateSequencerConfig(
 						"writeDirectCfg",
@@ -494,7 +492,6 @@ namespace UnitTests
 						}
 
 						Techniques::Draw(
-							*threadContext,
 							parsingContext, 
 							*testApparatus._pipelineAcceleratorPool,
 							*writeDirectCfg,

@@ -236,8 +236,8 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
-				parsingContext.AddShaderResourceDelegate(globalDelegate);
+				Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext, *threadContext};
+				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				auto prepare = Techniques::PrepareResources(*pipelineAcceleratorPool, *cfgId, pkt);
 				if (prepare) {
@@ -245,7 +245,6 @@ namespace UnitTests
 					REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 				}
 				Techniques::Draw(
-					*threadContext,
 					parsingContext, 
 					*pipelineAcceleratorPool,
 					*cfgId,
@@ -301,9 +300,9 @@ namespace UnitTests
 			for (unsigned c=0; c<1; ++c) {
 				{
 					auto rpi = fbHelper.BeginRenderPass(*threadContext);
-					Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext};
+					Techniques::ParsingContext parsingContext{*techniqueTestApparatus._techniqueContext, *threadContext};
 					parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
-					parsingContext.AddShaderResourceDelegate(globalDelegate);
+					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 					
 					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
 					auto future = pipelineAcceleratorPool->GetPipelineFuture(*d->_pipeline, *cfgId);
@@ -315,7 +314,6 @@ namespace UnitTests
 
 					for (const auto&pkt:pkts)
 						Techniques::Draw(
-							*threadContext,
 							parsingContext, 
 							*pipelineAcceleratorPool,
 							*cfgId,
@@ -434,14 +432,15 @@ namespace UnitTests
 		auto udel0 = std::make_shared<UniformDel>();
 		auto udel1 = std::make_shared<UniformDel>();
 		
-		ParsingContext parsingContext(*testApparatus._techniqueContext);
-		parsingContext.AddShaderResourceDelegate(del0);
-		parsingContext.AddShaderResourceDelegate(del1);
-		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-		parsingContext.AddUniformDelegate(Hash64("GlobalTransform"), udel0);
-		parsingContext.AddUniformDelegate(Hash64("LocalTransform"), udel0);
-		parsingContext.AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		ParsingContext parsingContext(*testApparatus._techniqueContext, *threadContext);
+		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(del0);
+		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(del1);
+		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
+		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
+		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
+		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("LocalTransform"), udel0);
+		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 		
 		// When multiple delegate bind to the same slot, we should only query the one
 		// with the highest priority. Delegates in the SequencerContext override the

@@ -86,9 +86,8 @@ namespace UnitTests
 		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() override
 		{
 			RenderCore::Techniques::TechniqueContext techniqueContext;
-			techniqueContext._systemUniformsDelegate = _drawingApparatus->_systemUniformsDelegate;
 			techniqueContext._commonResources = _drawingApparatus->_commonResources;
-			techniqueContext._sequencerDescSetLayout = _drawingApparatus->_sequencerDescSetLayout;
+			techniqueContext._uniformDelegateManager = _drawingApparatus->_mainUniformDelegateManager;
 			techniqueContext._attachmentPool = _frameRenderingApparatus->_attachmentPool;
 			techniqueContext._frameBufferPool = _frameRenderingApparatus->_frameBufferPool;
 			return techniqueContext;
@@ -161,7 +160,6 @@ namespace UnitTests
 	{
 	public:
 		virtual void Render(
-            RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ParsingContext& parserContext) override
 		{
 			UInt2 viewportDims { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
@@ -169,7 +167,7 @@ namespace UnitTests
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(_camera, viewportDims);
 			auto testHelper = _testHelper.lock();
 			REQUIRE(testHelper);
-			_overlaySystem->Render(threadContext, parserContext, *testHelper);
+			_overlaySystem->Render(parserContext, *testHelper);
 			parserContext.GetProjectionDesc() = oldProjDesc;
 		}
 
@@ -219,7 +217,6 @@ namespace UnitTests
 	}
 
 	void IInteractiveTestOverlay::Render(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parserContext,
 		IInteractiveTestHelper& testHelper)
 	{}

@@ -585,21 +585,20 @@ namespace UnitTests
 		{
 		public:
 			virtual void Render(
-				RenderCore::IThreadContext& threadContext,
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, RenderOverlays::ColorB{64, 140, 210});
 					_preview.Draw(*overlayContext);
 				}
 
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			virtual bool OnInputEvent(
@@ -649,19 +648,18 @@ namespace UnitTests
 	{
 	public:
 		virtual void Render(
-			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ParsingContext& parserContext,
 			IInteractiveTestHelper& testHelper) override
 		{
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 				for (const auto& preview:_previews)
 					preview.Draw(*overlayContext);
 			}
 
-			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, RenderCore::LoadStore::Clear);
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
+			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 		}
 
 		std::vector<StraightSkeletonPreview<float>> _previews;
@@ -916,18 +914,17 @@ namespace UnitTests
 		{
 		public:
 			virtual void Render(
-				RenderCore::IThreadContext& threadContext,
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 					_preview.Draw(*overlayContext);
 				}
 
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			virtual bool OnInputEvent(
@@ -991,7 +988,7 @@ namespace UnitTests
 			RenderCore::ClearValue clearValues[] = { RenderCore::MakeClearValue(1.0f, 1.0f, 1.f) };
 			auto rpi = fbHelper.BeginRenderPass(*threadContext, MakeIteratorRange(clearValues));
 			auto techContext = testHelper.CreateTechniqueContext();
-			RenderCore::Techniques::ParsingContext parserContext(techContext);
+			RenderCore::Techniques::ParsingContext parserContext(techContext, *threadContext);
 			auto defaultViewport = fbHelper.GetDefaultViewport();
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(cameraMins, cameraMaxs), {defaultViewport._width, defaultViewport._height});
 			parserContext.GetViewport() = defaultViewport;
@@ -1000,7 +997,7 @@ namespace UnitTests
 				auto state = prepare->StallWhilePending();
 				REQUIRE(state == ::Assets::AssetState::Ready);
 			}
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(*threadContext, parserContext, fbHelper.GetDesc(), 0);
+			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, fbHelper.GetDesc(), 0);
 		}
 		fbHelper.SaveImage(*threadContext, output);
 	}

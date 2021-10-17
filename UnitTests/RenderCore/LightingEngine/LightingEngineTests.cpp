@@ -186,7 +186,7 @@ namespace UnitTests
 			camera._bottom = -3.0f;
 		}
 
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 		testHelper->BeginFrameCapture();
@@ -272,7 +272,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *lightingTechnique);
+					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
@@ -301,7 +301,7 @@ namespace UnitTests
 		RenderCore::Techniques::CameraDesc camera;
 		camera._cameraToWorld = MakeCameraToWorld(-Normalize(Float3{-8.0f, 5.f, 0.f}), Float3{0.0f, 1.0f, 0.0f}, Float3{-8.0f, 5.f, 0.f});
 		
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 		parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 		testHelper->BeginFrameCapture();
@@ -352,7 +352,7 @@ namespace UnitTests
 
 			{
 				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-					*threadContext, parsingContext, *lightingTechnique);
+					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 

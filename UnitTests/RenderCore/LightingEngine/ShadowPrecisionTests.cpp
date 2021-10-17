@@ -218,7 +218,7 @@ namespace UnitTests
 					"saved-image");
 				auto stitchedImage = testHelper->_device->CreateResource(stitchedImageDesc);
 				UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, stripeTargetDesc);
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, stripeTargetDesc, camera);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, stripeTargetDesc, camera, *threadContext);
 				parsingContext.GetTechniqueContext()._attachmentPool->Bind(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget());
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
@@ -239,7 +239,7 @@ namespace UnitTests
 
 					{
 						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-							*threadContext, parsingContext, *lightingTechnique);
+							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
@@ -267,7 +267,7 @@ namespace UnitTests
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
@@ -285,7 +285,7 @@ namespace UnitTests
 
 				{
 					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-						*threadContext, parsingContext, *lightingTechnique);
+						parsingContext, *lightingTechnique);
 					ParseScene(lightingIterator, *drawableWriter);
 				}
 
@@ -364,13 +364,13 @@ namespace UnitTests
 		auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
 		RenderOverlays::DebuggingDisplay::DrawFrustum(*overlayContext, sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
 
-		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext);
 		auto prepare = immediateDrawingHelper._immediateDrawables->PrepareResources(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 		if (prepare) {
 			prepare->StallWhilePending();
 			REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 		}
-		immediateDrawingHelper._immediateDrawables->ExecuteDraws(threadContext, parsingContext, rpi);
+		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, rpi);
 	}
 
 	static void DrawCascadeColors(
@@ -380,7 +380,7 @@ namespace UnitTests
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout)
 	{
 		using namespace RenderCore;
-		auto rpi = Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
+		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
 		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
 		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::UnorderedAccess);
@@ -391,8 +391,7 @@ namespace UnitTests
 		auto op = CreateFullViewportOperator(
 			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, rpi, usi);
 		op->StallWhilePending();
-		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
-		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us);
+		op->Actualize()->Draw(parsingContext, us);
 	}
 
 	static void WriteFrustumListToPLY(std::ostream& str, IteratorRange<const Float4x4*> worldToProjs)
@@ -503,7 +502,7 @@ namespace UnitTests
 					TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 					"temporary-out");
 
-				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, sceneCamera);
+				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, sceneCamera, *threadContext);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 					testHelper->_device,
@@ -534,11 +533,11 @@ namespace UnitTests
 				{
 					{
 						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-							*threadContext, parsingContext, *lightingTechnique);
+							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 
-					DrawCascadeColors(*threadContext, parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
+					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelinePool, generalPipeline->GetPipelineLayout());
 
 					auto colorLDR = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
@@ -565,7 +564,7 @@ namespace UnitTests
 					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 					{
 						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-							*threadContext, parsingContext, *lightingTechnique);
+							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
 

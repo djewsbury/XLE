@@ -127,7 +127,7 @@ namespace UnitTests
 
 		{
 			RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
-				threadContext, parsingContext, lightingTechnique);
+				parsingContext, lightingTechnique);
 			ParseScene(lightingIterator, drawableWriter);
 		}
 
@@ -177,7 +177,7 @@ namespace UnitTests
 				TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM),
 				"temporary-out");
 
-			auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+			auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
 				testHelper->_device,

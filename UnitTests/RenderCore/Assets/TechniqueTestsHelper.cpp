@@ -5,6 +5,7 @@
 #include "TechniqueTestsHelper.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
+#include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 
 namespace UnitTests
@@ -36,7 +37,9 @@ namespace UnitTests
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
-		_techniqueContext->_sequencerDescSetLayout = _sequencerDescSetLayout.GetLayout();
+		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_sequencerDescSetLayout.GetLayout(), *testHelper._device);
+		// _techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<SystemUniformsDelegate>(*testHelper._device));
 	}
 
 	TechniqueTestApparatus::~TechniqueTestApparatus()

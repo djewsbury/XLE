@@ -242,7 +242,7 @@ namespace UnitTests
 	const uint64_t s_attachmentProbeTarget = 100;
 	const uint64_t s_attachmentProbeDepth = 101;
 
-	static RenderCore::Techniques::ParsingContext InitializeParsingContext(RenderCore::Techniques::TechniqueContext& techniqueContext)
+	static RenderCore::Techniques::ParsingContext InitializeParsingContext(RenderCore::Techniques::TechniqueContext& techniqueContext, RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
 
@@ -268,7 +268,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
-		Techniques::ParsingContext parsingContext{techniqueContext};
+		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 		stitchingContext._workingProps = fbProps;
@@ -337,7 +337,7 @@ namespace UnitTests
 			using namespace RenderCore;
 			auto* extWriter = dynamic_cast<ToolsRig::IExtendedDrawablesWriter*>(&drawablesWriter);
 			assert(extWriter);
-			Techniques::RenderPassInstance rpi{threadContext, parsingContext, _fragment};
+			Techniques::RenderPassInstance rpi{parsingContext, _fragment};
 			for (unsigned c=0; ;) {
 				auto& projDesc = parsingContext.GetProjectionDesc();
 				projDesc = BuildProjectionDesc(cameras[c], s_testResolution);
@@ -345,8 +345,7 @@ namespace UnitTests
 				RenderCore::Techniques::DrawablesPacket pkt;
 				extWriter->WriteDrawables(pkt, projDesc._worldToProjection);
 
-				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+				Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
 
 				++c;
 				if (c == cameras.size()) break;
@@ -490,18 +489,17 @@ namespace UnitTests
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxPerBatch);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
 				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
 
 				{
-					Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
-					RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-					Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+					Techniques::RenderPassInstance rpi{parsingContext, *frag};
+					Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
 				}
 
-				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}
@@ -698,13 +696,12 @@ namespace UnitTests
 				extWriter->WriteDrawables(pkt, cullingDelegate, testViewMask, drawDelegate);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
 
-				Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
-				RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-				Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+				Techniques::RenderPassInstance rpi{parsingContext, *frag};
+				Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
 
-				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}
@@ -805,18 +802,17 @@ namespace UnitTests
 				batchCameras.second = std::min(batchCameras.second, batchCameras.first+maxMultiview);
 
 				auto uniformDel = std::make_shared<ShaderResourceDelegate>(batchCameras, s_testResolution);
-				parsingContext.AddShaderResourceDelegate(uniformDel);
+				parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDel);
 
 				auto& projDesc = parsingContext.GetProjectionDesc();
 				projDesc = Techniques::ProjectionDesc{};		// identity world-to-projection
 
 				{
-					Techniques::RenderPassInstance rpi{threadContext, parsingContext, *frag};
-					RenderCore::Techniques::SequencerUniformsHelper sequencerUniforms {parsingContext};
-					Techniques::Draw(threadContext, parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, sequencerUniforms, pkt);
+					Techniques::RenderPassInstance rpi{parsingContext, *frag};
+					Techniques::Draw(parsingContext, *testApparatus._pipelineAcceleratorPool, *_cfg, pkt);
 				}
 
-				parsingContext.RemoveShaderResourceDelegate(*uniformDel);
+				parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDel);
 				cameras.first = batchCameras.second;
 				++frag;
 			}
@@ -860,7 +856,7 @@ namespace UnitTests
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext);
+		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, *threadContext);
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 		auto drawablesWriter = ToolsRig::CreateShapeWorldDrawableWriter(

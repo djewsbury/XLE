@@ -214,12 +214,11 @@ namespace UnitTests
 		{
 		public:
 			virtual void Render(
-				RenderCore::IThreadContext& threadContext,
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 
 				RenderOverlays::DebuggingDisplay::DrawFrustum(
 					*overlayContext, _worldToProjection,
@@ -244,8 +243,8 @@ namespace UnitTests
 					overlayContext->DrawTriangles(RenderOverlays::ProjectionMode::P3D, transformedGeo.data(), transformedGeo.size(), col);
 				}
 
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			Float4x4 _worldToProjection;
@@ -268,12 +267,11 @@ namespace UnitTests
 		{
 		public:
 			virtual void Render(
-				RenderCore::IThreadContext& threadContext,
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
 
 				for (unsigned c=0; c<_cutawayPoints.size(); ++c) {
 					auto pt0 = _cutawayPoints[c], pt1 = _cutawayPoints[(c+1)%unsigned(_cutawayPoints.size())];
@@ -303,8 +301,8 @@ namespace UnitTests
 
 				DrawBoxObjects(*overlayContext, frustumTester, MakeIteratorRange(_boxObjects));
 
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			std::vector<Float3> _cutawayPoints;
@@ -361,7 +359,6 @@ namespace UnitTests
 			Float3 _lightDirection;
 
 			virtual void Render(
-				RenderCore::IThreadContext& threadContext,
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
@@ -388,8 +385,8 @@ namespace UnitTests
 				auto worldToProj = Combine(InvertOrthonormalTransform(cameraToWorldNoTranslation), mainCamProjDesc._cameraToProjection);
 				_frustumTester = ExtrudeFrustumOrthogonally(worldToProj, eyePosition, -_lightDirection, 40.f, Techniques::GetDefaultClipSpaceType());
 
-				DrawTopDownView(threadContext, parserContext, testHelper, topDownRect, MakeProjDesc(_visCamera, topDownRect), mainCamProjDesc._worldToProjection);
-				DrawMainView(threadContext, parserContext, testHelper, mainCamRect, mainCamProjDesc);
+				DrawTopDownView(parserContext.GetThreadContext(), parserContext, testHelper, topDownRect, MakeProjDesc(_visCamera, topDownRect), mainCamProjDesc._worldToProjection);
+				DrawMainView(parserContext.GetThreadContext(), parserContext, testHelper, mainCamRect, mainCamProjDesc);
 
 				auto cascades = RenderCore::LightingEngine::Internal::TestResolutionNormalizedOrthogonalShadowProjections(
 					-_lightDirection, mainCamProjDesc, _sunSourceSettings, Techniques::GetDefaultClipSpaceType());
@@ -399,7 +396,7 @@ namespace UnitTests
 						cascades.first[c]._leftTopFront[0], cascades.first[c]._leftTopFront[1], 
 						cascades.first[c]._rightBottomBack[0], cascades.first[c]._rightBottomBack[1], 
 						cascades.first[c]._leftTopFront[2], cascades.first[c]._rightBottomBack[2]);
-					DrawMainView(threadContext, parserContext, testHelper, cascadeView[c], projDesc);
+					DrawMainView(parserContext.GetThreadContext(), parserContext, testHelper, cascadeView[c], projDesc);
 				}
 			}
 
@@ -422,9 +419,9 @@ namespace UnitTests
 				DrawBoxObjects(*overlayContext, _frustumTester, MakeIteratorRange(_boxObjects));
 
 				parserContext.GetProjectionDesc() = projDesc;
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Clear);
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
 				SetViewport(threadContext, parserContext, rect);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			void DrawMainView(
@@ -443,9 +440,9 @@ namespace UnitTests
 				DrawBoxObjectsShadowVolumes(*overlayContext, _frustumTester, MakeIteratorRange(_boxObjects), _lightDirection, 40.f);
 
 				parserContext.GetProjectionDesc() = projDesc;
-				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext, LoadStore::Retain);
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Retain);
 				SetViewport(threadContext, parserContext, rect);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 			}
 
 			Techniques::ProjectionDesc MakeProjDesc(Techniques::CameraDesc& cam, const RenderOverlays::Rect& rect)

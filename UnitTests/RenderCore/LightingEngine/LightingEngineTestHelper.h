@@ -60,5 +60,6 @@ namespace UnitTests
 	RenderCore::Techniques::ParsingContext InitializeParsingContext(
 		RenderCore::Techniques::TechniqueContext& techniqueContext,
 		const RenderCore::ResourceDesc& targetDesc,
-		const RenderCore::Techniques::CameraDesc& camera);
+		const RenderCore::Techniques::CameraDesc& camera,
+		RenderCore::IThreadContext& threadContext);
 }

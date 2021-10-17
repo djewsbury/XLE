@@ -16,6 +16,7 @@
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../Assets/OSFileSystem.h"
@@ -69,11 +70,13 @@ namespace UnitTests
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
-		_techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device);
-		_techniqueContext->_sequencerDescSetLayout = MakeSequencerDescriptorSetLayout().GetLayout();
 		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 		_techniqueContext->_drawablesPacketsPool = std::make_shared<RenderCore::Techniques::DrawablesPacketPool>();
+
+		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
+		_techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *MakeSequencerDescriptorSetLayout().GetLayout(), *_metalTestHelper->_device);
+		_techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
 	}
 
 	LightingEngineTestApparatus::~LightingEngineTestApparatus()
@@ -185,7 +188,8 @@ namespace UnitTests
 	RenderCore::Techniques::ParsingContext InitializeParsingContext(
 		RenderCore::Techniques::TechniqueContext& techniqueContext,
 		const RenderCore::ResourceDesc& targetDesc,
-		const RenderCore::Techniques::CameraDesc& camera)
+		const RenderCore::Techniques::CameraDesc& camera,
+		RenderCore::IThreadContext& threadContext)
 	{
 		using namespace RenderCore;
 
@@ -198,7 +202,7 @@ namespace UnitTests
 		};
 		FrameBufferProperties fbProps { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
 
-		Techniques::ParsingContext parsingContext{techniqueContext};
+		Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 		
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

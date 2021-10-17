@@ -99,8 +99,10 @@ namespace UnitTests
 
 		auto techniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
-		techniqueContext->_systemUniformsDelegate = std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device);
-		techniqueContext->_sequencerDescSetLayout = sequencerDescriptorSetLayout;
+
+		techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
+		techniqueContext->_uniformDelegateManager->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *sequencerDescriptorSetLayout, *testHelper->_device);
+		techniqueContext->_uniformDelegateManager->AddShaderResourceDelegate(std::make_shared<RenderCore::Techniques::SystemUniformsDelegate>(*testHelper->_device));
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
@@ -134,12 +136,12 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext };
+				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext, *threadContext };
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
-				immediateDrawables->ExecuteDraws(*threadContext, parsingContext, fbHelper.GetDesc(), 0);
+				immediateDrawables->ExecuteDraws(parsingContext, fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -175,12 +177,12 @@ namespace UnitTests
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
-				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext };
+				RenderCore::Techniques::ParsingContext parsingContext { *techniqueContext, *threadContext };
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
-				immediateDrawables->ExecuteDraws(*threadContext, parsingContext, fbHelper.GetDesc(), 0);
+				immediateDrawables->ExecuteDraws(parsingContext, fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);

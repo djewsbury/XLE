@@ -19,7 +19,6 @@ namespace UnitTests
 	{
 	public:
 		virtual void Render(
-			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ParsingContext& parserContext,
 			IInteractiveTestHelper& testHelper);
 

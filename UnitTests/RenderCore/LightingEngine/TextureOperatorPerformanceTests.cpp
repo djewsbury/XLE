@@ -243,7 +243,6 @@ namespace UnitTests
 				REQUIRE(prepare->GetAssetState() == ::Assets::AssetState::Ready);
 			}
 			Techniques::Draw(
-				*testApparatus._metalTestHelper->_device->GetImmediateContext(),
 				parsingContext,
 				*testApparatus._pipelineAcceleratorPool,
 				*sequencerConfig,
@@ -261,11 +260,7 @@ namespace UnitTests
 				rpi, usi);
 
 			REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-			RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
-			op->Actualize()->Draw(
-				*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-				parsingContext, uniformsHelper,
-				us);
+			op->Actualize()->Draw(parsingContext, us);
 		}
 	}
 
@@ -294,11 +289,7 @@ namespace UnitTests
 			rpi, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
-		op->Actualize()->Draw(
-			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-			parsingContext, uniformsHelper,
-			us);
+		op->Actualize()->Draw(parsingContext, us);
 	}
 
 	static void ComputeShaderBasedDownsample(
@@ -330,10 +321,8 @@ namespace UnitTests
 			{}, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-		RenderCore::Techniques::SequencerUniformsHelper uniformsHelper{parsingContext};
 		op->Actualize()->Dispatch(
-			*testApparatus._metalTestHelper->_device->GetImmediateContext(),
-			parsingContext, uniformsHelper,
+			parsingContext,
 			// 640/16, 360/8, 1,
 			640/2, 360/2, 1,
 			us);
@@ -363,7 +352,7 @@ namespace UnitTests
 		camera._top = 2.f;
 		camera._right = 2.f * aspectRatio;
 		camera._bottom = -2.f;
-		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera);
+		auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, targetDesc, camera, *threadContext);
 		parsingContext.GetFragmentStitchingContext()._workingProps._outputWidth = workingRes[0];
 		parsingContext.GetFragmentStitchingContext()._workingProps._outputHeight = workingRes[1];
 
@@ -392,7 +381,7 @@ namespace UnitTests
 				writeInputTexture.AppendOutput(preDownsampleAttachment);
 				fragDesc.AddSubpass(std::move(writeInputTexture));
 
-				Techniques::RenderPassInstance rpi { *threadContext, parsingContext, fragDesc };
+				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
 				WriteDownsampleInput(testApparatus, parsingContext, rpi, *drawableWriter);
 				downsampleSrcSRV = rpi.GetOutputAttachmentSRV(0, {});
 			}
@@ -417,7 +406,7 @@ namespace UnitTests
 				downsampleStep.AppendOutput(fragDesc.DefineAttachment(downsampledResult, {Format::R8_UNORM, 0, LoadStore::DontCare, LoadStore::Retain}));
 				fragDesc.AddSubpass(std::move(downsampleStep));
 
-				Techniques::RenderPassInstance rpi { *threadContext, parsingContext, fragDesc };
+				Techniques::RenderPassInstance rpi { parsingContext, fragDesc };
 				queryPool.SetTimeStampQuery(*Metal::DeviceContext::Get(*threadContext));
 				for (unsigned c=0; c<iterationCount; ++c)
 					PixelShaderBasedDownsample(testApparatus, parsingContext, rpi, *downsampleSrcSRV, *commonResourceBox);
