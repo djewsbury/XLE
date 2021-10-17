@@ -26,12 +26,14 @@ namespace RenderCore { namespace LightingEngine
 		float _miniProjZ, _miniProjW;
 	};
 
+	constexpr size_t s_maxProbesPerBatch = 5;		// ie, 30 slices of the array texture per batch
+
 	class MultiViewUniformsDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 	{
 	public:
 		struct MultiViewProperties
 		{
-			Float4x4 _worldToProjection[64];
+			Float4x4 _worldToProjection[s_maxProbesPerBatch*6];
 		};
 		MultiViewProperties _multProbeProperties;
 		unsigned _projectionCount = 0;
@@ -39,14 +41,14 @@ namespace RenderCore { namespace LightingEngine
 		virtual void WriteImmediateData(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 		{
 			assert(idx == 0);
-			assert(dst.size() == sizeof(Float4x4) * _projectionCount);
+			assert(dst.size() >= sizeof(Float4x4) * _projectionCount);
 			std::memcpy(dst.begin(), &_multProbeProperties, sizeof(Float4x4) * _projectionCount);
 		}
 
 		virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 		{
 			assert(idx == 0);
-			return sizeof(Float4x4) * _projectionCount;
+			return sizeof(Float4x4) * dimof(_multProbeProperties._worldToProjection);
 		}
 
 		void SetWorldToProjections(IteratorRange<const Float4x4*> worldToProjections)
@@ -55,6 +57,10 @@ namespace RenderCore { namespace LightingEngine
 			_projectionCount = std::min(worldToProjections.size(), dimof(_multProbeProperties._worldToProjection));
 			for (unsigned c=0; c<_projectionCount; ++c)
 				_multProbeProperties._worldToProjection[c] = worldToProjections[c];
+		}
+
+		MultiViewUniformsDelegate()
+		{
 			BindImmediateData(0, Utility::Hash64("MultiViewProperties"));
 		}
 	};
@@ -97,6 +103,7 @@ namespace RenderCore { namespace LightingEngine
 				uniformDelegateMan->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
 				uniformDelegateMan->AddShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
 				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, *threadContext.GetDevice());
+				_techContext._uniformDelegateManager = uniformDelegateMan;
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
 				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
@@ -134,8 +141,6 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	
-
 	class ShadowProbes::ProbeRenderingInstance : public IProbeRenderingInstance
 	{
 	public:
@@ -152,6 +157,7 @@ namespace RenderCore { namespace LightingEngine
 					// Commit the objects that were prepared for rendering
 					if (!_drawablePkt._drawables.empty()) {
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
+						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 						auto rpi = _staticPrepareHelper->BeginRPI(_probeIterator*6, _pendingViews.size());
 						Techniques::Draw(
 							*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
@@ -167,8 +173,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				auto probeCount = _pimpl->_probes.size();
-				const size_t maxProbesPerBatch = 5;		// ie, 30 slices of the array texture per batch
-				auto nextBatchCount = std::min(probeCount -_probeIterator, maxProbesPerBatch);
+				auto nextBatchCount = std::min(probeCount -_probeIterator, s_maxProbesPerBatch);
 				if (!nextBatchCount) {
 					// Completed all of the probes
 					if (_pimpl->_staticTable)		// (this will be null if all probes had no drawables)

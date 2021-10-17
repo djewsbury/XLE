@@ -607,14 +607,12 @@ namespace RenderCore { namespace Techniques
 					auto size = size_t(immData.end()) - size_t(immData.begin());
 					std::memcpy(PtrAdd(storage.GetData().begin(), immDataIterator), immData.begin(), size);
 					
-					tempResViews[newResourceViewCount] = resource->CreateBufferView(
-						BindFlag::ConstantBuffer, 
-						immDataIterator + beginAndEndInRes.first,
-						immDataIterator + size + beginAndEndInRes.first);
+					// Creating a IResourceView here is a bit unfortunate -- on most APIs we should be fine with a resource pointer and size/offset
+					tempResViews[newResourceViewCount] = resource->CreateBufferView(BindFlag::ConstantBuffer, immDataIterator + beginAndEndInRes.first, size);
 					newResourceViews[newResourceViewCount] = tempResViews[newResourceViewCount].get();
 					slot = { DescriptorSetInitializer::BindType::ResourceView, newResourceViewCount };
 					++newResourceViewCount;
-					immDataIterator += size_t(immData.end()) - size_t(immData.begin());
+					immDataIterator += size;
 				}
 
 				initializer._bindItems._resourceViews = MakeIteratorRange(newResourceViews, &newResourceViews[newResourceViewCount]);

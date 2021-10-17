@@ -21,7 +21,6 @@ namespace Sample
 		virtual void OnStartup(const SampleGlobals& globals) override;
 
 		void Render(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override;
 		std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
         void SetActivationState(bool newState) override;

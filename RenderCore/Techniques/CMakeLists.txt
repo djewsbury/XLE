@@ -26,7 +26,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         TechniqueUtils.cpp
         Services.cpp
         ModelCache.cpp
-        SequencerDescriptorSet.cpp
+        UniformDelegateManager.cpp
         PipelineCollection.cpp
         TextureCompilerUtil.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
