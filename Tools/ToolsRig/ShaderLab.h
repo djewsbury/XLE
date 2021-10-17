@@ -9,7 +9,7 @@
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; }}
-namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class SequencerUniformsHelper; class ImmediateDrawingApparatus; }}
+namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace Formatters { class IDynamicFormatter; }
 
@@ -22,9 +22,7 @@ namespace ToolsRig
 		{
 		public:
 			virtual void Execute(
-				RenderCore::IThreadContext& threadContext, 
 				RenderCore::Techniques::ParsingContext& parsingContext,
-				RenderCore::Techniques::SequencerUniformsHelper& uniformHelper,
 				RenderCore::Techniques::DrawingApparatus& drawingApparatus,
 				RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) = 0;
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;

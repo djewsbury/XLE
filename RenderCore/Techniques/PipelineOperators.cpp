@@ -8,6 +8,7 @@
 #include "ParsingContext.h"
 #include "Drawables.h"
 #include "DrawablesInternal.h"
+#include "DrawableDelegates.h"
 #include "PipelineAcceleratorInternal.h"
 #include "Services.h"
 #include "../Assets/PredefinedPipelineLayout.h"
@@ -68,17 +69,17 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 
 		virtual void Draw(
-			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			ParsingContext& parsingContext,
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
+			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
 			auto sysUsiHash = sysUsi.GetHash();
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
 
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
 
-			ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parsingContext, boundUniforms, 0);
+			ApplyUniforms(*parsingContext.GetUniformDelegateManager(), metalContext, encoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 1);
@@ -215,20 +216,20 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 
 		virtual void BeginDispatches(
-			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			ParsingContext& parsingContext,
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
 			uint64_t pushConstantsBinding = 0) override
 		{
 			assert(!_betweenBeginEnd);
-			auto& sysUsi = uniformsHelper.GetLooseUniformsStreamInterface();
+			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterface();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi, pushConstantsUSI);
 
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 
-			ApplyLooseUniforms(uniformsHelper, metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
+			ApplyUniforms(*parsingContext.GetUniformDelegateManager(), metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);
@@ -257,11 +258,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		virtual void Dispatch(
-			IThreadContext& threadContext, ParsingContext& parsingContext, SequencerUniformsHelper& uniformsHelper, 
+			ParsingContext& parsingContext,
 			unsigned countX, unsigned countY, unsigned countZ, 
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			BeginDispatches(threadContext, parsingContext, uniformsHelper, us, descSets);
+			BeginDispatches(parsingContext, us, descSets);
 			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			_activeEncoder = {};
 			_betweenBeginEnd = false;

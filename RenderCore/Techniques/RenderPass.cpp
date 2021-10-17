@@ -586,7 +586,6 @@ namespace RenderCore { namespace Techniques
     }
 
     RenderPassInstance::RenderPassInstance(
-        IThreadContext& context,
         ParsingContext& parsingContext,
         const FragmentStitchingContext::StitchResult& stitchedFragment,
         const RenderPassBeginDesc& beginInfo)
@@ -598,7 +597,7 @@ namespace RenderCore { namespace Techniques
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         if (stitchedFragment._pipelineType == PipelineType::Graphics) {
             *this = RenderPassInstance {
-                context, stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
+                parsingContext.GetThreadContext(), stitchedFragment._fbDesc, stitchedFragment._fullAttachmentDescriptions,
                 *parsingContext.GetTechniqueContext()._frameBufferPool,
                 *parsingContext.GetTechniqueContext()._attachmentPool,
                 beginInfo };
@@ -607,13 +606,13 @@ namespace RenderCore { namespace Techniques
             auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
             _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions);
             _attachmentPool = &attachmentPool;
-            _attachmentPoolReservation.CompleteInitialization(context);
+            _attachmentPoolReservation.CompleteInitialization(parsingContext.GetThreadContext());
             _layout = &stitchedFragment._fbDesc;
             // clear not supported in this mode
             for (const auto& a:_layout->GetAttachments())
                 assert(!HasClear(a._loadFromPreviousPhase));
 
-            _attachedContext = Metal::DeviceContext::Get(context).get();
+            _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
             #if defined(_DEBUG)
                 _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
             #endif
@@ -649,7 +648,6 @@ namespace RenderCore { namespace Techniques
     }
 
     RenderPassInstance::RenderPassInstance(
-        IThreadContext& context,
         ParsingContext& parsingContext,
         const FrameBufferDescFragment& layout,
         const RenderPassBeginDesc& beginInfo)
@@ -663,7 +661,7 @@ namespace RenderCore { namespace Techniques
         // todo -- have to protect lifetime of stitchResult._fbDesc in this case
         // candidate for subframe heap
         // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
-        *this = RenderPassInstance { context, parsingContext, stitchResult, beginInfo };
+        *this = RenderPassInstance { parsingContext, stitchResult, beginInfo };
     }
 
 	RenderPassInstance::RenderPassInstance(

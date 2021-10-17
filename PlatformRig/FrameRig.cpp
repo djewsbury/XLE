@@ -121,6 +121,7 @@ namespace PlatformRig
         HierarchicalCPUProfiler* cpuProfiler) -> FrameResult
     {
         CPUProfileEvent_Conditional pEvnt("FrameRig::ExecuteFrame", cpuProfiler);
+        assert(&parserContext.GetThreadContext() == context.get());
 
         uint64_t startTime = OSServices::GetPerformanceCounter();
         if (_pimpl->_frameLimiter) {
@@ -188,7 +189,7 @@ namespace PlatformRig
                     #if defined(_DEBUG)
                         assert(_pimpl->_mainOverlayRigTargetConfig == RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
                     #endif
-                    _mainOverlaySys->Render(*context, parserContext);
+                    _mainOverlaySys->Render(parserContext);
                     mainOverlaySucceeded = true;
                 } 
 			}
@@ -208,7 +209,7 @@ namespace PlatformRig
 
 			TRY {
 				if (_debugScreenOverlaySystem)
-                    _debugScreenOverlaySystem->Render(*context, parserContext);
+                    _debugScreenOverlaySystem->Render(parserContext);
 			}
 			CATCH_ASSETS(parserContext)
 			CATCH(const std::exception& e) {
@@ -294,15 +295,14 @@ namespace PlatformRig
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
         if (drawingApparatus) {
-    		techniqueContext._systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
             techniqueContext._commonResources = drawingApparatus->_commonResources;
-            techniqueContext._sequencerDescSetLayout = drawingApparatus->_sequencerDescSetLayout;
             techniqueContext._drawablesPacketsPool = drawingApparatus->_drawablesPacketsPool;
             techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
+            techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;
-        RenderCore::Techniques::ParsingContext parserContext(techniqueContext);
+        RenderCore::Techniques::ParsingContext parserContext{techniqueContext, *context};
         return ExecuteFrame(
             std::move(context), presChain,
             parserContext, 

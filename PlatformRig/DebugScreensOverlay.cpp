@@ -34,20 +34,19 @@ namespace PlatformRig
         std::shared_ptr<IInputListener> GetInputListener() override  { return _inputListener; }
 
         void Render(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
             TRY {
-                auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, *_immediateDrawables, _fontRenderer.get());
+                auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
             
                 // todo -- we need the viewport that we're going to get when we begin the presentation target; not the viewport that we have now
                 Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
                 assert(viewportDims[0] * viewportDims[1]);
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
 
-                auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(threadContext, parserContext);
+                auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
                 parserContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
-                _immediateDrawables->ExecuteDraws(threadContext, parserContext, rpi);
+                _immediateDrawables->ExecuteDraws(parserContext, rpi);
             } CATCH (...) {
                 _immediateDrawables->AbandonDraws();
                 throw;

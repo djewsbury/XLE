@@ -20,6 +20,7 @@
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/Techniques.h"
+#include "../Techniques/DrawableDelegates.h"
 #include "../IThreadContext.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"
@@ -338,6 +339,12 @@ namespace RenderCore { namespace LightingEngine
 				// Pre depth
 				// lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
 				lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
+
+				lightingTechnique->CreateStep_CallFunction(
+					[captures](LightingTechniqueIterator& iterator) {
+						iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
+						iterator._parsingContext->GetUniformDelegateManager()->BringUpToDate(*iterator._parsingContext);
+					});
 
 				// Build hierarchical depths
 				lightingTechnique->CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));

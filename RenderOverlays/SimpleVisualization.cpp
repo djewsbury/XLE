@@ -130,12 +130,11 @@ namespace RenderOverlays
 	}
 
 	void FillScreenWithMsg(
-		RenderCore::IThreadContext& threadContext, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
 		StringSection<> msg)
 	{
-		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(threadContext, immediateDrawingApparatus);
+		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawingApparatus);
 		Int2 viewportDims{ parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
 
 		auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
@@ -145,9 +144,9 @@ namespace RenderOverlays
 				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, msg);
 		}
 
-		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parsingContext, RenderCore::LoadStore::Clear);
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext, RenderCore::LoadStore::Clear);
 		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
-		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(threadContext, parsingContext, rpi);
+		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(parsingContext, rpi);
 	}
 }
 

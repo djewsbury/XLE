@@ -200,10 +200,9 @@ namespace RenderCore { namespace LightingEngine
 		us._resourceViews = MakeIteratorRange(srvs);
 		us._immediateData = MakeIteratorRange(immData);
 
-		Techniques::SequencerUniformsHelper uniformsHelper{*iterator._parsingContext};
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		_classifyTiles->Dispatch(
-			*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+			*iterator._parsingContext,
 			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
 			us);
 
@@ -223,7 +222,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		_prepareIndirectArgs->Dispatch(
-			*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+			*iterator._parsingContext,
 			1, 1, 1,
 			us);
 
@@ -242,14 +241,14 @@ namespace RenderCore { namespace LightingEngine
 				0, nullptr);
 		}
 
-		_intersect->BeginDispatches(*iterator._threadContext, *iterator._parsingContext, uniformsHelper, us);
+		_intersect->BeginDispatches(*iterator._parsingContext, us);
 		_intersect->DispatchIndirect(*_indirectArgsBuffer);
 		_intersect->EndDispatches();
 
 		{
 			Metal::Internal::CaptureForBind cap0{metalContext, *_res->_temporalDenoiseResult[_pingPongCounter&1], BindFlag::ShaderResource};
 			_resolveSpatial->Dispatch(
-				*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
 				us);
 		}
@@ -259,13 +258,13 @@ namespace RenderCore { namespace LightingEngine
 			Metal::Internal::CaptureForBind cap0{metalContext, *_res->_temporalDenoiseResult[(_pingPongCounter+1)&1], BindFlag::ShaderResource};
 			Metal::Internal::CaptureForBind cap1{metalContext, *_res->_rayLengthsTexture, BindFlag::ShaderResource};
 			_resolveTemporal->Dispatch(
-				*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
 				us);
 		}
 
 		_reflectionsBlur->Dispatch(
-			*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+			*iterator._parsingContext,
 			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
 			us);
 

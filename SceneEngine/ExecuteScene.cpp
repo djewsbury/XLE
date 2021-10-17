@@ -13,7 +13,6 @@
 namespace SceneEngine
 {
 	void ExecuteSceneRaw(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
@@ -21,19 +20,18 @@ namespace SceneEngine
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
-        scene.ExecuteScene(threadContext, ExecuteSceneContext{view, batchFilter, &pkt});
-		RenderCore::Techniques::Draw(threadContext, parserContext, pipelineAccelerators, sequencerConfig, pkt);
+        scene.ExecuteScene(parserContext.GetThreadContext(), ExecuteSceneContext{view, batchFilter, &pkt});
+		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
     }
 
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
 		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
 		lightingState.PreRender(parsingContext.GetProjectionDesc(), lightScene);
-		return RenderCore::LightingEngine::LightingTechniqueInstance { threadContext, parsingContext, compiledTechnique };
+		return RenderCore::LightingEngine::LightingTechniqueInstance { parsingContext, compiledTechnique };
 	}
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(

@@ -309,19 +309,16 @@ namespace RenderCore { namespace Techniques
 		}
 
 		void ExecuteDraws(
-			IThreadContext& context,
 			ParsingContext& parserContext,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) override
 		{
 			auto& sequencerConfig = GetSequencerConfig(fbDesc, subpassIndex);
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
-			SequencerUniformsHelper uniformsHelper{parserContext};
 			Draw(
-				context, parserContext,
+				parserContext,
 				*_pipelineAcceleratorPool,
 				sequencerConfig,
-				uniformsHelper,
 				_workingPkt);
 
 			AbandonDraws();	// (this just clears out everything prepared)
@@ -417,9 +414,9 @@ namespace RenderCore { namespace Techniques
 		return std::make_shared<ImmediateDrawables>(device);
 	}
 
-	void IImmediateDrawables::ExecuteDraws(IThreadContext& threadContext, ParsingContext& parsingContext, const RenderPassInstance& rpi)
+	void IImmediateDrawables::ExecuteDraws(ParsingContext& parsingContext, const RenderPassInstance& rpi)
 	{
-		ExecuteDraws(threadContext, parsingContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		ExecuteDraws(parsingContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 	}
 
 	IImmediateDrawables::~IImmediateDrawables() {}

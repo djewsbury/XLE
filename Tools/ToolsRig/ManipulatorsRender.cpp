@@ -75,7 +75,7 @@ namespace ToolsRig
 		}
 
 		Techniques::Draw(
-			threadContext, parserContext,
+			parserContext,
             pipelineAccelerators,
 			sequencerConfig, 
 			pkt);
@@ -98,7 +98,6 @@ namespace ToolsRig
 	};
 
     void Placements_RenderHighlight(
-        RenderCore::IThreadContext& threadContext,
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -108,23 +107,20 @@ namespace ToolsRig
         uint64_t materialGuid)
     {
         CATCH_ASSETS_BEGIN
-            RenderOverlays::BinaryHighlight highlight(
-                threadContext,
-                parserContext);
+            RenderOverlays::BinaryHighlight highlight{parserContext};
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
                 "render-highlight",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
-                threadContext, parserContext, pipelineAccelerators,
+                parserContext, pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
-            highlight.FinishWithOutline(threadContext, Float3(.65f, .8f, 1.5f));
+            highlight.FinishWithOutline(Float3(.65f, .8f, 1.5f));
         CATCH_ASSETS_END(parserContext)
     }
 
 	void Placements_RenderHighlightWithOutlineAndOverlay(
-        RenderCore::IThreadContext& threadContext,
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -134,27 +130,24 @@ namespace ToolsRig
         uint64_t materialGuid)
     {
 		CATCH_ASSETS_BEGIN
-            RenderOverlays::BinaryHighlight highlight(
-                threadContext,
-                parserContext);
+            RenderOverlays::BinaryHighlight highlight{parserContext};
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
                 "render-highlight",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
             Placements_RenderFiltered(
-                threadContext, parserContext, pipelineAccelerators,
+                parserContext, pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
 
 			const Float3 highlightCol(.75f, .8f, 0.4f);
             const unsigned overlayCol = 2;
 
-            highlight.FinishWithOutlineAndOverlay(threadContext, highlightCol, overlayCol);
+            highlight.FinishWithOutlineAndOverlay(highlightCol, overlayCol);
         CATCH_ASSETS_END(parserContext)
 	}
 
     void Placements_RenderShadow(
-        RenderCore::IThreadContext& threadContext,
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -164,18 +157,16 @@ namespace ToolsRig
         uint64_t materialGuid)
     {
         CATCH_ASSETS_BEGIN
-            RenderOverlays::BinaryHighlight highlight(
-                threadContext,
-                parserContext);
+            RenderOverlays::BinaryHighlight highlight{parserContext};
 			auto sequencerCfg = pipelineAccelerators.CreateSequencerConfig(
                 "render-shadow",
 				ConsoleRig::FindCachedBox<TechniqueBox>()._forwardIllumDelegate, ParameterBox{}, 
 				highlight.GetFrameBufferDesc());
 			Placements_RenderFiltered(
-                threadContext, parserContext, pipelineAccelerators,
+                parserContext, pipelineAccelerators,
 				*sequencerCfg,
                 renderer, cellSet, filterBegin, filterEnd, materialGuid);
-            highlight.FinishWithShadow(threadContext, Float4(.025f, .025f, .025f, 0.85f));
+            highlight.FinishWithShadow(Float4(.025f, .025f, .025f, 0.85f));
         CATCH_ASSETS_END(parserContext)
     }
 
@@ -202,7 +193,6 @@ namespace ToolsRig
     }
 
     void RenderCylinderHighlight(
-        IThreadContext& threadContext, 
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& centre, float radius)
@@ -213,7 +203,7 @@ namespace ToolsRig
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
 		mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
-		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
+		Techniques::RenderPassInstance rpi { parserContext, fbDesc }; 
 
         auto depthSrv = rpi.GetNonFrameBufferAttachmentView(0);
         if (!depthSrv) return;
@@ -239,9 +229,9 @@ namespace ToolsRig
                 //          because this decal only affects the area within a cylinder. But it's just for
                 //          tools, so the easy way should be fine.            
             DrawAutoFullscreenImmediately(
-                threadContext,
+                parserContext.GetThreadContext(),
                 *::Assets::MakeAsset<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
-                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(threadContext.GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
+                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(parserContext.GetThreadContext().GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     "xleres/ui/terrainmanipulators.hlsl:ps_circlehighlight:ps_*"),
                 usi, UniformsStream{MakeIteratorRange(resources), MakeIteratorRange(cbs._immediateDatas)},
@@ -256,7 +246,6 @@ namespace ToolsRig
     }
 
     void RenderRectangleHighlight(
-        IThreadContext& threadContext, 
         Techniques::ParsingContext& parserContext,
         Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& mins, const Float3& maxs,
@@ -268,7 +257,7 @@ namespace ToolsRig
 		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
 		mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{{TextureViewDesc::Aspect::Depth}});
         fbDesc.AddSubpass(std::move(mainPass));
-		Techniques::RenderPassInstance rpi { threadContext, parserContext, fbDesc }; 
+		Techniques::RenderPassInstance rpi { parserContext, fbDesc }; 
 
         auto depthSrv = rpi.GetNonFrameBufferAttachmentView(0);
         if (!depthSrv) return;
@@ -296,9 +285,9 @@ namespace ToolsRig
                 //          because this decal only affects the area within a cylinder. But it's just for
                 //          tools, so the easy way should be fine.
             DrawAutoFullscreenImmediately(
-                threadContext,
+                parserContext.GetThreadContext(),
                 *::Assets::MakeAsset<Metal::ShaderProgram>(      // note -- we might need access to the MSAA defines for this shader
-                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(threadContext.GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
+                    ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(parserContext.GetThreadContext().GetDevice(), MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout(),
                     BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector:vs_*",
                     (type == RectangleHighlightType::Tool)
                         ? "xleres/ui/terrainmanipulators.hlsl:ps_rectanglehighlight:ps_*"

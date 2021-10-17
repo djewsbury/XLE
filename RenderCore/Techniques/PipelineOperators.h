@@ -23,12 +23,11 @@ namespace RenderCore
 namespace RenderCore { namespace Techniques
 {
 	class ParsingContext;
-	class SequencerUniformsHelper;
 
 	class IShaderOperator
 	{
 	public:
-		virtual void Draw(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Draw(ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual void Draw(IThreadContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
@@ -38,10 +37,10 @@ namespace RenderCore { namespace Techniques
 	class IComputeShaderOperator
 	{
 	public:
-		virtual void Dispatch(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Dispatch(ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual void Dispatch(IThreadContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 
-		virtual void BeginDispatches(IThreadContext&, ParsingContext&, SequencerUniformsHelper&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}, uint64_t pushConstantsBinding = 0) = 0;
+		virtual void BeginDispatches(ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}, uint64_t pushConstantsBinding = 0) = 0;
 		virtual void BeginDispatches(IThreadContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}, uint64_t pushConstantsBinding = 0) = 0;
 		virtual void EndDispatches() = 0;
 		virtual void Dispatch(unsigned countX, unsigned countY, unsigned countZ, IteratorRange<const void*> pushConstants = {}) = 0;

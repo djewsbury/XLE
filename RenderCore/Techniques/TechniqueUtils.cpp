@@ -258,6 +258,7 @@ namespace RenderCore { namespace Techniques
 	IUniformBufferDelegate::~IUniformBufferDelegate() {}
 	IShaderResourceDelegate::~IShaderResourceDelegate() {}
 	IMaterialDelegate::~IMaterialDelegate() {}
+    IUniformDelegateManager::~IUniformDelegateManager() {}
 
 	Metal::ShaderProgram* ITechniqueDelegate_Old::GetShader(
 		ParsingContext& context,

@@ -39,10 +39,9 @@ namespace RenderCore { namespace LightingEngine
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
 
-		Techniques::SequencerUniformsHelper uniformsHelper{*iterator._parsingContext};
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		_resolveOp->Dispatch(
-			*iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+			*iterator._parsingContext,
 			(outputDims[0]+63) / 64, (outputDims[1]+63) / 64, 1,
 			us);
 	}

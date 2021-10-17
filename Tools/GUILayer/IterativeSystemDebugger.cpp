@@ -42,7 +42,6 @@ namespace GUILayer
     {
     public:
         virtual void Render(
-            RenderCore::IThreadContext& device, 
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
         ErosionOverlay(
@@ -282,7 +281,6 @@ namespace GUILayer
     {
     public:
         virtual void Render(
-            RenderCore::IThreadContext& device, 
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
         using RenderFn = std::function<void(

@@ -44,59 +44,6 @@ namespace RenderCore { namespace Techniques
 		}
     }
 
-	void ParsingContext::AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>& dele)
-	{
-		for (auto&d:_uniformDelegates)
-			if (d.first == binding) {
-				d.second = dele;
-				return;
-			}
-		_uniformDelegates.push_back(std::make_pair(binding, dele));
-	}
-
-	void ParsingContext::RemoveUniformDelegate(uint64_t binding)
-	{
-		_uniformDelegates.erase(
-			std::remove_if(
-				_uniformDelegates.begin(), _uniformDelegates.end(),
-				[binding](const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>& p) { return p.first == binding; }),
-			_uniformDelegates.end());
-	}
-
-	void ParsingContext::RemoveUniformDelegate(IUniformBufferDelegate& dele)
-	{
-		_uniformDelegates.erase(
-			std::remove_if(
-				_uniformDelegates.begin(), _uniformDelegates.end(),
-				[&dele](const std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>& p) { return p.second.get() == &dele; }),
-			_uniformDelegates.end());
-	}
-
-	void ParsingContext::AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>& dele)
-	{
-		#if defined(_DEBUG)
-			auto i = std::find_if(
-				_shaderResourceDelegates.begin(), _shaderResourceDelegates.end(),
-				[&dele](const std::shared_ptr<IShaderResourceDelegate>& p) { return p.get() == dele.get(); });
-			assert(i == _shaderResourceDelegates.end());
-		#endif
-		_shaderResourceDelegates.push_back(dele);
-	}
-
-	void ParsingContext::RemoveShaderResourceDelegate(IShaderResourceDelegate& dele)
-	{
-		_shaderResourceDelegates.erase(
-			std::remove_if(
-				_shaderResourceDelegates.begin(), _shaderResourceDelegates.end(),
-				[&dele](const std::shared_ptr<IShaderResourceDelegate>& p) { return p.get() == &dele; }),
-			_shaderResourceDelegates.end());
-	}
-
-	SystemUniformsDelegate& ParsingContext::GetSystemUniformsDelegate() const
-	{
-		return *_techniqueContext->_systemUniformsDelegate;
-	}
-
 	FragmentStitchingContext& ParsingContext::GetFragmentStitchingContext()
 	{
 		if (!_stitchingContext)
@@ -104,8 +51,9 @@ namespace RenderCore { namespace Techniques
 		return *_stitchingContext;
 	}
 
-    ParsingContext::ParsingContext(TechniqueContext& techniqueContext)
+    ParsingContext::ParsingContext(TechniqueContext& techniqueContext, IThreadContext& threadContext)
 	: _techniqueContext(&techniqueContext)
+    , _threadContext(&threadContext)
     {
 		assert(_techniqueContext);
         _stringHelpers = std::make_unique<StringHelpers>();
@@ -113,8 +61,7 @@ namespace RenderCore { namespace Techniques
         _internal = std::make_unique<Internal>();
         assert(size_t(_internal.get()) % 16 == 0);
 
-		if (_techniqueContext->_systemUniformsDelegate)
-			_shaderResourceDelegates.push_back(_techniqueContext->_systemUniformsDelegate);
+		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
     }
 
     ParsingContext::~ParsingContext() {}

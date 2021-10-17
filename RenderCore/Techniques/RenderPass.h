@@ -289,13 +289,11 @@ namespace RenderCore { namespace Techniques
         // stitching context in the ParsingContext to link the frame buffer to the current
         // environment
         RenderPassInstance(
-            IThreadContext& context,
             ParsingContext& parsingContext,
             const FrameBufferDescFragment& layoutFragment,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
         RenderPassInstance(
-            IThreadContext& context,
             ParsingContext& parsingContext,
             const FragmentStitchingContext::StitchResult& stitchedFragment,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());

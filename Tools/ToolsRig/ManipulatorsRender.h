@@ -22,7 +22,6 @@ namespace SceneEngine
 namespace ToolsRig
 {
     void Placements_RenderHighlight(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -32,7 +31,6 @@ namespace ToolsRig
         uint64 materialGuid = ~0ull);
 
 	void Placements_RenderHighlightWithOutlineAndOverlay(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -42,7 +40,6 @@ namespace ToolsRig
         uint64 materialGuid = ~0ull);
 
     void Placements_RenderFiltered(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const RenderCore::Techniques::SequencerConfig& sequencerTechnique,
@@ -53,7 +50,6 @@ namespace ToolsRig
         uint64 materialGuid = ~0ull);
 
     void Placements_RenderShadow(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         SceneEngine::PlacementsRenderer& renderer,
@@ -63,18 +59,16 @@ namespace ToolsRig
         uint64 materialGuid = ~0ull);
 
     void RenderCylinderHighlight(
-        RenderCore::IThreadContext& threadContext, 
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& centre, float radius);
 
     void DrawWorldSpaceCylinder(
-        RenderCore::IThreadContext& threadContext, RenderCore::Techniques::ParsingContext& parserContext,
+        RenderCore::Techniques::ParsingContext& parserContext,
         Float3 origin, Float3 axis, float radius);
 
 	enum class RectangleHighlightType { Tool, LockedArea };
     void RenderRectangleHighlight(
-        RenderCore::IThreadContext& threadContext, 
         RenderCore::Techniques::ParsingContext& parserContext,
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& mins, const Float3& maxs,

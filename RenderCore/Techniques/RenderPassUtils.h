@@ -16,23 +16,19 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
 
 	RenderPassInstance RenderPassToPresentationTarget(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain);
 
 	RenderPassInstance RenderPassToPresentationTarget(
-		IThreadContext& context,
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain);
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain);
 	
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		IThreadContext& context,
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain);

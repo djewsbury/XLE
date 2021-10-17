@@ -30,7 +30,6 @@ namespace PlatformRig
     {
     public:
 		virtual void Render(
-            RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ParsingContext& parserContext) = 0; 
 
         virtual std::shared_ptr<IInputListener> GetInputListener();
@@ -57,7 +56,6 @@ namespace PlatformRig
         std::shared_ptr<IInputListener> GetInputListener() override;
 
         void Render(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override;
         void SetActivationState(bool newState) override;
 		OverlayState GetOverlayState() const override;
@@ -89,7 +87,6 @@ namespace PlatformRig
         std::shared_ptr<IInputListener> GetInputListener() override;
 
         void Render(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parserContext) override;
         void SetActivationState(bool newState) override;
 		virtual OverlayState GetOverlayState() const override;

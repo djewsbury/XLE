@@ -135,13 +135,11 @@ namespace SceneEngine
     {}
 
     void TiledLighting_DrawDebugging(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parsingContext,
-        RenderCore::Techniques::SequencerUniformsHelper& sequencerUniformsHelper,
         const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
         TileLightingResources& tileLightingResources)
     {
-        auto rpi = Techniques::RenderPassToPresentationTarget(threadContext, parsingContext);
+        auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 
         UniformsStreamInterface usi;
         usi.BindResourceView(0, Hash64("LightOutput"));
@@ -168,7 +166,7 @@ namespace SceneEngine
             "xleres/Deferred/tiled.pipeline:ComputeMain",
             rpi,
             usi)->Actualize();
-        debuggingShader.Draw(threadContext, parsingContext, sequencerUniformsHelper, us);
+        debuggingShader.Draw(parsingContext, us);
     }
 
     static float PowerForHalfRadius(float halfRadius, float powerFraction)
@@ -303,9 +301,8 @@ namespace SceneEngine
                     "xleres/Deferred/tiled.compute.hlsl:PrepareLights", {},
                     "xleres/Deferred/tiled.pipeline:ComputeMain",
                     usi)->Actualize();
-                Techniques::SequencerUniformsHelper sequencerUniformsHelper { parsingContext };
                 prepareLights.Dispatch(
-                    threadContext, parsingContext, sequencerUniformsHelper,
+                    parsingContext,
                     (tileLightCount + 256 - 1) / 256, 1, 1,
                     us);
 
@@ -334,7 +331,7 @@ namespace SceneEngine
                         "xleres/Deferred/tiled.pipeline:ComputeMain",
                         usi)->Actualize();
                     clusteredMain.Dispatch(
-                        threadContext, parsingContext, sequencerUniformsHelper,
+                        parsingContext,
                         lightCulling._groupCounts[0], lightCulling._groupCounts[1], 1,
                         us);
                 } else {
@@ -344,7 +341,7 @@ namespace SceneEngine
                         "xleres/Deferred/tiled.pipeline:ComputeMain",
                         usi)->Actualize();
                     clusteredMain.Dispatch(
-                        threadContext, parsingContext, sequencerUniformsHelper,
+                        parsingContext,
                         lightCulling._groupCounts[0], lightCulling._groupCounts[1], 1,
                         us);
                 }

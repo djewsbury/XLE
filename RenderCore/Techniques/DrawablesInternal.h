@@ -15,12 +15,11 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt);
 
-	class sequencerUniformsHelper;
-	void ApplyLooseUniforms(
-		SequencerUniformsHelper& sequencerUniformsHelper,
+	class IUniformDelegateManager;
+	void ApplyUniforms(
+		IUniformDelegateManager& delManager,
 		Metal::DeviceContext& metalContext,
 		Metal::SharedEncoder& encoder,
 		ParsingContext& parsingContext,

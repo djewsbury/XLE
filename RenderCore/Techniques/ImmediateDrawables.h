@@ -63,12 +63,11 @@ namespace RenderCore { namespace Techniques
 			Topology topology = Topology::TriangleList) = 0;
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
 		virtual void ExecuteDraws(
-			IThreadContext& context,
 			ParsingContext& parserContext,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
 		virtual void AbandonDraws() = 0;
-		void ExecuteDraws(IThreadContext&, ParsingContext&, const RenderPassInstance&);
+		void ExecuteDraws(ParsingContext&, const RenderPassInstance&);
 		virtual std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;

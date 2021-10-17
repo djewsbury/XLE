@@ -99,7 +99,6 @@ namespace RenderCore { namespace LightingEngine
 		void PushFollowingStep(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 		void PushFollowingStep(std::shared_ptr<Techniques::SequencerConfig> seqConfig, std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
 		LightingTechniqueIterator(
-			IThreadContext& threadContext,
 			Techniques::ParsingContext& parsingContext,
 			const CompiledLightingTechnique& compiledTechnique);
 

@@ -41,31 +41,32 @@ namespace RenderCore { namespace Techniques
 		size_t _begin = 0, _end = 0;
 	};
 
+	constexpr unsigned s_uniformGroupSequencer = 0;
+	constexpr unsigned s_uniformGroupMaterial = 1;
+	constexpr unsigned s_uniformGroupDraw = 2;
+	static const auto s_materialDescSetName = Hash64("Material");
+
 	static void Draw(
 		RenderCore::Metal::DeviceContext& metalContext,
         RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
 		ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt,
 		const TemporaryStorageLocator& temporaryVB, 
 		const TemporaryStorageLocator& temporaryIB)
 	{
-		const auto sequencerDescriptorSetSlot = 0;
-		const auto materialDescriptorSetSlot = 1;
-		static const auto sequencerDescSetName = Hash64("Sequencer");
-		static const auto materialDescSetName = Hash64("Material");
-		
-		auto sequencerDescriptorSet = uniformsHelper.CreateDescriptorSet(
-			*pipelineAccelerators.GetDevice(), parserContext);
+		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
+		uniformDelegateMan.InvalidateUniforms();
+		uniformDelegateMan.BringUpToDate(parserContext);
 
-		UniformsStreamInterface sequencerUSI = uniformsHelper.GetLooseUniformsStreamInterface();
-		auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
-		sequencerUSI.BindFixedDescriptorSet(0, sequencerDescSetName, &sequencerDescriptorSet.second);
-		sequencerUSI.BindFixedDescriptorSet(1, materialDescSetName, &matDescSetLayout);
+		UniformsStreamInterface globalUSI = uniformDelegateMan.GetInterface();
+		// auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
+		
+		UniformsStreamInterface materialUSI;
+		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName); // , &matDescSetLayout);
 		if (parserContext._extraSequencerDescriptorSet.second)
-			sequencerUSI.BindFixedDescriptorSet(2, parserContext._extraSequencerDescriptorSet.first);
+			materialUSI.BindFixedDescriptorSet(1, parserContext._extraSequencerDescriptorSet.first);
 
 		UniformsStreamInterface emptyUSI;
 		DrawableGeo* currentGeo = nullptr;
@@ -80,7 +81,6 @@ namespace RenderCore { namespace Techniques
 
 		unsigned pipelineLookupCount = 0;
 		unsigned boundUniformLookupCount = 0;
-		unsigned applyLooseCount = 0;
 		unsigned fullDescSetCount = 0;
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
@@ -99,7 +99,7 @@ namespace RenderCore { namespace Techniques
 
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
-						sequencerUSI,
+						globalUSI, materialUSI,
 						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
 					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
 					++boundUniformLookupCount;
@@ -107,7 +107,7 @@ namespace RenderCore { namespace Techniques
 				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface.get()) {
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
-						sequencerUSI,
+						globalUSI, materialUSI,
 						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface.get() : &emptyUSI));
 					currentLooseUniformsInterface = drawable._looseUniformsInterface.get();
 					++boundUniformLookupCount;
@@ -152,22 +152,14 @@ namespace RenderCore { namespace Techniques
 				//////////////////////////////////////////////////////////////////////////////
 
 				if (currentBoundUniforms->GetGroupRulesHash(0) != currentSequencerUniformRules) {
-					const IDescriptorSet* descriptorSets[3];
-					descriptorSets[0] = sequencerDescriptorSet.first.get();
-					descriptorSets[1] = matDescSet;
-					descriptorSets[2] = parserContext._extraSequencerDescriptorSet.second;
-					currentBoundUniforms->ApplyDescriptorSets(
-						metalContext, encoder,
-						MakeIteratorRange(descriptorSets), 0);
-					if (__builtin_expect(currentBoundUniforms->GetBoundLooseImmediateDatas(0) | currentBoundUniforms->GetBoundLooseResources(0) | currentBoundUniforms->GetBoundLooseResources(0), 0ull)) {
-						ApplyLooseUniforms(uniformsHelper, metalContext, encoder, parserContext, *currentBoundUniforms, 0);
-						++applyLooseCount;
-					}
+					ApplyUniforms(uniformDelegateMan, metalContext, encoder, parserContext, *currentBoundUniforms, s_uniformGroupSequencer);
 					currentSequencerUniformRules = currentBoundUniforms->GetGroupRulesHash(0);
 					++fullDescSetCount;
-				} else {
+				} 
+				{
+					const IDescriptorSet* descriptorSets[2] { matDescSet, parserContext._extraSequencerDescriptorSet.second };
 					// When the shader interface hasn't changed, we'll set just the material descriptor set
-					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet, 0, 1);
+					currentBoundUniforms->ApplyDescriptorSets(metalContext, encoder, descriptorSets, s_uniformGroupMaterial);
 					++justMatDescSetCount;
 				}
 
@@ -191,7 +183,6 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt)
 	{
 		TemporaryStorageLocator temporaryVB, temporaryIB;
@@ -210,20 +201,18 @@ namespace RenderCore { namespace Techniques
 			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt, temporaryVB, temporaryIB);
+		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB);
 	}
 
 	void Draw(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt)
 	{
 		pipelineAccelerators.LockForReading();
 		TRY {
-			auto& metalContext = *Metal::DeviceContext::Get(context);
+			auto& metalContext = *Metal::DeviceContext::Get(parserContext.GetThreadContext());
 			auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
 			if (!pipelineLayout) {
 				pipelineAccelerators.UnlockForReading();
@@ -233,35 +222,7 @@ namespace RenderCore { namespace Techniques
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
-		} CATCH (...) {
-			pipelineAccelerators.UnlockForReading();
-			throw;
-		} CATCH_END
-		pipelineAccelerators.UnlockForReading();
-	}
-
-	void Draw(
-		IThreadContext& context,
-        ParsingContext& parserContext,
-		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt)
-	{
-		pipelineAccelerators.LockForReading();
-		TRY {
-			auto& metalContext = *Metal::DeviceContext::Get(context);
-			auto pipelineLayout = pipelineAccelerators.TryGetCompiledPipelineLayout(sequencerConfig);
-			if (!pipelineLayout) {
-				pipelineAccelerators.UnlockForReading();
-				return;
-			}
-			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayout);
-			auto viewport = parserContext.GetViewport();
-			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
-			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			SequencerUniformsHelper uniformsHelper { parserContext };
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, uniformsHelper, drawablePkt);
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt);
 		} CATCH (...) {
 			pipelineAccelerators.UnlockForReading();
 			throw;
@@ -305,37 +266,37 @@ namespace RenderCore { namespace Techniques
 	void ExecuteDrawableContext::ApplyLooseUniforms(const UniformsStream& stream) const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		realContext._boundUniforms->ApplyLooseUniforms(*realContext._metalContext, *realContext._encoder, stream, 1);
+		realContext._boundUniforms->ApplyLooseUniforms(*realContext._metalContext, *realContext._encoder, stream, s_uniformGroupDraw);
 	}
 
 	void ExecuteDrawableContext::ApplyDescriptorSets(IteratorRange<const IDescriptorSet* const*> descSets) const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		realContext._boundUniforms->ApplyDescriptorSets(*realContext._metalContext, *realContext._encoder, descSets, 1);
+		realContext._boundUniforms->ApplyDescriptorSets(*realContext._metalContext, *realContext._encoder, descSets, s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseImmediateDatas() const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		return realContext._boundUniforms->GetBoundLooseImmediateDatas(1);
+		return realContext._boundUniforms->GetBoundLooseImmediateDatas(s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseResources() const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		return realContext._boundUniforms->GetBoundLooseResources(1);
+		return realContext._boundUniforms->GetBoundLooseResources(s_uniformGroupDraw);
 	}
 
 	uint64_t ExecuteDrawableContext::GetBoundLooseSamplers() const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		return realContext._boundUniforms->GetBoundLooseSamplers(1);
+		return realContext._boundUniforms->GetBoundLooseSamplers(s_uniformGroupDraw);
 	}
 
 	bool ExecuteDrawableContext::AtLeastOneBoundLooseUniform() const
 	{
 		auto& realContext = *(RealExecuteDrawableContext*)this;
-		return (realContext._boundUniforms->GetBoundLooseImmediateDatas(1) | realContext._boundUniforms->GetBoundLooseResources(1) | realContext._boundUniforms->GetBoundLooseSamplers(1)) != 0;
+		return (realContext._boundUniforms->GetBoundLooseImmediateDatas(s_uniformGroupDraw) | realContext._boundUniforms->GetBoundLooseResources(s_uniformGroupDraw) | realContext._boundUniforms->GetBoundLooseSamplers(s_uniformGroupDraw)) != 0;
 	}
 
 	void ExecuteDrawableContext::Draw(unsigned vertexCount, unsigned startVertexLocation) const

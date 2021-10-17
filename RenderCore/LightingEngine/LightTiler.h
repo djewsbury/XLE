@@ -19,7 +19,7 @@ namespace RenderCore
 	class IThreadContext;
 }
 
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; class ParsingContext; class SequencerUniformsHelper; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; class ParsingContext; }}
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace LightingEngine
@@ -72,9 +72,7 @@ namespace RenderCore { namespace LightingEngine
 			const Configuration& config);
 
 		static void Visualize(
-			RenderCore::IThreadContext& threadContext, 
 			RenderCore::Techniques::ParsingContext& parsingContext,
-			RenderCore::Techniques::SequencerUniformsHelper& uniformHelper,
 			const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool);
 	
 	private:

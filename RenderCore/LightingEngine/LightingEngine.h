@@ -35,7 +35,6 @@ namespace RenderCore { namespace LightingEngine
 		Step GetNextStep();
 
 		LightingTechniqueInstance(
-			IThreadContext&,
 			Techniques::ParsingContext&,
 			CompiledLightingTechnique&);
 		~LightingTechniqueInstance();

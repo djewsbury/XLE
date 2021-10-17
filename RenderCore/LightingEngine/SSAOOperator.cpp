@@ -50,15 +50,14 @@ namespace RenderCore { namespace LightingEngine
             MakeOpaqueIteratorRange(aoProps)
         };
         us._immediateData = MakeIteratorRange(immData);
-        Techniques::SequencerUniformsHelper uniformsHelper{*iterator._parsingContext};
         UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
         
         _computeOp->Dispatch(
-            *iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+            *iterator._parsingContext,
             (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
             us);
         _upsampleOp->Dispatch(
-            *iterator._threadContext, *iterator._parsingContext, uniformsHelper,
+            *iterator._parsingContext,
             (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
             us);
 

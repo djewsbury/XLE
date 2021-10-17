@@ -11,6 +11,7 @@
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/Services.h"
 #include "../Techniques/SystemUniformsDelegate.h"
+#include "../Techniques/DrawableDelegates.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
@@ -24,78 +25,6 @@ namespace RenderCore { namespace LightingEngine
 	{
 		float _miniProjZ, _miniProjW;
 	};
-
-	class ShadowProbes::Pimpl
-	{
-	public:
-		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<IResource> _staticTable;
-		std::shared_ptr<IResourceView> _staticTableSRV;
-		std::shared_ptr<IResourceView> _probeUniformsUAV;
-		std::vector<Probe> _probes;
-		Configuration _config;
-		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
-		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
-		bool _pendingRebuild = false;
-
-		struct StaticProbePrepareHelper
-		{
-			ShadowProbes::Pimpl* _pimpl;
-			Techniques::TechniqueContext _techContext;
-			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
-			
-			static const auto semanticProbePrepare = ConstHash64<'prob', 'epre'>::Value;
-			StaticProbePrepareHelper(std::shared_ptr<IDevice> device, ShadowProbes::Pimpl& pimpl)
-			: _pimpl(&pimpl)
-			{
-				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-				// auto staticDatabaseDesc = TextureDesc::Plain2D(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
-				Techniques::PreregisteredAttachment preregisteredAttachments[] {
-					semanticProbePrepare,
-					CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, 0, 0, staticDatabaseDesc, "probe-prepare")
-				};
-
-				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
-				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
-				_techContext._sequencerDescSetLayout = _pimpl->_sequencerDescSetLayout;
-				_techContext._systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*device);
-				_techContext._commonResources = Techniques::Services::GetCommonResources();
-				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext);
-				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
-			}
-
-			Techniques::RenderPassInstance BeginRPI(IThreadContext& threadContext, unsigned firstSlice, unsigned sliceCount)
-			{
-				Techniques::FrameBufferDescFragment fragment;
-				SubpassDesc sp;
-				TextureViewDesc viewDesc;
-				viewDesc._arrayLayerRange = {firstSlice, sliceCount};
-				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
-				sp.SetName("static-shadow-prepare");
-				fragment.AddSubpass(std::move(sp));
-
-				Techniques::RenderPassBeginDesc beginInfo;
-				return Techniques::RenderPassInstance{threadContext, *_parsingContext, fragment, beginInfo};
-			}
-		};
-	};
-
-	static std::vector<Techniques::ProjectionDesc> CreateProjectionDescs(
-		IteratorRange<const ShadowProbes::Probe*> probes)
-	{
-		// Should we consider fewer rendering directions for some probes? 
-		std::vector<Techniques::ProjectionDesc> result;
-		auto count = probes.size()*6;
-		result.reserve(count);
-		for (unsigned c=0; c<count; ++c) {
-			const auto& p = probes[c/6];
-			float near = p._nearRadius;
-			float far = p._farRadius;
-			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near, far));
-		}
-		return result;
-	}
 
 	class MultiViewUniformsDelegate : public RenderCore::Techniques::IShaderResourceDelegate
 	{
@@ -120,7 +49,7 @@ namespace RenderCore { namespace LightingEngine
 			return sizeof(Float4x4) * _projectionCount;
 		}
 
-		MultiViewUniformsDelegate(IteratorRange<const Float4x4*> worldToProjections)
+		void SetWorldToProjections(IteratorRange<const Float4x4*> worldToProjections)
 		{
 			assert(worldToProjections.size() > 0 && worldToProjections.size() <= dimof(_multProbeProperties._worldToProjection));
 			_projectionCount = std::min(worldToProjections.size(), dimof(_multProbeProperties._worldToProjection));
@@ -130,10 +59,86 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
+	class ShadowProbes::Pimpl
+	{
+	public:
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<IResource> _staticTable;
+		std::shared_ptr<IResourceView> _staticTableSRV;
+		std::shared_ptr<IResourceView> _probeUniformsUAV;
+		std::vector<Probe> _probes;
+		Configuration _config;
+		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
+		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
+		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
+		bool _pendingRebuild = false;
+
+		struct StaticProbePrepareHelper
+		{
+			ShadowProbes::Pimpl* _pimpl;
+			Techniques::TechniqueContext _techContext;
+			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
+			
+			static const auto semanticProbePrepare = ConstHash64<'prob', 'epre'>::Value;
+			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
+			: _pimpl(&pimpl)
+			{
+				auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
+				// auto staticDatabaseDesc = TextureDesc::Plain2D(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
+				staticDatabaseDesc._arrayCount = 6*_pimpl->_probes.size();
+				Techniques::PreregisteredAttachment preregisteredAttachments[] {
+					semanticProbePrepare,
+					CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil, 0, 0, staticDatabaseDesc, "probe-prepare")
+				};
+
+				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(threadContext.GetDevice());
+				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
+				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();
+				uniformDelegateMan->AddShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
+				uniformDelegateMan->AddShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
+				uniformDelegateMan->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *_pimpl->_sequencerDescSetLayout, *threadContext.GetDevice());
+				_techContext._commonResources = Techniques::Services::GetCommonResources();
+				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
+				for (const auto&a:preregisteredAttachments) _parsingContext->GetFragmentStitchingContext().DefineAttachment(a);
+			}
+
+			Techniques::RenderPassInstance BeginRPI(unsigned firstSlice, unsigned sliceCount)
+			{
+				Techniques::FrameBufferDescFragment fragment;
+				SubpassDesc sp;
+				TextureViewDesc viewDesc;
+				viewDesc._arrayLayerRange = {firstSlice, sliceCount};
+				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
+				sp.SetName("static-shadow-prepare");
+				fragment.AddSubpass(std::move(sp));
+
+				Techniques::RenderPassBeginDesc beginInfo;
+				return Techniques::RenderPassInstance{*_parsingContext, fragment, beginInfo};
+			}
+		};
+	};
+
+	static std::vector<Techniques::ProjectionDesc> CreateProjectionDescs(
+		IteratorRange<const ShadowProbes::Probe*> probes)
+	{
+		// Should we consider fewer rendering directions for some probes? 
+		std::vector<Techniques::ProjectionDesc> result;
+		auto count = probes.size()*6;
+		result.reserve(count);
+		for (unsigned c=0; c<count; ++c) {
+			const auto& p = probes[c/6];
+			float near = p._nearRadius;
+			float far = p._farRadius;
+			result.push_back(Techniques::BuildCubemapProjectionDesc(c%6, p._position, near, far));
+		}
+		return result;
+	}
+
+	
+
 	class ShadowProbes::ProbeRenderingInstance : public IProbeRenderingInstance
 	{
 	public:
-		IThreadContext* _threadContext = nullptr;
 		unsigned _probeIterator = 0;
 		std::vector<Float4x4> _pendingViews;	// candidate for subframe heap
 		std::unique_ptr<ShadowProbes::Pimpl::StaticProbePrepareHelper> _staticPrepareHelper;
@@ -146,13 +151,11 @@ namespace RenderCore { namespace LightingEngine
 				if (!_pendingViews.empty()) {
 					// Commit the objects that were prepared for rendering
 					if (!_drawablePkt._drawables.empty()) {
-						auto srDel = std::make_shared<MultiViewUniformsDelegate>(MakeIteratorRange(_pendingViews));
-						_staticPrepareHelper->_parsingContext->AddShaderResourceDelegate(srDel);
-						auto rpi = _staticPrepareHelper->BeginRPI(*_threadContext, _probeIterator*6, _pendingViews.size());
+						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
+						auto rpi = _staticPrepareHelper->BeginRPI(_probeIterator*6, _pendingViews.size());
 						Techniques::Draw(
-							*_threadContext, *_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
+							*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
 							*_pimpl->_probePrepareCfg, _drawablePkt);
-						_staticPrepareHelper->_parsingContext->RemoveShaderResourceDelegate(*srDel);
 						_drawablePkt.Reset();
 
 						auto staticTable = rpi.GetDepthStencilAttachmentResource();
@@ -212,9 +215,8 @@ namespace RenderCore { namespace LightingEngine
 			return nullptr;
 
 		auto result = std::make_shared<ProbeRenderingInstance>();
-		result->_threadContext = &threadContext;
 		result->_pimpl = _pimpl.get();
-		result->_staticPrepareHelper = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext.GetDevice(), *_pimpl);
+		result->_staticPrepareHelper = std::make_unique<ShadowProbes::Pimpl::StaticProbePrepareHelper>(threadContext, *_pimpl);
 
 		// Build the StaticShadowProbeDesc table
 		std::vector<CB_StaticShadowProbeDesc> probeUniforms;
@@ -259,6 +261,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_config = config;
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
+		_pimpl->_multiViewUniformsDelegate = std::make_shared<MultiViewUniformsDelegate>();
 
 		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 		descSetLayoutFuture->StallWhilePending();

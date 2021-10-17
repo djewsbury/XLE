@@ -108,7 +108,6 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<AttachmentPool> _attachmentPool;
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
         std::shared_ptr<CommonResourceBox> _commonResources;
-        std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
         std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
         std::shared_ptr<PipelinePool> _graphicsPipelinePool;
     };

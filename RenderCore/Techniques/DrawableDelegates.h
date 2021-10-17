@@ -55,7 +55,7 @@ namespace RenderCore { namespace Techniques
 		virtual void RemoveUniformDelegate(IUniformBufferDelegate&) = 0;
 
         virtual void AddSemiConstantDescriptorSet(
-            uint64_t binding, const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>,
+            uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&,
             IDevice& device) = 0;
         virtual void RemoveSemiConstantDescriptorSet(uint64_t binding) = 0;
 
@@ -63,7 +63,7 @@ namespace RenderCore { namespace Techniques
 		virtual void RemoveBase(IUniformDelegateManager&) = 0;
 
         virtual void InvalidateUniforms() = 0;
-        virtual void BringUpToDate(IThreadContext&, ParsingContext& parsingContext) = 0;
+        virtual void BringUpToDate(ParsingContext& parsingContext) = 0;
 
         virtual const UniformsStreamInterface& GetInterface() = 0;
         virtual ~IUniformDelegateManager();

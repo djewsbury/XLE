@@ -528,7 +528,7 @@ namespace ToolsRig
                 //  likely get the most efficient results by rendering
                 //  all of objects that require highlights in one go.
             Placements_RenderHighlight(
-                context, parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
+                parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
                 AsPointer(activeSelection.begin()), AsPointer(activeSelection.end()));
         }
     }
@@ -748,7 +748,7 @@ namespace ToolsRig
             }
 
             Placements_RenderHighlight(
-                context, parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
+                parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
                 AsPointer(objects.begin()), AsPointer(objects.end()));
         }
     }
@@ -1277,7 +1277,7 @@ namespace ToolsRig
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators)
     {
         if (_hasHoverPoint)
-            RenderCylinderHighlight(context, parserContext, pipelineAccelerators, _hoverPoint, _radius);
+            RenderCylinderHighlight(parserContext, pipelineAccelerators, _hoverPoint, _radius);
     }
 
     const char* ScatterPlacements::GetName() const  { return "ScatterPlace"; }

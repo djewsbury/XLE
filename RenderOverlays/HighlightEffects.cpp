@@ -188,7 +188,6 @@ namespace RenderOverlays
     static const bool s_inputAttachmentMode = false;
 
     void ExecuteHighlightByStencil(
-        IThreadContext& threadContext,
         Techniques::ParsingContext& parsingContext,
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted)
@@ -207,13 +206,13 @@ namespace RenderOverlays
             mainPass.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, stencilViewDesc);
         }
         fbDesc.AddSubpass(std::move(mainPass));
-		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
+		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
         auto stencilSrv = s_inputAttachmentMode ? rpi.GetInputAttachmentView(0) : rpi.GetNonFrameBufferAttachmentView(0);
         if (!stencilSrv) return;
 
-        auto& metalContext = *RenderCore::Metal::DeviceContext::Get(threadContext);
-        auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
+        auto& metalContext = *RenderCore::Metal::DeviceContext::Get(parsingContext.GetThreadContext());
+        auto pipelineLayout = GetMainPipelineLayout(parsingContext.GetThreadContext().GetDevice());
         auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
         ExecuteHighlightByStencil(metalContext, encoder, stencilSrv.get(), settings, onlyHighlighted, s_inputAttachmentMode);
     }
@@ -223,13 +222,12 @@ namespace RenderOverlays
     class BinaryHighlight::Pimpl
     {
     public:
-        IThreadContext*                 _threadContext;
         std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
         Techniques::RenderPassInstance  _rpi;
         Techniques::ParsingContext* _parsingContext = nullptr;
 
-        Pimpl(IThreadContext& threadContext, std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout)
-        : _threadContext(&threadContext), _pipelineLayout(std::move(pipelineLayout)) {}
+        Pimpl(std::shared_ptr<RenderCore::ICompiledPipelineLayout> pipelineLayout)
+        : _pipelineLayout(std::move(pipelineLayout)) {}
         ~Pimpl() {}
     };
 
@@ -239,12 +237,11 @@ namespace RenderOverlays
 	}
 
     BinaryHighlight::BinaryHighlight(
-        IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext)
     {
         using namespace RenderCore;
-        auto pipelineLayout = GetMainPipelineLayout(threadContext.GetDevice());
-        _pimpl = std::make_unique<Pimpl>(threadContext, std::move(pipelineLayout));
+        auto pipelineLayout = GetMainPipelineLayout(parsingContext.GetThreadContext().GetDevice());
+        _pimpl = std::make_unique<Pimpl>(std::move(pipelineLayout));
         _pimpl->_parsingContext = &parsingContext;
 
 		Techniques::FrameBufferDescFragment fbDescFrag;
@@ -270,11 +267,11 @@ namespace RenderOverlays
         
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
         _pimpl->_rpi = Techniques::RenderPassInstance(
-            threadContext, parsingContext, fbDescFrag, 
+            parsingContext, fbDescFrag, 
 			{MakeIteratorRange(clearValues)});
     }
 
-    void BinaryHighlight::FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor)
+    void BinaryHighlight::FinishWithOutlineAndOverlay(Float3 outlineColor, unsigned overlayColor)
     {
         assert(!s_inputAttachmentMode);
 
@@ -283,14 +280,14 @@ namespace RenderOverlays
         _pimpl->_rpi.End();
         
         if (srv) {
-            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
 			static Float3 highlightColO(1.5f, 1.35f, .7f);
 			static unsigned overlayColO = 1;
 
 			outlineColor = highlightColO;
 			overlayColor = overlayColO;
 
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
 
 			HighlightByStencilSettings settings;
 			settings._outlineColor = outlineColor;
@@ -301,7 +298,7 @@ namespace RenderOverlays
 		}
     }
 
-    void BinaryHighlight::FinishWithOutline(RenderCore::IThreadContext& threadContext, Float3 outlineColor)
+    void BinaryHighlight::FinishWithOutline(Float3 outlineColor)
     {
             //  now we can render these objects over the main image, 
             //  using some filtering
@@ -313,8 +310,8 @@ namespace RenderOverlays
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
 		if (srv && shaders) {
-            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
+			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 
 			struct Constants { Float3 _color; unsigned _dummy; } constants = { outlineColor, 0 };
@@ -335,7 +332,7 @@ namespace RenderOverlays
         _pimpl->_rpi.End();
     }
 
-    void BinaryHighlight::FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor)
+    void BinaryHighlight::FinishWithShadow(Float4 shadowColor)
     {
         assert(!s_inputAttachmentMode);
 
@@ -348,8 +345,8 @@ namespace RenderOverlays
 
         auto shaders = ::Assets::MakeAsset<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
         if (srv && shaders) {
-            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, *_pimpl->_parsingContext);
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
+			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
             auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(_pimpl->_pipelineLayout);
 			struct Constants { Float4 _shadowColor; } constants = { shadowColor };
 

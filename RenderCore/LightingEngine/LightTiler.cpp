@@ -339,9 +339,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void RasterizationLightTileOperator::Visualize(
-		IThreadContext& threadContext, 
 		Techniques::ParsingContext& parsingContext,
-		Techniques::SequencerUniformsHelper& uniformHelper,
 		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool)
 	{
 #if 0

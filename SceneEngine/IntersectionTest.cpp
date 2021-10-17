@@ -155,9 +155,8 @@ namespace SceneEngine
     static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
-        techniqueContext._systemUniformsDelegate = drawingApparatus._systemUniformsDelegate;
         techniqueContext._commonResources = drawingApparatus._commonResources;
-        techniqueContext._sequencerDescSetLayout = drawingApparatus._sequencerDescSetLayout;
+        techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
         return techniqueContext;
     }
 
@@ -171,7 +170,7 @@ namespace SceneEngine
 
 		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
         auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
-		RenderCore::Techniques::ParsingContext parsingContext(techniqueContext);
+		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
 
         if ((filter & Type::Terrain) && _terrainManager) {
@@ -303,7 +302,7 @@ namespace SceneEngine
                 TRY
                 {
                     auto techniqueContext = MakeTechniqueContext(*context._drawingApparatus);
-					RenderCore::Techniques::ParsingContext parsingContext(techniqueContext);
+					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 
                     // note --  we could do this all in a single render call, except that there
                     //          is no way to associate a low level intersection result with a specific

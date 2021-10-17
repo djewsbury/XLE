@@ -15,7 +15,6 @@
 namespace RenderCore { namespace Techniques
 {
 	RenderPassInstance RenderPassToPresentationTarget(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		LoadStore loadOperation)
 	{
@@ -23,27 +22,25 @@ namespace RenderCore { namespace Techniques
 		SubpassDesc subpass;
 		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation, 0));
 		frag.AddSubpass(std::move(subpass));
-        return RenderPassInstance{context, parserContext, frag};
+        return RenderPassInstance{parserContext, frag};
 	}
 
 	RenderPassInstance RenderPassToPresentationTarget(
-		IThreadContext& context,
 		const RenderCore::IResourcePtr& presentationTarget,
         ParsingContext& parserContext,
 		LoadStore loadOperation)
 	{
 		parserContext.GetTechniqueContext()._attachmentPool->Bind(AttachmentSemantics::ColorLDR, presentationTarget);
-		return RenderPassToPresentationTarget(context, parserContext, loadOperation);
+		return RenderPassToPresentationTarget(parserContext, loadOperation);
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		LoadStore loadOperation)
 	{
 		auto boundDepth = parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(AttachmentSemantics::MultisampleDepth);
 		if (!boundDepth && loadOperation != LoadStore::Clear)
-			return RenderPassToPresentationTarget(context, parserContext, loadOperation);
+			return RenderPassToPresentationTarget(parserContext, loadOperation);
 
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
@@ -51,16 +48,15 @@ namespace RenderCore { namespace Techniques
 		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation, 0));
 		frag.AddSubpass(std::move(subpass));
 
-        return RenderPassInstance{ context, parserContext, frag };
+        return RenderPassInstance{ parserContext, frag };
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		IThreadContext& context,
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,
 		LoadStore loadOperation)
 	{
         parserContext.GetTechniqueContext()._attachmentPool->Bind(AttachmentSemantics::ColorLDR, presentationTarget);
-		return RenderPassToPresentationTargetWithDepthStencil(context, parserContext, loadOperation);
+		return RenderPassToPresentationTargetWithDepthStencil(parserContext, loadOperation);
 	}
 }}

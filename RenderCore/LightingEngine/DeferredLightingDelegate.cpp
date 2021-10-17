@@ -449,7 +449,7 @@ namespace RenderCore { namespace LightingEngine
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
 
-		Techniques::RenderPassInstance rpi { threadContext, parsingContext, fbDesc };
+		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Utility::Hash64("GBuffer_Normals"));
@@ -469,8 +469,7 @@ namespace RenderCore { namespace LightingEngine
 		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
-		Techniques::SequencerUniformsHelper uniformsHelper{ parsingContext };
-		op->Actualize()->Draw(threadContext, parsingContext, uniformsHelper, us, MakeIteratorRange(shadowDescSets));
+		op->Actualize()->Draw(parsingContext, us, MakeIteratorRange(shadowDescSets));
 	}
 
 	void DeferredLightingCaptures::GenerateDebuggingOutputs(LightingTechniqueIterator& iterator)

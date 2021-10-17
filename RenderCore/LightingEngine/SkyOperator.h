@@ -23,7 +23,6 @@ namespace RenderCore { namespace Techniques
 	class PipelinePool;
 	class FrameBufferTarget;
 	class ParsingContext;
-	class SequencerUniformsHelper;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -39,10 +38,7 @@ namespace RenderCore { namespace LightingEngine
 	class SkyOperator
 	{
 	public:
-		void Execute(
-			IThreadContext& threadContext,
-			Techniques::ParsingContext& parsingContext,
-			Techniques::SequencerUniformsHelper& seqUniforms);
+		void Execute(Techniques::ParsingContext& parsingContext);
 		void Execute(LightingTechniqueIterator&);
 		void SetResource(std::shared_ptr<IResourceView>);
 

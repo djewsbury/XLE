@@ -26,7 +26,6 @@ namespace Assets { class IAsyncMarker; }
 namespace SceneEngine
 {
 	void ExecuteSceneRaw(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
@@ -34,7 +33,6 @@ namespace SceneEngine
 		IScene& scene);
 
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
-		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique);

@@ -10,6 +10,7 @@
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/ParsingContext.h"
+#include "../Techniques/DrawableDelegates.h"
 #include "../FrameBufferDesc.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/AsyncMarkerGroup.h"
@@ -240,11 +241,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	LightingTechniqueIterator::LightingTechniqueIterator(
-		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		const CompiledLightingTechnique& compiledTechnique)
 	: _drawablePkt(parsingContext.GetTechniqueContext()._drawablesPacketsPool->Allocate())
-	, _threadContext(&threadContext)
+	, _threadContext(&parsingContext.GetThreadContext())
 	, _parsingContext(&parsingContext)
 	, _pipelineAcceleratorPool(compiledTechnique._pipelineAccelerators.get())
 	, _compiledTechnique(&compiledTechnique)
@@ -281,19 +281,16 @@ namespace RenderCore { namespace LightingEngine
 
 			case CompiledLightingTechnique::Step::Type::ExecuteDrawables:
 				{
-					std::shared_ptr<Techniques::IShaderResourceDelegate> resourceDelegates[] = { next->_shaderResourceDelegate };
-					Techniques::SequencerUniformsHelper uniformsHelper {
-						*_iterator->_parsingContext,
-						(next->_shaderResourceDelegate) ? MakeIteratorRange(resourceDelegates) : IteratorRange<const std::shared_ptr<Techniques::IShaderResourceDelegate>*>{}
-					};
+					if (next->_shaderResourceDelegate)
+						_iterator->_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(next->_shaderResourceDelegate);
 					Techniques::Draw(
-						*_iterator->_threadContext,
 						*_iterator->_parsingContext,
 						*_iterator->_pipelineAcceleratorPool,
 						*next->_sequencerConfig,
-						uniformsHelper,
 						_iterator->_drawablePkt);
 					_iterator->_drawablePkt.Reset();
+					if (next->_shaderResourceDelegate)
+						_iterator->_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*next->_shaderResourceDelegate);
 				}
 				break;
 
@@ -304,7 +301,7 @@ namespace RenderCore { namespace LightingEngine
 				{
 					assert(next->_fbDescIdx < _iterator->_compiledTechnique->_fbDescs.size());
 					_iterator->_rpi = Techniques::RenderPassInstance{
-						*_iterator->_threadContext, *_iterator->_parsingContext,
+						*_iterator->_parsingContext,
 						_iterator->_compiledTechnique->_fbDescs[next->_fbDescIdx]};
 				}
 				break;
@@ -332,11 +329,10 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	LightingTechniqueInstance::LightingTechniqueInstance(
-		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		CompiledLightingTechnique& compiledTechnique)
 	{
-		_iterator = std::make_unique<LightingTechniqueIterator>(threadContext, parsingContext, compiledTechnique);
+		_iterator = std::make_unique<LightingTechniqueIterator>(parsingContext, compiledTechnique);
 	}
 
 	LightingTechniqueInstance::~LightingTechniqueInstance() {}

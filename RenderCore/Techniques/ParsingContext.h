@@ -24,6 +24,7 @@ namespace RenderCore { namespace Techniques
     class SystemUniformsDelegate;
     class FragmentStitchingContext;
     class RenderPassInstance;
+    class IUniformDelegateManager;
         
     /// <summary>Manages critical shader state</summary>
     /// Certain system variables are bound to the shaders, and managed by higher
@@ -53,15 +54,10 @@ namespace RenderCore { namespace Techniques
         TechniqueContext&		GetTechniqueContext()               { return *_techniqueContext; }
 		ParameterBox&			GetSubframeShaderSelectors()		{ return _subframeShaderSelectors; }
 
-		void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>&);
-		void RemoveUniformDelegate(IUniformBufferDelegate&);
-        void RemoveUniformDelegate(uint64_t binding);
-        void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>&);
-		void RemoveShaderResourceDelegate(IShaderResourceDelegate&);
-		auto GetUniformDelegates() const { return MakeIteratorRange(_uniformDelegates); }
-        auto GetShaderResourceDelegates() const { return MakeIteratorRange(_shaderResourceDelegates); }
+        const std::shared_ptr<IUniformDelegateManager>& GetUniformDelegateManager() { return _uniformDelegateManager; }
+        void SetUniformDelegateManager(std::shared_ptr<IUniformDelegateManager> newMan) { _uniformDelegateManager = newMan; }
 
-        SystemUniformsDelegate& GetSystemUniformsDelegate() const;
+        IThreadContext& GetThreadContext() { return *_threadContext; }
 
         std::pair<uint64_t, const IDescriptorSet*> _extraSequencerDescriptorSet = {0ull, nullptr};
         RenderPassInstance* _rpi = nullptr;
@@ -75,7 +71,7 @@ namespace RenderCore { namespace Techniques
         FragmentStitchingContext& GetFragmentStitchingContext();
 
 			//  ----------------- Overlays for late rendering -----------------
-        typedef std::function<void(IThreadContext&, ParsingContext&)> PendingOverlay;
+        typedef std::function<void(ParsingContext&)> PendingOverlay;
         std::vector<PendingOverlay> _pendingOverlays;
 
             //  ----------------- Exception reporting -----------------
@@ -95,7 +91,9 @@ namespace RenderCore { namespace Techniques
         bool HasInvalidAssets() const { return _stringHelpers->_invalidAssets[0] != '\0'; }
         bool HasErrorString() const { return _stringHelpers->_errorString[0] != '\0'; }
 
-        ParsingContext(TechniqueContext& techniqueContext);
+        ParsingContext(
+            TechniqueContext& techniqueContext,
+            IThreadContext& threadContext);
         ~ParsingContext();
 
         ParsingContext& operator=(const ParsingContext&) = delete;
@@ -104,7 +102,10 @@ namespace RenderCore { namespace Techniques
         ParsingContext(ParsingContext&&) = default;
 
     protected:
-        TechniqueContext*                   _techniqueContext;
+        TechniqueContext*       _techniqueContext;
+        IThreadContext*         _threadContext;
+        std::shared_ptr<IUniformDelegateManager> _uniformDelegateManager;
+
         struct Internal 
         {
             ProjectionDesc _projectionDesc;
@@ -117,8 +118,7 @@ namespace RenderCore { namespace Techniques
 		ParameterBox                        _subframeShaderSelectors;
         std::unique_ptr<FragmentStitchingContext> _stitchingContext;
 
-		std::vector<std::pair<uint64_t, std::shared_ptr<IUniformBufferDelegate>>> _uniformDelegates;
-        std::vector<std::shared_ptr<IShaderResourceDelegate>> _shaderResourceDelegates;
+		
     };
 
     /// <summary>Utility macros for catching asset exceptions</summary>

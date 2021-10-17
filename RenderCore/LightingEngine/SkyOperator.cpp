@@ -15,30 +15,23 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	void SkyOperator::Execute(
-		IThreadContext& threadContext,
-		Techniques::ParsingContext& parsingContext,
-		Techniques::SequencerUniformsHelper& seqUniforms)
+	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
 	{
 		if (!_descSet) {
 			StringMeldAppend(parsingContext._stringHelpers->_pendingAssets, ArrayEnd(parsingContext._stringHelpers->_pendingAssets)) << "Sky resources\n";
 			return;
 		}
 
-		// todo -- don't reconstruct the SequencerUniformsHelper every time here!
 		const IDescriptorSet* descSets[] = { _descSet.get() };
 		_shader->Draw(
-			threadContext,
 			parsingContext,
-			seqUniforms,
 			{},
 			MakeIteratorRange(descSets));
 	}
 
 	void SkyOperator::Execute(LightingTechniqueIterator& iterator)
 	{
-		Techniques::SequencerUniformsHelper seqUniforms{*iterator._parsingContext};
-		Execute(*iterator._threadContext, *iterator._parsingContext, seqUniforms);
+		Execute(*iterator._parsingContext);
 	}
 
 	void SkyOperator::SetResource(std::shared_ptr<IResourceView> texture)

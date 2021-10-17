@@ -220,9 +220,7 @@ namespace ToolsRig
 	{
 	public:
 		void Execute(
-			RenderCore::IThreadContext& threadContext, 
 			RenderCore::Techniques::ParsingContext& parsingContext,
-			RenderCore::Techniques::SequencerUniformsHelper& uniformHelper,
 			RenderCore::Techniques::DrawingApparatus& drawingApparatus,
 			RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) override
 		{
@@ -241,7 +239,7 @@ namespace ToolsRig
 				spDesc.SetName("visualize");
 				fragment.AddSubpass(std::move(spDesc));
 
-				Techniques::RenderPassInstance rpi{threadContext, parsingContext, fragment};
+				Techniques::RenderPassInstance rpi{parsingContext, fragment};
 				auto attachmentSRV = rpi.GetNonFrameBufferAttachmentView(0);
 
 				UniformsStreamInterface usi;
@@ -267,7 +265,7 @@ namespace ToolsRig
 					"rawos/shaderlab/visualize-attachment.pixel.hlsl:main", _shaderSelectors, 
 					GENERAL_OPERATOR_PIPELINE ":GraphicsMain", rpi,
 					usi);
-				op->Actualize()->Draw(threadContext, parsingContext, uniformHelper, us);
+				op->Actualize()->Draw(parsingContext, us);
 			} else {
 				std::stringstream str;
 				str << "Attachment with semantic (" << _attachmentName << ") was not found. Try the following:" << std::endl;
@@ -279,7 +277,7 @@ namespace ToolsRig
 					if (dehash) str << dehash;
 					else str << std::hex << attachment._semantic;
 				}
-				RenderOverlays::FillScreenWithMsg(threadContext, parsingContext, immediateDrawingApparatus, str.str());
+				RenderOverlays::FillScreenWithMsg(parsingContext, immediateDrawingApparatus, str.str());
 			}
 		}
 

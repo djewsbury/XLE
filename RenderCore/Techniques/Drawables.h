@@ -156,18 +156,14 @@ namespace RenderCore { namespace Techniques
 
 	class IPipelineAcceleratorPool;
 	class SequencerConfig;
-	class SequencerUniformsHelper;
 		
 	void Draw(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		SequencerUniformsHelper& uniformsHelper,
 		const DrawablesPacket& drawablePkt);
 
 	void Draw(
-		IThreadContext& context,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,

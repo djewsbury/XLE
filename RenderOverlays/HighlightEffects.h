@@ -24,7 +24,6 @@ namespace RenderOverlays
     };
 
     void ExecuteHighlightByStencil(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parsingContext,
         const HighlightByStencilSettings& settings,
         bool onlyHighlighted);
@@ -44,14 +43,13 @@ namespace RenderOverlays
     class BinaryHighlight
     {
     public:
-        void FinishWithOutline(RenderCore::IThreadContext& threadContext, Float3 outlineColor);
-        void FinishWithOutlineAndOverlay(RenderCore::IThreadContext& threadContext, Float3 outlineColor, unsigned overlayColor);
-        void FinishWithShadow(RenderCore::IThreadContext& threadContext, Float4 shadowColor);
+        void FinishWithOutline(Float3 outlineColor);
+        void FinishWithOutlineAndOverlay(Float3 outlineColor, unsigned overlayColor);
+        void FinishWithShadow(Float4 shadowColor);
 
 		const RenderCore::FrameBufferDesc& GetFrameBufferDesc() const;
         
         BinaryHighlight(
-            RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::ParsingContext& parsingContext);
         ~BinaryHighlight();
     protected:

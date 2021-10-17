@@ -348,20 +348,17 @@ namespace SceneEngine
 		parsingContext.GetProjectionDesc() = projDesc;
 
 		auto& metalContext = *Metal::DeviceContext::Get(context);
+		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(_pimpl->_res->_rayDefinition);
 
-		std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegates[] { _pimpl->_res->_rayDefinition };
-	
-		Techniques::SequencerUniformsHelper uniformsHelper {
-			parsingContext, MakeIteratorRange(uniformDelegates)
-		};
 		_pimpl->_pipelineAccelerators->LockForReading();
 		TRY {
-			RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, *_pimpl->_sequencerConfig, uniformsHelper, drawablePkt);
+			RenderCore::Techniques::Draw(metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, *_pimpl->_sequencerConfig, drawablePkt);
 		} CATCH(...) {
 			_pimpl->_pipelineAccelerators->UnlockForReading();
 			throw;
 		} CATCH_END
 		_pimpl->_pipelineAccelerators->UnlockForReading();
+		parsingContext.GetUniformDelegateManager()->RemoveShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
 	}
 
 	static const InputElementDesc s_soEles[] = {

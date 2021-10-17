@@ -159,7 +159,6 @@ namespace ToolsRig
     {
     public:
         virtual void Render(
-            RenderCore::IThreadContext& context,
             RenderCore::Techniques::ParsingContext& parserContext) override;
 		virtual OverlayState GetOverlayState() const override;
 
@@ -188,7 +187,6 @@ namespace ToolsRig
         virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
 
         virtual void Render(
-            RenderCore::IThreadContext& context, 
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
 		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);

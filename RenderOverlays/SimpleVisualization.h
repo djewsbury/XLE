@@ -24,7 +24,6 @@ namespace RenderOverlays
 		float gridScale = 1.0f, Float3 origin = Float3(0,0,0));
 
 	void FillScreenWithMsg(
-		RenderCore::IThreadContext& threadContext, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
 		StringSection<> msg);
