@@ -646,10 +646,12 @@ namespace Utility
 		CircularBuffer<Type,Count>::~CircularBuffer() 
 	{
 		if (_start != 0 || _end != Count)
-			for (unsigned c = _start; c != _end; c = Internal::Modulo<Count>(c + 1)) {
+			for (unsigned c = _start;;) {
 				auto& src = ((Type*)_objects)[c];
 				(void)src;
 				src.~Type();
+                c=Internal::Modulo<Count>(c+1);
+                if (c==_end) break;
 			}
 	}
 
@@ -664,10 +666,12 @@ namespace Utility
 		#pragma push_macro("new")
 		#undef new
 		if (_start != 0 || _end != Count)
-			for (unsigned c=_start; c!=_end; c=Internal::Modulo<Count>(c+1)) {
+			for (unsigned c=_start;;) {
 				auto& src = ((Type*)moveFrom._objects)[c];
 				new(_objects + sizeof(Type)*c) Type(std::move(src));
 				src.~Type();
+                c=Internal::Modulo<Count>(c+1);
+                if (c==_end) break;
 			}
 		#pragma pop_macro("new")
 	}
@@ -676,10 +680,12 @@ namespace Utility
 		auto CircularBuffer<Type, Count>::operator=(CircularBuffer&& moveFrom) never_throws -> CircularBuffer&
 	{
 		if (_start != 0 || _end != Count)
-			for (unsigned c = _start; c != _end; c = Internal::Modulo<Count>(c + 1)) {
+			for (unsigned c = _start;;) {
 				auto& src = ((Type*)_objects)[c];
 				(void)src;
 				src.~Type();
+                c=Internal::Modulo<Count>(c+1);
+                if (c==_end) break;
 			}
 
 		_start = moveFrom._start;
@@ -690,10 +696,12 @@ namespace Utility
 		#pragma push_macro("new")
 		#undef new
 		if (_start != 0 || _end != Count)
-			for (unsigned c = _start; c != _end; c = Internal::Modulo<Count>(c + 1)) {
+			for (unsigned c = _start;;) {
 				auto& src = ((Type*)moveFrom._objects)[c];
 				new(_objects + sizeof(Type)*c) Type(std::move(src));
 				src.~Type();
+                c=Internal::Modulo<Count>(c+1);
+                if (c==_end) break;
 			}
 		#pragma pop_macro("new")
 		return *this;
