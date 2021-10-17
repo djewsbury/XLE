@@ -186,10 +186,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::vector<ResourceView> _retainedViews;
 		std::vector<SamplerState> _retainedSamplers;
+		GlobalPools* _globalPools;
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			std::vector<uint64_t> _resourcesThatMustBeVisible;
 		#endif
+
+		void WriteInternal(
+			ObjectFactory& factory,
+			IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
+			const UniformsStream& uniforms);
 	};
 
 }}

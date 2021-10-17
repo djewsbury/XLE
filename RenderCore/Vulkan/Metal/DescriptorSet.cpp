@@ -880,22 +880,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		return (slotIdx < _fixedSamplers.size()) && (_fixedSamplers[slotIdx] != nullptr);
 	}
 
-	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors)
-	{
-		assert(0);
-	}
-
-	CompiledDescriptorSet::CompiledDescriptorSet(
+	void CompiledDescriptorSet::WriteInternal(
 		ObjectFactory& factory,
-		GlobalPools& globalPools,
-		const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
-		VkShaderStageFlags shaderStageFlags,
 		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
 		const UniformsStream& uniforms)
-	: _layout(layout)
 	{
-		_underlying = globalPools._longTermDescriptorPool.Allocate(GetUnderlyingLayout());
-
 		uint64_t writtenMask = 0ull;
 		size_t linearBufferIterator = 0;
 		unsigned offsetMultiple = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
@@ -918,7 +907,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				// across APIs.
 				// to support different descriptor types, we'd need to change the offset alignment
 				// values and change the bind flag used to create the buffer
-				assert(layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBuffer);
+				assert(_layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBuffer);
 				auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
 				linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				writtenMask |= 1ull<<uint64_t(c);
@@ -952,19 +941,45 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 		}
 
-		builder.BindDummyDescriptors(globalPools, layout->GetDummyMask() & ~writtenMask);
+		builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask);
 
-		std::vector<uint64_t> resourceVisibilityList;
+		#if !defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			std::vector<uint64_t> resourceVisibilityList;
+		#endif
 		builder.FlushChanges(
 			factory.GetDevice().get(),
 			_underlying.get(),
 			nullptr, 0,
-			resourceVisibilityList
+			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+				_resourcesThatMustBeVisible
+			#else
+				resourceVisibilityList
+			#endif
 			VULKAN_VERBOSE_DEBUG_ONLY(, _description));
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-			_resourcesThatMustBeVisible = std::move(resourceVisibilityList);
+			std::sort(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end());
+			_resourcesThatMustBeVisible.erase(std::unique(_resourcesThatMustBeVisible.begin(), _resourcesThatMustBeVisible.end()), _resourcesThatMustBeVisible.end());
 		#endif
+	}
+
+	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors)
+	{
+		WriteInternal(GetObjectFactory(), newDescriptors._slotBindings, newDescriptors._bindItems);
+	}
+
+	CompiledDescriptorSet::CompiledDescriptorSet(
+		ObjectFactory& factory,
+		GlobalPools& globalPools,
+		const std::shared_ptr<CompiledDescriptorSetLayout>& layout,
+		VkShaderStageFlags shaderStageFlags,
+		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
+		const UniformsStream& uniforms)
+	: _layout(layout)
+	, _globalPools(&globalPools)
+	{
+		_underlying = globalPools._longTermDescriptorPool.Allocate(GetUnderlyingLayout());
+		WriteInternal(factory, binds, uniforms);
 	}
 
 	CompiledDescriptorSet::~CompiledDescriptorSet()

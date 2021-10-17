@@ -49,6 +49,7 @@ namespace RenderCore { namespace Techniques
 			for (auto page=_pages.begin(); page!=_pages.end(); ++page) {
 				if (!page->_freeItems.empty()) {
 					auto item = page->_freeItems.front();
+					assert(item<PageSize);
 					page->_freeItems.pop_front();
 					page->_allocatedItems.try_emplace_back(producerMarker, item);
 					return PageSize*std::distance(_pages.begin(), page) + item;
@@ -58,6 +59,7 @@ namespace RenderCore { namespace Techniques
 			_pages.push_back({});
 			auto& page = *(_pages.end()-1);
 			auto item = page._freeItems.front();
+			assert(item<PageSize);
 			page._freeItems.pop_front();
 			page._allocatedItems.try_emplace_back(producerMarker, item);
 			return PageSize*(_pages.size()-1) + item;
@@ -474,6 +476,7 @@ namespace RenderCore { namespace Techniques
 	class SemiConstantDescriptorSet
 	{
 	public:
+		RenderCore::Assets::PredefinedDescriptorSetLayout _descSetLayout;
 		DescriptorSetSignature _signature;
 
 		GPUTrackerHeap<s_poolPageSize> _trackerHeap;
@@ -481,7 +484,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _currentDescriptorSet = ~0u;
 
 		void RebuildDescriptorSet(
-			IThreadContext& threadContext, ParsingContext& parsingContext,
+			ParsingContext& parsingContext,
 			DelegateQueryHelper& delegateHelper);
 
 		const IDescriptorSet* GetDescSet() const;
@@ -494,7 +497,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	void SemiConstantDescriptorSet::RebuildDescriptorSet(
-		IThreadContext& threadContext, ParsingContext& parsingContext,
+		ParsingContext& parsingContext,
 		DelegateQueryHelper& delegateHelper)
 	{
 		// Create a temporary descriptor set, with per-sequencer bindings
@@ -506,20 +509,17 @@ namespace RenderCore { namespace Techniques
 		// calculate how the various delegates map onto the descriptor set layout. It might be
 		// worth considering caching this result, because there should actually only be a finite
 		// number of different configurations in most use cases
-
-		assert(parsingContext.GetTechniqueContext()._sequencerDescSetLayout);
-		const auto& descSetLayout = *parsingContext.GetTechniqueContext()._sequencerDescSetLayout;
 		
 		std::vector<DescriptorSetInitializer::BindTypeAndIdx> bindTypesAndIdx;
-		bindTypesAndIdx.reserve(descSetLayout._slots.size());
+		bindTypesAndIdx.reserve(_descSetLayout._slots.size());
 		uint64_t resourcesWeNeed = 0ull;
 		uint64_t samplersWeNeed = 0ull;
 		uint64_t immediateDatasWeNeed = 0ull;
 
-		for (unsigned slotIdx=0; slotIdx<descSetLayout._slots.size(); ++slotIdx) {
-			auto hashName = Hash64(descSetLayout._slots[slotIdx]._name);
+		for (unsigned slotIdx=0; slotIdx<_descSetLayout._slots.size(); ++slotIdx) {
+			auto hashName = Hash64(_descSetLayout._slots[slotIdx]._name);
 
-			if (descSetLayout._slots[slotIdx]._type == DescriptorType::Sampler) {
+			if (_descSetLayout._slots[slotIdx]._type == DescriptorType::Sampler) {
 				auto samplerBinding = std::find(delegateHelper._finalUSI._samplerBindings.begin(), delegateHelper._finalUSI._samplerBindings.end(), hashName);
 				if (samplerBinding != delegateHelper._finalUSI._samplerBindings.end()) {
 					auto samplerIdx = (unsigned)std::distance(delegateHelper._finalUSI._samplerBindings.begin(), samplerBinding);
@@ -530,10 +530,10 @@ namespace RenderCore { namespace Techniques
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
 					auto resourceBinding = std::find(delegateHelper._finalUSI._resourceViewBindings.begin(), delegateHelper._finalUSI._resourceViewBindings.end(), hashName);
 					if (resourceBinding != delegateHelper._finalUSI._resourceViewBindings.end())
-						Log(Warning) << "Resource view provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
+						Log(Warning) << "Resource view provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
 					auto immediateDataBinding = std::find(delegateHelper._finalUSI._immediateDataBindings.begin(), delegateHelper._finalUSI._immediateDataBindings.end(), hashName);
 					if (immediateDataBinding != delegateHelper._finalUSI._immediateDataBindings.end())
-						Log(Warning) << "Immediate data provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
+						Log(Warning) << "Immediate data provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is 'sampler' type in the descriptor set layout." << std::endl;
 				#endif
 			} else {
 				auto resourceBinding = std::find(delegateHelper._finalUSI._resourceViewBindings.begin(), delegateHelper._finalUSI._resourceViewBindings.end(), hashName);
@@ -555,7 +555,7 @@ namespace RenderCore { namespace Techniques
 				#if defined(_DEBUG)		// just check to make sure we're not attempting to bind some incorrect type here 
 					auto samplerBinding = std::find(delegateHelper._finalUSI._samplerBindings.begin(), delegateHelper._finalUSI._samplerBindings.end(), hashName);
 					if (samplerBinding != delegateHelper._finalUSI._samplerBindings.end())
-						Log(Warning) << "Sampler provided for descriptor set slot (" << descSetLayout._slots[slotIdx]._name << "), however, this lot is not a sampler type in the descriptor set layout." << std::endl;
+						Log(Warning) << "Sampler provided for descriptor set slot (" << _descSetLayout._slots[slotIdx]._name << "), however, this lot is not a sampler type in the descriptor set layout." << std::endl;
 				#endif
 			}
 
@@ -580,16 +580,17 @@ namespace RenderCore { namespace Techniques
 		const IResourceView* newResourceViews[delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size()];
 		std::shared_ptr<IResourceView> tempResViews[delegateHelper._queriedResources.size() + delegateHelper._queriedImmediateDatas.size()];
 		if (useCmdListAttachedStorage) {
-			size_t immDataStart = -1, immDataEnd = 0;
-			for (unsigned c=0; c<delegateHelper._queriedImmediateDatas.size(); ++c)
-				if (immediateDatasWeNeed & 1ull<<uint64_t(c)) {
-					immDataStart = std::min(immDataStart, size_t(delegateHelper._queriedImmediateDatas[c].first));
-					immDataEnd = std::min(immDataStart, size_t(delegateHelper._queriedImmediateDatas[c].second));
-				}
-			auto dataSize = immDataEnd-immDataStart;
-			if (dataSize) {
-				auto storage = Metal::DeviceContext::Get(threadContext)->MapTemporaryStorage(dataSize, BindFlag::ConstantBuffer);
-				std::memcpy(storage.GetData().begin(), (const void*)immDataStart, dataSize);
+			size_t immDataIterator = 0;
+			const unsigned alignment = 0x100;
+			for (auto& slot:bindTypesAndIdx) {
+				if (slot._type != DescriptorSetInitializer::BindType::ImmediateData) continue;
+				auto immData = initializer._bindItems._immediateData[slot._uniformsStreamIdx];
+				immDataIterator = CeilToMultiplePow2(immDataIterator, alignment);
+				immDataIterator += size_t(immData.end()) - size_t(immData.begin());
+			}
+
+			if (immDataIterator) {
+				auto storage = Metal::DeviceContext::Get(parsingContext.GetThreadContext())->MapTemporaryStorage(immDataIterator, BindFlag::ConstantBuffer);
 
 				unsigned newResourceViewCount = 0;
 				for (auto& src:initializer._bindItems._resourceViews)
@@ -597,16 +598,27 @@ namespace RenderCore { namespace Techniques
 
 				auto resource = storage.GetResource();					
 				auto beginAndEndInRes = storage.GetBeginAndEndInResource(); 
-				for (auto& immData:initializer._bindItems._immediateData) {
+				immDataIterator = 0;
+				for (auto& slot:bindTypesAndIdx) {
+					if (slot._type != DescriptorSetInitializer::BindType::ImmediateData) continue;
+					auto immData = initializer._bindItems._immediateData[slot._uniformsStreamIdx];
+
+					immDataIterator = CeilToMultiplePow2(immDataIterator, alignment);
+					auto size = size_t(immData.end()) - size_t(immData.begin());
+					std::memcpy(PtrAdd(storage.GetData().begin(), immDataIterator), immData.begin(), size);
+					
 					tempResViews[newResourceViewCount] = resource->CreateBufferView(
 						BindFlag::ConstantBuffer, 
-						size_t(immData.first) - immDataStart + beginAndEndInRes.first,
-						size_t(immData.second) - immDataStart + beginAndEndInRes.first);
+						immDataIterator + beginAndEndInRes.first,
+						immDataIterator + size + beginAndEndInRes.first);
 					newResourceViews[newResourceViewCount] = tempResViews[newResourceViewCount].get();
+					slot = { DescriptorSetInitializer::BindType::ResourceView, newResourceViewCount };
 					++newResourceViewCount;
+					immDataIterator += size_t(immData.end()) - size_t(immData.begin());
 				}
 
 				initializer._bindItems._resourceViews = MakeIteratorRange(newResourceViews, &newResourceViews[newResourceViewCount]);
+				initializer._bindItems._immediateData = {};
 			}
 		}
 
@@ -614,12 +626,12 @@ namespace RenderCore { namespace Techniques
 		if (_currentDescriptorSet >= _descriptorSetPool.size()) {
 			// _trackerHeap allocated a new page -- we need to resize the pool of descriptor sets
 			auto initialSize = _descriptorSetPool.size();
-			auto newPageCount = (_currentDescriptorSet+s_poolPageSize-1)/s_poolPageSize;
+			auto newPageCount = 1+_currentDescriptorSet/s_poolPageSize;
 			_descriptorSetPool.resize(newPageCount*s_poolPageSize);
 			DescriptorSetInitializer creationInitializer;
 			creationInitializer._signature = &_signature;
 			for (auto c=initialSize; c<_descriptorSetPool.size(); ++c)
-				_descriptorSetPool[c] = threadContext.GetDevice()->CreateDescriptorSet(creationInitializer);
+				_descriptorSetPool[c] = parsingContext.GetThreadContext().GetDevice()->CreateDescriptorSet(creationInitializer);
 		}
 
 		_descriptorSetPool[_currentDescriptorSet]->Write(initializer);
@@ -636,6 +648,7 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		CommonResourceBox& res)
 	: _trackerHeap(device)
+	, _descSetLayout(layout)
 	{
 		_signature = layout.MakeDescriptorSetSignature(&res._samplerPool);
 
@@ -655,6 +668,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<UniformDelegateGroup> _delegateGroup;
 		UniformDelegateGroup::ChangeIndex _lastPreparedChangeIndex = -1;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SemiConstantDescriptorSet>>> _semiConstantDescSets;
+		std::vector<const IDescriptorSet*> _descSetsForBinding;
 		
 		bool _pendingRebuildDescSets = true;
 		UniformsStreamInterface _interface;
@@ -667,18 +681,21 @@ namespace RenderCore { namespace Techniques
 		void RemoveUniformDelegate(IUniformBufferDelegate&) override;
 
 		void AddSemiConstantDescriptorSet(
-			uint64_t binding, const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>,
+			uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout&,
 			IDevice& device) override;
 		void RemoveSemiConstantDescriptorSet(uint64_t binding) override;
 
 		void AddBase(const std::shared_ptr<IUniformDelegateManager>&) override;
 		void RemoveBase(IUniformDelegateManager&) override;
 
-		void BringUpToDate(IThreadContext& threadContext, ParsingContext& parsingContext) override;
+		void BringUpToDate(ParsingContext& parsingContext) override;
+		const UniformsStreamInterface& GetInterface() override;
 		void InvalidateUniforms() override;
+
+		UniformDelegateManager();
 	};
 
-	void UniformDelegateManager::BringUpToDate(IThreadContext& threadContext, ParsingContext& parsingContext)
+	void UniformDelegateManager::BringUpToDate(ParsingContext& parsingContext)
 	{
 		bool pendingReprepare = _delegateGroup->_currentChangeIndex != _lastPreparedChangeIndex;
 		for (auto&base:_delegateGroup->_baseGroups)
@@ -697,9 +714,18 @@ namespace RenderCore { namespace Techniques
 		}
 		if (_pendingRebuildDescSets) {
 			for (auto& descSet:_semiConstantDescSets)
-				descSet.second->RebuildDescriptorSet(threadContext, parsingContext, _delegateHelper);
+				descSet.second->RebuildDescriptorSet(parsingContext, _delegateHelper);
 			_pendingRebuildDescSets = false;
 		}
+
+		_descSetsForBinding.resize(_semiConstantDescSets.size());
+		for (unsigned c=0; c<_semiConstantDescSets.size(); ++c)
+			_descSetsForBinding[c] = _semiConstantDescSets[c].second->GetDescSet();
+	}
+
+	const UniformsStreamInterface& UniformDelegateManager::GetInterface()
+	{
+		return _interface;
 	}
 
 	void UniformDelegateManager::InvalidateUniforms()
@@ -741,7 +767,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void UniformDelegateManager::AddSemiConstantDescriptorSet(
-		uint64_t binding, const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> layout,
+		uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		IDevice& device)
 	{
 		#if defined(_DEBUG)
@@ -761,12 +787,17 @@ namespace RenderCore { namespace Techniques
 			_semiConstantDescSets.erase(i);
 	}
 
+	UniformDelegateManager::UniformDelegateManager()
+	{
+		_delegateGroup = std::make_shared<UniformDelegateGroup>();
+	}
+
 	std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager()
 	{
 		return std::make_shared<UniformDelegateManager>();
 	}
 
-	void ApplyLooseUniforms(
+	void ApplyUniforms(
 		IUniformDelegateManager& delManager,
 		Metal::DeviceContext& metalContext,
 		Metal::SharedEncoder& encoder,
@@ -777,23 +808,19 @@ namespace RenderCore { namespace Techniques
 		auto& man = *checked_cast<UniformDelegateManager*>(&delManager);
 		assert(man._lastPreparedChangeIndex == man._delegateGroup->_currentChangeIndex);
 		assert(!man._pendingRebuildDescSets);
-		man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
-		man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
-		man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
-		UniformsStream us {
-			man._delegateHelper._queriedResources,
-			man._delegateHelper._queriedImmediateDatas,
-			man._delegateHelper._queriedSamplers };
-		boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, groupIdx);
+		if (__builtin_expect(!man._descSetsForBinding.empty(), true))
+			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._descSetsForBinding, groupIdx);
 
-		if (!man._semiConstantDescSets.empty()) {
-			const IDescriptorSet* descriptorSets[man._semiConstantDescSets.size()];
-			for (unsigned c=0; c<man._semiConstantDescSets.size(); ++c)
-				descriptorSets[c] = man._semiConstantDescSets[c].second->GetDescSet();
-			boundUniforms.ApplyDescriptorSets(
-				metalContext, encoder,
-				MakeIteratorRange(descriptorSets, &descriptorSets[man._semiConstantDescSets.size()]), 0);
-		}
+		if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
+			man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
+			man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
+			UniformsStream us {
+				man._delegateHelper._queriedResources,
+				man._delegateHelper._queriedImmediateDatas,
+				man._delegateHelper._queriedSamplers };
+			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, groupIdx);
+		}		
 	}
 
 }}

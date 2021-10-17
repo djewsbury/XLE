@@ -225,6 +225,7 @@ namespace RenderCore
     class IDescriptorSet
 	{
 	public:
+        virtual void Write(const DescriptorSetInitializer& newDescriptors) = 0;
 		virtual ~IDescriptorSet() = default;
 	};
 
