@@ -45,7 +45,7 @@ namespace RenderCore { namespace Techniques
 		void BindSampler(unsigned slot, uint64_t hashName);
     };
 
-    class ISemiConstantDescriptorSet
+    class IUniformDelegateManager
     {
     public:
         virtual void AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>&) = 0;
@@ -54,17 +54,22 @@ namespace RenderCore { namespace Techniques
         virtual void AddUniformDelegate(uint64_t binding, const std::shared_ptr<IUniformBufferDelegate>&) = 0;
 		virtual void RemoveUniformDelegate(IUniformBufferDelegate&) = 0;
 
+        virtual void AddSemiConstantDescriptorSet(
+            uint64_t binding, const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>,
+            IDevice& device) = 0;
+        virtual void RemoveSemiConstantDescriptorSet(uint64_t binding) = 0;
+
+        virtual void AddBase(const std::shared_ptr<IUniformDelegateManager>&) = 0;
+		virtual void RemoveBase(IUniformDelegateManager&) = 0;
+
         virtual void InvalidateUniforms() = 0;
-        virtual const UniformsStreamInterface& GetInterface(IThreadContext&, ParsingContext& parsingContext) = 0;
-        virtual ~ISemiConstantDescriptorSet();
+        virtual void BringUpToDate(IThreadContext&, ParsingContext& parsingContext) = 0;
+
+        virtual const UniformsStreamInterface& GetInterface() = 0;
+        virtual ~IUniformDelegateManager();
     };
 
-    class CommonResources;
-    std::shared_ptr<ISemiConstantDescriptorSet> CreateSemiConstantDescriptorSet(
-        IDevice& device,
-        uint64_t descriptorSetName,
-        const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
-        const CommonResources&);
+    std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager();
 
     XLE_DEPRECATED_ATTRIBUTE class IMaterialDelegate
     {
