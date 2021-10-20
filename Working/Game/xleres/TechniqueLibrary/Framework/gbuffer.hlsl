@@ -251,33 +251,34 @@ GBufferValues GetSystemStruct_GBufferValues()
     return GBufferValues_Default();
 }
 
-struct DepthMotionNormalEncoded
+struct DepthPlusEncoded
 {
-    int2 motionBuffer       : SV_Target0;
-    float3 normalBuffer     : SV_Target1;
+    #if DEPTH_PLUS_MOTION
+        int2 motionBuffer       : SV_Target0;
+        #if DEPTH_PLUS_NORMAL && DEPTH_PLUS_ROUGHNESS
+            float4 normalBuffer     : SV_Target1;
+        #elif DEPTH_PLUS_NORMAL
+            float3 normalBuffer     : SV_Target1;
+        #endif
+    #endif
 };
 
-DepthMotionNormalEncoded EncodeDepthMotionNormal(GBufferValues values, int2 motion)
+DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion)
 {
         //
         //      Take the raw gbuffer input values and
         //      generate the encoded values
         //
-    DepthMotionNormalEncoded result;
-    result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz).xyz;
-    result.motionBuffer = motion;
-    return result;
-}
-
-struct DepthMotionEncoded
-{
-    int2 motionBuffer     : SV_Target0;
-};
-
-DepthMotionEncoded EncodeDepthMotion(int2 motion)
-{
-    DepthMotionEncoded result;
-    result.motionBuffer = motion;
+    DepthPlusEncoded result;
+    #if DEPTH_PLUS_MOTION
+        result.motionBuffer = motion;
+    #endif
+    #if DEPTH_PLUS_NORMAL
+        result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz);
+    #endif
+    #if DEPTH_PLUS_ROUGHNESS
+        result.normalBuffer.a = values.material.roughness;
+    #endif
     return result;
 }
 

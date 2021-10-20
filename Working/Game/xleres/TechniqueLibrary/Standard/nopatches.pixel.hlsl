@@ -47,7 +47,7 @@ GBufferEncoded deferred(VSOUT geo)
 #if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
 	[earlydepthstencil]
 #endif
-DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
+DepthPlusEncoded depthPlus(VSOUT geo)
 {
 	DoAlphaTest(geo, GetAlphaThreshold());
 	GBufferValues sample = IllumShader_PerPixel(geo);
@@ -63,28 +63,7 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthMotionNormal(sample, int2(prevPos.xy));
-}
-
-#if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))
-	[earlydepthstencil]
-#endif
-DepthMotionEncoded depthMotion(VSOUT geo)
-{
-	DoAlphaTest(geo, GetAlphaThreshold());
-
-	float3 prevPos;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthMotion(int2(prevPos.xy));
+	return EncodeDepthPlus(sample, int2(prevPos.xy));
 }
 
 #if !(VSOUT_HAS_TEXCOORD && (MAT_ALPHA_TEST==1))

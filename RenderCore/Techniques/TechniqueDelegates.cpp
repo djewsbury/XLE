@@ -568,6 +568,10 @@ namespace RenderCore { namespace Techniques
 					psNoPatchesHash = Hash64("DepthMotionNormal_NoPatches");
 					psPerPixelHash = Hash64("DepthMotionNormal_PerPixel");
 					perPixelAndEarlyRejectionHash = Hash64("DepthMotionNormal_PerPixelAndEarlyRejection");
+				} else if (preDepthType == PreDepthType::DepthMotionNormalRoughness) {
+					psNoPatchesHash = Hash64("DepthMotionNormalRoughness_NoPatches");
+					psPerPixelHash = Hash64("DepthMotionNormalRoughness_PerPixel");
+					perPixelAndEarlyRejectionHash = Hash64("DepthMotionNormalRoughness_PerPixelAndEarlyRejection");
 				} else if (preDepthType == PreDepthType::DepthMotion) {
 					psNoPatchesHash = Hash64("DepthMotion_NoPatches");
 					psPerPixelHash = Hash64("DepthMotion_PerPixel");
@@ -618,7 +622,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 			if (_preDepthType != PreDepthType::DepthOnly) {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
-				if (_preDepthType == PreDepthType::DepthMotionNormal)
+				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness)
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 

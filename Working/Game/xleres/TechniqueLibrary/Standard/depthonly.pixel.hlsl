@@ -13,7 +13,7 @@ void frameworkEntryDepthOnlyWithEarlyRejection(VSOUT geo)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 [earlydepthstencil]
-DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
+DepthPlusEncoded depthPlus(VSOUT geo)
 {
 	GBufferValues sample = PerPixel(geo);
 
@@ -28,10 +28,10 @@ DepthMotionNormalEncoded depthMotionNormal(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthMotionNormal(sample, int2(prevPos.xy));
+	return EncodeDepthPlus(sample, int2(prevPos.xy));
 }
 
-DepthMotionNormalEncoded depthMotionNormalWithEarlyRejection(VSOUT geo)
+DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
 {
     if (EarlyRejectionTest(geo))
         discard;
@@ -49,47 +49,7 @@ DepthMotionNormalEncoded depthMotionNormalWithEarlyRejection(VSOUT geo)
 	#else
 		prevPos = 0.0.xxx;
 	#endif
-	return EncodeDepthMotionNormal(sample, int2(prevPos.xy));
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-[earlydepthstencil]
-DepthMotionEncoded depthMotion(VSOUT geo)
-{
-	float3 prevPos;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthMotion(int2(prevPos.xy));
-}
-
-DepthMotionEncoded depthMotionWithEarlyRejection(VSOUT geo)
-{
-    if (EarlyRejectionTest(geo))
-        discard;
-
-	GBufferValues sample = PerPixel(geo);
-
-	float3 prevPos;
-	#if VSOUT_HAS_PREV_POSITION
-		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos * SysUniform_GetViewportWidthHeight();
-		prevPos.xyz -= geo.position.xyz;
-		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
-	#else
-		prevPos = 0.0.xxx;
-	#endif
-	return EncodeDepthMotion(int2(prevPos.xy));
+	return EncodeDepthPlus(sample, int2(prevPos.xy));
 }
 
 float4 flatColorEarlyRejection(VSOUT geo) : SV_Target0
