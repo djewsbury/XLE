@@ -1329,5 +1329,108 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 	BoundUniforms::~BoundUniforms() {}
 
+	DescriptorSlot AsDescriptorSlot(const ReflectionVariableInformation& varinfo)
+	{
+		if (varinfo._isStructType)
+			return DescriptorSlot { DescriptorType::UniformBuffer, 1 };
+		if (!varinfo._type) return {};
+
+		DescriptorSlot result;
+		if (*varinfo._type == SPIRVReflection::BasicType::Image || *varinfo._type == SPIRVReflection::BasicType::SampledImage) {
+			result._type = DescriptorType::SampledTexture;
+		} else if (*varinfo._type == SPIRVReflection::BasicType::TexelBuffer) {
+			result._type = DescriptorType::UniformTexelBuffer;
+		} else if (*varinfo._type == SPIRVReflection::BasicType::StorageTexelBuffer) {
+			result._type = DescriptorType::UnorderedAccessTexelBuffer;
+		} else if (*varinfo._type == SPIRVReflection::BasicType::StorageImage) {
+			result._type = DescriptorType::UnorderedAccessTexture;
+		} else if (*varinfo._type == SPIRVReflection::BasicType::Sampler) {
+			result._type = DescriptorType::Sampler;
+		} else
+			result._type = DescriptorType::UniformBuffer;
+		// DescriptorType::InputAttachment & DescriptorType::UnorderedAccessBuffer can never be generated
+		result._count = varinfo._arrayElementCount.value_or(1);
+		return result;
+	}
+
+	ConstantBufferElementDesc AsConstantBufferElementDesc(const ReflectionVariableInformation& varinfo)
+	{
+		if (!varinfo._type) return {};
+
+		ConstantBufferElementDesc result;
+		result._semanticHash = Hash64(varinfo._name);
+		result._nativeFormat = Format::Unknown;		// format conversion not handled
+		result._offset = varinfo._binding._offset;
+		result._arrayElementCount = varinfo._arrayElementCount.value_or(0);
+		return result;
+	}
+
+	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode, ShaderStage shaderStage)
+	{
+		SPIRVReflection reflection(byteCode.GetByteCode());
+		Log(Debug) << reflection << std::endl;
+		DiassembleByteCode(Log(Debug), byteCode.GetByteCode());
+
+		std::vector<PipelineLayoutInitializer::DescriptorSetBinding> descriptorSets;
+		PipelineLayoutInitializer::PushConstantsBinding pushConstants;
+		pushConstants._shaderStage = shaderStage;
+
+		auto pipelineType = (shaderStage == ShaderStage::Compute) ? PipelineType::Compute : PipelineType::Graphics;
+
+		for (const auto&v:reflection._variables) {
+			auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);
+			if (   reflectionVariable._storageType == SPIRVReflection::StorageType::Input 	// storage "Input/Output" should be attributes and can be ignored
+				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Output
+				|| reflectionVariable._storageType == SPIRVReflection::StorageType::Function) continue;
+
+			if (reflectionVariable._storageType == SPIRVReflection::StorageType::PushConstant) {
+				if (!pushConstants._cbElements.empty())
+					Throw(std::runtime_error("Multiple separate push constant structures detected"));
+				assert(reflectionVariable._isStructType);
+
+				auto typeToLookup = v.second._type;
+				auto p = LowerBound(reflection._pointerTypes, typeToLookup);
+				if (p != reflection._pointerTypes.end() && p->first == typeToLookup)
+					typeToLookup = p->second._targetType;
+
+				for (const auto&m:reflection._memberBindings) {
+					if (m.first.first != typeToLookup) continue;
+
+					auto end = m.second._offset + 16;	// assuming everything is just 16 bytes
+					pushConstants._cbSize = std::max(pushConstants._cbSize, end);
+					ConstantBufferElementDesc member;
+					member._semanticHash = 0;
+					auto n = LowerBound(reflection._memberNames, m.first);
+					if (n != reflection._memberNames.end() && n->first == m.first) member._semanticHash = Hash64(n->second);
+					member._nativeFormat = Format::Unknown;		// format conversion not handled
+					member._offset = m.second._offset;
+					member._arrayElementCount = 1;
+					pushConstants._cbElements.push_back(member);
+				}
+			}
+
+			if (reflectionVariable._binding._bindingPoint == ~0u || reflectionVariable._binding._descriptorSet == ~0u) continue;
+
+			if (descriptorSets.size() <= reflectionVariable._binding._descriptorSet)
+				descriptorSets.resize(reflectionVariable._binding._descriptorSet+1, {{}, {}, pipelineType});
+
+			auto& descSet = descriptorSets[reflectionVariable._binding._descriptorSet];
+			if (descSet._signature._slots.size() <= reflectionVariable._binding._bindingPoint) {
+				descSet._signature._slots.resize(reflectionVariable._binding._bindingPoint+1);
+				descSet._signature._slotNames.resize(reflectionVariable._binding._bindingPoint+1);
+			}
+			auto& slot = descSet._signature._slots[reflectionVariable._binding._bindingPoint];
+			slot = AsDescriptorSlot(reflectionVariable);
+			descSet._signature._slotNames[reflectionVariable._binding._bindingPoint] = Hash64(reflectionVariable._name);
+		}
+
+		if (!pushConstants._cbElements.empty()) {
+			std::sort(pushConstants._cbElements.begin(), pushConstants._cbElements.end(), [](const auto& lhs, const auto& rhs) { return lhs._offset < rhs._offset; });
+			return PipelineLayoutInitializer{descriptorSets, MakeIteratorRange(&pushConstants, &pushConstants+1)};
+		} else {
+			return PipelineLayoutInitializer{descriptorSets, {}};
+		}
+	}
+
 }}
 

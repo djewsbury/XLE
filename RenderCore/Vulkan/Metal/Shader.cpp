@@ -8,14 +8,13 @@
 #include "ObjectFactory.h"
 #include "DeviceContext.h"
 #include "PipelineLayout.h"
+#include "ShaderReflection.h"
 #include "../../ShaderService.h"
 #include "../../Types.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/DepVal.h"
 #include "../../../Utility/StringUtils.h"
 #include "../../../Utility/StringFormat.h"
-
-#include "ShaderReflection.h"
 
 #pragma warning(disable:4702)
 

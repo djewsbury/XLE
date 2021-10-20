@@ -114,4 +114,5 @@ namespace RenderCore { namespace Metal_Vulkan
     };
 
 	std::ostream& operator<<(std::ostream& str, const SPIRVReflection& refl);
+    std::ostream& DiassembleByteCode(std::ostream& str, IteratorRange<const void*> byteCode);
 }}

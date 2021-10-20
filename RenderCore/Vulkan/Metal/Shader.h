@@ -16,6 +16,7 @@ namespace RenderCore
 	class CompiledShaderByteCode; class IDevice; 
 	class ICompiledPipelineLayout; class LegacyRegisterBindingDesc; 
 	class VulkanCompilerConfiguration;
+	class PipelineLayoutInitializer;
 }
 
 namespace RenderCore { namespace Metal_Vulkan
@@ -150,6 +151,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		using VkShaderStageFlags_ = unsigned;
 		VkShaderStageFlags_ AsVkShaderStageFlags(ShaderStage input);
 	}
+
+	// Build a default PipelineLayoutInitializer for all of the uniform inputs of the given shader code
+	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode, ShaderStage shaderStage);
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 

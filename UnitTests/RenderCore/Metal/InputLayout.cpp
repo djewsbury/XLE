@@ -1153,7 +1153,7 @@ namespace UnitTests
 		auto targetTexture = testHelper->_device->CreateResource(targetDesc); 
 		Metal::CompleteInitialization(metalContext, {targetTexture.get()});
 
-		static const char s_computeShaderText[] = R"--(
+		const char computeShaderText[] = R"--(
 			RWTexture2D<float4> Output : register(u0, space0);
 			struct InputStruct { float4 color; };
 			StructuredBuffer<InputStruct> ArrayInput[8] : register(t1, space0);
@@ -1199,7 +1199,7 @@ namespace UnitTests
 			Metal::ComputeShader computeShader(
 				Metal::GetObjectFactory(),
 				pipelineLayout,
-				testHelper->MakeShader(s_computeShaderText, "cs_*"));
+				testHelper->MakeShader(computeShaderText, "cs_*"));
 			Metal::ComputePipelineBuilder pipelineBuilder;
 			pipelineBuilder.Bind(computeShader);
 			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
@@ -1264,7 +1264,7 @@ namespace UnitTests
 		auto targetTexture = testHelper->_device->CreateResource(targetDesc); 
 		Metal::CompleteInitialization(metalContext, {targetTexture.get()});
 
-		static const char s_computeShaderText[] = R"--(
+		const char computeShaderText[] = R"--(
 			RWTexture2D<float4> Output : register(u0, space0);
 			
 			struct InputStruct { float4 A; };
@@ -1340,7 +1340,7 @@ namespace UnitTests
 			Metal::ComputeShader computeShader(
 				Metal::GetObjectFactory(),
 				pipelineLayout,
-				testHelper->MakeShader(s_computeShaderText, "cs_*"));
+				testHelper->MakeShader(computeShaderText, "cs_*"));
 			Metal::ComputePipelineBuilder pipelineBuilder;
 			pipelineBuilder.Bind(computeShader);
 			auto pipeline = pipelineBuilder.CreatePipeline(Metal::GetObjectFactory());
@@ -1377,6 +1377,88 @@ namespace UnitTests
 			REQUIRE(colorBreakdown.find(AsPackedColor(f)) != colorBreakdown.end());
 		for (unsigned c=0; c<4; ++c)
 			REQUIRE(pixels[c*targetDesc._textureDesc._width] == AsPackedColor(colors[c]));
+	}
+
+	TEST_CASE( "InputLayout-PipelineLayoutFromShader", "[rendercore_metal]" )
+	{
+		using namespace RenderCore;
+		auto testHelper = MakeTestHelper();
+
+		const char shaderText[] = R"--(
+			RWTexture2D<float4> RWTex : register(u0, space0);
+			
+			struct InputStruct { float4 A; };
+			StructuredBuffer<InputStruct> UnorderedAccessReadBuffer : register(t1, space0);
+			RWStructuredBuffer<InputStruct> UnorderedAccessRWBuffer : register(u2, space0);
+
+			RWBuffer<float4> TexelBuffer : register(u3, space1);
+			Buffer<float4> InputTexelBuffer : register(t4, space1);
+
+			cbuffer UniformBuffer : register(b0, space1)
+			{
+				float4 A, B, C, D;
+			}
+
+			SamplerState Samplr : register(s2, space2);
+			Texture2D<float> Tex : register(t5, space2);
+
+			[[vk::push_constant]] struct PushConstantsStruct
+			{
+				row_major float3x4 M;
+				float3 A;
+				float4 B;
+			} PushConstants;
+
+			float4 main(float4 position : SV_Position) : SV_Target0
+			{
+				uint idx = position.x*1024;
+				if ((idx%8) == 0) return UnorderedAccessReadBuffer[0].A;
+				else if ((idx%8) == 1) return UnorderedAccessRWBuffer[0].A;
+				else if ((idx%8) == 2) return TexelBuffer[0];
+				else if ((idx%8) == 3) return InputTexelBuffer[0];
+				else if ((idx%8) == 4) return A;
+				else if ((idx%8) == 5) return PushConstants.B;
+				else if ((idx%8) == 6) return RWTex[uint2(idx, 100)];
+				else if ((idx%8) == 7) return Tex.Sample(Samplr, position.xy);
+				return 0;
+			}
+		)--";
+
+		auto shaderCode = testHelper->MakeShader(shaderText, "ps_*");
+		auto pipelineLayout = Metal::BuildPipelineLayoutInitializer(shaderCode, ShaderStage::Pixel);
+		REQUIRE(pipelineLayout.GetDescriptorSets().size() == 3);
+
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots.size() == 3);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames.size() == 3);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[0] == Hash64("RWTex"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[1] == Hash64("UnorderedAccessReadBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[2] == Hash64("UnorderedAccessRWBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[0]._type == DescriptorType::UnorderedAccessTexture);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UniformBuffer); // (Vulkan can't distinguish these types) DescriptorType::UniformTexelBuffer);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UniformBuffer); // (Vulkan can't distinguish these types) DescriptorType::UnorderedAccessTexelBuffer);
+
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots.size() == 5);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames.size() == 5);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[0] == Hash64("UniformBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[3] == Hash64("TexelBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames[4] == Hash64("InputTexelBuffer"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[0]._type == DescriptorType::UniformBuffer);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[3]._type == DescriptorType::UnorderedAccessTexelBuffer);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots[4]._type == DescriptorType::UniformTexelBuffer);
+
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots.size() == 6);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames.size() == 6);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[2] == Hash64("Samplr"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slotNames[5] == Hash64("Tex"));
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots[2]._type == DescriptorType::Sampler);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[2]._signature._slots[5]._type == DescriptorType::SampledTexture);
+
+		REQUIRE(pipelineLayout.GetPushConstants().size() == 1);
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbSize == 80);
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements.size() == 3);
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[0]._semanticHash == Hash64("M"));
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[1]._semanticHash == Hash64("A"));
+		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[2]._semanticHash == Hash64("B"));
 	}
 
 	// error cases we could try:

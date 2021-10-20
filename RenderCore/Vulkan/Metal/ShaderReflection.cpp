@@ -616,14 +616,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			str << std::endl;
 		}
 
-		// std::stringstream disassem;
-        // std::vector<unsigned> spirv(byteCode.begin(), byteCode.end());
-        // spv::Disassemble(disassem, spirv);
-        // auto d = disassem.str();
-        // (void)d;
-		
 		return str;
 	}
+
+    std::ostream& DiassembleByteCode(std::ostream& str, IteratorRange<const void*> byteCode)
+	{
+        std::vector<unsigned> spirv((const unsigned*)byteCode.begin(), (const unsigned*)byteCode.end());
+        glslang::SpirvToolsDisassemble(str, spirv);
+        str << std::endl;
+        return str;
+    }
 
 }}
 
