@@ -25,10 +25,11 @@ namespace RenderCore { namespace Techniques
 	void ConstructDescriptorSet(
 		::Assets::Future<ActualizedDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		PipelineType pipelineType,
 		bool generateBindingInfo)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
@@ -133,7 +134,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		future.SetPollingFunction(
-			[working, device](::Assets::Future<ActualizedDescriptorSet>& thatFuture) -> bool {
+			[working, device, pipelineType](::Assets::Future<ActualizedDescriptorSet>& thatFuture) -> bool {
 
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
@@ -197,6 +198,7 @@ namespace RenderCore { namespace Techniques
 				initializer._bindItems._resourceViews = MakeIteratorRange(resourceViews);
 				initializer._bindItems._samplers = MakeIteratorRange(samplers);
 				initializer._signature = &working._signature;
+				initializer._pipelineType = pipelineType;
 
 				ActualizedDescriptorSet actualized;
 				actualized._descriptorSet = device->CreateDescriptorSet(initializer);
@@ -213,7 +215,8 @@ namespace RenderCore { namespace Techniques
 		IDevice& device,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
-		const UniformsStream& us)
+		const UniformsStream& us,
+		PipelineType pipelineType)
 	{
 		assert(usi._immediateDataBindings.empty());		// imm data bindings not supported here
 		DescriptorSetInitializer::BindTypeAndIdx bindTypesAndIdx[layout._slots.size()];
@@ -250,6 +253,7 @@ namespace RenderCore { namespace Techniques
 		initializer._bindItems._resourceViews = us._resourceViews;
 		initializer._bindItems._samplers = us._samplers;
 		initializer._signature = &sig;
+		initializer._pipelineType = pipelineType;
 
 		return device.CreateDescriptorSet(initializer);
 	}

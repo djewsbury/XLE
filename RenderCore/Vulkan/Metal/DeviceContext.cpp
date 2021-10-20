@@ -487,6 +487,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		_capturedStates = nullptr;
 	}
 
+	auto SharedEncoder::GetEncoderType() -> EncoderType
+	{
+		assert(_sharedState);
+		return _sharedState->_currentEncoderType;
+	}
+
 	SharedEncoder::SharedEncoder(
 		EncoderType encoderType,
 		std::shared_ptr<CompiledPipelineLayout> pipelineLayout,

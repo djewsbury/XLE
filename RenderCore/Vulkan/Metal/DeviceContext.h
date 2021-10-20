@@ -173,8 +173,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		// --------------- Vulkan specific interface --------------- 
 		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
 		void		PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data);
-	protected:
+
 		enum class EncoderType { None, Graphics, ProgressiveGraphics, Compute };
+		EncoderType GetEncoderType();
+	protected:
 		SharedEncoder(
 			EncoderType encoderType = EncoderType::None,
 			std::shared_ptr<CompiledPipelineLayout> pipelineLayout = nullptr,

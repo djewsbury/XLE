@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../UniformsStream.h"
+#include "../Types.h"
 #include "../../Assets/AssetFuture.h"
 #include <vector>
 #include <memory>
@@ -50,16 +51,18 @@ namespace RenderCore { namespace Techniques
 	void ConstructDescriptorSet(
 		::Assets::Future<ActualizedDescriptorSet>& future,
 		const std::shared_ptr<IDevice>& device,
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		PipelineType pipelineType = PipelineType::Graphics,
 		bool generateBindingInfo = false);
 
 	std::shared_ptr<IDescriptorSet> ConstructDescriptorSet(
 		IDevice& device,
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
-		const UniformsStream& us);
+		const UniformsStream& us,
+		PipelineType pipelineType = PipelineType::Graphics);
 
 }}

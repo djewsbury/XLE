@@ -848,13 +848,12 @@ namespace RenderCore { namespace ImplVulkan
 
 	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(const DescriptorSetInitializer& desc)
 	{
+		VkShaderStageFlags shaderStages = desc._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT;
+		auto descSetLayout = _pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(*desc._signature, {}, shaderStages); // don't have the name available here
 		return std::make_shared<Metal_Vulkan::CompiledDescriptorSet>(
 			_objectFactory, _pools,
-			_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(
-				*desc._signature,
-				{},		// don't have the name available here
-				VK_SHADER_STAGE_ALL_GRAPHICS)->_layout,
-			VK_SHADER_STAGE_ALL_GRAPHICS,
+			descSetLayout->_layout,
+			shaderStages,
 			desc._slotBindings,
 			desc._bindItems);
 	}

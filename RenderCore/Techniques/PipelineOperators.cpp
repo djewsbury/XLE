@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			auto encoder = metalContext.BeginGraphicsEncoder(_pipelineLayout);
 
-			ApplyUniforms(*parsingContext.GetUniformDelegateManager(), metalContext, encoder, parsingContext, boundUniforms, 0);
+			ApplyUniformsGraphics(*parsingContext.GetUniformDelegateManager(), metalContext, encoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 1);
@@ -229,7 +229,7 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 
-			ApplyUniforms(*parsingContext.GetUniformDelegateManager(), metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
+			ApplyUniformsCompute(*parsingContext.GetUniformDelegateManager(), metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);

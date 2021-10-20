@@ -885,6 +885,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
 		const UniformsStream& uniforms)
 	{
+		// _retainedViews & _retainedSamplers must be per-slot, so we release the previous binding to the
+		// slot. Note that due to the synchronization methods, the actual release of the previous view
+		// might happen one frame too late
+		_retainedViews.resize(binds.size(), {});
+		_retainedSamplers.resize(binds.size(), {});
+
 		uint64_t writtenMask = 0ull;
 		size_t linearBufferIterator = 0;
 		unsigned offsetMultiple = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
@@ -895,13 +901,13 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[binds[c]._uniformsStreamIdx]);
 				builder.Bind(c, *view);
 				writtenMask |= 1ull<<uint64_t(c);
-				_retainedViews.emplace_back(*view);
+				_retainedViews[c] = *view;
 			} else if (binds[c]._type == DescriptorSetInitializer::BindType::Sampler) {
 				assert(uniforms._samplers[binds[c]._uniformsStreamIdx]);
 				auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[binds[c]._uniformsStreamIdx]);
 				builder.Bind(c, sampler->GetUnderlying());
 				writtenMask |= 1ull<<uint64_t(c);
-				_retainedSamplers.emplace_back(*sampler);
+				_retainedSamplers[c] = *sampler;
 			} else if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
 				// Only constant buffers are supported for immediate data; partially for consistency
 				// across APIs.

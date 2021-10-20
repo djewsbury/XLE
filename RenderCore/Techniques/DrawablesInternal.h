@@ -18,7 +18,15 @@ namespace RenderCore { namespace Techniques
 		const DrawablesPacket& drawablePkt);
 
 	class IUniformDelegateManager;
-	void ApplyUniforms(
+	void ApplyUniformsGraphics(
+		IUniformDelegateManager& delManager,
+		Metal::DeviceContext& metalContext,
+		Metal::SharedEncoder& encoder,
+		ParsingContext& parsingContext,
+		Metal::BoundUniforms&,
+		unsigned groupIndex);
+
+	void ApplyUniformsCompute(
 		IUniformDelegateManager& delManager,
 		Metal::DeviceContext& metalContext,
 		Metal::SharedEncoder& encoder,

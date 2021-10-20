@@ -58,7 +58,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
-		uniformDelegateMan.BringUpToDate(parserContext);
+		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
 		UniformsStreamInterface globalUSI = uniformDelegateMan.GetInterface();
 		// auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
@@ -152,7 +152,7 @@ namespace RenderCore { namespace Techniques
 				//////////////////////////////////////////////////////////////////////////////
 
 				if (currentBoundUniforms->GetGroupRulesHash(0) != currentSequencerUniformRules) {
-					ApplyUniforms(uniformDelegateMan, metalContext, encoder, parserContext, *currentBoundUniforms, s_uniformGroupSequencer);
+					ApplyUniformsGraphics(uniformDelegateMan, metalContext, encoder, parserContext, *currentBoundUniforms, s_uniformGroupSequencer);
 					currentSequencerUniformRules = currentBoundUniforms->GetGroupRulesHash(0);
 					++fullDescSetCount;
 				} 

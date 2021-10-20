@@ -482,6 +482,7 @@ namespace RenderCore { namespace Techniques
 		GPUTrackerHeap<s_poolPageSize> _trackerHeap;
 		std::vector<std::shared_ptr<IDescriptorSet>> _descriptorSetPool;
 		unsigned _currentDescriptorSet = ~0u;
+		PipelineType _pipelineType;
 
 		void RebuildDescriptorSet(
 			ParsingContext& parsingContext,
@@ -492,6 +493,7 @@ namespace RenderCore { namespace Techniques
 		SemiConstantDescriptorSet(
 			IDevice& device,
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+			PipelineType pipelineType,
 			CommonResourceBox& res);
 		~SemiConstantDescriptorSet();
 	};
@@ -628,6 +630,7 @@ namespace RenderCore { namespace Techniques
 			_descriptorSetPool.resize(newPageCount*s_poolPageSize);
 			DescriptorSetInitializer creationInitializer;
 			creationInitializer._signature = &_signature;
+			creationInitializer._pipelineType = _pipelineType;
 			for (auto c=initialSize; c<_descriptorSetPool.size(); ++c)
 				_descriptorSetPool[c] = parsingContext.GetThreadContext().GetDevice()->CreateDescriptorSet(creationInitializer);
 		}
@@ -644,14 +647,17 @@ namespace RenderCore { namespace Techniques
 	SemiConstantDescriptorSet::SemiConstantDescriptorSet(
 		IDevice& device,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		PipelineType pipelineType,
 		CommonResourceBox& res)
 	: _trackerHeap(device)
 	, _descSetLayout(layout)
+	, _pipelineType(pipelineType)
 	{
 		_signature = layout.MakeDescriptorSetSignature(&res._samplerPool);
 
 		DescriptorSetInitializer initializer;
 		initializer._signature = &_signature;
+		initializer._pipelineType = _pipelineType;
 		_descriptorSetPool.reserve(s_poolPageSize);
 		for (unsigned c=0; c<s_poolPageSize; ++c)
 			_descriptorSetPool.push_back(device.CreateDescriptorSet(initializer));
@@ -665,10 +671,16 @@ namespace RenderCore { namespace Techniques
 		DelegateQueryHelper _delegateHelper;
 		std::shared_ptr<UniformDelegateGroup> _delegateGroup;
 		UniformDelegateGroup::ChangeIndex _lastPreparedChangeIndex = -1;
-		std::vector<std::pair<uint64_t, std::shared_ptr<SemiConstantDescriptorSet>>> _semiConstantDescSets;
-		std::vector<const IDescriptorSet*> _descSetsForBinding;
+
+		struct PipelineBindings
+		{
+			std::vector<std::pair<uint64_t, std::shared_ptr<SemiConstantDescriptorSet>>> _semiConstantDescSets;
+			std::vector<const IDescriptorSet*> _descSetsForBinding;
+			bool _pendingRebuildDescSets = true;
+		};
+		PipelineBindings _graphics;
+		PipelineBindings _compute;
 		
-		bool _pendingRebuildDescSets = true;
 		UniformsStreamInterface _interface;
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -686,14 +698,15 @@ namespace RenderCore { namespace Techniques
 		void AddBase(const std::shared_ptr<IUniformDelegateManager>&) override;
 		void RemoveBase(IUniformDelegateManager&) override;
 
-		void BringUpToDate(ParsingContext& parsingContext) override;
+		void BringUpToDateGraphics(ParsingContext& parsingContext) override;
+		void BringUpToDateCompute(ParsingContext& parsingContext) override;
 		const UniformsStreamInterface& GetInterface() override;
 		void InvalidateUniforms() override;
 
 		UniformDelegateManager();
 	};
 
-	void UniformDelegateManager::BringUpToDate(ParsingContext& parsingContext)
+	void UniformDelegateManager::BringUpToDateGraphics(ParsingContext& parsingContext)
 	{
 		bool pendingReprepare = _delegateGroup->_currentChangeIndex != _lastPreparedChangeIndex;
 		for (auto&base:_delegateGroup->_baseGroups)
@@ -701,24 +714,35 @@ namespace RenderCore { namespace Techniques
 
 		if (pendingReprepare) {
 			_delegateHelper.Prepare(parsingContext, *_delegateGroup);
+
 			_lastPreparedChangeIndex = _delegateGroup->_currentChangeIndex;
 			for (auto&base:_delegateGroup->_baseGroups)
 				base.first = base.second->_currentChangeIndex;
 
-			_pendingRebuildDescSets = true;
 			_interface = _delegateHelper._finalUSI;
-			for (unsigned c=0; c<_semiConstantDescSets.size(); ++c)
-				_interface.BindFixedDescriptorSet(c, _semiConstantDescSets[c].first);
-		}
-		if (_pendingRebuildDescSets) {
-			for (auto& descSet:_semiConstantDescSets)
-				descSet.second->RebuildDescriptorSet(parsingContext, _delegateHelper);
-			_pendingRebuildDescSets = false;
+			for (unsigned c=0; c<_graphics._semiConstantDescSets.size(); ++c)
+				_interface.BindFixedDescriptorSet(c, _graphics._semiConstantDescSets[c].first);
+
+			_graphics._pendingRebuildDescSets = true;
+			_compute._pendingRebuildDescSets = true;
 		}
 
-		_descSetsForBinding.resize(_semiConstantDescSets.size());
-		for (unsigned c=0; c<_semiConstantDescSets.size(); ++c)
-			_descSetsForBinding[c] = _semiConstantDescSets[c].second->GetDescSet();
+		PipelineBindings* bindings[] { &_graphics, &_compute };
+		for (auto&b:bindings) {
+			if (b->_pendingRebuildDescSets) {
+				for (auto& descSet:b->_semiConstantDescSets)
+					descSet.second->RebuildDescriptorSet(parsingContext, _delegateHelper);
+				b->_pendingRebuildDescSets = false;
+			}
+
+			b->_descSetsForBinding.resize(b->_semiConstantDescSets.size());
+			for (unsigned c=0; c<b->_semiConstantDescSets.size(); ++c)
+				b->_descSetsForBinding[c] = b->_semiConstantDescSets[c].second->GetDescSet();
+		}
+	}
+
+	void UniformDelegateManager::BringUpToDateCompute(ParsingContext& parsingContext)
+	{
 	}
 
 	const UniformsStreamInterface& UniformDelegateManager::GetInterface()
@@ -729,7 +753,8 @@ namespace RenderCore { namespace Techniques
 	void UniformDelegateManager::InvalidateUniforms()
 	{
 		_delegateHelper.InvalidateUniforms();
-		_pendingRebuildDescSets = true;
+		_graphics._pendingRebuildDescSets = true;
+		_compute._pendingRebuildDescSets = true;
 	}
 
 	void UniformDelegateManager::AddShaderResourceDelegate(const std::shared_ptr<IShaderResourceDelegate>& delegate)
@@ -768,21 +793,31 @@ namespace RenderCore { namespace Techniques
 		uint64_t binding, const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		IDevice& device)
 	{
-		#if defined(_DEBUG)
-			auto i = std::find_if(_semiConstantDescSets.begin(), _semiConstantDescSets.end(),
-				[binding](const auto& c) { return c.first == binding; });
-			assert(i == _semiConstantDescSets.end());
-		#endif
 		auto& resBox = *Services::GetCommonResources();
-		_semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, resBox));
+		#if defined(_DEBUG)
+			auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
+				[binding](const auto& c) { return c.first == binding; });
+			assert(i == _graphics._semiConstantDescSets.end());
+			i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
+				[binding](const auto& c) { return c.first == binding; });
+			assert(i == _compute._semiConstantDescSets.end());
+		#endif
+
+		_graphics._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Graphics, resBox));
+		_compute._semiConstantDescSets.emplace_back(binding, std::make_shared<SemiConstantDescriptorSet>(device, layout, PipelineType::Compute, resBox));
 	}
 
 	void UniformDelegateManager::RemoveSemiConstantDescriptorSet(uint64_t binding)
 	{
-		auto i = std::find_if(_semiConstantDescSets.begin(), _semiConstantDescSets.end(),
+		auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
 			[binding](const auto& c) { return c.first == binding; });
-		if (i != _semiConstantDescSets.end())
-			_semiConstantDescSets.erase(i);
+		if (i != _graphics._semiConstantDescSets.end())
+			_graphics._semiConstantDescSets.erase(i);
+
+		i = std::find_if(_compute._semiConstantDescSets.begin(), _compute._semiConstantDescSets.end(),
+			[binding](const auto& c) { return c.first == binding; });
+		if (i != _compute._semiConstantDescSets.end())
+			_compute._semiConstantDescSets.erase(i);
 	}
 
 	UniformDelegateManager::UniformDelegateManager()
@@ -795,7 +830,7 @@ namespace RenderCore { namespace Techniques
 		return std::make_shared<UniformDelegateManager>();
 	}
 
-	void ApplyUniforms(
+	void ApplyUniformsGraphics(
 		IUniformDelegateManager& delManager,
 		Metal::DeviceContext& metalContext,
 		Metal::SharedEncoder& encoder,
@@ -805,9 +840,35 @@ namespace RenderCore { namespace Techniques
 	{
 		auto& man = *checked_cast<UniformDelegateManager*>(&delManager);
 		assert(man._lastPreparedChangeIndex == man._delegateGroup->_currentChangeIndex);
-		assert(!man._pendingRebuildDescSets);
-		if (__builtin_expect(!man._descSetsForBinding.empty(), true))
-			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._descSetsForBinding, groupIdx);
+		assert(!man._graphics._pendingRebuildDescSets);
+		if (__builtin_expect(!man._graphics._descSetsForBinding.empty(), true))
+			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._graphics._descSetsForBinding, groupIdx);
+
+		if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
+			man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
+			man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));
+			UniformsStream us {
+				man._delegateHelper._queriedResources,
+				man._delegateHelper._queriedImmediateDatas,
+				man._delegateHelper._queriedSamplers };
+			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, groupIdx);
+		}		
+	}
+
+	void ApplyUniformsCompute(
+		IUniformDelegateManager& delManager,
+		Metal::DeviceContext& metalContext,
+		Metal::SharedEncoder& encoder,
+		ParsingContext& parsingContext,
+		Metal::BoundUniforms& boundUniforms,
+		unsigned groupIdx)
+	{
+		auto& man = *checked_cast<UniformDelegateManager*>(&delManager);
+		assert(man._lastPreparedChangeIndex == man._delegateGroup->_currentChangeIndex);
+		assert(!man._compute._pendingRebuildDescSets);
+		if (__builtin_expect(!man._compute._descSetsForBinding.empty(), true))
+			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._compute._descSetsForBinding, groupIdx);
 
 		if (__builtin_expect(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
 			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));

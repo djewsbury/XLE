@@ -330,6 +330,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_sampler = objectFactory.CreateSampler(samplerCreateInfo);
 	}
 
+	SamplerState::SamplerState() {}
 	SamplerState::~SamplerState() {}
 
 	SamplerDesc SamplerState::GetDesc() const { return _desc; }

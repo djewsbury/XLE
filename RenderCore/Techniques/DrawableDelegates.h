@@ -63,7 +63,8 @@ namespace RenderCore { namespace Techniques
 		virtual void RemoveBase(IUniformDelegateManager&) = 0;
 
         virtual void InvalidateUniforms() = 0;
-        virtual void BringUpToDate(ParsingContext& parsingContext) = 0;
+        virtual void BringUpToDateGraphics(ParsingContext& parsingContext) = 0;
+        virtual void BringUpToDateCompute(ParsingContext& parsingContext) = 0;
 
         virtual const UniformsStreamInterface& GetInterface() = 0;
         virtual ~IUniformDelegateManager();

@@ -149,6 +149,7 @@ namespace RenderCore
 		IteratorRange<const BindTypeAndIdx*> _slotBindings;
 		UniformsStream _bindItems;
 		const DescriptorSetSignature* _signature;
+		PipelineType _pipelineType = PipelineType::Graphics;
 	};
 
 	class PipelineLayoutInitializer

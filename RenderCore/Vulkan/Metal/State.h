@@ -26,6 +26,7 @@ namespace RenderCore { namespace Metal_Vulkan
     {
     public:
         SamplerState(ObjectFactory&, const SamplerDesc&);
+        SamplerState();
 		~SamplerState();
 
         using UnderlyingType = VkSampler;

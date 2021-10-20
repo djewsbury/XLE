@@ -1273,6 +1273,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto& fixedSet:_group[groupIdx]._fixedDescriptorSetRules) {
 			auto* descSet = checked_cast<const CompiledDescriptorSet*>(descriptorSets[fixedSet._inputSlot]);
 			assert(descSet);
+			#if defined(_DEBUG)
+				// validate that the descriptor set is going to be compatible with the encoder type
+				if (encoder.GetEncoderType() == SharedEncoder::EncoderType::Compute) {
+					assert(descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_COMPUTE_BIT);
+				} else {
+					assert(encoder.GetEncoderType() == SharedEncoder::EncoderType::Graphics || encoder.GetEncoderType() == SharedEncoder::EncoderType::ProgressiveGraphics);
+					assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
+				}
+			#endif
 			encoder.BindDescriptorSet(
 				fixedSet._outputSlot, descSet->GetUnderlying()
 				VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
@@ -1294,6 +1303,15 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (fixedSet._inputSlot == slotIdx) {
 				auto* descSet = checked_cast<const CompiledDescriptorSet*>(&descriptorSet);
 				assert(descSet);
+				#if defined(_DEBUG)
+					// validate that the descriptor set is going to be compatible with the encoder type
+					if (encoder.GetEncoderType() == SharedEncoder::EncoderType::Compute) {
+						assert(descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_COMPUTE_BIT);
+					} else {
+						assert(encoder.GetEncoderType() == SharedEncoder::EncoderType::Graphics || encoder.GetEncoderType() == SharedEncoder::EncoderType::ProgressiveGraphics);
+						assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
+					}
+				#endif
 				encoder.BindDescriptorSet(
 					fixedSet._outputSlot, descSet->GetUnderlying()
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));

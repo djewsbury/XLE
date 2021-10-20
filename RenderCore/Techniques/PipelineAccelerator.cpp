@@ -935,10 +935,11 @@ namespace RenderCore { namespace Techniques
 				ConstructDescriptorSet(
 					*result->_descriptorSet,
 					_device,
+					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
 					constantBindings,
 					resourceBindings,
 					MakeIteratorRange(metalSamplers),
-					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
+					PipelineType::Graphics,
 					!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 			} else {
 				ParameterBox constantBindingsCopy = constantBindings;
@@ -959,10 +960,11 @@ namespace RenderCore { namespace Techniques
 						ConstructDescriptorSet(
 							future,
 							d,
+							patchCollection->GetInterface().GetMaterialDescriptorSet(),
 							constantBindingsCopy,
 							resourceBindingsCopy,
 							MakeIteratorRange(metalSamplers),
-							patchCollection->GetInterface().GetMaterialDescriptorSet(),
+							PipelineType::Graphics,
 							generateBindingInfo);
 					});
 			}
@@ -970,10 +972,11 @@ namespace RenderCore { namespace Techniques
 			ConstructDescriptorSet(
 				*result->_descriptorSet,
 				_device,
+				*_matDescSetLayout.GetLayout(),
 				constantBindings,
 				resourceBindings,
 				MakeIteratorRange(metalSamplers),
-				*_matDescSetLayout.GetLayout(),
+				PipelineType::Graphics,
 				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 		}
 
