@@ -78,3 +78,4 @@
 
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
 
+#define VISUALIZE_ATTACHMENT_PIXEL_HLSL "xleres/ToolsHelper/visualize-attachment.pixel.hlsl"

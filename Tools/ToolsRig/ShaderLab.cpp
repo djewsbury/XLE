@@ -14,6 +14,7 @@
 #include "../../RenderCore/Techniques/CommonResources.h"
 #include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
+#include "../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../RenderCore/UniformsStream.h"
 #include "../../RenderCore/FrameBufferDesc.h"
 #include "../../Formatters/IDynamicFormatter.h"
@@ -112,6 +113,11 @@ namespace ToolsRig
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>(
 						l->_drawingApparatus->_pipelineAccelerators,
 						constructorContext._stitchingContext, nullptr);
+					technique->CreateStep_CallFunction(
+						[](RenderCore::LightingEngine::LightingTechniqueIterator& iterator) {
+							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
+							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
+						});
 					for (auto& fn:constructorContext._setupFunctions) fn(*technique);
 					technique->CompleteConstruction();
 
@@ -125,6 +131,11 @@ namespace ToolsRig
 					return std::static_pointer_cast<ICompiledOperation>(result);
 				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
 					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
+				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
+					auto depVel = ::Assets::GetDepValSys().Make();
+					depVel.RegisterDependency(formatter->GetDependencyValidation());
+					depVel.RegisterDependency(e.GetDependencyValidation());
+					Throw(::Assets::Exceptions::ConstructionError(e, depVel));
 				} CATCH (const std::exception& e) {
 					Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));
 				} CATCH_END
@@ -233,39 +244,46 @@ namespace ToolsRig
 			auto i = std::find_if(preRegAttachments.begin(), preRegAttachments.end(),
 				[attachmentSemantic](const auto& c) { return c._semantic == attachmentSemantic; });
 			if (i != preRegAttachments.end()) {
-				Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-				spDesc.AppendOutput(fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).Clear());
-				spDesc.AppendNonFrameBufferAttachmentView(fragment.DefineAttachment(attachmentSemantic));
-				spDesc.SetName("visualize");
-				fragment.AddSubpass(std::move(spDesc));
+				TRY {
+					Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
+					spDesc.AppendOutput(fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).Clear());
+					spDesc.AppendNonFrameBufferAttachmentView(fragment.DefineAttachment(attachmentSemantic));
+					spDesc.SetName("visualize");
+					fragment.AddSubpass(std::move(spDesc));
 
-				Techniques::RenderPassInstance rpi{parsingContext, fragment};
-				auto attachmentSRV = rpi.GetNonFrameBufferAttachmentView(0);
+					Techniques::RenderPassInstance rpi{parsingContext, fragment};
+					auto attachmentSRV = rpi.GetNonFrameBufferAttachmentView(0);
 
-				UniformsStreamInterface usi;
-				usi.BindResourceView(0, Hash64("VisualizeInput"));
-				usi.BindImmediateData(0, Hash64("DebuggingGlobals"));
-				UniformsStream us;
-				IResourceView* srvs[] = { attachmentSRV.get() };
-				us._resourceViews = MakeIteratorRange(srvs);
+					UniformsStreamInterface usi;
+					usi.BindResourceView(0, Hash64("VisualizeInput"));
+					usi.BindImmediateData(0, Hash64("DebuggingGlobals"));
+					UniformsStream us;
+					IResourceView* srvs[] = { attachmentSRV.get() };
+					us._resourceViews = MakeIteratorRange(srvs);
 
-				struct DebuggingGlobals
-				{
-					UInt2 _viewportDimension;
-					UInt2 _mousePosition;
-				} debuggingGlobals { UInt2 { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height }, GetCursorPos() };
-				UniformsStream::ImmediateData immData[] = {
-					MakeOpaqueIteratorRange(debuggingGlobals)
-				};
-				us._immediateData = MakeIteratorRange(immData);
+					struct DebuggingGlobals
+					{
+						UInt2 _viewportDimension;
+						UInt2 _mousePosition;
+					} debuggingGlobals { UInt2 { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height }, GetCursorPos() };
+					UniformsStream::ImmediateData immData[] = {
+						MakeOpaqueIteratorRange(debuggingGlobals)
+					};
+					us._immediateData = MakeIteratorRange(immData);
 
-				auto op = Techniques::CreateFullViewportOperator(
-					drawingApparatus._graphicsPipelinePool,
-					Techniques::FullViewportOperatorSubType::DisableDepth,
-					"rawos/shaderlab/visualize-attachment.pixel.hlsl:main", _shaderSelectors, 
-					GENERAL_OPERATOR_PIPELINE ":GraphicsMain", rpi,
-					usi);
-				op->Actualize()->Draw(parsingContext, us);
+					auto op = Techniques::CreateFullViewportOperator(
+						drawingApparatus._graphicsPipelinePool,
+						Techniques::FullViewportOperatorSubType::DisableDepth,
+						VISUALIZE_ATTACHMENT_PIXEL_HLSL ":main", _shaderSelectors, 
+						GENERAL_OPERATOR_PIPELINE ":GraphicsMain", rpi,
+						usi);
+					op->Actualize()->Draw(parsingContext, us);
+				} CATCH (::Assets::Exceptions::InvalidAsset& e) {
+					std::stringstream str;
+					str << "Error in visualize shader:" << std::endl;
+					str << ::Assets::AsString(e.GetActualizationLog());
+					RenderOverlays::FillScreenWithMsg(parsingContext, immediateDrawingApparatus, str.str());
+				} CATCH_END
 			} else {
 				std::stringstream str;
 				str << "Attachment with semantic (" << _attachmentName << ") was not found. Try the following:" << std::endl;
@@ -308,6 +326,7 @@ namespace ToolsRig
 		case VisualizeAttachmentShader::Motion: return "Motion";
 		case VisualizeAttachmentShader::Alpha: return "Alpha";
 		case VisualizeAttachmentShader::GreyScale: return "GreyScale";
+		case VisualizeAttachmentShader::GBufferNormals: return "GBufferNormals";
 		default: return nullptr;
 		}
 	}
@@ -320,6 +339,7 @@ namespace ToolsRig
 		if (XlEqString(shader, "Motion")) return VisualizeAttachmentShader::Motion;
 		if (XlEqString(shader, "Alpha")) return VisualizeAttachmentShader::Alpha;
 		if (XlEqString(shader, "GreyScale")) return VisualizeAttachmentShader::GreyScale;
+		if (XlEqString(shader, "GBufferNormals")) return VisualizeAttachmentShader::GBufferNormals;
 		return {};
 	}
 
@@ -327,7 +347,7 @@ namespace ToolsRig
 	{
 		using namespace RenderCore::Techniques::AttachmentSemantics;
 		auto semantic = ConstHash64FromString(AsPointer(attachmentName.begin()), AsPointer(attachmentName.end()));
-		if (semantic == GBufferNormal) return VisualizeAttachmentShader::Normal;
+		if (semantic == GBufferNormal) return VisualizeAttachmentShader::GBufferNormals;
 		else if (semantic == GBufferMotion) return VisualizeAttachmentShader::Motion;
 		else if (semantic == Depth) return VisualizeAttachmentShader::Depth;
 		else if (semantic == ShadowDepthMap) return VisualizeAttachmentShader::Depth;

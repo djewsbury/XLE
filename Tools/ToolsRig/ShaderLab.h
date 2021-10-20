@@ -75,7 +75,7 @@ namespace ToolsRig
 
 	void RegisterVisualizeAttachment(ShaderLab&);
 
-	enum class VisualizeAttachmentShader { Color, Depth, Normal, Motion, Alpha, GreyScale };
+	enum class VisualizeAttachmentShader { Color, Depth, Normal, Motion, Alpha, GreyScale, GBufferNormals };
 	const char* AsString(VisualizeAttachmentShader);
 	std::optional<VisualizeAttachmentShader> AsVisualizeAttachmentShader(StringSection<>);
 }
