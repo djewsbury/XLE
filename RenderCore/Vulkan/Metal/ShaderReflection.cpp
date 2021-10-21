@@ -621,9 +621,14 @@ namespace RenderCore { namespace Metal_Vulkan
 
     std::ostream& DiassembleByteCode(std::ostream& str, IteratorRange<const void*> byteCode)
 	{
-        std::vector<unsigned> spirv((const unsigned*)byteCode.begin(), (const unsigned*)byteCode.end());
-        glslang::SpirvToolsDisassemble(str, spirv);
-        str << std::endl;
+        // excluded to avoid a link time dependency on spirv tools
+        #if 0
+            std::vector<unsigned> spirv((const unsigned*)byteCode.begin(), (const unsigned*)byteCode.end());
+            glslang::SpirvToolsDisassemble(str, spirv);
+            str << std::endl;
+        #else
+            str << "SpirvToolsDisassemble not enabled";
+        #endif
         return str;
     }
 

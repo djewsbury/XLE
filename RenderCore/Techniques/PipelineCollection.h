@@ -39,15 +39,38 @@ namespace RenderCore { namespace Techniques
     class PipelinePool
 	{
 	public:
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateGraphicsPipeline(
+		struct GraphicsPipelineAndLayout
+		{
+			std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
+			std::shared_ptr<ICompiledPipelineLayout> _layout;
+
+			const ::Assets::DependencyValidation& GetDependencyValidation() const;
+		};
+		std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
 
-		::Assets::PtrToFuturePtr<Metal::ComputePipeline> CreateComputePipeline(
+		struct ComputePipelineAndLayout
+		{
+			std::shared_ptr<Metal::ComputePipeline> _pipeline;
+			std::shared_ptr<ICompiledPipelineLayout> _layout;
+
+			const ::Assets::DependencyValidation& GetDependencyValidation() const;
+		};
+		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipeline(
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
+
+		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipeline(
+			std::shared_ptr<::Assets::Future<RenderCore::Assets::PredefinedPipelineLayout>> futurePipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
+
+		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipeline(
 			StringSection<> shader,
 			const ParameterBox& selectors);
 
@@ -59,15 +82,15 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::shared_ptr<IDevice> _device;
 		Threading::Mutex _pipelinesLock;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _graphicsPipelines;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::ComputePipeline>>> _computePipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>>> _graphicsPipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>>> _computePipelines;
 
 		class SharedPools;
 		std::shared_ptr<SharedPools> _sharedPools;
 		uint64_t _guid = ~0ull;
 
 		void ConstructToFuture(
-			::Assets::FuturePtr<Metal::GraphicsPipeline>& future,
+			::Assets::Future<GraphicsPipelineAndLayout>& future,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			const GraphicsPipelineDesc& pipelineDesc,
 			const ParameterBox& selectors,
@@ -75,8 +98,19 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget);
 
 		void ConstructToFuture(
-			::Assets::FuturePtr<Metal::ComputePipeline>& future,
+			::Assets::Future<ComputePipelineAndLayout>& future,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
+
+		void ConstructToFuture(
+			::Assets::Future<ComputePipelineAndLayout>& future,
+			std::shared_ptr<::Assets::Future<RenderCore::Assets::PredefinedPipelineLayout>> futurePipelineLayout,
+			StringSection<> shader,
+			const ParameterBox& selectors);
+
+		void ConstructToFuture(
+			::Assets::Future<ComputePipelineAndLayout>& future,
 			StringSection<> shader,
 			const ParameterBox& selectors);
 	};

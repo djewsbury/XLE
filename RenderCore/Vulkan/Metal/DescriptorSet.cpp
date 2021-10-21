@@ -454,6 +454,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					/* note sure if there's a good dummy here, because we may have to match the texel format from the shader */
 				} else if (b == DescriptorType::InputAttachment) {
 					/* not sure what would be a correct dummy descriptor for an input attachment */
+				} else if (b == DescriptorType::Unknown) {
+					/* treated as empty */
 				} else {
 					assert(0);
 					continue;
@@ -486,6 +488,8 @@ namespace RenderCore { namespace Metal_Vulkan
 						AsVkDescriptorType(b),
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::Unknown) {
+					/* treated as empty */
 				} else {
 					assert(0);
 					continue;

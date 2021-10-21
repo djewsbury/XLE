@@ -31,15 +31,16 @@ namespace RenderCore { namespace Assets
 	{
 	public:
         std::unordered_map<std::string, std::shared_ptr<PredefinedDescriptorSetLayout>> _descriptorSets;
+        struct DescSetReference
+        {
+            std::string _name;
+            std::shared_ptr<PredefinedDescriptorSetLayout> _descSet;
+            PipelineType _pipelineType;
+            bool _isAuto = false;
+        };
         class PipelineLayout
         {
         public:
-            struct DescSetReference
-            {
-                std::string _name;
-                std::shared_ptr<PredefinedDescriptorSetLayout> _descSet;
-                PipelineType _pipelineType;
-            };
             std::vector<DescSetReference> _descriptorSets;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _vsPushConstants;
             std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
@@ -69,12 +70,7 @@ namespace RenderCore { namespace Assets
     class PredefinedPipelineLayout
     {
     public:
-        struct DescSetReference
-        {
-            std::string _name;
-            std::shared_ptr<PredefinedDescriptorSetLayout> _descSet;
-        };
-        std::vector<DescSetReference> _descriptorSets;
+        std::vector<PredefinedPipelineLayoutFile::DescSetReference> _descriptorSets;
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _vsPushConstants;
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
@@ -82,6 +78,11 @@ namespace RenderCore { namespace Assets
         PipelineType _pipelineType;
 
         PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
+        PipelineLayoutInitializer MakePipelineLayoutInitializerWithAutoMatching(
+            const PipelineLayoutInitializer& autoInitializer,
+            ShaderLanguage language, SamplerPool* =nullptr) const;
+
+        bool HasAutoDescriptorSets() const;
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         const PredefinedDescriptorSetLayout* FindDescriptorSet(StringSection<>) const;
@@ -95,6 +96,8 @@ namespace RenderCore { namespace Assets
             StringSection<::Assets::ResChar> src);
     protected:
         ::Assets::DependencyValidation _depVal;
+
+        PipelineLayoutInitializer MakePipelineLayoutInitializerInternal(const PipelineLayoutInitializer*, ShaderLanguage language, SamplerPool*) const;
     };
 
 }}

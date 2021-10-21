@@ -326,8 +326,8 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(futurePipeline).ThenConstructToFuture(
 			future,
-			[pipelinePool, pipelineLayout=pipelineLayout.GetPipelineLayout(), config](auto pipeline) {
-				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), pipeline, std::move(pipelineLayout), config);
+			[pipelinePool, config](auto pipeline) {
+				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline._pipeline), std::move(pipeline._layout), config);
 			});
 	}
 

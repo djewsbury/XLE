@@ -140,18 +140,18 @@ namespace RenderCore { namespace Techniques
 			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, selectors, vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
-				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](std::shared_ptr<Metal::GraphicsPipeline> pipeline) {
+				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<FullViewportOperator>();
-					op->_pipelineLayout = pipelineLayout;
-					op->_pipeline = std::move(pipeline);
 					op->_usi = std::move(usi);
-					op->_predefinedPipelineLayout = predefinedPipelineLayout;
-					op->_depVal = op->_pipeline->GetDependencyValidation();
 					if (pipelineLayoutDepVal) {
 						op->_depVal = ::Assets::GetDepValSys().Make();
-						op->_depVal.RegisterDependency(op->_pipeline->GetDependencyValidation());
+						op->_depVal.RegisterDependency(pipelineAndLayout.GetDependencyValidation());
 						op->_depVal.RegisterDependency(pipelineLayoutDepVal);
-					}
+					} else
+						op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+					op->_pipeline = std::move(pipelineAndLayout._pipeline);
+					op->_predefinedPipelineLayout = predefinedPipelineLayout;
 					return op;
 				});
 		}
@@ -310,18 +310,39 @@ namespace RenderCore { namespace Techniques
 			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, selectors);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
-				[usi=usi, pipelineLayout, pipelineLayoutDepVal, predefinedPipelineLayout](std::shared_ptr<Metal::ComputePipeline> pipeline) {
+				[usi=usi, pipelineLayout, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
-					op->_pipelineLayout = std::move(pipelineLayout);
 					op->_usi = std::move(usi);
-					op->_pipeline = std::move(pipeline);
-					op->_predefinedPipelineLayout = std::move(predefinedPipelineLayout);
-					assert(op->_pipeline);
 					if (pipelineLayoutDepVal) {
 						op->_depVal = ::Assets::GetDepValSys().Make();
-						op->_depVal.RegisterDependency(op->_pipeline->GetDependencyValidation());
+						op->_depVal.RegisterDependency(pipelineAndLayout.GetDependencyValidation());
 						op->_depVal.RegisterDependency(pipelineLayoutDepVal);
-					}
+					} else
+						op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+					op->_pipeline = std::move(pipelineAndLayout._pipeline);
+					op->_predefinedPipelineLayout = std::move(predefinedPipelineLayout);
+					assert(op->_pipeline);
+					return op;
+				});
+		}
+
+		static void ConstructToFuture(
+			::Assets::FuturePtr<ComputeOperator>& future,
+			const std::shared_ptr<PipelinePool>& pool,
+			StringSection<> computeShader,
+			const ParameterBox& selectors,
+			const UniformsStreamInterface& usi)
+		{
+			auto pipelineFuture = pool->CreateComputePipeline(computeShader, selectors);
+			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
+				future,
+				[usi=usi](auto pipelineAndLayout) {
+					auto op = std::make_shared<ComputeOperator>();
+					op->_usi = std::move(usi);
+					op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+					op->_pipeline = std::move(pipelineAndLayout._pipeline);
 					return op;
 				});
 		}
@@ -374,7 +395,16 @@ namespace RenderCore { namespace Techniques
 				});
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&result);
 		}
+	}
 
+	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelinePool>& pool,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi)
+	{
+		auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(pool, computeShader, selectors, usi);
+		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
 	}
 
 	IShaderOperator::~IShaderOperator() {}

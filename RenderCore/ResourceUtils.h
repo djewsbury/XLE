@@ -10,6 +10,7 @@
 #include "Format.h"
 #include "StateDesc.h"
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/Threading/Mutex.h"
 #include <memory>
 #include <iostream>
 
@@ -140,6 +141,7 @@ namespace RenderCore
 		std::shared_ptr<ISampler> GetSampler(const SamplerDesc&);
         SamplerPool(IDevice& device);
     private:
+        Threading::Mutex _lock;
         std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> _samplers;
         IDevice* _device = nullptr;
     };

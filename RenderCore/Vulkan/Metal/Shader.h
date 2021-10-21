@@ -153,7 +153,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	// Build a default PipelineLayoutInitializer for all of the uniform inputs of the given shader code
-	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode, ShaderStage shaderStage);
+	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode);
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -402,6 +402,7 @@ namespace RenderCore
 
     std::shared_ptr<ISampler> SamplerPool::GetSampler(const SamplerDesc& desc)
     {
+        ScopedLock(_lock);
         auto hash = desc.Hash();
         auto i = LowerBound(_samplers, hash);
 		if (i != _samplers.end() && i->first == hash)

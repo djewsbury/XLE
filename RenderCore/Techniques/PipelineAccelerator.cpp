@@ -16,6 +16,7 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Assets/RawMaterial.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/AssetFutureContinuation.h"
 #include "../../Assets/Assets.h"
@@ -53,7 +54,7 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<InputElementDesc> _inputAssembly;
 		std::vector<MiniInputElementDesc> _miniInputAssembly;
-		uint64_t _hash;
+		uint64_t _hashCode = 0;
 	};
 
 	class SharedPools : public std::enable_shared_from_this<SharedPools>
@@ -62,19 +63,17 @@ namespace RenderCore { namespace Techniques
 		Threading::Mutex _lock;
 		UniqueShaderVariationSet _selectorVariationsSet;
 		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
+		std::shared_ptr<SamplerPool> _samplerPool;
+		std::shared_ptr<IDevice> _device;
 
-		// todo -- _metalPipelines should really hold weak pointers, not strong ones. But it's awkward, and not
-		// as easy as just making it a weak pointer to the future, or a future of a weak pointer
-		// Also we have to use shared_ptrs<> here, rather than using GraphicsPipeline by value
-		// This is because pipelines can be shared between multiple pipeline-accelerators, or used in the 
-		// same accelerator multiple times
-		std::vector<std::pair<uint64_t, std::weak_ptr<Metal::GraphicsPipeline>>> _completedPipelines;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pendingPipelines;
+		std::vector<std::pair<uint64_t, std::weak_ptr<Metal::GraphicsPipeline>>> _completedGraphicsPipelines;
+		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pendingGraphicsPipelines;
 
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateMetalPipelineAlreadyLocked(
+		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateGraphicsPipelineAlreadyLocked(
 			const InputAssembly& ia,
 			Topology topology,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
+			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
 			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
@@ -86,7 +85,7 @@ namespace RenderCore { namespace Techniques
 					hash = HashCombine(s._hashValue, hash);
 			hash = HashCombine(sequencerCfg._fbRelevanceValue, hash);
 			hash = HashCombine((uint64_t)topology, hash);
-			hash = HashCombine(ia._hash, hash);
+			hash = HashCombine(ia._hashCode, hash);
 
 			// we need to hash specific parts of the graphics pipeline desc -- only those parts that we'll use below
 			// some parts of the pipeline desc (eg, the selectors) have already been used to create other inputs here
@@ -94,8 +93,8 @@ namespace RenderCore { namespace Techniques
 			// (particularly for the filtered selectors)
 			hash = pipelineDesc->CalculateHashNoSelectors(hash);
 
-			auto completedi = LowerBound(_completedPipelines, hash);
-			if (completedi != _completedPipelines.end() && completedi->first == hash) {
+			auto completedi = LowerBound(_completedGraphicsPipelines, hash);
+			if (completedi != _completedGraphicsPipelines.end() && completedi->first == hash) {
 				auto l = completedi->second.lock();
 				if (l && l->GetDependencyValidation().GetValidationIndex() == 0) {
 					// we can return an already completed pipeline
@@ -105,8 +104,8 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			auto i = LowerBound(_pendingPipelines, hash);
-			if (i!=_pendingPipelines.end() && i->first == hash)
+			auto i = LowerBound(_pendingGraphicsPipelines, hash);
+			if (i!=_pendingGraphicsPipelines.end() && i->first == hash)
 				if (!::Assets::IsInvalidated(*i->second))
 					return i->second;
 
@@ -122,14 +121,19 @@ namespace RenderCore { namespace Techniques
 				}
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
-
 			StreamOutputInitializers so;
 			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
+			::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFutures[3];
+			for (unsigned c=0; c<3; ++c) {
+				if (pipelineDesc->_shaders[c].empty())
+					continue;
+				byteCodeFutures[c] = MakeByteCodeFutureAlreadyLocked((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c], compiledPatchCollection, pipelineDesc->_patchExpansions, so);
+			}
 
-			auto shaderProgram = Internal::MakeShaderProgram(*pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors, so);
+			auto shaderProgram = Internal::MakeShaderProgram(byteCodeFutures, pipelineLayout, so);
 			
+			auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
 			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
 				*result,
 				[	ia=ia, topology, pipelineDesc, 
@@ -142,32 +146,213 @@ namespace RenderCore { namespace Techniques
 						fbDesc, subpassIdx);
 				});
 
-			if (i!=_pendingPipelines.end() && i->first == hash) {
-				i->second = result;
-			} else
-				_pendingPipelines.insert(i, std::make_pair(hash, result));
+			AddGraphicsPipelineFuture(result, hash);
+			return result;
+		}
 
-			::Assets::WhenAll(result).Then(
+		void AddGraphicsPipelineFuture(const ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>& future, uint64_t hash)
+		{
+			auto i = LowerBound(_pendingGraphicsPipelines, hash);
+			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
+				i->second = future;
+			} else
+				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
+
+			::Assets::WhenAll(future).Then(
 				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
 					ScopedLock(t->_lock);
 
-					auto i = LowerBound(t->_pendingPipelines, hash);
-					assert(i!=t->_pendingPipelines.end() && i->first == hash);
-					if (i!=t->_pendingPipelines.end() && i->first == hash) {
+					auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
+					assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
+					if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
 						if (i->second.get() != completedFuture.get())
 							return;		// possibly scheduled a replacement while the first was still pending
-						t->_pendingPipelines.erase(i);
+						t->_pendingGraphicsPipelines.erase(i);
 					}
 
-					auto completedi = LowerBound(t->_completedPipelines, hash);
-					if (completedi != t->_completedPipelines.end() && completedi->first == hash) {
+					auto completedi = LowerBound(t->_completedGraphicsPipelines, hash);
+					if (completedi != t->_completedGraphicsPipelines.end() && completedi->first == hash) {
 						completedi->second = *completedFuture->TryActualize();
 					} else
-						t->_completedPipelines.insert(completedi, std::make_pair(hash, *completedFuture->TryActualize()));
+						t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, *completedFuture->TryActualize()));
 				});
+		}
+
+		struct ComputePipelineAndLayout
+		{
+			std::shared_ptr<Metal::ComputePipeline> _pipeline;
+			std::shared_ptr<ICompiledPipelineLayout> _layout;
+
+			const ::Assets::DependencyValidation& GetDependencyValidation() const;
+		};
+
+		struct PipelineLayoutOptions
+		{
+			std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
+			::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
+			uint64_t _hashCode = 0;
+		};
+
+		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
+			StringSection<> shader,
+			const PipelineLayoutOptions& pipelineLayout,
+			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
+		{
+			auto hash = Hash64(shader, filteredSelectors._hashValue);
+			hash = HashCombine(pipelineLayout._hashCode, hash);
+
+			auto completedi = LowerBound(_completedComputePipelines, hash);
+			if (completedi != _completedComputePipelines.end() && completedi->first == hash) {
+				auto pipeline = completedi->second._pipeline.lock();
+				auto layout = completedi->second._layout.lock();
+				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
+					// we can return an already completed pipeline
+					auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
+					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout)}, {});
+					return result;
+				}
+			}
+
+			auto i = LowerBound(_pendingComputePipelines, hash);
+			if (i!=_pendingComputePipelines.end() && i->first == hash)
+				if (!::Assets::IsInvalidated(*i->second))
+					return i->second;
+
+			auto byteCodeFuture = MakeByteCodeFutureAlreadyLocked(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
+
+			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
+			if (pipelineLayout._prebuiltPipelineLayout) {
+				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
+					*result,
+					[pipelineLayout = pipelineLayout._prebuiltPipelineLayout](auto csCode) {
+						return MakeComputePipeline(*csCode, pipelineLayout);
+					});
+			} else if (!pipelineLayout._predefinedPipelineLayout) {
+				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
+					*result,
+					[weakDevice=std::weak_ptr<IDevice>{_device}](auto csCode) {
+						auto d = weakDevice.lock();
+						if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+						auto initializer = Metal::BuildPipelineLayoutInitializer(*csCode);
+						auto pipelineLayout = d->CreatePipelineLayout(initializer);
+						return MakeComputePipeline(*csCode, pipelineLayout);
+					});
+			} else {
+				::Assets::WhenAll(byteCodeFuture, pipelineLayout._predefinedPipelineLayout).ThenConstructToFuture(
+					*result,
+					[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{_device}, weakSamplerPool=std::weak_ptr<SamplerPool>{_samplerPool}](auto csCode, auto predefinedPipelineLayout) {
+						auto d = weakDevice.lock();
+						auto samplers = weakSamplerPool.lock();
+						if (!d || !samplers) Throw(std::runtime_error("Device shutdown before completion"));
+
+						// This case is a little more complicated because we need to generate a pipeline layout 
+						// (potentially using the shader byte code)
+						std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
+						if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
+							auto autoInitializer = Metal::BuildPipelineLayoutInitializer(*csCode);
+							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
+								autoInitializer, GetDefaultShaderLanguage(), samplers.get());
+							finalPipelineLayout = d->CreatePipelineLayout(initializer);
+						} else {
+							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplers.get());
+							finalPipelineLayout = d->CreatePipelineLayout(initializer);
+						}
+
+						return MakeComputePipeline(*csCode, finalPipelineLayout);
+					});
+			}
+
+			AddComputePipelineFuture(result, hash);
 			return result;
+		};
+
+		void AddComputePipelineFuture(const std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>& future, uint64_t hash)
+		{
+			auto i = LowerBound(_pendingComputePipelines, hash);
+			if (i!=_pendingComputePipelines.end() && i->first == hash) {
+				i->second = future;
+			} else
+				_pendingComputePipelines.insert(i, std::make_pair(hash, future));
+
+			::Assets::WhenAll(future).Then(
+				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> completedFuture) {
+					auto t = weakThis.lock();
+					if (!t) return;
+					ScopedLock(t->_lock);
+
+					auto i = LowerBound(t->_pendingComputePipelines, hash);
+					assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
+					if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
+						if (i->second.get() != completedFuture.get())
+							return;		// possibly scheduled a replacement while the first was still pending
+						t->_pendingComputePipelines.erase(i);
+					}
+
+					WeakComputePipelineAndLayout weakPtrs;
+					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
+					weakPtrs._layout = completedFuture->TryActualize()->_layout;
+
+					auto completedi = LowerBound(t->_completedComputePipelines, hash);
+					if (completedi != t->_completedComputePipelines.end() && completedi->first == hash) {
+						completedi->second = std::move(weakPtrs);
+					} else
+						t->_completedComputePipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
+				});
+		}
+
+		struct WeakComputePipelineAndLayout
+		{
+			std::weak_ptr<Metal::ComputePipeline> _pipeline;
+			std::weak_ptr<ICompiledPipelineLayout> _layout;
+		};
+		std::vector<std::pair<uint64_t, WeakComputePipelineAndLayout>> _completedComputePipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>>> _pendingComputePipelines;
+
+		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
+			ShaderStage shaderStage,
+			IteratorRange<const ParameterBox**> selectors,
+			const ShaderSourceParser::SelectorFilteringRules& automaticFiltering,
+			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
+			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,
+			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
+			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions)
+		{
+			UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors;
+
+			const ShaderSourceParser::SelectorFilteringRules* autoFiltering[1+patchExpansions.size()];
+			unsigned filteringRulesPulledIn[1+patchExpansions.size()];
+			unsigned autoFilteringCount = 0;
+			autoFiltering[autoFilteringCount++] = &automaticFiltering;
+			filteringRulesPulledIn[0] = ~0u;
+
+			// Figure out which filtering rules we need from the compiled patch collection, and include them
+			// This is important because the filtering rules for different shader stages might be vastly different
+			for (auto exp:patchExpansions) {
+				if (exp.second != shaderStage) continue;
+				auto i = std::find_if(
+					compiledPatchCollection->GetInterface().GetPatches().begin(), compiledPatchCollection->GetInterface().GetPatches().end(),
+					[exp](const auto& c) { return c._implementsHash == exp.first; });
+				assert(i != compiledPatchCollection->GetInterface().GetPatches().end());
+				if (i == compiledPatchCollection->GetInterface().GetPatches().end()) continue;
+				if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
+				filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
+				autoFiltering[autoFilteringCount++] = &compiledPatchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
+			}
+
+			return _selectorVariationsSet.FilterSelectors(
+				selectors,
+				manualFiltering, 
+				MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
+				preconfiguration);
+		}
+
+		SharedPools(std::shared_ptr<IDevice> device)
+		: _device(std::move(device))
+		{
+			_samplerPool = std::make_shared<SamplerPool>();
 		}
 
 	private:
@@ -200,6 +385,41 @@ namespace RenderCore { namespace Techniques
 
 			return builder.CreatePipeline(Metal::GetObjectFactory());
 		}
+
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFutureAlreadyLocked(
+			ShaderStage shaderStage,
+			StringSection<> shader,
+			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,
+			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
+			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
+			StreamOutputInitializers so = {})
+		{
+			uint64_t patchExpansionsBuffer[patchExpansions.size()];
+			unsigned patchExpansionCount = 0;
+			for (auto p:patchExpansions)
+				if (p.second == shaderStage) 
+					patchExpansionsBuffer[patchExpansionCount++] = p.first;
+
+			return Internal::MakeByteCodeFuture(
+				shaderStage,
+				shader,
+				filteredSelectors._selectors,
+				compiledPatchCollection,
+				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]), 
+				so);
+		};
+
+		static ComputePipelineAndLayout MakeComputePipeline(
+			const CompiledShaderByteCode& csCode,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
+		{
+			Metal::ComputeShader shaderActual{Metal::GetObjectFactory(), pipelineLayout, csCode};
+			Metal::ComputePipelineBuilder builder;
+			builder.Bind(shaderActual);
+			return ComputePipelineAndLayout {
+				builder.CreatePipeline(Metal::GetObjectFactory()),
+				pipelineLayout };
+		}
 	};
 
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
@@ -221,13 +441,13 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet);
 		~PipelineAccelerator();
 	
-		// "_completedPipelines" is protected by the _pipelineUsageLock lock in the pipeline accelerator pool
-		std::vector<IPipelineAcceleratorPool::Pipeline> _completedPipelines;
+		// "_completedGraphicsPipelines" is protected by the _pipelineUsageLock lock in the pipeline accelerator pool
+		std::vector<IPipelineAcceleratorPool::Pipeline> _completedGraphicsPipelines;
 
-		// "_pendingPipelines" is protected by the _constructionLock in the pipeline accelerator pool
+		// "_pendingGraphicsPipelines" is protected by the _constructionLock in the pipeline accelerator pool
 		using Pipeline = IPipelineAcceleratorPool::Pipeline;
 		using PtrToPipelineFuture = std::shared_ptr<::Assets::Future<Pipeline>>;
-		std::vector<std::pair<SequencerConfigId, PtrToPipelineFuture>> _pendingPipelines;
+		std::vector<std::pair<SequencerConfigId, PtrToPipelineFuture>> _pendingGraphicsPipelines;
 
 		void BeginPrepareForSequencerStateAlreadyLocked(
 			std::shared_ptr<SequencerConfig> cfg,
@@ -315,37 +535,21 @@ namespace RenderCore { namespace Techniques
 							ScopedLock(sharedPools->_lock);
 							for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
 								if (!pipelineDesc->_shaders[c].empty()) {
-									const ShaderSourceParser::SelectorFilteringRules* autoFiltering[1+pipelineDesc->_patchExpansions.size()];
-									unsigned filteringRulesPulledIn[1+pipelineDesc->_patchExpansions.size()];
-									unsigned autoFilteringCount = 0;
-									autoFiltering[autoFilteringCount++] = pipelineDescWithFiltering->_automaticFiltering[c].get();
-									filteringRulesPulledIn[0] = ~0u;
-
-									// Figure out which filtering rules we need from the compiled patch collection, and include them
-									// This is important because the filtering rules for different shader stages might be vastly different
-									for (auto exp:pipelineDesc->_patchExpansions) {
-										if (exp.second != (ShaderStage)c) continue;
-										auto i = std::find_if(
-											compiledPatchCollection->GetInterface().GetPatches().begin(), compiledPatchCollection->GetInterface().GetPatches().end(),
-											[exp](const auto& c) { return c._implementsHash == exp.first; });
-										assert(i != compiledPatchCollection->GetInterface().GetPatches().end());
-										if (i == compiledPatchCollection->GetInterface().GetPatches().end()) continue;
-										if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
-										filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
-										autoFiltering[autoFilteringCount++] = &compiledPatchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
-									}
-
-									filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
+									filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
+										(ShaderStage)c,
 										MakeIteratorRange(paramBoxes),
+										*pipelineDescWithFiltering->_automaticFiltering[c],
 										pipelineDesc->_manualSelectorFiltering,
-										MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]),
-										pipelineDescWithFiltering->_preconfiguration.get());
+										pipelineDescWithFiltering->_preconfiguration.get(),
+										compiledPatchCollection, 
+										pipelineDesc->_patchExpansions);
 								} else
 									filteredSelectors[c]._hashValue = 0;
 
-							metalPipelineFuture = sharedPools->CreateMetalPipelineAlreadyLocked(
+							metalPipelineFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
 								containingPipelineAccelerator->_ia, containingPipelineAccelerator->_topology, 
-								pipelineDesc, pipelineLayoutAsset->GetPipelineLayout(),
+								pipelineDesc, pipelineDescWithFiltering,
+								pipelineLayoutAsset->GetPipelineLayout(),
 								compiledPatchCollection,
 								MakeIteratorRange(filteredSelectors),
 								*cfg);
@@ -397,11 +601,11 @@ namespace RenderCore { namespace Techniques
 			});
 
 		unsigned sequencerIdx = unsigned(cfg->_cfgId);
-		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingPipelines.end()) {
+		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingGraphicsPipelines.end()) {
 			i->second = pipelineFuture;
 		} else 
-			_pendingPipelines.emplace_back(sequencerIdx, std::move(pipelineFuture));
+			_pendingGraphicsPipelines.emplace_back(sequencerIdx, std::move(pipelineFuture));
 	}
 
 	bool PipelineAccelerator::PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const
@@ -412,15 +616,15 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
-		// If we have something in _completedPipelines with a current validation index, return true
+		// If we have something in _completedGraphicsPipelines with a current validation index, return true
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		if (sequencerIdx < _completedPipelines.size())
-			if (_completedPipelines[sequencerIdx]._metalPipeline && _completedPipelines[sequencerIdx].GetDependencyValidation().GetValidationIndex() == 0)
+		if (sequencerIdx < _completedGraphicsPipelines.size())
+			if (_completedGraphicsPipelines[sequencerIdx]._metalPipeline && _completedGraphicsPipelines[sequencerIdx].GetDependencyValidation().GetValidationIndex() == 0)
 				return true;
 
 		// If we have a pipeline currently in pending state, or ready/invalid with a current validation index, then return true
-		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingPipelines.end()) {
+		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingGraphicsPipelines.end()) {
 			::Assets::DependencyValidation depVal;
 			::Assets::Blob b;
 			auto state = i->second->CheckStatusBkgrnd(depVal, b);
@@ -440,9 +644,9 @@ namespace RenderCore { namespace Techniques
 		#endif
 
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		if (sequencerIdx >= _completedPipelines.size() || !_completedPipelines[sequencerIdx]._metalPipeline)
+		if (sequencerIdx >= _completedGraphicsPipelines.size() || !_completedGraphicsPipelines[sequencerIdx]._metalPipeline)
 			return nullptr;
-		return &_completedPipelines[sequencerIdx];
+		return &_completedGraphicsPipelines[sequencerIdx];
 	}
 
 	auto PipelineAccelerator::FindPipelineFutureAlreadyLocked(const SequencerConfig& cfg) -> PtrToPipelineFuture
@@ -455,8 +659,8 @@ namespace RenderCore { namespace Techniques
 
 		// we should be in the pool's _constructionLock for this
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		auto i = std::find_if(_pendingPipelines.begin(), _pendingPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
-		if (i != _pendingPipelines.end())
+		auto i = std::find_if(_pendingGraphicsPipelines.begin(), _pendingGraphicsPipelines.end(), [sequencerIdx](const auto& p) { return p.first == sequencerIdx; });
+		if (i != _pendingGraphicsPipelines.end())
 			return i->second;
 		return nullptr;
 	}
@@ -475,7 +679,7 @@ namespace RenderCore { namespace Techniques
 	, _ownerPoolId(ownerPoolId)
 	{
 		_ia._inputAssembly = {inputAssembly.begin(), inputAssembly.end()};
-		_ia._hash = HashInputAssembly(_ia._inputAssembly, DefaultSeed64);
+		_ia._hashCode = HashInputAssembly(_ia._inputAssembly, DefaultSeed64);
 		std::vector<InputElementDesc> sortedIA = _ia._inputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
@@ -522,7 +726,7 @@ namespace RenderCore { namespace Techniques
 	, _ownerPoolId(ownerPoolId)
 	{
 		_ia._miniInputAssembly = {miniInputAssembly.begin(), miniInputAssembly.end()};
-		_ia._hash = HashInputAssembly(_ia._miniInputAssembly, DefaultSeed64);
+		_ia._hashCode = HashInputAssembly(_ia._miniInputAssembly, DefaultSeed64);
 		std::vector<MiniInputElementDesc> sortedIA = _ia._miniInputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
@@ -1117,10 +1321,10 @@ namespace RenderCore { namespace Techniques
 				}
 
 				// check for completed/invalidated pipelines
-				if (a->_completedPipelines.size() < _sequencerConfigById.size())
-					a->_completedPipelines.resize(_sequencerConfigById.size());
+				if (a->_completedGraphicsPipelines.size() < _sequencerConfigById.size())
+					a->_completedGraphicsPipelines.resize(_sequencerConfigById.size());
 
-				for (auto i=a->_pendingPipelines.begin(); i!=a->_pendingPipelines.end();) {
+				for (auto i=a->_pendingGraphicsPipelines.begin(); i!=a->_pendingGraphicsPipelines.end();) {
 					PipelineAccelerator::Pipeline pipeline;
 					::Assets::DependencyValidation depVal;
 					::Assets::Blob b;
@@ -1129,13 +1333,13 @@ namespace RenderCore { namespace Techniques
 						++i;
 						continue;
 					} else if (state == ::Assets::AssetState::Ready) {
-						a->_completedPipelines[i->first] = std::move(pipeline);
-						i=a->_pendingPipelines.erase(i);
+						a->_completedGraphicsPipelines[i->first] = std::move(pipeline);
+						i=a->_pendingGraphicsPipelines.erase(i);
 					} else {
 						// "invalid" state. Attempt to rebuild on changes
-						a->_completedPipelines[i->first] = {};
+						a->_completedGraphicsPipelines[i->first] = {};
 						if (depVal.GetValidationIndex() != 0 && lockedSequencerConfigs[i->first]) {
-							// should not change _pendingPipelines, just overwrite existing entry
+							// should not change _pendingGraphicsPipelines, just overwrite existing entry
 							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, _matDescSetLayout, _sharedPools);
 						}
 						++i;
@@ -1145,9 +1349,9 @@ namespace RenderCore { namespace Techniques
 				for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
 					if (!lockedSequencerConfigs[c]) continue;
 
-					if (a->_completedPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
-						auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c](const auto& p) { return p.first == c; });
-						if (existing != a->_pendingPipelines.end()) continue;	// already scheduled this rebuild
+					if (a->_completedGraphicsPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
+						auto existing = std::find_if(a->_pendingGraphicsPipelines.begin(), a->_pendingGraphicsPipelines.end(), [c](const auto& p) { return p.first == c; });
+						if (existing != a->_pendingGraphicsPipelines.end()) continue;	// already scheduled this rebuild
 						a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _sharedPools);
 					}
 				}
@@ -1230,8 +1434,8 @@ namespace RenderCore { namespace Techniques
 		result._descriptorSetAcceleratorCount = _descriptorSetAccelerators.size();
 		{
 			ScopedLock(_sharedPools->_lock);
-			result._metalPipelineCount = _sharedPools->_pendingPipelines.size();
-			for (auto& p:_sharedPools->_completedPipelines)
+			result._metalPipelineCount = _sharedPools->_pendingGraphicsPipelines.size();
+			for (auto& p:_sharedPools->_completedGraphicsPipelines)
 				if (!p.second.expired())
 					++result._metalPipelineCount;
 		}

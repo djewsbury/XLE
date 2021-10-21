@@ -219,32 +219,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	}
 
 	static ::Assets::PtrToFuturePtr<Metal::ShaderProgram> MakeShaderProgram(
-		const GraphicsPipelineDesc& pipelineDesc,
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-		IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
 		StreamOutputInitializers so = {})
 	{
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3];
-
-		uint64_t patchExpansionsBuffer[pipelineDesc._patchExpansions.size()];
-		for (unsigned c=0; c<3; ++c) {
-			if (pipelineDesc._shaders[c].empty())
-				continue;
-
-			unsigned patchExpansionCount = 0;
-			for (auto p:pipelineDesc._patchExpansions)
-				if (p.second == (ShaderStage)c) patchExpansionsBuffer[patchExpansionCount++] = p.first;
-
-			byteCodeFuture[c] = MakeByteCodeFuture(
-				(ShaderStage)c,
-				pipelineDesc._shaders[c],
-				filteredSelectors[c]._selectors,
-				compiledPatchCollection,
-				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]),
-				so);
-		}
-
 		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
 
@@ -260,60 +238,34 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						pipelineLayout, *vsCode, *psCode);
 				});
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			auto soElements = pipelineDesc._soElements;
-			auto soBufferStrides = pipelineDesc._soBufferStrides;
+			std::vector<RenderCore::InputElementDesc> soElementsCopy{so._outputElements.begin(), so._outputElements.end()};
+			std::vector<unsigned> soBufferStridesCopy{so._outputBufferStrides.begin(), so._outputBufferStrides.end()};
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 				*result,
-				[pipelineLayout, soElements, soBufferStrides](
+				[pipelineLayout, soElementsCopy, soBufferStridesCopy](
 					std::shared_ptr<CompiledShaderByteCode> vsCode, 
 					std::shared_ptr<CompiledShaderByteCode> psCode,
 					std::shared_ptr<CompiledShaderByteCode> gsCode) {
 					return std::make_shared<Metal::ShaderProgram>(
 						Metal::GetObjectFactory(),
 						pipelineLayout, *vsCode, *gsCode, *psCode,
-						StreamOutputInitializers{soElements, soBufferStrides});
+						StreamOutputInitializers{soElementsCopy, soBufferStridesCopy});
 				});
 		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			auto soElements = pipelineDesc._soElements;
-			auto soBufferStrides = pipelineDesc._soBufferStrides;
+			std::vector<RenderCore::InputElementDesc> soElementsCopy{so._outputElements.begin(), so._outputElements.end()};
+			std::vector<unsigned> soBufferStridesCopy{so._outputBufferStrides.begin(), so._outputBufferStrides.end()};
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
 				*result,
-				[pipelineLayout, soElements, soBufferStrides](
+				[pipelineLayout, soElementsCopy, soBufferStridesCopy](
 					std::shared_ptr<CompiledShaderByteCode> vsCode, 
 					std::shared_ptr<CompiledShaderByteCode> gsCode) {
 					return std::make_shared<Metal::ShaderProgram>(
 						Metal::GetObjectFactory(),
 						pipelineLayout, *vsCode, *gsCode, CompiledShaderByteCode{},
-						StreamOutputInitializers{soElements, soBufferStrides});
+						StreamOutputInitializers{soElementsCopy, soBufferStridesCopy});
 				});
 		} else
 			Throw(std::runtime_error("Missing shader stages while building shader program"));
-		return result;
-	}
-
-	static ::Assets::PtrToFuturePtr<Metal::ComputeShader> MakeComputeShader(
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		StringSection<> shader,
-		const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,
-		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-		IteratorRange<const uint64_t*> patchExpansions)
-	{
-		auto byteCodeFuture = MakeByteCodeFuture(
-			ShaderStage::Compute,
-			shader,
-			filteredSelectors._selectors,
-			compiledPatchCollection,
-			patchExpansions, {});
-
-		auto result = std::make_shared<::Assets::FuturePtr<Metal::ComputeShader>>();
-		::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
-			*result,
-			[pipelineLayout](
-				std::shared_ptr<CompiledShaderByteCode> csCode) {
-				return std::make_shared<Metal::ComputeShader>(
-					Metal::GetObjectFactory(),
-					pipelineLayout, *csCode);
-			});
 		return result;
 	}
 

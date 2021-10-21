@@ -6,6 +6,7 @@
 #include "PredefinedDescriptorSetLayout.h"
 #include "PredefinedCBLayout.h"
 #include "../UniformsStream.h"
+#include "../ResourceUtils.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
@@ -167,52 +168,113 @@ namespace RenderCore { namespace Assets
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile() {}
 	PredefinedPipelineLayoutFile::~PredefinedPipelineLayoutFile() {}
 
-	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
+	static DescriptorSetSignature BuildAutoDescriptorSet(
+		const DescriptorSetSignature& autoSignature,
+		const PredefinedDescriptorSetLayout& predefinedLayout,
+		SamplerPool* samplerPool)
 	{
-		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[_descriptorSets.size()];
-		for (size_t c=0; c<_descriptorSets.size(); ++c) {
+		DescriptorSetSignature result = autoSignature;
+		for (unsigned s=0; s<result._slots.size(); ++s) {
+			if (result._slots[s]._type == DescriptorType::Sampler) {
+				// look for a fixed sampler in the predefined layout
+				auto name = result._slotNames[s];
+				auto i = std::find_if(predefinedLayout._slots.begin(), predefinedLayout._slots.end(), [name](const auto& c) { return Hash64(c._name) == name; });
+				if (i != predefinedLayout._slots.end() && i->_fixedSamplerIdx != ~0u) {
+					if (result._fixedSamplers.size() <= s)
+						result._fixedSamplers.resize(s+1);
+					result._fixedSamplers[s] = samplerPool->GetSampler(predefinedLayout._fixedSamplers[i->_fixedSamplerIdx]);					
+				}
+			}
+		}
+		return result;
+	}
+
+	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerInternal(
+		const PipelineLayoutInitializer* autoInitializer,
+		ShaderLanguage language, SamplerPool* samplerPool) const
+	{
+		auto descSetCount = autoInitializer ? autoInitializer->GetDescriptorSets().size() : _descriptorSets.size();
+		PipelineLayoutInitializer::DescriptorSetBinding descriptorSetBindings[descSetCount];
+		size_t c=0;
+		for (; c<_descriptorSets.size() && c<descSetCount; ++c) {
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
-			descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature(samplerPool);
 			descriptorSetBindings[c]._pipelineType = _pipelineType;
+			if (_descriptorSets[c]._isAuto) {
+				if (!autoInitializer)
+					Throw(std::runtime_error("Pipeline layout has auto descriptor sets and cannot be used without reflection information from the shader"));
+				if (c < autoInitializer->GetDescriptorSets().size()) {
+					auto* matchingDescriptorSet = &autoInitializer->GetDescriptorSets()[c]._signature;
+					descriptorSetBindings[c]._signature = BuildAutoDescriptorSet(*matchingDescriptorSet, *_descriptorSets[c]._descSet, samplerPool);
+				} else {
+					// shader doesn't actually use anything from this descriptor set, we'll just keep the signature blank
+				}
+			} else {
+				descriptorSetBindings[c]._signature = _descriptorSets[c]._descSet->MakeDescriptorSetSignature(samplerPool);
+			}
+		}
+		if (autoInitializer) {
+			// If the shader requires some descriptor sets that aren't in the predefined layout, we'll include those here
+			for (; c<autoInitializer->GetDescriptorSets().size(); ++c)
+				descriptorSetBindings[c] = autoInitializer->GetDescriptorSets()[c];
 		}
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
 		unsigned pushConstantBindingsCount = 0;
-		if (_vsPushConstants.second) {
-			auto& binding = pushConstantBindings[pushConstantBindingsCount++];
-			binding._name = _vsPushConstants.first;
-			binding._shaderStage = ShaderStage::Vertex;
-			binding._cbSize = _vsPushConstants.second->GetSize(language);
-			binding._cbElements = _vsPushConstants.second->MakeConstantBufferElements(language);
-		}
+		IteratorRange<const PipelineLayoutInitializer::PushConstantsBinding*> pushConstantsInitializer;
 
-		if (_psPushConstants.second) {
-			auto& binding = pushConstantBindings[pushConstantBindingsCount++];
-			binding._name = _psPushConstants.first;
-			binding._shaderStage = ShaderStage::Pixel;
-			binding._cbSize = _psPushConstants.second->GetSize(language);
-			binding._cbElements = _psPushConstants.second->MakeConstantBufferElements(language);
-		}
+		if (autoInitializer) {
+			// also just defer to the autoInitializer for push constant initializers
+			pushConstantsInitializer = autoInitializer->GetPushConstants();
+		} else {
+			if (_vsPushConstants.second) {
+				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
+				binding._name = _vsPushConstants.first;
+				binding._shaderStage = ShaderStage::Vertex;
+				binding._cbSize = _vsPushConstants.second->GetSize(language);
+				binding._cbElements = _vsPushConstants.second->MakeConstantBufferElements(language);
+			}
 
-		if (_gsPushConstants.second) {
-			auto& binding = pushConstantBindings[pushConstantBindingsCount++];
-			binding._name = _gsPushConstants.first;
-			binding._shaderStage = ShaderStage::Geometry;
-			binding._cbSize = _gsPushConstants.second->GetSize(language);
-			binding._cbElements = _gsPushConstants.second->MakeConstantBufferElements(language);
+			if (_psPushConstants.second) {
+				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
+				binding._name = _psPushConstants.first;
+				binding._shaderStage = ShaderStage::Pixel;
+				binding._cbSize = _psPushConstants.second->GetSize(language);
+				binding._cbElements = _psPushConstants.second->MakeConstantBufferElements(language);
+			}
+
+			if (_gsPushConstants.second) {
+				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
+				binding._name = _gsPushConstants.first;
+				binding._shaderStage = ShaderStage::Geometry;
+				binding._cbSize = _gsPushConstants.second->GetSize(language);
+				binding._cbElements = _gsPushConstants.second->MakeConstantBufferElements(language);
+			}
+			if (_csPushConstants.second) {
+				auto& binding = pushConstantBindings[pushConstantBindingsCount++];
+				binding._name = _csPushConstants.first;
+				binding._shaderStage = ShaderStage::Compute;
+				binding._cbSize = _csPushConstants.second->GetSize(language);
+				binding._cbElements = _csPushConstants.second->MakeConstantBufferElements(language);
+			}
+			assert(pushConstantBindingsCount <= dimof(pushConstantBindings));
+			pushConstantsInitializer = MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount]);
 		}
-		if (_csPushConstants.second) {
-			auto& binding = pushConstantBindings[pushConstantBindingsCount++];
-			binding._name = _csPushConstants.first;
-			binding._shaderStage = ShaderStage::Compute;
-			binding._cbSize = _csPushConstants.second->GetSize(language);
-			binding._cbElements = _csPushConstants.second->MakeConstantBufferElements(language);
-		}
-		assert(pushConstantBindingsCount <= dimof(pushConstantBindings));
 
 		return PipelineLayoutInitializer {
-			MakeIteratorRange(descriptorSetBindings, &descriptorSetBindings[_descriptorSets.size()]),
-			MakeIteratorRange(pushConstantBindings, &pushConstantBindings[pushConstantBindingsCount])};
+			MakeIteratorRange(descriptorSetBindings, &descriptorSetBindings[descSetCount]),
+			pushConstantsInitializer};
+	}
+
+	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* samplerPool) const
+	{
+		return MakePipelineLayoutInitializerInternal(nullptr, language, samplerPool);
+	}
+
+	PipelineLayoutInitializer PredefinedPipelineLayout::MakePipelineLayoutInitializerWithAutoMatching(
+		const PipelineLayoutInitializer& autoInitializer,
+		ShaderLanguage language, SamplerPool* samplerPool) const
+	{
+		return MakePipelineLayoutInitializerInternal(&autoInitializer, language, samplerPool);
 	}
 
 	const PredefinedDescriptorSetLayout* PredefinedPipelineLayout::FindDescriptorSet(StringSection<> name) const
@@ -221,6 +283,13 @@ namespace RenderCore { namespace Assets
 			if (XlEqString(name, d._name))
 				return d._descSet.get();
 		return nullptr;
+	}
+
+	bool PredefinedPipelineLayout::HasAutoDescriptorSets() const
+	{
+		for (const auto& descSet:_descriptorSets)
+			if (descSet._isAuto) return true;
+		return false;
 	}
 
 	PredefinedPipelineLayout::PredefinedPipelineLayout(
@@ -244,7 +313,7 @@ namespace RenderCore { namespace Assets
 						::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
 						srcFile.GetDependencyValidation(),
 						"Mixing multiple pipeline types (compute/graphics) in pipeline layout"));
-				_descriptorSets.push_back({d._name, d._descSet});
+				_descriptorSets.push_back(d);
 			}
 		}
 		_vsPushConstants = i->second->_vsPushConstants;

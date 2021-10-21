@@ -1425,7 +1425,7 @@ namespace UnitTests
 		)--";
 
 		auto shaderCode = testHelper->MakeShader(shaderText, "ps_*");
-		auto pipelineLayout = Metal::BuildPipelineLayoutInitializer(shaderCode, ShaderStage::Pixel);
+		auto pipelineLayout = Metal::BuildPipelineLayoutInitializer(shaderCode);
 		REQUIRE(pipelineLayout.GetDescriptorSets().size() == 3);
 
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots.size() == 3);

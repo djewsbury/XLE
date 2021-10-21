@@ -1365,7 +1365,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
-	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode, ShaderStage shaderStage)
+	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode)
 	{
 		SPIRVReflection reflection(byteCode.GetByteCode());
 		Log(Debug) << reflection << std::endl;
@@ -1373,9 +1373,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::vector<PipelineLayoutInitializer::DescriptorSetBinding> descriptorSets;
 		PipelineLayoutInitializer::PushConstantsBinding pushConstants;
-		pushConstants._shaderStage = shaderStage;
+		pushConstants._shaderStage = byteCode.GetStage();
 
-		auto pipelineType = (shaderStage == ShaderStage::Compute) ? PipelineType::Compute : PipelineType::Graphics;
+		auto pipelineType = (byteCode.GetStage() == ShaderStage::Compute) ? PipelineType::Compute : PipelineType::Graphics;
 
 		for (const auto&v:reflection._variables) {
 			auto reflectionVariable = GetReflectionVariableInformation(reflection, v.first);

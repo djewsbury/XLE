@@ -80,7 +80,7 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
-	::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> BuildLightResolveOperator(
+	static std::shared_ptr<::Assets::Future<Techniques::PipelinePool::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
 		Techniques::PipelinePool& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
@@ -196,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 			LightSourceOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
 		};
-		using PipelineFuture = ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>;
+		using PipelineFuture = std::shared_ptr<::Assets::Future<Techniques::PipelinePool::GraphicsPipelineAndLayout>>;
 		std::vector<PipelineFuture> pipelineFutures;
 		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
@@ -275,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 		result->SetPollingFunction(
 			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)](::Assets::FuturePtr<LightResolveOperators>& future) -> bool {
 				using namespace ::Assets;
-				std::vector<std::shared_ptr<Metal::GraphicsPipeline>> actualized;
+				std::vector<Techniques::PipelinePool::GraphicsPipelineAndLayout> actualized;
 				actualized.resize(pipelineFutures.size());
 				auto a=actualized.begin();
 				Blob queriedLog;
@@ -289,7 +289,7 @@ namespace RenderCore { namespace LightingEngine
 						} else 
 							return true;
 					}
-					assert(*a);
+					assert(a->_pipeline);
 					++a;
 				}
 
@@ -308,8 +308,8 @@ namespace RenderCore { namespace LightingEngine
 				finalResult->_pipelines.reserve(actualized.size());
 				assert(actualized.size() == attachedData.size());
 				for (unsigned c=0; c<actualized.size(); ++c) {
-					finalResult->_depVal.RegisterDependency(actualized[c]->GetDependencyValidation());
-					finalResult->_pipelines.push_back({std::move(actualized[c]), attachedData[c]._flags, attachedData[c]._stencilingShape});
+					finalResult->_depVal.RegisterDependency(actualized[c].GetDependencyValidation());
+					finalResult->_pipelines.push_back({std::move(actualized[c]._pipeline), attachedData[c]._flags, attachedData[c]._stencilingShape});
 				}
 				finalResult->_operatorToPipelineMap = operatorToPipelineMap; 
 

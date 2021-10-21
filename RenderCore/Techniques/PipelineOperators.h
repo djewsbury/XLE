@@ -88,6 +88,12 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pipelineLayoutAsset,
 		const UniformsStreamInterface& usi);
 
+	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelinePool>& pool,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi);
+
 	class CompiledPipelineLayoutAsset
 	{
 	public:
