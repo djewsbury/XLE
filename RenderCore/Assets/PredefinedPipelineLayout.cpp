@@ -36,10 +36,11 @@ namespace RenderCore { namespace Assets
 
 			iterator.GetNextToken();	// skip over what we peeked
 
-			if (XlEqString(next._value, "DescriptorSet") || XlEqString(next._value, "GraphicsDescriptorSet") || XlEqString(next._value, "ComputeDescriptorSet")) {
+			if (XlEqString(next._value, "DescriptorSet") || XlEqString(next._value, "GraphicsDescriptorSet") || XlEqString(next._value, "ComputeDescriptorSet") || XlEqString(next._value, "AutoDescriptorSet")) {
 				auto pipelineType = PipelineType::Graphics;
 				if (XlEqString(next._value, "ComputeDescriptorSet"))
 					pipelineType = PipelineType::Compute;
+				bool isAuto = XlEqString(next._value, "AutoDescriptorSet");
 					
 				auto name = iterator.GetNextToken();
 				auto semi = iterator.GetNextToken();
@@ -51,7 +52,7 @@ namespace RenderCore { namespace Assets
 				if (i == _descriptorSets.end())
 					Throw(FormatException(StringMeld<256>() << "Descriptor set with the name (" << name._value << ") has not been declared", name._start));
 
-				result->_descriptorSets.push_back({name._value.AsString(), i->second, pipelineType});
+				result->_descriptorSets.push_back({name._value.AsString(), i->second, pipelineType, isAuto});
 			} else if (XlEqString(next._value, "VSPushConstants") 
 					|| XlEqString(next._value, "PSPushConstants") 
 					|| XlEqString(next._value, "GSPushConstants")
@@ -87,7 +88,8 @@ namespace RenderCore { namespace Assets
 				auto semi = iterator.GetNextToken();
 				if (!XlEqString(closeBrace._value, "}") || !XlEqString(semi._value, ";"))
 					Throw(FormatException("Expecting } and then ;", closeBrace._start));
-			}
+			} else
+				Throw(FormatException("Expecting DescriptorSet, GraphicsDescriptorSet, ComputeDescriptorSet, AutoDescriptorSet, VSPushConstants, PSPushConstants, GSPushConstants or CSPushConstants", iterator.GetLocation()));
 		}
 
 		return result;
@@ -198,7 +200,7 @@ namespace RenderCore { namespace Assets
 		size_t c=0;
 		for (; c<_descriptorSets.size() && c<descSetCount; ++c) {
 			descriptorSetBindings[c]._name = _descriptorSets[c]._name;
-			descriptorSetBindings[c]._pipelineType = _pipelineType;
+			descriptorSetBindings[c]._pipelineType = _descriptorSets[c]._pipelineType;
 			if (_descriptorSets[c]._isAuto) {
 				if (!autoInitializer)
 					Throw(std::runtime_error("Pipeline layout has auto descriptor sets and cannot be used without reflection information from the shader"));
@@ -216,6 +218,11 @@ namespace RenderCore { namespace Assets
 			// If the shader requires some descriptor sets that aren't in the predefined layout, we'll include those here
 			for (; c<autoInitializer->GetDescriptorSets().size(); ++c)
 				descriptorSetBindings[c] = autoInitializer->GetDescriptorSets()[c];
+
+			// If there's at least one auto descriptor set, we'll reset all of the pipeline types to 
+			if (!autoInitializer->GetDescriptorSets().empty())
+				for (unsigned c=0; c<descSetCount; ++c)
+					descriptorSetBindings[c]._pipelineType = autoInitializer->GetDescriptorSets()[0]._pipelineType;
 		}
 
 		PipelineLayoutInitializer::PushConstantsBinding pushConstantBindings[3];
@@ -303,16 +310,18 @@ namespace RenderCore { namespace Assets
 				srcFile.GetDependencyValidation(),
 				"No pipeline layout entry with the name (%s)", name.c_str()));
 
-		_pipelineType = PipelineType::Graphics;
 		if (!i->second->_descriptorSets.empty()) {
-			_pipelineType = i->second->_descriptorSets[0]._pipelineType;
 			_descriptorSets.reserve(i->second->_descriptorSets.size());
+			std::optional<PipelineType> pipelineType;
 			for (const auto& d:i->second->_descriptorSets) {
-				if (d._pipelineType != _pipelineType)
-					Throw(::Assets::Exceptions::ConstructionError(
-						::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
-						srcFile.GetDependencyValidation(),
-						"Mixing multiple pipeline types (compute/graphics) in pipeline layout"));
+				if (!d._isAuto) {
+					if (pipelineType && d._pipelineType != pipelineType.value())
+						Throw(::Assets::Exceptions::ConstructionError(
+							::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
+							srcFile.GetDependencyValidation(),
+							"Mixing multiple pipeline types (compute/graphics) in pipeline layout"));
+					pipelineType = d._pipelineType;
+				}
 				_descriptorSets.push_back(d);
 			}
 		}

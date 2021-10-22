@@ -75,7 +75,6 @@ namespace RenderCore { namespace Assets
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _psPushConstants;
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _gsPushConstants;
         std::pair<std::string, std::shared_ptr<PredefinedCBLayout>> _csPushConstants;
-        PipelineType _pipelineType;
 
         PipelineLayoutInitializer MakePipelineLayoutInitializer(ShaderLanguage language, SamplerPool* =nullptr) const;
         PipelineLayoutInitializer MakePipelineLayoutInitializerWithAutoMatching(

@@ -50,378 +50,6 @@ namespace RenderCore { namespace Techniques
 		std::string _name;
 	};
 
-	struct InputAssembly
-	{
-		std::vector<InputElementDesc> _inputAssembly;
-		std::vector<MiniInputElementDesc> _miniInputAssembly;
-		uint64_t _hashCode = 0;
-	};
-
-	class SharedPools : public std::enable_shared_from_this<SharedPools>
-	{
-	public:
-		Threading::Mutex _lock;
-		UniqueShaderVariationSet _selectorVariationsSet;
-		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
-		std::shared_ptr<SamplerPool> _samplerPool;
-		std::shared_ptr<IDevice> _device;
-
-		std::vector<std::pair<uint64_t, std::weak_ptr<Metal::GraphicsPipeline>>> _completedGraphicsPipelines;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pendingGraphicsPipelines;
-
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateGraphicsPipelineAlreadyLocked(
-			const InputAssembly& ia,
-			Topology topology,
-			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
-			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
-			const SequencerConfig& sequencerCfg)
-		{
-			uint64_t hash = HashCombine(compiledPatchCollection->GetGUID(), pipelineLayout->GetGUID());
-			for (auto s:filteredSelectors)
-				if (s._hashValue)
-					hash = HashCombine(s._hashValue, hash);
-			hash = HashCombine(sequencerCfg._fbRelevanceValue, hash);
-			hash = HashCombine((uint64_t)topology, hash);
-			hash = HashCombine(ia._hashCode, hash);
-
-			// we need to hash specific parts of the graphics pipeline desc -- only those parts that we'll use below
-			// some parts of the pipeline desc (eg, the selectors) have already been used to create other inputs here
-			// we don't want to use use them, because they may be more aggressively filtered in the secondary products
-			// (particularly for the filtered selectors)
-			hash = pipelineDesc->CalculateHashNoSelectors(hash);
-
-			auto completedi = LowerBound(_completedGraphicsPipelines, hash);
-			if (completedi != _completedGraphicsPipelines.end() && completedi->first == hash) {
-				auto l = completedi->second.lock();
-				if (l && l->GetDependencyValidation().GetValidationIndex() == 0) {
-					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
-					result->SetAsset(std::move(l), {});
-					return result;
-				}
-			}
-
-			auto i = LowerBound(_pendingGraphicsPipelines, hash);
-			if (i!=_pendingGraphicsPipelines.end() && i->first == hash)
-				if (!::Assets::IsInvalidated(*i->second))
-					return i->second;
-
-			#if 0
-				Log(Verbose) << "Building pipeline for pipeline accelerator: " << std::endl;
-				Log(Verbose) << "\tPipeline layout: " << pipelineLayout->GetGUID() << " (" << (size_t)pipelineLayout.get() << ")" << std::endl;
-				Log(Verbose) << "\tFB relevance: " << sequencerCfg._fbRelevanceValue << std::endl;
-				Log(Verbose) << "\tIA: " << ia._hash << std::endl;
-				Log(Verbose) << "\tPatch collection: " << compiledPatchCollection->GetGUID() << std::endl;
-				for (unsigned c=0; c<filteredSelectors.size(); ++c) {
-					if (!filteredSelectors[c]._hashValue) continue;
-					Log(Verbose) << "\tFiltered selectors[" << c << "]: " << filteredSelectors[c]._selectors << std::endl;
-				}
-			#endif
-
-			StreamOutputInitializers so;
-			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
-			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
-			::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFutures[3];
-			for (unsigned c=0; c<3; ++c) {
-				if (pipelineDesc->_shaders[c].empty())
-					continue;
-				byteCodeFutures[c] = MakeByteCodeFutureAlreadyLocked((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c], compiledPatchCollection, pipelineDesc->_patchExpansions, so);
-			}
-
-			auto shaderProgram = Internal::MakeShaderProgram(byteCodeFutures, pipelineLayout, so);
-			
-			auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
-			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
-				*result,
-				[	ia=ia, topology, pipelineDesc, 
-					fbDesc=sequencerCfg._fbDesc, subpassIdx=sequencerCfg._subpassIdx
-					](std::shared_ptr<Metal::ShaderProgram> shaderProgram) {
-
-					return InternalCreatePipeline(
-						*shaderProgram, 
-						*pipelineDesc, ia, topology,
-						fbDesc, subpassIdx);
-				});
-
-			AddGraphicsPipelineFuture(result, hash);
-			return result;
-		}
-
-		void AddGraphicsPipelineFuture(const ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>& future, uint64_t hash)
-		{
-			auto i = LowerBound(_pendingGraphicsPipelines, hash);
-			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
-				i->second = future;
-			} else
-				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
-
-			::Assets::WhenAll(future).Then(
-				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> completedFuture) {
-					auto t = weakThis.lock();
-					if (!t) return;
-					ScopedLock(t->_lock);
-
-					auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
-					assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
-					if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
-						if (i->second.get() != completedFuture.get())
-							return;		// possibly scheduled a replacement while the first was still pending
-						t->_pendingGraphicsPipelines.erase(i);
-					}
-
-					auto completedi = LowerBound(t->_completedGraphicsPipelines, hash);
-					if (completedi != t->_completedGraphicsPipelines.end() && completedi->first == hash) {
-						completedi->second = *completedFuture->TryActualize();
-					} else
-						t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, *completedFuture->TryActualize()));
-				});
-		}
-
-		struct ComputePipelineAndLayout
-		{
-			std::shared_ptr<Metal::ComputePipeline> _pipeline;
-			std::shared_ptr<ICompiledPipelineLayout> _layout;
-
-			const ::Assets::DependencyValidation& GetDependencyValidation() const;
-		};
-
-		struct PipelineLayoutOptions
-		{
-			std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
-			::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
-			uint64_t _hashCode = 0;
-		};
-
-		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
-			StringSection<> shader,
-			const PipelineLayoutOptions& pipelineLayout,
-			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
-		{
-			auto hash = Hash64(shader, filteredSelectors._hashValue);
-			hash = HashCombine(pipelineLayout._hashCode, hash);
-
-			auto completedi = LowerBound(_completedComputePipelines, hash);
-			if (completedi != _completedComputePipelines.end() && completedi->first == hash) {
-				auto pipeline = completedi->second._pipeline.lock();
-				auto layout = completedi->second._layout.lock();
-				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
-					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
-					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout)}, {});
-					return result;
-				}
-			}
-
-			auto i = LowerBound(_pendingComputePipelines, hash);
-			if (i!=_pendingComputePipelines.end() && i->first == hash)
-				if (!::Assets::IsInvalidated(*i->second))
-					return i->second;
-
-			auto byteCodeFuture = MakeByteCodeFutureAlreadyLocked(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
-
-			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
-			if (pipelineLayout._prebuiltPipelineLayout) {
-				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
-					*result,
-					[pipelineLayout = pipelineLayout._prebuiltPipelineLayout](auto csCode) {
-						return MakeComputePipeline(*csCode, pipelineLayout);
-					});
-			} else if (!pipelineLayout._predefinedPipelineLayout) {
-				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
-					*result,
-					[weakDevice=std::weak_ptr<IDevice>{_device}](auto csCode) {
-						auto d = weakDevice.lock();
-						if (!d) Throw(std::runtime_error("Device shutdown before completion"));
-
-						auto initializer = Metal::BuildPipelineLayoutInitializer(*csCode);
-						auto pipelineLayout = d->CreatePipelineLayout(initializer);
-						return MakeComputePipeline(*csCode, pipelineLayout);
-					});
-			} else {
-				::Assets::WhenAll(byteCodeFuture, pipelineLayout._predefinedPipelineLayout).ThenConstructToFuture(
-					*result,
-					[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{_device}, weakSamplerPool=std::weak_ptr<SamplerPool>{_samplerPool}](auto csCode, auto predefinedPipelineLayout) {
-						auto d = weakDevice.lock();
-						auto samplers = weakSamplerPool.lock();
-						if (!d || !samplers) Throw(std::runtime_error("Device shutdown before completion"));
-
-						// This case is a little more complicated because we need to generate a pipeline layout 
-						// (potentially using the shader byte code)
-						std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
-						if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
-							auto autoInitializer = Metal::BuildPipelineLayoutInitializer(*csCode);
-							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
-								autoInitializer, GetDefaultShaderLanguage(), samplers.get());
-							finalPipelineLayout = d->CreatePipelineLayout(initializer);
-						} else {
-							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplers.get());
-							finalPipelineLayout = d->CreatePipelineLayout(initializer);
-						}
-
-						return MakeComputePipeline(*csCode, finalPipelineLayout);
-					});
-			}
-
-			AddComputePipelineFuture(result, hash);
-			return result;
-		};
-
-		void AddComputePipelineFuture(const std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>& future, uint64_t hash)
-		{
-			auto i = LowerBound(_pendingComputePipelines, hash);
-			if (i!=_pendingComputePipelines.end() && i->first == hash) {
-				i->second = future;
-			} else
-				_pendingComputePipelines.insert(i, std::make_pair(hash, future));
-
-			::Assets::WhenAll(future).Then(
-				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> completedFuture) {
-					auto t = weakThis.lock();
-					if (!t) return;
-					ScopedLock(t->_lock);
-
-					auto i = LowerBound(t->_pendingComputePipelines, hash);
-					assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
-					if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
-						if (i->second.get() != completedFuture.get())
-							return;		// possibly scheduled a replacement while the first was still pending
-						t->_pendingComputePipelines.erase(i);
-					}
-
-					WeakComputePipelineAndLayout weakPtrs;
-					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
-					weakPtrs._layout = completedFuture->TryActualize()->_layout;
-
-					auto completedi = LowerBound(t->_completedComputePipelines, hash);
-					if (completedi != t->_completedComputePipelines.end() && completedi->first == hash) {
-						completedi->second = std::move(weakPtrs);
-					} else
-						t->_completedComputePipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
-				});
-		}
-
-		struct WeakComputePipelineAndLayout
-		{
-			std::weak_ptr<Metal::ComputePipeline> _pipeline;
-			std::weak_ptr<ICompiledPipelineLayout> _layout;
-		};
-		std::vector<std::pair<uint64_t, WeakComputePipelineAndLayout>> _completedComputePipelines;
-		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>>> _pendingComputePipelines;
-
-		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
-			ShaderStage shaderStage,
-			IteratorRange<const ParameterBox**> selectors,
-			const ShaderSourceParser::SelectorFilteringRules& automaticFiltering,
-			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
-			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions)
-		{
-			UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors;
-
-			const ShaderSourceParser::SelectorFilteringRules* autoFiltering[1+patchExpansions.size()];
-			unsigned filteringRulesPulledIn[1+patchExpansions.size()];
-			unsigned autoFilteringCount = 0;
-			autoFiltering[autoFilteringCount++] = &automaticFiltering;
-			filteringRulesPulledIn[0] = ~0u;
-
-			// Figure out which filtering rules we need from the compiled patch collection, and include them
-			// This is important because the filtering rules for different shader stages might be vastly different
-			for (auto exp:patchExpansions) {
-				if (exp.second != shaderStage) continue;
-				auto i = std::find_if(
-					compiledPatchCollection->GetInterface().GetPatches().begin(), compiledPatchCollection->GetInterface().GetPatches().end(),
-					[exp](const auto& c) { return c._implementsHash == exp.first; });
-				assert(i != compiledPatchCollection->GetInterface().GetPatches().end());
-				if (i == compiledPatchCollection->GetInterface().GetPatches().end()) continue;
-				if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
-				filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
-				autoFiltering[autoFilteringCount++] = &compiledPatchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
-			}
-
-			return _selectorVariationsSet.FilterSelectors(
-				selectors,
-				manualFiltering, 
-				MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
-				preconfiguration);
-		}
-
-		SharedPools(std::shared_ptr<IDevice> device)
-		: _device(std::move(device))
-		{
-			_samplerPool = std::make_shared<SamplerPool>();
-		}
-
-	private:
-		static std::shared_ptr<Metal::GraphicsPipeline> InternalCreatePipeline(
-			const Metal::ShaderProgram& shader,
-			const GraphicsPipelineDesc& pipelineDesc,
-			const InputAssembly& ia,
-			Topology topology,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIdx)
-		{
-			Metal::GraphicsPipelineBuilder builder;
-			builder.Bind(shader);
-			builder.Bind(pipelineDesc._blend);
-			builder.Bind(pipelineDesc._depthStencil);
-			builder.Bind(pipelineDesc._rasterization);
-
-			if (!ia._inputAssembly.empty()) {
-				Metal::BoundInputLayout boundIA(MakeIteratorRange(ia._inputAssembly), shader);
-				assert(boundIA.AllAttributesBound());
-				builder.Bind(boundIA, topology);
-			} else {
-				Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(ia._miniInputAssembly), 0 };
-				Metal::BoundInputLayout boundIA(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-				assert(boundIA.AllAttributesBound());
-				builder.Bind(boundIA, topology);
-			}
-
-			builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
-
-			return builder.CreatePipeline(Metal::GetObjectFactory());
-		}
-
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFutureAlreadyLocked(
-			ShaderStage shaderStage,
-			StringSection<> shader,
-			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
-			StreamOutputInitializers so = {})
-		{
-			uint64_t patchExpansionsBuffer[patchExpansions.size()];
-			unsigned patchExpansionCount = 0;
-			for (auto p:patchExpansions)
-				if (p.second == shaderStage) 
-					patchExpansionsBuffer[patchExpansionCount++] = p.first;
-
-			return Internal::MakeByteCodeFuture(
-				shaderStage,
-				shader,
-				filteredSelectors._selectors,
-				compiledPatchCollection,
-				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]), 
-				so);
-		};
-
-		static ComputePipelineAndLayout MakeComputePipeline(
-			const CompiledShaderByteCode& csCode,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
-		{
-			Metal::ComputeShader shaderActual{Metal::GetObjectFactory(), pipelineLayout, csCode};
-			Metal::ComputePipelineBuilder builder;
-			builder.Bind(shaderActual);
-			return ComputePipelineAndLayout {
-				builder.CreatePipeline(Metal::GetObjectFactory()),
-				pipelineLayout };
-		}
-	};
-
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
 	{
 	public:
@@ -453,7 +81,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<SequencerConfig> cfg,
 			const ParameterBox& globalSelectors,
 			const DescriptorSetLayoutAndBinding& matDescSetLayout,
-			const std::shared_ptr<SharedPools>& sharedPools);
+			const std::shared_ptr<Internal::SharedPools>& sharedPools);
 		bool PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const;
 
 		Pipeline* TryGetPipeline(const SequencerConfig& cfg);
@@ -462,7 +90,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
 		ParameterBox _geoSelectors;
-		InputAssembly _ia;
+		Internal::InputAssemblyStates _ia;
 		Topology _topology;
 		RenderCore::Assets::RenderStateSet _stateSet;
 
@@ -473,7 +101,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<SequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		const std::shared_ptr<SharedPools>& sharedPools)
+		const std::shared_ptr<Internal::SharedPools>& sharedPools)
 	{
 		PtrToPipelineFuture pipelineFuture = std::make_shared<::Assets::Future<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
 		ParameterBox copyGlobalSelectors = globalSelectors;
@@ -552,7 +180,7 @@ namespace RenderCore { namespace Techniques
 								pipelineLayoutAsset->GetPipelineLayout(),
 								compiledPatchCollection,
 								MakeIteratorRange(filteredSelectors),
-								*cfg);
+								FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx});
 						}
 
 						// todo -- we could consider hashing all of the creation parameters at this point and looking up in a
@@ -878,7 +506,7 @@ namespace RenderCore { namespace Techniques
 
 		SamplerPool _samplerPool;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
-		std::shared_ptr<SharedPools> _sharedPools;
+		std::shared_ptr<Internal::SharedPools> _sharedPools;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
 		Threading::Mutex _usisLock;
@@ -1500,7 +1128,7 @@ namespace RenderCore { namespace Techniques
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = device;
 		_flags = flags;
-		_sharedPools = std::make_shared<SharedPools>();
+		_sharedPools = std::make_shared<Internal::SharedPools>(_device);
 		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
 		_matDescSetLayout = matDescSetLayout;

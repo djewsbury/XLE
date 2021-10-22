@@ -34,7 +34,78 @@ namespace RenderCore { namespace Techniques
 		return HashInputAssembly(_inputLayout, seed);
 	}
 
-	class PipelinePool::SharedPools
+#if 0
+	std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> PipelinePool::CreateGraphicsPipeline(
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		const GraphicsPipelineDesc& pipelineDesc,
+		const ParameterBox& selectors,
+		const VertexInputStates& inputStates,
+		const FrameBufferTarget& fbTarget)
+	{
+		assert(0);
+		return nullptr;
+	}
+#endif
+
+	std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> PipelinePool::CreateComputePipeline(
+		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		return CreateComputePipelineInternal(pipelineLayout, shader, selectors);
+	}
+
+	std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> PipelinePool::CreateComputePipeline(
+		::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> futurePipelineLayout,
+		uint64_t futurePipelineLayoutGuid,
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		return CreateComputePipelineInternal({std::move(futurePipelineLayout), futurePipelineLayoutGuid}, shader, selectors);
+	}
+
+	std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> PipelinePool::CreateComputePipeline(
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		return CreateComputePipelineInternal({}, shader, selectors);
+	}
+
+	std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> PipelinePool::CreateComputePipelineInternal(
+		const Internal::PipelineLayoutOptions& pipelineLayout,
+		StringSection<> shader,
+		const ParameterBox& selectors)
+	{
+		// accelerated return when the filtering rules are already available
+		auto filteringFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
+		if (filteringFuture->GetAssetState() == ::Assets::AssetState::Ready) {
+			ScopedLock(_sharedPools->_lock);
+
+			const ParameterBox* selectorsList[] { &selectors };
+			auto filteredSelectors = _sharedPools->FilterSelectorsAlreadyLocked(
+				ShaderStage::Compute, MakeIteratorRange(selectorsList), *filteringFuture->Actualize(), 
+				{}, nullptr, nullptr, {});
+			return _sharedPools->CreateComputePipelineAlreadyLocked(shader, pipelineLayout, filteredSelectors);
+		} else {
+			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>(shader.AsString());
+			::Assets::WhenAll(filteringFuture).ThenConstructToFuture(
+				*result,
+				[selectorsCopy = selectors, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayoutCopy=pipelineLayout]( 
+					::Assets::Future<ComputePipelineAndLayout>& resultFuture,
+					std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {
+
+					const ParameterBox* selectorsList[] { &selectorsCopy };
+					auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
+						ShaderStage::Compute, MakeIteratorRange(selectorsList), *automaticFiltering, 
+						{}, nullptr, nullptr, {});
+					auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, pipelineLayoutCopy, filteredSelectors);
+					::Assets::WhenAll(chainedFuture).ThenConstructToFuture(resultFuture);
+				});
+			return result;
+		}	
+	}
+
+	class PipelinePool::OldSharedPools
 	{
 	public:
 		Threading::Mutex _lock;
@@ -52,7 +123,7 @@ namespace RenderCore { namespace Techniques
 	template<typename Type>
 		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
-	std::shared_ptr<::Assets::Future<PipelinePool::GraphicsPipelineAndLayout>> PipelinePool::CreateGraphicsPipeline(
+	std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> PipelinePool::CreateGraphicsPipeline(
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		const GraphicsPipelineDesc& pipelineDesc,
 		const ParameterBox& selectors,
@@ -121,7 +192,7 @@ namespace RenderCore { namespace Techniques
 		auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescInit);
 		::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
 			future,
-			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_sharedPools, 
+			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_oldSharedPools, 
 			 pipelineLayout=pipelineLayout,
 			 inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
 			 fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx]( 
@@ -161,7 +232,15 @@ namespace RenderCore { namespace Techniques
 				// todo -- now that we have the filtered selectors, we could attempt to reuse an existing pipeline (if one exists with
 				// the same filtered selectors)
 
-				auto shaderProgram = Internal::MakeShaderProgram(pipelineDesc, pipelineLayout, nullptr, MakeIteratorRange(filteredSelectors));
+				::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFutures[3];
+				for (unsigned c=0; c<3; ++c) {
+					if (pipelineDesc._shaders[c].empty())
+						continue;
+
+					byteCodeFutures[c] = Internal::MakeByteCodeFuture((ShaderStage)c, pipelineDesc._shaders[c], filteredSelectors[c]._selectors, nullptr, {}, {});
+				}
+
+				auto shaderProgram = Internal::MakeShaderProgram(byteCodeFutures, pipelineLayout);
 				std::string vsd, psd, gsd;
 				#if defined(_DEBUG)
 					vsd = Internal::MakeShaderDescription(ShaderStage::Vertex, pipelineDesc, pipelineLayout, nullptr, filteredSelectors[(unsigned)ShaderStage::Vertex]);
@@ -196,6 +275,7 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
+#if 0
 	std::shared_ptr<::Assets::Future<PipelinePool::ComputePipelineAndLayout>> PipelinePool::CreateComputePipeline(
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<> shader,
@@ -365,19 +445,37 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
-	const ::Assets::DependencyValidation& PipelinePool::GraphicsPipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
-	const ::Assets::DependencyValidation& PipelinePool::ComputePipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
-
+#endif
 	static uint64_t s_nextGraphicsPipelinePoolGUID = 1;
 	PipelinePool::PipelinePool(std::shared_ptr<IDevice> device)
 	: _device(std::move(device))
 	, _guid(s_nextGraphicsPipelinePoolGUID++)
 	{
-		_sharedPools = std::make_shared<SharedPools>();
+		_sharedPools = std::make_shared<Internal::SharedPools>(_device);
+
+		_oldSharedPools = std::make_shared<OldSharedPools>();
 	}
 
 	PipelinePool::~PipelinePool()
 	{}
+
+	const ::Assets::DependencyValidation& GraphicsPipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
+	const ::Assets::DependencyValidation& ComputePipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
+
+
+	namespace Internal
+	{
+		PipelineLayoutOptions::PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout> prebuilt)
+		: _prebuiltPipelineLayout(std::move(prebuilt))
+		{
+			_hashCode = _prebuiltPipelineLayout->GetGUID();
+		}
+
+		PipelineLayoutOptions::PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> future, uint64_t guid)
+		: _predefinedPipelineLayout(std::move(future))
+		, _hashCode(guid)
+		{}
+	}
 
 }}
 

@@ -80,7 +80,7 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
-	static std::shared_ptr<::Assets::Future<Techniques::PipelinePool::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
+	static std::shared_ptr<::Assets::Future<Techniques::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
 		Techniques::PipelinePool& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
@@ -196,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 			LightSourceOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
 		};
-		using PipelineFuture = std::shared_ptr<::Assets::Future<Techniques::PipelinePool::GraphicsPipelineAndLayout>>;
+		using PipelineFuture = std::shared_ptr<::Assets::Future<Techniques::GraphicsPipelineAndLayout>>;
 		std::vector<PipelineFuture> pipelineFutures;
 		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
@@ -275,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 		result->SetPollingFunction(
 			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)](::Assets::FuturePtr<LightResolveOperators>& future) -> bool {
 				using namespace ::Assets;
-				std::vector<Techniques::PipelinePool::GraphicsPipelineAndLayout> actualized;
+				std::vector<Techniques::GraphicsPipelineAndLayout> actualized;
 				actualized.resize(pipelineFutures.size());
 				auto a=actualized.begin();
 				Blob queriedLog;

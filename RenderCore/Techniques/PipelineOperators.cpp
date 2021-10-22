@@ -347,6 +347,28 @@ namespace RenderCore { namespace Techniques
 				});
 		}
 
+		static void ConstructToFuture(
+			::Assets::FuturePtr<ComputeOperator>& future,
+			const std::shared_ptr<PipelinePool>& pool,
+			const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& futurePipelineLayout,
+			uint64_t futurePipelineLayoutGuid,
+			StringSection<> computeShader,
+			const ParameterBox& selectors,
+			const UniformsStreamInterface& usi)
+		{
+			auto pipelineFuture = pool->CreateComputePipeline(futurePipelineLayout, futurePipelineLayoutGuid, computeShader, selectors);
+			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
+				future,
+				[usi=usi](auto pipelineAndLayout) {
+					auto op = std::make_shared<ComputeOperator>();
+					op->_usi = std::move(usi);
+					op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+					op->_pipeline = std::move(pipelineAndLayout._pipeline);
+					return op;
+				});
+		}
+
 		RenderCore::Metal::ComputeEncoder _activeEncoder;
 		bool _betweenBeginEnd = false;
 	};
@@ -379,6 +401,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pipelineLayoutAssetName,
 		const UniformsStreamInterface& usi)
 	{
+#if 0
 		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
@@ -395,6 +418,12 @@ namespace RenderCore { namespace Techniques
 				});
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&result);
 		}
+#endif
+		auto pipelineLayoutAsset = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
+		auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(
+			pool, pipelineLayoutAsset, Hash64(pipelineLayoutAssetName),
+			computeShader, selectors, usi);
+		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
 	}
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
