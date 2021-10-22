@@ -853,6 +853,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkSampler tempSamplerArray[_fixedSamplers.size()];
 		uint64_t dummyMask = 0;
 		for (unsigned bIndex=0; bIndex<(unsigned)srcLayout.size(); ++bIndex) {
+			if (srcLayout[bIndex]._type == DescriptorType::Unknown) continue;
+			
 			VkDescriptorSetLayoutBinding dstBinding = {};
 			dstBinding.binding = bIndex;
 			dstBinding.descriptorType = (VkDescriptorType)AsVkDescriptorType(srcLayout[bIndex]._type);

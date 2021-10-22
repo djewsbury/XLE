@@ -33,6 +33,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const SPIRVReflection::BasicType* _type = nullptr;
 		std::optional<unsigned> _arrayElementCount;
 		bool _isStructType = false;
+		bool _isRuntimeArrayStructType = false;
 		StringSection<> _name;
 	};
 
@@ -92,6 +93,8 @@ namespace RenderCore { namespace Metal_Vulkan
 						if (n != reflection._names.end() && n->first == typeToLookup)
 							result._name = n->second;
 					}
+				} else if (std::find(reflection._runtimeArrayStructTypes.begin(), reflection._runtimeArrayStructTypes.end(), typeToLookup) != reflection._runtimeArrayStructTypes.end()) {
+					result._isRuntimeArrayStructType = true;
 				} else {
 					#if defined(_DEBUG)
 						std::cout << "Could not understand type information for input " << result._name << std::endl;
@@ -531,16 +534,17 @@ namespace RenderCore { namespace Metal_Vulkan
 			switch (slotType) { 
 			case DescriptorType::SampledTexture:
 			case DescriptorType::UnorderedAccessTexture:
-				return !reflectionVariable._isStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage); 
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage); 
 			case DescriptorType::UniformBuffer:
+				return reflectionVariable._isStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
 			case DescriptorType::UnorderedAccessBuffer:
-				return reflectionVariable._isStructType || !reflectionVariable._type || (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler);
+				return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
 			case DescriptorType::UniformTexelBuffer:
-				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::TexelBuffer; 
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::TexelBuffer; 
 			case DescriptorType::UnorderedAccessTexelBuffer:
-				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::StorageTexelBuffer; 
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::StorageTexelBuffer; 
 			case DescriptorType::Sampler:
-				return !reflectionVariable._isStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
+				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
 			case DescriptorType::InputAttachment:
 				return reflectionVariable._binding._inputAttachmentIndex != ~0u;
 			case DescriptorType::Unknown:
@@ -1333,6 +1337,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		if (varinfo._isStructType)
 			return DescriptorSlot { DescriptorType::UniformBuffer, 1 };
+		if (varinfo._isRuntimeArrayStructType)
+			return DescriptorSlot { DescriptorType::UnorderedAccessBuffer, 1 };
 		if (!varinfo._type) return {};
 
 		DescriptorSlot result;
@@ -1348,7 +1354,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			result._type = DescriptorType::Sampler;
 		} else
 			result._type = DescriptorType::UniformBuffer;
-		// DescriptorType::InputAttachment & DescriptorType::UnorderedAccessBuffer can never be generated
+		// DescriptorType::InputAttachment can never be generated
 		result._count = varinfo._arrayElementCount.value_or(1);
 		return result;
 	}

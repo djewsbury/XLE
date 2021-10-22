@@ -199,6 +199,8 @@ namespace RenderCore { namespace Metal_Vulkan
         using namespace spv;
         // spv::Parameterize();
 
+        std::vector<ObjectId> runtimeArrayTypes;
+
         auto* bci = ((const uint32_t*)byteCode.begin()) + 5;
         while (bci < byteCode.end()) {
             // Instruction wordCount and opcode
@@ -325,8 +327,15 @@ namespace RenderCore { namespace Metal_Vulkan
                 }
                 break;
 
+            case OpTypeRuntimeArray:
+                runtimeArrayTypes.push_back(paramStart[0]);
+                break;
+
             case OpTypeStruct:
-                _structTypes.push_back(paramStart[0]);
+                if (wordCount >= 3 && std::find(runtimeArrayTypes.begin(), runtimeArrayTypes.end(), paramStart[1]) != runtimeArrayTypes.end()) {
+                    _runtimeArrayStructTypes.push_back(paramStart[0]);
+                } else
+                    _structTypes.push_back(paramStart[0]);
                 break;
 
             case OpTypePointer:  

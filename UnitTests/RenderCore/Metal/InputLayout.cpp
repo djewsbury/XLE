@@ -1434,8 +1434,8 @@ namespace UnitTests
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[1] == Hash64("UnorderedAccessReadBuffer"));
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slotNames[2] == Hash64("UnorderedAccessRWBuffer"));
 		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[0]._type == DescriptorType::UnorderedAccessTexture);
-		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UniformBuffer); // (Vulkan can't distinguish these types) DescriptorType::UniformTexelBuffer);
-		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UniformBuffer); // (Vulkan can't distinguish these types) DescriptorType::UnorderedAccessTexelBuffer);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UnorderedAccessBuffer);
+		REQUIRE(pipelineLayout.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UnorderedAccessBuffer);
 
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slots.size() == 5);
 		REQUIRE(pipelineLayout.GetDescriptorSets()[1]._signature._slotNames.size() == 5);
@@ -1459,6 +1459,44 @@ namespace UnitTests
 		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[0]._semanticHash == Hash64("M"));
 		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[1]._semanticHash == Hash64("A"));
 		REQUIRE(pipelineLayout.GetPushConstants()[0]._cbElements[2]._semanticHash == Hash64("B"));
+
+		const char readBuffersShaderText[] = R"--(
+			struct InputStruct { float4 A; float4 B; };
+			StructuredBuffer<InputStruct> StructuredBufferComplex : register(t0, space0);
+			StructuredBuffer<uint> StructuredBufferSimple : register(t1, space0);
+			Buffer<float4> TexelBuffer : register(t2, space0);
+
+			cbuffer UniformBuffer : register(b3, space0)
+			{
+				float4 A, B, C, D;
+			}
+
+			float4 main(float4 position : SV_Position) : SV_Target0
+			{
+				uint idx = position.x*1024;
+				if ((idx%4) == 0) return StructuredBufferComplex[0].B;
+				else if ((idx%4) == 1) return StructuredBufferSimple[0];
+				else if ((idx%4) == 2) return TexelBuffer[0];
+				else if ((idx%4) == 3) return C;
+				return 0;
+			}
+		)--";
+
+		auto shaderCode2 = testHelper->MakeShader(readBuffersShaderText, "ps_*");
+		auto pipelineLayout2 = Metal::BuildPipelineLayoutInitializer(shaderCode2);
+		REQUIRE(pipelineLayout2.GetDescriptorSets().size() == 1);
+
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots.size() == 6);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames.size() == 6);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[0] == Hash64("StructuredBufferComplex"));
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[1] == Hash64("StructuredBufferSimple"));
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[2] == Hash64("TexelBuffer"));
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slotNames[3] == Hash64("UniformBuffer"));
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[0]._type == DescriptorType::UnorderedAccessBuffer);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[1]._type == DescriptorType::UnorderedAccessBuffer);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[2]._type == DescriptorType::UnorderedAccessTexelBuffer);
+		REQUIRE(pipelineLayout2.GetDescriptorSets()[0]._signature._slots[3]._type == DescriptorType::UniformBuffer);
+
 	}
 
 	// error cases we could try:

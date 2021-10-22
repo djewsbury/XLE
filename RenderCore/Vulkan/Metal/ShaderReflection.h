@@ -64,6 +64,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::vector<std::pair<ObjectId, VectorType>>    _vectorTypes;
         std::vector<std::pair<ObjectId, PointerType>>   _pointerTypes;
         std::vector<ObjectId>                           _structTypes;
+        std::vector<ObjectId>                           _runtimeArrayStructTypes;
         std::vector<std::pair<ObjectId, ArrayType>>     _arrayTypes;
 
         struct Variable { ObjectId _type; StorageType _storage; };
