@@ -547,7 +547,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::Sampler; 
 			case DescriptorType::InputAttachment:
 				return reflectionVariable._binding._inputAttachmentIndex != ~0u;
-			case DescriptorType::Unknown:
+			case DescriptorType::Empty:
 			default:
 				assert(0);
 				return true;

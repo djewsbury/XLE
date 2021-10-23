@@ -39,16 +39,18 @@ namespace RenderCore { namespace Techniques
 	{
 		std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _layout;
+		::Assets::DependencyValidation _depVal;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 	};
 
 	struct ComputePipelineAndLayout
 	{
 		std::shared_ptr<Metal::ComputePipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _layout;
+		::Assets::DependencyValidation _depVal;
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 	};
 
 	namespace Internal { class SharedPools; class PipelineLayoutOptions; }

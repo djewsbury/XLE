@@ -301,8 +301,6 @@ namespace RenderCore { namespace Techniques
 			::Assets::FuturePtr<ComputeOperator>& future,
 			const std::shared_ptr<PipelinePool>& pool,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-			const std::shared_ptr<Assets::PredefinedPipelineLayout>& predefinedPipelineLayout,
-			const ::Assets::DependencyValidation& pipelineLayoutDepVal,
 			StringSection<> computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
@@ -310,18 +308,12 @@ namespace RenderCore { namespace Techniques
 			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, selectors);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
-				[usi=usi, pipelineLayout, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
+				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
 					op->_usi = std::move(usi);
-					if (pipelineLayoutDepVal) {
-						op->_depVal = ::Assets::GetDepValSys().Make();
-						op->_depVal.RegisterDependency(pipelineAndLayout.GetDependencyValidation());
-						op->_depVal.RegisterDependency(pipelineLayoutDepVal);
-					} else
-						op->_depVal = pipelineAndLayout.GetDependencyValidation();
-					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
-					op->_pipeline = std::move(pipelineAndLayout._pipeline);
-					op->_predefinedPipelineLayout = std::move(predefinedPipelineLayout);
+					op->_depVal = pipelineAndLayout.GetDependencyValidation();
+					op->_pipelineLayout = pipelineAndLayout._layout;
+					op->_pipeline = pipelineAndLayout._pipeline;
 					assert(op->_pipeline);
 					return op;
 				});
@@ -382,15 +374,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
-		static_assert(::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<ComputeOperator>, 
-			const std::shared_ptr<PipelinePool>&,
-			const std::shared_ptr<ICompiledPipelineLayout>&,
-			const std::shared_ptr<Assets::PredefinedPipelineLayout>&,
-			const ::Assets::DependencyValidation&,
-			StringSection<>,
-			const ParameterBox&,
-			const UniformsStreamInterface&>::value);
-		auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(pool, pipelineLayout, std::shared_ptr<Assets::PredefinedPipelineLayout>{}, ::Assets::DependencyValidation{}, computeShader, selectors, usi);
+		auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(pool, pipelineLayout, computeShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
 	}
 

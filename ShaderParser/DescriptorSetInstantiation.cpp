@@ -53,7 +53,7 @@ namespace ShaderSourceParser
 
 			// If we didn't get a descriptor slot type from the type name, we'll treat this as a
 			// constant within a constant buffer
-			if (newSlot._type == RenderCore::DescriptorType::Unknown) {
+			if (newSlot._type == RenderCore::DescriptorType::Empty) {
 				auto fmt = RenderCore::ShaderLangTypeNameAsTypeDesc(c._type);
 				if (fmt._type == ImpliedTyping::TypeCat::Void) {
 					warningStream << "\t// Could not convert type (" << c._type << ") to shader language type for capture (" << c._name << "). Skipping cbuffer entry." << std::endl;

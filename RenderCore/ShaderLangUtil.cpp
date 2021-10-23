@@ -167,7 +167,7 @@ namespace RenderCore
 		if (XlBeginsWithI(type, "sampler"))
 			return DescriptorType::Sampler;
 
-		return DescriptorType::Unknown;
+		return DescriptorType::Empty;
 	}
 }
 

@@ -120,12 +120,12 @@ namespace RenderCore
 		InputAttachment,
 		UniformTexelBuffer,					// "uniform texel buffer" in Vulkan terminology 
 		UnorderedAccessTexelBuffer,			// "storage texel buffer" in Vulkan terminology 
-		Unknown
+		Empty
 	};
 
 	struct DescriptorSlot
 	{
-		DescriptorType _type = DescriptorType::Unknown;
+		DescriptorType _type = DescriptorType::Empty;
 		unsigned _count = 1;
 	};
 
@@ -193,7 +193,7 @@ namespace RenderCore
 			IteratorRange<const DescriptorSetBinding*> descriptorSets,
 			IteratorRange<const PushConstantsBinding*> pushConstants);
 		~PipelineLayoutInitializer();
-	private:
+
 		std::vector<DescriptorSetBinding> _descriptorSets;
 		std::vector<PushConstantsBinding> _pushConstants;
 	};

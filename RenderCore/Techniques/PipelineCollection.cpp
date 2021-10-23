@@ -190,12 +190,14 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget)
 	{
 		auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescInit);
+		auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>(pipelineDescInit);
 		::Assets::WhenAll(resolvedTechnique).ThenConstructToFuture(
 			future,
-			[selectorsCopy = selectors, pipelineDesc=pipelineDescInit, sharedPools=_oldSharedPools, 
+			[selectorsCopy = selectors, pipelineDesc=pipelineDesc, sharedPools=_oldSharedPools, 
 			 pipelineLayout=pipelineLayout,
-			 inputAssembly=AsVector(inputStates._inputLayout), topology=inputStates._topology,
-			 fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx]( 
+			 inputAssembly=AsVector(inputStates._inputLayout), iaHash=inputStates.GetHash(), topology=inputStates._topology,
+			 fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx,
+			 weakDevice=std::weak_ptr<IDevice>{_device}]( 
 				::Assets::Future<GraphicsPipelineAndLayout>& resultFuture,
 				std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering) {
 
@@ -208,23 +210,23 @@ namespace RenderCore { namespace Techniques
 				{
 					ScopedLock(sharedPools->_lock);
 					for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-						if (!pipelineDesc._shaders[c].empty()) {
+						if (!pipelineDesc->_shaders[c].empty()) {
 							const ShaderSourceParser::SelectorFilteringRules* autoFiltering[] = {
 								pipelineDescWithFiltering->_automaticFiltering[c].get()
 							};
 							filteredSelectors[c] = sharedPools->_selectorVariationsSet.FilterSelectors(
 								MakeIteratorRange(paramBoxes),
-								pipelineDesc._manualSelectorFiltering,
+								pipelineDesc->_manualSelectorFiltering,
 								MakeIteratorRange(autoFiltering),
 								pipelineDescWithFiltering->_preconfiguration.get());
 						}
 				}
 
 				auto configurationDepVal = ::Assets::GetDepValSys().Make();
-				if (pipelineDesc.GetDependencyValidation())
-					configurationDepVal.RegisterDependency(pipelineDesc.GetDependencyValidation());
+				if (pipelineDesc->GetDependencyValidation())
+					configurationDepVal.RegisterDependency(pipelineDesc->GetDependencyValidation());
 				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-					if (!pipelineDesc._shaders[c].empty() && pipelineDescWithFiltering->_automaticFiltering[c])
+					if (!pipelineDesc->_shaders[c].empty() && pipelineDescWithFiltering->_automaticFiltering[c])
 						configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_automaticFiltering[c]->GetDependencyValidation());
 				if (pipelineDescWithFiltering->_preconfiguration)
 					configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
@@ -234,12 +236,22 @@ namespace RenderCore { namespace Techniques
 
 				::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFutures[3];
 				for (unsigned c=0; c<3; ++c) {
-					if (pipelineDesc._shaders[c].empty())
+					if (pipelineDesc->_shaders[c].empty())
 						continue;
 
-					byteCodeFutures[c] = Internal::MakeByteCodeFuture((ShaderStage)c, pipelineDesc._shaders[c], filteredSelectors[c]._selectors, nullptr, {}, {});
+					byteCodeFutures[c] = Internal::MakeByteCodeFuture((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c]._selectors, nullptr, {}, {});
 				}
 
+				Internal::GraphicsPipelineConstructionParams constructionParams;
+				constructionParams._pipelineDesc = pipelineDesc;
+				constructionParams._ia._miniInputAssembly = inputAssembly;
+				constructionParams._ia._hashCode = iaHash;
+				constructionParams._topology = topology;
+				constructionParams._fbDesc = fbDesc;
+				constructionParams._subpassIdx = spIdx;
+				MakeGraphicsPipelineFuture0(resultFuture, weakDevice.lock(), byteCodeFutures, pipelineLayout, std::move(constructionParams));
+
+#if 0
 				auto shaderProgram = Internal::MakeShaderProgram(byteCodeFutures, pipelineLayout);
 				std::string vsd, psd, gsd;
 				#if defined(_DEBUG)
@@ -268,10 +280,13 @@ namespace RenderCore { namespace Techniques
 						builder.SetRenderPassConfiguration(fbDesc, spIdx);
 
 						// todo -- we have to use configurationDepVal for something!
+						auto pipeline = builder.CreatePipeline(Metal::GetObjectFactory());
 						return GraphicsPipelineAndLayout {
-							builder.CreatePipeline(Metal::GetObjectFactory()),
-							pipelineLayout };
+							pipeline,
+							pipelineLayout,
+							pipeline->GetDependencyValidation() };
 					});
+#endif
 			});
 	}
 
@@ -458,10 +473,6 @@ namespace RenderCore { namespace Techniques
 
 	PipelinePool::~PipelinePool()
 	{}
-
-	const ::Assets::DependencyValidation& GraphicsPipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
-	const ::Assets::DependencyValidation& ComputePipelineAndLayout::GetDependencyValidation() const { return _pipeline->GetDependencyValidation(); }
-
 
 	namespace Internal
 	{

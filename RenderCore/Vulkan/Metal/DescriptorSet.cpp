@@ -454,7 +454,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					/* note sure if there's a good dummy here, because we may have to match the texel format from the shader */
 				} else if (b == DescriptorType::InputAttachment) {
 					/* not sure what would be a correct dummy descriptor for an input attachment */
-				} else if (b == DescriptorType::Unknown) {
+				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
 				} else {
 					assert(0);
@@ -488,7 +488,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						AsVkDescriptorType(b),
 						MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
-				} else if (b == DescriptorType::Unknown) {
+				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
 				} else {
 					assert(0);
@@ -853,7 +853,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkSampler tempSamplerArray[_fixedSamplers.size()];
 		uint64_t dummyMask = 0;
 		for (unsigned bIndex=0; bIndex<(unsigned)srcLayout.size(); ++bIndex) {
-			if (srcLayout[bIndex]._type == DescriptorType::Unknown) continue;
+			if (srcLayout[bIndex]._type == DescriptorType::Empty) continue;
 			
 			VkDescriptorSetLayoutBinding dstBinding = {};
 			dstBinding.binding = bIndex;

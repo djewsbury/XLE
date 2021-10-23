@@ -157,6 +157,116 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	struct PipelineLayoutOptions
+	{
+		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
+		::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
+		uint64_t _hashCode = 0;
+
+		PipelineLayoutOptions() = default;
+		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
+		PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
+	};
+
+	static void MergeInPipelineLayoutInitializer(
+		PipelineLayoutInitializer& srcAndDst,
+		const PipelineLayoutInitializer& one)
+	{
+		unsigned descSet=0;
+		for (;descSet < srcAndDst.GetDescriptorSets().size() && descSet < one.GetDescriptorSets().size(); ++descSet) {
+			auto& d = srcAndDst._descriptorSets[descSet];
+			auto& s = one.GetDescriptorSets()[descSet];
+
+			if (d._signature._slots.size() < s._signature._slots.size()) {
+				d._signature._slots.resize(s._signature._slots.size());
+				d._signature._slotNames.resize(s._signature._slotNames.size());
+			}
+
+			unsigned slot=0;
+			for (;slot < d._signature._slots.size() && slot < s._signature._slots.size(); ++slot) {
+				if (d._signature._slots[slot]._type != DescriptorType::Empty && s._signature._slots[slot]._type != DescriptorType::Empty) {
+					if (d._signature._slots[slot]._type != s._signature._slots[slot]._type)
+						Throw(std::runtime_error(StringMeld<256>() << "Descriptor set slot conflict when merging slot (" << slot << ") of desc set (" << descSet << ")"));
+				} else if (s._signature._slots[slot]._type != DescriptorType::Empty) {
+					d._signature._slots[slot] = s._signature._slots[slot];
+					d._signature._slotNames[slot] = s._signature._slotNames[slot];
+					if (s._signature._fixedSamplers.size() > slot && s._signature._fixedSamplers[slot]) {
+						if (d._signature._fixedSamplers.size() < s._signature._fixedSamplers.size())
+							d._signature._fixedSamplers.resize(s._signature._fixedSamplers.size());
+						d._signature._fixedSamplers[slot] = s._signature._fixedSamplers[slot];
+					}
+				}
+			}
+		}
+
+		while (srcAndDst._descriptorSets.size() < one.GetDescriptorSets().size()) {
+			auto& s = one.GetDescriptorSets()[srcAndDst._descriptorSets.size()];
+			srcAndDst._descriptorSets.push_back(s);
+		}
+
+		for (const auto& s:one.GetPushConstants()) {
+			auto i = std::find_if(srcAndDst.GetPushConstants().begin(), srcAndDst.GetPushConstants().end(),
+				[shaderStage = s._shaderStage](const auto& c) { return c._shaderStage == shaderStage; });
+			if (i!=srcAndDst.GetPushConstants().end())
+				Throw(std::runtime_error(StringMeld<256>() << "Conflict in push constants for shader stage (" << AsString(s._shaderStage) << ")"));
+			srcAndDst._pushConstants.push_back(*i);
+		}
+	}
+
+	static std::shared_ptr<ICompiledPipelineLayout> MakeCompiledPipelineLayout(
+		IDevice& d,
+		const PipelineLayoutOptions& pipelineLayout,
+		const CompiledShaderByteCode& code0)
+	{
+		if (pipelineLayout._prebuiltPipelineLayout) {
+			return pipelineLayout._prebuiltPipelineLayout;
+		} else {
+			auto initializer = Metal::BuildPipelineLayoutInitializer(code0);
+			return d.CreatePipelineLayout(initializer);
+		}
+	}
+
+	static std::shared_ptr<ICompiledPipelineLayout> MakeCompiledPipelineLayout(
+		IDevice& d,
+		const PipelineLayoutOptions& pipelineLayout,
+		const CompiledShaderByteCode& code0,
+		const CompiledShaderByteCode& code1)
+	{
+		if (pipelineLayout._prebuiltPipelineLayout) {
+			return pipelineLayout._prebuiltPipelineLayout;
+		} else {
+			auto initializer = Metal::BuildPipelineLayoutInitializer(code0);
+			MergeInPipelineLayoutInitializer(initializer, Metal::BuildPipelineLayoutInitializer(code1));
+			return d.CreatePipelineLayout(initializer);
+		}
+	}
+
+	static std::shared_ptr<ICompiledPipelineLayout> MakeCompiledPipelineLayout(
+		IDevice& d,
+		const PipelineLayoutOptions& pipelineLayout,
+		const CompiledShaderByteCode& code0,
+		const CompiledShaderByteCode& code1,
+		const CompiledShaderByteCode& code2)
+	{
+		if (pipelineLayout._prebuiltPipelineLayout) {
+			return pipelineLayout._prebuiltPipelineLayout;
+		} else {
+			auto initializer = Metal::BuildPipelineLayoutInitializer(code0);
+			MergeInPipelineLayoutInitializer(initializer, Metal::BuildPipelineLayoutInitializer(code1));
+			MergeInPipelineLayoutInitializer(initializer, Metal::BuildPipelineLayoutInitializer(code2));
+			return d.CreatePipelineLayout(initializer);
+		}
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct InputAssemblyStates
+	{
+		std::vector<InputElementDesc> _inputAssembly;
+		std::vector<MiniInputElementDesc> _miniInputAssembly;
+		uint64_t _hashCode = 0;
+	};
+
 	static std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
 	{
 		std::stringstream str;
@@ -222,55 +332,199 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 	}
 
-	static ::Assets::PtrToFuturePtr<Metal::ShaderProgram> MakeShaderProgram(
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
+	struct GraphicsPipelineConstructionParams
+	{
+		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc;
+		InputAssemblyStates _ia;
+		Topology _topology;
+		FrameBufferDesc _fbDesc;
+		unsigned _subpassIdx = 0;
+	};	
+
+	static std::shared_ptr<Metal::GraphicsPipeline> MakeGraphicsPipeline(
+		const Metal::ShaderProgram& shader,
+		const GraphicsPipelineConstructionParams& params)
+	{
+		Metal::GraphicsPipelineBuilder builder;
+		builder.Bind(shader);
+		builder.Bind(params._pipelineDesc->_blend);
+		builder.Bind(params._pipelineDesc->_depthStencil);
+		builder.Bind(params._pipelineDesc->_rasterization);
+
+		if (!params._ia._inputAssembly.empty()) {
+			Metal::BoundInputLayout boundIA(MakeIteratorRange(params._ia._inputAssembly), shader);
+			assert(boundIA.AllAttributesBound());
+			builder.Bind(boundIA, params._topology);
+		} else {
+			Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(params._ia._miniInputAssembly), 0 };
+			Metal::BoundInputLayout boundIA(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
+			assert(boundIA.AllAttributesBound());
+			builder.Bind(boundIA, params._topology);
+		}
+
+		builder.SetRenderPassConfiguration(params._fbDesc, params._subpassIdx);
+
+		return builder.CreatePipeline(Metal::GetObjectFactory());
+	}
+
+	static GraphicsPipelineAndLayout MakeGraphicsPipelineAndLayout(
+		const Metal::ShaderProgram& shader,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		StreamOutputInitializers so = {})
+		const ::Assets::DependencyValidation& pipelineLayoutDepVal,
+		const GraphicsPipelineConstructionParams& params)
+	{
+		auto pipeline = MakeGraphicsPipeline(shader, params);
+		::Assets::DependencyValidation depVal; 
+		if (pipelineLayoutDepVal) {
+			depVal = ::Assets::GetDepValSys().Make();
+			depVal.RegisterDependency(pipeline->GetDependencyValidation());
+			depVal.RegisterDependency(pipelineLayoutDepVal);
+		} else
+			depVal = pipeline->GetDependencyValidation();
+		return GraphicsPipelineAndLayout { std::move(pipeline), pipelineLayout, std::move(depVal) };
+	}
+
+	static void MakeGraphicsPipelineFuture0(
+		::Assets::Future<GraphicsPipelineAndLayout>& result,
+		const std::shared_ptr<IDevice>& device,
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
+		const PipelineLayoutOptions& pipelineLayout,
+		GraphicsPipelineConstructionParams&& params)
 	{
 		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
 
-		auto result = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>();
 		if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && !byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToFuture(
-				*result,
-				[pipelineLayout](
+				result,
+				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					std::shared_ptr<CompiledShaderByteCode> vsCode, 
 					std::shared_ptr<CompiledShaderByteCode> psCode) {
-					return std::make_shared<Metal::ShaderProgram>(
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *psCode);
+					Metal::ShaderProgram shaderProgram{
 						Metal::GetObjectFactory(),
-						pipelineLayout, *vsCode, *psCode);
+						pipelineLayoutActual, *vsCode, *psCode};
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			std::vector<RenderCore::InputElementDesc> soElementsCopy{so._outputElements.begin(), so._outputElements.end()};
-			std::vector<unsigned> soBufferStridesCopy{so._outputBufferStrides.begin(), so._outputBufferStrides.end()};
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
-				*result,
-				[pipelineLayout, soElementsCopy, soBufferStridesCopy](
+				result,
+				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					std::shared_ptr<CompiledShaderByteCode> vsCode, 
 					std::shared_ptr<CompiledShaderByteCode> psCode,
 					std::shared_ptr<CompiledShaderByteCode> gsCode) {
-					return std::make_shared<Metal::ShaderProgram>(
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *psCode, *gsCode);
+					Metal::ShaderProgram shaderProgram(
 						Metal::GetObjectFactory(),
-						pipelineLayout, *vsCode, *gsCode, *psCode,
-						StreamOutputInitializers{soElementsCopy, soBufferStridesCopy});
+						pipelineLayoutActual, *vsCode, *gsCode, *psCode,
+						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
 		} else if (!byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
-			std::vector<RenderCore::InputElementDesc> soElementsCopy{so._outputElements.begin(), so._outputElements.end()};
-			std::vector<unsigned> soBufferStridesCopy{so._outputBufferStrides.begin(), so._outputBufferStrides.end()};
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToFuture(
-				*result,
-				[pipelineLayout, soElementsCopy, soBufferStridesCopy](
+				result,
+				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
 					std::shared_ptr<CompiledShaderByteCode> vsCode, 
 					std::shared_ptr<CompiledShaderByteCode> gsCode) {
-					return std::make_shared<Metal::ShaderProgram>(
+					auto d = weakDevice.lock();
+					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *gsCode);
+					Metal::ShaderProgram shaderProgram(
 						Metal::GetObjectFactory(),
-						pipelineLayout, *vsCode, *gsCode, CompiledShaderByteCode{},
-						StreamOutputInitializers{soElementsCopy, soBufferStridesCopy});
+						pipelineLayoutActual, *vsCode, *gsCode, CompiledShaderByteCode{},
+						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
+					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
 		} else
 			Throw(std::runtime_error("Missing shader stages while building shader program"));
-		return result;
+	}
+
+	static void MakeGraphicsPipelineFuture1(
+		::Assets::Future<GraphicsPipelineAndLayout>& result,
+		const std::shared_ptr<IDevice>& device,
+		const std::shared_ptr<SamplerPool>& samplerPool,
+		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
+		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout,
+		const GraphicsPipelineConstructionParams& params)
+	{
+		assert(0);
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static ComputePipelineAndLayout MakeComputePipelineAndLayout(
+		const CompiledShaderByteCode& csCode,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const ::Assets::DependencyValidation& pipelineLayoutDepVal)
+	{
+		Metal::ComputeShader shader{Metal::GetObjectFactory(), pipelineLayout, csCode};
+		Metal::ComputePipelineBuilder builder;
+		builder.Bind(shader);
+		auto pipeline = builder.CreatePipeline(Metal::GetObjectFactory());
+		::Assets::DependencyValidation depVal; 
+		if (pipelineLayoutDepVal) {
+			depVal = ::Assets::GetDepValSys().Make();
+			depVal.RegisterDependency(pipeline->GetDependencyValidation());
+			depVal.RegisterDependency(pipelineLayoutDepVal);
+		} else
+			depVal = pipeline->GetDependencyValidation();
+		return ComputePipelineAndLayout { std::move(pipeline), pipelineLayout, std::move(depVal) };
+	}
+
+	static void MakeComputePipelineFuture0(
+		::Assets::Future<ComputePipelineAndLayout>& result,
+		const std::shared_ptr<IDevice>& device,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& csCode,
+		const PipelineLayoutOptions& pipelineLayout)
+	{
+		// Variation without a PredefinedPipelineLayout
+		::Assets::WhenAll(csCode).ThenConstructToFuture(
+			result,
+			[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}](auto csCodeActual) {
+				auto d = weakDevice.lock();
+				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
+				auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *csCodeActual);
+				return MakeComputePipelineAndLayout(*csCodeActual, pipelineLayoutActual, {});
+			});
+	}
+
+	static void MakeComputePipelineFuture1(
+		::Assets::Future<ComputePipelineAndLayout>& result,
+		const std::shared_ptr<IDevice>& device,
+		const std::shared_ptr<SamplerPool>& samplerPool,
+		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& csCode,
+		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout)
+	{
+		// Variation for MakePipelineLayoutInitializerWithAutoMatching
+		::Assets::WhenAll(csCode, pipelineLayout).ThenConstructToFuture(
+			result,
+			[weakDevice=std::weak_ptr<IDevice>{device}, weakSamplerPool=std::weak_ptr<SamplerPool>{samplerPool}](auto csCodeActual, auto predefinedPipelineLayout) {
+				auto d = weakDevice.lock();
+				auto samplers = weakSamplerPool.lock();
+				if (!d || !samplers) Throw(std::runtime_error("Device shutdown before completion"));
+
+				// This case is a little more complicated because we need to generate a pipeline layout 
+				// (potentially using the shader byte code)
+				std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
+				if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
+					auto autoInitializer = Metal::BuildPipelineLayoutInitializer(*csCodeActual);
+					auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
+						autoInitializer, GetDefaultShaderLanguage(), samplers.get());
+					finalPipelineLayout = d->CreatePipelineLayout(initializer);
+				} else {
+					auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplers.get());
+					finalPipelineLayout = d->CreatePipelineLayout(initializer);
+				}
+
+				return MakeComputePipelineAndLayout(*csCodeActual, finalPipelineLayout, predefinedPipelineLayout->GetDependencyValidation());
+			});
 	}
 
 #if defined(_DEBUG)
@@ -311,24 +565,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	struct InputAssemblyStates
-	{
-		std::vector<InputElementDesc> _inputAssembly;
-		std::vector<MiniInputElementDesc> _miniInputAssembly;
-		uint64_t _hashCode = 0;
-	};
-
-	struct PipelineLayoutOptions
-	{
-		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
-		::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
-		uint64_t _hashCode = 0;
-
-		PipelineLayoutOptions() = default;
-		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
-		PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
-	};
-
 	class SharedPools : public std::enable_shared_from_this<SharedPools>
 	{
 	public:
@@ -338,20 +574,26 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<IDevice> _device;
 
-		std::vector<std::pair<uint64_t, std::weak_ptr<Metal::GraphicsPipeline>>> _completedGraphicsPipelines;
-		std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>>> _pendingGraphicsPipelines;
+		struct WeakGraphicsPipelineAndLayout
+		{
+			std::weak_ptr<Metal::GraphicsPipeline> _pipeline;
+			std::weak_ptr<ICompiledPipelineLayout> _layout;
+			::Assets::DependencyValidation _depVal;
+		};
+		std::vector<std::pair<uint64_t, WeakGraphicsPipelineAndLayout>> _completedGraphicsPipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
 
-		::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> CreateGraphicsPipelineAlreadyLocked(
+		std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> CreateGraphicsPipelineAlreadyLocked(
 			const InputAssemblyStates& ia,
 			Topology topology,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+			const PipelineLayoutOptions& pipelineLayout,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
 			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
 			const FrameBufferTarget& fbTarget)
 		{
-			uint64_t hash = HashCombine(compiledPatchCollection->GetGUID(), pipelineLayout->GetGUID());
+			uint64_t hash = HashCombine(compiledPatchCollection->GetGUID(), pipelineLayout._hashCode);
 			for (auto s:filteredSelectors)
 				if (s._hashValue)
 					hash = HashCombine(s._hashValue, hash);
@@ -367,11 +609,12 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 			auto completedi = LowerBound(_completedGraphicsPipelines, hash);
 			if (completedi != _completedGraphicsPipelines.end() && completedi->first == hash) {
-				auto l = completedi->second.lock();
-				if (l && l->GetDependencyValidation().GetValidationIndex() == 0) {
+				auto pipeline = completedi->second._pipeline.lock();
+				auto layout = completedi->second._layout.lock();
+				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
-					result->SetAsset(std::move(l), {});
+					auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+					result->SetAsset(GraphicsPipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal}, {});
 					return result;
 				}
 			}
@@ -403,26 +646,25 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				byteCodeFutures[c] = MakeByteCodeFuture((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c], compiledPatchCollection, pipelineDesc->_patchExpansions, so);
 			}
 
-			auto shaderProgram = Internal::MakeShaderProgram(byteCodeFutures, pipelineLayout, so);
-			
-			auto result = std::make_shared<::Assets::FuturePtr<Metal::GraphicsPipeline>>("pipeline-accelerator");
-			::Assets::WhenAll(shaderProgram).ThenConstructToFuture(
-				*result,
-				[	ia=ia, topology, pipelineDesc, 
-					fbDesc=*fbTarget._fbDesc, subpassIdx=fbTarget._subpassIdx
-					](std::shared_ptr<Metal::ShaderProgram> shaderProgram) {
+			GraphicsPipelineConstructionParams constructionParams;
+			constructionParams._pipelineDesc = pipelineDesc;
+			constructionParams._ia = ia;
+			constructionParams._topology = topology;
+			constructionParams._fbDesc = *fbTarget._fbDesc;
+			constructionParams._subpassIdx = fbTarget._subpassIdx;
 
-					return InternalCreatePipeline(
-						*shaderProgram, 
-						*pipelineDesc, ia, topology,
-						fbDesc, subpassIdx);
-				});
+			auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+			if (pipelineLayout._predefinedPipelineLayout) {
+				MakeGraphicsPipelineFuture1(*result, _device, _samplerPool, byteCodeFutures, pipelineLayout._predefinedPipelineLayout, std::move(constructionParams));
+			} else {
+				MakeGraphicsPipelineFuture0(*result, _device, byteCodeFutures, pipelineLayout, std::move(constructionParams));
+			}
 
 			AddGraphicsPipelineFuture(result, hash);
 			return result;
 		}
 
-		void AddGraphicsPipelineFuture(const ::Assets::PtrToFuturePtr<Metal::GraphicsPipeline>& future, uint64_t hash)
+		void AddGraphicsPipelineFuture(const std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>& future, uint64_t hash)
 		{
 			auto i = LowerBound(_pendingGraphicsPipelines, hash);
 			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
@@ -431,7 +673,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
 
 			::Assets::WhenAll(future).Then(
-				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::FuturePtr<Metal::GraphicsPipeline>> completedFuture) {
+				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
 					// Invalid futures stay in the "_pendingGraphicsPipelines" list
@@ -446,11 +688,16 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						t->_pendingGraphicsPipelines.erase(i);
 					}
 
+					WeakGraphicsPipelineAndLayout weakPtrs;
+					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
+					weakPtrs._layout = completedFuture->TryActualize()->_layout;
+					weakPtrs._depVal = completedFuture->TryActualize()->_depVal;
+
 					auto completedi = LowerBound(t->_completedGraphicsPipelines, hash);
 					if (completedi != t->_completedGraphicsPipelines.end() && completedi->first == hash) {
-						completedi->second = *completedFuture->TryActualize();
+						completedi->second = std::move(weakPtrs);
 					} else
-						t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, *completedFuture->TryActualize()));
+						t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
 				});
 		}
 
@@ -466,10 +713,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			if (completedi != _completedComputePipelines.end() && completedi->first == hash) {
 				auto pipeline = completedi->second._pipeline.lock();
 				auto layout = completedi->second._layout.lock();
-				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
+				if (pipeline && completedi->second._depVal.GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
 					auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
-					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout)}, {});
+					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal}, {});
 					return result;
 				}
 			}
@@ -479,51 +726,14 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				if (!::Assets::IsInvalidated(*i->second))
 					return i->second;
 
+			// Make the futures and setup caching
 			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
-
 			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
-			if (pipelineLayout._prebuiltPipelineLayout) {
-				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
-					*result,
-					[pipelineLayout = pipelineLayout._prebuiltPipelineLayout](auto csCode) {
-						return MakeComputePipeline(*csCode, pipelineLayout);
-					});
-			} else if (!pipelineLayout._predefinedPipelineLayout) {
-				::Assets::WhenAll(byteCodeFuture).ThenConstructToFuture(
-					*result,
-					[weakDevice=std::weak_ptr<IDevice>{_device}](auto csCode) {
-						auto d = weakDevice.lock();
-						if (!d) Throw(std::runtime_error("Device shutdown before completion"));
-
-						auto initializer = Metal::BuildPipelineLayoutInitializer(*csCode);
-						auto pipelineLayout = d->CreatePipelineLayout(initializer);
-						return MakeComputePipeline(*csCode, pipelineLayout);
-					});
+			if (pipelineLayout._predefinedPipelineLayout) {
+				MakeComputePipelineFuture1(*result, _device, _samplerPool, byteCodeFuture, pipelineLayout._predefinedPipelineLayout);
 			} else {
-				::Assets::WhenAll(byteCodeFuture, pipelineLayout._predefinedPipelineLayout).ThenConstructToFuture(
-					*result,
-					[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{_device}, weakSamplerPool=std::weak_ptr<SamplerPool>{_samplerPool}](auto csCode, auto predefinedPipelineLayout) {
-						auto d = weakDevice.lock();
-						auto samplers = weakSamplerPool.lock();
-						if (!d || !samplers) Throw(std::runtime_error("Device shutdown before completion"));
-
-						// This case is a little more complicated because we need to generate a pipeline layout 
-						// (potentially using the shader byte code)
-						std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
-						if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
-							auto autoInitializer = Metal::BuildPipelineLayoutInitializer(*csCode);
-							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
-								autoInitializer, GetDefaultShaderLanguage(), samplers.get());
-							finalPipelineLayout = d->CreatePipelineLayout(initializer);
-						} else {
-							auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializer(GetDefaultShaderLanguage(), samplers.get());
-							finalPipelineLayout = d->CreatePipelineLayout(initializer);
-						}
-
-						return MakeComputePipeline(*csCode, finalPipelineLayout);
-					});
+				MakeComputePipelineFuture0(*result, _device, byteCodeFuture, pipelineLayout);
 			}
-
 			AddComputePipelineFuture(result, hash);
 			return result;
 		};
@@ -556,6 +766,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					WeakComputePipelineAndLayout weakPtrs;
 					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
 					weakPtrs._layout = completedFuture->TryActualize()->_layout;
+					weakPtrs._depVal = completedFuture->TryActualize()->_depVal;
 
 					auto completedi = LowerBound(t->_completedComputePipelines, hash);
 					if (completedi != t->_completedComputePipelines.end() && completedi->first == hash) {
@@ -569,6 +780,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		{
 			std::weak_ptr<Metal::ComputePipeline> _pipeline;
 			std::weak_ptr<ICompiledPipelineLayout> _layout;
+			::Assets::DependencyValidation _depVal;
 		};
 		std::vector<std::pair<uint64_t, WeakComputePipelineAndLayout>> _completedComputePipelines;
 		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>>> _pendingComputePipelines;
@@ -618,36 +830,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 	private:
-		static std::shared_ptr<Metal::GraphicsPipeline> InternalCreatePipeline(
-			const Metal::ShaderProgram& shader,
-			const GraphicsPipelineDesc& pipelineDesc,
-			const InputAssemblyStates& ia,
-			Topology topology,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIdx)
-		{
-			Metal::GraphicsPipelineBuilder builder;
-			builder.Bind(shader);
-			builder.Bind(pipelineDesc._blend);
-			builder.Bind(pipelineDesc._depthStencil);
-			builder.Bind(pipelineDesc._rasterization);
-
-			if (!ia._inputAssembly.empty()) {
-				Metal::BoundInputLayout boundIA(MakeIteratorRange(ia._inputAssembly), shader);
-				assert(boundIA.AllAttributesBound());
-				builder.Bind(boundIA, topology);
-			} else {
-				Metal::BoundInputLayout::SlotBinding slotBinding { MakeIteratorRange(ia._miniInputAssembly), 0 };
-				Metal::BoundInputLayout boundIA(MakeIteratorRange(&slotBinding, &slotBinding+1), shader);
-				assert(boundIA.AllAttributesBound());
-				builder.Bind(boundIA, topology);
-			}
-
-			builder.SetRenderPassConfiguration(fbDesc, subpassIdx);
-
-			return builder.CreatePipeline(Metal::GetObjectFactory());
-		}
-
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
 			ShaderStage shaderStage,
 			StringSection<> shader,
@@ -670,18 +852,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]), 
 				so);
 		};
-
-		static ComputePipelineAndLayout MakeComputePipeline(
-			const CompiledShaderByteCode& csCode,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
-		{
-			Metal::ComputeShader shaderActual{Metal::GetObjectFactory(), pipelineLayout, csCode};
-			Metal::ComputePipelineBuilder builder;
-			builder.Bind(shaderActual);
-			return ComputePipelineAndLayout {
-				builder.CreatePipeline(Metal::GetObjectFactory()),
-				pipelineLayout };
-		}
 	};
 
 }}}

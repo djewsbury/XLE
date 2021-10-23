@@ -293,7 +293,7 @@ namespace ShaderSourceParser
             // Resource types (eg, texture, etc) can't be handled like scalars
             // they must become globals in the shader.
 		auto descriptor = RenderCore::ShaderLangTypeNameAsDescriptorType(MakeStringSection(_parameters[index]._type));
-		return descriptor != RenderCore::DescriptorType::Unknown;
+		return descriptor != RenderCore::DescriptorType::Empty;
     }
 
     ParameterGenerator::ParameterGenerator(const NodeGraphSignature& interf, const PreviewOptions& previewOptions)

@@ -149,7 +149,7 @@ namespace RenderCore { namespace Techniques
 							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
 						UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
-						::Assets::PtrToFuturePtr<Metal::GraphicsPipeline> metalPipelineFuture;
+						std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> metalPipelineFuture;
 						{
 							// The list here defines the override order. Note that the global settings are last
 							// because they can actually override everything
@@ -209,20 +209,20 @@ namespace RenderCore { namespace Techniques
 
 						::Assets::WhenAll(metalPipelineFuture).ThenConstructToFuture(
 							resultFuture,
-							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](std::shared_ptr<Metal::GraphicsPipeline> metalPipeline) {
+							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](GraphicsPipelineAndLayout metalPipeline) {
 								auto containingPipelineAccelerator = weakThis.lock();
 								if (!containingPipelineAccelerator)
 									Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
 								IPipelineAcceleratorPool::Pipeline result;
-								result._metalPipeline = metalPipeline;
+								result._metalPipeline = std::move(metalPipeline._pipeline);
 								result._depVal = configurationDepVal;
 								#if defined(_DEBUG)
 									result._vsDescription = vsd;
 									result._psDescription = psd;
 									result._gsDescription = gsd;
 								#endif
-								result._depVal.RegisterDependency(metalPipeline->GetDependencyValidation());
+								result._depVal.RegisterDependency(metalPipeline._depVal);
 								return result;
 							});
 					});
@@ -1064,7 +1064,7 @@ namespace RenderCore { namespace Techniques
 			ScopedLock(_sharedPools->_lock);
 			result._metalPipelineCount = _sharedPools->_pendingGraphicsPipelines.size();
 			for (auto& p:_sharedPools->_completedGraphicsPipelines)
-				if (!p.second.expired())
+				if (!p.second._pipeline.expired())
 					++result._metalPipelineCount;
 		}
 
