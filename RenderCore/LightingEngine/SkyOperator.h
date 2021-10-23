@@ -20,7 +20,7 @@ namespace RenderCore
 namespace RenderCore { namespace Techniques
 {
 	class IShaderOperator;
-	class PipelinePool;
+	class PipelineCollection;
 	class FrameBufferTarget;
 	class ParsingContext;
 }}
@@ -53,7 +53,7 @@ namespace RenderCore { namespace LightingEngine
 		static void ConstructToFuture(
 			::Assets::FuturePtr<SkyOperator>& future,
 			const SkyOperatorDesc& desc,
-			std::shared_ptr<Techniques::PipelinePool> pipelinePool,
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const Techniques::FrameBufferTarget& fbTarget);
 	private:
 		std::shared_ptr<Techniques::IShaderOperator> _shader;

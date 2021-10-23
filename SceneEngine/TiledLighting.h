@@ -7,14 +7,14 @@
 #include <memory>
 
 namespace RenderCore { class IResourceView; class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class PipelinePool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class PipelineCollection; } }
 
 namespace SceneEngine
 {
     std::shared_ptr<RenderCore::IResourceView> TiledLighting_CalculateLighting(
         RenderCore::IThreadContext& context, 
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pool,
+        const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool,
         RenderCore::IResourceView& depthsSRV, 
         RenderCore::IResourceView& normalsSRV,
 		RenderCore::IResourceView& metricBufferUAV);
@@ -22,7 +22,7 @@ namespace SceneEngine
     void TiledLighting_RenderBeamsDebugging(  
         RenderCore::IThreadContext& context, 
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pool,
+        const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool,
         bool active, unsigned mainViewportWidth, unsigned mainViewportHeight, 
         unsigned techniqueIndex);
 }

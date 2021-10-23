@@ -488,7 +488,7 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::ConstructToFuture(
 		::Assets::FuturePtr<ForwardPlusLightScene>& future,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperatorsInit,

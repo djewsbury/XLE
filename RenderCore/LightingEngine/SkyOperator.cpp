@@ -64,7 +64,7 @@ namespace RenderCore { namespace LightingEngine
 	void SkyOperator::ConstructToFuture(
 		::Assets::FuturePtr<SkyOperator>& future,
 		const SkyOperatorDesc& desc,
-		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget)
 	{
 		UniformsStreamInterface usi;

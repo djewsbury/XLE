@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
 {
 	static uint64_t Hash(IteratorRange<const ParameterBox* const*> shaderSelectors)
 	{
+		if (shaderSelectors.empty()) return 0;
 		uint64_t inputHash = 0;
 		const bool simpleHash = false;
 		if (constant_expression<simpleHash>::result()) {

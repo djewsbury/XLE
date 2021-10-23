@@ -246,7 +246,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	RasterizationLightTileOperator::RasterizationLightTileOperator(
-		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
 		std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
 		const Configuration& config)
@@ -293,7 +293,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RasterizationLightTileOperator::ConstructToFuture(
 		::Assets::FuturePtr<RasterizationLightTileOperator>& future,
-		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Configuration& config)
 	{
 		auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
@@ -340,7 +340,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RasterizationLightTileOperator::Visualize(
 		Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool)
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool)
 	{
 #if 0
 		if (!s_lastLightBufferResView) return;

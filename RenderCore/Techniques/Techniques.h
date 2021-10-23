@@ -97,7 +97,7 @@ namespace RenderCore { namespace Techniques
     class FrameBufferPool;
     class CommonResourceBox;
     class DrawablesPacketPool;
-    class PipelinePool;
+    class PipelineCollection;
 
     class TechniqueContext
     {
@@ -109,7 +109,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<FrameBufferPool> _frameBufferPool;
         std::shared_ptr<CommonResourceBox> _commonResources;
         std::shared_ptr<DrawablesPacketPool> _drawablesPacketsPool;
-        std::shared_ptr<PipelinePool> _graphicsPipelinePool;
+        std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
     };
 
 	UnderlyingAPI GetTargetAPI();

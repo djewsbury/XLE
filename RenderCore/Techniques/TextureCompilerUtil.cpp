@@ -80,7 +80,7 @@ namespace RenderCore { namespace Techniques
 		if (filter == EquRectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, Hash64("OutputArray"));
  			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelinePool>(threadContext->GetDevice()),
+				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				"xleres/ToolsHelper/EquirectangularToCube.hlsl:EquRectToCube",
 				{},
 				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
@@ -91,7 +91,7 @@ namespace RenderCore { namespace Techniques
 		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, Hash64("OutputArray"));
 			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelinePool>(threadContext->GetDevice()),
+				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				"xleres/ToolsHelper/IBLPrefilter.hlsl:EquiRectFilterGlossySpecular",
 				// "xleres/ToolsHelper/IBLPrefilter.hlsl:ReferenceDiffuseFilter",
 				{},
@@ -103,7 +103,7 @@ namespace RenderCore { namespace Techniques
 			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, Hash64("Output"));
 			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelinePool>(threadContext->GetDevice()),
+				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 				"xleres/ToolsHelper/IBLPrefilter.hlsl:ProjectToSphericalHarmonic",
 				{},
 				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
@@ -195,7 +195,7 @@ namespace RenderCore { namespace Techniques
 		usi.BindImmediateData(0, Hash64("FilterPassParams"));
 
  		auto computeOpFuture = CreateComputeOperator(
-			std::make_shared<PipelinePool>(threadContext->GetDevice()),
+			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 			shader, {}, "xleres/ToolsHelper/operators.pipeline:ComputeMain", usi);
 		// todo -- we really want to extract the full set of dependencies from the depVal
 		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(shader));

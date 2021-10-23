@@ -14,7 +14,7 @@ namespace RenderCore
 	class IResourceView;
 }
 
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace LightingEngine
@@ -39,7 +39,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<HierarchicalDepthsOperator>& future,
-			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool);
+			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool);
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _resolveOp;
 		std::shared_ptr<IResourceView> _atomicCounterBufferView;

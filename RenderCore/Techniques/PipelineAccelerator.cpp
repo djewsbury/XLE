@@ -4,11 +4,11 @@
 
 #include "PipelineAccelerator.h"
 #include "PipelineAcceleratorInternal.h"
+#include "PipelineCollection.h"
 #include "DescriptorSetAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
-#include "PipelineBuilderUtil.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
@@ -81,7 +81,8 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<SequencerConfig> cfg,
 			const ParameterBox& globalSelectors,
 			const DescriptorSetLayoutAndBinding& matDescSetLayout,
-			const std::shared_ptr<Internal::SharedPools>& sharedPools);
+			const std::shared_ptr<PipelineCollection>& pipelineCollection,
+			const ::Assets::PtrToFuturePtr<CompiledShaderPatchCollection>& emptyPatchCollection);
 		bool PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const;
 
 		Pipeline* TryGetPipeline(const SequencerConfig& cfg);
@@ -102,7 +103,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<SequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
-		const std::shared_ptr<Internal::SharedPools>& sharedPools)
+		const std::shared_ptr<PipelineCollection>& pipelineCollection,
+		const ::Assets::PtrToFuturePtr<CompiledShaderPatchCollection>& emptyPatchCollection)
 	{
 		PtrToPipelineFuture pipelineFuture = std::make_shared<::Assets::Future<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
 		ParameterBox copyGlobalSelectors = globalSelectors;
@@ -112,7 +114,7 @@ namespace RenderCore { namespace Techniques
 		if (_shaderPatches) {
 			patchCollectionFuture = ::Assets::MakeAsset<CompiledShaderPatchCollection>(*_shaderPatches, matDescSetLayout);
 		} else {
-			patchCollectionFuture = sharedPools->_emptyPatchCollection;
+			patchCollectionFuture = emptyPatchCollection;
 		}
 
 		// Queue massive chain of future continuation functions (it's not as scary as it looks)
@@ -124,7 +126,7 @@ namespace RenderCore { namespace Techniques
 		// is actually something about the configuration, we won't get the proper recompile functionality 
 		::Assets::WhenAll(patchCollectionFuture, cfg->_pipelineLayout).ThenConstructToFuture(
 			*pipelineFuture,
-			[sharedPools, copyGlobalSelectors, cfg, weakThis](
+			[pipelineCollection, copyGlobalSelectors, cfg, weakThis](
 				::Assets::Future<IPipelineAcceleratorPool::Pipeline>& resultFuture,
 				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 				std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayoutAsset) {
@@ -133,101 +135,38 @@ namespace RenderCore { namespace Techniques
 				if (!containingPipelineAccelerator)
 					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
-				// we will actually begin a "GraphicsPipelineDescWithFilteringRules" future here, which
-				// will complete to the pipeline desc + automatic shader filtering rules
+				const ParameterBox* paramBoxes[] = {
+					&cfg->_sequencerSelectors,
+					&containingPipelineAccelerator->_geoSelectors,
+					&containingPipelineAccelerator->_materialSelectors,
+					&copyGlobalSelectors
+				};
+
 				auto pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
-				auto resolvedTechnique = Internal::GraphicsPipelineDescWithFilteringRules::CreateFuture(pipelineDescFuture);
-				
-				::Assets::WhenAll(resolvedTechnique, pipelineDescFuture).ThenConstructToFuture(
+				VertexInputStates vis { containingPipelineAccelerator->_inputAssembly, containingPipelineAccelerator->_miniInputAssembly, containingPipelineAccelerator->_topology };
+				auto metalPipelineFuture = pipelineCollection->CreateGraphicsPipeline(
+					pipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
+					MakeIteratorRange(paramBoxes), 
+					vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+
+				::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToFuture(
 					resultFuture,
-					[sharedPools, pipelineLayoutAsset, copyGlobalSelectors, cfg, weakThis, compiledPatchCollection](
-						::Assets::Future<IPipelineAcceleratorPool::Pipeline>& resultFuture,
-						std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules> pipelineDescWithFiltering,
-						std::shared_ptr<GraphicsPipelineDesc> pipelineDesc) {
+					[cfg, weakThis](
+						GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
 
 						auto containingPipelineAccelerator = weakThis.lock();
 						if (!containingPipelineAccelerator)
 							Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
-						UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
-						std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> metalPipelineFuture;
-						{
-							// The list here defines the override order. Note that the global settings are last
-							// because they can actually override everything
-							const ParameterBox* paramBoxes[] = {
-								&cfg->_sequencerSelectors,
-								&containingPipelineAccelerator->_geoSelectors,
-								&containingPipelineAccelerator->_materialSelectors,
-								&copyGlobalSelectors
-							};
-							
-							ScopedLock(sharedPools->_lock);
-							for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-								if (!pipelineDesc->_shaders[c].empty()) {
-									filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
-										(ShaderStage)c,
-										MakeIteratorRange(paramBoxes),
-										*pipelineDescWithFiltering->_automaticFiltering[c],
-										pipelineDesc->_manualSelectorFiltering,
-										pipelineDescWithFiltering->_preconfiguration.get(),
-										compiledPatchCollection, 
-										pipelineDesc->_patchExpansions);
-								} else
-									filteredSelectors[c]._hashValue = 0;
-
-							VertexInputStates vis { containingPipelineAccelerator->_inputAssembly, containingPipelineAccelerator->_miniInputAssembly, containingPipelineAccelerator->_topology };
-
-							metalPipelineFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
-								vis,
-								pipelineDesc, pipelineDescWithFiltering,
-								pipelineLayoutAsset->GetPipelineLayout(),
-								compiledPatchCollection,
-								MakeIteratorRange(filteredSelectors),
-								FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx});
-						}
-
-						// todo -- we could consider hashing all of the creation parameters at this point and looking up in a
-						//			cache of recently build pipelines. Everything has been filtered down by this point, so there
-						//			might be some duplicates 
-
-						auto configurationDepVal = ::Assets::GetDepValSys().Make();
-						if (pipelineDesc->GetDependencyValidation())
-							configurationDepVal.RegisterDependency(pipelineDesc->GetDependencyValidation());
-						if (compiledPatchCollection->GetDependencyValidation())
-							configurationDepVal.RegisterDependency(compiledPatchCollection->GetDependencyValidation());
-						for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-							if (!pipelineDesc->_shaders[c].empty() && pipelineDescWithFiltering->_automaticFiltering[c])
-								configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_automaticFiltering[c]->GetDependencyValidation());
-						if (pipelineDescWithFiltering->_preconfiguration)
-							configurationDepVal.RegisterDependency(pipelineDescWithFiltering->_preconfiguration->GetDependencyValidation());
-						configurationDepVal.RegisterDependency(pipelineLayoutAsset->GetDependencyValidation());
-
-						std::string vsd, psd, gsd;
+						IPipelineAcceleratorPool::Pipeline result;
+						result._metalPipeline = std::move(metalPipeline._pipeline);
+						result._depVal = metalPipeline._depVal;
 						#if defined(_DEBUG)
-							auto pipelineLayout = pipelineLayoutAsset->GetPipelineLayout();
-							vsd = Internal::MakeShaderDescription(ShaderStage::Vertex, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Vertex]);
-							psd = Internal::MakeShaderDescription(ShaderStage::Pixel, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Pixel]);
-							gsd = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, pipelineLayout, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
+							result._vsDescription = metalPipeline._debugInfo._vsDescription;
+							result._psDescription = metalPipeline._debugInfo._psDescription;
+							result._gsDescription = metalPipeline._debugInfo._gsDescription;
 						#endif
-
-						::Assets::WhenAll(metalPipelineFuture).ThenConstructToFuture(
-							resultFuture,
-							[cfg, pipelineDesc, configurationDepVal, vsd, psd, gsd, weakThis](GraphicsPipelineAndLayout metalPipeline) {
-								auto containingPipelineAccelerator = weakThis.lock();
-								if (!containingPipelineAccelerator)
-									Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
-
-								IPipelineAcceleratorPool::Pipeline result;
-								result._metalPipeline = std::move(metalPipeline._pipeline);
-								result._depVal = configurationDepVal;
-								#if defined(_DEBUG)
-									result._vsDescription = vsd;
-									result._psDescription = psd;
-									result._gsDescription = gsd;
-								#endif
-								result._depVal.RegisterDependency(metalPipeline._depVal);
-								return result;
-							});
+						return result;
 					});
 			});
 
@@ -507,7 +446,8 @@ namespace RenderCore { namespace Techniques
 
 		SamplerPool _samplerPool;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
-		std::shared_ptr<Internal::SharedPools> _sharedPools;
+		std::shared_ptr<PipelineCollection> _pipelineCollection;
+		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
 		Threading::Mutex _usisLock;
@@ -858,7 +798,7 @@ namespace RenderCore { namespace Techniques
 					for (auto& accelerator:_pipelineAccelerators) {
 						auto a = accelerator.second.lock();
 						if (!(*a).PipelineValidPipelineOrFuture(*result))
-							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _sharedPools);
+							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 					}
 				} else {
 					if (!name.empty() && !XlFindString(result->_name, name))
@@ -881,7 +821,7 @@ namespace RenderCore { namespace Techniques
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
 			if (a)
-				a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _sharedPools);
+				a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 		}
 
 		return result;
@@ -893,7 +833,7 @@ namespace RenderCore { namespace Techniques
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
 			auto l = _sequencerConfigById[c].second.lock();
 			if (l) 
-				pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _matDescSetLayout, _sharedPools);
+				pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 		}
 	}
 
@@ -946,7 +886,7 @@ namespace RenderCore { namespace Techniques
 			if (a) {
 				for (auto invalidSequencer:MakeIteratorRange(invalidSequencerIndices, &invalidSequencerIndices[invalidSequencerCount])) {
 					// It's out of date -- let's rebuild and reassign it
-					a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _matDescSetLayout, _sharedPools);
+					a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[invalidSequencer], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 				}
 
 				// check for completed/invalidated pipelines
@@ -969,7 +909,7 @@ namespace RenderCore { namespace Techniques
 						a->_completedGraphicsPipelines[i->first] = {};
 						if (depVal.GetValidationIndex() != 0 && lockedSequencerConfigs[i->first]) {
 							// should not change _pendingGraphicsPipelines, just overwrite existing entry
-							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, _matDescSetLayout, _sharedPools);
+							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[i->first], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 						}
 						++i;
 					}
@@ -1061,13 +1001,9 @@ namespace RenderCore { namespace Techniques
 			result._sequencerConfigs.push_back(record);
 		}
 		result._descriptorSetAcceleratorCount = _descriptorSetAccelerators.size();
-		{
-			ScopedLock(_sharedPools->_lock);
-			result._metalPipelineCount = _sharedPools->_pendingGraphicsPipelines.size();
-			for (auto& p:_sharedPools->_completedGraphicsPipelines)
-				if (!p.second._pipeline.expired())
-					++result._metalPipelineCount;
-		}
+
+		auto collectionMetrics = _pipelineCollection->GetMetrics();
+		result._metalPipelineCount = collectionMetrics._graphicsPipelineCount;
 
 		return result;
 	}
@@ -1129,9 +1065,9 @@ namespace RenderCore { namespace Techniques
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = device;
 		_flags = flags;
-		_sharedPools = std::make_shared<Internal::SharedPools>(_device);
-		_sharedPools->_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
-		_sharedPools->_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
+		_pipelineCollection = std::make_shared<PipelineCollection>(_device);
+		_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
+		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
 		_matDescSetLayout = matDescSetLayout;
 		assert(_matDescSetLayout.GetLayout());
 	}

@@ -20,11 +20,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../xleres/FileList.h"
 
-namespace Assets
-{
-	uint64_t Hash64(const ::Assets::DependencyValidation&, uint64_t seed = DefaultSeed64) { return seed; }
-}
-
 namespace RenderCore { namespace Techniques
 {
 	const ::Assets::DependencyValidation CompiledPipelineLayoutAsset::GetDependencyValidation() const { return _predefinedLayout->GetDependencyValidation(); };
@@ -112,7 +107,7 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<FullViewportOperator>& future,
-			const std::shared_ptr<PipelinePool>& pool,
+			const std::shared_ptr<PipelineCollection>& pool,
 			unsigned subType,
 			StringSection<> pixelShader,
 			const ParameterBox& selectors,
@@ -137,7 +132,8 @@ namespace RenderCore { namespace Techniques
 			}
 
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
-			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, selectors, vInputStates, fbTarget);
+			const ParameterBox* selectorList[] { &selectors };
+			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
 				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
@@ -158,7 +154,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<PipelinePool>& pool,
+		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
@@ -172,7 +168,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
-		const std::shared_ptr<PipelinePool>& pool,
+		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
@@ -299,13 +295,14 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<ComputeOperator>& future,
-			const std::shared_ptr<PipelinePool>& pool,
+			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<> computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
-			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, selectors);
+			const ParameterBox* selectorList[] { &selectors };
+			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
 				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
@@ -321,12 +318,13 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<ComputeOperator>& future,
-			const std::shared_ptr<PipelinePool>& pool,
+			const std::shared_ptr<PipelineCollection>& pool,
 			StringSection<> computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
-			auto pipelineFuture = pool->CreateComputePipeline(computeShader, selectors);
+			const ParameterBox* selectorList[] { &selectors };
+			auto pipelineFuture = pool->CreateComputePipeline({}, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
 				[usi=usi](auto pipelineAndLayout) {
@@ -341,14 +339,15 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<ComputeOperator>& future,
-			const std::shared_ptr<PipelinePool>& pool,
+			const std::shared_ptr<PipelineCollection>& pool,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& futurePipelineLayout,
 			uint64_t futurePipelineLayoutGuid,
 			StringSection<> computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
-			auto pipelineFuture = pool->CreateComputePipeline(futurePipelineLayout, futurePipelineLayoutGuid, computeShader, selectors);
+			const ParameterBox* selectorList[] { &selectors };
+			auto pipelineFuture = pool->CreateComputePipeline({futurePipelineLayout, futurePipelineLayoutGuid}, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
 				future,
 				[usi=usi](auto pipelineAndLayout) {
@@ -366,7 +365,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelinePool>& pool,
+		const std::shared_ptr<PipelineCollection>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
@@ -379,30 +378,12 @@ namespace RenderCore { namespace Techniques
 	}
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelinePool>& pool,
+		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAssetName,
 		const UniformsStreamInterface& usi)
 	{
-#if 0
-		auto pipelineLayoutAsset = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName);
-		auto fastLayout = pipelineLayoutAsset->TryActualize();
-		if (fastLayout) {
-			auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(pool, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetPredefinedPipelineLayout(), (*fastLayout)->GetDependencyValidation(), computeShader, selectors, usi);
-			return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
-		} else {
-			auto result = std::make_shared<::Assets::FuturePtr<ComputeOperator>>();
-			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToFuture(
-				*result,
-				[computeShader=computeShader.AsString(), selectors=selectors, pool=pool,
-				usi=usi](::Assets::FuturePtr<ComputeOperator>& resultFuture,
-					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
-					ComputeOperator::ConstructToFuture(resultFuture, pool, pipelineLayout->GetPipelineLayout(), pipelineLayout->GetPredefinedPipelineLayout(), pipelineLayout->GetDependencyValidation(), computeShader, selectors, usi);
-				});
-			return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&result);
-		}
-#endif
 		auto pipelineLayoutAsset = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 		auto op = ::Assets::MakeFuture<std::shared_ptr<ComputeOperator>>(
 			pool, pipelineLayoutAsset, Hash64(pipelineLayoutAssetName),
@@ -411,7 +392,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelinePool>& pool,
+		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)

@@ -19,7 +19,7 @@ namespace RenderCore
 	class IThreadContext;
 }
 
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelinePool; class ParsingContext; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; class ParsingContext; }}
 namespace BufferUploads { using CommandListID = uint32_t; }
 
 namespace RenderCore { namespace LightingEngine
@@ -60,7 +60,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
 		RasterizationLightTileOperator(
-			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 			std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
 			std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
 			const Configuration& config);
@@ -68,15 +68,15 @@ namespace RenderCore { namespace LightingEngine
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<RasterizationLightTileOperator>& future,
-			std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool,
+			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 			const Configuration& config);
 
 		static void Visualize(
 			RenderCore::Techniques::ParsingContext& parsingContext,
-			const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool);
+			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool);
 	
 	private:
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelinePool;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
 		::Assets::DependencyValidation _depVal;
 		UInt2 _lightTileBufferSize = UInt2{0,0};
 

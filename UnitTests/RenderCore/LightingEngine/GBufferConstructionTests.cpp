@@ -247,7 +247,7 @@ namespace UnitTests
 
 	static void RunSimpleFullscreen(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<RenderCore::ICompiledPipelineLayout>& pipelineLayout,
 		const RenderCore::Techniques::RenderPassInstance& rpi,
 		StringSection<> pixelShader,
@@ -367,7 +367,7 @@ namespace UnitTests
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
-			auto pipelinePool = std::make_shared<Techniques::PipelinePool>(testHelper->_device);
+			auto pipelinePool = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				INFO("Camera: " + std::to_string(c));

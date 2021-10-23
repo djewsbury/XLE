@@ -136,7 +136,7 @@ namespace SceneEngine
 
     void TiledLighting_DrawDebugging(
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
+        const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
         TileLightingResources& tileLightingResources)
     {
         auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
@@ -178,7 +178,7 @@ namespace SceneEngine
     std::shared_ptr<RenderCore::IResourceView> TiledLighting_CalculateLighting(
         RenderCore::IThreadContext& threadContext, 
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pipelinePool,
+        const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
         RenderCore::IResourceView& depthsSRV, RenderCore::IResourceView& normalsSRV,
 		RenderCore::IResourceView& metricBufferUAV)
     {
@@ -379,7 +379,7 @@ namespace SceneEngine
     void TiledLighting_RenderBeamsDebugging(
         RenderCore::IThreadContext& threadContext, 
         RenderCore::Techniques::ParsingContext& parsingContext,
-        const std::shared_ptr<RenderCore::Techniques::PipelinePool>& pool,
+        const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool,
         bool active, unsigned mainViewportWidth, unsigned mainViewportHeight, 
         unsigned techniqueIndex)
     {

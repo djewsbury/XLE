@@ -53,7 +53,7 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
 		_dmShadowDescSetTemplate = i->second;
 
-		_lightingOperatorCollection = std::make_shared<Techniques::PipelinePool>(_device);
+		_lightingOperatorCollection = std::make_shared<Techniques::PipelineCollection>(_device);
 		_systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
 	}
 

@@ -86,7 +86,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::PtrToFuturePtr<Techniques::IShaderOperator> _operator;
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
 		ToneMapStandin(
-			const std::shared_ptr<Techniques::PipelinePool>& pool,
+			const std::shared_ptr<Techniques::PipelineCollection>& pool,
 			const Techniques::FrameBufferTarget& fbTarget)
 		{
 			UniformsStreamInterface usi;
@@ -133,7 +133,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	static ::Assets::PtrToFuturePtr<SkyOperator> CreateSkyOperator(
-		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
 	{
@@ -275,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> positionalLightOperators,

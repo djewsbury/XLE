@@ -50,7 +50,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
-		std::shared_ptr<Techniques::PipelinePool> _lightingOperatorCollection;
+		std::shared_ptr<Techniques::PipelineCollection> _lightingOperatorCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _lightingOperatorsPipelineLayoutFile;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 		std::shared_ptr<Techniques::SystemUniformsDelegate> _systemUniformsDelegate;

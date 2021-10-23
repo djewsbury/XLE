@@ -66,7 +66,7 @@ namespace UnitTests
 		_commonResources = std::make_shared<RenderCore::Techniques::CommonResourceBox>(*_metalTestHelper->_device);
 		_techniqueServices->SetCommonResources(_commonResources);
 
-		_pipelinePool = std::make_shared<Techniques::PipelinePool>(_metalTestHelper->_device);
+		_pipelinePool = std::make_shared<Techniques::PipelineCollection>(_metalTestHelper->_device);
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;

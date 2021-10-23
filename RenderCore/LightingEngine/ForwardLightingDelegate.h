@@ -7,7 +7,7 @@
 #include "LightingEngine.h"
 #include "../../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelinePool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; } }
 namespace RenderCore { class IDevice; class FrameBufferProperties; }
 
 namespace RenderCore { namespace LightingEngine
@@ -25,7 +25,7 @@ namespace RenderCore { namespace LightingEngine
 
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelinePool>& pipelinePool,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,

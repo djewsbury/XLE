@@ -17,7 +17,7 @@ namespace RenderCore { namespace Techniques
 	class TechniqueContext;
 	class CameraDesc;
 	class CommonResourceBox;
-	class PipelinePool;
+	class PipelineCollection;
 }}
 
 namespace RenderCore { namespace LightingEngine
@@ -46,7 +46,7 @@ namespace UnitTests
 		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelinePool;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelinePool;
 		std::shared_ptr<RenderCore::LightingEngine::SharedTechniqueDelegateBox> _sharedDelegates;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;
 		std::shared_ptr<RenderCore::Techniques::TechniqueContext> _techniqueContext;

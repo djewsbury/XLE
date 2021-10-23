@@ -151,7 +151,7 @@ namespace RenderCore { namespace LightingEngine
 
     void SSAOOperator::ConstructToFuture(
         ::Assets::FuturePtr<SSAOOperator>& future,
-        std::shared_ptr<RenderCore::Techniques::PipelinePool> pipelinePool)
+        std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
     {
         UniformsStreamInterface usi;
         usi.BindResourceView(0, Hash64("InputTexture"));

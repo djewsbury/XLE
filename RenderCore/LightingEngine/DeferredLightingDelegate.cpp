@@ -71,7 +71,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
 		std::shared_ptr<DeferredLightScene> _lightScene;
-		std::shared_ptr<Techniques::PipelinePool> _pipelineCollection;
+		std::shared_ptr<Techniques::PipelineCollection> _pipelineCollection;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator);
@@ -292,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		const std::shared_ptr<Techniques::PipelinePool>& pipelineCollection,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& shadowDescSet,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
@@ -433,7 +433,7 @@ namespace RenderCore { namespace LightingEngine
 	static void GenerateShadowingDebugTextures(
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
-		const std::shared_ptr<Techniques::PipelinePool>& pool,
+		const std::shared_ptr<Techniques::PipelineCollection>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		const ShadowOperatorDesc& shadowOpDesc,
 		const IPreparedShadowResult& preparedShadowResult,

@@ -39,7 +39,7 @@ namespace RenderCore { namespace Techniques
 	class FrameBufferPool;
 	class CommonResourceBox;
 	class SystemUniformsDelegate;
-	class PipelinePool;
+	class PipelineCollection;
 	class SubFrameEvents;
 	class DrawablesPacketPool;
 	class IUniformDelegateManager;
@@ -69,7 +69,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<ICompiledPipelineLayout> _compiledPipelineLayout;
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<PipelinePool> _graphicsPipelinePool;
+		std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
 
 		std::shared_ptr<LegacyRegisterBindingDesc> _legacyRegisterBindingDesc;
 		std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;

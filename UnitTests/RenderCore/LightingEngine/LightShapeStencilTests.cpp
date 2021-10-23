@@ -69,7 +69,7 @@ namespace UnitTests
 	{
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile> _pipelineLayoutFile;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
-		std::shared_ptr<RenderCore::Techniques::PipelinePool> _pipelineCollection;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _pipelineCollection;
 		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _dmShadowDescSetTemplate;
 		std::shared_ptr<RenderCore::SamplerPool> _samplerPool;
 
@@ -89,7 +89,7 @@ namespace UnitTests
 				Throw(std::runtime_error("Missing ShadowTemplate entry in pipeline layout file"));
 			_dmShadowDescSetTemplate = i->second;
 
-			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelinePool>(testHelper._device);
+			_pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(testHelper._device);
 		}
 	};
 

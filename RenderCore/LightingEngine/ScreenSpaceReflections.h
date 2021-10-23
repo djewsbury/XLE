@@ -20,7 +20,7 @@ namespace RenderCore { namespace Techniques
 {
 	class FragmentStitchingContext;
 	class IComputeShaderOperator;
-	class PipelinePool;
+	class PipelineCollection;
 	class DeferredShaderResource;
 }}
 namespace BufferUploads { using CommandListID = uint32_t; }
@@ -58,7 +58,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
-			std::shared_ptr<Techniques::PipelinePool> pipelinePool);
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _classifyTiles;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _prepareIndirectArgs;

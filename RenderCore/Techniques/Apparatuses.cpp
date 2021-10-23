@@ -88,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 
-		_graphicsPipelinePool = std::make_shared<PipelinePool>(_device);
+		_graphicsPipelinePool = std::make_shared<PipelineCollection>(_device);
 
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(_device);
