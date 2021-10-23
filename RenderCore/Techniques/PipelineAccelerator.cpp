@@ -916,12 +916,15 @@ namespace RenderCore { namespace Techniques
 				}
 
 				for (unsigned c=0; c<_sequencerConfigById.size(); ++c) {
-					if (!lockedSequencerConfigs[c]) continue;
-
-					if (a->_completedGraphicsPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
-						auto existing = std::find_if(a->_pendingGraphicsPipelines.begin(), a->_pendingGraphicsPipelines.end(), [c](const auto& p) { return p.first == c; });
-						if (existing != a->_pendingGraphicsPipelines.end()) continue;	// already scheduled this rebuild
-						a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _sharedPools);
+					if (lockedSequencerConfigs[c]) {
+						if (a->_completedGraphicsPipelines[c].GetDependencyValidation().GetValidationIndex() != 0) {
+							auto existing = std::find_if(a->_pendingGraphicsPipelines.begin(), a->_pendingGraphicsPipelines.end(), [c](const auto& p) { return p.first == c; });
+							if (existing != a->_pendingGraphicsPipelines.end()) continue;	// already scheduled this rebuild
+							a->BeginPrepareForSequencerStateAlreadyLocked(lockedSequencerConfigs[c], _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
+						}
+					} else {
+						// sequencer destroyed, release related pipelines
+						a->_completedGraphicsPipelines[c] = {};
 					}
 				}
 			}
