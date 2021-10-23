@@ -296,16 +296,16 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelinePool> pipelinePool,
 		const Configuration& config)
 	{
-		Techniques::GraphicsPipelineDesc pipelineDesc;
-		pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
-		pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
-		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
-		// pipelineDesc._manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
-		pipelineDesc._manualSelectorFiltering._setValues.SetParameter("GS_OBJECT_INDEX", 1);
-		// pipelineDesc._depthStencil._depthBoundsTestEnable = true;
-		pipelineDesc._rasterization = Techniques::CommonResourceBox::s_rsDefault;
-		pipelineDesc._rasterization._flags |= RasterizationDescFlags::ConservativeRaster;
-		pipelineDesc._depthStencil = Techniques::CommonResourceBox::s_dsDisable;
+		auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
+		// pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
+		pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_OBJECT_INDEX", 1);
+		// pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
+		pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
+		pipelineDesc->_rasterization._flags |= RasterizationDescFlags::ConservativeRaster;
+		pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
 
 		auto& pipelineLayout = *::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
 			pipelinePool->GetDevice(),
@@ -314,7 +314,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::VertexInputStates inputStates;
 		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
 		Techniques::VertexInputStates vInput;
-		inputStates._inputLayout = MakeIteratorRange(inputElements);
+		inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
 		vInput._topology = Topology::TriangleList;
 		FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
 		Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};

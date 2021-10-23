@@ -157,16 +157,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	struct PipelineLayoutOptions
-	{
-		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
-		::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
-		uint64_t _hashCode = 0;
-
-		PipelineLayoutOptions() = default;
-		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
-		PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
-	};
+	template<typename Type>
+		std::vector<Type> AsVector(IteratorRange<const Type*> range) { return std::vector<Type>{range.begin(), range.end()}; }
 
 	static void MergeInPipelineLayoutInitializer(
 		PipelineLayoutInitializer& srcAndDst,
@@ -260,13 +252,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	struct InputAssemblyStates
-	{
-		std::vector<InputElementDesc> _inputAssembly;
-		std::vector<MiniInputElementDesc> _miniInputAssembly;
-		uint64_t _hashCode = 0;
-	};
-
 	static std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
 	{
 		std::stringstream str;
@@ -332,9 +317,14 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 	}
 
-	struct GraphicsPipelineConstructionParams
+	struct GraphicsPipelineRetainedConstructionParams
 	{
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc;
+		struct InputAssemblyStates
+		{
+			std::vector<InputElementDesc> _inputAssembly;
+			std::vector<MiniInputElementDesc> _miniInputAssembly;
+		};
 		InputAssemblyStates _ia;
 		Topology _topology;
 		FrameBufferDesc _fbDesc;
@@ -343,7 +333,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 	static std::shared_ptr<Metal::GraphicsPipeline> MakeGraphicsPipeline(
 		const Metal::ShaderProgram& shader,
-		const GraphicsPipelineConstructionParams& params)
+		const GraphicsPipelineRetainedConstructionParams& params)
 	{
 		Metal::GraphicsPipelineBuilder builder;
 		builder.Bind(shader);
@@ -371,7 +361,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		const Metal::ShaderProgram& shader,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const ::Assets::DependencyValidation& pipelineLayoutDepVal,
-		const GraphicsPipelineConstructionParams& params)
+		const GraphicsPipelineRetainedConstructionParams& params)
 	{
 		auto pipeline = MakeGraphicsPipeline(shader, params);
 		::Assets::DependencyValidation depVal; 
@@ -389,7 +379,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		const std::shared_ptr<IDevice>& device,
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
 		const PipelineLayoutOptions& pipelineLayout,
-		GraphicsPipelineConstructionParams&& params)
+		GraphicsPipelineRetainedConstructionParams&& params)
 	{
 		if (!byteCodeFuture[(unsigned)ShaderStage::Vertex])
 			Throw(std::runtime_error("Missing vertex shader stage while building shader program"));
@@ -452,7 +442,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		const std::shared_ptr<SamplerPool>& samplerPool,
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout,
-		const GraphicsPipelineConstructionParams& params)
+		const GraphicsPipelineRetainedConstructionParams& params)
 	{
 		assert(0);
 	}
@@ -584,8 +574,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
 
 		std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> CreateGraphicsPipelineAlreadyLocked(
-			const InputAssemblyStates& ia,
-			Topology topology,
+			const VertexInputStates& ia,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
 			const PipelineLayoutOptions& pipelineLayout,
@@ -593,13 +582,14 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
 			const FrameBufferTarget& fbTarget)
 		{
-			uint64_t hash = HashCombine(compiledPatchCollection->GetGUID(), pipelineLayout._hashCode);
+			uint64_t hash = pipelineLayout._hashCode;
+			if (compiledPatchCollection)
+			 	hash = HashCombine(compiledPatchCollection->GetGUID(), hash);
 			for (auto s:filteredSelectors)
 				if (s._hashValue)
 					hash = HashCombine(s._hashValue, hash);
 			hash = HashCombine(fbTarget.GetHash(), hash);
-			hash = HashCombine((uint64_t)topology, hash);
-			hash = HashCombine(ia._hashCode, hash);
+			hash = HashCombine(ia.GetHash(), hash);
 
 			// we need to hash specific parts of the graphics pipeline desc -- only those parts that we'll use below
 			// some parts of the pipeline desc (eg, the selectors) have already been used to create other inputs here
@@ -629,7 +619,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				Log(Verbose) << "\tPipeline layout: " << pipelineLayout->GetGUID() << " (" << (size_t)pipelineLayout.get() << ")" << std::endl;
 				Log(Verbose) << "\tFB relevance: " << sequencerCfg._fbRelevanceValue << std::endl;
 				Log(Verbose) << "\tIA: " << ia._hash << std::endl;
-				Log(Verbose) << "\tPatch collection: " << compiledPatchCollection->GetGUID() << std::endl;
+				if (compiledPatchCollection)
+					Log(Verbose) << "\tPatch collection: " << compiledPatchCollection->GetGUID() << std::endl;
+				else
+					Log(Verbose) << "\tNo patch collection" << std::endl;
 				for (unsigned c=0; c<filteredSelectors.size(); ++c) {
 					if (!filteredSelectors[c]._hashValue) continue;
 					Log(Verbose) << "\tFiltered selectors[" << c << "]: " << filteredSelectors[c]._selectors << std::endl;
@@ -646,10 +639,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				byteCodeFutures[c] = MakeByteCodeFuture((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c], compiledPatchCollection, pipelineDesc->_patchExpansions, so);
 			}
 
-			GraphicsPipelineConstructionParams constructionParams;
+			GraphicsPipelineRetainedConstructionParams constructionParams;
 			constructionParams._pipelineDesc = pipelineDesc;
-			constructionParams._ia = ia;
-			constructionParams._topology = topology;
+			constructionParams._ia._inputAssembly = AsVector(ia._inputAssembly);
+			constructionParams._ia._miniInputAssembly = AsVector(ia._miniInputAssembly);
+			constructionParams._topology = ia._topology;
 			constructionParams._fbDesc = *fbTarget._fbDesc;
 			constructionParams._subpassIdx = fbTarget._subpassIdx;
 

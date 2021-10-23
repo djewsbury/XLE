@@ -90,7 +90,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
 		ParameterBox _geoSelectors;
-		Internal::InputAssemblyStates _ia;
+		std::vector<InputElementDesc> _inputAssembly;
+		std::vector<MiniInputElementDesc> _miniInputAssembly;
 		Topology _topology;
 		RenderCore::Assets::RenderStateSet _stateSet;
 
@@ -174,8 +175,10 @@ namespace RenderCore { namespace Techniques
 								} else
 									filteredSelectors[c]._hashValue = 0;
 
+							VertexInputStates vis { containingPipelineAccelerator->_inputAssembly, containingPipelineAccelerator->_miniInputAssembly, containingPipelineAccelerator->_topology };
+
 							metalPipelineFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
-								containingPipelineAccelerator->_ia, containingPipelineAccelerator->_topology, 
+								vis,
 								pipelineDesc, pipelineDescWithFiltering,
 								pipelineLayoutAsset->GetPipelineLayout(),
 								compiledPatchCollection,
@@ -306,9 +309,8 @@ namespace RenderCore { namespace Techniques
 	, _stateSet(stateSet)
 	, _ownerPoolId(ownerPoolId)
 	{
-		_ia._inputAssembly = {inputAssembly.begin(), inputAssembly.end()};
-		_ia._hashCode = HashInputAssembly(_ia._inputAssembly, DefaultSeed64);
-		std::vector<InputElementDesc> sortedIA = _ia._inputAssembly;
+		_inputAssembly = {inputAssembly.begin(), inputAssembly.end()};
+		std::vector<InputElementDesc> sortedIA = _inputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
 			[](const InputElementDesc& lhs, const InputElementDesc& rhs) {
@@ -353,9 +355,8 @@ namespace RenderCore { namespace Techniques
 	, _stateSet(stateSet)
 	, _ownerPoolId(ownerPoolId)
 	{
-		_ia._miniInputAssembly = {miniInputAssembly.begin(), miniInputAssembly.end()};
-		_ia._hashCode = HashInputAssembly(_ia._miniInputAssembly, DefaultSeed64);
-		std::vector<MiniInputElementDesc> sortedIA = _ia._miniInputAssembly;
+		_miniInputAssembly = {miniInputAssembly.begin(), miniInputAssembly.end()};
+		std::vector<MiniInputElementDesc> sortedIA = _miniInputAssembly;
 		std::sort(
 			sortedIA.begin(), sortedIA.end(),
 			[](const MiniInputElementDesc& lhs, const MiniInputElementDesc& rhs) {
@@ -1041,10 +1042,10 @@ namespace RenderCore { namespace Techniques
 			record._materialSelectors = AsString(l->_materialSelectors, 4);
 			record._geoSelectors = AsString(l->_geoSelectors, 2);
 			record._stateSetHash = l->_stateSet.GetHash();
-			if (!l->_ia._miniInputAssembly.empty())
-				record._inputAssemblyHash = HashInputAssembly(l->_ia._miniInputAssembly, DefaultSeed64);
+			if (!l->_miniInputAssembly.empty())
+				record._inputAssemblyHash = HashInputAssembly(l->_miniInputAssembly, DefaultSeed64);
 			else
-				record._inputAssemblyHash = HashInputAssembly(l->_ia._inputAssembly, DefaultSeed64);
+				record._inputAssemblyHash = HashInputAssembly(l->_inputAssembly, DefaultSeed64);
 			result._pipelineAccelerators.push_back(std::move(record));
 		}
 

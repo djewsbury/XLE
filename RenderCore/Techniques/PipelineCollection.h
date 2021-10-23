@@ -29,10 +29,22 @@ namespace RenderCore { namespace Techniques
 
 	struct VertexInputStates
 	{
-		IteratorRange<const MiniInputElementDesc*> _inputLayout;
+		IteratorRange<const InputElementDesc*> _inputAssembly;
+		IteratorRange<const MiniInputElementDesc*> _miniInputAssembly;
 		Topology _topology;
 
 		uint64_t GetHash() const;
+	};
+
+	struct PipelineLayoutOptions
+	{
+		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
+		::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
+		uint64_t _hashCode = 0;
+
+		PipelineLayoutOptions() = default;
+		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
+		PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
 	};
 
 	struct GraphicsPipelineAndLayout
@@ -53,14 +65,14 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 	};
 
-	namespace Internal { class SharedPools; class PipelineLayoutOptions; }
+	namespace Internal { class SharedPools; }
 
     class PipelinePool
 	{
 	public:
 		std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
-			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
-			const GraphicsPipelineDesc& pipelineDesc,
+			const PipelineLayoutOptions& pipelineLayout,
+			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
@@ -90,10 +102,11 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid = ~0ull;
 		std::shared_ptr<Internal::SharedPools> _sharedPools;
 
-		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipelineInternal(const Internal::PipelineLayoutOptions&, StringSection<>, const ParameterBox&);
+		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipelineInternal(const PipelineLayoutOptions&, StringSection<>, const ParameterBox&);
 
 
 
+#if 0
 		Threading::Mutex _pipelinesLock;
 		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>>> _graphicsPipelines;
 		class OldSharedPools;
@@ -107,7 +120,6 @@ namespace RenderCore { namespace Techniques
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
 
-#if 0
 		void ConstructToFuture(
 			::Assets::Future<ComputePipelineAndLayout>& future,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,

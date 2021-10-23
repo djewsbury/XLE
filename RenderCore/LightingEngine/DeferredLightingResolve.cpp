@@ -100,7 +100,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::FrameBufferTarget fbTarget {&fbDesc, subpassIdx};
 
-		Techniques::GraphicsPipelineDesc pipelineDesc;
+		auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 
 		ParameterBox selectors;
 		selectors.SetParameter("GBUFFER_TYPE", unsigned(gbufferType));
@@ -115,29 +115,29 @@ namespace RenderCore { namespace LightingEngine
 
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
 		if (doSampleFrequencyOptimisation && sampleCount._sampleCount > 1) {
-			pipelineDesc._depthStencil = s_dsWritePixelFrequencyPixel;
+			pipelineDesc->_depthStencil = s_dsWritePixelFrequencyPixel;
 			stencilRefValue = StencilSampleCount;
 		} else {
-			pipelineDesc._depthStencil = s_dsWriteNonSky;
+			pipelineDesc->_depthStencil = s_dsWriteNonSky;
 			stencilRefValue = 0x0;
 		}
 
 		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
-			inputStates._inputLayout = {};
-			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			inputStates._inputAssembly = {};
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
 			inputStates._topology = Topology::TriangleStrip;
 		} else {
-			inputStates._inputLayout = MakeIteratorRange(inputElements);
-			pipelineDesc._shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":main";
-			pipelineDesc._shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
+			inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":main";
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
 			inputStates._topology = Topology::TriangleList;
-			pipelineDesc._depthStencil._depthBoundsTestEnable = true;
-			pipelineDesc._manualSelectorFiltering._setValues.SetParameter("GS_FVF", 1);
+			pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
+			pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_FVF", 1);
 		}
 
-		pipelineDesc._rasterization = Techniques::CommonResourceBox::s_rsDefault;
-		pipelineDesc._blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
-		pipelineDesc._shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
+		pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
+		pipelineDesc->_blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
 
 		return pipelineCollection.CreateGraphicsPipeline(
 			pipelineLayout, pipelineDesc, selectors,
