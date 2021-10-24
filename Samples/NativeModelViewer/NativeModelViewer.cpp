@@ -81,10 +81,9 @@ namespace Sample
 	}
 
 	void NativeModelViewerOverlay::Render(
-        RenderCore::IThreadContext& threadContext,
         RenderCore::Techniques::ParsingContext& parserContext)
 	{
-		OverlaySystemSet::Render(threadContext, parserContext);
+		OverlaySystemSet::Render(parserContext);
 	}
 
 	void NativeModelViewerOverlay::OnRenderTargetUpdate(

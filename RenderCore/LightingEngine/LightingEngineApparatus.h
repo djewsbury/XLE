@@ -16,7 +16,7 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate;
 	class DrawingApparatus;
 	class IPipelineAcceleratorPool;
-	class PipelinePool;
+	class PipelineCollection;
 	class SystemUniformsDelegate;
 }}
 namespace RenderCore { class IDevice; }

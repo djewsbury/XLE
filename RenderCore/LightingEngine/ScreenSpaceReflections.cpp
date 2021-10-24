@@ -398,7 +398,7 @@ namespace RenderCore { namespace LightingEngine
 	
 	void ScreenSpaceReflectionsOperator::ConstructToFuture(
 		::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
-		std::shared_ptr<Techniques::PipelinePool> pipelinePool)
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
 	{
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("g_denoised_reflections"));

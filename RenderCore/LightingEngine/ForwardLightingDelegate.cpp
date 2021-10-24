@@ -343,7 +343,7 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {
 						iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-						iterator._parsingContext->GetUniformDelegateManager()->BringUpToDate(*iterator._parsingContext);
+						iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 					});
 
 				// Build hierarchical depths
