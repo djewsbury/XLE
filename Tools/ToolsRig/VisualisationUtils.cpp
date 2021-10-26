@@ -333,6 +333,16 @@ namespace ToolsRig
 			auto viewportDims = Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 			Rect rect { Coord2{0, 0}, viewportDims };
 			RenderLoadingIndicator(overlays, rect, _loadingIndicatorCounter++);
+
+			if (_preparedSceneFuture && _preparedSceneFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
+				auto log = ::Assets::AsString(_preparedSceneFuture->GetActualizationLog());
+				auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
+				if (font) {
+					overlays.DrawText(
+						std::make_tuple(Float3{0.f, 0.f, 0.f}, Float3{viewportDims[0], viewportDims[1], 0.f}),
+						**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, log);
+				}
+			}
 			overlays.ReleaseState();
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
