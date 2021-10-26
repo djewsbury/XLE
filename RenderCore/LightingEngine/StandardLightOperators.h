@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	class AmbientLightOperatorDesc
 	{
 	public:
+		bool _enableScreenSpaceReflections = true;
 	};
 
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);

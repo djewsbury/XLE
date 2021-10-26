@@ -1,5 +1,30 @@
 #include "xleres/TechniqueLibrary/Config/sequencer.pipeline"
 
+DescriptorSet AutoFixedSamplers
+{
+	Sampler TrilinearClampTransparentBlack
+	{
+		Filter = Trilinear,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
+
+	Sampler SkyCubeSampler
+	{
+		Filter = Bilinear,
+		AddressU = Wrap,
+		AddressV = Wrap
+	};
+};
+
+PipelineLayout Main
+{
+	AutoDescriptorSet AutoFixedSamplers;
+	ComputeDescriptorSet Sequencer;
+};
+
+////////////////////////////////////////////////////////////////////////
+
 DescriptorSet DownsampleDepthsDS
 {
 	SampledTexture InputDepths;						// 0
@@ -11,122 +36,5 @@ PipelineLayout DownsampleDepths
 {
 	ComputeDescriptorSet Sequencer;
 	ComputeDescriptorSet DownsampleDepthsDS;
-};
-
-////////////////////////////////////////////////////////////////////////
-
-DescriptorSet ClassifyTilesDS
-{
-	UnorderedAccessBuffer g_temporal_variance_mask;			// 0
-	UnorderedAccessTexelBuffer g_ray_list;  				// 1
-	UnorderedAccessTexelBuffer g_ray_counter;  				// 2
-	UnorderedAccessTexture g_intersection_result;			// 3
-	UnorderedAccessBuffer g_tile_meta_data_mask;			// 4
-	UnorderedAccessTexelBuffer g_intersect_args;			// 5
-	SampledTexture DownsampleDepths;						// 6
-};
-
-PipelineLayout ClassifyTiles
-{
-	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet ClassifyTilesDS;
-};
-
-////////////////////////////////////////////////////////////////////////
-
-DescriptorSet IntersectDS
-{
-	SampledTexture GBufferNormal;					// 0
-	SampledTexture DownsampleDepths;  				// 1
-	SampledTexture SkyCube;  						// 2
-	UniformBuffer ExtendedTransforms;				// 3
-	UniformTexelBuffer g_ray_list_read;				// 4
-	UnorderedAccessTexelBuffer g_ray_counter;		// 5
-	UnorderedAccessTexture g_intersection_result;	// 6
-	UnorderedAccessTexture g_ray_lengths;			// 7
-
-	UniformBuffer FrameIdBuffer;					// 8
-
-	UniformTexelBuffer BN_Sobol;					// 9
-	UniformTexelBuffer BN_Ranking;					// 10
-	UniformTexelBuffer BN_Scrambling;				// 11
-
-	SampledTexture GBufferMotion;					// 12
-	SampledTexture LastFrameLit;					// 13
-
-	Sampler TrilinearClampTransparentBlack			// 14
-	{
-		Filter = Trilinear,
-		AddressU = Clamp,
-		AddressV = Clamp
-	};
-
-	Sampler SkyCubeSampler							// 15
-	{
-		Filter = Bilinear,
-		AddressU = Wrap,
-		AddressV = Wrap
-	};
-};
-
-PipelineLayout Intersect
-{
-	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet IntersectDS;
-};
-
-////////////////////////////////////////////////////////////////////////
-
-DescriptorSet ResolveTemporalDS
-{
-	SampledTexture DownsampleDepths;
-	SampledTexture GBufferNormal;
-	SampledTexture GBufferMotion;
-	SampledTexture g_temporally_denoised_reflections_history;
-	SampledTexture g_ray_lengths_read;
-	SampledTexture g_spatially_denoised_reflections_read;
-	UnorderedAccessBuffer g_tile_meta_data_mask_read;
-	UnorderedAccessTexture g_temporally_denoised_reflections;
-	UnorderedAccessBuffer g_temporal_variance_mask;
-	UniformBuffer ExtendedTransforms;
-};
-
-PipelineLayout ResolveTemporal
-{
-	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet ResolveTemporalDS;
-};
-
-////////////////////////////////////////////////////////////////////////
-
-DescriptorSet ResolveSpatialDS
-{
-	SampledTexture DownsampleDepths;
-	SampledTexture GBufferNormal;
-	SampledTexture g_intersection_result_read;
-	UnorderedAccessBuffer g_tile_meta_data_mask_read;
-	UnorderedAccessTexture g_spatially_denoised_reflections;
-};
-
-PipelineLayout ResolveSpatial
-{
-	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet ResolveSpatialDS;
-};
-
-////////////////////////////////////////////////////////////////////////
-
-DescriptorSet ReflectionsBlurDS
-{
-	UnorderedAccessTexture g_denoised_reflections;
-	SampledTexture g_temporally_denoised_reflections_read;
-	UnorderedAccessBuffer g_tile_meta_data_mask_read;
-	SampledTexture DownsampleDepths;
-};
-
-PipelineLayout ReflectionsBlur
-{
-	ComputeDescriptorSet Sequencer;
-	ComputeDescriptorSet ReflectionsBlurDS;
 };
 

@@ -28,6 +28,8 @@ namespace RenderCore { namespace LightingEngine
 		HierarchicalDepthsOperator& GetHierarchicalDepthsOperator() { return *_hierarchicalDepthsOperator; }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
 
+		bool HasScreenSpaceReflectionsOperator() { return _ssrOperator != nullptr; }
+
 		void FinalizeConfiguration();
 		virtual void SetEquirectangularSource(StringSection<> input) override;
 		void SetupProjection(Techniques::ParsingContext& parsingContext);

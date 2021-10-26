@@ -24,11 +24,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-RWTexture2D<float3> g_denoised_reflections                	: register(u0, space1); 
-Texture2D<float3> g_temporally_denoised_reflections_read	: register(t1, space1); 
-StructuredBuffer<uint> g_tile_meta_data_mask_read         	: register(t2, space1);
+RWTexture2D<float3> g_denoised_reflections;
+Texture2D<float3> g_temporally_denoised_reflections_read;
+StructuredBuffer<uint> g_tile_meta_data_mask_read;
 
-Texture2D<float> DownsampleDepths            : register(t3, space1);
+Texture2D<float> DownsampleDepths;
+Texture2D GBufferNormal;
 
 static const float g_roughness_sigma_min = 0.001f;
 static const float g_roughness_sigma_max = 0.01f;
@@ -69,12 +70,12 @@ void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radianc
 
 min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
 {
-	return g_temporally_denoised_reflections_read.Load(int3(pixel_coordinate, 0)).xyz;
+	return (min16float)g_temporally_denoised_reflections_read.Load(int3(pixel_coordinate, 0)).xyz;
 }
 
 min16float FFX_DNSR_Reflections_LoadRoughnessFP16(int2 pixel_coordinate)
 {
-	return (min16float) ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
+	return (min16float)GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
 }
 
 void FFX_DNSR_Reflections_StoreDenoisedReflectionResult(int2 pixel_coordinate, min16float3 value)

@@ -236,7 +236,7 @@ namespace RenderCore { namespace LightingEngine
 
 		const bool hasSSR = true;
 		if (hasSSR) {
-			auto ssr = result.DefineAttachment(Utility::Hash64("SSRReflections")).NoInitialState();
+			auto ssr = result.DefineAttachment(ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value).NoInitialState();
 			mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
 		}
 		mainSubpass.SetName("MainForward");
@@ -311,13 +311,15 @@ namespace RenderCore { namespace LightingEngine
 				auto stitchingContext = stitchingContextCap;
 				lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
 				lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-				lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+				if (lightScene->HasScreenSpaceReflectionsOperator())
+					lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 
 				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
 				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 				lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
 				lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
+				if (lightScene->HasScreenSpaceReflectionsOperator())
+					lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
 
 				// Reset captures
 				lightingTechnique->CreateStep_CallFunction(
@@ -326,7 +328,8 @@ namespace RenderCore { namespace LightingEngine
 						PreregisterAttachments(stitchingContext);
 						captures->_lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
 						captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-						captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+						if (captures->_lightScene->HasScreenSpaceReflectionsOperator())
+							captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 						captures->_lightScene->SetupProjection(*iterator._parsingContext);
 					});
 
@@ -337,11 +340,14 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Pre depth
-				// lightingTechnique->CreateStep_RunFragments(lightScene->CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
-				lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalDelegate));
+				if (lightScene->HasScreenSpaceReflectionsOperator()) {
+					lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
+				} else {
+					lightingTechnique->CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
+				}
 
 				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
+					[](LightingTechniqueIterator& iterator) {
 						iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 						iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 					});
@@ -354,7 +360,8 @@ namespace RenderCore { namespace LightingEngine
 				lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
 				// Calculate SSRs
-				lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
+				if (lightScene->HasScreenSpaceReflectionsOperator())
+					lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
 
 				lightingTechnique->CreateStep_CallFunction(
 					[captures](LightingTechniqueIterator& iterator) {

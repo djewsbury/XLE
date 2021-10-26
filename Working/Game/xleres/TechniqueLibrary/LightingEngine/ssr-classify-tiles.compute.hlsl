@@ -43,16 +43,16 @@ bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness
 #define g_temporal_variance_guided_tracing_enabled 1
 #define g_samples_per_quad 1
 
-StructuredBuffer<uint> g_temporal_variance_mask_read       : register(t0, space1);
+StructuredBuffer<uint> g_temporal_variance_mask_read;
 
-RWBuffer<uint> g_ray_list                             : register(u1, space1);
-globallycoherent RWBuffer<uint> g_ray_counter         : register(u2, space1);
-RWTexture2D<float3> g_intersection_result             : register(u3, space1);
-RWStructuredBuffer<uint> g_tile_meta_data_mask        : register(u4, space1);
-RWBuffer<uint> g_intersect_args                       : register(u5, space1);
+RWBuffer<uint> g_ray_list;
+globallycoherent RWBuffer<uint> g_ray_counter;
+RWTexture2D<float3> g_intersection_result;
+RWStructuredBuffer<uint> g_tile_meta_data_mask;
+RWBuffer<uint> g_intersect_args;
 
-Texture2D<float> DownsampleDepths            : register(t6, space1);
-
+Texture2D<float> DownsampleDepths;
+Texture2D GBufferNormal;
 
 uint FFX_DNSR_Reflections_LoadTemporalVarianceMask(uint index)
 {
@@ -80,14 +80,11 @@ void FFX_DNSR_Reflections_StoreTileMetaDataMask(uint index, uint mask)
     void ClassifyTiles(uint2 group_id : SV_GroupID, uint group_index : SV_GroupIndex)
 {
     uint2 screen_size;
-    // g_roughness.GetDimensions(screen_size.x, screen_size.y);
-    screen_size = uint2(1920, 1080);
-
+    GBufferNormal.GetDimensions(screen_size.x, screen_size.y);
     uint2 group_thread_id = FFX_DNSR_Reflections_RemapLane8x8(group_index); // Remap lanes to ensure four neighboring lanes are arranged in a quad pattern
     uint2 dispatch_thread_id = group_id * 8 + group_thread_id;
 
-    // float roughness = g_roughness.Load(int3(dispatch_thread_id, 0)).w;
-    float roughness = (DownsampleDepths.Load(uint3(dispatch_thread_id.xy, 0)) == 0) ? 1.0f : 0.125f;
+    float roughness = GBufferNormal.Load(int3(dispatch_thread_id.xy, 0)).a;
 
     if (WaveActiveCountBits(FFX_DNSR_Reflections_IsGlossyReflection(roughness))) {
         FFX_DNSR_Reflections_ClassifyTiles(dispatch_thread_id, group_thread_id, roughness, screen_size, g_samples_per_quad, g_temporal_variance_guided_tracing_enabled);

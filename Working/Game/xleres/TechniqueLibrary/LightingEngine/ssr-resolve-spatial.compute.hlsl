@@ -26,12 +26,17 @@ THE SOFTWARE.
 
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
-Texture2D<float> DownsampleDepths                         : register(t0, space1);
-Texture2D GBufferNormal                                   : register(t1, space1);
+Texture2D<float> DownsampleDepths;
+Texture2D GBufferNormal;
 
-Texture2D<min16float3> g_intersection_result_read         : register(t2, space1);
-StructuredBuffer<uint> g_tile_meta_data_mask_read         : register(t3, space1);
-RWTexture2D<float3> g_spatially_denoised_reflections      : register(u4, space1);
+Texture2D<min16float3> g_intersection_result_read;
+StructuredBuffer<uint> g_tile_meta_data_mask_read;
+RWTexture2D<float3> g_spatially_denoised_reflections;
+
+cbuffer FrameIdBuffer
+{
+    uint FrameId;
+};
 
 static const float g_depth_sigma = 0.02f;
 
@@ -85,7 +90,7 @@ void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radianc
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 {
-    return 0.125f; // (DownsampleDepths.Load(uint3(pixel_coordinate, 0))==0) ? 1.0f : 0.125f;
+    return GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
 }
 
 min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
@@ -114,7 +119,7 @@ uint FFX_DNSR_Reflections_LoadTileMetaDataMask(uint index)
 }
 
 bool FFX_DNSR_Reflections_IsGlossyReflection(float roughness) { return roughness < 0.5f; }
-bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return false; /*roughness < 0.0001;*/ }
+bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return false; }
 
 #include "xleres/Foreign/ffx-reflection-dnsr/ffx_denoiser_reflections_resolve_spatial.h"
 

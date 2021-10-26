@@ -10,6 +10,8 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/CommonResources.h"
+#include "../Techniques/Services.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/Resource.h"
 #include "../IAnnotator.h"
@@ -113,7 +115,7 @@ namespace RenderCore { namespace LightingEngine
 
 			_tileTemporalVarianceMask = device.CreateResource(
 				CreateDesc(
-					BindFlag::UnorderedAccess,
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 					0, 0, LinearBufferDesc::Create(tileCount*2*sizeof(uint32_t)),
 					"ssr-tile-temporal-variance"
 				));
@@ -143,7 +145,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
-		IResourceView* srvs[26];
+		IResourceView* srvs[27];
 		srvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();			// g_denoised_reflections
 		srvs[1] = _res->_temporalDenoiseResultUAV[_pingPongCounter&1].get();		// g_intersection_result
 		srvs[2] = _res->_temporalDenoiseResultSRV[_pingPongCounter&1].get();		// g_intersection_result_read
@@ -172,12 +174,17 @@ namespace RenderCore { namespace LightingEngine
 		srvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
 		srvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : _dummyCube.get();
+		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
 
+		srvs[26] = iterator._rpi.GetNonFrameBufferAttachmentView(6).get();			// SSRDebug
+
+		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		struct ExtendedTransforms
 		{
 			Float4x4 _clipToView, _clipToWorld, _worldToView;
 			Float4x4 _viewToWorld, _viewToProj, _prevWorldToClip;
+			Float2 _negativeReciprocalScreenSize;
+			unsigned _dummy[2];
 		} extendedTransforms;
 		auto& projDesc = iterator._parsingContext->GetProjectionDesc();
 		extendedTransforms._clipToView = Inverse(projDesc._cameraToProjection);
@@ -190,6 +197,7 @@ namespace RenderCore { namespace LightingEngine
 		} else {
 			extendedTransforms._prevWorldToClip = iterator._parsingContext->GetProjectionDesc()._worldToProjection;
 		}
+		extendedTransforms._negativeReciprocalScreenSize = {-1.0f/outputDims[0], -1.0f/outputDims[1]};
 		struct FrameId
 		{
 			unsigned _frameId; unsigned _dummy[3];
@@ -200,7 +208,6 @@ namespace RenderCore { namespace LightingEngine
 		us._resourceViews = MakeIteratorRange(srvs);
 		us._immediateData = MakeIteratorRange(immData);
 
-		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		_classifyTiles->Dispatch(
 			*iterator._parsingContext,
 			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
@@ -268,8 +275,6 @@ namespace RenderCore { namespace LightingEngine
 			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
 			us);
 
-		// g_lastIntersectionResultSRV = _res._temporalDenoiseResultSRV[_pingPongCounter&1].get();
-
 		++_pingPongCounter;
 	}
 
@@ -277,13 +282,15 @@ namespace RenderCore { namespace LightingEngine
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto outputReflections = result.DefineAttachment(Hash64("SSRReflections")).NoInitialState().FinalState(BindFlag::ShaderResource);
+		auto outputReflections = result.DefineAttachment(ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
+		auto debugAttachment = result.DefineAttachment(ConstHash64<'SSRD', 'ebug'>::Value).NoInitialState().FinalState(BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(debugAttachment, BindFlag::UnorderedAccess);
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -299,11 +306,19 @@ namespace RenderCore { namespace LightingEngine
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
-				Hash64("SSRReflections"),
+				ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
 					"ssr-reflections"),
+				Techniques::PreregisteredAttachment::State::Uninitialized
+			},
+			Techniques::PreregisteredAttachment {
+				ConstHash64<'SSRD', 'ebug'>::Value,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32G32B32A32_FLOAT),
+					"ssr-debug"),
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			}
 		};
@@ -321,20 +336,6 @@ namespace RenderCore { namespace LightingEngine
 			checked_cast<Metal::Resource*>(_rayCounterBufferUAV->GetResource().get())->GetBuffer(), 
 			0, VK_WHOLE_SIZE, 0);
 		_res->CompleteInitialization(metalContext);
-
-		// ensure the dummy cube is initialized
-		Metal::CompleteInitialization(metalContext, {_dummyCube->GetResource().get()});
-
-		auto stagingDesc = CreateDesc(BindFlag::TransferSrc, CPUAccess::Write, 0, TextureDesc::PlainCube(32, 32, Format::R8G8B8A8_SNORM, 6), "dummy-cube");
-		std::vector<uint8_t> dummyData(32*32*4, 0);
-		auto stagingTexture = threadContext.GetDevice()->CreateResource(
-			stagingDesc,
-			[&dummyData, stagingDesc](SubResourceId sr) {
-				auto srDesc = GetSubResourceOffset(stagingDesc._textureDesc, sr._mip, sr._arrayLayer);
-				return SubResourceInitData{MakeIteratorRange(dummyData.begin(), dummyData.begin()+srDesc._size), srDesc._pitches};
-			});
-		auto bltEncoder = metalContext.BeginBlitEncoder();
-		bltEncoder.Copy(*_dummyCube->GetResource(), *stagingTexture);
 	}
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
@@ -388,10 +389,6 @@ namespace RenderCore { namespace LightingEngine
 				"ssr-indirect-args"
 			));
 		_indirectArgsBufferUAV = _indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
-
-		auto dummyCubeTexture = _device->CreateResource(
-			CreateDesc(BindFlag::TransferDst|BindFlag::ShaderResource, 0, 0, TextureDesc::PlainCube(32, 32, Format::R8G8B8A8_SNORM, 6), "dummy-cube"));
-		_dummyCube = dummyCubeTexture->CreateTextureView();
 	}
 
 	ScreenSpaceReflectionsOperator::~ScreenSpaceReflectionsOperator() {}
@@ -436,50 +433,53 @@ namespace RenderCore { namespace LightingEngine
 
 		usi.BindResourceView(25, Hash64("SkyCube"));
 
+		usi.BindResourceView(26, Hash64("SSRDebug"));
+
 		usi.BindImmediateData(0, Hash64("ExtendedTransforms"));
 		usi.BindImmediateData(1, Hash64("FrameIdBuffer"));
 
 		ParameterBox selectors;
+		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);
 		auto classifyTiles = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":ClassifyTiles",
 			selectors,
-			SSR_PIPELINE ":ClassifyTiles",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		auto prepareIndirectArgs = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":PrepareIndirectArgs",
 			selectors,
-			SSR_PIPELINE ":ClassifyTiles",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		auto intersect = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_INTERSECT_HLSL ":SSRIntersect",
 			selectors,
-			SSR_PIPELINE ":Intersect",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		auto resolveSpatial = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_RESOLVE_SPATIAL_HLSL ":ResolveSpatial",
 			selectors,
-			SSR_PIPELINE ":ResolveSpatial",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		auto resolveTemporal = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_RESOLVE_TEMPORAL_HLSL ":ResolveTemporal",
 			selectors,
-			SSR_PIPELINE ":ResolveTemporal",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		auto reflectionsBlur = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_REFLECTIONS_BLUR_HLSL ":ReflectionsBlur",
 			selectors,
-			SSR_PIPELINE ":ReflectionsBlur",
+			SSR_PIPELINE ":Main",
 			usi);
 
 		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur).ThenConstructToFuture(

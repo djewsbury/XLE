@@ -26,23 +26,23 @@ THE SOFTWARE.
 
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
-Texture2D<float> DownsampleDepths       : register(t0, space1);
-Texture2D GBufferNormal                 : register(t1, space1);
-Texture2D<int2> GBufferMotion           : register(t2, space1);
+Texture2D<float> DownsampleDepths;
+Texture2D GBufferNormal;
+Texture2D<int2> GBufferMotion;
 
 // [[vk::binding(1, 1)]] Texture2D<float> g_roughness                                      : register(t1); 
 // [[vk::binding(2, 1)]] Texture2D<float4> g_normal_history                                : register(t2); 
 // [[vk::binding(3, 1)]] Texture2D<float> g_roughness_history                              : register(t3); 
 
-Texture2D<float3> g_temporally_denoised_reflections_history       : register(t3, space1);
-Texture2D<float> g_ray_lengths_read                               : register(t4, space1); 
-Texture2D<float3> g_spatially_denoised_reflections_read           : register(t5, space1);
-StructuredBuffer<uint> g_tile_meta_data_mask_read                 : register(t6, space1);
+Texture2D<float3> g_temporally_denoised_reflections_history;
+Texture2D<float> g_ray_lengths_read;
+Texture2D<float3> g_spatially_denoised_reflections_read;
+StructuredBuffer<uint> g_tile_meta_data_mask_read;
 
-RWTexture2D<float3> g_temporally_denoised_reflections             : register(u7, space1);
-RWStructuredBuffer<uint> g_temporal_variance_mask                 : register(u8, space1);
+RWTexture2D<float3> g_temporally_denoised_reflections;
+RWStructuredBuffer<uint> g_temporal_variance_mask;
 
-cbuffer ExtendedTransforms          : register(b9, space1)
+cbuffer ExtendedTransforms
 {
     row_major float4x4 ClipToView;      // g_inv_proj
     row_major float4x4 ClipToWorld;     // g_inv_view_proj
@@ -50,6 +50,7 @@ cbuffer ExtendedTransforms          : register(b9, space1)
     row_major float4x4 ViewToWorld;     // g_inv_view
     row_major float4x4 ViewToProj;      // g_proj
     row_major float4x4 PrevWorldToClip; // g_prev_view_proj
+    float2 SSRNegativeReciprocalScreenSize;
 };
 
 #define g_temporal_stability_factor 0.975f
@@ -65,11 +66,8 @@ float FFX_DNSR_Reflections_LoadRayLength(int2 pixel_coordinate)
 
 float2 FFX_DNSR_Reflections_LoadMotionVector(int2 pixel_coordinate)
 {
-    // todo -- conversions here!
     float2 res = GBufferMotion.Load(int3(pixel_coordinate, 0)).xy;
-    res /= float2(1920, 1080);
-    res = -res;
-    res *= 1.f;
+    res *= SSRNegativeReciprocalScreenSize;
     return res;
 }
 
@@ -86,12 +84,13 @@ float3 FFX_DNSR_Reflections_LoadNormalHistory(int2 pixel_coordinate)
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 {
-    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
+    return GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
 }
 
 float FFX_DNSR_Reflections_LoadRoughnessHistory(int2 pixel_coordinate)
 {
-    return ((DownsampleDepths.Load(uint3(pixel_coordinate.xy, 0)) == 0) ? 1.0f : 0.125f);
+    // todo -- roughness history buffer
+    return GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
 }
 
 float3 FFX_DNSR_Reflections_LoadRadianceHistory(int2 pixel_coordinate)
@@ -125,7 +124,7 @@ void FFX_DNSR_Reflections_StoreTemporalVarianceMask(int index, uint mask)
 }
 
 bool FFX_DNSR_Reflections_IsGlossyReflection(float roughness) { return roughness < 0.5f; }
-bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness < 0.0001; }
+bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return false; }
 
 float3 FFX_DNSR_Reflections_ScreenSpaceToViewSpace(float3 screen_space_position) 
 {
@@ -168,4 +167,5 @@ float3 FFX_DNSR_Reflections_WorldSpaceToScreenSpacePrevious(float3 world_coord)
     uint2 image_size;
     g_temporally_denoised_reflections.GetDimensions(image_size.x, image_size.y);
     FFX_DNSR_Reflections_ResolveTemporal(dispatch_thread_id, group_thread_id, image_size, g_temporal_stability_factor, g_temporal_variance_threshold);
+    // FFX_DNSR_Reflections_StoreTemporallyDenoisedReflections(dispatch_thread_id.xy, FFX_DNSR_Reflections_LoadSpatiallyDenoisedReflections(dispatch_thread_id.xy));
 }

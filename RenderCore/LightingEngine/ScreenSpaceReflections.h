@@ -77,8 +77,6 @@ namespace RenderCore { namespace LightingEngine
 		std::unique_ptr<ResolutionDependentResources> _res;
 		std::unique_ptr<BlueNoiseGeneratorTables> _blueNoiseRes;
 		
-		std::shared_ptr<IResourceView> _dummyCube;
-
 		std::shared_ptr<IDevice> _device;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
