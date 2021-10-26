@@ -46,8 +46,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<IAsyncTracker> _gpuTracker;
 
 		struct MarkedDestroys { IAsyncTracker::Marker _marker; unsigned _pendingCount; };
-		CircularBuffer<MarkedDestroys, 64>	_markedDestroys;
-		std::vector<VkCommandBuffer>		_pendingDestroys;
+        struct Page
+        {
+            CircularBuffer<MarkedDestroys, 32>	_buffer;
+        };
+        std::vector<Page> _markedDestroys;
+		std::vector<VkCommandBuffer> _pendingDestroys;
         #if defined(CHECK_COMMAND_POOL)
             Threading::Mutex _lock;
         #endif
