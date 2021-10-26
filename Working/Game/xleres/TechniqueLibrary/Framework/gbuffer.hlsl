@@ -82,29 +82,68 @@ float3 GBuffer_CalculateBestFitNormal(float3 inputNormal)
 	return result;
 }
 
-float4 CompressGBufferNormal(float3 inputNormal)
+// From "A Survey of Efficient Representations for Independent Unit Vectors", Cigolle et. al
+// Separate the square into 8 parts and use these to encode the faces of an octant in 3d space
+float2 signNotZero(float2 v) { return float2((v.x >= 0.0) ? +1.0 : -1.0, (v.y >= 0.0) ? +1.0 : -1.0); }
+float2 float32x3_to_oct(float3 v)
 {
-	return float4(GBuffer_CalculateBestFitNormal(inputNormal),0);
+	// note; requires normalized input
+	float2 p = v.xy * rcp(abs(v.x) + abs(v.y) + abs(v.z));
+	return (v.z <= 0.0) ? ((1.0 - abs(p.yx)) * signNotZero(p)) : p;
+}
+float3 oct_to_float32x3(float2 e) 
+{
+	float3 v = float3(e.xy, 1.0 - abs(e.x) - abs(e.y));
+	if (v.z < 0) v.xy = (1.0 - abs(v.yx)) * signNotZero(v.xy);
+	return normalize(v);
+}
+
+// Normal compression modes
+//   NORMAL_COMPRESSION_BEST_FIT_TABLE 
+//          should be able to store and recover a normal at quite high precision, but
+//          requires 3 components in the gbuffer and a lookup table texture
+//          Writing the normal is a little expensive, but loading it is just a normalize
+//  NORMAL_COMPRESSION_OCTANT
+//          stores a normal in two components, and little lower precision
+//          loading and storing are approximately the same cost and medium cost
+#define NORMAL_COMPRESSION_BEST_FIT_TABLE 1
+#define NORMAL_COMPRESSION_OCTANT 2
+#if !NORMAL_COMPRESSION
+    #define NORMAL_COMPRESSION NORMAL_COMPRESSION_OCTANT
+#endif
+
+float3 CompressGBufferNormal(float3 inputNormal)
+{
+    #if NORMAL_COMPRESSION == NORMAL_COMPRESSION_OCTANT
+        // assuming that the input is pre-normalized here!
+        return float3(float32x3_to_oct(inputNormal), 0);
+    #else
+    	return GBuffer_CalculateBestFitNormal(inputNormal);
+    #endif
 }
 
 float3 DecompressGBufferNormal(float3 gBufferNormalSample)
 {
-    float3 rangeAdj;
-    if (!SignedNormalOutput) {
-        rangeAdj = -1.0.xxx + 2.f * gBufferNormalSample;
-    } else {
-        rangeAdj = gBufferNormalSample;
-    }
+    #if NORMAL_COMPRESSION == NORMAL_COMPRESSION_OCTANT
+        return oct_to_float32x3(gBufferNormalSample.xy);
+    #else
+        float3 rangeAdj;
+        if (!SignedNormalOutput) {
+            rangeAdj = -1.0.xxx + 2.f * gBufferNormalSample;
+        } else {
+            rangeAdj = gBufferNormalSample;
+        }
 
-    float lengthSq = dot(rangeAdj, rangeAdj);
+        float lengthSq = dot(rangeAdj, rangeAdj);
 
-    // note -- we're getting issues with zero length normals in the gbuffer
-    //          this can occur when the texture mapping bends around geometry
-    //          in an extreme way.
-    float mult;
-    [flatten] if (lengthSq < 1e-4f) mult = 1.f;
-    else mult = rsqrt(lengthSq);
-    return rangeAdj * mult;
+        // note -- we're getting issues with zero length normals in the gbuffer
+        //          this can occur when the texture mapping bends around geometry
+        //          in an extreme way.
+        float mult;
+        [flatten] if (lengthSq < 1e-4f) mult = 1.f;
+        else mult = rsqrt(lengthSq);
+        return rangeAdj * mult;
+    #endif
 }
 
 #if !defined(GBUFFER_TYPE)
@@ -194,7 +233,7 @@ GBufferEncoded Encode(GBufferValues values)
     GBufferEncoded result;
     result.diffuseBuffer.rgb = values.diffuseAlbedo;
     #if NORMAL_BUFFER_8BIT == 1
-        result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz).xyz;
+        result.normalBuffer.xyz = CompressGBufferNormal(values.worldSpaceNormal.xyz);
     #else
         result.normalBuffer.xyz = values.worldSpaceNormal.xyz;
     #endif
