@@ -114,6 +114,17 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _pingPongCounter = 0;
 		bool _hasPrevProjection = false;
 		Techniques::ProjectionDesc _prevProjDesc;
+
+		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
+			std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,
+			std::shared_ptr<HierarchicalDepthsOperator> hierarchicalDepthsOperator,
+			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
+			std::shared_ptr<ScreenSpaceReflectionsOperator> ssr,
+			const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
+			const AmbientLightOperatorDesc& ambientLightOperator, 
+			const ForwardPlusLightScene::ShadowOperatorIdMapping& shadowOperatorMapping, 
+			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, 
+			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox);
 	};
 
 }}

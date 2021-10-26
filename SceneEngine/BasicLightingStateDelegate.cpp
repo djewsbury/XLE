@@ -298,31 +298,31 @@ namespace SceneEngine
         _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         _shadowOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
-            auto h = c.second.Hash();
-            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            auto h = c.second.GetHash();
+            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
             if (i==result._lightResolveOperators.end())
                 i = result._lightResolveOperators.insert(i, c.second);
             _lightOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._lightResolveOperators.begin(), i));
         }
         for (const auto& c:_operatorResolveContext._shadowOperators._objects) {
-            auto h = c.second.Hash();
-            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            auto h = c.second.GetHash();
+            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
             if (i==result._shadowResolveOperators.end())
                 i = result._shadowResolveOperators.insert(i, c.second);
             _shadowOperatorHashToId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
         }
         for (const auto& c:_sunSourceFrustumSettingsInCfgFile._objects) {
             auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(c.second);
-            auto h = shadowOperator.Hash();
-            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            auto h = shadowOperator.GetHash();
+            auto i = std::find_if(result._shadowResolveOperators.begin(), result._shadowResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
             if (i==result._shadowResolveOperators.end())
                 i = result._shadowResolveOperators.insert(i, shadowOperator);
             _sunSourceHashToShadowOperatorId.emplace_back(c.first, (unsigned)std::distance(result._shadowResolveOperators.begin(), i));
         }
 
         {
-            auto h = s_swirlingLights._operator.Hash();
-            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.Hash() == h; });
+            auto h = s_swirlingLights._operator.GetHash();
+            auto i = std::find_if(result._lightResolveOperators.begin(), result._lightResolveOperators.end(), [h](const auto& c) { return c.GetHash() == h; });
             s_swirlingLightsOp = (unsigned)std::distance(result._lightResolveOperators.begin(), i);
             if (i == result._lightResolveOperators.end())
                 result._lightResolveOperators.push_back(s_swirlingLights._operator);

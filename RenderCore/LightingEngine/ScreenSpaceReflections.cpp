@@ -17,6 +17,7 @@
 #include "../IAnnotator.h"
 #include "../../Math/Transformations.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Utility/ArithmeticUtils.h"
 #include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace LightingEngine
@@ -107,7 +108,9 @@ namespace RenderCore { namespace LightingEngine
 		ResolutionDependentResources() {};
 	};
 
-	constexpr uint64_t SSRReflections = ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value;
+	constexpr uint64_t SSRReflections = ConstHash64<'SSRe', 'flec', 'tion'>::Value;
+	constexpr uint64_t SSRConfidence = ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value;
+	constexpr uint64_t SSRInt = ConstHash64<'SSRI', 'nt'>::Value;
 	constexpr uint64_t SSRDebug = ConstHash64<'SSRD', 'ebug'>::Value;
 
 	constexpr unsigned s_nfb_outputUAV = 0;
@@ -118,10 +121,14 @@ namespace RenderCore { namespace LightingEngine
 	constexpr unsigned s_nfb_gbufferNormalSRV = 4;
 	constexpr unsigned s_nfb_colorHDRSRV = 5;
 
-	constexpr unsigned s_nfb_debugUAV = 6;
-	constexpr unsigned s_nfb_intUAV = 7;
-	constexpr unsigned s_nfb_intSRV = 8;
-	constexpr unsigned s_nfb_intPrevSRV = 9;
+	constexpr unsigned s_nfb_intUAV = 6;
+	constexpr unsigned s_nfb_intSRV = 7;
+
+	// depending on whether the find blur is enabled, you'll get one of the following
+	constexpr unsigned s_nfb_intPrevSRV = 8;
+	constexpr unsigned s_nfb_SSRPrevSRV = 8;
+
+	constexpr unsigned s_nfb_debugUAV = 9;
 
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
@@ -138,28 +145,38 @@ namespace RenderCore { namespace LightingEngine
 
 		IResourceView* rvs[27];
 		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
-		rvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get();				// g_intersection_result
-		rvs[2] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();				// g_intersection_result_read
-		rvs[3] = _res->_rayListBufferUAV.get();									// g_ray_list
-		rvs[4] = _res->_rayListBufferSRV.get();									// g_ray_list_read
-		rvs[5] = _rayCounterBufferUAV.get();										// g_ray_counter
-		rvs[6] = _res->_rayLengthsUAV.get();										// g_ray_lengths
-		rvs[7] = _res->_rayLengthsSRV.get();										// g_ray_lengths_read
-		rvs[8] = _res->_tileMetaDataMaskUAV.get();									// g_tile_meta_data_mask
-		rvs[9] = _res->_tileMetaDataMaskSRV.get();									// g_tile_meta_data_mask_read
-		rvs[10] = _res->_tileTemporalVarianceMaskUAV.get();						// g_temporal_variance_mask
-		rvs[11] = _res->_tileTemporalVarianceMaskSRV.get();						// g_temporal_variance_mask_read
-		rvs[12] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get(); 			// g_temporally_denoised_reflections
-		rvs[13] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();			// g_temporally_denoised_reflections_read
-		rvs[14] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV).get();		// g_temporally_denoised_reflections_history
-		rvs[15] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_spatially_denoised_reflections
-		rvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputSRV).get();			// g_spatially_denoised_reflections_read
-		rvs[17] = _indirectArgsBufferUAV.get();									// g_intersect_args
+		rvs[3] = _res->_rayListBufferUAV.get();													// g_ray_list
+		rvs[4] = _res->_rayListBufferSRV.get();													// g_ray_list_read
+		rvs[5] = _rayCounterBufferUAV.get();													// g_ray_counter
+		rvs[6] = _res->_rayLengthsUAV.get();													// g_ray_lengths
+		rvs[7] = _res->_rayLengthsSRV.get();													// g_ray_lengths_read
+		rvs[8] = _res->_tileMetaDataMaskUAV.get();												// g_tile_meta_data_mask
+		rvs[9] = _res->_tileMetaDataMaskSRV.get();												// g_tile_meta_data_mask_read
+		rvs[10] = _res->_tileTemporalVarianceMaskUAV.get();										// g_temporal_variance_mask
+		rvs[11] = _res->_tileTemporalVarianceMaskSRV.get();										// g_temporal_variance_mask_read
+		if (_desc._enableFinalBlur) {
+			rvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get();			// g_intersection_result
+			rvs[2] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();			// g_intersection_result_read
+			rvs[12] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get(); 		// g_temporally_denoised_reflections
+			rvs[13] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();		// g_temporally_denoised_reflections_read
+			rvs[14] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV).get();	// g_temporally_denoised_reflections_history
+			rvs[15] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();		// g_spatially_denoised_reflections
+			rvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputSRV).get();		// g_spatially_denoised_reflections_read
+		} else {
+			rvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();		// g_intersection_result
+			rvs[2] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputSRV).get();		// g_intersection_result_read
+			rvs[12] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get(); 	// g_temporally_denoised_reflections
+			rvs[13] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputSRV).get();		// g_temporally_denoised_reflections_read
+			rvs[14] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_SSRPrevSRV).get();	// g_temporally_denoised_reflections_history
+			rvs[15] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get();		// g_spatially_denoised_reflections
+			rvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();		// g_spatially_denoised_reflections_read
+		}
+		rvs[17] = _indirectArgsBufferUAV.get();													// g_intersect_args
 
-		rvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_hierarchicalDepthsSRV).get();			// HierarchicalDepths
+		rvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_hierarchicalDepthsSRV).get();		// HierarchicalDepths
 		rvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferMotionSRV).get();			// GBufferMotion
 		rvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalSRV).get();			// GBufferNormal
-		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();			// LastFrameLit
+		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();				// LastFrameLit
 
 		rvs[22] = _blueNoiseRes->_sobolBufferView.get();
 		rvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
@@ -263,10 +280,11 @@ namespace RenderCore { namespace LightingEngine
 				us);
 		}
 
-		_reflectionsBlur->Dispatch(
-			*iterator._parsingContext,
-			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
-			us);
+		if (_desc._enableFinalBlur)
+			_reflectionsBlur->Dispatch(
+				*iterator._parsingContext,
+				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
+				us);
 
 		++_pingPongCounter;
 	}
@@ -282,13 +300,21 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
-		auto debugAttachment = result.DefineAttachment(SSRDebug).NoInitialState().FinalState(BindFlag::ShaderResource);
-		spDesc.AppendNonFrameBufferAttachmentView(debugAttachment, BindFlag::UnorderedAccess);
+
 		auto intAttachment = result.DefineAttachment(SSRInt).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(intAttachment, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(intAttachment, BindFlag::ShaderResource);
-		auto intPrevAttachment = result.DefineAttachment(SSRInt+1).InitialState(BindFlag::ShaderResource).Discard();
-		spDesc.AppendNonFrameBufferAttachmentView(intPrevAttachment, BindFlag::ShaderResource);
+		if (_desc._enableFinalBlur) {
+			auto intPrevAttachment = result.DefineAttachment(SSRInt+1).InitialState(BindFlag::ShaderResource).Discard();
+			spDesc.AppendNonFrameBufferAttachmentView(intPrevAttachment, BindFlag::ShaderResource);
+		} else {
+			auto intPrevSSRAttachment = result.DefineAttachment(SSRReflections+1).InitialState(BindFlag::ShaderResource).Discard();
+			spDesc.AppendNonFrameBufferAttachmentView(intPrevSSRAttachment, BindFlag::ShaderResource);
+		}
+
+		auto debugAttachment = result.DefineAttachment(SSRDebug).NoInitialState().FinalState(BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(debugAttachment, BindFlag::UnorderedAccess);
+
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -302,32 +328,84 @@ namespace RenderCore { namespace LightingEngine
 	void ScreenSpaceReflectionsOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		const auto colorFormat = Format::R11G11B10_FLOAT;
+		if (_desc._enableFinalBlur) {	/////////////////////////////////////////////
+			Techniques::PreregisteredAttachment attachments[] {
+				Techniques::PreregisteredAttachment {
+					SSRReflections,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-reflections"),
+					Techniques::PreregisteredAttachment::State::Uninitialized
+				},
+				Techniques::PreregisteredAttachment {
+					SSRInt,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-intermediate0"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer0
+				},
+				Techniques::PreregisteredAttachment {
+					SSRInt+1,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-intermediate1"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+				}
+			};
+			for (const auto& a:attachments)
+				stitchingContext.DefineAttachment(a);
+		} else {	/////////////////////////////////////////////
+			Techniques::PreregisteredAttachment attachments[] {
+				Techniques::PreregisteredAttachment {
+					SSRReflections,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-reflections0"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer0
+				},
+				Techniques::PreregisteredAttachment {
+					SSRReflections+1,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-reflections1"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+				},
+				Techniques::PreregisteredAttachment {
+					SSRInt,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], colorFormat),
+						"ssr-intermediate"),
+					Techniques::PreregisteredAttachment::State::Uninitialized
+				}
+			};
+			for (const auto& a:attachments)
+				stitchingContext.DefineAttachment(a);
+		}	/////////////////////////////////////////////
+
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
-				SSRReflections,
+				SSRConfidence,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
-					"ssr-reflections"),
-				Techniques::PreregisteredAttachment::State::Uninitialized
-			},
-			Techniques::PreregisteredAttachment {
-				SSRInt,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
-					"ssr-intermediate0"),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
+					"ssr-confidence0"),
 				Techniques::PreregisteredAttachment::State::PingPongBuffer0
 			},
 			Techniques::PreregisteredAttachment {
-				SSRInt+1,
+				SSRConfidence+1,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
-					"ssr-intermediate1"),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
+					"ssr-confidence1"),
 				Techniques::PreregisteredAttachment::State::PingPongBuffer1
 			},
-			Techniques::PreregisteredAttachment {
 			Techniques::PreregisteredAttachment {
 				SSRDebug,
 				CreateDesc(
@@ -359,6 +437,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
+		const ScreenSpaceReflectionsOperatorDesc& desc,
 		std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
 		std::shared_ptr<Techniques::IComputeShaderOperator> prepareIndirectArgs,
 		std::shared_ptr<Techniques::IComputeShaderOperator> intersect,
@@ -366,7 +445,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IComputeShaderOperator> resolveTemporal,
 		std::shared_ptr<Techniques::IComputeShaderOperator> reflectionsBlur,
 		std::shared_ptr<IDevice> device)
-	: _classifyTiles(std::move(classifyTiles))
+	: _desc(desc)
+	, _classifyTiles(std::move(classifyTiles))
 	, _prepareIndirectArgs(std::move(prepareIndirectArgs))
 	, _intersect(std::move(intersect))
 	, _resolveSpatial(std::move(resolveSpatial))
@@ -410,7 +490,8 @@ namespace RenderCore { namespace LightingEngine
 	
 	void ScreenSpaceReflectionsOperator::ConstructToFuture(
 		::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
-		std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+		const ScreenSpaceReflectionsOperatorDesc& desc)
 	{
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("g_denoised_reflections"));
@@ -499,12 +580,59 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur).ThenConstructToFuture(
 			future, 
-			[dev=pipelinePool->GetDevice()](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur) { 
+			[dev=pipelinePool->GetDevice(), desc](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur) { 
 				return std::make_shared<ScreenSpaceReflectionsOperator>(
+					desc,
 					std::move(classifyTiles), std::move(prepareIndirectArgs), std::move(intersect), std::move(resolveSpatial), std::move(resolveTemporal), std::move(reflectionsBlur),
 					std::move(dev)); 
 			});
 	}
+
+	uint64_t ScreenSpaceReflectionsOperatorDesc::GetHash(uint64_t seed) const
+	{
+		return rotl64(seed, !!_enableFinalBlur);
+	}
+
+	/*
+		Reference for some of the main shader inputs:
+
+		With blur step
+		==========================================================================
+
+			intersect
+			------------------------------------------
+			_rayListBuffer in "g_ray_list_read" -> intermediate[0] in "g_intersection_result"
+
+			spatial
+			------------------------------------------
+			intermediate[0] in "g_intersection_result_read" -> SSRReflections in "g_spatially_denoised_reflections"
+
+			temporal
+			------------------------------------------
+			SSRReflections in "g_spatially_denoised_reflections_read" 
+			& intermediate[1] in "g_temporally_denoised_reflections_history" -> intermediate[0] in "g_temporally_denoised_reflections"
+
+			blur
+			------------------------------------------
+			intermediate[0] "g_temporally_denoised_reflections_read" -> SSRReflections in "g_denoised_reflections"
+
+
+		With blur step
+		==========================================================================
+
+			intersect
+			------------------------------------------
+			_rayListBuffer in "g_ray_list_read" -> SSRReflections[0] in "g_intersection_result"
+
+			spatial
+			------------------------------------------
+			SSRReflections[0] in "g_intersection_result_read" -> intermediate in "g_spatially_denoised_reflections"
+
+			temporal
+			------------------------------------------
+			intermediate in "g_spatially_denoised_reflections_read" 
+			& SSRReflections[1] in "g_temporally_denoised_reflections_history" -> SSRReflections[0] in "g_temporally_denoised_reflections"
+	*/
 	
 }}
 

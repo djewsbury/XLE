@@ -406,7 +406,7 @@ namespace RenderCore { namespace LightingEngine
 
 	inline uint32_t FloatBits(float i) { return *(uint32_t*)&i; }
 
-	uint64_t ShadowOperatorDesc::Hash(uint64_t seed) const
+	uint64_t ShadowOperatorDesc::GetHash(uint64_t seed) const
 	{
 		uint64_t h0 = 
 			  (GetBits<13>(_width)					<< 0ull)

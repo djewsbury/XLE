@@ -26,13 +26,20 @@ namespace RenderCore { namespace LightingEngine
 		};
 		Flags::BitField _flags = 0;
 
-		uint64_t Hash(uint64_t seed = DefaultSeed64) const;
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
+	};
+
+	struct ScreenSpaceReflectionsOperatorDesc
+	{
+		bool _enableFinalBlur = false;
+
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
 	class AmbientLightOperatorDesc
 	{
 	public:
-		bool _enableScreenSpaceReflections = true;
+		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssrOperator;
 	};
 
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);

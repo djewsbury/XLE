@@ -214,7 +214,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 namespace RenderCore { namespace LightingEngine
 {
-	uint64_t LightSourceOperatorDesc::Hash(uint64_t seed) const
+	uint64_t LightSourceOperatorDesc::GetHash(uint64_t seed) const
 	{
 		uint64_t h = 
 			(uint64_t(_shape) & 0xff) << 8ull | (uint64_t(_diffuseModel) & 0xff) | (uint64_t(_flags) << 16ull);

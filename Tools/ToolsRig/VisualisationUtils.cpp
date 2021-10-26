@@ -389,6 +389,7 @@ namespace ToolsRig
 				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
 
 				RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
+				ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
 				auto operators = envSettings->GetOperators();
 				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 					lightingApparatus,

@@ -265,7 +265,8 @@ namespace RenderCore { namespace LightingEngine
 				if (!l) return;
 				if (specularIBLFuture->GetAssetState() != ::Assets::AssetState::Ready
 					|| diffuseIBLFuture->GetAssetState() != ::Assets::AssetState::Ready) {
-					l->_ssrOperator->SetSpecularIBL(nullptr);
+					if (l->_ssrOperator)
+						l->_ssrOperator->SetSpecularIBL(nullptr);
 					l->_onChangeSkyTexture(nullptr);
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 				} else {
@@ -274,7 +275,8 @@ namespace RenderCore { namespace LightingEngine
 						TextureViewDesc adjustedViewDesc;
 						adjustedViewDesc._mipRange._min = 2;
 						auto adjustedView = ambientRawCubemap->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
-						l->_ssrOperator->SetSpecularIBL(adjustedView);
+						if (l->_ssrOperator)
+							l->_ssrOperator->SetSpecularIBL(adjustedView);
 					}
 					auto actualDiffuse = diffuseIBLFuture->Actualize();
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
@@ -334,7 +336,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
-			i->_enableSSR = lastFrameBuffersPrimed;
+			i->_enableSSR = HasScreenSpaceReflectionsOperator() && lastFrameBuffersPrimed;
 			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 		}
 
@@ -376,7 +378,10 @@ namespace RenderCore { namespace LightingEngine
 
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(context._rpi);
-				dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+				if (_lightScene->HasScreenSpaceReflectionsOperator()) {
+					dst[4] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+				} else
+					dst[4] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
 			}
 
 			if (bindingFlags & (1ull<<5ull)) {
@@ -461,7 +466,7 @@ namespace RenderCore { namespace LightingEngine
 			auto dynShadowOp = _shadowOperatorIdMapping._operatorToDynamicShadowOperator[c];
 			if (dynShadowOp == ~0u) continue;
 			if (c >= shadowGenerators.size()) return false;
-			if (_shadowPreparationOperators->_operators[dynShadowOp]._desc.Hash() != shadowGenerators[c].Hash()) return false;
+			if (_shadowPreparationOperators->_operators[dynShadowOp]._desc.GetHash() != shadowGenerators[c].GetHash()) return false;
 		}
 		if (_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
 			if (_shadowOperatorIdMapping._operatorForStaticProbes >= shadowGenerators.size()) return false;
@@ -469,7 +474,7 @@ namespace RenderCore { namespace LightingEngine
 			if (!(cfg == _shadowOperatorIdMapping._shadowProbesCfg)) return false;
 		}
 		for (unsigned c=0; c<_positionalLightOperators.size(); ++c) {
-			if (resolveOperators[c].Hash() != _positionalLightOperators[c].Hash())
+			if (resolveOperators[c].GetHash() != _positionalLightOperators[c].GetHash())
 				return false;
 		}
 		return true;
@@ -483,6 +488,34 @@ namespace RenderCore { namespace LightingEngine
 		// We'll maintain the first few ids for system lights (ambient surrounds, etc)
 		ReserveLightSourceIds(32);
 		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+	}
+
+	std::shared_ptr<ForwardPlusLightScene> ForwardPlusLightScene::CreateInternal(
+		std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,
+		std::shared_ptr<HierarchicalDepthsOperator> hierarchicalDepthsOperator,
+		std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
+		std::shared_ptr<ScreenSpaceReflectionsOperator> ssr,
+		const std::vector<LightSourceOperatorDesc>& positionalLightOperators,
+		const AmbientLightOperatorDesc& ambientLightOperator, 
+		const ForwardPlusLightScene::ShadowOperatorIdMapping& shadowOperatorMapping, 
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators, 
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox)
+	{
+		auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
+		lightScene->_positionalLightOperators = std::move(positionalLightOperators);
+		lightScene->_shadowPreparationOperators = shadowPreparationOperators;
+		lightScene->_ssrOperator = ssr;
+		lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
+		lightScene->_pipelineAccelerators = std::move(pipelineAccelerators);
+		lightScene->_techDelBox = std::move(techDelBox);
+
+		lightScene->_lightTiler = lightTiler;
+		lightTiler->SetLightScene(*lightScene);
+
+		lightScene->_shadowOperatorIdMapping = std::move(shadowOperatorMapping);
+
+		lightScene->FinalizeConfiguration();
+		return lightScene;
 	}
 
 	void ForwardPlusLightScene::ConstructToFuture(
@@ -527,30 +560,20 @@ namespace RenderCore { namespace LightingEngine
 
 		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
 		auto lightTilerFuture = ::Assets::MakeFuture<std::shared_ptr<RasterizationLightTileOperator>>(pipelinePool, tilerCfg);
-		auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool);
-
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
-		::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
-			future,
-			[positionalLightOperators, ambientLightOperator, shadowOperatorMapping=std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox]
-			(auto shadowPreparationOperators, auto hierarchicalDepthsOperator, auto lightTiler, auto ssr) {
 
-				auto lightScene = std::make_shared<ForwardPlusLightScene>(ambientLightOperator);
-				lightScene->_positionalLightOperators = std::move(positionalLightOperators);
-				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
-				lightScene->_ssrOperator = ssr;
-				lightScene->_hierarchicalDepthsOperator = hierarchicalDepthsOperator;
-				lightScene->_pipelineAccelerators = std::move(pipelineAccelerators);
-				lightScene->_techDelBox = std::move(techDelBox);
+		using namespace std::placeholders;
+		if (ambientLightOperator._ssrOperator) {
+			auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool, ambientLightOperator._ssrOperator.value());
+			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
+				future,
+				std::bind(CreateInternal, _1, _2, _3, _4, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
 
-				lightScene->_lightTiler = lightTiler;
-				lightTiler->SetLightScene(*lightScene);
-
-				lightScene->_shadowOperatorIdMapping = std::move(shadowOperatorMapping);
-
-				lightScene->FinalizeConfiguration();
-				return lightScene;
-			});
+		} else {
+			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture).ThenConstructToFuture(
+				future,
+				std::bind(CreateInternal, _1, _2, _3, nullptr, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
+		}
 
 	}
 

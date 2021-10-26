@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "StandardLightOperators.h"
 #include <memory>
 #include "../../Assets/AssetsCore.h"
 
@@ -47,6 +48,7 @@ namespace RenderCore { namespace LightingEngine
 		void CompleteInitialization(IThreadContext& threadContext);
 
 		ScreenSpaceReflectionsOperator(
+			const ScreenSpaceReflectionsOperatorDesc& desc,
 			std::shared_ptr<Techniques::IComputeShaderOperator> classifyTiles,
 			std::shared_ptr<Techniques::IComputeShaderOperator> prepareIndirectArgs,
 			std::shared_ptr<Techniques::IComputeShaderOperator> intersect,
@@ -58,8 +60,10 @@ namespace RenderCore { namespace LightingEngine
 
 		static void ConstructToFuture(
 			::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
-			std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+			const ScreenSpaceReflectionsOperatorDesc& desc);
 	private:
+		ScreenSpaceReflectionsOperatorDesc _desc;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _classifyTiles;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _prepareIndirectArgs;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _intersect;

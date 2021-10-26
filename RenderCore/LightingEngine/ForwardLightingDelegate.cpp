@@ -208,7 +208,8 @@ namespace RenderCore { namespace LightingEngine
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		Techniques::DeferredShaderResource& balancedNoiseTexture)
+		Techniques::DeferredShaderResource& balancedNoiseTexture,
+		bool hasSSR)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
@@ -234,9 +235,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.AppendOutput(lightResolve);
 		mainSubpass.SetDepthStencil(depth);
 
-		const bool hasSSR = true;
 		if (hasSSR) {
-			auto ssr = result.DefineAttachment(ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value).NoInitialState();
+			auto ssr = result.DefineAttachment(ConstHash64<'SSRe', 'flec', 'tion'>::Value).NoInitialState();
 			mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
 		}
 		mainSubpass.SetName("MainForward");
@@ -369,7 +369,8 @@ namespace RenderCore { namespace LightingEngine
 					});
 
 				// Draw main scene
-				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture));
+				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(
+					CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture, captures->_lightScene->HasScreenSpaceReflectionsOperator()));
 
 				// Post processing
 				auto toneMapFragment = CreateToneMapFragment(

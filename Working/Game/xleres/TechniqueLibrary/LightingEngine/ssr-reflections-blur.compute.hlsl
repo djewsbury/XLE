@@ -70,7 +70,7 @@ void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radianc
 
 min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
 {
-	return (min16float)g_temporally_denoised_reflections_read.Load(int3(pixel_coordinate, 0)).xyz;
+	return (min16float3)g_temporally_denoised_reflections_read.Load(int3(pixel_coordinate, 0)).xyz;
 }
 
 min16float FFX_DNSR_Reflections_LoadRoughnessFP16(int2 pixel_coordinate)
@@ -103,6 +103,5 @@ bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness
 	// the blurring should be coming from the distribution of rays in the "intersect" shader; and 
 	// we then to a very similar filter in "resolve-spatial". This filter is also not super cheap; so
 	// we might actually be better off with just more rays earlier or more samples in "resolve-spatial"
-	// FFX_DNSR_Reflections_Blur(dispatch_thread_id, group_thread_id, screen_dimensions);
-	g_denoised_reflections[dispatch_thread_id] = g_temporally_denoised_reflections_read[dispatch_thread_id];
+	FFX_DNSR_Reflections_Blur(dispatch_thread_id, group_thread_id, screen_dimensions);
 }
