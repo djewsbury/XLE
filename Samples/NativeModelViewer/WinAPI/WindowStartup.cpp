@@ -49,6 +49,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         Log(Error) << e.what() << std::endl;
     } CATCH_END
 
+    services->PrepareForDestruction();
     services = nullptr;
 
     return 0;
