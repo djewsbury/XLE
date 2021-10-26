@@ -300,9 +300,12 @@ namespace RenderCore { namespace LightingEngine
 			case CompiledLightingTechnique::Step::Type::BeginRenderPassInstance:
 				{
 					assert(next->_fbDescIdx < _iterator->_compiledTechnique->_fbDescs.size());
+					Techniques::RenderPassBeginDesc beginDesc;
+					beginDesc._frameIdx = _iterator->_compiledTechnique->_frameIdx;
 					_iterator->_rpi = Techniques::RenderPassInstance{
 						*_iterator->_parsingContext,
-						_iterator->_compiledTechnique->_fbDescs[next->_fbDescIdx]};
+						_iterator->_compiledTechnique->_fbDescs[next->_fbDescIdx],
+						beginDesc};
 				}
 				break;
 
@@ -335,8 +338,11 @@ namespace RenderCore { namespace LightingEngine
 		_iterator = std::make_unique<LightingTechniqueIterator>(parsingContext, compiledTechnique);
 	}
 
-	LightingTechniqueInstance::~LightingTechniqueInstance() {}
-
+	LightingTechniqueInstance::~LightingTechniqueInstance() 
+	{
+		if (_iterator)
+			++_iterator->_compiledTechnique->_frameIdx;
+	}
 
 	class LightingTechniqueInstance::PrepareResourcesIterator
 	{

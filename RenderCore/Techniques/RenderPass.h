@@ -86,7 +86,11 @@ namespace RenderCore { namespace Techniques
     public:
         uint64_t _semantic = 0ull;
         ResourceDesc _desc;
-        enum class State { Uninitialized, Initialized, Initialized_StencilUninitialized, Uninitialized_StencilInitialized };
+        enum class State { 
+            Uninitialized, Initialized, 
+            Initialized_StencilUninitialized, Uninitialized_StencilInitialized,
+            PingPongBuffer0, PingPongBuffer1
+        };
         State _state = State::Uninitialized;
         BindFlag::BitField _layoutFlags = 0;
 
@@ -161,6 +165,7 @@ namespace RenderCore { namespace Techniques
     {
     public:
         void Bind(uint64_t semantic, const IResourcePtr& resource);
+        void Bind(uint64_t semantic, AttachmentName resName);
         void Unbind(const IResource& resource);
         void Unbind(uint64_t semantic);
         void UnbindAll();
@@ -176,7 +181,10 @@ namespace RenderCore { namespace Techniques
             using BitField=unsigned; 
         };
         class Reservation;
-        Reservation Reserve(IteratorRange<const PreregisteredAttachment*>, ReservationFlag::BitField = 0);
+        Reservation Reserve(
+            IteratorRange<const PreregisteredAttachment*>, 
+            unsigned frameIdx,      // (used for pingpong buffers)
+            ReservationFlag::BitField = 0);
 
         void ResetActualized();
         std::string GetMetrics() const;
@@ -218,6 +226,7 @@ namespace RenderCore { namespace Techniques
     struct RenderPassBeginDesc
     {
         IteratorRange<const ClearValue*>    _clearValues;
+        unsigned _frameIdx = 0;
     };
 
     /// <summary>Stores a set of retained frame buffers, which can be reused frame-to-frame</summary>
@@ -303,7 +312,8 @@ namespace RenderCore { namespace Techniques
 		RenderPassInstance(
 			const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
-			AttachmentPool& attachmentPool);
+			AttachmentPool& attachmentPool,
+            unsigned frameIdx = 0);
         ~RenderPassInstance();
 
         RenderPassInstance();

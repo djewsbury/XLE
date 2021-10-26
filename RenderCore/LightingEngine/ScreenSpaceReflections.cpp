@@ -24,22 +24,17 @@ namespace RenderCore { namespace LightingEngine
 	struct ScreenSpaceReflectionsOperator::ResolutionDependentResources
 	{
 	public:
-		std::shared_ptr<IResource> _outputTexture;
 		std::shared_ptr<IResource> _rayListBuffer;
 		std::shared_ptr<IResource> _tileMetaDataMask;
 		std::shared_ptr<IResource> _tileTemporalVarianceMask;
-		std::shared_ptr<IResource> _temporalDenoiseResult[2];
 		std::shared_ptr<IResource> _rayLengthsTexture;
 
-		std::shared_ptr<IResourceView> _outputTextureUAV;
 		std::shared_ptr<IResourceView> _rayListBufferUAV;
 		std::shared_ptr<IResourceView> _rayListBufferSRV;
 		std::shared_ptr<IResourceView> _tileMetaDataMaskUAV;
 		std::shared_ptr<IResourceView> _tileMetaDataMaskSRV;
 		std::shared_ptr<IResourceView> _tileTemporalVarianceMaskUAV;
 		std::shared_ptr<IResourceView> _tileTemporalVarianceMaskSRV;
-		std::shared_ptr<IResourceView> _temporalDenoiseResultUAV[2];
-		std::shared_ptr<IResourceView> _temporalDenoiseResultSRV[2];
 		std::shared_ptr<IResourceView> _rayLengthsUAV;
 		std::shared_ptr<IResourceView> _rayLengthsSRV;
 
@@ -47,12 +42,7 @@ namespace RenderCore { namespace LightingEngine
 		
 		void CompleteInitialization(Metal::DeviceContext& metalContext)
 		{
-			Metal::CompleteInitialization(
-				metalContext,
-				{ _outputTexture.get(), _temporalDenoiseResult[0].get(), _temporalDenoiseResult[1].get(), _rayLengthsTexture.get() });
-
-			metalContext.Clear(*_temporalDenoiseResultUAV[0], Float4{0.f,0.f,0.f,0.f});
-			metalContext.Clear(*_temporalDenoiseResultUAV[1], Float4{0.f,0.f,0.f,0.f});
+			Metal::CompleteInitialization(metalContext, { _rayLengthsTexture.get() });
 			_pendingCompleteInitialization = false;
 
 			// Ensure the image is cleared
@@ -73,14 +63,6 @@ namespace RenderCore { namespace LightingEngine
 		ResolutionDependentResources(IDevice& device, const FrameBufferProperties& fbProps)
 		: _pendingCompleteInitialization(true)
 		{
-			_outputTexture = device.CreateResource(
-				CreateDesc(
-					BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource,
-					0, 0, TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R11G11B10_FLOAT),
-					"ssr-output"
-				));
-			_outputTextureUAV = _outputTexture->CreateTextureView(BindFlag::UnorderedAccess);
-
 			_rayLengthsTexture = device.CreateResource(
 				CreateDesc(
 					BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::ShaderResource,
@@ -121,62 +103,71 @@ namespace RenderCore { namespace LightingEngine
 				));
 			_tileTemporalVarianceMaskUAV = _tileTemporalVarianceMask->CreateBufferView(BindFlag::UnorderedAccess);
 			_tileTemporalVarianceMaskSRV = _tileTemporalVarianceMask->CreateBufferView(BindFlag::ShaderResource);
-
-			for (unsigned c=0; c<2; ++c) {
-				StringMeld<256> meld;
-				meld << "ssr-tile-temporal-denoise[" << c << "]";
-				_temporalDenoiseResult[c] = device.CreateResource(
-					CreateDesc(
-						BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc | BindFlag::TransferDst,
-						0, 0, TextureDesc::Plain2D(fbProps._outputWidth, fbProps._outputHeight, Format::R11G11B10_FLOAT),
-						meld.AsStringSection()
-					));
-				_temporalDenoiseResultUAV[c] = _temporalDenoiseResult[c]->CreateTextureView(BindFlag::UnorderedAccess);
-				_temporalDenoiseResultSRV[c] = _temporalDenoiseResult[c]->CreateTextureView(BindFlag::ShaderResource);
-			}
 		}
 		ResolutionDependentResources() {};
 	};
 
+	constexpr uint64_t SSRReflections = ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value;
+	constexpr uint64_t SSRDebug = ConstHash64<'SSRD', 'ebug'>::Value;
+
+	constexpr unsigned s_nfb_outputUAV = 0;
+	constexpr unsigned s_nfb_outputSRV = 1;
+
+	constexpr unsigned s_nfb_hierarchicalDepthsSRV = 2;
+	constexpr unsigned s_nfb_gbufferMotionSRV = 3;
+	constexpr unsigned s_nfb_gbufferNormalSRV = 4;
+	constexpr unsigned s_nfb_colorHDRSRV = 5;
+
+	constexpr unsigned s_nfb_debugUAV = 6;
+	constexpr unsigned s_nfb_intUAV = 7;
+	constexpr unsigned s_nfb_intSRV = 8;
+	constexpr unsigned s_nfb_intPrevSRV = 9;
+
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
-		if (_res->_pendingCompleteInitialization)
+		if (_res->_pendingCompleteInitialization) {
 			CompleteInitialization(*iterator._threadContext);
+
+			// hack -- force clear here
+			auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV), Float4{0.f,0.f,0.f,0.f});
+			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV), Float4{0.f,0.f,0.f,0.f});
+		}
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
-		IResourceView* srvs[27];
-		srvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();			// g_denoised_reflections
-		srvs[1] = _res->_temporalDenoiseResultUAV[_pingPongCounter&1].get();		// g_intersection_result
-		srvs[2] = _res->_temporalDenoiseResultSRV[_pingPongCounter&1].get();		// g_intersection_result_read
-		srvs[3] = _res->_rayListBufferUAV.get();									// g_ray_list
-		srvs[4] = _res->_rayListBufferSRV.get();									// g_ray_list_read
-		srvs[5] = _rayCounterBufferUAV.get();										// g_ray_counter
-		srvs[6] = _res->_rayLengthsUAV.get();										// g_ray_lengths
-		srvs[7] = _res->_rayLengthsSRV.get();										// g_ray_lengths_read
-		srvs[8] = _res->_tileMetaDataMaskUAV.get();									// g_tile_meta_data_mask
-		srvs[9] = _res->_tileMetaDataMaskSRV.get();									// g_tile_meta_data_mask_read
-		srvs[10] = _res->_tileTemporalVarianceMaskUAV.get();						// g_temporal_variance_mask
-		srvs[11] = _res->_tileTemporalVarianceMaskSRV.get();						// g_temporal_variance_mask_read
-		srvs[12] = _res->_temporalDenoiseResultUAV[_pingPongCounter&1].get();		// g_temporally_denoised_reflections
-		srvs[13] = _res->_temporalDenoiseResultSRV[_pingPongCounter&1].get();		// g_temporally_denoised_reflections_read
-		srvs[14] = _res->_temporalDenoiseResultSRV[(_pingPongCounter+1)&1].get();	// g_temporally_denoised_reflections_history
-		srvs[15] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();			// g_spatially_denoised_reflections
-		srvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(1).get();			// g_spatially_denoised_reflections_read
-		srvs[17] = _indirectArgsBufferUAV.get();									// g_intersect_args
+		IResourceView* rvs[27];
+		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
+		rvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get();				// g_intersection_result
+		rvs[2] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();				// g_intersection_result_read
+		rvs[3] = _res->_rayListBufferUAV.get();									// g_ray_list
+		rvs[4] = _res->_rayListBufferSRV.get();									// g_ray_list_read
+		rvs[5] = _rayCounterBufferUAV.get();										// g_ray_counter
+		rvs[6] = _res->_rayLengthsUAV.get();										// g_ray_lengths
+		rvs[7] = _res->_rayLengthsSRV.get();										// g_ray_lengths_read
+		rvs[8] = _res->_tileMetaDataMaskUAV.get();									// g_tile_meta_data_mask
+		rvs[9] = _res->_tileMetaDataMaskSRV.get();									// g_tile_meta_data_mask_read
+		rvs[10] = _res->_tileTemporalVarianceMaskUAV.get();						// g_temporal_variance_mask
+		rvs[11] = _res->_tileTemporalVarianceMaskSRV.get();						// g_temporal_variance_mask_read
+		rvs[12] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV).get(); 			// g_temporally_denoised_reflections
+		rvs[13] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV).get();			// g_temporally_denoised_reflections_read
+		rvs[14] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV).get();		// g_temporally_denoised_reflections_history
+		rvs[15] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_spatially_denoised_reflections
+		rvs[16] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputSRV).get();			// g_spatially_denoised_reflections_read
+		rvs[17] = _indirectArgsBufferUAV.get();									// g_intersect_args
 
-		srvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(2).get();			// HierarchicalDepths
-		srvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(3).get();			// GBufferMotion
-		srvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(4).get();			// GBufferNormal
-		srvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(5).get();			// LastFrameLit
+		rvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_hierarchicalDepthsSRV).get();			// HierarchicalDepths
+		rvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferMotionSRV).get();			// GBufferMotion
+		rvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalSRV).get();			// GBufferNormal
+		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();			// LastFrameLit
 
-		srvs[22] = _blueNoiseRes->_sobolBufferView.get();
-		srvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
-		srvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
+		rvs[22] = _blueNoiseRes->_sobolBufferView.get();
+		rvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
+		rvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		srvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
+		rvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
 
-		srvs[26] = iterator._rpi.GetNonFrameBufferAttachmentView(6).get();			// SSRDebug
+		rvs[26] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
 
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		struct ExtendedTransforms
@@ -205,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 		UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(extendedTransforms), MakeOpaqueIteratorRange(frameId) };
 
 		UniformsStream us;
-		us._resourceViews = MakeIteratorRange(srvs);
+		us._resourceViews = MakeIteratorRange(rvs);
 		us._immediateData = MakeIteratorRange(immData);
 
 		_classifyTiles->Dispatch(
@@ -253,7 +244,8 @@ namespace RenderCore { namespace LightingEngine
 		_intersect->EndDispatches();
 
 		{
-			Metal::Internal::CaptureForBind cap0{metalContext, *_res->_temporalDenoiseResult[_pingPongCounter&1], BindFlag::ShaderResource};
+			auto* res = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV)->GetResource().get();
+			Metal::Internal::CaptureForBind cap0{metalContext, *res, BindFlag::ShaderResource};
 			_resolveSpatial->Dispatch(
 				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
@@ -261,8 +253,9 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		{
-			// note: _res._temporalDenoiseResult[_pingPongCounter&1] will transition from BindFlag::ShaderResource -> BindFlag::UnorderedAccess for this (as a result of the end of the previous capture)
-			Metal::Internal::CaptureForBind cap0{metalContext, *_res->_temporalDenoiseResult[(_pingPongCounter+1)&1], BindFlag::ShaderResource};
+			// note: s_nfb_intPrevSRV will transition from BindFlag::ShaderResource -> BindFlag::UnorderedAccess for this (as a result of the end of the previous capture)
+			auto* res = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV)->GetResource().get();
+			Metal::Internal::CaptureForBind cap0{metalContext, *res, BindFlag::ShaderResource};
 			Metal::Internal::CaptureForBind cap1{metalContext, *_res->_rayLengthsTexture, BindFlag::ShaderResource};
 			_resolveTemporal->Dispatch(
 				*iterator._parsingContext,
@@ -282,15 +275,20 @@ namespace RenderCore { namespace LightingEngine
 	{
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto outputReflections = result.DefineAttachment(ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value).NoInitialState().FinalState(BindFlag::ShaderResource);
+		auto outputReflections = result.DefineAttachment(SSRReflections).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
-		auto debugAttachment = result.DefineAttachment(ConstHash64<'SSRD', 'ebug'>::Value).NoInitialState().FinalState(BindFlag::ShaderResource);
+		auto debugAttachment = result.DefineAttachment(SSRDebug).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(debugAttachment, BindFlag::UnorderedAccess);
+		auto intAttachment = result.DefineAttachment(SSRInt).NoInitialState().FinalState(BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(intAttachment, BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(intAttachment, BindFlag::ShaderResource);
+		auto intPrevAttachment = result.DefineAttachment(SSRInt+1).InitialState(BindFlag::ShaderResource).Discard();
+		spDesc.AppendNonFrameBufferAttachmentView(intPrevAttachment, BindFlag::ShaderResource);
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
@@ -306,7 +304,7 @@ namespace RenderCore { namespace LightingEngine
 		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
-				ConstHash64<'SSRR', 'efle', 'ctio', 'ns'>::Value,
+				SSRReflections,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
@@ -314,7 +312,24 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::PreregisteredAttachment::State::Uninitialized
 			},
 			Techniques::PreregisteredAttachment {
-				ConstHash64<'SSRD', 'ebug'>::Value,
+				SSRInt,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
+					"ssr-intermediate0"),
+				Techniques::PreregisteredAttachment::State::PingPongBuffer0
+			},
+			Techniques::PreregisteredAttachment {
+				SSRInt+1,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R11G11B10_FLOAT),
+					"ssr-intermediate1"),
+				Techniques::PreregisteredAttachment::State::PingPongBuffer1
+			},
+			Techniques::PreregisteredAttachment {
+			Techniques::PreregisteredAttachment {
+				SSRDebug,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32G32B32A32_FLOAT),

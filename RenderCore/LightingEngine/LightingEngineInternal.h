@@ -46,6 +46,8 @@ namespace RenderCore { namespace LightingEngine
 			const std::shared_ptr<ILightScene>& lightScene);
 		~CompiledLightingTechnique();
 
+		mutable unsigned _frameIdx = 0;
+
 	private:
 		// PendingCreateFragmentStep is used internally to merge subsequent CreateStep_ calls
 		// into single render passes
