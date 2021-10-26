@@ -797,7 +797,7 @@ namespace RenderCore { namespace Techniques
 					// as necessary -- 
 					for (auto& accelerator:_pipelineAccelerators) {
 						auto a = accelerator.second.lock();
-						if (!(*a).PipelineValidPipelineOrFuture(*result))
+						if (!a || !(*a).PipelineValidPipelineOrFuture(*result))
 							a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _matDescSetLayout, _pipelineCollection, _emptyPatchCollection);
 					}
 				} else {
