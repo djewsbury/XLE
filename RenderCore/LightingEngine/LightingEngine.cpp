@@ -80,6 +80,8 @@ namespace RenderCore { namespace LightingEngine
 		return _nextFragmentInterfaceRegistration-1;
 	}
 
+	static const std::string s_defaultSequencerCfgName = "lighting-technique";
+
 	void CompiledLightingTechnique::ResolvePendingCreateFragmentSteps()
 	{
 		if (_pendingCreateFragmentSteps.empty()) return;
@@ -123,8 +125,12 @@ namespace RenderCore { namespace LightingEngine
 					_steps.emplace_back(std::move(drawStep));
 
 					drawStep._type = Step::Type::ExecuteDrawables;
-					auto name = _fbDescs[beginStep._fbDescIdx]._fbDesc.GetSubpasses()[c]._name;
-					if (name.empty()) name = "lighting-technique";
+					#if defined(_DEBUG)
+						auto name = _fbDescs[beginStep._fbDescIdx]._fbDesc.GetSubpasses()[c]._name;
+						if (name.empty()) name = s_defaultSequencerCfgName;
+					#else
+						auto name = s_defaultSequencerCfgName;
+					#endif
 					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(
 						name,
 						sb._techniqueDelegate, sb._sequencerSelectors, 

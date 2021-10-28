@@ -700,7 +700,9 @@ namespace RenderCore
 		for (auto& a:layout) {
 			if (result.size() <= a._inputSlot) {
 				result.resize(a._inputSlot + 1, 0);
-                largestAlignmentRequirement.resize(a._inputSlot + 1, 1);
+                #if defined(_DEBUG)
+                    largestAlignmentRequirement.resize(a._inputSlot + 1, 1);
+                #endif
             }
 			unsigned& stride = result[a._inputSlot];
             #if defined(_DEBUG)
