@@ -634,6 +634,14 @@ namespace RenderCore { namespace Techniques
                 ++semantic;
             else if (stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer1 && (beginInfo._frameIdx&1))
                 --semantic;
+
+            // hack -- we have to keep the ping pong buffers bound in all cases, because they are intended to stay set, and we just flip flop between them
+            if (    stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer0 
+                ||  stitchedFragment._fullAttachmentDescriptions[aIdx]._state == PreregisteredAttachment::State::PingPongBuffer1) {
+                parsingContext.GetTechniqueContext()._attachmentPool->Bind(semantic, _attachmentPoolReservation.GetResourceIds()[aIdx]);
+                continue;
+            }
+
             switch (stitchedFragment._attachmentTransforms[aIdx]._type) {
             case FragmentStitchingContext::AttachmentTransform::Preserved:
             case FragmentStitchingContext::AttachmentTransform::Temporary:
@@ -1010,6 +1018,8 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Bind(uint64_t semantic, AttachmentName resName)
     {
+        if (resName & (1u<<31u)) return;
+
         auto existing = std::find_if(
             _pimpl->_poolSemanticAttachments.begin(), _pimpl->_poolSemanticAttachments.end(),
             [resName](const auto& c) { return c.second == resName; });

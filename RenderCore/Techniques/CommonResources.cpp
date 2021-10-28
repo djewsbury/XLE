@@ -163,6 +163,7 @@ namespace RenderCore { namespace Techniques
             case MultisampleDepth: return "MultisampleDepth";
             case GBufferDiffuse: return "GBufferDiffuse";
             case GBufferNormal: return "GBufferNormal";
+            case GBufferNormalPrev: return "GBufferNormalPrev";
             case GBufferParameter: return "GBufferParameter";
             case GBufferMotion: return "GBufferMotion";
             case ColorLDR: return "ColorLDR";
@@ -171,6 +172,13 @@ namespace RenderCore { namespace Techniques
             case ShadowDepthMap: return "ShadowDepthMap";
             case HierarchicalDepths: return "HierarchicalDepths";
             case TiledLightBitField: return "TiledLightBitField";
+            case ConstHash64<'SSRe', 'flec', 'tion'>::Value: return "SSReflection";
+            case ConstHash64<'SSRe', 'flec', 'tion'>::Value+1: return "SSReflectionPrev";
+            case ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value: return "SSRConfidence";
+            case ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value+1: return "SSRConfidencePrev";
+            case ConstHash64<'SSRC', 'onfi', 'denc', 'eInt'>::Value: return "SSRConfidenceInt";
+            case ConstHash64<'SSRI', 'nt'>::Value: return "SSRInt";
+            case ConstHash64<'SSRD', 'ebug'>::Value: return "SSRDebug";
             default: return nullptr;
             }
         }
