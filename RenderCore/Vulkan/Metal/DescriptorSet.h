@@ -42,11 +42,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	class ProgressiveDescriptorSetBuilder
     {
     public:
-		void    Bind(unsigned descriptorSetBindPoint, const ResourceView& resource);
-		void    Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> description = {});
-		void    Bind(unsigned descriptorSetBindPoint, VkSampler sampler, StringSection<> description = {});
+		void    Bind(unsigned descriptorSetBindPoint, const ResourceView& resource, StringSection<> shaderOrDescSetVariable={});
+		void    Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> shaderOrDescSetVariable={}, StringSection<> bufferDescription={});
+		void    Bind(unsigned descriptorSetBindPoint, VkSampler sampler, StringSection<> shaderOrDescSetVariable={}, StringSection<> samplerDescription={});
 
-		void    BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources);
+		void    BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources, StringSection<> shaderOrDescSetVariable={});
 
 		uint64_t	BindDummyDescriptors(GlobalPools& globalPools, uint64_t dummyDescWriteMask);
 

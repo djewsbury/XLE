@@ -221,7 +221,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			tempSpace.range = pkt.size();
 			_pimpl->_descSet[binding._descSetIndex]._builder.Bind(
 				binding._slotIndex, tempSpace
-				VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+				VULKAN_VERBOSE_DEBUG_ONLY(, {}, "temporary buffer"));
 
 			auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
 			iterator += alignedSize;

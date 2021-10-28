@@ -110,9 +110,9 @@ static const unsigned MaxExtension    = 256;    /* max. length of extension comp
 #endif
 
 #if defined(_DEBUG)
-    #define DEBUG_ONLY(x)       x
+    #define DEBUG_ONLY(...)       __VA_ARGS__
 #else
-    #define DEBUG_ONLY(x)       
+    #define DEBUG_ONLY(...)       
 #endif
 
 #if defined(__cplusplus)

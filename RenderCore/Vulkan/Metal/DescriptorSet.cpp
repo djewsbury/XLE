@@ -15,6 +15,7 @@
 #include "../../../Utility/ArithmeticUtils.h"
 #include "../../../Utility/StreamUtils.h"
 #include "../../../Utility/BitUtils.h"
+#include "../../../Utility/StringFormat.h"
 #include "../../../Core/Prefix.h"
 #include <sstream>
 
@@ -204,7 +205,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 	}
 
-	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ResourceView& resourceView)
+	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, const ResourceView& resourceView, StringSection<> shaderOrDescSetVariable)
 	{
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			std::string description;
@@ -222,20 +223,39 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(descriptorSetBindPoint < _signature.size());
 		auto slotType = _signature[descriptorSetBindPoint]._type;
 		assert(_signature[descriptorSetBindPoint]._count == 1);
+		auto vkSlotType = AsVkDescriptorType(slotType);
 
 		assert(resourceView.GetVulkanResource());
 		switch (resourceView.GetType()) {
 		case ResourceView::Type::ImageView:
 			assert(resourceView.GetImageView());
+
+			#if defined(_DEBUG)
+				if (	vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLER
+					&&  vkSlotType != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+					&&  vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+					&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+					&&  vkSlotType != VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
+					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding resource (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+			#endif
+
 			WriteBinding(
 				descriptorSetBindPoint,
-				AsVkDescriptorType(slotType),
+				vkSlotType,
 				AsVkDescriptorImageInfo(resourceView), true
 				VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			break;
 
 		case ResourceView::Type::BufferAndRange:
 			{
+				#if defined(_DEBUG)
+					if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+						&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+						Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+				#endif
+
 				assert(resourceView.GetVulkanResource() && resourceView.GetVulkanResource()->GetBuffer());
 				auto range = resourceView.GetBufferRangeOffsetAndSize();
 				uint64_t rangeBegin = range.first, rangeSize = range.second;
@@ -244,17 +264,23 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(rangeSize != 0);
 				WriteBinding(
 					descriptorSetBindPoint,
-					AsVkDescriptorType(slotType),
+					vkSlotType,
 					VkDescriptorBufferInfo { resourceView.GetVulkanResource()->GetBuffer(), rangeBegin, rangeSize }, true
 					VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			}
 			break;
 
 		case ResourceView::Type::BufferView:
+			#if defined(_DEBUG)
+				if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+					&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+					Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << (resourceView.GetVulkanResource() ? resourceView.GetVulkanResource()->GetDesc()._name : std::string{}) << ")"));
+			#endif
+
 			assert(resourceView.GetBufferView());
 			WriteBinding(
 				descriptorSetBindPoint,
-				AsVkDescriptorType(slotType),
+				vkSlotType,
 				resourceView.GetBufferView(), true
 				VULKAN_VERBOSE_DEBUG_ONLY(, description));
 			break;
@@ -264,7 +290,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void    ProgressiveDescriptorSetBuilder::BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources)
+	void    ProgressiveDescriptorSetBuilder::BindArray(unsigned descriptorSetBindPoint, IteratorRange<const ResourceView*const*> resources, StringSection<> shaderOrDescSetVariable)
 	{
 		assert(!resources.empty());
 		assert(resources[0]);
@@ -339,13 +365,22 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> description)
+	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkDescriptorBufferInfo uniformBuffer, StringSection<> shaderOrDescSetVariable, StringSection<> bufferDescription)
 	{
 		assert(descriptorSetBindPoint < _signature.size());
 		auto slotType = _signature[descriptorSetBindPoint]._type;
 		assert(_signature[descriptorSetBindPoint]._count == 1);
 		assert(uniformBuffer.buffer);
 		assert(uniformBuffer.range != 0); 
+		auto vkSlotType = AsVkDescriptorType(slotType);
+
+		#if defined(_DEBUG)
+			if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+				&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+				&&  vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+				&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+				Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding buffer (" << bufferDescription << ")"));
+		#endif
 
 		switch (slotType) {
 		case DescriptorType::UniformBuffer:
@@ -354,9 +389,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		case DescriptorType::UnorderedAccessTexelBuffer:
 			WriteBinding(
 				descriptorSetBindPoint,
-				AsVkDescriptorType(slotType),
+				vkSlotType,
 				uniformBuffer, true
-				VULKAN_VERBOSE_DEBUG_ONLY(, description.AsString()));
+				VULKAN_VERBOSE_DEBUG_ONLY(, bufferDescription.AsString()));
 			break;
 
 		default:
@@ -364,19 +399,26 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 	}
 
-	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkSampler sampler, StringSection<> description)
+	void    ProgressiveDescriptorSetBuilder::Bind(unsigned descriptorSetBindPoint, VkSampler sampler, StringSection<> shaderOrDescSetVariable, StringSection<> samplerDescription)
 	{
 		assert(descriptorSetBindPoint < _signature.size());
 		auto slotType = _signature[descriptorSetBindPoint]._type;
 		assert(_signature[descriptorSetBindPoint]._count == 1);
+		auto vkSlotType = AsVkDescriptorType(slotType);
+
+		#if defined(_DEBUG)
+			if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+				&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+				Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding sampler (" << samplerDescription << ")"));
+		#endif
 
 		switch (slotType) {
 		case DescriptorType::Sampler:
 			WriteBinding(
 				descriptorSetBindPoint,
-				AsVkDescriptorType(slotType),
+				vkSlotType,
 				VkDescriptorImageInfo { sampler }, true
-				VULKAN_VERBOSE_DEBUG_ONLY(, description.AsString()));
+				VULKAN_VERBOSE_DEBUG_ONLY(, samplerDescription.AsString()));
 			break;
 
 		default:
@@ -905,13 +947,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (binds[c]._type == DescriptorSetInitializer::BindType::ResourceView) {
 				assert(uniforms._resourceViews[binds[c]._uniformsStreamIdx]);
 				auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[binds[c]._uniformsStreamIdx]);
-				builder.Bind(c, *view);
+				builder.Bind(c, *view, {});
 				writtenMask |= 1ull<<uint64_t(c);
 				_retainedViews[c] = *view;
 			} else if (binds[c]._type == DescriptorSetInitializer::BindType::Sampler) {
 				assert(uniforms._samplers[binds[c]._uniformsStreamIdx]);
 				auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[binds[c]._uniformsStreamIdx]);
-				builder.Bind(c, sampler->GetUnderlying());
+				builder.Bind(c, sampler->GetUnderlying(), {}, {});
 				writtenMask |= 1ull<<uint64_t(c);
 				_retainedSamplers[c] = *sampler;
 			} else if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
@@ -948,7 +990,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (binds[c]._type == DescriptorSetInitializer::BindType::ImmediateData) {
 					auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
 					assert(size);
-					builder.Bind(c, VkDescriptorBufferInfo{_associatedLinearBufferData.GetBuffer(), linearBufferIterator, size}, "descriptor-set-bound-data");
+					builder.Bind(c, VkDescriptorBufferInfo{_associatedLinearBufferData.GetBuffer(), linearBufferIterator, size}, {}, "descriptor-set-bound-data");
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				}
 		}

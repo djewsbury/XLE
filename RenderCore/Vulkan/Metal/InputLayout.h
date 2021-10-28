@@ -149,9 +149,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<uint32_t> _samplerBinds;
 			
 			// these exist so we default out slots that are used by the shader, but not provided as input
-			std::vector<DescriptorSlot> _sig;
 			uint64_t _dummyMask = 0ull;
 			unsigned _sharedBuilder = ~0u;
+
+			#if defined(_DEBUG)
+				std::vector<std::string> _resourceViewNames;
+				std::vector<std::string> _immedateDataNames;
+				std::vector<std::string> _samplerNames;
+			#endif
 
 			uint64_t CalculateHash(uint64_t) const;
 		};

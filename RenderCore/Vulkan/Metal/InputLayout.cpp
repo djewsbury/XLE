@@ -413,8 +413,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				groupRules._adaptiveSetRules.push_back(
 					AdaptiveSetBindingRules { outputDescriptorSet, 0u, _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet) });
 				adaptiveSet = groupRules._adaptiveSetRules.end()-1;
-				auto bindings = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet)->GetDescriptorSlots();
-				adaptiveSet->_sig = std::vector<DescriptorSlot> { bindings.begin(), bindings.end() };
 			}
 			adaptiveSet->_shaderStageMask |= shaderStageMask;
 			return AsPointer(adaptiveSet);
@@ -423,7 +421,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void AddLooseUniformBinding(
 			UniformStreamType uniformStreamType,
 			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
-			unsigned groupIdx, unsigned inputUniformStreamIdx, uint32_t shaderStageMask)
+			unsigned groupIdx, unsigned inputUniformStreamIdx, uint32_t shaderStageMask,
+			StringSection<> variableName)
 		{
 			if (_descSetInfos.size() <= outputDescriptorSet)
 				_descSetInfos.resize(outputDescriptorSet+1);
@@ -443,15 +442,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
 
 			std::vector<uint32_t>* binds;
+			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_immedateDataNames);
 				groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_resourceViewNames);
 				groupRules._boundLooseResources |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else {
 				assert(uniformStreamType == UniformStreamType::Sampler);
 				binds = &adaptiveSet->_samplerBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_samplerNames);
 				groupRules._boundLooseSamplerStates |= (1ull << uint64_t(inputUniformStreamIdx));
 			}
 
@@ -464,13 +467,15 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(!(inputUniformStreamIdx& s_arrayBindingFlag));
 				binds->push_back(outputDescriptorSetSlot);
 				binds->push_back(inputUniformStreamIdx);
+				DEBUG_ONLY(names->push_back(variableName.AsString()));
 			}
 		}
 
 		void AddLooseUniformArrayBinding(
 			UniformStreamType uniformStreamType,
 			unsigned outputDescriptorSet, unsigned outputDescriptorSetSlot,
-			unsigned groupIdx, IteratorRange<const unsigned*> inputUniformStreamIdx, uint32_t shaderStageMask)
+			unsigned groupIdx, IteratorRange<const unsigned*> inputUniformStreamIdx, uint32_t shaderStageMask,
+			StringSection<> variableName)
 		{
 			if (_descSetInfos.size() <= outputDescriptorSet)
 				_descSetInfos.resize(outputDescriptorSet+1);
@@ -490,15 +495,19 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
 
 			std::vector<uint32_t>* binds;
+			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_immedateDataNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(streamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_resourceViewNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseResources |= (1ull << uint64_t(streamIdx));
 			} else {
 				assert(uniformStreamType == UniformStreamType::Sampler);
 				binds = &adaptiveSet->_samplerBinds;
+				DEBUG_ONLY(names = &adaptiveSet->_samplerNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseSamplerStates |= (1ull << uint64_t(streamIdx));
 			}
 
@@ -510,6 +519,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				binds->push_back(outputDescriptorSetSlot);
 				binds->push_back(uint32_t(inputUniformStreamIdx.size())|s_arrayBindingFlag);
 				binds->insert(binds->end(), inputUniformStreamIdx.begin(), inputUniformStreamIdx.end());
+				DEBUG_ONLY(names->push_back(variableName.AsString()));
 			}
 		}
 
@@ -598,7 +608,8 @@ namespace RenderCore { namespace Metal_Vulkan
 								AddLooseUniformBinding(
 									bindingType,
 									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-									groupIdx, inputSlot, shaderStageMask);
+									groupIdx, inputSlot, shaderStageMask,
+									reflectionVariable._name);
 								foundBinding = true;
 							}
 						} else {
@@ -625,7 +636,8 @@ namespace RenderCore { namespace Metal_Vulkan
 								AddLooseUniformArrayBinding(
 									bindingType,
 									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-									groupIdx, MakeIteratorRange(inputSlots, &inputSlots[eleCount]), shaderStageMask);
+									groupIdx, MakeIteratorRange(inputSlots, &inputSlots[eleCount]), shaderStageMask,
+									reflectionVariable._name);
 							}
 						}
 						
@@ -640,7 +652,8 @@ namespace RenderCore { namespace Metal_Vulkan
 								AddLooseUniformBinding(
 									UniformStreamType::Dummy,
 									reflectionVariable._binding._descriptorSet, reflectionVariable._binding._bindingPoint,
-									groupIdxForDummies, ~0u, shaderStageMask);
+									groupIdxForDummies, ~0u, shaderStageMask,
+									reflectionVariable._name);
 							}
 						}
 					} else {
@@ -738,7 +751,8 @@ namespace RenderCore { namespace Metal_Vulkan
 							AddLooseUniformBinding(
 								bindingType,
 								descSetIdx, slotIdx,
-								groupIdx, inputSlot, shaderStageMask);
+								groupIdx, inputSlot, shaderStageMask,
+								"pipeline-layout-binding");
 						}
 					}
 				} else {
@@ -1038,6 +1052,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			ObjectFactory& factory,
 			IteratorRange<const UniformsStream::ImmediateData*> pkts,
 			IteratorRange<const uint32_t*> bindingIndicies,
+			IteratorRange<const std::string*> shaderVariableNames,
 			BindFlag::Enum bindType)
 		{
 			if (bindingIndicies.empty()) return {};
@@ -1061,6 +1076,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			assert(totalSize != 0);
 
+			DEBUG_ONLY(auto nameIterator = shaderVariableNames.begin());
 			auto temporaryMapping = context.MapTemporaryStorage(totalSize, bindType);
 			if (!temporaryMapping.GetData().empty()) {
 				assert(temporaryMapping.GetData().size() == totalSize);
@@ -1079,7 +1095,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					tempSpace.buffer = checked_cast<Resource*>(temporaryMapping.GetResource().get())->GetBuffer();
 					tempSpace.offset = beginInResource + iterator;
 					tempSpace.range = pkt.size();
-					builder.Bind(bind[0], tempSpace VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+					builder.Bind(bind[0], tempSpace DEBUG_ONLY(, *nameIterator++, "temporary buffer"));
 
 					auto alignedSize = CeilToMultiple((unsigned)pkt.size(), alignment);
 					iterator += alignedSize;
@@ -1099,7 +1115,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						factory, 
 						CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create(unsigned(pkt.size())), "overflow-buf"), 
 						SubResourceInitData{pkt}};
-					builder.Bind(bind[0], { cb.GetBuffer(), 0, VK_WHOLE_SIZE } VULKAN_VERBOSE_DEBUG_ONLY(, "temporary buffer"));
+					builder.Bind(bind[0], { cb.GetBuffer(), 0, VK_WHOLE_SIZE } DEBUG_ONLY(, *nameIterator++, "temporary buffer"));
 					bindingsWrittenTo |= (1ull << uint64_t(bind[0]));
 					bind += 2;
 				}
@@ -1111,9 +1127,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		static uint64_t WriteResourceViewBindings(
 			ProgressiveDescriptorSetBuilder& builder,
 			IteratorRange<const IResourceView*const*> srvs,
-			IteratorRange<const uint32_t*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies,
+			IteratorRange<const std::string*> shaderVariableNames)
 		{
 			uint64_t bindingsWrittenTo = 0u;
+			DEBUG_ONLY(auto nameIterator = shaderVariableNames.begin());
 
 			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
 				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
@@ -1122,7 +1140,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!(bind[1]&s_arrayBindingFlag)) {
 					assert(bind[1] < srvs.size());
 					auto* srv = srvs[bind[1]];
-					builder.Bind(bind[0], *checked_cast<const ResourceView*>(srv));
+					builder.Bind(bind[0], *checked_cast<const ResourceView*>(srv) DEBUG_ONLY(, *nameIterator++));
 					bind += 2;
 				} else {
 					auto count = bind[1]&~s_arrayBindingFlag;
@@ -1131,7 +1149,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						assert(bind[2+c] != ~0u);
 						resViews[c] = checked_cast<const ResourceView*>(srvs[bind[2+c]]);
 					}
-					builder.BindArray(bind[0], MakeIteratorRange(resViews, &resViews[count]));
+					builder.BindArray(bind[0], MakeIteratorRange(resViews, &resViews[count]) DEBUG_ONLY(, *nameIterator++));
 					bind += 2+count;
 				}
 			}
@@ -1142,9 +1160,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		static uint64_t WriteSamplerStateBindings(
 			ProgressiveDescriptorSetBuilder& builder,
 			IteratorRange<const SamplerState*const*> samplerStates,
-			IteratorRange<const uint32_t*> bindingIndicies)
+			IteratorRange<const uint32_t*> bindingIndicies,
+			IteratorRange<const std::string*> shaderVariableNames)
 		{
 			uint64_t bindingsWrittenTo = 0u;
+			DEBUG_ONLY(auto nameIterator = shaderVariableNames.begin());
 
 			for (auto bind=bindingIndicies.begin(); bind!=bindingIndicies.end();) {
 				assert(!(bindingsWrittenTo & (1ull<<uint64_t(bind[0]))));
@@ -1153,7 +1173,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!(bind[1]&s_arrayBindingFlag)) {
 					assert(bind[1] < samplerStates.size());
 					auto& samplerState = samplerStates[bind[1]];
-					builder.Bind(bind[0], samplerState->GetUnderlying());
+					builder.Bind(bind[0], samplerState->GetUnderlying() DEBUG_ONLY(, *nameIterator++));
 					bind += 2;
 				} else {
 					assert(0);	// array sampler bindings not supported yet
@@ -1198,7 +1218,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			#endif
 
 			// -------- write descriptor set --------
-			ProgressiveDescriptorSetBuilder builderT { MakeIteratorRange(adaptiveSet._sig) };
+			ProgressiveDescriptorSetBuilder builderT { adaptiveSet._layout->GetDescriptorSlots() };
 			bool doFlushNow = true;
 			ProgressiveDescriptorSetBuilder* builder = &builderT;
 			if (adaptiveSet._sharedBuilder != ~0u) {
@@ -1221,17 +1241,34 @@ namespace RenderCore { namespace Metal_Vulkan
 				context.GetFactory(),
 				stream._immediateData,
 				MakeIteratorRange(adaptiveSet._immediateDataBinds),
+				#if defined(_DEBUG)
+					MakeIteratorRange(adaptiveSet._immedateDataNames),
+				#else
+					{},
+				#endif
 				BindFlag::ConstantBuffer);
 
 			descSetSlots |= BindingHelper::WriteResourceViewBindings(
 				*builder,
 				stream._resourceViews,
-				MakeIteratorRange(adaptiveSet._resourceViewBinds));
+				MakeIteratorRange(adaptiveSet._resourceViewBinds)
+				#if defined(_DEBUG)
+					, MakeIteratorRange(adaptiveSet._resourceViewNames)
+				#else
+					, {}
+				#endif
+				);
 
 			descSetSlots |= BindingHelper::WriteSamplerStateBindings(
 				*builder,
 				MakeIteratorRange((const SamplerState*const*)stream._samplers.begin(), (const SamplerState*const*)stream._samplers.end()),
-				MakeIteratorRange(adaptiveSet._samplerBinds));
+				MakeIteratorRange(adaptiveSet._samplerBinds)
+				#if defined(_DEBUG)
+					, MakeIteratorRange(adaptiveSet._samplerNames)
+				#else
+					, {}
+				#endif
+				);
 
 			// Any locations referenced by the descriptor layout, by not written by the values in
 			// the streams must now be filled in with the defaults.
@@ -1374,8 +1411,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode)
 	{
 		SPIRVReflection reflection(byteCode.GetByteCode());
-		Log(Debug) << reflection << std::endl;
-		DiassembleByteCode(Log(Debug), byteCode.GetByteCode());
+		/*#if defined(_DEBUG)
+			Log(Debug) << reflection << std::endl;
+			DiassembleByteCode(Log(Debug), byteCode.GetByteCode());
+		#endif*/
 
 		std::vector<PipelineLayoutInitializer::DescriptorSetBinding> descriptorSets;
 		PipelineLayoutInitializer::PushConstantsBinding pushConstants;
