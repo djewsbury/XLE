@@ -28,11 +28,8 @@ THE SOFTWARE.
 
 Texture2D<float> DownsampleDepths;
 Texture2D GBufferNormal;
+Texture2D GBufferNormalPrev;
 Texture2D<int2> GBufferMotion;
-
-// [[vk::binding(1, 1)]] Texture2D<float> g_roughness                                      : register(t1); 
-// [[vk::binding(2, 1)]] Texture2D<float4> g_normal_history                                : register(t2); 
-// [[vk::binding(3, 1)]] Texture2D<float> g_roughness_history                              : register(t3); 
 
 Texture2D<float3> g_temporally_denoised_reflections_history;
 Texture2D<float> g_ray_lengths_read;
@@ -41,6 +38,12 @@ StructuredBuffer<uint> g_tile_meta_data_mask_read;
 
 RWTexture2D<float3> g_temporally_denoised_reflections;
 RWStructuredBuffer<uint> g_temporal_variance_mask;
+
+#if SPLIT_CONFIDENCE
+    Texture2D<float> g_temporally_denoised_confidence_history;
+    RWTexture2D<float> g_temporally_denoised_confidence;
+    Texture2D<float> g_spatially_denoised_confidence_read;
+#endif
 
 cbuffer ExtendedTransforms
 {
@@ -53,7 +56,7 @@ cbuffer ExtendedTransforms
     float2 SSRNegativeReciprocalScreenSize;
 };
 
-#define g_temporal_stability_factor 0.975f
+#define g_temporal_stability_factor 0.66 // 0.975f
 #define g_temporal_variance_threshold 0.002f
 
 static const float g_roughness_sigma_min = 0.001f;
@@ -78,8 +81,7 @@ float3 FFX_DNSR_Reflections_LoadNormal(int2 pixel_coordinate)
 
 float3 FFX_DNSR_Reflections_LoadNormalHistory(int2 pixel_coordinate)
 {
-    // todo -- normal history buffer
-    return DecompressGBufferNormal(GBufferNormal.Load(int3(pixel_coordinate, 0)).xyz);
+    return DecompressGBufferNormal(GBufferNormalPrev.Load(int3(pixel_coordinate, 0)).xyz);
 }
 
 float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
@@ -89,8 +91,7 @@ float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
 
 float FFX_DNSR_Reflections_LoadRoughnessHistory(int2 pixel_coordinate)
 {
-    // todo -- roughness history buffer
-    return GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
+    return GBufferNormalPrev.Load(int3(pixel_coordinate, 0)).a;
 }
 
 float3 FFX_DNSR_Reflections_LoadRadianceHistory(int2 pixel_coordinate)
@@ -117,6 +118,23 @@ void FFX_DNSR_Reflections_StoreTemporallyDenoisedReflections(int2 pixel_coordina
 {
     g_temporally_denoised_reflections[pixel_coordinate] = value;
 }
+
+#if SPLIT_CONFIDENCE
+    float FFX_DNSR_Reflections_LoadSpatiallyDenoisedConfidence(int2 pixel_coordinate)
+    {
+        return g_spatially_denoised_confidence_read.Load(int3(pixel_coordinate, 0));
+    }
+
+    float FFX_DNSR_Reflections_LoadConfidenceHistory(int2 pixel_coordinate)
+    {
+        return g_temporally_denoised_confidence_history.Load(int3(pixel_coordinate, 0));
+    }
+
+    void FFX_DNSR_Reflections_StoreTemporallyDenoisedConfidence(int2 pixel_coordinate, float value)
+    {
+        g_temporally_denoised_confidence[pixel_coordinate] = value;
+    }
+#endif
 
 void FFX_DNSR_Reflections_StoreTemporalVarianceMask(int index, uint mask)
 {
@@ -168,4 +186,5 @@ float3 FFX_DNSR_Reflections_WorldSpaceToScreenSpacePrevious(float3 world_coord)
     g_temporally_denoised_reflections.GetDimensions(image_size.x, image_size.y);
     FFX_DNSR_Reflections_ResolveTemporal(dispatch_thread_id, group_thread_id, image_size, g_temporal_stability_factor, g_temporal_variance_threshold);
     // FFX_DNSR_Reflections_StoreTemporallyDenoisedReflections(dispatch_thread_id.xy, FFX_DNSR_Reflections_LoadSpatiallyDenoisedReflections(dispatch_thread_id.xy));
+    // FFX_DNSR_Reflections_StoreTemporallyDenoisedConfidence(dispatch_thread_id.xy, FFX_DNSR_Reflections_LoadSpatiallyDenoisedConfidence(dispatch_thread_id.xy));
 }

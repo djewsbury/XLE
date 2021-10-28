@@ -32,7 +32,7 @@ TextureCube SkyCube;
 Texture2D<int2> GBufferMotion;
 Texture2D LastFrameLit;
 
-cbuffer ExtendedTransforms          : register(b5, space0)
+cbuffer ExtendedTransforms
 {
     row_major float4x4 ClipToView;      // g_inv_proj
     row_major float4x4 ClipToWorld;     // g_inv_view_proj
@@ -54,6 +54,9 @@ RWBuffer<uint> g_ray_counter;
 
 // Outputs from this shader
 RWTexture2D<float3> g_intersection_result;
+#if SPLIT_CONFIDENCE
+    RWTexture2D<float> g_confidence_result;
+#endif
 
 Buffer<uint> BN_Sobol;
 Buffer<uint> BN_Ranking;
@@ -308,6 +311,7 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
     float2 mip_resolution = FFX_SSSR_GetMipResolution(screen_size, most_detailed_mip);
     float z = FFX_SSSR_LoadDepth(uv * mip_resolution, most_detailed_mip);
     float4 debugOutput = 0;
+    float confidence;
     {
         float3 screen_uv_space_ray_origin = float3(uv, z);
         float3 view_space_ray = FFX_SSSR_ScreenSpaceToViewSpace(screen_uv_space_ray_origin);
@@ -328,7 +332,7 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
         float3 world_space_ray      = world_space_hit - world_space_origin.xyz;
 
         float depthBufferThickness = g_depth_buffer_thickness;
-        float confidence = valid_hit ? FFX_SSSR_ValidateHit(hit, uv, world_space_ray, screen_size, depthBufferThickness) : 0;
+        confidence = valid_hit ? FFX_SSSR_ValidateHit(hit, uv, world_space_ray, screen_size, depthBufferThickness) : 0;
         world_ray_length = length(world_space_ray);
         
         if (confidence > 0) {
@@ -338,21 +342,29 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
 
         debugOutput = float4(roughness.xxx, 1);
 
-        // Sample environment map.
-        // It's not ideal to do this here, because this sample doesn't work well with the temporal denoising when there is motion, since 
-        // we're reflecting an infinitely distant object. Denoising attempting to reproject a past surface position, as the camera moves
-        // the reflection will shift on the object as well, so the sample from the reprojected position will be poor... However that's not
-        // such a big issue for reflections of nearby surfaces.
-        // Instead let's store and denoise a confidence value along with the color value
-        float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction);
-        reflection_radiance = confidence * reflection_radiance + (1 - confidence) * environment_lookup;
-        reflection_radiance *= weight;
+        #if !SPLIT_CONFIDENCE
+            // Sample environment map.
+            // It's not ideal to do this here, because this sample doesn't work well with the temporal denoising when there is motion, since 
+            // we're reflecting an infinitely distant object. Denoising attempting to reproject a past surface position, as the camera moves
+            // the reflection will shift on the object as well, so the sample from the reprojected position will be poor... However that's not
+            // such a big issue for reflections of nearby surfaces.
+            // Instead let's store and denoise a confidence value along with the color value
+            float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction);
+            reflection_radiance = confidence * reflection_radiance + (1 - confidence) * environment_lookup;
+            reflection_radiance *= weight;
+        #endif
 
         // protect against zero length normals (which we can sometimes run into, and which will result in nans)
-        if (all(world_space_normal == 0)) reflection_radiance = 0;
+        if (all(world_space_normal == 0)) {
+            reflection_radiance = 0;
+            confidence = 0;
+        }
     }
 
     g_intersection_result[coords] = reflection_radiance;
+    #if SPLIT_CONFIDENCE
+        g_confidence_result[coords] = confidence;
+    #endif
     #if DEBUGGING_PRODUCTS
         g_ray_lengths[coords] = world_ray_length;
         SSRDebug[coords] = debugOutput;
@@ -362,6 +374,9 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
     if (copy_horizontal) {
         uint2 copy_coords = uint2(copy_target.x, coords.y);
         g_intersection_result[copy_coords] = reflection_radiance;
+        #if SPLIT_CONFIDENCE
+            g_confidence_result[copy_coords] = confidence;
+        #endif
         #if DEBUGGING_PRODUCTS
             g_ray_lengths[copy_coords] = world_ray_length;
             SSRDebug[copy_coords] = debugOutput;
@@ -370,6 +385,9 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
     if (copy_vertical) {
         uint2 copy_coords = uint2(coords.x, copy_target.y);
         g_intersection_result[copy_coords] = reflection_radiance;
+        #if SPLIT_CONFIDENCE
+            g_confidence_result[copy_coords] = confidence;
+        #endif
         #if DEBUGGING_PRODUCTS
             g_ray_lengths[copy_coords] = world_ray_length;
             SSRDebug[copy_coords] = debugOutput;
@@ -378,6 +396,9 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
     if (copy_diagonal) {
         uint2 copy_coords = copy_target;
         g_intersection_result[copy_coords] = reflection_radiance;
+        #if SPLIT_CONFIDENCE
+            g_confidence_result[copy_coords] = confidence;
+        #endif
         #if DEBUGGING_PRODUCTS
             g_ray_lengths[copy_coords] = world_ray_length;
             SSRDebug[copy_coords] = debugOutput;

@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	struct ScreenSpaceReflectionsOperatorDesc
 	{
 		bool _enableFinalBlur = false;
+		bool _splitConfidence = true;
 
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};

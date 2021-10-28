@@ -26,12 +26,23 @@ THE SOFTWARE.
 
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
+#if SPLIT_CONFIDENCE
+    #define min16RadianceValue min16float4
+#else
+    #define min16RadianceValue min16float3
+#endif
+
 Texture2D<float> DownsampleDepths;
 Texture2D GBufferNormal;
 
 Texture2D<min16float3> g_intersection_result_read;
 StructuredBuffer<uint> g_tile_meta_data_mask_read;
 RWTexture2D<float3> g_spatially_denoised_reflections;
+
+#if SPLIT_CONFIDENCE
+    Texture2D<float> g_confidence_result_read;
+    RWTexture2D<float> g_spatially_denoised_confidence;
+#endif
 
 cbuffer FrameIdBuffer
 {
@@ -59,12 +70,16 @@ min16float2 UnpackFloat16(uint a)
     return min16float2(tmp);
 }
 
-min16float3 FFX_DNSR_Reflections_LoadRadianceFromGroupSharedMemory(int2 idx)
+min16RadianceValue FFX_DNSR_Reflections_LoadRadianceFromGroupSharedMemory(int2 idx)
 {
     uint2 tmp;
     tmp.x = g_shared_0[idx.y][idx.x];
     tmp.y = g_shared_1[idx.y][idx.x];
-    return min16float4(UnpackFloat16(tmp.x), UnpackFloat16(tmp.y)).xyz;
+    #if SPLIT_CONFIDENCE
+        return min16float4(UnpackFloat16(tmp.x), UnpackFloat16(tmp.y));
+    #else
+        return min16float4(UnpackFloat16(tmp.x), UnpackFloat16(tmp.y)).xyz;
+    #endif
 }
 
 min16float3 FFX_DNSR_Reflections_LoadNormalFromGroupSharedMemory(int2 idx)
@@ -80,9 +95,13 @@ float FFX_DNSR_Reflections_LoadDepthFromGroupSharedMemory(int2 idx)
     return g_shared_depth[idx.y][idx.x];
 }
 
-void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16float3 radiance, min16float3 normal, float depth) {
+void FFX_DNSR_Reflections_StoreInGroupSharedMemory(int2 idx, min16RadianceValue radiance, min16float3 normal, float depth) {
     g_shared_0[idx.y][idx.x] = PackFloat16(radiance.xy);
-    g_shared_1[idx.y][idx.x] = PackFloat16(min16float2(radiance.z, 0));
+    #if SPLIT_CONFIDENCE
+        g_shared_1[idx.y][idx.x] = PackFloat16(radiance.zw);
+    #else
+        g_shared_1[idx.y][idx.x] = PackFloat16(min16float2(radiance.z, 0));
+    #endif
     g_shared_2[idx.y][idx.x] = PackFloat16(normal.xy);
     g_shared_3[idx.y][idx.x] = PackFloat16(min16float2(normal.z, 0));
     g_shared_depth[idx.y][idx.x] = depth;
@@ -93,9 +112,14 @@ float FFX_DNSR_Reflections_LoadRoughness(int2 pixel_coordinate)
     return GBufferNormal.Load(int3(pixel_coordinate, 0)).a;
 }
 
-min16float3 FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
+min16RadianceValue FFX_DNSR_Reflections_LoadRadianceFP16(int2 pixel_coordinate)
 {
-    return g_intersection_result_read.Load(int3(pixel_coordinate, 0)).xyz;
+    min16RadianceValue result;
+    result.xyz = g_intersection_result_read.Load(int3(pixel_coordinate, 0)).xyz;
+    #if SPLIT_CONFIDENCE
+        result.w = (min16float)g_confidence_result_read.Load(int3(pixel_coordinate, 0));
+    #endif
+    return result;
 }
 
 min16float3 FFX_DNSR_Reflections_LoadNormalFP16(int2 pixel_coordinate)
@@ -108,9 +132,12 @@ float FFX_DNSR_Reflections_LoadDepth(int2 pixel_coordinate)
     return DownsampleDepths.Load(int3(pixel_coordinate, 0));
 }
 
-void FFX_DNSR_Reflections_StoreSpatiallyDenoisedReflections(int2 pixel_coordinate, min16float3 value)
+void FFX_DNSR_Reflections_StoreSpatiallyDenoisedReflections(int2 pixel_coordinate, min16RadianceValue value)
 {
-    g_spatially_denoised_reflections[pixel_coordinate] = value;
+    g_spatially_denoised_reflections[pixel_coordinate] = value.xyz;
+    #if SPLIT_CONFIDENCE
+        g_spatially_denoised_confidence[pixel_coordinate] = value.w;
+    #endif
 }
 
 uint FFX_DNSR_Reflections_LoadTileMetaDataMask(uint index)

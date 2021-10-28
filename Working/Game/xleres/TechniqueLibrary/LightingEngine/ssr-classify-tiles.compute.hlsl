@@ -48,6 +48,9 @@ StructuredBuffer<uint> g_temporal_variance_mask_read;
 RWBuffer<uint> g_ray_list;
 globallycoherent RWBuffer<uint> g_ray_counter;
 RWTexture2D<float3> g_intersection_result;
+#if SPLIT_CONFIDENCE
+    RWTexture2D<float> g_confidence_result;
+#endif
 RWStructuredBuffer<uint> g_tile_meta_data_mask;
 RWBuffer<uint> g_intersect_args;
 
@@ -97,6 +100,9 @@ void FFX_DNSR_Reflections_StoreTileMetaDataMask(uint index, uint mask)
 
     // Clear intersection results as there wont be any ray that overwrites them
     g_intersection_result[dispatch_thread_id] = 0;
+    #if SPLIT_CONFIDENCE
+        g_confidence_result[dispatch_thread_id] = 0;
+    #endif
 
     // Extract only the channel containing the roughness to avoid loading all 4 channels in the follow up passes.
     // g_extracted_roughness[dispatch_thread_id] = roughness;

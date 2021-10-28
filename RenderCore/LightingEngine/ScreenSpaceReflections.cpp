@@ -110,6 +110,7 @@ namespace RenderCore { namespace LightingEngine
 
 	constexpr uint64_t SSRReflections = ConstHash64<'SSRe', 'flec', 'tion'>::Value;
 	constexpr uint64_t SSRConfidence = ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value;
+	constexpr uint64_t SSRConfidenceInt = ConstHash64<'SSRC', 'onfi', 'denc', 'eInt'>::Value;
 	constexpr uint64_t SSRInt = ConstHash64<'SSRI', 'nt'>::Value;
 	constexpr uint64_t SSRDebug = ConstHash64<'SSRD', 'ebug'>::Value;
 
@@ -119,16 +120,23 @@ namespace RenderCore { namespace LightingEngine
 	constexpr unsigned s_nfb_hierarchicalDepthsSRV = 2;
 	constexpr unsigned s_nfb_gbufferMotionSRV = 3;
 	constexpr unsigned s_nfb_gbufferNormalSRV = 4;
-	constexpr unsigned s_nfb_colorHDRSRV = 5;
+	constexpr unsigned s_nfb_gbufferNormalPrevSRV = 5;
+	constexpr unsigned s_nfb_colorHDRSRV = 6;
 
-	constexpr unsigned s_nfb_intUAV = 6;
-	constexpr unsigned s_nfb_intSRV = 7;
+	constexpr unsigned s_nfb_intUAV = 7;
+	constexpr unsigned s_nfb_intSRV = 8;
 
 	// depending on whether the find blur is enabled, you'll get one of the following
-	constexpr unsigned s_nfb_intPrevSRV = 8;
-	constexpr unsigned s_nfb_SSRPrevSRV = 8;
+	constexpr unsigned s_nfb_intPrevSRV = 9;
+	constexpr unsigned s_nfb_SSRPrevSRV = 9;
 
-	constexpr unsigned s_nfb_debugUAV = 9;
+	constexpr unsigned s_nfb_debugUAV = 10;
+
+	constexpr unsigned s_nfb_confidenceUAV = 11;
+	constexpr unsigned s_nfb_confidenceSRV = 12;
+	constexpr unsigned s_nfb_confidencePrevSRV = 13;
+	constexpr unsigned s_nfb_confidenceIntUAV = 14;
+	constexpr unsigned s_nfb_confidenceIntSRV = 15;
 
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
@@ -143,7 +151,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
-		IResourceView* rvs[27];
+		IResourceView* rvs[34];
 		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
 		rvs[3] = _res->_rayListBufferUAV.get();													// g_ray_list
 		rvs[4] = _res->_rayListBufferSRV.get();													// g_ray_list_read
@@ -176,15 +184,26 @@ namespace RenderCore { namespace LightingEngine
 		rvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_hierarchicalDepthsSRV).get();		// HierarchicalDepths
 		rvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferMotionSRV).get();			// GBufferMotion
 		rvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalSRV).get();			// GBufferNormal
-		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();				// LastFrameLit
+		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalPrevSRV).get();		// GBufferNormalPrev
+		rvs[22] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();				// LastFrameLit
 
-		rvs[22] = _blueNoiseRes->_sobolBufferView.get();
-		rvs[23] = _blueNoiseRes->_rankingTileBufferView.get();
-		rvs[24] = _blueNoiseRes->_scramblingTileBufferView.get();
+		rvs[23] = _blueNoiseRes->_sobolBufferView.get();
+		rvs[24] = _blueNoiseRes->_rankingTileBufferView.get();
+		rvs[25] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		rvs[25] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
+		rvs[26] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
 
-		rvs[26] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
+		rvs[27] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
+
+		if (_desc._splitConfidence) {
+			rvs[28] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
+			rvs[29] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceSRV).get();		// g_confidence_result_read
+			rvs[30] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntUAV).get();	// g_spatially_denoised_confidence
+
+			rvs[31] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidencePrevSRV).get();	// g_temporally_denoised_confidence_history
+			rvs[32] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_temporally_denoised_confidence
+			rvs[33] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
+		}
 
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
 		struct ExtendedTransforms
@@ -299,6 +318,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR), BindFlag::ShaderResource);
 
 		auto intAttachment = result.DefineAttachment(SSRInt).NoInitialState().FinalState(BindFlag::ShaderResource);
@@ -308,12 +328,23 @@ namespace RenderCore { namespace LightingEngine
 			auto intPrevAttachment = result.DefineAttachment(SSRInt+1).InitialState(BindFlag::ShaderResource).Discard();
 			spDesc.AppendNonFrameBufferAttachmentView(intPrevAttachment, BindFlag::ShaderResource);
 		} else {
-			auto intPrevSSRAttachment = result.DefineAttachment(SSRReflections+1).InitialState(BindFlag::ShaderResource).Discard();
-			spDesc.AppendNonFrameBufferAttachmentView(intPrevSSRAttachment, BindFlag::ShaderResource);
+			auto SRRPrevAttachment = result.DefineAttachment(SSRReflections+1).InitialState(BindFlag::ShaderResource).Discard();
+			spDesc.AppendNonFrameBufferAttachmentView(SRRPrevAttachment, BindFlag::ShaderResource);
 		}
 
 		auto debugAttachment = result.DefineAttachment(SSRDebug).NoInitialState().FinalState(BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(debugAttachment, BindFlag::UnorderedAccess);
+
+		if (_desc._splitConfidence) {
+			auto confidenceAttachment = result.DefineAttachment(SSRConfidence).NoInitialState().FinalState(BindFlag::ShaderResource);
+			auto confidencePrevAttachment = result.DefineAttachment(SSRConfidence+1).InitialState(BindFlag::ShaderResource).Discard();
+			auto confidenceIntAttachment = result.DefineAttachment(SSRConfidenceInt).NoInitialState().FinalState(BindFlag::ShaderResource);
+			spDesc.AppendNonFrameBufferAttachmentView(confidenceAttachment, BindFlag::UnorderedAccess);
+			spDesc.AppendNonFrameBufferAttachmentView(confidenceAttachment, BindFlag::ShaderResource);
+			spDesc.AppendNonFrameBufferAttachmentView(confidencePrevAttachment, BindFlag::ShaderResource);
+			spDesc.AppendNonFrameBufferAttachmentView(confidenceIntAttachment, BindFlag::UnorderedAccess);
+			spDesc.AppendNonFrameBufferAttachmentView(confidenceIntAttachment, BindFlag::ShaderResource);
+		}
 
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
@@ -389,23 +420,38 @@ namespace RenderCore { namespace LightingEngine
 				stitchingContext.DefineAttachment(a);
 		}	/////////////////////////////////////////////
 
+		if (_desc._splitConfidence) {
+			Techniques::PreregisteredAttachment attachments[] {
+				Techniques::PreregisteredAttachment {
+					SSRConfidence,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
+						"ssr-confidence0"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer0
+				},
+				Techniques::PreregisteredAttachment {
+					SSRConfidence+1,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
+						"ssr-confidence1"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+				},
+				Techniques::PreregisteredAttachment {
+					SSRConfidenceInt,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
+						"ssr-confidence-intermediate"),
+					Techniques::PreregisteredAttachment::State::Uninitialized
+				}
+			};
+			for (const auto& a:attachments)
+				stitchingContext.DefineAttachment(a);
+		}
+
 		Techniques::PreregisteredAttachment attachments[] {
-			Techniques::PreregisteredAttachment {
-				SSRConfidence,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
-					"ssr-confidence0"),
-				Techniques::PreregisteredAttachment::State::PingPongBuffer0
-			},
-			Techniques::PreregisteredAttachment {
-				SSRConfidence+1,
-				CreateDesc(
-					BindFlag::UnorderedAccess | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R8_UNORM),
-					"ssr-confidence1"),
-				Techniques::PreregisteredAttachment::State::PingPongBuffer1
-			},
 			Techniques::PreregisteredAttachment {
 				SSRDebug,
 				CreateDesc(
@@ -521,21 +567,33 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(18, Hash64("DownsampleDepths"));
 		usi.BindResourceView(19, Hash64("GBufferMotion"));
 		usi.BindResourceView(20, Hash64("GBufferNormal"));
-		usi.BindResourceView(21, Hash64("LastFrameLit"));
+		usi.BindResourceView(21, Hash64("GBufferNormalPrev"));
+		usi.BindResourceView(22, Hash64("LastFrameLit"));
 
-		usi.BindResourceView(22, Hash64("BN_Sobol"));
-		usi.BindResourceView(23, Hash64("BN_Ranking"));
-		usi.BindResourceView(24, Hash64("BN_Scrambling"));
+		usi.BindResourceView(23, Hash64("BN_Sobol"));
+		usi.BindResourceView(24, Hash64("BN_Ranking"));
+		usi.BindResourceView(25, Hash64("BN_Scrambling"));
 
-		usi.BindResourceView(25, Hash64("SkyCube"));
+		usi.BindResourceView(26, Hash64("SkyCube"));
 
-		usi.BindResourceView(26, Hash64("SSRDebug"));
+		usi.BindResourceView(27, Hash64("SSRDebug"));
+
+		if (desc._splitConfidence) {
+			usi.BindResourceView(28, Hash64("g_confidence_result"));
+			usi.BindResourceView(29, Hash64("g_confidence_result_read"));
+			usi.BindResourceView(30, Hash64("g_spatially_denoised_confidence"));
+			usi.BindResourceView(31, Hash64("g_temporally_denoised_confidence_history"));
+			usi.BindResourceView(32, Hash64("g_temporally_denoised_confidence"));
+			usi.BindResourceView(33, Hash64("g_spatially_denoised_confidence_read"));
+		}
 
 		usi.BindImmediateData(0, Hash64("ExtendedTransforms"));
 		usi.BindImmediateData(1, Hash64("FrameIdBuffer"));
 
 		ParameterBox selectors;
 		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);
+		if (desc._splitConfidence)
+			selectors.SetParameter("SPLIT_CONFIDENCE", 1);
 		auto classifyTiles = Techniques::CreateComputeOperator(
 			pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":ClassifyTiles",
