@@ -276,7 +276,11 @@ namespace RenderCore { namespace LightingEngine
 				return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt, next->_complexCullingVolume.get() };
 
 			case CompiledLightingTechnique::Step::Type::CallFunction:
-				next->_function(*_iterator);
+				TRY {
+					next->_function(*_iterator);
+				} CATCH(const std::exception& e) {
+					StringMeldAppend(_iterator->_parsingContext->_stringHelpers->_errorString) << e.what() << "\n";
+				} CATCH_END
 				break;
 
 			case CompiledLightingTechnique::Step::Type::ExecuteDrawables:

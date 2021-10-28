@@ -223,12 +223,14 @@ namespace RenderCore { namespace Techniques
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi, pushConstantsUSI);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
-			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			_activeEncoder = {};
+			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 
-			ApplyUniformsCompute(*parsingContext.GetUniformDelegateManager(), metalContext, _activeEncoder, parsingContext, boundUniforms, 0);
+			ApplyUniformsCompute(*parsingContext.GetUniformDelegateManager(), metalContext, newEncoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
-				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
-			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);
+				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 1);
+			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us, 1);
+			_activeEncoder = std::move(newEncoder);
 			_betweenBeginEnd = true;
 		}
 
@@ -239,10 +241,12 @@ namespace RenderCore { namespace Techniques
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi, pushConstantsUSI);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			_activeEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			_activeEncoder = {};
+			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
 			if (!descSets.empty())
-				boundUniforms.ApplyDescriptorSets(metalContext, _activeEncoder, descSets, 1);
-			boundUniforms.ApplyLooseUniforms(metalContext, _activeEncoder, us, 1);
+				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 1);
+			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us, 1);
+			_activeEncoder = std::move(newEncoder);
 			_betweenBeginEnd = true;
 		}
 
@@ -258,16 +262,28 @@ namespace RenderCore { namespace Techniques
 			unsigned countX, unsigned countY, unsigned countZ, 
 			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			BeginDispatches(parsingContext, us, descSets);
-			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			TRY {
+				BeginDispatches(parsingContext, us, descSets);
+				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			} CATCH(...) {
+				_activeEncoder = {};
+				_betweenBeginEnd = false;
+				throw;
+			} CATCH_END
 			_activeEncoder = {};
 			_betweenBeginEnd = false;
 		}
 
 		virtual void Dispatch(IThreadContext& threadContext, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			BeginDispatches(threadContext, us, descSets);
-			_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			TRY {
+				BeginDispatches(threadContext, us, descSets);
+				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
+			} CATCH(...) {
+				_activeEncoder = {};
+				_betweenBeginEnd = false;
+				throw;
+			} CATCH_END
 			_activeEncoder = {};
 			_betweenBeginEnd = false;
 		}
