@@ -586,10 +586,8 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback) {
-			assert(_pollingFunction);
+		if (needsFrameBufferCallback)
 			RegisterFrameBarrierCallbackAlreadyLocked();
-		}
 	}
 
 	template<typename Type>
@@ -617,10 +615,8 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback) {
-			assert(_pollingFunction);
+		if (needsFrameBufferCallback)
 			RegisterFrameBarrierCallbackAlreadyLocked();
-		}
 
 		return *this;
 	}
