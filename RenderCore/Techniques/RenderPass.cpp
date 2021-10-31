@@ -18,6 +18,7 @@
 #include "../../OSServices/Log.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/StreamUtils.h"
+#include "../../Utility/StringFormat.h"
 #include <cmath>
 #include <sstream>
 #include <iostream>
@@ -28,16 +29,14 @@ namespace RenderCore
 {
     static std::ostream& operator<<(std::ostream& str, const AttachmentDesc& attachment)
     {
-        str << "AttachmentDesc { "
-            #if defined(_DEBUG)
-                << (!attachment._name.empty()?attachment._name:std::string("<<no name>>")) << ", "
-            #endif
-            << AsString(attachment._format)
+        str << "AttachmentDesc {";
+        #if defined(_DEBUG)
+            if (!attachment._name.empty()) str << "\"" << attachment._name << "\"";
+        #endif
+        str << " " << AsString(attachment._format)
+            << ", L:" << AsString(attachment._loadFromPreviousPhase) << " " << BindFlagsAsString(attachment._initialLayout)
+            << ", S:" << AsString(attachment._storeToNextPhase) << " " << BindFlagsAsString(attachment._finalLayout)
             << ", 0x" << std::hex << attachment._flags << std::dec
-            << ", " << AsString(attachment._loadFromPreviousPhase) 
-            << ", " << AsString(attachment._storeToNextPhase)
-            << ", 0x" << std::hex << attachment._initialLayout << std::dec
-            << ", 0x" << std::hex << attachment._finalLayout << std::dec
             << " }";
         return str;
     }
@@ -89,7 +88,7 @@ namespace RenderCore
         } else {
             str << "[Buffer] " << Utility::ByteCount(desc._linearBufferDesc._sizeInBytes);
         }
-        str << ", 0x" << std::hex << desc._bindFlags << std::dec;
+        str << ", " << BindFlagsAsString(desc._bindFlags);
         return str;
     }
 }
@@ -1549,7 +1548,7 @@ namespace RenderCore { namespace Techniques
             << AttachmentSemantic{attachment._semantic} << ", "
             << attachment._desc << ", "
             << AsString(attachment._state) << ", "
-            << "0x" << std::hex << attachment._layoutFlags << std::dec << "}";
+            << BindFlagsAsString(attachment._layoutFlags) << "}";
         return str;
     }
 
@@ -1560,8 +1559,8 @@ namespace RenderCore { namespace Techniques
             << "{" << AsString(attachment._format) << ", " << (unsigned)attachment._samples._sampleCount << "}, "
             << std::hex << "Contains: " << AttachmentSemantic{attachment._containsDataForSemantic} << ", "
             << "ShouldReceive: " << AttachmentSemantic{attachment._shouldReceiveDataForSemantic} << ", "
-            << "FirstAccess: {" << AttachmentSemantic{attachment._firstAccessSemantic} << ", 0x" << attachment._firstAccessInitialLayout << ", " << AsString(attachment._firstAccessLoad) << "}, "
-            << "LastAccess: {" << AttachmentSemantic{attachment._lastWriteSemantic} << ", 0x" << attachment._lastAccessFinalLayout << ", " << AsString(attachment._lastAccessStore) << "}, "
+            << "FirstAccess: {" << AttachmentSemantic{attachment._firstAccessSemantic} << ", " << BindFlagsAsString(attachment._firstAccessInitialLayout) << ", " << AsString(attachment._firstAccessLoad) << "}, "
+            << "LastAccess: {" << AttachmentSemantic{attachment._lastWriteSemantic} << ", " << BindFlagsAsString(attachment._lastAccessFinalLayout) << ", " << AsString(attachment._lastAccessStore) << "}, "
             << std::dec
             << AsString(attachment._state) << "}";
         return str;
@@ -1637,6 +1636,10 @@ namespace RenderCore { namespace Techniques
                     }
                 #endif
                 result._fullAttachmentDescriptions.push_back(*i);
+
+                auto requiredBindFlags = usageFlags | a._desc._initialLayout | a._desc._finalLayout; 
+                if ((i->_desc._bindFlags & requiredBindFlags) != requiredBindFlags)
+                    Throw(std::runtime_error((StringMeld<512>() << "FrameBufferDescFragment requires attachment bind flags that are not present in the preregistered attachment. Attachment semantic (" << AttachmentSemantic{a._inputSemanticBinding} << "). Preregistered attachment bind flags: (" << BindFlagsAsString(i->_desc._bindFlags) << "), Frame buffer request bind flags: (" << BindFlagsAsString(requiredBindFlags) << ")").AsString()));
 
                 AttachmentTransform transform;
                 if (directionFlags & DirectionFlags::RetainsOnExit) {

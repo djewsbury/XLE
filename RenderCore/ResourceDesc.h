@@ -92,6 +92,9 @@ namespace RenderCore
         typedef unsigned BitField;
     }
 
+    std::string BindFlagsAsString(BindFlag::BitField bindFlags);
+    const char* AsString(BindFlag::Enum);
+
     /// Container for AllocationRules::Enum
     namespace AllocationRules
     {

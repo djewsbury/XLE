@@ -988,6 +988,44 @@ namespace RenderCore
 		}
 	}
 
+    std::string BindFlagsAsString(BindFlag::BitField bindFlags)
+    {
+        static std::string s_zero {"0"};
+        if (!bindFlags) return s_zero;
+        std::stringstream str;
+        bool first = true;
+        while (bindFlags) {
+            auto bit = xl_ctz4(bindFlags);
+            bindFlags ^= 1u<<bit;
+            if (!first) str << "|";
+            first = false;
+            str << AsString((BindFlag::Enum)(1u<<bit));
+        }
+        return str.str();
+    }
+
+    const char* AsString(BindFlag::Enum flag)
+    {
+        switch (flag) {
+        case BindFlag::VertexBuffer: return "VertexBuffer";
+		case BindFlag::IndexBuffer: return "IndexBuffer";
+		case BindFlag::ShaderResource: return "ShaderResource";
+		case BindFlag::RenderTarget: return "RenderTarget";
+		case BindFlag::DepthStencil: return "DepthStencil";
+		case BindFlag::UnorderedAccess: return "UnorderedAccess";
+		case BindFlag::ConstantBuffer: return "ConstantBuffer";
+		case BindFlag::StreamOutput: return "StreamOutput";
+        case BindFlag::DrawIndirectArgs: return "DrawIndirectArgs";
+        case BindFlag::RawViews: return "RawViews";
+        case BindFlag::InputAttachment: return "InputAttachment";
+        case BindFlag::TransferSrc: return "TransferSrc";
+        case BindFlag::TransferDst: return "TransferDst";
+        case BindFlag::PresentationSrc: return "PresentationSrc";
+        case BindFlag::TexelBuffer: return "TexelBuffer";
+		default: return "<<unknown>>";
+        }
+    }
+
     IResourcePtr IDevice::CreateResource(const ResourceDesc& desc, const SubResourceInitData& initData)
     {
         // Utility function to make creating single-subresource resources a little easier
