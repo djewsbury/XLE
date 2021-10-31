@@ -330,6 +330,17 @@ namespace Assets
             XlCopyString(_initializer, dimof(_initializer), initializer); 
         }
 
+        RetrievalError::RetrievalError(const RetrievalError& copyFrom)
+        {
+            XlCopyString(_initializer, dimof(_initializer), copyFrom._initializer); 
+        }
+        
+        RetrievalError& RetrievalError::operator=(const RetrievalError& copyFrom)
+        {
+            XlCopyString(_initializer, dimof(_initializer), copyFrom._initializer); 
+            return *this;
+        }
+
         InvalidAsset::InvalidAsset(StringSection<ResChar> initializer, const DependencyValidation& depVal, const Blob& actualizationLog) never_throws
         : RetrievalError(initializer)
 		, _depVal(depVal)
@@ -356,6 +367,22 @@ namespace Assets
 		}
 
         auto InvalidAsset::State() const -> AssetState { return AssetState::Invalid; }
+
+        InvalidAsset::InvalidAsset(const InvalidAsset& copyFrom)
+        : RetrievalError(copyFrom)
+        , _depVal(DependencyValidation::SafeCopy(copyFrom._depVal))
+        , _actualizationLog(copyFrom._actualizationLog)
+        , _whatString(copyFrom._whatString)
+        {}
+
+        InvalidAsset& InvalidAsset::operator=(const InvalidAsset& copyFrom)
+        {
+            RetrievalError::operator=(copyFrom);
+            _depVal = DependencyValidation::SafeCopy(copyFrom._depVal);
+            _actualizationLog = copyFrom._actualizationLog;
+            _whatString = copyFrom._whatString;
+            return *this;
+        }
 
         PendingAsset::PendingAsset(StringSection<ResChar> initializer) never_throws
         : RetrievalError(initializer)
@@ -445,6 +472,21 @@ namespace Assets
 				_depVal = depVal;
 			}
 		}
+
+        ConstructionError::ConstructionError(const ConstructionError& copyFrom)
+        : _reason(copyFrom._reason)
+        , _depVal(DependencyValidation::SafeCopy(copyFrom._depVal))
+        , _actualizationLog(copyFrom._actualizationLog)
+        {}
+
+        ConstructionError& ConstructionError::operator=(const ConstructionError& copyFrom)
+        {
+            _reason = copyFrom._reason;
+            _depVal = DependencyValidation::SafeCopy(copyFrom._depVal);
+            _actualizationLog = copyFrom._actualizationLog;
+            return *this;
+        }
+
     }
 
 	Blob AsBlob(const std::exception& e)

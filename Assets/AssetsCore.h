@@ -54,6 +54,8 @@ namespace Assets
             virtual AssetState State() const = 0;
 
 			RetrievalError(StringSection<ResChar> initializer) never_throws;
+            RetrievalError(const RetrievalError&);
+            RetrievalError& operator=(const RetrievalError&);
         private:
             ResChar _initializer[512];
         };
@@ -75,6 +77,10 @@ namespace Assets
 			virtual const char* what() const noexcept;
 
             InvalidAsset(StringSection<ResChar> initializer, const DependencyValidation&, const Blob& actualizationLog) never_throws;
+            InvalidAsset(InvalidAsset&&) = default;
+            InvalidAsset& operator=(InvalidAsset&&) = default;
+            InvalidAsset(const InvalidAsset&);
+            InvalidAsset& operator=(const InvalidAsset&);
 		private:
 			DependencyValidation _depVal;
 			Blob _actualizationLog;
@@ -128,6 +134,10 @@ namespace Assets
 			ConstructionError(Reason reason, const DependencyValidation&, const char format[], ...) never_throws;
 			ConstructionError(const std::exception&, const DependencyValidation&) never_throws;
 			ConstructionError(const ConstructionError&, const DependencyValidation&) never_throws;
+            ConstructionError(ConstructionError&&) = default;
+            ConstructionError& operator=(ConstructionError&&) = default;
+            ConstructionError(const ConstructionError&);
+            ConstructionError& operator=(const ConstructionError&);
 
         private:
 			Reason _reason;

@@ -43,6 +43,8 @@ namespace Assets
         DependencyValidation(const DependencyValidation&);
         DependencyValidation& operator=(const DependencyValidation&);
 
+        static DependencyValidation SafeCopy(const DependencyValidation&);      // copies with an additional check to ensure the global DepVal sys is still up
+
     private:
         friend class DependencyValidationSystem;
         DependencyValidation(DependencyValidationMarker marker);

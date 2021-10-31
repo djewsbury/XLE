@@ -380,6 +380,19 @@ namespace Assets
 	DependencyValidation::DependencyValidation(DependencyValidationMarker marker) : _marker(marker)
 	{}
 
+	DependencyValidation DependencyValidation::SafeCopy(const DependencyValidation& copyFrom)
+	{
+		auto sys = s_depValSystem.lock();
+		if (sys) {
+			DependencyValidation result;
+			result._marker = copyFrom._marker;
+			if (result._marker != DependencyValidationMarker_Invalid)
+				checked_cast<DependencyValidationSystem*>(&GetDepValSys())->AddRef(result._marker);
+			return result;
+		}
+		return {};
+	}
+
 	IDependencyValidationSystem& GetDepValSys()
 	{
 		return *s_depValSystem.lock();
