@@ -663,8 +663,12 @@ namespace Assets
 						// Log(Warning) << "Frame barrier callback function was not cleaned up before asset was destroyed" << std::endl; 
 						return;
 					}
-					ScopedLock(l->_parentLock);
-					if (l->_parent) l->_parent->OnFrameBarrier();
+					// If we don't get a lock straight away, just skip. This can prevent a deadlock since we lock the mutexes l->_parentLock && l->_parentLock->_lock
+					// in 2 different orders. There's no point in stalling here, anyway, since if we find the mutex is locked, it probably means we're destroying this
+					// callback
+					std::unique_lock<Threading::RecursiveMutex> lk{l->_parentLock, std::defer_lock};
+					if (lk.try_lock() && l->_parent)
+						l->_parent->OnFrameBarrier();
 				});
 		}
 
