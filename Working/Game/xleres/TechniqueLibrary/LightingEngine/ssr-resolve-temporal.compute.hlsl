@@ -24,6 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
+#include "ssr-common.hlsl"
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
 Texture2D<float> DownsampleDepths;
@@ -44,23 +45,6 @@ RWStructuredBuffer<uint> g_temporal_variance_mask;
     RWTexture2D<float> g_temporally_denoised_confidence;
     Texture2D<float> g_spatially_denoised_confidence_read;
 #endif
-
-cbuffer ExtendedTransforms
-{
-    row_major float4x4 ClipToView;      // g_inv_proj
-    row_major float4x4 ClipToWorld;     // g_inv_view_proj
-    row_major float4x4 WorldToView;     // g_view
-    row_major float4x4 ViewToWorld;     // g_inv_view
-    row_major float4x4 ViewToProj;      // g_proj
-    row_major float4x4 PrevWorldToClip; // g_prev_view_proj
-    float2 SSRNegativeReciprocalScreenSize;
-};
-
-#define g_temporal_stability_factor 0.66 // 0.975f
-#define g_temporal_variance_threshold 0.002f
-
-static const float g_roughness_sigma_min = 0.001f;
-static const float g_roughness_sigma_max = 0.01f;
 
 float FFX_DNSR_Reflections_LoadRayLength(int2 pixel_coordinate)
 {

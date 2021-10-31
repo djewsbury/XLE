@@ -12,11 +12,14 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/Services.h"
+#include "../Assets/PredefinedCBLayout.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/Resource.h"
 #include "../IAnnotator.h"
 #include "../../Math/Transformations.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Assets.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../xleres/FileList.h"
 
@@ -151,7 +154,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 
-		IResourceView* rvs[34];
+		IResourceView* rvs[35];
 		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
 		rvs[3] = _res->_rayListBufferUAV.get();													// g_ray_list
 		rvs[4] = _res->_rayListBufferSRV.get();													// g_ray_list_read
@@ -195,14 +198,16 @@ namespace RenderCore { namespace LightingEngine
 
 		rvs[27] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
 
-		if (_desc._splitConfidence) {
-			rvs[28] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
-			rvs[29] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceSRV).get();		// g_confidence_result_read
-			rvs[30] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntUAV).get();	// g_spatially_denoised_confidence
+		rvs[28] = _configCB.get();
 
-			rvs[31] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidencePrevSRV).get();	// g_temporally_denoised_confidence_history
-			rvs[32] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_temporally_denoised_confidence
-			rvs[33] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
+		if (_desc._splitConfidence) {
+			rvs[29] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
+			rvs[30] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceSRV).get();		// g_confidence_result_read
+			rvs[31] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntUAV).get();	// g_spatially_denoised_confidence
+
+			rvs[32] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidencePrevSRV).get();	// g_temporally_denoised_confidence_history
+			rvs[33] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_temporally_denoised_confidence
+			rvs[34] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
 		}
 
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._outputWidth, iterator._rpi.GetFrameBufferDesc().GetProperties()._outputHeight };
@@ -490,6 +495,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IComputeShaderOperator> resolveSpatial,
 		std::shared_ptr<Techniques::IComputeShaderOperator> resolveTemporal,
 		std::shared_ptr<Techniques::IComputeShaderOperator> reflectionsBlur,
+		const RenderCore::Assets::PredefinedCBLayout& configCBLayout,
 		std::shared_ptr<IDevice> device)
 	: _desc(desc)
 	, _classifyTiles(std::move(classifyTiles))
@@ -509,6 +515,14 @@ namespace RenderCore { namespace LightingEngine
 		_depVal.RegisterDependency(_resolveSpatial->GetDependencyValidation());
 		_depVal.RegisterDependency(_resolveTemporal->GetDependencyValidation());
 		_depVal.RegisterDependency(_reflectionsBlur->GetDependencyValidation());
+
+		{
+			ParameterBox params;
+			auto cbInitializer = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
+			_configCB = _device->CreateResource(
+				CreateDesc(BindFlag::ConstantBuffer, 0, 0, LinearBufferDesc::Create(cbInitializer.size()), "ssr-config"),
+				SubResourceInitData{MakeIteratorRange(cbInitializer)})->CreateBufferView();
+		}
 
 		///////////////////
 
@@ -533,6 +547,15 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	ScreenSpaceReflectionsOperator::~ScreenSpaceReflectionsOperator() {}
+
+	static const RenderCore::Assets::PredefinedCBLayout& FindCBLayout(const RenderCore::Assets::PredefinedPipelineLayout& layout, StringSection<> name)
+	{
+		for (const auto& l:layout._descriptorSets)
+			for (const auto& cb:l._descSet->_slots)
+				if (XlEqString(name, cb._name) && cb._type == DescriptorType::UniformBuffer && cb._cbIdx != ~0u)
+					return *l._descSet->_constantBuffers[cb._cbIdx];
+		Throw(std::runtime_error("Missing CBLayout named (" + name.AsString() + ")"));
+	}
 	
 	void ScreenSpaceReflectionsOperator::ConstructToFuture(
 		::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
@@ -577,14 +600,15 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(26, Hash64("SkyCube"));
 
 		usi.BindResourceView(27, Hash64("SSRDebug"));
+		usi.BindResourceView(28, Hash64("SSRConfiguration"));
 
 		if (desc._splitConfidence) {
-			usi.BindResourceView(28, Hash64("g_confidence_result"));
-			usi.BindResourceView(29, Hash64("g_confidence_result_read"));
-			usi.BindResourceView(30, Hash64("g_spatially_denoised_confidence"));
-			usi.BindResourceView(31, Hash64("g_temporally_denoised_confidence_history"));
-			usi.BindResourceView(32, Hash64("g_temporally_denoised_confidence"));
-			usi.BindResourceView(33, Hash64("g_spatially_denoised_confidence_read"));
+			usi.BindResourceView(29, Hash64("g_confidence_result"));
+			usi.BindResourceView(30, Hash64("g_confidence_result_read"));
+			usi.BindResourceView(31, Hash64("g_spatially_denoised_confidence"));
+			usi.BindResourceView(32, Hash64("g_temporally_denoised_confidence_history"));
+			usi.BindResourceView(33, Hash64("g_temporally_denoised_confidence"));
+			usi.BindResourceView(34, Hash64("g_spatially_denoised_confidence_read"));
 		}
 
 		usi.BindImmediateData(0, Hash64("ExtendedTransforms"));
@@ -636,13 +660,15 @@ namespace RenderCore { namespace LightingEngine
 			SSR_PIPELINE ":Main",
 			usi);
 
-		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur).ThenConstructToFuture(
+		auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(SSR_PIPELINE ":Main");
+
+		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur, pipelineLayoutFuture).ThenConstructToFuture(
 			future, 
-			[dev=pipelinePool->GetDevice(), desc](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur) { 
+			[dev=pipelinePool->GetDevice(), desc](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur, auto pipelineLayout) { 
 				return std::make_shared<ScreenSpaceReflectionsOperator>(
 					desc,
 					std::move(classifyTiles), std::move(prepareIndirectArgs), std::move(intersect), std::move(resolveSpatial), std::move(resolveTemporal), std::move(reflectionsBlur),
-					std::move(dev)); 
+					FindCBLayout(*pipelineLayout, "SSRConfiguration"), std::move(dev));
 			});
 	}
 

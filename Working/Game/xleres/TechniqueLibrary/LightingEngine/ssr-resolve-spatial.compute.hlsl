@@ -24,6 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
+#include "ssr-common.hlsl"
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
 #if SPLIT_CONFIDENCE
@@ -43,13 +44,6 @@ RWTexture2D<float3> g_spatially_denoised_reflections;
     Texture2D<float> g_confidence_result_read;
     RWTexture2D<float> g_spatially_denoised_confidence;
 #endif
-
-cbuffer FrameIdBuffer
-{
-    uint FrameId;
-};
-
-static const float g_depth_sigma = 0.02f;
 
 groupshared uint g_shared_0[16][16];
 groupshared uint g_shared_1[16][16];

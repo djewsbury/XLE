@@ -25,6 +25,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
+#include "ssr-common.hlsl"
+
 uint PackRayCoords(uint2 ray_coord, bool copy_horizontal, bool copy_vertical, bool copy_diagonal)
 {
     uint ray_x_15bit = ray_coord.x & 0b111111111111111;
@@ -39,9 +41,6 @@ uint PackRayCoords(uint2 ray_coord, bool copy_horizontal, bool copy_vertical, bo
 
 bool FFX_DNSR_Reflections_IsGlossyReflection(float roughness) { return roughness < 0.5f; }
 bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return roughness < 0.0001; }
-
-#define g_temporal_variance_guided_tracing_enabled 1
-#define g_samples_per_quad 1
 
 StructuredBuffer<uint> g_temporal_variance_mask_read;
 

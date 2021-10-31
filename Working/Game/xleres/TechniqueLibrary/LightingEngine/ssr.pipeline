@@ -2,6 +2,25 @@
 
 DescriptorSet AutoFixedSamplers
 {
+	UniformBuffer SSRConfiguration
+	{
+		uint g_most_detailed_mip = 1;
+		uint g_min_traversal_occupancy = 4;
+		uint g_max_traversal_intersections = 128;
+
+		float g_depth_buffer_thickness = 0.015;
+
+		uint g_temporal_variance_guided_tracing_enabled = 1;
+		uint g_samples_per_quad = 4;
+
+		float g_temporal_stability_factor = 0.76;
+		float g_temporal_variance_threshold = 0.002;
+
+		float g_depth_sigma = 0.02;
+		float g_roughness_sigma_min = 0.001;
+		float g_roughness_sigma_max = 0.01;
+	};
+
 	Sampler TrilinearClampTransparentBlack
 	{
 		Filter = Trilinear,

@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 	class PipelineCollection;
 	class DeferredShaderResource;
 }}
-namespace BufferUploads { using CommandListID = uint32_t; }
+namespace RenderCore { namespace Assets { class PredefinedCBLayout; } }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -55,6 +55,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::IComputeShaderOperator> resolveSpatial,
 			std::shared_ptr<Techniques::IComputeShaderOperator> resolveTemporal,
 			std::shared_ptr<Techniques::IComputeShaderOperator> reflectionsBlur,
+			const RenderCore::Assets::PredefinedCBLayout& configCBLayout,
 			std::shared_ptr<IDevice> device);
 		~ScreenSpaceReflectionsOperator();
 
@@ -76,6 +77,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _indirectArgsBufferUAV;
 		std::shared_ptr<IResource> _indirectArgsBuffer;
 		std::shared_ptr<IResourceView> _skyCubeSRV;
+
+		std::shared_ptr<IResourceView> _configCB;
 
 		class ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;
