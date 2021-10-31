@@ -159,13 +159,6 @@ namespace RenderCore { namespace LightingEngine
 					"color-hdr")
 			},
 			Techniques::PreregisteredAttachment {
-				Techniques::AttachmentSemantics::GBufferNormal,
-				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
-					"gbuffer-normal")
-			},
-			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::GBufferMotion,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
@@ -175,6 +168,42 @@ namespace RenderCore { namespace LightingEngine
 		};
 		for (const auto& a:attachments)
 			stitchingContext.DefineAttachment(a);
+
+		const bool doubleBufferNormals = true;
+		if (doubleBufferNormals) {
+			Techniques::PreregisteredAttachment attachments[] {
+				Techniques::PreregisteredAttachment {
+					Techniques::AttachmentSemantics::GBufferNormal,
+					CreateDesc(
+						BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
+						"gbuffer-normal"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer0
+				},
+				Techniques::PreregisteredAttachment {
+					Techniques::AttachmentSemantics::GBufferNormalPrev,
+					CreateDesc(
+						BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
+						"gbuffer-normal"),
+					Techniques::PreregisteredAttachment::State::PingPongBuffer1
+				}
+			};
+			for (const auto& a:attachments)
+				stitchingContext.DefineAttachment(a);
+		} else {
+			Techniques::PreregisteredAttachment attachments[] {
+				Techniques::PreregisteredAttachment {
+					Techniques::AttachmentSemantics::GBufferNormal,
+					CreateDesc(
+						BindFlag::RenderTarget | BindFlag::ShaderResource, 0, 0, 
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
+						"gbuffer-normal")
+				},
+			};
+			for (const auto& a:attachments)
+				stitchingContext.DefineAttachment(a);
+		}
 	}
 
 	static RenderStepFragmentInterface CreateDepthMotionFragment(
@@ -236,8 +265,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.SetDepthStencil(depth);
 
 		if (hasSSR) {
-			auto ssr = result.DefineAttachment(ConstHash64<'SSRe', 'flec', 'tion'>::Value).NoInitialState();
-			mainSubpass.AppendNonFrameBufferAttachmentView(ssr);
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64<'SSRe', 'flec', 'tion'>::Value).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment(ConstHash64<'SSRC', 'onfi', 'denc', 'e'>::Value).NoInitialState());
 		}
 		mainSubpass.SetName("MainForward");
 

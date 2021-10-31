@@ -24,19 +24,20 @@ StructuredBuffer<LightDesc> LightList : register (t1, space3);
 StructuredBuffer<uint> LightDepthTable : register(t2, space3);
 Texture3D<uint> TiledLightBitField : register(t3, space3);
 
-Texture2D SSR : register(t4, space3);
+Texture2D<float3> SSR : register(t4, space3);
+Texture2D<float> SSRConfidence : register(t5, space3);
 
 #if TEST_SHADOW_PROBE
-	Texture2DArray<float> StaticShadowProbeDatabase : register(t5, space3);
+	Texture2DArray<float> StaticShadowProbeDatabase : register(t6, space3);
 #else
-	TextureCubeArray<float> StaticShadowProbeDatabase : register(t5, space3);
+	TextureCubeArray<float> StaticShadowProbeDatabase : register(t6, space3);
 #endif
 
 struct StaticShadowProbeDesc
 {
 	MiniProjZW _miniProjZW;
 };
-StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t6, space3);
+StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t7, space3);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -58,7 +59,7 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 	#if !defined(PROBE_PREPARE)
 		float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
 		fresnel *= float(EnableSSR); 
-		result += fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+		result += fresnel * SSRConfidence.Load(uint3(lsd.pixelCoords, 0)) * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
 	#endif
 
 	return result; 
