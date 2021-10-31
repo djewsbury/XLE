@@ -432,7 +432,11 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
         // We need a world space maximum search distance here; even though we later clamp the
         // maximum distance in pixel space. This is to get consistency between the cascades -- because
         // if we search further in larger cascades, it emphasizes the differences between them
-        float searchSize = OrthoShadowCascadeScale[cascadeIndex].x * maxBlurNorm * 0.125 * 1024;
+        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+            float searchSize = OrthoShadowCascadeScale[cascadeIndex].x * maxBlurNorm * 0.125 * 1024;
+        #else
+            float searchSize = maxBlurNorm;
+        #endif
         filterSize = CalculateFilterSize(
             cascadeIndex, shadowTexCoord, miniProjection, biasedDepth, 
             searchSize, filterPlane, randomizerValue, msaaSampleIndex);
@@ -443,7 +447,11 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
         // return (filterSize - MinBlurRadiusNorm) / (maxBlurNorm - MinBlurRadiusNorm);
         // filterSize = maxBlurNorm;
     } else {
-        filterSize = max(MinBlurRadiusNorm, OrthoShadowCascadeScale[cascadeIndex].x * MaxBlurRadiusNorm * 0.25 * 1024);
+        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+            filterSize = max(MinBlurRadiusNorm, OrthoShadowCascadeScale[cascadeIndex].x * MaxBlurRadiusNorm * 0.125 * 1024);
+        #else
+            filterSize = maxBlurNorm;
+        #endif
     }
 
     return CalculateFilteredShadows(

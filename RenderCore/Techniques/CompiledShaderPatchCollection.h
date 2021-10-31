@@ -77,7 +77,6 @@ namespace RenderCore { namespace Techniques
 			};
 			IteratorRange<const Patch*> GetPatches() const { return MakeIteratorRange(_patches); }
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& GetMaterialDescriptorSet() const { return *_descriptorSet; }
-			unsigned GetMaterialDescriptorSetSlotIndex() const { return _materialDescriptorSetSlotIndex; }
 			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
 
 			bool HasPatchType(uint64_t implementing) const;

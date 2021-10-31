@@ -511,10 +511,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
 		::Assets::WhenAll(csCode, pipelineLayout).ThenConstructToFuture(
 			result,
-			[weakDevice=std::weak_ptr<IDevice>{device}, weakSamplerPool=std::weak_ptr<SamplerPool>{samplerPool}](auto csCodeActual, auto predefinedPipelineLayout) {
+			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool](auto csCodeActual, auto predefinedPipelineLayout) {
 				auto d = weakDevice.lock();
-				auto samplers = weakSamplerPool.lock();
-				if (!d || !samplers) Throw(std::runtime_error("Device shutdown before completion"));
+				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
 				// This case is a little more complicated because we need to generate a pipeline layout 
 				// (potentially using the shader byte code)

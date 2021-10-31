@@ -407,8 +407,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto vkSlotType = AsVkDescriptorType(slotType);
 
 		#if defined(_DEBUG)
-			if (	vkSlotType != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-				&&  vkSlotType != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)
+			if (	vkSlotType != VK_DESCRIPTOR_TYPE_SAMPLER
+				&&  vkSlotType != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 				Throw(std::runtime_error(StringMeld<256>() << "Binding mismatch for shader variable (" << shaderOrDescSetVariable << ") when binding sampler (" << samplerDescription << ")"));
 		#endif
 

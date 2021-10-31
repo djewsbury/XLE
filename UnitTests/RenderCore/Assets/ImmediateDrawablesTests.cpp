@@ -133,6 +133,7 @@ namespace UnitTests
 				REQUIRE(finalState.value() == ::Assets::AssetState::Ready);
 				REQUIRE(asyncMarker->GetAssetState() == ::Assets::AssetState::Ready);
 			}
+			immediateDrawables->OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -174,6 +175,7 @@ namespace UnitTests
 				REQUIRE(finalState.value() == ::Assets::AssetState::Ready);
 				REQUIRE(asyncMarker->GetAssetState() == ::Assets::AssetState::Ready);
 			}
+			immediateDrawables->OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);

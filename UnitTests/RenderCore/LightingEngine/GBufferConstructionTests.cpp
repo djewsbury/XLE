@@ -419,6 +419,7 @@ namespace UnitTests
 							prepareMarker->StallWhilePending();
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
+						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 
 						Techniques::Draw(
 							parsingContext, 
@@ -490,6 +491,7 @@ namespace UnitTests
 							prepareMarker->StallWhilePending();
 							REQUIRE(prepareMarker->GetAssetState() == ::Assets::AssetState::Ready);
 						}
+						testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 
 						Techniques::Draw(
 							parsingContext, 

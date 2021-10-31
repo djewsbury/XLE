@@ -7,8 +7,8 @@
 
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
-#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/CascadeResolve.hlsl"
+#include "../TechniqueLibrary/LightingEngine/ShadowsResolve.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 
 float3 ResolveLight(
@@ -46,8 +46,7 @@ float ResolveShadows(CascadeAddress cascadeAddress, LightScreenDest screenDesc)
             config);
     #else
         return ResolveShadows_Cascade(
-            cascadeAddress.cascadeIndex, cascadeAddress.frustumCoordinates, cascadeAddress.frustumSpaceNormal, 
-            cascadeAddress.miniProjection,
+            cascadeAddress,
             screenDesc.pixelCoords, screenDesc.sampleIndex,
             config);
     #endif

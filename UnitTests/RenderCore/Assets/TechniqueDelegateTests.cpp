@@ -336,7 +336,7 @@ namespace UnitTests
 
 		std::string GetPipelineLayout() override
 		{
-			return "ut-data/unit-test.pipeline:MainGraphics";
+			return "ut-data/unit-test.pipeline:GraphicsMain";
 		}
 	};
 

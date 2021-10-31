@@ -8,6 +8,8 @@
 #include "../Techniques/Drawables.h"
 #include "../Techniques/DescriptorSetAccelerator.h"
 #include "../Techniques/ParsingContext.h"
+#include "../Techniques/Services.h"
+#include "../Techniques/CommonResources.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/AssetFutureContinuation.h"
@@ -42,9 +44,16 @@ namespace RenderCore { namespace LightingEngine
 		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("t3"));
-		_descSet = Techniques::ConstructDescriptorSet(
-			*_device, *descSetLayout, usi, 
-			ResourceViewStream{*texture});
+		if (texture) {
+			_descSet = Techniques::ConstructDescriptorSet(
+				*_device, *descSetLayout, usi, 
+				ResourceViewStream{*texture});
+		} else {
+			auto dummy = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+			_descSet = Techniques::ConstructDescriptorSet(
+				*_device, *descSetLayout, usi, 
+				ResourceViewStream{*dummy});
+		}
 	}
 
 	::Assets::DependencyValidation SkyOperator::GetDependencyValidation() const { return _shader->GetDependencyValidation(); }

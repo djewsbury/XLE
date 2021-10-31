@@ -434,50 +434,58 @@ namespace UnitTests
 		
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		ParsingContext parsingContext(*testApparatus._techniqueContext, *threadContext);
-		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(del0);
-		parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(del1);
-		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
-		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
-		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
-		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("LocalTransform"), udel0);
-		parsingContext.GetUniformDelegateManager()->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 		
-		// When multiple delegate bind to the same slot, we should only query the one
-		// with the highest priority. Delegates in the SequencerContext override the
-		// ParsingContext, and delegates later in each array take precidence over earlier
-		// ones
-		std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResDelegates[] = { del2 };
-		std::pair<uint64_t, std::shared_ptr<Techniques::IUniformBufferDelegate>> uniformBufferDelegates[] = { std::make_pair(Hash64("LocalTransform"), udel1) };
-		SequencerUniformsHelper helper0{parsingContext, MakeIteratorRange(shaderResDelegates), MakeIteratorRange(uniformBufferDelegates)};
-		auto descSet0 = helper0.CreateDescriptorSet(
-			*testHelper->_device,
-			parsingContext);
-		REQUIRE(del2->_resViewQueryCount == 1);
-		REQUIRE(del1->_resViewQueryCount == 0);
-		REQUIRE(del0->_resViewQueryCount == 0);
-		REQUIRE(del2->_samplerQueryCount == 1);
-		REQUIRE(del1->_samplerQueryCount == 0);
-		REQUIRE(del0->_samplerQueryCount == 0);
-		REQUIRE(del2->_immediateDataQueryCount == 1);
-		REQUIRE(del1->_immediateDataQueryCount == 0);
-		REQUIRE(del0->_immediateDataQueryCount == 0);
-		REQUIRE(udel0->_queryCount == 1);		// once for GlobalTransform
-		REQUIRE(udel1->_queryCount == 1);		// once for LocalTransform
+		{
+			auto helper0 = Techniques::CreateUniformDelegateManager();
+			helper0->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *testApparatus._sequencerDescSetLayout.GetLayout(), *testHelper->_device);
+			helper0->AddShaderResourceDelegate(del0);
+			helper0->AddShaderResourceDelegate(del1);
+			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
+			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
+			helper0->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
+			helper0->AddUniformDelegate(Hash64("LocalTransform"), udel0);
+			helper0->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
 
-		SequencerUniformsHelper helper1{parsingContext};
-		auto descSet1 = helper1.CreateDescriptorSet(
-			*testHelper->_device,
-			parsingContext);
-		REQUIRE(del2->_resViewQueryCount == 1);
-		REQUIRE(del1->_resViewQueryCount == 1);
-		REQUIRE(del0->_resViewQueryCount == 0);
-		REQUIRE(del2->_samplerQueryCount == 1);
-		REQUIRE(del1->_samplerQueryCount == 1);
-		REQUIRE(del0->_samplerQueryCount == 0);
-		REQUIRE(del2->_immediateDataQueryCount == 1);
-		REQUIRE(del1->_immediateDataQueryCount == 1);
-		REQUIRE(del0->_immediateDataQueryCount == 0);
-		REQUIRE(udel0->_queryCount == 3);		// twice more for GlobalTransform & LocalTransform
-		REQUIRE(udel1->_queryCount == 1);		// removed from binding
+			helper0->AddShaderResourceDelegate(del2);
+			helper0->AddUniformDelegate(Hash64("LocalTransform"), udel1);
+
+			helper0->BringUpToDateGraphics(parsingContext);
+			REQUIRE(del2->_resViewQueryCount == 1);
+			REQUIRE(del1->_resViewQueryCount == 0);
+			REQUIRE(del0->_resViewQueryCount == 0);
+			REQUIRE(del2->_samplerQueryCount == 1);
+			REQUIRE(del1->_samplerQueryCount == 0);
+			REQUIRE(del0->_samplerQueryCount == 0);
+			REQUIRE(del2->_immediateDataQueryCount == 1);
+			REQUIRE(del1->_immediateDataQueryCount == 0);
+			REQUIRE(del0->_immediateDataQueryCount == 0);
+			REQUIRE(udel0->_queryCount == 1);		// once for GlobalTransform
+			REQUIRE(udel1->_queryCount == 1);		// once for LocalTransform
+		}
+
+		{
+			auto helper1 = Techniques::CreateUniformDelegateManager();
+			helper1->AddSemiConstantDescriptorSet(Hash64("Sequencer"), *testApparatus._sequencerDescSetLayout.GetLayout(), *testHelper->_device);
+			helper1->AddShaderResourceDelegate(del0);
+			helper1->AddShaderResourceDelegate(del1);
+			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-0"), udel0);
+			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-1"), udel0);
+			helper1->AddUniformDelegate(Hash64("GlobalTransform"), udel0);
+			helper1->AddUniformDelegate(Hash64("LocalTransform"), udel0);
+			helper1->AddUniformDelegate(Hash64("slot-doesnt-exist-2"), udel0);
+
+			helper1->BringUpToDateGraphics(parsingContext);
+			REQUIRE(del2->_resViewQueryCount == 1);
+			REQUIRE(del1->_resViewQueryCount == 1);
+			REQUIRE(del0->_resViewQueryCount == 0);
+			REQUIRE(del2->_samplerQueryCount == 1);
+			REQUIRE(del1->_samplerQueryCount == 1);
+			REQUIRE(del0->_samplerQueryCount == 0);
+			REQUIRE(del2->_immediateDataQueryCount == 1);
+			REQUIRE(del1->_immediateDataQueryCount == 1);
+			REQUIRE(del0->_immediateDataQueryCount == 0);
+			REQUIRE(udel0->_queryCount == 3);		// twice more for GlobalTransform & LocalTransform
+			REQUIRE(udel1->_queryCount == 1);		// removed from binding
+		}
 	}
 }

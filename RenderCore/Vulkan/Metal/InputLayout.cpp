@@ -140,6 +140,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto offset = e._alignedByteOffset == ~0x0u ? trackingOffset : e._alignedByteOffset;
 				trackingOffset = offset + BitsPerPixel(e._nativeFormat) / 8;
 
+				assert((offset % VertexAttributeRequiredAlignment(e._nativeFormat)) == 0);
+
 				auto i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
 				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash)
 					continue;   // Could not be bound
@@ -209,6 +211,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned ei=0; ei<layouts[slot]._elements.size(); ++ei) {
 				const auto& e = layouts[slot]._elements[ei];
 				auto hash = e._semanticHash;
+
+				assert((accumulatingOffset % VertexAttributeRequiredAlignment(e._nativeFormat)) == 0);
 
 				auto i = LowerBound(reflection._inputInterfaceQuickLookup, hash);
 				if (i == reflection._inputInterfaceQuickLookup.end() || i->first != hash) {

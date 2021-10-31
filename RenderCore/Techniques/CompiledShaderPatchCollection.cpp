@@ -124,7 +124,8 @@ namespace RenderCore { namespace Techniques
 			filteringRules.MergeIn(*rawIncludeFilteringRules->Actualize());
 		}
 		_interface._filteringRules.push_back(filteringRules);
-		_depVal.RegisterDependency(filteringRules.GetDependencyValidation());
+		if (filteringRules.GetDependencyValidation())
+			_depVal.RegisterDependency(filteringRules.GetDependencyValidation());
 
 		size_t size = 0;
 		for (const auto&i:inst._sourceFragments)

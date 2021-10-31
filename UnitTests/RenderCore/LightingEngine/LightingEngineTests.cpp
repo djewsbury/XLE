@@ -106,7 +106,7 @@ namespace UnitTests
 					c,
 					ExtractTranslation(positional->GetLocalToWorld()),
 					0.01f, finite->GetCutoffRange(),
-					GeometricCoordinateSpace::RightHanded,
+					RenderCore::Techniques::GetGeometricCoordinateSpaceForCubemaps(),
 					RenderCore::Techniques::GetDefaultClipSpaceType());
 		}
 

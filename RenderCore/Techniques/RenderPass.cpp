@@ -1087,6 +1087,10 @@ namespace RenderCore { namespace Techniques
             });
 		if (existingBinding != _pimpl->_semanticAttachments.end())
 			return existingBinding->_resource;
+
+        auto binding2 = LowerBound(_pimpl->_poolSemanticAttachments, semantic);
+        if (binding2 != _pimpl->_poolSemanticAttachments.end() && binding2->first == semantic)
+            return _pimpl->_attachments[binding2->second]._resource;
 		return nullptr;
 	}
 

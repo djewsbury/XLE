@@ -112,11 +112,11 @@ namespace UnitTests
 
 		InputElementDesc complicatedIA[] = 
 		{
-			InputElementDesc { "POSITION", 0, Format::R8_UNORM, 0, 0 },
-			InputElementDesc { "POSITION", 1, Format::R8_UNORM, 1, 16 },
+			InputElementDesc { "POSITION", 0, Format::R8G8B8A8_UNORM, 0, 0 },
+			InputElementDesc { "POSITION", 1, Format::R8G8B8A8_UNORM, 1, 16 },
 			InputElementDesc { "TEXCOORD", 0, Format::R32_FLOAT, 1, ~0u },
-			InputElementDesc { "TEXTANGENT", 0, Format::R8_UNORM, 1, 24 },
-			InputElementDesc { "NORMAL", 0, Format::R8_UNORM, 0, 24 },
+			InputElementDesc { "TEXTANGENT", 0, Format::R8G8B8A8_UNORM, 1, 24 },
+			InputElementDesc { "NORMAL", 0, Format::R8G8B8A8_UNORM, 0, 24 },
 			InputElementDesc { "TEXCOORD", 3, Format::R8G8B8A8_UNORM, 0, ~0u }
 		};
 		TestHashingNormalizingAndScrambling(MakeIteratorRange(complicatedIA));

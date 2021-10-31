@@ -502,7 +502,7 @@ namespace RenderCore { namespace LightingEngine
 						// I suppose we could reduce this depth range when we know that the center point is onscreen
 						Float4 extremePoint0 = projectionDesc._worldToProjection * Float4{standardLightDesc._position + cameraForward * standardLightDesc._cutoffRange, 1.0f};
 						Float4 extremePoint1 = projectionDesc._worldToProjection * Float4{standardLightDesc._position - cameraForward * standardLightDesc._cutoffRange, 1.0f};
-						float d0 = extremePoint0[2] / std::abs(extremePoint0[3]), d1 = extremePoint1[2] / std::abs(extremePoint1[3]);
+						float d0 = extremePoint0[2] / extremePoint0[3], d1 = extremePoint1[2] / extremePoint1[3];
 						encoder.SetDepthBounds(std::max(0.f, std::min(d0, d1)), std::min(1.f, std::max(d0, d1)));
 
 						// We only need the front faces of the sphere. There are some special problems when the camera is inside of the sphere,

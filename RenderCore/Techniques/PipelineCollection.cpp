@@ -48,6 +48,7 @@ namespace RenderCore { namespace Techniques
 					const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
 					for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
 						selectorsList[c] = &selectorsCopy._selectors[c];
+					ScopedLock(sharedPools->_lock);
 					auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
 						ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), *automaticFiltering, 
 						{}, nullptr, nullptr, {});

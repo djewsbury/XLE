@@ -385,8 +385,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				// set that contains a lot of the important information. Instead we just want to find the most recent use of this physical
 				// attachment with an overlapping view. That will be considered the same "viewed attachment"
 				for (auto i=_workingViewedAttachments.rbegin(); i!=_workingViewedAttachments.rend(); ++i)
-					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == resourceName)
-						i2 = i.base();
+					if (ViewsOverlap(i->_view, view) && i->_mappedAttachmentIdx == resourceName) {
+						i2 = (i+1).base();
+						assert(i2->_mappedAttachmentIdx == resourceName);
+					}
 
 				if (i2 == _workingViewedAttachments.end())
 					Throw(std::runtime_error("Could not find earlier output operation for input attachment request when building Vulkan framebuffer"));

@@ -126,37 +126,13 @@ namespace RenderCore { namespace LightingEngine
 				// the gbuffer contents are useful for various effects.
 
 				auto createGBuffer = std::make_shared<RenderStepFragmentInterface>(RenderCore::PipelineType::Graphics);
-				auto msDepth = createGBuffer->DefineAttachment(
-					Techniques::AttachmentSemantics::MultisampleDepth,
-					// Main multisampled depth stencil
-					{ RenderCore::Format::D24_UNORM_S8_UINT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear, LoadStore::Retain, 0, BindFlag::DepthStencil | BindFlag::ShaderResource });
-
-						// Generally the deferred pixel shader will just copy information from the albedo
-						// texture into the first deferred buffer. So the first deferred buffer should
-						// have the same pixel format as much input textures.
-						// Usually this is an 8 bit SRGB format, so the first deferred buffer should also
-						// be 8 bit SRGB. So long as we don't do a lot of processing in the deferred pixel shader
-						// that should be enough precision.
-						//      .. however, it possible some clients might prefer 10 or 16 bit albedo textures
-						//      In these cases, the first buffer should be a matching format.
-				auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
-				auto diffuse = createGBuffer->DefineAttachment(
-					Techniques::AttachmentSemantics::GBufferDiffuse,
-					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear, LoadStore::Retain });
-
-				auto normal = createGBuffer->DefineAttachment(
-					Techniques::AttachmentSemantics::GBufferNormal,
-					{ (!precisionTargets) ? Format::R8G8B8A8_SNORM : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear, LoadStore::Retain });
-
-				auto parameter = createGBuffer->DefineAttachment(
-					Techniques::AttachmentSemantics::GBufferParameter,
-					{ (!precisionTargets) ? Format::R8G8B8A8_UNORM : Format::R32G32B32A32_FLOAT, AttachmentDesc::Flags::Multisampled,
-						LoadStore::Clear, LoadStore::Retain });
+				auto msDepth = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::DepthStencil|BindFlag::ShaderResource);
+				auto diffuse = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferDiffuse).NoInitialState();
+				auto normal = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).NoInitialState();
+				auto parameter = createGBuffer->DefineAttachment(Techniques::AttachmentSemantics::GBufferParameter).NoInitialState();
 
 				Techniques::FrameBufferDescFragment::SubpassDesc subpass;
+				auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
 				subpass.AppendOutput(diffuse, {diffuseAspect});
 				subpass.AppendOutput(normal);
 				if (gbufferType == GBufferType::PositionNormalParameters)
@@ -288,6 +264,58 @@ namespace RenderCore { namespace LightingEngine
 		encoder.Draw(4);
 	}
 
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, GBufferType gbufferType, bool precisionTargets = false)
+	{
+		UInt2 fbSize{stitchingContext._workingProps._outputWidth, stitchingContext._workingProps._outputHeight};
+		Techniques::PreregisteredAttachment attachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::MultisampleDepth,
+				CreateDesc(
+					BindFlag::DepthStencil | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::D24_UNORM_S8_UINT),
+					"main-depth")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorHDR,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT),
+					"color-hdr")
+			},
+				// Generally the deferred pixel shader will just copy information from the albedo
+				// texture into the first deferred buffer. So the first deferred buffer should
+				// have the same pixel format as much input textures.
+				// Usually this is an 8 bit SRGB format, so the first deferred buffer should also
+				// be 8 bit SRGB. So long as we don't do a lot of processing in the deferred pixel shader
+				// that should be enough precision.
+				//      .. however, it possible some clients might prefer 10 or 16 bit albedo textures
+				//      In these cases, the first buffer should be a matching format.
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::GBufferDiffuse,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R8G8B8A8_UNORM_SRGB : Format::R32G32B32A32_FLOAT),
+					"gbuffer-diffuse")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::GBufferNormal,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_SNORM),
+					"gbuffer-diffuse")
+			},
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::GBufferParameter,
+				CreateDesc(
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::InputAttachment, 0, 0, 
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], RenderCore::Format::R8G8B8A8_UNORM),
+					"gbuffer-parameter")
+			}
+		};
+		for (const auto& a:attachments)
+			stitchingContext.DefineAttachment(a);
+	}
+
 	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -320,6 +348,8 @@ namespace RenderCore { namespace LightingEngine
 				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
 
 				Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
+				PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
+
 				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
 				auto captures = std::make_shared<DeferredLightingCaptures>();
 				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
@@ -474,6 +504,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void DeferredLightingCaptures::GenerateDebuggingOutputs(LightingTechniqueIterator& iterator)
 	{
+		iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 		unsigned c=0;
 		for (const auto& preparedShadow:_preparedShadows) {
 			auto opId = preparedShadow._shadowOpId;

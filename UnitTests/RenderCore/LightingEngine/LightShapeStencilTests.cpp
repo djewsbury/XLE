@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Metal/Resource.h"
@@ -189,6 +190,7 @@ namespace UnitTests
 
 			auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")

@@ -293,12 +293,18 @@ namespace RenderCore { namespace LightingEngine
 				{
 					if (next->_shaderResourceDelegate)
 						_iterator->_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(next->_shaderResourceDelegate);
-					Techniques::Draw(
-						*_iterator->_parsingContext,
-						*_iterator->_pipelineAcceleratorPool,
-						*next->_sequencerConfig,
-						_iterator->_drawablePkt);
-					_iterator->_drawablePkt.Reset();
+					TRY {
+						Techniques::Draw(
+							*_iterator->_parsingContext,
+							*_iterator->_pipelineAcceleratorPool,
+							*next->_sequencerConfig,
+							_iterator->_drawablePkt);
+						_iterator->_drawablePkt.Reset();
+					} CATCH(...) {
+						if (next->_shaderResourceDelegate)
+							_iterator->_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*next->_shaderResourceDelegate);
+						throw;
+					} CATCH_END
 					if (next->_shaderResourceDelegate)
 						_iterator->_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*next->_shaderResourceDelegate);
 				}

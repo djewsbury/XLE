@@ -25,6 +25,7 @@ namespace ShaderSourceParser
 		std::map<Utility::Internal::Token, Utility::Internal::ExpressionTokenList> _defaultSets;
 
 		uint64_t GetHash() const { return _hash; }
+		operator bool() const { return !_relevanceTable.empty() || !_defaultSets.empty(); }
 
 		bool IsRelevant(
 			StringSection<> symbol, StringSection<> value = {},

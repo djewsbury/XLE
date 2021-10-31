@@ -383,6 +383,7 @@ namespace UnitTests
 		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
 		auto cascadeIndexTexture = parsingContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Hash64("CascadeIndex")+0);
+		REQUIRE(cascadeIndexTexture);
 		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::UnorderedAccess);
 		usi.BindResourceView(0, Hash64("PrebuiltCascadeIndexTexture"));
 		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };

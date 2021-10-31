@@ -68,7 +68,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				nextMsg = now + std::chrono::milliseconds(250);
 			}
 			Threading::Sleep(1);
-			UpdateConsumer();
+			if (std::this_thread::get_id() == _queueThreadId)
+				UpdateConsumer();
 
 			lock.lock();
 		}
@@ -196,6 +197,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void FenceBasedTracker::UpdateConsumer()
 	{
+		assert(std::this_thread::get_id() == _queueThreadId);
+
 		{
 			ScopedLock(_trackersSubmittedToQueueLock);
 			while (!_trackersSubmittedToQueue.empty()) {

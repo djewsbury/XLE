@@ -141,6 +141,8 @@ namespace UnitTests
 
 	TEST_CASE( "PipelineConfiguration-BadSyntax", "[rendercore_assets]" )
 	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+
 		using PredefinedPipelineLayoutFile = RenderCore::Assets::PredefinedPipelineLayoutFile;
 
 		REQUIRE_THROWS(
