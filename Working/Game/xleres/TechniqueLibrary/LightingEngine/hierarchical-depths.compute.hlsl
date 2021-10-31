@@ -48,7 +48,10 @@ void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1
 void SpdIncreaseAtomicCounter()                     { InterlockedAdd(AtomicBuffer[0], 1, GroupAtomicCounter); }
 AU1 SpdGetAtomicCounter()                           { return GroupAtomicCounter; }
 void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value)  { GroupDepthValues[x][y] = value.x; }
-AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)      { return min(min(v0, v1), min(v2,v3)); }
+
+// For AMD screenspace reflections, the reduction operator must return the closest depth of the for
+// so for ReverseZ depth mode, we must use a max operator
+AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)      { return max(max(v0, v1), max(v2,v3)); }
 
 AF4 SpdLoadIntermediate(AU1 x, AU1 y) 
 {
