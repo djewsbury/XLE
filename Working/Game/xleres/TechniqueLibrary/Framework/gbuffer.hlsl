@@ -248,8 +248,8 @@ GBufferEncoded Encode(GBufferValues values)
         result.normalBuffer.a = values.blendingAlpha;
     } else {
             // todo -- "normal map accuracy" can be used to soften the roughness here...
-        result.diffuseBuffer.a = values.material.roughness;
-        result.normalBuffer.a = values.material.specular;
+        result.diffuseBuffer.a = values.material.specular;
+        result.normalBuffer.a = values.material.roughness;
     }
 
     #if HAS_PROPERTIES_BUFFER == 1
@@ -268,8 +268,8 @@ GBufferValues Decode(GBufferEncoded values)
 	result.diffuseAlbedo = values.diffuseBuffer.rgb;
 	result.worldSpaceNormal  = DecompressGBufferNormal(values.normalBuffer.xyz);
 
-    result.material.roughness = values.diffuseBuffer.a;
-    result.material.specular = values.normalBuffer.a;
+    result.material.roughness = values.normalBuffer.a;
+    result.material.specular = values.diffuseBuffer.a;
 
 	result.blendingAlpha = 1.f;
 	result.normalMapAccuracy = 1.f;
