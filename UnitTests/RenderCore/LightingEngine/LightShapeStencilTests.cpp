@@ -151,7 +151,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		RenderCore::Techniques::CameraDesc camera;
-		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 10.f, 0.0f});
+		camera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, 1.0f}), Float3{0.0f, 20.f, 0.0f});
 		camera._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		camera._nearClip = 0.0f;
 		camera._farClip = 100.f;		// a small far clip here reduces the impact of gbuffer reconstruction accuracy on sampling
@@ -189,6 +189,7 @@ namespace UnitTests
 			PumpBufferUploads(testApparatus);
 
 			auto drawableWriter = ToolsRig::CreateFlatPlaneDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
+			auto drawableWriterWithBlocker = ToolsRig::CreateFlatPlaneAndBlockerDrawableWriter(*testHelper->_device, *testApparatus._pipelineAcceleratorPool);
 			PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
 			testApparatus._pipelineAcceleratorPool->RebuildAllOutOfDatePipelines();
 
@@ -214,13 +215,27 @@ namespace UnitTests
 				auto stencilHighLight = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 				lightScene.DestroyLightSource(lightId);
 
+
 				REQUIRE(stencilHighLight == baseInvocations);		// depth bounds should prevent this "high light" from effect any pixels
 				REQUIRE(stencilHighLight < stencilMedLight);
 				REQUIRE(stencilMedLight < stencilLowLight);			// because were using orthogonal projection, we won't see a big different between low and mid lights -- but we shift one off the to the side a bit
 				REQUIRE(stencilLowLight < dontStencilCount);
+
+				// Do some more tests, this time with a blocker between the camera and the light (but not close enough to the light to be illuminated itself)
+				lightId = CreateTestLight(lightScene, {0.f, 2.0f, 0.f}, 0);
+				auto stencilLowLightWithBlocker = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriterWithBlocker);
+				lightScene.DestroyLightSource(lightId);
+
+				lightId = CreateTestLight(lightScene, {0.f, 8.0f, 0.f}, 0);
+				auto stencilHighLightWithBlocker = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriterWithBlocker);
+				lightScene.DestroyLightSource(lightId);
+
+				testHelper->EndFrameCapture();
+
+				REQUIRE(stencilLowLightWithBlocker < stencilLowLight);
+				REQUIRE(stencilLowLightWithBlocker != baseInvocations);
+				REQUIRE(stencilHighLightWithBlocker == baseInvocations);
 			}
 		}
-
-		testHelper->EndFrameCapture();
 	}
 }

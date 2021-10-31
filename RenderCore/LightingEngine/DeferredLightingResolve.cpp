@@ -70,13 +70,13 @@ namespace RenderCore { namespace LightingEngine
 	static const uint32_t StencilSampleCount = 1<<6;
 
 	static DepthStencilDesc s_dsWritePixelFrequencyPixel {
-		CompareOp::Always, false,
+		CompareOp::GreaterEqual, false,
 		true, StencilSky|StencilSampleCount, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal},
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Less}};
 
 	static DepthStencilDesc s_dsWriteNonSky {
-		CompareOp::Always, false,
+		CompareOp::GreaterEqual, false,
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
@@ -470,7 +470,6 @@ namespace RenderCore { namespace LightingEngine
 				cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 				float debuggingDummy[4] = {};
 				cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);
-
 				
 				assert(set._operatorId < lightResolveOperators._pipelines.size());
 

@@ -285,6 +285,29 @@ namespace ToolsRig
 		return std::make_shared<FlatPlaneDrawableWriter>(device, pipelineAcceleratorPool);
 	}
 
+	class FlatPlaneAndBlockerDrawableWriter : public FlatPlaneDrawableWriter
+	{
+	public:
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt)
+		{
+			FlatPlaneDrawableWriter::WriteDrawables(pkt);
+
+			ScaleRotationTranslationM srt {
+				Float3 { 1.f, 1.0f, 1.f },
+				Identity<Float3x3>(),
+				Float3 { 0.f, 15.0f, 0.f }
+			};
+			WriteDrawable(pkt, _geo, _vertexCount, AsFloat4x4(srt));
+		}
+
+		using FlatPlaneDrawableWriter::FlatPlaneDrawableWriter;
+	};
+
+	std::shared_ptr<IDrawablesWriter> CreateFlatPlaneAndBlockerDrawableWriter(RenderCore::IDevice& device, RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
+	{
+		return std::make_shared<FlatPlaneAndBlockerDrawableWriter>(device, pipelineAcceleratorPool);
+	}
+
 	class SharpContactDrawableWriter : public DrawablesWriterCommon
 	{
 	public:

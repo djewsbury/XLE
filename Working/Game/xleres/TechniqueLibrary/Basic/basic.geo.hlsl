@@ -225,9 +225,13 @@ ClipToNearVertex ProjectOntoNearPlane(ClipToNearVertex input)
 		}
 	} else {
 		// For an orthographic projection, we can actually just clamp to z=0, we don't actually have to do the full clipping algorithm
-		// (note that the reverseZ case isn't handled here)
-		result.position.z = 1e-6;		// creep protection
-		result.position.w = 1;
+		if (ReverseZ) {
+			result.position.z = 1;
+			result.position.w = 1;
+		} else {
+			result.position.z = 1e-6;		// creep protection
+			result.position.w = 1;
+		}
 	}
 #if defined(GS_FVF)
 	result.vfv = CalculateViewFrustumVectorFromClipSpacePosition(result.position);

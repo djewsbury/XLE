@@ -45,10 +45,11 @@ FullscreenCorner MakeFullscreenCorner(uint vertexId)
 	FullscreenCorner result;
 
 	result.coord = float2((float)(vertexId >> 1), (float)(vertexId & 1));
+	// Make sure to set the Y value to closest possible value to the camera for ReverseZ modes
 	#if (NDC == NDC_POSITIVE_RIGHT_HANDED) || (NDC == NDC_POSITIVE_RIGHT_HANDED_REVERSEZ)
-		result.position = float4(2.f * result.coord.x - 1.f, 2.f * result.coord.y - 1.f, 0.f, 1.f);
+		result.position = float4(2.f * result.coord.x - 1.f, 2.f * result.coord.y - 1.f, 1.f, 1.f);
 	#else
-		result.position = float4(2.f * result.coord.x - 1.f, -2.f * result.coord.y + 1.f, 0.f, 1.f);
+		result.position = float4(2.f * result.coord.x - 1.f, -2.f * result.coord.y + 1.f, 1.f, 1.f);
 	#endif
 	result.vfi.oViewFrustumVector = SysUniform_GetFrustumCorners(vertexId).xyz;
 	result.texCoord = result.coord;
