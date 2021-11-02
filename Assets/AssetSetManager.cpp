@@ -117,7 +117,10 @@ namespace Assets
 		_pimpl->_frameBarrierFunctions.insert(_pimpl->_frameBarrierFunctions.end(), _pimpl->_pendingFrameBarrierFunctions.begin(), _pimpl->_pendingFrameBarrierFunctions.end());
 		_pimpl->_pendingFrameBarrierFunctions.clear();
 
-		for (auto r:_pimpl->_pendingRemoveFrameBarrierFunctions) {
+		// we have to be a little bit careful here, because destroying _frameBarrierFunctions can result
+		// in calling an arbitrary destructor which could end up modifying _pendingRemoveFrameBarrierFunctions during this loop
+		for (size_t c=0; c<_pimpl->_pendingRemoveFrameBarrierFunctions.size(); ++c) {
+			auto r = _pimpl->_pendingRemoveFrameBarrierFunctions[c];
 			auto i = LowerBound(_pimpl->_frameBarrierFunctions, r);
 			if (i!=_pimpl->_frameBarrierFunctions.end() && i->first == r)
 				_pimpl->_frameBarrierFunctions.erase(i);

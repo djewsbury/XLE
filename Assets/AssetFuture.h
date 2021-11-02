@@ -12,8 +12,6 @@
 #include <assert.h>
 #include <utility>
 
-// #include "../OSServices/Log.h"
-
 namespace Assets
 {
 
@@ -29,16 +27,19 @@ namespace Assets
 			explicit FutureShared(const std::string& initializer = {});
 			~FutureShared();
 		protected:
+			mutable Threading::Mutex		_lock;
 			struct CallbackMarker
 			{
-				Threading::RecursiveMutex _parentLock; 
-				unsigned _markerId; FutureShared* _parent; 
+				std::atomic<FutureShared*> _parent;
+				unsigned _markerId;
+				Threading::Mutex _callbackActive;
 			};
 			mutable std::shared_ptr<CallbackMarker> _frameBarrierCallbackMarker;
 
 			void RegisterFrameBarrierCallbackAlreadyLocked();
-			void ClearFrameBarrierCallbackAlreadyLocked() const;
-			virtual void OnFrameBarrier() = 0;
+			void DisableFrameBarrierCallbackAlreadyLocked() const;
+			void EnsureFrameBarrierCallbackStopped() const;
+			virtual void OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) = 0;
 
 			std::string _initializer;	// stored for debugging purposes
 		};
@@ -77,7 +78,6 @@ namespace Assets
 		void SetPollingFunction(std::function<bool(Future<Type>&)>&&);
 		
 	private:
-		mutable Threading::Mutex		_lock;
 		mutable Threading::Conditional	_conditional;
 
 		volatile AssetState 	_state;
@@ -95,7 +95,7 @@ namespace Assets
 		bool TryRunPollingFunction(std::unique_lock<Threading::Mutex>&);
 		void CheckFrameBarrierCallbackAlreadyLocked();
 
-		virtual void			OnFrameBarrier() override;
+		virtual void			OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) override;
 	};
 
 	template<typename Type>
@@ -307,10 +307,9 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::OnFrameBarrier() 
+		void Future<Type>::OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) 
 	{
 		auto state = _state;
-		assert(_frameBarrierCallbackMarker);
 		if (state != AssetState::Pending) {
 			// Log(Warning) << "OnFrameBarrier for non-pending future" << std::endl;
 			return;
@@ -318,7 +317,6 @@ namespace Assets
 
 			// lock & swap the asset into the front buffer. We only do this during the "frame barrier" phase, to
 			// prevent assets from changing in the middle of a single frame.
-		std::unique_lock<Threading::Mutex> lock(_lock);
 		TryRunPollingFunction(lock);
 
 		if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
@@ -331,7 +329,7 @@ namespace Assets
 			_state = _pendingState;
 
 			assert(!_pollingFunction);
-			ClearFrameBarrierCallbackAlreadyLocked();
+			DisableFrameBarrierCallbackAlreadyLocked();
 		}
 	}
 
@@ -343,7 +341,7 @@ namespace Assets
 		//		2. move background state into foreground state
 		// If neither of these are relevant now, we can go ahead and clear it
 		if (_state != ::Assets::AssetState::Pending && !_pollingFunction)
-			ClearFrameBarrierCallbackAlreadyLocked();
+			DisableFrameBarrierCallbackAlreadyLocked();
 	}
 
 	template<typename Type>
@@ -460,7 +458,7 @@ namespace Assets
 				that->_actualizationLog = std::move(that->_pendingActualizationLog);
 				that->_actualizedDepVal = std::move(that->_pendingDepVal);
 				that->_state = that->_pendingState;
-				that->ClearFrameBarrierCallbackAlreadyLocked();
+				that->DisableFrameBarrierCallbackAlreadyLocked();
 				DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 				return (AssetState)that->_state;
 			}
@@ -503,7 +501,7 @@ namespace Assets
 		// asset and goes immediately into ready state
 		{
 			ScopedLock(_lock);
-			ClearFrameBarrierCallbackAlreadyLocked();
+			DisableFrameBarrierCallbackAlreadyLocked();
 			_actualized = std::move(newAsset);
 			_actualizationLog = log;
 			if (_actualized) {
@@ -543,7 +541,7 @@ namespace Assets
 			// ready/invalid state already.
 			// assert(_state == AssetState::Pending);
 			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
-				ClearFrameBarrierCallbackAlreadyLocked();
+				DisableFrameBarrierCallbackAlreadyLocked();
 			if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
 				_actualized = std::move(_pending);
 				_actualizationLog = std::move(_pendingActualizationLog);
@@ -568,10 +566,15 @@ namespace Assets
 	template<typename Type>
 		Future<Type>::Future(Future&& moveFrom)
 	{
+		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
+		moveFrom.EnsureFrameBarrierCallbackStopped();
+
 		ScopedLock(moveFrom._lock);
 
-		bool needsFrameBufferCallback = moveFrom._frameBarrierCallbackMarker != nullptr;
-		moveFrom.ClearFrameBarrierCallbackAlreadyLocked();
+		// It's not safe if the moveFrom._frameBarrierCallbackMarker is reinstated by another thread
+		// after we called EnsureFrameBarrierCallbackStopped()
+		assert(!moveFrom._frameBarrierCallbackMarker);
+
 		_state = moveFrom._state;
 		moveFrom._state = AssetState::Pending;
 		_actualized = std::move(moveFrom._actualized);
@@ -586,21 +589,26 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback)
+		if ((_state == AssetState::Pending && _pendingState != AssetState::Pending) || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
 	template<typename Type>
 		Future<Type>& Future<Type>::operator=(Future&& moveFrom)
 	{
+		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
+		EnsureFrameBarrierCallbackStopped();
+		moveFrom.EnsureFrameBarrierCallbackStopped();
+
 		std::lock(_lock, moveFrom._lock);
         std::lock_guard<Threading::Mutex> lk1(_lock, std::adopt_lock);
         std::lock_guard<Threading::Mutex> lk2(moveFrom._lock, std::adopt_lock);
 
-		ClearFrameBarrierCallbackAlreadyLocked();
+		// It's not safe if the moveFrom._frameBarrierCallbackMarker is reinstated by another thread
+		// after we called EnsureFrameBarrierCallbackStopped()
+		assert(!_frameBarrierCallbackMarker);
+		assert(!moveFrom._frameBarrierCallbackMarker);
 
-		bool needsFrameBufferCallback = moveFrom._frameBarrierCallbackMarker != nullptr;
-		moveFrom.ClearFrameBarrierCallbackAlreadyLocked();
 		_state = moveFrom._state;
 		moveFrom._state = AssetState::Pending;
 		_actualized = std::move(moveFrom._actualized);
@@ -615,7 +623,7 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if (needsFrameBufferCallback)
+		if ((_state == AssetState::Pending && _pendingState != AssetState::Pending) || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 
 		return *this;
@@ -643,7 +651,7 @@ namespace Assets
 	{
 		inline void FutureShared::RegisterFrameBarrierCallbackAlreadyLocked()
 		{
-			if (_frameBarrierCallbackMarker)
+			if (_frameBarrierCallbackMarker && _frameBarrierCallbackMarker->_parent.load())
 				return;
 
 			_frameBarrierCallbackMarker = std::make_shared<CallbackMarker>();
@@ -659,31 +667,64 @@ namespace Assets
 						// Log(Warning) << "Frame barrier callback function was not cleaned up before asset was destroyed" << std::endl; 
 						return;
 					}
-					// If we don't get a lock straight away, just skip. This can prevent a deadlock since we lock the mutexes l->_parentLock && l->_parentLock->_lock
-					// in 2 different orders. There's no point in stalling here, anyway, since if we find the mutex is locked, it probably means we're destroying this
-					// callback
-					std::unique_lock<Threading::RecursiveMutex> lk{l->_parentLock, std::defer_lock};
-					if (lk.try_lock() && l->_parent)
-						l->_parent->OnFrameBarrier();
+					ScopedLock(l->_callbackActive);
+					// If we don't get a lock straight away, just skip. There's no point in stalling here, anyway, since 
+					// we can just wait until the next frame
+					auto* parent = l->_parent.load();
+					if (!parent) return;
+					std::unique_lock<Threading::Mutex> lk{parent->_lock, std::defer_lock};
+					if (lk.try_lock()) {
+						// We must check "_parent" again after we've taken the lock above
+						parent = l->_parent.load();
+						if (!parent) return;
+						parent->OnFrameBarrier(lk);
+					}
 				});
 		}
 
-		inline void FutureShared::ClearFrameBarrierCallbackAlreadyLocked() const
+		inline void FutureShared::DisableFrameBarrierCallbackAlreadyLocked() const
 		{
+			// Deregistered the callback, but don't stall waiting if we're currently within a callback. That callback
+			// might be waiting on _lock right now, and so could complete when _lock is released
 			if (!_frameBarrierCallbackMarker)
 				return;
 
-			{
-				// We need to ensure that any OnFrameBarrier callbacks have finished, and will never be
-				// started beyond this point. This is partially critical when destroying the future
-				// Note that the OnFrameBarrier() callback doesn't take a ref count on this during it's callback
-				// (it only ref the _frameBarrierCallbackMarker). So the future can be destroyed in a background
-				// thread while the OnFrameBarrier() callback is being run -- we need a mutex to prevent that.
-				ScopedLock(_frameBarrierCallbackMarker->_parentLock);
+			auto* oldParent = _frameBarrierCallbackMarker->_parent.exchange(nullptr);
+			if (oldParent)
 				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
-				_frameBarrierCallbackMarker->_parent = nullptr;
+		}
+
+		inline void FutureShared::EnsureFrameBarrierCallbackStopped() const
+		{
+			// This is similar to DisableFrameBarrierCallbackAlreadyLocked(), except it also stalls waiting
+			// for the callback if it is currently running in a different thread.
+			// Use this in scenarios where ee need to ensure that any OnFrameBarrier callbacks have finished, 
+			// and will never be
+			// started beyond this point. This is partially critical when destroying the future
+			// 
+			// Note that the OnFrameBarrier() callback doesn't take a ref count on this during it's callback
+			// (it only ref the _frameBarrierCallbackMarker). So the future can be destroyed in a background
+			// thread while the OnFrameBarrier() callback is being run -- we need a mutex to prevent that.
+			//
+			// Never call this function while  "_lock" is locked. That can cause deadlocks because of the stall
+			// on callbackMarker->_callbackActive
+			std::shared_ptr<CallbackMarker> callbackMarker;
+			{
+				ScopedLock(_lock);
+				DisableFrameBarrierCallbackAlreadyLocked();
+				callbackMarker = std::move(_frameBarrierCallbackMarker);
 			}
-			_frameBarrierCallbackMarker.reset();
+			if (callbackMarker) {
+				// Lock the mutex inside of the callback marker to ensure that if the callback is currently active, 
+				// we stall waiting for it to finish.
+				// We can't lock this at the same time as _lock, in order to avoid deadlock scenarios
+				ScopedLock(callbackMarker->_callbackActive);
+				// We actually need to repeat the check again, because the callback we just completed may register
+				// another callback as it completes.
+				// It should be unlikely for this to chain more than once more, because that would require the new
+				// callback to also be running at the same time we're processing on this thread
+				EnsureFrameBarrierCallbackStopped();
+			}
 		}
 
 		inline FutureShared::FutureShared(const std::string& initializer)
@@ -692,7 +733,7 @@ namespace Assets
 
 		inline FutureShared::~FutureShared() 
 		{
-			ClearFrameBarrierCallbackAlreadyLocked();
+			EnsureFrameBarrierCallbackStopped();
 		}
 	}
 }
