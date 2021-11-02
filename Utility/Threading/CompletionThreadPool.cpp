@@ -269,6 +269,9 @@ namespace Utility
     {
         if (stallDuration.has_value()) {
             auto timeoutPt = std::chrono::steady_clock::now() + stallDuration.value();
+            RunBlocks(true);
+            if (std::chrono::steady_clock::now() >= timeoutPt)
+                return _runningWorkerCount == 0;
             while (_runningWorkerCount) {
                 Threading::YieldTimeSlice();
                 RunBlocks(true);
@@ -277,6 +280,7 @@ namespace Utility
             }
             return true;
         } else {
+            RunBlocks(true);
             while (_runningWorkerCount) {
                 Threading::YieldTimeSlice();
                 RunBlocks(true);
