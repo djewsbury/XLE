@@ -13,9 +13,12 @@
 #include "../../ConsoleRig/GlobalServices.h"
 #include <stdexcept>
 #include <filesystem>
+#include <future>
+#include <chrono>
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
+using namespace std::chrono_literals;
 
 using namespace Catch::literals;
 namespace UnitTests
@@ -231,5 +234,92 @@ namespace UnitTests
 			REQUIRE(resolvedRequests[1]._buffer);
 			REQUIRE(resolvedRequests[1]._bufferSize);
 		}
+	}
+
+	TEST_CASE( "General-StandardFutures", "[assets]" )
+	{
+		// creating a future after the promise is fullfilled
+		// sharing a future after the original future has been queried
+		// is there a shared_ptr within the promise?
+		// querying the future with wait_for multiple times?
+		// moving a promise with a future attached
+		// cost of wait_for
+
+		struct PromisedType
+		{
+			std::shared_ptr<void> _asset;
+			::Assets::Blob _actualizationLog;
+		};
+		std::promise<PromisedType> promise;
+		auto future = promise.get_future();
+
+		promise.set_value(PromisedType{});
+		REQUIRE(future.wait_for(0s) == std::future_status::ready);
+		auto gotValue = future.get();
+
+		// we can't query or wait for the future after query
+		REQUIRE_THROWS([&]() {future.wait_for(0s);}());
+		REQUIRE_THROWS([&]() {future.get();}());
+
+		// we can share after query, but we end up with a useless shared_future<>
+		auto sharedAfterQuery = future.share();
+		REQUIRE_THROWS([&]() {sharedAfterQuery.wait_for(0s);}());
+		REQUIRE_THROWS([&]() {sharedAfterQuery.get();}());
+
+		// we can't get a second future from promise
+		// and we can't call set_value() a second time
+		REQUIRE_THROWS([&]() {promise.get_future();}());
+		REQUIRE_THROWS([&]() {promise.set_value(PromisedType{});}());
+
+		// however we can reset and reuse the same promise
+		promise = {};
+		promise.set_value(PromisedType{});
+
+		// get future from promise after fullfilling it
+		auto secondFuture = promise.get_future();
+		REQUIRE(secondFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = secondFuture.get();
+
+		// shared future hyjinks
+		std::promise<PromisedType> promiseForSharedFuture;
+		promiseForSharedFuture.set_value(PromisedType{});
+		auto sharedFuture = promiseForSharedFuture.get_future().share();
+		REQUIRE(sharedFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = sharedFuture.get();
+
+		// waiting for and calling get() on a shared_future is valid even after the
+		// first query
+		REQUIRE(sharedFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = sharedFuture.get();
+
+		std::shared_future<PromisedType> secondSharedFuture = sharedFuture;
+		REQUIRE(secondSharedFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = secondSharedFuture.get();
+
+		// copy constructor off the copied future
+		std::shared_future<PromisedType> thirdSharedFuture = secondSharedFuture;
+		REQUIRE(thirdSharedFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = thirdSharedFuture.get();
+
+		// waiting for the original shared future still valid
+		REQUIRE(sharedFuture.wait_for(0s) == std::future_status::ready);
+		gotValue = sharedFuture.get();
+
+		// does a promise loose contact with it's futures after it's moved?
+		promise = {};
+		auto futureToExplode = promise.get_future();
+		REQUIRE(futureToExplode.wait_for(0s) == std::future_status::timeout);
+		std::promise<PromisedType> moveDstPromise = std::move(promise);
+
+		// we can't use a promise that was just used as a move src
+		REQUIRE_THROWS([&]() {promise.set_value(PromisedType{});}());
+		
+		REQUIRE(futureToExplode.wait_for(0s) == std::future_status::timeout);
+		moveDstPromise.set_value(PromisedType{});
+		REQUIRE(futureToExplode.wait_for(0s) == std::future_status::ready);
+
+		// Internally std::promise<> holds a pointer to another object. In the VS libraries, it's called _Associated_state
+		// This contains a mutex and condition variable. The promised type is stored within the same heap block
+		// calling wait_for() always invokes a mutex lock/unlock and std::condition_variable::wait_for combo 
 	}
 }
