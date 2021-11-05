@@ -45,6 +45,21 @@ namespace Assets
 		};
 	}
 
+	template<typename Type> struct PromisedAsset
+	{
+		Type 					_asset;
+		AssetState				_state;
+		Blob					_actualizationLog;
+		DependencyValidation	_depVal;
+	};
+
+	namespace Internal
+	{
+		template<typename Type> static auto SharedFutureFallback_Helper(int) -> typename std::enable_if<std::is_copy_constructible_v<Type>, std::shared_future<Type>>::type;
+		template<typename... T> static auto SharedFutureFallback_Helper(...) -> std::future<T...>;
+		template<typename Type> using SharedFutureFallback = decltype(SharedFutureFallback_Helper<Type>(0));
+	}
+
 	template<typename Type>
 		class Future : public Internal::FutureShared
 	{
@@ -78,17 +93,13 @@ namespace Assets
 		void SetPollingFunction(std::function<bool(Future<Type>&)>&&);
 		
 	private:
-		mutable Threading::Conditional	_conditional;
-
 		volatile AssetState 	_state;
 		Type 					_actualized;
 		Blob					_actualizationLog;
 		DependencyValidation	_actualizedDepVal;
 
-		AssetState				_pendingState;
-		Type 					_pending;
-		Blob					_pendingActualizationLog;
-		DependencyValidation	_pendingDepVal;
+		std::promise<PromisedAsset<Type>> _pendingPromise;
+		Internal::SharedFutureFallback<PromisedAsset<Type>> _pendingFuture;
 
 		std::function<bool(Future<Type>&)> _pollingFunction;
 
@@ -209,14 +220,11 @@ namespace Assets
 				std::swap(pollingFunction, _pollingFunction);
 			}
 		} CATCH (const Exceptions::ConstructionError& e) {
+			_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e), e.GetDependencyValidation()});
 			lock = std::unique_lock<Threading::Mutex>(_lock);
-			_pendingState = AssetState::Invalid;
-			_pendingActualizationLog = AsBlob(e);
-			_pendingDepVal = e.GetDependencyValidation();
 		} CATCH (const std::exception& e) {
+			_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e)});
 			lock = std::unique_lock<Threading::Mutex>(_lock);
-			_pendingState = AssetState::Invalid;
-			_pendingActualizationLog = AsBlob(e);
 		} CATCH_END
 
 		CheckFrameBarrierCallbackAlreadyLocked();
@@ -235,36 +243,19 @@ namespace Assets
 
 		{
 			std::unique_lock<Threading::Mutex> lock(_lock);
-			if (_state != AssetState::Pending) {
-				actualized = _actualized;
-				depVal = _actualizedDepVal;
-				actualizationLog = _actualizationLog;
-				return _state;
-			}
-			if (_pendingState != AssetState::Pending) {
-				actualized = _pending;
-				depVal = _pendingDepVal;
-				actualizationLog = _pendingActualizationLog;
-				return _pendingState;
-			}
-			if (TryRunPollingFunction(lock)) {
-				if (_state != AssetState::Pending) {
-					actualized = _actualized;
-					depVal = _actualizedDepVal;
-					actualizationLog = _actualizationLog;
-					return _state;
-				}
-
-				if (_pendingState != AssetState::Pending) {
-					actualized = _pending;
-					depVal = _pendingDepVal;
-					actualizationLog = _pendingActualizationLog;
-					return _pendingState;
-				}
-			}
+			TryRunPollingFunction(lock);
 		}
 
-		return AssetState::Pending;
+		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
+		if (futureState == std::future_status::ready) {
+			auto promised = _pendingFuture.get();
+			actualized = std::move(promised._asset);
+			depVal = std::move(promised._depVal);
+			actualizationLog = std::move(promised._actualizationLog);
+			return promised._state;
+		} else {
+			return AssetState::Pending;
+		}
 	}
 
 	template<typename Type>
@@ -278,32 +269,18 @@ namespace Assets
 
 		{
 			std::unique_lock<Threading::Mutex> lock(_lock);
-			if (_state != AssetState::Pending) {
-				depVal = _actualizedDepVal;
-				actualizationLog = _actualizationLog;
-				return _state;
-			}
-			if (_pendingState != AssetState::Pending) {
-				depVal = _actualizedDepVal;
-				actualizationLog = _pendingActualizationLog;
-				return _pendingState;
-			}
-			if (TryRunPollingFunction(lock)) {
-				if (_state != AssetState::Pending) {
-					depVal = _actualizedDepVal;
-					actualizationLog = _actualizationLog;
-					return _state;
-				}
-
-				if (_pendingState != AssetState::Pending) {
-					depVal = _actualizedDepVal;
-					actualizationLog = _pendingActualizationLog;
-					return _pendingState;
-				}
-			}
+			TryRunPollingFunction(lock);
 		}
 
-		return AssetState::Pending;
+		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
+		if (futureState == std::future_status::ready) {
+			auto promised = _pendingFuture.get();
+			depVal = std::move(promised._depVal);
+			actualizationLog = std::move(promised._actualizationLog);
+			return promised._state;
+		} else {
+			return AssetState::Pending;
+		}
 	}
 
 	template<typename Type>
@@ -319,14 +296,16 @@ namespace Assets
 			// prevent assets from changing in the middle of a single frame.
 		TryRunPollingFunction(lock);
 
-		if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
-			_actualized = std::move(_pending);
-			_actualizationLog = std::move(_pendingActualizationLog);
-			_actualizedDepVal = std::move(_pendingDepVal);
+		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
+		if (futureState == std::future_status::ready) {
+			auto promised = _pendingFuture.get();
+			_actualized = std::move(promised._asset);
+			_actualizationLog = std::move(promised._actualizationLog);
+			_actualizedDepVal = std::move(promised._depVal);
 			// Note that we must change "_state" last -- because another thread can access _actualized without a mutex lock
 			// when _state is set to AssetState::Ready
 			// we should also consider a cache flush here to ensure the CPU commits in the correct order
-			_state = _pendingState;
+			_state = promised._state;
 
 			assert(!_pollingFunction);
 			DisableFrameBarrierCallbackAlreadyLocked();
@@ -356,7 +335,6 @@ namespace Assets
 			Throw(std::runtime_error("Detected asset future deadlock scenario in StallWhilePending. Future initializer: " + _initializer));
 		}
 
-		using namespace std::chrono_literals;
 		auto startTime = std::chrono::steady_clock::now();
         auto timeToCancel = startTime + timeout;
 
@@ -383,18 +361,10 @@ namespace Assets
 				TRY {
 					pollingResult = pollingFunction(*that);
 				} CATCH (const Exceptions::ConstructionError& e) {
-					lock = std::unique_lock<Threading::Mutex>(_lock);
-					that->_pendingState = AssetState::Invalid;
-					that->_pendingActualizationLog = AsBlob(e);
-					that->_pendingDepVal = e.GetDependencyValidation();
-					isInLock = true;		// already locked "that->_lock"
+					that->_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e), e.GetDependencyValidation()});
 					break;
 				} CATCH (const std::exception& e) {
-					lock = std::unique_lock<Threading::Mutex>(that->_lock);
-					that->_pendingState = AssetState::Invalid;
-					that->_pendingActualizationLog = AsBlob(e);
-					that->_pendingDepVal = {};
-					isInLock = true;		// already locked "that->_lock"
+					that->_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e)});
 					break;
 				} CATCH_END
 
@@ -441,57 +411,55 @@ namespace Assets
 			that->CheckFrameBarrierCallbackAlreadyLocked();
 		}
 
+		lock = {};
+
 		for (;;) {
 			if (that->_state != AssetState::Pending) {
 				DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 				return (AssetState)that->_state;
 			}
-			if (that->_pendingState != AssetState::Pending) {
-				// Force the background version into the foreground (see OnFrameBarrier)
-				// This is required because we can be woken up by SetAsset, which only set the
-				// background asset. But the caller most likely needs the asset right now, so
-				// we've got to swap it into the foreground.
-				// There is a problem if the caller is using bothActualize() and StallWhilePending() on the
-				// same asset in the same frame -- in this case, the order can have side effects.
-				assert(that->_state == AssetState::Pending);
-				that->_actualized = std::move(that->_pending);
-				that->_actualizationLog = std::move(that->_pendingActualizationLog);
-				that->_actualizedDepVal = std::move(that->_pendingDepVal);
-				that->_state = that->_pendingState;
-				that->DisableFrameBarrierCallbackAlreadyLocked();
-				DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
-				return (AssetState)that->_state;
-			}
-            if (timeout.count() != 0) {
-                auto waitResult = that->_conditional.wait_until(lock, timeToCancel);
-                // If we timed out during wait, we should cancel and return
-                if (waitResult == std::cv_status::timeout) {
+			std::future_status waitResult;
+			if (timeout.count() != 0) {
+				waitResult = that->_pendingFuture.wait_until(timeToCancel);
+				if (waitResult == std::future_status::timeout) {
 					DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 					return {};
 				}
-            } else {
-                that->_conditional.wait(lock);
-            }
+			} else
+				that->_pendingFuture.wait();
+
+			auto pendingResult = that->_pendingFuture.get();
+			assert(pendingResult._state != AssetState::Pending);
+
+			// Force the background version into the foreground (see OnFrameBarrier)
+			// This is required because we can be woken up by SetAsset, which only set the
+			// background asset. But the caller most likely needs the asset right now, so
+			// we've got to swap it into the foreground.
+			// There is a problem if the caller is using bothActualize() and StallWhilePending() on the
+			// same asset in the same frame -- in this case, the order can have side effects.
+			lock = std::unique_lock<Threading::Mutex>(that->_lock);
+			assert(that->_state == AssetState::Pending);
+			that->_actualized = std::move(pendingResult._asset);
+			that->_actualizationLog = std::move(pendingResult._actualizationLog);
+			that->_actualizedDepVal = std::move(pendingResult._depVal);
+			that->_state = pendingResult._state;
+			that->DisableFrameBarrierCallbackAlreadyLocked();
+			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
+			return (AssetState)that->_state;
 		}
 	}
 
 	template<typename Type>
 		void Future<Type>::SetAsset(Type&& newAsset, const Blob& log)
 	{
-		{
-			ScopedLock(_lock);
-			_pending = std::move(newAsset);
-			_pendingState = AssetState::Ready;
-			_pendingActualizationLog = log;
-			_pendingDepVal = Internal::GetDependencyValidation(_pending);
-			RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
+		// If we are already in invalid / ready state, we will never move the pending
+		// asset into the foreground. We also cannot change from those states to pending, 
+		// because of some other assumptions.
+		assert(_state == ::Assets::AssetState::Pending);
 
-			// If we are already in invalid / ready state, we will never move the pending
-			// asset into the foreground. We also cannot change from those states to pending, 
-			// because of some other assumptions.
-			assert(_state == ::Assets::AssetState::Pending);
-		}
-		_conditional.notify_all();
+		_pendingPromise.set_value({std::move(newAsset), AssetState::Ready, log, Internal::GetDependencyValidation(newAsset)});
+		ScopedLock(_lock);
+		RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 	}
 
 	template<typename Type>
@@ -499,32 +467,24 @@ namespace Assets
 	{
 		// this is intended for "shadowing" assets only; it sets the asset directly into the foreground
 		// asset and goes immediately into ready state
-		{
-			ScopedLock(_lock);
-			DisableFrameBarrierCallbackAlreadyLocked();
-			_actualized = std::move(newAsset);
-			_actualizationLog = log;
-			if (_actualized) {
-				_actualizedDepVal = Internal::GetDependencyValidation(_actualized);
-			} else
-				_actualizedDepVal = {};
-			_state = _actualized ? AssetState::Ready : AssetState::Invalid;
-		}
-		_conditional.notify_all();
+		auto depVal = Internal::GetDependencyValidation(newAsset);
+		_pendingPromise.set_value({newAsset, AssetState::Ready, log, depVal});
+		ScopedLock(_lock);
+		DisableFrameBarrierCallbackAlreadyLocked();
+		_actualized = std::move(newAsset);
+		_actualizationLog = log;
+		_actualizedDepVal = std::move(depVal);
+		_state = _actualized ? AssetState::Ready : AssetState::Invalid;
 	}
 
 	template<typename Type>
 		void Future<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
 	{
+		_pendingPromise.set_value({{}, AssetState::Invalid, log, std::move(depVal)});
 		{
 			ScopedLock(_lock);
-			_pending = {};
-			_pendingState = AssetState::Invalid;
-			_pendingActualizationLog = log;
-			_pendingDepVal = std::move(depVal);
 			RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 		}
-		_conditional.notify_all();
 	}
 
 	template<typename Type>
@@ -542,14 +502,15 @@ namespace Assets
 			// assert(_state == AssetState::Pending);
 			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
 				DisableFrameBarrierCallbackAlreadyLocked();
-			if (_state == AssetState::Pending && _pendingState != AssetState::Pending) {
-				_actualized = std::move(_pending);
-				_actualizationLog = std::move(_pendingActualizationLog);
-				_actualizedDepVal = std::move(_pendingDepVal);
+			if (_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+				auto pendingState = _pendingFuture.get();
+				_actualized = std::move(pendingState._asset);
+				_actualizationLog = std::move(pendingState._actualizationLog);
+				_actualizedDepVal = std::move(pendingState._depVal);
 				// Note that we must change "_state" last -- because another thread can access _actualized without a mutex lock
 				// when _state is set to AssetState::Ready
 				// we should also consider a cache flush here to ensure the CPU commits in the correct order
-				_state = _pendingState;
+				_state = pendingState._state;
 			}
 			return;
 		}
@@ -557,7 +518,7 @@ namespace Assets
 		ScopedLock(_lock);
 		assert(!_pollingFunction);
 		assert(_state == AssetState::Pending);
-		assert(_pendingState == AssetState::Pending);
+		assert(_pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready);
 		_pollingFunction = std::move(newFunction);
 		if (_pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
@@ -581,15 +542,12 @@ namespace Assets
 		_actualizationLog = std::move(moveFrom._actualizationLog);
 		_actualizedDepVal = std::move(moveFrom._actualizedDepVal);
 
-		_pendingState = moveFrom._pendingState;
-		moveFrom._pendingState = AssetState::Pending;
-		_pending = std::move(moveFrom._pending);
-		_pendingActualizationLog = std::move(moveFrom._pendingActualizationLog);
-		_pendingDepVal = std::move(moveFrom._pendingDepVal);
+		_pendingPromise = std::move(moveFrom._pendingPromise);
+		_pendingFuture = std::move(moveFrom._pendingFuture);
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if ((_state == AssetState::Pending && _pendingState != AssetState::Pending) || _pollingFunction)
+		if ((_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
@@ -615,15 +573,12 @@ namespace Assets
 		_actualizationLog = std::move(moveFrom._actualizationLog);
 		_actualizedDepVal = std::move(moveFrom._actualizedDepVal);
 
-		_pendingState = moveFrom._pendingState;
-		moveFrom._pendingState = AssetState::Pending;
-		_pending = std::move(moveFrom._pending);
-		_pendingActualizationLog = std::move(moveFrom._pendingActualizationLog);
-		_pendingDepVal = std::move(moveFrom._pendingDepVal);
+		_pendingPromise = std::move(moveFrom._pendingPromise);
+		_pendingFuture = std::move(moveFrom._pendingFuture);
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if ((_state == AssetState::Pending && _pendingState != AssetState::Pending) || _pollingFunction)
+		if ((_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 
 		return *this;
@@ -637,7 +592,10 @@ namespace Assets
 		// If this future is not bound to a specific operation, we'll be stuck in pending state
 		// forever.
 		_state = AssetState::Pending;
-		_pendingState = AssetState::Pending;
+		if constexpr (std::is_copy_constructible_v<Type>) {
+			_pendingFuture = _pendingPromise.get_future().share();
+		} else 
+			_pendingFuture = _pendingPromise.get_future();
 	}
 
 	template<typename Type>
