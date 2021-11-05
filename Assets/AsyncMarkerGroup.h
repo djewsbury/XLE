@@ -25,7 +25,7 @@ namespace Assets
         void Remove(const std::shared_ptr<IAsyncMarker>&);
         
         AssetState        GetAssetState() const override;
-        std::optional<AssetState>   StallWhilePending(std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const override;
+        std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
 
         AsyncMarkerGroup();
         ~AsyncMarkerGroup();

@@ -43,7 +43,7 @@ namespace Assets
         return AssetState::Ready;
     }
     
-    std::optional<AssetState>   AsyncMarkerGroup::StallWhilePending(std::chrono::milliseconds timeout) const
+    std::optional<AssetState>   AsyncMarkerGroup::StallWhilePending(std::chrono::microseconds timeout) const
     {
         auto timeToCancel = std::chrono::steady_clock::now() + timeout;
 
@@ -52,9 +52,9 @@ namespace Assets
             if (timeout.count() != 0) {
                 auto now = std::chrono::steady_clock::now();
                 if (now >= timeToCancel) return {};
-                state = e._marker->StallWhilePending(std::chrono::duration_cast<std::chrono::milliseconds>(timeToCancel - now));
+                state = e._marker->StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(timeToCancel - now));
             } else {
-                state = e._marker->StallWhilePending(std::chrono::milliseconds(0));
+                state = e._marker->StallWhilePending(std::chrono::microseconds(0));
             }
             if (!state) return {};
             if (state == AssetState::Invalid)

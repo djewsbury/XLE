@@ -67,7 +67,7 @@ namespace Assets
 		const Type& Actualize() const;
 		const Type* TryActualize() const;
 		
-        std::optional<AssetState>   StallWhilePending(std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const override;
+        std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
 
 		AssetState		            GetAssetState() const override { return _state; }
 		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
@@ -324,7 +324,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-        std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::milliseconds timeout) const
+        std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::microseconds timeout) const
 	{
 		if (Internal::FutureResolution_DeadlockDetection((void*)this)) {
 			// This future is currently in a "resolution moment"

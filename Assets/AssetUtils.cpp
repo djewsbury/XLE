@@ -523,7 +523,7 @@ namespace Assets
         _state = newState;
     }
 
-    std::optional<AssetState>   GenericFuture::StallWhilePending(std::chrono::milliseconds timeout) const
+    std::optional<AssetState>   GenericFuture::StallWhilePending(std::chrono::microseconds timeout) const
     {
         auto timeToCancel = std::chrono::steady_clock::now() + timeout;
 
