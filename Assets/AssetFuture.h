@@ -79,6 +79,8 @@ namespace Assets
 			Blob& actualizationLog);
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
 
+		std::shared_future<PromisedAsset<Type>> ShareFuture();
+
 		using PromisedType = Type;
 
 		explicit Future(const std::string& initializer = {});
@@ -281,6 +283,13 @@ namespace Assets
 		} else {
 			return AssetState::Pending;
 		}
+	}
+
+	template<typename Type>
+		std::shared_future<PromisedAsset<Type>> Future<Type>::ShareFuture()
+	{
+		static_assert(std::is_copy_constructible_v<Type>, "ShareFuture() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
+		return _pendingFuture;
 	}
 
 	template<typename Type>

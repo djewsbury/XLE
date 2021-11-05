@@ -11,6 +11,9 @@
 #include <stdexcept>
 #include <random>
 #include <future>
+#include "thousandeyes/futures/then.h"
+#include "thousandeyes/futures/DefaultExecutor.h"
+#include "thousandeyes/futures/Executor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
@@ -169,6 +172,226 @@ namespace UnitTests
 
 		Log(Debug) << "Not completed immediately: " << notCompletedImmediately << std::endl;
 		Log(Debug) << "Abandoned: " << assetsAbandoned << std::endl;
+	}
+
+	template<typename... AssetTypes>
+		class MultiAssetFuture2
+	{
+	public:
+		// based on thousandeyes::futures::detail::FutureWithTuple, this generates fullfills a promise
+		// with our tuple of futures
+		struct TETimedWaitable : public thousandeyes::futures::TimedWaitable
+		{
+		public:
+			using TupleOfFutures = std::tuple<std::shared_ptr<::Assets::Future<AssetTypes>>...>;
+			TETimedWaitable(
+				std::chrono::microseconds waitLimit,
+				TupleOfFutures subFutures,
+				std::promise<TupleOfFutures> p)
+			: TimedWaitable(std::move(waitLimit)), _subFutures(std::move(subFutures)), _promise(std::move(p))
+			{}
+
+			template<std::size_t I>
+				bool timedWait_(const std::chrono::microseconds& timeout)
+			{
+				auto stallResult = std::get<I>(_subFutures)->StallWhilePending(timeout);
+				if (!stallResult || stallResult != ::Assets::AssetState::Ready)
+					return false;
+				if constexpr(I+1 != sizeof...(AssetTypes))
+					return timedWait_<I+1>(timeout);
+				return true;
+			}
+
+			bool timedWait(const std::chrono::microseconds& timeout) override
+			{
+				return timedWait_<0>(timeout);
+			}
+
+			void dispatch(std::exception_ptr err) override
+			{
+				if (err) {
+					_promise.set_exception(err);
+					return;
+				}
+
+				TRY {
+					_promise.set_value(std::move(_subFutures));
+				} CATCH (...) {
+					_promise.set_exception(std::current_exception());
+				} CATCH_END
+			}
+
+			TupleOfFutures _subFutures;
+			std::promise<TupleOfFutures> _promise;
+		};
+
+		/*template<std::size_t ... I>
+			void Then_(std::function<void(AssetTypes...)>&& continuationFunction, std::index_sequence<I...>)
+		{
+			using Tuple = decltype(_subFutures);
+			std::vector<decltype(std::get<I>(_subFutures)->ShareFuture())...> futures;
+
+			thousandeyes::futures::then(
+				(std::get<I>(_subFutures)->ShareFuture())...,
+				[](std::shared_future<AssetTypes>... futures) {
+
+				});
+		}*/
+
+		void Then()
+		{
+			// using Tuple = decltype(_subFutures);
+			// using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
+			// Then_(std::move(continuationFunction), Indices{});
+
+			std::promise<decltype(_subFutures)> mergedPromise;
+			auto mergedFuture = mergedPromise.get_future();
+			std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
+
+			std::chrono::microseconds timeLimit { 0 };
+			executor->watch(std::make_unique<TETimedWaitable>(
+				std::move(timeLimit),
+				std::move(_subFutures),
+				std::move(mergedPromise)
+			));
+
+			thousandeyes::futures::then(
+				std::move(mergedFuture),
+				[](std::future<decltype(_subFutures)> completedAssets) {
+					auto result = completedAssets.get();
+					auto resultZero = std::get<0>(result)->Actualize();
+					auto resultOne = std::get<1>(result)->Actualize();
+					auto resultTwo = std::get<2>(result)->Actualize();
+
+					int c=0;
+					(void)c;
+				});
+		}
+
+		std::tuple<std::shared_ptr<::Assets::Future<AssetTypes>>...> _subFutures;
+	};
+
+	template<typename... AssetTypes>
+		MultiAssetFuture2<AssetTypes...> WhenAll2(const std::shared_ptr<::Assets::Future<AssetTypes>>&... subFutures)
+	{
+		return {
+			std::tuple<std::shared_ptr<::Assets::Future<AssetTypes>>...>{ subFutures... }
+		};
+	}
+
+	template<typename PromisedType>
+		bool TimedWait(const std::shared_ptr<::Assets::Future<PromisedType>>& future, std::chrono::microseconds timeout)
+	{
+		auto stallResult = future->StallWhilePending(timeout);
+		return stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Ready;
+	}
+	
+	static bool TimedWait(const ::Assets::IAsyncMarker& future, std::chrono::microseconds timeout)
+	{
+		auto stallResult = future.StallWhilePending(timeout);
+		return stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Ready;
+	}
+
+	template<typename PromisedType>
+		bool TimedWait(const std::future<PromisedType>& future, std::chrono::microseconds timeout)
+	{
+		return future.wait_for(timeout) == std::future_status::ready;
+	}
+
+	template<typename... FutureTypes>
+		struct FlexTimedWaitable : public thousandeyes::futures::TimedWaitable
+	{
+	public:
+		using TupleOfFutures = std::tuple<FutureTypes...>;
+		FlexTimedWaitable(
+			std::chrono::microseconds waitLimit,
+			TupleOfFutures subFutures,
+			std::promise<TupleOfFutures> p)
+		: TimedWaitable(std::move(waitLimit)), _subFutures(std::move(subFutures)), _promise(std::move(p))
+		{}
+
+		template<std::size_t I>
+			bool timedWait_(const std::chrono::microseconds& timeout)
+		{
+			if (!TimedWait(std::get<I>(_subFutures), timeout))
+				return false;
+			if constexpr(I+1 != sizeof...(FutureTypes))
+				return timedWait_<I+1>(timeout);
+			return true;
+		}
+
+		bool timedWait(const std::chrono::microseconds& timeout) override
+		{
+			return timedWait_<0>(timeout);
+		}
+
+		void dispatch(std::exception_ptr err) override
+		{
+			if (err) {
+				_promise.set_exception(err);
+				return;
+			}
+
+			TRY {
+				_promise.set_value(std::move(_subFutures));
+			} CATCH (...) {
+				_promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
+
+		TupleOfFutures _subFutures;
+		std::promise<TupleOfFutures> _promise;
+	};
+	
+	template<typename... FutureTypes>
+		std::future<std::tuple<std::decay_t<FutureTypes>...>> WhenAll3(FutureTypes... subFutures)
+	{
+		std::promise<std::tuple<std::decay_t<FutureTypes>...>> mergedPromise;
+		auto mergedFuture = mergedPromise.get_future();
+		std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
+
+		std::chrono::microseconds timeLimit { 0 };
+		executor->watch(std::make_unique<FlexTimedWaitable<FutureTypes...>>(
+			timeLimit,
+			std::make_tuple(std::forward<FutureTypes>(subFutures)...),
+			std::move(mergedPromise)
+		));
+
+		return mergedFuture;
+	}
+
+	TEST_CASE( "AssetFuture-Continuation", "[assets]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+
+		auto futureZero = std::make_shared<::Assets::Future<unsigned>>();
+		auto futureOne = std::make_shared<::Assets::Future<unsigned>>();
+		auto futureTwo = std::make_shared<::Assets::Future<unsigned>>();
+		
+		/*WhenAll2(futureZero, futureOne, futureTwo).Then();*/
+		futureZero->SetAsset(0, {});
+		futureOne->SetAsset(1, {});
+		futureTwo->SetAsset(2, {});
+
+		std::atomic<bool> test = false;
+		thousandeyes::futures::then(
+			WhenAll3(futureZero, futureOne, futureTwo),
+			[&test](auto futureTuple) {
+
+				auto tuple = futureTuple.get();
+
+				auto resultZero = std::get<0>(tuple)->Actualize();
+				auto resultOne = std::get<1>(tuple)->Actualize();
+				auto resultTwo = std::get<2>(tuple)->Actualize();
+
+				int c=0;
+				(void)c;
+				test = true;
+			});
+
+		while (!test) { std::this_thread::sleep_for(0s); }
 	}
 
 	TEST_CASE( "General-StandardFutures", "[assets]" )
