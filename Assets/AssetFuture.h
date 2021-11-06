@@ -51,6 +51,9 @@ namespace Assets
 		AssetState				_state;
 		Blob					_actualizationLog;
 		DependencyValidation	_depVal;
+
+		operator Type&() { return _asset; }
+		operator const Type&() const { return _asset; }
 	};
 
 	namespace Internal
@@ -80,6 +83,7 @@ namespace Assets
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
 
 		std::shared_future<PromisedAsset<Type>> ShareFuture();
+		std::promise<PromisedAsset<Type>> AdoptPromise();
 
 		using PromisedType = Type;
 
@@ -290,6 +294,12 @@ namespace Assets
 	{
 		static_assert(std::is_copy_constructible_v<Type>, "ShareFuture() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
 		return _pendingFuture;
+	}
+
+	template<typename Type>
+		std::promise<PromisedAsset<Type>> Future<Type>::AdoptPromise()
+	{
+		return std::move(_pendingPromise);
 	}
 
 	template<typename Type>
