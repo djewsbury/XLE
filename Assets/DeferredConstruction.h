@@ -56,7 +56,7 @@ namespace Assets
 		Internal::FutureResolutionMoment<typename Future::PromisedType> moment(future);
 		TRY {
 			auto asset = AutoConstructAsset<typename Future::PromisedType>(std::forward<Params>(initialisers)...);
-			future.SetAsset(std::move(asset), {});
+			future.SetAsset(std::move(asset));
 		} CATCH (const Exceptions::ConstructionError& e) {
 			future.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
 		} CATCH (const Exceptions::InvalidAsset& e) {

@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
+
 #include "../UnitTestHelper.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetFuture.h"
@@ -31,7 +33,7 @@ namespace UnitTests
 		{
 			std::this_thread::sleep_for(constructionTime);
 			if (finalState == ::Assets::AssetState::Ready) {
-				future.SetAsset(AssetWithRandomConstructionTime{}, {});
+				future.SetAsset(AssetWithRandomConstructionTime{});
 			} else {
 				future.SetInvalidAsset({}, {});
 			}
@@ -283,17 +285,23 @@ namespace UnitTests
 		bool TimedWait(const std::shared_ptr<::Assets::Future<PromisedType>>& future, std::chrono::microseconds timeout)
 	{
 		auto stallResult = future->StallWhilePending(timeout);
-		return stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Ready;
+		return stallResult.value_or(::Assets::AssetState::Pending) != ::Assets::AssetState::Pending;
 	}
 	
 	static bool TimedWait(const ::Assets::IAsyncMarker& future, std::chrono::microseconds timeout)
 	{
 		auto stallResult = future.StallWhilePending(timeout);
-		return stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Ready;
+		return stallResult.value_or(::Assets::AssetState::Pending) != ::Assets::AssetState::Pending;
 	}
 
 	template<typename PromisedType>
 		bool TimedWait(const std::future<PromisedType>& future, std::chrono::microseconds timeout)
+	{
+		return future.wait_for(timeout) == std::future_status::ready;
+	}
+
+	template<typename PromisedType>
+		bool TimedWait(const std::shared_future<PromisedType>& future, std::chrono::microseconds timeout)
 	{
 		return future.wait_for(timeout) == std::future_status::ready;
 	}
@@ -365,40 +373,15 @@ namespace UnitTests
 	using namespace Assets;
 
 	template<typename T> static auto FutureResult_(int) -> decltype(std::declval<::Assets::Internal::RemoveSmartPtrType<T>>().get());
-	template<typename T> static auto FutureResult_(int) -> PromisedAsset<typename ::Assets::Internal::RemoveSmartPtrType<T>::PromisedType>;
+	template<typename T> static auto FutureResult_(int) -> typename std::enable_if<std::is_copy_constructible_v<typename ::Assets::Internal::RemoveSmartPtrType<T>::PromisedType>, decltype(std::declval<::Assets::Internal::RemoveSmartPtrType<T>>().ActualizeBkgrnd())>::type;
 	template<typename...> static auto FutureResult_(...) -> void;
 
-	template<typename T> using FutureResult = decltype(FutureResult_<Future<unsigned>>(0));
+	template<typename T> using FutureResult = decltype(FutureResult_<T>(0));
 
-	static_assert(std::is_same_v<FutureResult<Future<unsigned>>, PromisedAsset<unsigned>>);
-
+	////////////////////////////////////////////////////////////////////////////////////////////////
 	template<typename Payload>
-		static AssetState QueryFuture(
-			std::future<Payload>&& future,
-			Payload& actualized,
-			Blob& actualizationBlob,
-			DependencyValidation& exceptionDepVal)
-	{
-		TRY {
-			actualized = future.get();
-			return AssetState::Ready;
-		} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
-			actualizationBlob = e.GetActualizationLog();
-			exceptionDepVal = e.GetDependencyValidation();
-			return AssetState::Invalid;
-		} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
-			actualizationBlob = e.GetActualizationLog();
-			exceptionDepVal = e.GetDependencyValidation();
-			return AssetState::Invalid;
-		} CATCH (const std::exception& e) {
-			actualizationBlob = AsBlob(e);
-			return AssetState::Invalid;
-		} CATCH_END
-	}
-
-	template<typename Payload>
-		static AssetState QueryFuture(
-			Future<Payload>&& future,
+		static AssetState TryQueryFuture(
+			Future<Payload>& future,
 			Payload& actualized,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
@@ -407,32 +390,56 @@ namespace UnitTests
 	}
 
 	template<typename Payload>
-		static AssetState QueryFuture(
-			std::shared_ptr<Future<Payload>>&& future,
-			PromisedAsset<Payload>& actualized,
+		static AssetState TryQueryFuture(
+			std::shared_ptr<Future<Payload>>& future,
+			Payload& actualized,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
 	{
 		return future->CheckStatusBkgrnd(actualized, exceptionDepVal, actualizationBlob);
 	}
 
+	template<typename Payload>
+		static AssetState TryQueryFuture(
+			std::future<Payload>& future,
+			Payload& actualized,
+			Blob& actualizationBlob,
+			DependencyValidation& exceptionDepVal)
+	{
+		AssetState state;
+		::Assets::Internal::TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
+		return state;
+	}
+
+	template<typename Payload>
+		static AssetState TryQueryFuture(
+			std::shared_future<Payload>& future,
+			Payload& actualized,
+			Blob& actualizationBlob,
+			DependencyValidation& exceptionDepVal)
+	{
+		AssetState state;
+		::Assets::Internal::TryGetAssetFromFuture(future, state, actualized, actualizationBlob, exceptionDepVal);
+		return state;
+	}
+
 	template<size_t I = 0, typename... Futures>
-		static void QueryFutures_(
+		static void TryQueryFutures_(
 			AssetState& currentState,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal,
-			std::tuple<Futures...>&& completedFutures,
+			std::tuple<Futures...>& completedFutures,
 			std::tuple<FutureResult<Futures>...>& actualized)
 	{
 		Blob queriedLog;
 		DependencyValidation queriedDepVal;
-		auto state = QueryFuture(std::get<I>(std::move(completedFutures)), std::get<I>(actualized), queriedLog, queriedDepVal);
+		auto state = TryQueryFuture(std::get<I>(completedFutures), std::get<I>(actualized), queriedLog, queriedDepVal);
 		if (state != AssetState::Ready)
 			currentState = state;
 
 		if (state != AssetState::Invalid) {	// (on first invalid, stop looking any further)
 			if constexpr(I+1 != sizeof...(Futures))
-				QueryFutures_<I+1>(currentState, actualizationBlob, exceptionDepVal, std::move(completedFutures), actualized);
+				TryQueryFutures_<I+1>(currentState, actualizationBlob, exceptionDepVal, completedFutures, actualized);
 		} else {
 			std::stringstream str;
 			str << "Failed to actualize subasset number (" << I << "): ";
@@ -443,19 +450,160 @@ namespace UnitTests
 	}
 
 	template<typename... Futures>
-		static std::tuple<FutureResult<Futures>...> QueryFutures(
+		static std::tuple<FutureResult<Futures>...> TryQueryFutures(
 			AssetState& currentState,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal,
-			std::tuple<Futures...>&& completedFutures)
+			std::tuple<Futures...>& completedFutures)
 	{
 		std::tuple<FutureResult<Futures>...> result;
-		QueryFutures_(currentState, actualizationBlob, exceptionDepVal, std::move(completedFutures), result);
+		TryQueryFutures_(currentState, actualizationBlob, exceptionDepVal, completedFutures, result);
 		return result;
 	}
 
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	template<typename Payload>
+		static auto QueryFuture(Future<Payload>& future) -> decltype(future.ActualizeBkgrnd()) { return future.ActualizeBkgrnd(); }
+
+	template<typename Payload>
+		static auto QueryFuture(std::shared_ptr<Future<Payload>>& future) -> decltype(future->ActualizeBkgrnd()) { return future->ActualizeBkgrnd(); }
+
+	template<typename Payload>
+		static Payload QueryFuture(std::future<Payload>& future) { return future.get(); }
+
+	template<typename Payload>
+		static const Payload& QueryFuture(std::shared_future<Payload>& future) { return future.get(); }
+
+	template<size_t I = 0, typename... Futures>
+		static void QueryFutures(
+			std::tuple<FutureResult<Futures>...>& actualized,
+			std::tuple<Futures...>& completedFutures)
+	{
+		// note -- this won't work with futures that return references. However "QueryToTuple" will
+		// This is because QueryToTuple doesn't require the default constructor for "actualized" to be called
+		std::get<I>(actualized) = QueryFuture(std::get<I>(completedFutures));
+		if constexpr(I+1 != sizeof...(Futures))
+			QueryFutures<I+1>(actualized, completedFutures);
+	}
+
+	template<typename Tuple, std::size_t ... I>
+		static std::tuple<FutureResult<std::tuple_element_t<I, Tuple>>...> QueryToTuple(Tuple& completedFutures, std::index_sequence<I...>)
+	{
+		return {
+			QueryFuture(std::get<I>(completedFutures))...
+		};
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename PromisedAssetType, typename... Futures>
+		static void FulfillPromise(
+			std::promise<PromisedAssetType>& promise, 
+			std::tuple<Futures...>& completedFutures)
+	{
+		#if 0	// note -- this style doesn't with futures that return references (and the exception types are different)
+			AssetState currentState = AssetState::Ready;
+			Blob actualizationBlob;
+			DependencyValidation exceptionDepVal;
+			auto actualized = TryQueryFutures<Futures...>(currentState, actualizationBlob, exceptionDepVal, completedFutures);
+				
+			if (currentState == AssetState::Invalid) {
+				// Note that if one of the assets in invalid, we only consider the depVal for that specific asset
+				::Assets::SetPromiseInvalidAsset(promise, exceptionDepVal, actualizationBlob);
+			} else if (currentState == AssetState::Ready) {
+				TRY
+				{
+					auto finalConstruction = ::Assets::Internal::ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
+					promise.set_value(std::move(finalConstruction));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			}
+		#else
+			TRY {
+				// std::tuple<FutureResult<Futures>...> actualized;
+				// QueryFutures(actualized, completedFutures);
+				auto completed = completedFutures.get();
+				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto finalConstruction = ::Assets::Internal::ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
+				promise.set_value(std::move(finalConstruction));	
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		#endif
+	}
+
+	template<typename PromisedAssetType, typename... Futures>
+		static void FulfillPromise(
+			std::promise<PromisedAssetType>& promise, 
+			std::future<std::tuple<Futures...>>& completedFutures)
+	{
+		TRY {
+			auto completed = completedFutures.get();
+			auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+			auto finalConstruction = ::Assets::Internal::ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
+			promise.set_value(std::move(finalConstruction));	
+		} CATCH(...) {
+			promise.set_exception(std::current_exception());
+		} CATCH_END
+	}
+
+	template<typename Fn, typename... Futures>
+		static void FulfillContinuationFunction(
+			std::promise<std::invoke_result_t<Fn, FutureResult<Futures>...>>& promise, 
+			Fn&& continuationFunction,
+			std::tuple<Futures...>& completedFutures)
+	{
+		#if 0
+			AssetState currentState = AssetState::Ready;
+			Blob actualizationBlob;
+			DependencyValidation exceptionDepVal;
+			auto actualized = TryQueryFutures<Futures...>(currentState, actualizationBlob, exceptionDepVal, completedFutures);
+				
+			if (currentState == AssetState::Invalid) {
+				// Note that if one of the assets in invalid, we only consider the depVal for that specific asset
+				::Assets::Internal::SetPromiseInvalidAsset(promise, exceptionDepVal, actualizationBlob);
+			} else if (currentState == AssetState::Ready) {
+				TRY
+				{
+					auto finalResult = std::apply(continuationFunction, std::move(actualized));
+					promise.set_value(std::move(finalResult));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			}
+		#else
+			TRY {
+				// std::tuple<FutureResult<Futures>...> actualized;
+				// QueryFutures(actualized, completedFutures);
+				auto completed = completedFutures.get();
+				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto finalResult = std::apply(std::move(continuationFunction), std::move(actualized));
+				promise.set_value(std::move(finalResult));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		#endif
+	}
+
+	template<typename Fn, typename... Futures>
+		static void FulfillContinuationFunction(
+			std::promise<std::invoke_result_t<Fn, FutureResult<Futures>...>>& promise, 
+			Fn&& continuationFunction,
+			std::future<std::tuple<Futures...>>& completedFutures)
+	{
+		TRY {
+			auto completed = completedFutures.get();
+			auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+			auto finalResult = std::apply(std::move(continuationFunction), std::move(actualized));
+			promise.set_value(std::move(finalResult));
+		} CATCH(...) {
+			promise.set_exception(std::current_exception());
+		} CATCH_END
+	}
+
 	template<typename... FutureTypes>
-		class MultiAssetFuture4 : public std::future<std::tuple<std::decay_t<FutureTypes>...>>
+		class MultiAssetFuture4 : public std::future<std::tuple<FutureTypes...>>
 	{
 	public:
 		template<typename FinalFutureType>
@@ -464,47 +612,33 @@ namespace UnitTests
 			auto promise = future.AdoptPromise();
 			thousandeyes::futures::then(
 				std::move(*this),
-				[promise=std::move(promise)](std::future<std::tuple<std::decay_t<FutureTypes>...>>&& completedFutures) mutable {
-					FulfillPromise(promise, std::move(completedFutures.get()));
+				[promise=std::move(promise)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+					FulfillPromise(promise, completedFutures);
 				});
 		}
 
-		template<typename PromisedAssetType, typename... Futures>
-			static void FulfillPromise(
-				std::promise<::Assets::PromisedAsset<PromisedAssetType>>& promise, 
-				std::tuple<Futures...>&& completedFutures)
+		template<typename Fn>
+			std::future<std::invoke_result_t<Fn, FutureResult<FutureTypes>...>> Then(Fn&& continuationFunction)
 		{
-			AssetState currentState = AssetState::Ready;
-			Blob actualizationBlob;
-			DependencyValidation exceptionDepVal;
-			auto actualized = QueryFutures<Futures...>(currentState, actualizationBlob, exceptionDepVal, std::move(completedFutures));
-				
-			if (currentState == AssetState::Invalid) {
-				// Note that if one of the assets in invalid, we only consider the depVal for that specific asset
-				promise.set_value({{}, currentState, actualizationBlob, exceptionDepVal});
-			} else if (currentState == AssetState::Ready) {
-				TRY
-				{
-					auto finalConstruction = ::Assets::Internal::ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
-					promise.set_value({std::move(finalConstruction), ::Assets::AssetState::Ready});
-				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
-					promise.set_value({{}, ::Assets::AssetState::Invalid, e.GetActualizationLog(), e.GetDependencyValidation()});
-				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
-					promise.set_value({{}, ::Assets::AssetState::Invalid, e.GetActualizationLog(), e.GetDependencyValidation()});
-				} CATCH (const std::exception& e) {
-					promise.set_value({{}, ::Assets::AssetState::Invalid, AsBlob(e)});
-				} CATCH_END
-			}
+			using FunctionResult = std::invoke_result_t<Fn, FutureResult<FutureTypes>...>;
+			std::promise<FunctionResult> promise;
+			auto result = promise.get_future();
+			thousandeyes::futures::then(
+				std::move(*this),
+				[promise=std::move(promise), func=std::move(continuationFunction)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+					FulfillContinuationFunction(promise, std::move(func), completedFutures);
+				});
+			return result;
 		}
 
 		MultiAssetFuture4(FutureTypes... subFutures) 
-		: std::future<std::tuple<std::decay_t<FutureTypes>...>>{MakeFuture(std::forward<FutureTypes>(subFutures)...)}
+		: std::future<std::tuple<FutureTypes...>>{MakeFuture(std::forward<FutureTypes>(subFutures)...)}
 		{
 		}
 
-		static std::future<std::tuple<std::decay_t<FutureTypes>...>> MakeFuture(FutureTypes... subFutures)
+		static std::future<std::tuple<FutureTypes...>> MakeFuture(FutureTypes... subFutures)
 		{
-			std::promise<std::tuple<std::decay_t<FutureTypes>...>> mergedPromise;
+			std::promise<std::tuple<FutureTypes...>> mergedPromise;
 			auto mergedFuture = mergedPromise.get_future();
 
 			std::chrono::microseconds timeLimit { 0 };
@@ -519,9 +653,22 @@ namespace UnitTests
 		}		
 	};
 
+	namespace Internal
+	{
+		template<int I, typename... FutureTypes>
+			static void CheckValidForContinuation()
+		{
+			using Test = std::tuple_element_t<I, std::tuple<FutureTypes...>>;
+			static_assert(!std::is_void_v<FutureResult<Test>>, "The given future type can't be used with continuation functions. This can happen when using Asset::Future<> with a non-copyable object");
+			if constexpr ((I+1) != sizeof...(FutureTypes))
+				CheckValidForContinuation<I+1, FutureTypes...>();
+		}
+	}
+
 	template<typename... FutureTypes>
 		MultiAssetFuture4<FutureTypes...> WhenAll4(FutureTypes... subFutures)
 	{
+		Internal::CheckValidForContinuation<0, FutureTypes...>();
 		return MultiAssetFuture4<FutureTypes...>{std::forward<FutureTypes>(subFutures)...};
 	}
 
@@ -536,9 +683,9 @@ namespace UnitTests
 		auto futureTwo = std::make_shared<::Assets::Future<unsigned>>();
 		
 		/*WhenAll2(futureZero, futureOne, futureTwo).Then();*/
-		futureZero->SetAsset(0, {});
-		futureOne->SetAsset(1, {});
-		futureTwo->SetAsset(2, {});
+		futureZero->SetAsset(0);
+		futureOne->SetAsset(1);
+		futureTwo->SetAsset(2);
 
 		std::atomic<bool> test = false;
 		thousandeyes::futures::then(
@@ -560,7 +707,7 @@ namespace UnitTests
 
 		struct TripleConstructor
 		{
-			unsigned _result = 0;
+			unsigned _result = 26394629;
 			TripleConstructor(unsigned zero, unsigned one, unsigned two)
 			:_result(zero+one+two)
 			{
@@ -568,12 +715,124 @@ namespace UnitTests
 				(void)c;
 			}
 			TripleConstructor() {}
+			TripleConstructor(TripleConstructor&&) = default;
+			TripleConstructor& operator=(TripleConstructor&&) = default;
 		};
 		::Assets::Future<TripleConstructor> finalFuture;
 
 		WhenAll4(futureZero, futureOne, futureTwo).ThenConstructToFuture(finalFuture);
 		finalFuture.StallWhilePending();
 		REQUIRE(finalFuture.Actualize()._result == 3);
+
+		auto continuation = WhenAll4(futureZero, futureOne, futureTwo).Then(
+			[](auto zero, auto one, auto two) { return zero+one+two; });
+		continuation.wait();
+		REQUIRE(continuation.get() == 3);
+
+		std::promise<unsigned> basicPromise;
+		auto basicFuture = basicPromise.get_future();
+		basicPromise.set_value(3);
+
+		std::promise<unsigned> basicPromise2;
+		auto basicFuture2 = basicPromise2.get_future().share();
+		basicPromise2.set_value(4);
+
+		::Assets::Future<unsigned> futureThree;
+		futureThree.SetAsset(5);
+
+		auto continuation2 = WhenAll4(futureZero, futureOne, futureTwo, std::move(basicFuture), basicFuture2, std::move(futureThree)).Then(
+			[](auto zero, auto one, auto two, auto three, auto four, auto five) {
+				return zero+one+two+three+four+five; 
+			});
+		continuation2.wait();
+		REQUIRE(continuation2.get() == 15);
+	}
+
+	TEST_CASE( "AssetFuture-ContinuationException", "[assets]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+
+		struct AssetTypeOne
+		{
+			std::string _value;
+			AssetTypeOne() {}
+			AssetTypeOne(std::string v) : _value(v) {}
+			/*AssetTypeOne(AssetTypeOne&&) = default;
+			AssetTypeOne& operator=(AssetTypeOne&&) = default;
+			AssetTypeOne(const AssetTypeOne&) = delete;
+			AssetTypeOne& operator=(const AssetTypeOne&) = delete;*/
+
+			static ::Assets::Future<AssetTypeOne> SuccessfulAssetFuture(std::string v)
+			{
+				::Assets::Future<AssetTypeOne> result;
+				result.SetAsset(v);
+				return result;
+			}
+
+			static ::Assets::Future<AssetTypeOne> FailedAssetFuture(::Assets::Blob blob)
+			{
+				::Assets::Future<AssetTypeOne> result;
+				result.SetInvalidAsset({}, blob);
+				return result;
+			}
+
+			static std::future<AssetTypeOne> SuccessfulStdFuture(std::string v)
+			{
+				std::promise<AssetTypeOne> promise;
+				promise.set_value(v);
+				return promise.get_future();
+			}
+
+			static std::future<AssetTypeOne> FailedStdFuture(std::exception_ptr eptr)
+			{
+				std::promise<AssetTypeOne> promise;
+				promise.set_exception(std::move(eptr));
+				return promise.get_future();
+			}
+		};
+
+		static_assert(std::is_same_v<FutureResult<Future<unsigned>>, const unsigned&>);
+		static_assert(std::is_same_v<FutureResult<std::future<AssetTypeOne>>, AssetTypeOne>);
+		static_assert(std::is_same_v<FutureResult<std::shared_future<AssetTypeOne>>, const AssetTypeOne&>);
+
+		auto successfulChain = WhenAll4(
+			AssetTypeOne::SuccessfulAssetFuture("zero"), 
+			AssetTypeOne::SuccessfulStdFuture(" one"))
+			.Then([](auto zero, auto one) { return zero._value + one._value; });
+		successfulChain.wait();
+		REQUIRE(successfulChain.get() == "zero one");
+
+		auto failedChain = WhenAll4(
+			AssetTypeOne::SuccessfulAssetFuture("zero"), 
+			AssetTypeOne::FailedAssetFuture(::Assets::AsBlob("Failed asset")))
+			.Then([](auto zero, auto one) { return zero._value + one._value; });
+		failedChain.wait();
+		{
+			::Assets::AssetState state;
+			::Assets::Blob blob;
+			::Assets::DependencyValidation depVal;
+			std::string actualized;
+			::Assets::Internal::TryGetAssetFromFuture(failedChain, state, actualized, blob, depVal);
+			REQUIRE(state == ::Assets::AssetState::Invalid);
+			REQUIRE(::Assets::AsString(blob) == "Failed asset");
+		}
+
+		auto failedChain2 = WhenAll4(
+			AssetTypeOne::SuccessfulAssetFuture("zero"), 
+			AssetTypeOne::FailedStdFuture(std::make_exception_ptr(std::runtime_error("runtime_error"))))
+			.Then([](auto zero, auto one) { return zero._value + one._value; });
+		failedChain2.wait();
+		{
+			::Assets::AssetState state;
+			::Assets::Blob blob;
+			::Assets::DependencyValidation depVal;
+			std::string actualized;
+			::Assets::Internal::TryGetAssetFromFuture(failedChain2, state, actualized, blob, depVal);
+			REQUIRE(state == ::Assets::AssetState::Invalid);
+			REQUIRE(::Assets::AsString(blob) == "runtime_error");
+		}
 	}
 
 	TEST_CASE( "General-StandardFutures", "[assets]" )

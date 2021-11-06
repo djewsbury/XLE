@@ -98,7 +98,7 @@ namespace Assets
 						TRY
 						{
 							auto finalConstruction = std::apply(continuationFunction, std::move(actualized));
-							thatFuture.SetAsset(std::move(finalConstruction), {});
+							thatFuture.SetAsset(std::move(finalConstruction));
 						} CATCH (const Exceptions::ConstructionError& e) {
 							thatFuture.SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());	
 						} CATCH (const Exceptions::InvalidAsset& e) {

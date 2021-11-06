@@ -45,21 +45,10 @@ namespace Assets
 		};
 	}
 
-	template<typename Type> struct PromisedAsset
-	{
-		Type 					_asset;
-		AssetState				_state;
-		Blob					_actualizationLog;
-		DependencyValidation	_depVal;
-
-		operator Type&() { return _asset; }
-		operator const Type&() const { return _asset; }
-	};
-
 	namespace Internal
 	{
 		template<typename Type> static auto SharedFutureFallback_Helper(int) -> typename std::enable_if<std::is_copy_constructible_v<Type>, std::shared_future<Type>>::type;
-		template<typename... T> static auto SharedFutureFallback_Helper(...) -> std::future<T...>;
+		template<typename Type> static auto SharedFutureFallback_Helper(...) -> std::future<Type>;
 		template<typename Type> using SharedFutureFallback = decltype(SharedFutureFallback_Helper<Type>(0));
 	}
 
@@ -76,14 +65,12 @@ namespace Assets
 		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
 		const Blob&				    GetActualizationLog() const { return _actualizationLog; }
 
-		AssetState		CheckStatusBkgrnd(
-			Type& actualized,
-			DependencyValidation& depVal,
-			Blob& actualizationLog);
+		AssetState		CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog);
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
+		const Type& 	ActualizeBkgrnd();
 
-		std::shared_future<PromisedAsset<Type>> ShareFuture();
-		std::promise<PromisedAsset<Type>> AdoptPromise();
+		std::shared_future<Type> ShareFuture();
+		std::promise<Type> AdoptPromise();
 
 		using PromisedType = Type;
 
@@ -93,9 +80,9 @@ namespace Assets
 		Future(Future&&);
 		Future& operator=(Future&&);
 
-		void SetAsset(Type&&, const Blob& log);
+		void SetAsset(Type&&);
 		void SetInvalidAsset(DependencyValidation depVal, const Blob& log);
-		void SetAssetForeground(Type&& newAsset, const Blob& log);
+		void SetAssetForeground(Type&& newAsset);
 		void SetPollingFunction(std::function<bool(Future<Type>&)>&&);
 		
 	private:
@@ -104,8 +91,8 @@ namespace Assets
 		Blob					_actualizationLog;
 		DependencyValidation	_actualizedDepVal;
 
-		std::promise<PromisedAsset<Type>> _pendingPromise;
-		Internal::SharedFutureFallback<PromisedAsset<Type>> _pendingFuture;
+		std::promise<Type> _pendingPromise;
+		Internal::SharedFutureFallback<Type> _pendingFuture;
 
 		std::function<bool(Future<Type>&)> _pollingFunction;
 
@@ -182,6 +169,41 @@ namespace Assets
 		private:
 			Future<Type>* _future;
 		};
+
+		template<typename Future, typename AssetType>
+			void TryGetAssetFromFuture(
+				Future& future,
+				AssetState& state,
+				AssetType& actualized,
+				Blob& actualizationLog,
+				DependencyValidation& actualizedDepVal)
+		{
+			TRY {
+				auto pendingResult = future.get();
+				actualized = std::move(pendingResult);
+				actualizedDepVal = Internal::GetDependencyValidation(actualized);
+				actualizationLog = {};
+				state = AssetState::Ready;
+			} CATCH (const Exceptions::ConstructionError& e) {
+				actualizedDepVal = e.GetDependencyValidation();
+				actualizationLog = e.GetActualizationLog();
+				state = AssetState::Invalid;
+			} CATCH (const Exceptions::InvalidAsset& e) {
+				actualizedDepVal = e.GetDependencyValidation();
+				actualizationLog = e.GetActualizationLog();
+				state = AssetState::Invalid;
+			} CATCH (const std::exception& e) {
+				actualizedDepVal = {};
+				actualizationLog = AsBlob(e);
+				state = AssetState::Invalid;
+			} CATCH_END
+		}
+
+		template<typename Type>
+			void SetPromiseInvalidAsset(std::promise<Type>& promise, DependencyValidation depVal, const Blob& log)
+		{
+			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset({}, depVal, log)));
+		}
 	}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,11 +247,8 @@ namespace Assets
 				assert(!_pollingFunction);
 				std::swap(pollingFunction, _pollingFunction);
 			}
-		} CATCH (const Exceptions::ConstructionError& e) {
-			_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e), e.GetDependencyValidation()});
-			lock = std::unique_lock<Threading::Mutex>(_lock);
-		} CATCH (const std::exception& e) {
-			_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e)});
+		} CATCH (...) {
+			_pendingPromise.set_exception(std::current_exception());
 			lock = std::unique_lock<Threading::Mutex>(_lock);
 		} CATCH_END
 
@@ -254,11 +273,9 @@ namespace Assets
 
 		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
 		if (futureState == std::future_status::ready) {
-			auto promised = _pendingFuture.get();
-			actualized = std::move(promised._asset);
-			depVal = std::move(promised._depVal);
-			actualizationLog = std::move(promised._actualizationLog);
-			return promised._state;
+			AssetState newState;
+			Internal::TryGetAssetFromFuture(_pendingFuture, newState, actualized, actualizationLog, depVal);
+			return newState;
 		} else {
 			return AssetState::Pending;
 		}
@@ -280,24 +297,39 @@ namespace Assets
 
 		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
 		if (futureState == std::future_status::ready) {
-			auto promised = _pendingFuture.get();
-			depVal = std::move(promised._depVal);
-			actualizationLog = std::move(promised._actualizationLog);
-			return promised._state;
+			AssetState newState;
+			Type actualized;
+			Internal::TryGetAssetFromFuture(_pendingFuture, newState, actualized, actualizationLog, depVal);
+			return newState;
 		} else {
 			return AssetState::Pending;
 		}
 	}
 
 	template<typename Type>
-		std::shared_future<PromisedAsset<Type>> Future<Type>::ShareFuture()
+		const Type& Future<Type>::ActualizeBkgrnd()
+	{
+		static_assert(std::is_copy_constructible_v<Type>, "ActualizeBkgrnd() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
+		if (_state == AssetState::Ready)
+			return _actualized;
+
+		{
+			std::unique_lock<Threading::Mutex> lock(_lock);
+			TryRunPollingFunction(lock);
+		}
+
+		return _pendingFuture.get();
+	}
+
+	template<typename Type>
+		std::shared_future<Type> Future<Type>::ShareFuture()
 	{
 		static_assert(std::is_copy_constructible_v<Type>, "ShareFuture() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
 		return _pendingFuture;
 	}
 
 	template<typename Type>
-		std::promise<PromisedAsset<Type>> Future<Type>::AdoptPromise()
+		std::promise<Type> Future<Type>::AdoptPromise()
 	{
 		return std::move(_pendingPromise);
 	}
@@ -317,14 +349,12 @@ namespace Assets
 
 		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
 		if (futureState == std::future_status::ready) {
-			auto promised = _pendingFuture.get();
-			_actualized = std::move(promised._asset);
-			_actualizationLog = std::move(promised._actualizationLog);
-			_actualizedDepVal = std::move(promised._depVal);
+			AssetState newState;
+			Internal::TryGetAssetFromFuture(_pendingFuture, newState, _actualized, _actualizationLog, _actualizedDepVal);
 			// Note that we must change "_state" last -- because another thread can access _actualized without a mutex lock
 			// when _state is set to AssetState::Ready
 			// we should also consider a cache flush here to ensure the CPU commits in the correct order
-			_state = promised._state;
+			_state = newState;
 
 			assert(!_pollingFunction);
 			DisableFrameBarrierCallbackAlreadyLocked();
@@ -379,12 +409,8 @@ namespace Assets
 
 				TRY {
 					pollingResult = pollingFunction(*that);
-				} CATCH (const Exceptions::ConstructionError& e) {
-					that->_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e), e.GetDependencyValidation()});
-					break;
-				} CATCH (const std::exception& e) {
-					that->_pendingPromise.set_value({{}, AssetState::Invalid, AsBlob(e)});
-					break;
+				} CATCH (...) {
+					that->_pendingPromise.set_exception(std::current_exception());
 				} CATCH_END
 
 				if (!pollingResult) {
@@ -447,21 +473,25 @@ namespace Assets
 			} else
 				that->_pendingFuture.wait();
 
-			auto pendingResult = that->_pendingFuture.get();
-			assert(pendingResult._state != AssetState::Pending);
-
 			// Force the background version into the foreground (see OnFrameBarrier)
 			// This is required because we can be woken up by SetAsset, which only set the
 			// background asset. But the caller most likely needs the asset right now, so
 			// we've got to swap it into the foreground.
 			// There is a problem if the caller is using bothActualize() and StallWhilePending() on the
 			// same asset in the same frame -- in this case, the order can have side effects.
+			AssetState newState;
+			Type newActualized;
+			Blob newActualizationLog;
+			DependencyValidation newDepVal;
+			Internal::TryGetAssetFromFuture(that->_pendingFuture, newState, newActualized, newActualizationLog, newDepVal);
+			
 			lock = std::unique_lock<Threading::Mutex>(that->_lock);
 			assert(that->_state == AssetState::Pending);
-			that->_actualized = std::move(pendingResult._asset);
-			that->_actualizationLog = std::move(pendingResult._actualizationLog);
-			that->_actualizedDepVal = std::move(pendingResult._depVal);
-			that->_state = pendingResult._state;
+			that->_actualized = std::move(newActualized);
+			that->_actualizationLog = std::move(newActualizationLog);
+			that->_actualizedDepVal = std::move(newDepVal);
+			that->_state = newState;
+
 			that->DisableFrameBarrierCallbackAlreadyLocked();
 			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 			return (AssetState)that->_state;
@@ -469,41 +499,38 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::SetAsset(Type&& newAsset, const Blob& log)
+		void Future<Type>::SetAsset(Type&& newAsset)
 	{
 		// If we are already in invalid / ready state, we will never move the pending
 		// asset into the foreground. We also cannot change from those states to pending, 
 		// because of some other assumptions.
 		assert(_state == ::Assets::AssetState::Pending);
 
-		_pendingPromise.set_value({std::move(newAsset), AssetState::Ready, log, Internal::GetDependencyValidation(newAsset)});
+		_pendingPromise.set_value(std::move(newAsset));
 		ScopedLock(_lock);
 		RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 	}
 
 	template<typename Type>
-		void Future<Type>::SetAssetForeground(Type&& newAsset, const Blob& log)
+		void Future<Type>::SetAssetForeground(Type&& newAsset)
 	{
 		// this is intended for "shadowing" assets only; it sets the asset directly into the foreground
 		// asset and goes immediately into ready state
-		auto depVal = Internal::GetDependencyValidation(newAsset);
-		_pendingPromise.set_value({newAsset, AssetState::Ready, log, depVal});
+		_pendingPromise.set_value(newAsset);
 		ScopedLock(_lock);
 		DisableFrameBarrierCallbackAlreadyLocked();
 		_actualized = std::move(newAsset);
 		_actualizationLog = log;
-		_actualizedDepVal = std::move(depVal);
+		_actualizedDepVal = Internal::GetDependencyValidation(newAsset);
 		_state = _actualized ? AssetState::Ready : AssetState::Invalid;
 	}
 
 	template<typename Type>
 		void Future<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
 	{
-		_pendingPromise.set_value({{}, AssetState::Invalid, log, std::move(depVal)});
-		{
-			ScopedLock(_lock);
-			RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
-		}
+		Internal::SetPromiseInvalidAsset(_pendingPromise, depVal, log);
+		ScopedLock(_lock);
+		RegisterFrameBarrierCallbackAlreadyLocked();		// register single callback event to move into foreground state
 	}
 
 	template<typename Type>
@@ -522,14 +549,12 @@ namespace Assets
 			if (!_pollingFunction)		// "newFunction" might actually set a new polling function on the future
 				DisableFrameBarrierCallbackAlreadyLocked();
 			if (_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-				auto pendingState = _pendingFuture.get();
-				_actualized = std::move(pendingState._asset);
-				_actualizationLog = std::move(pendingState._actualizationLog);
-				_actualizedDepVal = std::move(pendingState._depVal);
+				AssetState newState;
+				Internal::TryGetAssetFromFuture(_pendingFuture, newState, _actualized, _actualizationLog, _actualizedDepVal);
 				// Note that we must change "_state" last -- because another thread can access _actualized without a mutex lock
 				// when _state is set to AssetState::Ready
 				// we should also consider a cache flush here to ensure the CPU commits in the correct order
-				_state = pendingState._state;
+				_state = newState;
 			}
 			return;
 		}
