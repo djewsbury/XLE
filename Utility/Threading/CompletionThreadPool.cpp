@@ -166,20 +166,18 @@ namespace Utility
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void ThreadPool::EnqueueBasic(PendingTask&& task)
-    {
-        assert(IsGood());
-        std::unique_lock<decltype(this->_pendingTaskLock)> autoLock(this->_pendingTaskLock);
-        _pendingTasks.push(std::forward<PendingTask>(task));
-        _pendingTaskVariable.notify_one();
-    }
+    ThreadPool::Page::Page()
+    : _storage(PageSize)
+    , _heap(PageSize)
+    {}
 
     void ThreadPool::RunBlocks(bool finishWhenEmpty)
     {
         ++_runningWorkerCount;
 
         _yieldToPoolInterface->SetFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
-            std::function<void()> task;
+            StoredFunction task;
+            void* fnObjectPtr;
             {
                 // slightly awkwardly, we can't actually use std::timed_mutex and try_lock_until
                 // here, because std::timed_mutex can't be used with std::condition_variable
@@ -187,6 +185,7 @@ namespace Utility
                 if (this->_workerQuit) 
                     return;
 
+                DrainPendingReleaseAlreadyLocked();
                 if (_pendingTasks.empty()) {
                     this->_pendingTaskVariable.wait_until(autoLock, waitUntilTime);
                     if (this->_workerQuit) return;
@@ -196,21 +195,26 @@ namespace Utility
 
                 task = std::move(_pendingTasks.front());
                 _pendingTasks.pop();
+                fnObjectPtr = PtrAdd(AsPointer(_pages[task._pageIdx]._storage.begin()), task._offset);
             }
 
             TRY
             {
-                task();
+                task._caller(fnObjectPtr);
+                task._destructor(fnObjectPtr);
             } CATCH(const std::exception& e) {
                 Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
                 (void)e;
             } CATCH(...) {
                 Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
             } CATCH_END
+
+            AddPendingRelease(task);
         });
 
         for (;;) {
-            std::function<void()> task;
+            StoredFunction task;
+            void* fnObjectPtr;
 
             {
                     // note that _pendingTasks is safe for multiple pushing threads,
@@ -223,6 +227,7 @@ namespace Utility
                     break;
                 }
 
+                DrainPendingReleaseAlreadyLocked();
                 if (_pendingTasks.empty()) {
                     --_runningWorkerCount;
                     if (finishWhenEmpty) {
@@ -238,20 +243,86 @@ namespace Utility
 
                 task = std::move(_pendingTasks.front());
                 _pendingTasks.pop();
+                fnObjectPtr = PtrAdd(AsPointer(_pages[task._pageIdx]._storage.begin()), task._offset);
             }
 
             TRY
             {
-                task();
+                task._caller(fnObjectPtr);
+                task._destructor(fnObjectPtr);
             } CATCH(const std::exception& e) {
                 Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
                 (void)e;
             } CATCH(...) {
                 Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
             } CATCH_END
+
+            AddPendingRelease(task);
         }
 
         _yieldToPoolInterface->SetFunction(nullptr);
+    }
+
+    void ThreadPool::EnqueueBasic(std::function<void()>&& fn)
+    {
+        assert(IsGood());
+
+        std::unique_lock<decltype(this->_pendingTaskLock)> autoLock(this->_pendingTaskLock);
+        static_assert(sizeof(std::function<void()>) <= PageSize);
+        auto size = sizeof(std::function<void()>);
+
+        bool foundAllocation = false;
+        StoredFunction storedFunction;
+        for (unsigned p=0; p<_pages.size(); ++p) {
+            auto attemptedAllocation = _pages[p]._heap.Allocate(size);
+            if (attemptedAllocation != ~0u) {
+                storedFunction = {
+                    p, attemptedAllocation, size,
+                    &Internal::Destructor<std::function<void()>>,
+                    &Internal::MoveConstructor<std::function<void()>>,
+                    &Internal::CallOpaqueFunction<std::function<void()>>
+                };
+                foundAllocation = true;
+            }
+        }
+
+        if (!foundAllocation) {
+            _pages.push_back({});
+            auto p = _pages.end()-1;
+            auto allocation = p->_heap.Allocate(size);
+            assert(allocation != ~0u);
+            storedFunction = {
+                (unsigned)_pages.size()-1, allocation, size,
+                &Internal::Destructor<std::function<void()>>,
+                &Internal::MoveConstructor<std::function<void()>>,
+                &Internal::CallOpaqueFunction<std::function<void()>>
+            };
+        }
+
+        new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) std::function<void()>(std::move(fn));
+
+        _pendingTasks.push(storedFunction);
+        _pendingTaskVariable.notify_one();
+    }
+
+    void ThreadPool::DrainPendingReleaseAlreadyLocked()
+    {
+        StoredFunction* fn;
+        while (_pendingRelease.try_front(fn)) {
+            _pages[fn->_pageIdx]._heap.Deallocate(fn->_offset, fn->_size);
+            _pendingRelease.pop();
+        }
+    }
+
+    void ThreadPool::AddPendingRelease(StoredFunction fn)
+    {
+        if (!_pendingRelease.push(fn)) {
+            std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
+            DrainPendingReleaseAlreadyLocked();
+            auto secondAttempt = _pendingRelease.push(fn);
+            (void)secondAttempt;
+            assert(secondAttempt);
+        }
     }
 
     ThreadPool::ThreadPool(unsigned threadCount)
@@ -278,6 +349,8 @@ namespace Utility
                 if (std::chrono::steady_clock::now() >= timeoutPt)
                     return false;
             }
+            std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
+            DrainPendingReleaseAlreadyLocked();
             return true;
         } else {
             RunBlocks(true);
@@ -285,6 +358,8 @@ namespace Utility
                 Threading::YieldTimeSlice();
                 RunBlocks(true);
             }
+            std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
+            DrainPendingReleaseAlreadyLocked();
             return true;
         }
     }

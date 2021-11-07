@@ -10,6 +10,7 @@
 #include "../../OSServices/TimeUtils.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/Threading/LockFree.h"
+#include "../../Utility/Threading/CompletionThreadPool.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include "thousandeyes/futures/then.h"
@@ -311,5 +312,89 @@ namespace UnitTests
 
         // note that we don't want the RawFSMonitor to still be alive when we do this (because it will end up triggering everything again!)
         std::filesystem::remove_all(tempDirPath);
+    }
+
+    class InstanceCountingObject
+    {
+    public:
+        static std::atomic<int> s_instanceCount;
+        bool _openInstance = true;
+        InstanceCountingObject() { ++s_instanceCount; }
+        ~InstanceCountingObject() { if (_openInstance) --s_instanceCount; }
+
+        InstanceCountingObject(const InstanceCountingObject&) { ++s_instanceCount; }
+        InstanceCountingObject(InstanceCountingObject&& moveFrom) { _openInstance = moveFrom._openInstance; moveFrom._openInstance = false; }
+
+        InstanceCountingObject& operator=(const InstanceCountingObject& copyFrom) 
+        { 
+            if (_openInstance) --s_instanceCount;
+            _openInstance = copyFrom._openInstance;
+            if (_openInstance) ++s_instanceCount; 
+            return *this;
+        }
+
+        InstanceCountingObject& operator=(InstanceCountingObject&& moveFrom) 
+        { 
+            if (_openInstance) --s_instanceCount;
+            _openInstance = moveFrom._openInstance; 
+            moveFrom._openInstance = false; 
+            return *this;
+        }
+    };
+
+    std::atomic<int> InstanceCountingObject::s_instanceCount{0};
+
+    TEST_CASE( "ThreadPool-DestructionRules", "[osservices]" )
+    {
+        // Ensure that functions queued in the thread pool are getting destructors called correctly
+        ThreadPool threadPool(4);
+
+        SECTION("captured smart ptr") 
+        {
+            for (unsigned c=0; c<1024; ++c) {
+                auto ptr = std::make_shared<InstanceCountingObject>();
+                threadPool.Enqueue(
+                    [ptr]() {
+                        REQUIRE(ptr->_openInstance);
+                    });
+            }
+
+            for (unsigned c=0; c<2048; ++c) {
+                auto ptr = std::make_shared<InstanceCountingObject>();
+                threadPool.Enqueue(
+                    [](auto p) { 
+                        REQUIRE(p->_openInstance);
+                    }, 
+                    ptr);
+            }
+
+            threadPool.StallAndDrainQueue();
+
+            REQUIRE(InstanceCountingObject::s_instanceCount.load() == 0);
+        }
+
+        SECTION("captured by value") 
+        {
+            for (unsigned c=0; c<1024; ++c) {
+                InstanceCountingObject obj;
+                threadPool.Enqueue(
+                    [obj=std::move(obj)]() {
+                        REQUIRE(obj._openInstance);
+                    });
+            }
+
+            for (unsigned c=0; c<2048; ++c) {
+                InstanceCountingObject obj;
+                threadPool.Enqueue(
+                    [](auto obj) {
+                        REQUIRE(obj._openInstance);
+                    }, 
+                    obj);
+            }
+
+            threadPool.StallAndDrainQueue();
+
+            REQUIRE(InstanceCountingObject::s_instanceCount.load() == 0);
+        }
     }
 }

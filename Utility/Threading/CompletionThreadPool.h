@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Mutex.h"
+#include "../HeapUtils.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
     #include "LockFree.h"
@@ -104,8 +105,7 @@ namespace Utility
     public:
         template<class Fn, class... Args>
             void Enqueue(Fn&& fn, Args... args);
-
-		void EnqueueBasic(std::function<void()>&& task);
+        void EnqueueBasic(std::function<void()>&& fn);
 
         bool IsGood() const { return !_workerThreads.empty(); }
         bool StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration = {});
@@ -122,22 +122,91 @@ namespace Utility
 
         Threading::Conditional _pendingTaskVariable;
         Threading::Mutex _pendingTaskLock;
-        using PendingTask = std::function<void()>;
-        std::queue<PendingTask> _pendingTasks;
 
+        struct StoredFunction
+        {
+            unsigned _pageIdx;
+            size_t  _offset;
+            size_t  _size;
+            void (*_destructor)(void*);
+            void (*_moveConstructor)(void*, void*);
+            void (*_caller)(void*);
+			// OSServices::ModuleId _moduleId;
+        };
+
+        std::queue<StoredFunction> _pendingTasks;
+        LockFreeFixedSizeQueue<StoredFunction, 256> _pendingRelease;
+
+        static constexpr unsigned PageSize = 32*1024;
+        struct Page
+        {
+            std::vector<uint8_t> _storage;
+            SimpleSpanningHeap _heap;
+            Page();
+        };
+        std::vector<Page> _pages;
+        
         volatile bool _workerQuit;
         std::atomic<signed> _runningWorkerCount;
 
         ConsoleRig::AttachablePtr<Internal::IYieldToPool> _yieldToPoolInterface;
 
         void RunBlocks(bool finishWhenEmpty);
+        void DrainPendingReleaseAlreadyLocked();
+        void AddPendingRelease(StoredFunction fn);
     };
 
     template<class Fn, class... Args>
         void ThreadPool::Enqueue(Fn&& fn, Args... args)
-        {
-			EnqueueBasic(std::bind(std::move(fn), std::forward<Args>(args)...));
+    {
+        assert(IsGood());
+
+        std::unique_lock<decltype(this->_pendingTaskLock)> autoLock(this->_pendingTaskLock);
+
+        using BoundFn = decltype(std::bind(std::move(fn), std::forward<Args>(args)...));
+        StoredFunction storedFunction;
+        if constexpr(sizeof...(Args)==0) {
+            static_assert(sizeof(Fn) <= PageSize);
+            storedFunction._size = sizeof(Fn);
+            storedFunction._destructor = &Internal::Destructor<Fn>;
+            storedFunction._moveConstructor = &Internal::MoveConstructor<Fn>;
+            storedFunction._caller = &Internal::CallOpaqueFunction<Fn>;
+        } else {
+            static_assert(sizeof(BoundFn) <= PageSize);
+            storedFunction._size = sizeof(BoundFn);
+            storedFunction._destructor = &Internal::Destructor<BoundFn>;
+            storedFunction._moveConstructor = &Internal::MoveConstructor<BoundFn>;
+            storedFunction._caller = &Internal::CallOpaqueFunction<BoundFn>;
         }
+    
+        bool foundAllocation = false;
+        for (unsigned p=0; p<_pages.size(); ++p) {
+            auto attemptedAllocation = _pages[p]._heap.Allocate(storedFunction._size);
+            if (attemptedAllocation != ~0u) {
+                storedFunction._pageIdx = p;
+                storedFunction._offset = attemptedAllocation;
+                foundAllocation = true;
+            }
+        }
+
+        if (!foundAllocation) {
+            _pages.push_back({});
+            auto p = _pages.end()-1;
+            auto allocation = p->_heap.Allocate(storedFunction._size);
+            assert(allocation != ~0u);
+            storedFunction._pageIdx = (unsigned)_pages.size()-1;
+            storedFunction._offset = allocation;
+        }
+
+        if constexpr(sizeof...(Args)==0) {
+            new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) Fn(std::move(fn));
+        } else {
+            new((void*)PtrAdd(AsPointer(_pages[storedFunction._pageIdx]._storage.begin()), storedFunction._offset)) BoundFn(std::bind(std::move(fn), std::forward<Args>(args)...));
+        }
+
+        _pendingTasks.push(storedFunction);
+        _pendingTaskVariable.notify_one();
+    }
 }
 
 using namespace Utility;

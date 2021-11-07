@@ -260,6 +260,12 @@ namespace Utility
                     new (d) Type(std::move(*s));
                 #pragma pop_macro("new")
             }
+
+        template<typename Type>
+            static void CallOpaqueFunction(void* obj)
+            {
+                (*reinterpret_cast<Type*>(obj))();
+            }
     }
 
     class VariantFunctions::DuplicateFunction : public std::runtime_error
