@@ -69,7 +69,7 @@ namespace Assets
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
 		const Type& 	ActualizeBkgrnd();
 
-		std::shared_future<Type> ShareFuture();
+		std::shared_future<Type> ShareFuture() const;
 		std::promise<Type> AdoptPromise();
 
 		using PromisedType = Type;
@@ -322,7 +322,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		std::shared_future<Type> Future<Type>::ShareFuture()
+		std::shared_future<Type> Future<Type>::ShareFuture() const
 	{
 		static_assert(std::is_copy_constructible_v<Type>, "ShareFuture() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
 		return _pendingFuture;
