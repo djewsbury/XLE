@@ -39,33 +39,64 @@ namespace Assets
 		IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts)
 	{
 		assert(!artifacts.empty());
-		assert(_artifactCollections.empty());
-		_artifactCollections = std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>{
-			artifacts.begin(), artifacts.end()
-		};
-		SetState(::Assets::AssetState::Ready);
+		_promise.set_value(
+			std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>{
+				artifacts.begin(), artifacts.end()
+			});
 	}
 
-	void ArtifactCollectionFuture::StoreException(const std::exception_ptr& excpt)
+	void ArtifactCollectionFuture::StoreException(std::exception_ptr excpt)
 	{
-		assert(_artifactCollections.empty());
-		_capturedException = excpt;
-		SetState(::Assets::AssetState::Invalid);
+		_promise.set_exception(excpt);
 	}
 
 	const std::shared_ptr<IArtifactCollection>& ArtifactCollectionFuture::GetArtifactCollection(ArtifactTargetCode targetCode)
 	{
-		if (_capturedException)
-			std::rethrow_exception(_capturedException);
-
-		for (const auto&col:_artifactCollections)
+		const auto& collections = _rootSharedFuture.get();
+		for (const auto&col:collections)
 			if (col.first == targetCode)
 				return col.second;
 		static std::shared_ptr<IArtifactCollection> dummy;
 		return dummy;
 	}
 
-	ArtifactCollectionFuture::ArtifactCollectionFuture() {}
+	auto ArtifactCollectionFuture::ShareFuture() -> std::shared_future<ArtifactCollectionSet>
+	{
+		return _rootSharedFuture;
+	}
+
+	AssetState ArtifactCollectionFuture::GetAssetState() const
+	{
+		assert(0);
+		return AssetState::Pending;
+	}
+
+	std::optional<AssetState> ArtifactCollectionFuture::StallWhilePending(std::chrono::microseconds timeout) const
+	{
+		auto s = _rootSharedFuture.wait_for(timeout);
+		if (s == std::future_status::ready) return AssetState::Ready;
+		return {};
+	}
+
+    const char* ArtifactCollectionFuture::GetDebugLabel() const
+    {
+        #if defined(_DEBUG)
+            return _initializer;
+        #else
+            return "";
+        #endif
+    }
+
+    void ArtifactCollectionFuture::SetDebugLabel(StringSection<char> initializer)
+    {
+        DEBUG_ONLY(XlCopyString(_initializer, initializer));
+    }
+
+	ArtifactCollectionFuture::ArtifactCollectionFuture()
+	{
+		DEBUG_ONLY(_initializer[0] = '\0');
+		_rootSharedFuture = _promise.get_future().share();
+	}
 	ArtifactCollectionFuture::~ArtifactCollectionFuture()  {}
 
 			////////////////////////////////////////////////////////////

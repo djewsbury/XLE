@@ -20,8 +20,6 @@ namespace Utility
 
 namespace Assets
 {
-    class ArtifactCollectionFuture;
-
     /// <summary>Container file with with one child that is initialized via InputStreamFormatter</summary>
     ///
     /// Represents a file that contains a single serialized item. That item must be a type that

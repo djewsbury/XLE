@@ -318,7 +318,7 @@ namespace Assets
 				[weakDelegate, store, inits=_initializers](ArtifactCollectionFuture& op) {
 				auto d = weakDelegate.lock();
 				if (!d) {
-					op.SetState(AssetState::Invalid);
+					op.StoreException(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
 					return;
 				}
 
@@ -331,14 +331,14 @@ namespace Assets
 						throw;
 					} CATCH_END
 				} else {
-					op.SetState(AssetState::Invalid);
+					op.StoreException(std::make_exception_ptr(std::runtime_error("System shutdown before compile request was completed")));
 				}
 				--d->_activeOperationCount;
 			});
 		} else {
 			auto d = _delegate.lock();
 			if (!d) {
-				backgroundOp->SetState(AssetState::Invalid);
+				backgroundOp->StoreException(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
 			} else {
 				++d->_activeOperationCount;
 				if (!d->_shuttingDown) {
@@ -349,7 +349,7 @@ namespace Assets
 						throw;
 					} CATCH_END
 				} else {
-					backgroundOp->SetState(AssetState::Invalid);
+					backgroundOp->StoreException(std::make_exception_ptr(std::runtime_error("System shutdown before compile request was completed")));
 				}
 				--d->_activeOperationCount;
 			}

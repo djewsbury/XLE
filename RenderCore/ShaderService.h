@@ -23,9 +23,6 @@
 namespace Assets
 {
 	class DependencyValidation; class DependentFileState; 
-	class ArtifactCollectionFuture; class IIntermediateCompileMarker; 
-	class IArtifactCollection;
-    class InitializerPack;
 }
 
 namespace RenderCore

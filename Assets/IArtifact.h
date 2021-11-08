@@ -11,6 +11,7 @@
 #include "../Utility/MemoryUtils.h"
 #include <memory>
 #include <functional>
+#include <future>
 
 namespace Assets
 {
@@ -70,10 +71,13 @@ namespace Assets
     /// Other times, objects are stored in a "ArchiveCache" object. For example,
     /// shader compiles are typically combined together into archives of a few
     /// different configurations. So a pointer to an optional ArchiveCache is provided.
-    class ArtifactCollectionFuture : public GenericFuture
+    class ArtifactCollectionFuture : public IAsyncMarker
     {
     public:
 		const std::shared_ptr<IArtifactCollection>& GetArtifactCollection(ArtifactTargetCode);
+
+		using ArtifactCollectionSet = std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>;
+		auto ShareFuture() -> std::shared_future<ArtifactCollectionSet>;
 
         ArtifactCollectionFuture();
         ~ArtifactCollectionFuture();
@@ -84,11 +88,17 @@ namespace Assets
 		ArtifactCollectionFuture& operator=(const ArtifactCollectionFuture&) = delete;
 
 		void SetArtifactCollections(IteratorRange<const std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>*> artifacts);
-		void StoreException(const std::exception_ptr&);
+		void StoreException(std::exception_ptr);
+		const char* GetDebugLabel() const;  // GetDebugLabel only provided in debug builds, and only intended for debugging
+		void SetDebugLabel(StringSection<char> initializer);
+
+		virtual AssetState		            GetAssetState() const override;
+		virtual std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
 
 	private:
-		std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>> _artifactCollections;
-		std::exception_ptr _capturedException;
+		std::promise<ArtifactCollectionSet> _promise;
+		std::shared_future<ArtifactCollectionSet> _rootSharedFuture;
+		DEBUG_ONLY(ResChar _initializer[MaxPath];)
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -91,10 +91,10 @@ namespace Assets
 	}
 
 	template<typename Promise, typename std::enable_if_t<Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests>* =nullptr>
-		void AutoConstructToPromise(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
+		void AutoConstructToPromiseFromArtifactCollection(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
-			future.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
+			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
 			return;
 		}
 
@@ -104,34 +104,26 @@ namespace Assets
 	}
 
 	template<typename Promise>
-		void AutoConstructToPromise(Promise&& promise, const std::shared_ptr<ArtifactCollectionFuture>& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
+		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
 	{
 		// We must poll the compile operation every frame, and construct the asset when it is ready. Note that we're
 		// still going to end up constructing the asset in the main thread.
-		promise.SetPollingFunction(
-			[pendingCompile, targetCode](Future& thatFuture) -> bool {
-				auto state = pendingCompile->GetAssetState();
-				if (state == AssetState::Pending) return true;
-				
-				const auto& artifactCollection = pendingCompile->GetArtifactCollection(targetCode);
-				if (state == AssetState::Invalid || !artifactCollection) {
-					if (artifactCollection) {
-						thatFuture.SetInvalidAsset(artifactCollection->GetDependencyValidation(), GetErrorMessage(*artifactCollection));
-					} else {
-						thatFuture.SetInvalidAsset({}, AsBlob("No artifact collection of the requested type was found"));
+		WhenAll(pendingCompile.ShareFuture()).ThenConstructToPromise(
+			std::move(promise),
+			[targetCode](Promise&& promise, const ArtifactCollectionFuture::ArtifactCollectionSet& collections) mutable {
+				for (const auto&artifactCollection:collections)
+					if (artifactCollection.first == targetCode) {
+						AutoConstructToPromiseFromArtifactCollection(std::move(promise), *artifactCollection.second, targetCode);
+						return;
 					}
-					return false;
-				}
 
-				assert(state == AssetState::Ready);
-				AutoConstructToPromise(thatFuture, *artifactCollection, targetCode);
-				return false;
+				Throw(std::runtime_error("No artifact collection of the requested type was found"));
 			});
 	}
 
 	template<typename Promise, typename... Args>
 		static void DefaultCompilerConstruction(
-			Promise& promise,
+			Promise&& promise,
 			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
 			Args... args)
 	{
@@ -160,12 +152,12 @@ namespace Assets
 			auto existingArtifact = marker->GetExistingAsset(targetCode);
 			if (existingArtifact && existingArtifact->GetDependencyValidation() && existingArtifact->GetDependencyValidation().GetValidationIndex()==0) {
 				bool doRecompile = false;
-				AutoConstructToPromise(std::move(promise), *existingArtifact, targetCode);
+				AutoConstructToPromiseFromArtifactCollection(std::move(promise), *existingArtifact, targetCode);
 				if (!doRecompile) return;
 			}
 		
 			auto pendingCompile = marker->InvokeCompile();
-			AutoConstructToPromise(std::move(promise), pendingCompile, targetCode);
+			AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
 			
 		} CATCH (const Exceptions::InvalidAsset& e) {
 			Exceptions::InvalidAsset copiedException = e;
