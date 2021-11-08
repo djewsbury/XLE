@@ -79,3 +79,7 @@
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
 
 #define VISUALIZE_ATTACHMENT_PIXEL_HLSL "xleres/ToolsHelper/visualize-attachment.pixel.hlsl"
+
+#define IBL_PREFILTER_HLSL "xleres/ToolsHelper/IBLPrefilter.hlsl"
+#define EQUIRECTANGULAR_TO_CUBE_HLSL "xleres/ToolsHelper/EquirectangularToCube.hlsl"
+#define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"

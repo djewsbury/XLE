@@ -9,10 +9,10 @@
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "../Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D Input : register(t0, space0);
-RWTexture2DArray<float4> OutputArray : register(u1, space0);
-RWTexture2D<float4> Output : register(u1, space0);
-SamplerState EquirectangularBilinearSampler : register(s2, space0);
+Texture2D Input;
+RWTexture2DArray<float4> OutputArray;
+RWTexture2D<float4> Output;
+SamplerState EquirectangularBilinearSampler;
 
 struct FilterPassParamsStruct
 {
@@ -122,7 +122,6 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
             PassSampleCount, FilterPassParams.PassIndex, FilterPassParams.PassCount);
         if (FilterPassParams.PassIndex == 0) OutputArray[dispatchThreadId.xyz] = float4(0,0,0,1);
         OutputArray[dispatchThreadId.xyz].rgb += r / float(FilterPassParams.PassCount);
-        OutputArray[dispatchThreadId.xyz].rgb = 1.0.xxx;
     }
 }
 

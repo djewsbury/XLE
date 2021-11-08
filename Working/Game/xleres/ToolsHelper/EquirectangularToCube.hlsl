@@ -8,8 +8,8 @@
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
-Texture2D Input : register(t0, space0);
-RWTexture2DArray<float4> OutputArray : register(u1, space0);
+Texture2D Input;
+RWTexture2DArray<float4> OutputArray;
 
 struct FilterPassParamsStruct
 {

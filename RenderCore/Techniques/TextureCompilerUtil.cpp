@@ -15,6 +15,7 @@
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Utility/BitUtils.h"
+#include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -81,41 +82,40 @@ namespace RenderCore { namespace Techniques
 			usi.BindResourceView(1, Hash64("OutputArray"));
  			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
-				"xleres/ToolsHelper/EquirectangularToCube.hlsl:EquRectToCube",
+				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquRectToCube",
 				{},
-				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 			// todo -- we really want to extract the full set of dependencies from the depVal
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/EquirectangularToCube.hlsl"));
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(EQUIRECTANGULAR_TO_CUBE_HLSL));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, Hash64("OutputArray"));
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
-				"xleres/ToolsHelper/IBLPrefilter.hlsl:EquiRectFilterGlossySpecular",
-				// "xleres/ToolsHelper/IBLPrefilter.hlsl:ReferenceDiffuseFilter",
+				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular",
+				// IBL_PREFILTER_HLSL ":ReferenceDiffuseFilter",
 				{},
-				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/IBLPrefilter.hlsl"));
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(IBL_PREFILTER_HLSL));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		} else {
 			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, Hash64("Output"));
 			computeOpFuture = CreateComputeOperator(
 				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
-				"xleres/ToolsHelper/IBLPrefilter.hlsl:ProjectToSphericalHarmonic",
+				IBL_PREFILTER_HLSL ":ProjectToSphericalHarmonic",
 				{},
-				"xleres/ToolsHelper/operators.pipeline:ComputeMain",
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/IBLPrefilter.hlsl"));
-			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(IBL_PREFILTER_HLSL));
+			result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 		}
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
-		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-		Metal::CompleteInitialization(metalContext, {outputRes.get()});
+		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
@@ -148,26 +148,26 @@ namespace RenderCore { namespace Techniques
 					computeOp->Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 
 					if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
-						/* since successive passes add to the values written in previous passes when
-						 need some kind of barrier. But since we're submitting the command list, it's not required
-						{
-							VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-							barrier.pNext = nullptr;
-							barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-							vkCmdPipelineBarrier(
-								metalContext.GetActiveCommandList().GetUnderlying().get(),
-								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								0,
-								1, &barrier,
-								0, nullptr,
-								0, nullptr);
-						}*/
-
 						computeOp->EndDispatches();
 						threadContext->CommitCommands();
 						computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+					} else {
+						/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
+							cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
+							the start before we commit the command list
+						VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+						barrier.pNext = nullptr;
+						barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+						barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+						vkCmdPipelineBarrier(
+							Metal::DeviceContext::Get(*threadContext)->GetActiveCommandList().GetUnderlying().get(),
+							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+							0,
+							1, &barrier,
+							0, nullptr,
+							0, nullptr);
+						 */
 					}
 				}
 			} else {
@@ -196,10 +196,10 @@ namespace RenderCore { namespace Techniques
 
  		auto computeOpFuture = CreateComputeOperator(
 			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
-			shader, {}, "xleres/ToolsHelper/operators.pipeline:ComputeMain", usi);
+			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
 		// todo -- we really want to extract the full set of dependencies from the depVal
 		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(shader));
-		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState("xleres/ToolsHelper/operators.pipeline"));
+		result._depFileStates.push_back(::Assets::IntermediatesStore::GetDependentFileState(TOOLSHELPER_OPERATORS_PIPELINE));
 
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write, targetDesc, "texture-compiler"));
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
