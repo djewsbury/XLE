@@ -13,6 +13,7 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include <assert.h>
+#include <future>
 
 namespace Utility
 {
@@ -75,15 +76,15 @@ namespace Assets
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
 
 		template<typename AssetType, typename... Params>
-			static auto HasConstructToFutureOverride_Helper(int) -> decltype(
-				Internal::RemoveSmartPtrType<AssetType>::ConstructToFuture(std::declval<::Assets::Future<AssetType>&>(), std::declval<Params>()...), 
+			static auto HasConstructToPromiseOverride_Helper(int) -> decltype(
+				Internal::RemoveSmartPtrType<AssetType>::ConstructToPromise(std::declval<std::promise<AssetType>&&>(), std::declval<Params>()...), 
 				std::true_type{});
 
 		template<typename...>
-			static auto HasConstructToFutureOverride_Helper(...) -> std::false_type;
+			static auto HasConstructToPromiseOverride_Helper(...) -> std::false_type;
 
 		template<typename AssetType, typename... Params>
-			struct HasConstructToFutureOverride : decltype(HasConstructToFutureOverride_Helper<AssetType, Params...>(0)) {};
+			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetType, Params...>(0)) {};
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,19 +101,19 @@ namespace Assets
 		template<typename T> struct IsUniquePtr<std::unique_ptr<T>> : std::true_type {};
 
 		template <typename Type, typename... Params, ENABLE_IF(IsSharedPtr<std::decay_t<Type>>::value)>
-			Type ConstructFinalAssetObject(Params&&... params)
+			Type InvokeAssetConstructor(Params&&... params)
 		{
 			return std::make_shared<typename Type::element_type>(std::forward<Params>(params)...);
 		}
 
 		template <typename Type, typename... Params, ENABLE_IF(IsUniquePtr<std::decay_t<Type>>::value)>
-			Type ConstructFinalAssetObject(Params&&... params)
+			Type InvokeAssetConstructor(Params&&... params)
 		{
 			return std::make_unique<typename Type::element_type>(std::forward<Params>(params)...);
 		}
 
 		template <typename Type, typename... Params, ENABLE_IF(!IsSharedPtr<std::decay_t<Type>>::value && !IsUniquePtr<std::decay_t<Type>>::value)>
-			Type ConstructFinalAssetObject(Params&&... params)
+			Type InvokeAssetConstructor(Params&&... params)
 		{
 			return Type { std::forward<Params>(params)... };
 		}
@@ -128,7 +129,7 @@ namespace Assets
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
-		// See also AutoConstructToFuture<> variation of this function
+		// See also AutoConstructToPromise<> variation of this function
 		const char* p = XlFindChar(initializer, ':');
 		if (p) {
 			char buffer[256];
@@ -136,7 +137,7 @@ namespace Assets
 			const auto& container = Internal::GetConfigFileContainer(buffer);
 			TRY {
 				auto fmttr = container.GetFormatter(MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()));
-				return Internal::ConstructFinalAssetObject<AssetType>(
+				return Internal::InvokeAssetConstructor<AssetType>(
 					fmttr, 
 					DefaultDirectorySearchRules(buffer),
 					container.GetDependencyValidation());
@@ -149,7 +150,7 @@ namespace Assets
 			const auto& container = Internal::GetConfigFileContainer(initializer);
 			TRY { 
 				auto fmttr = container.GetRootFormatter();
-				return Internal::ConstructFinalAssetObject<AssetType>(
+				return Internal::InvokeAssetConstructor<AssetType>(
 					fmttr,
 					DefaultDirectorySearchRules(initializer),
 					container.GetDependencyValidation());
@@ -167,7 +168,7 @@ namespace Assets
 		TRY {
 			auto container = ConfigFileContainer<>(blob, depVal);
 			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters.Cast<utf8>());
-			return Internal::ConstructFinalAssetObject<AssetType>(
+			return Internal::InvokeAssetConstructor<AssetType>(
 				fmttr,
 				DirectorySearchRules{},
 				container.GetDependencyValidation());
@@ -185,10 +186,10 @@ namespace Assets
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
-		// See also AutoConstructToFuture<> variation of this function
+		// See also AutoConstructToPromise<> variation of this function
 		const auto& container = Internal::GetChunkFileContainer(initializer);
 		TRY {
-			return Internal::ConstructFinalAssetObject<AssetType>(container);
+			return Internal::InvokeAssetConstructor<AssetType>(container);
 		} CATCH (const Exceptions::ConstructionError& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
@@ -200,7 +201,7 @@ namespace Assets
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
-			return Internal::ConstructFinalAssetObject<AssetType>(ChunkFileContainer(blob, depVal, requestParameters));
+			return Internal::InvokeAssetConstructor<AssetType>(ChunkFileContainer(blob, depVal, requestParameters));
 		} CATCH (const Exceptions::ConstructionError& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
@@ -215,11 +216,11 @@ namespace Assets
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
-		// See also AutoConstructToFuture<> variation of this function
+		// See also AutoConstructToPromise<> variation of this function
 		const auto& container = Internal::GetChunkFileContainer(initializer);
 		TRY {
 			auto chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::ConstructFinalAssetObject<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
+			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
 		} CATCH (const Exceptions::ConstructionError& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
@@ -232,7 +233,7 @@ namespace Assets
 	{
 		TRY {
 			auto chunks = ChunkFileContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::ConstructFinalAssetObject<AssetType>(MakeIteratorRange(chunks), depVal);
+			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
 		} CATCH (const Exceptions::ConstructionError& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
@@ -245,7 +246,7 @@ namespace Assets
 	{
 		TRY {
 			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::ConstructFinalAssetObject<AssetType>(MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
+			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
 		} CATCH (const Exceptions::ConstructionError& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
@@ -263,7 +264,7 @@ namespace Assets
 		auto depVal = GetDepValSys().Make(initializer);
 		TRY { 
 			auto file = MainFileSystem::OpenFileInterface(initializer, "rb");
-			return Internal::ConstructFinalAssetObject<AssetType>(
+			return Internal::InvokeAssetConstructor<AssetType>(
 				*file,
 				DefaultDirectorySearchRules(initializer),
 				depVal);
@@ -290,7 +291,7 @@ namespace Assets
 			file->Seek(0);
 			auto readCount = file->Read(block.get(), size);
 			assert(readCount == 1); (void)readCount;
-			return Internal::ConstructFinalAssetObject<AssetType>(
+			return Internal::InvokeAssetConstructor<AssetType>(
 				MakeStringSection(block.get(), PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),
 				depVal);
@@ -307,7 +308,7 @@ namespace Assets
 	template<typename AssetType, typename... Params, typename std::enable_if<std::is_constructible<Internal::RemoveSmartPtrType<AssetType>, Params...>::value>::type* = nullptr>
 		static AssetType AutoConstructAsset(Params... initialisers)
 	{
-		return Internal::ConstructFinalAssetObject<AssetType>(std::forward<Params>(initialisers)...);
+		return Internal::InvokeAssetConstructor<AssetType>(std::forward<Params>(initialisers)...);
 	}
 
 	#undef ENABLE_IF

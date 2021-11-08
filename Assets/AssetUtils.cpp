@@ -561,21 +561,21 @@ namespace Assets
 			return compilers.Prepare(targetCode, std::move(initializers));
 		}
 
-        struct ActiveFutureResolutionMoment
+        struct ActivePromiseFulFillmentMoment
         {
             void* _future;
-            FutureResolution_CheckStatusFn _checkStatusFn;
+            PromiseFulFillment_CheckStatusFn _checkStatusFn;
         };
-        static thread_local std::unique_ptr<std::vector<ActiveFutureResolutionMoment>> s_activeFutureResolutionMoments;
-        void FutureResolution_BeginMoment(void* future, FutureResolution_CheckStatusFn checkStatusFn)
+        static thread_local std::unique_ptr<std::vector<ActivePromiseFulFillmentMoment>> s_activeFutureResolutionMoments;
+        void PromiseFulFillment_BeginMoment(void* future, PromiseFulFillment_CheckStatusFn checkStatusFn)
         {
             assert((*checkStatusFn)(future) == AssetState::Pending);
             if (!s_activeFutureResolutionMoments)
-                s_activeFutureResolutionMoments = std::make_unique<std::vector<ActiveFutureResolutionMoment>>();
+                s_activeFutureResolutionMoments = std::make_unique<std::vector<ActivePromiseFulFillmentMoment>>();
             s_activeFutureResolutionMoments->push_back({future, checkStatusFn});
         }
 
-		void FutureResolution_EndMoment(void* future)
+		void PromiseFulFillment_EndMoment(void* future)
         {
             assert(s_activeFutureResolutionMoments);
             for (auto i=s_activeFutureResolutionMoments->rbegin(); i!=s_activeFutureResolutionMoments->rend(); ++i) {
@@ -594,7 +594,7 @@ namespace Assets
             assert(0);      // didn't find this resolution item
         }
 
-		bool FutureResolution_DeadlockDetection(void* future)
+		bool PromiseFulFillment_DeadlockDetection(void* future)
         {
             if (!s_activeFutureResolutionMoments) return false;
             for (auto i=s_activeFutureResolutionMoments->rbegin(); i!=s_activeFutureResolutionMoments->rend(); ++i)

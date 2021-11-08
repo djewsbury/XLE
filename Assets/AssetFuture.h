@@ -132,14 +132,14 @@ namespace Assets
 
 		void CheckMainThreadStall(std::chrono::steady_clock::time_point& stallStartTime);
 
-		using FutureResolution_CheckStatusFn = AssetState(*)(void*);
-		void FutureResolution_BeginMoment(void* future, FutureResolution_CheckStatusFn);
-		void FutureResolution_EndMoment(void* future);
-		bool FutureResolution_DeadlockDetection(void* future);
+		using PromiseFulFillment_CheckStatusFn = AssetState(*)(void*);
+		void PromiseFulFillment_BeginMoment(void* future, PromiseFulFillment_CheckStatusFn);
+		void PromiseFulFillment_EndMoment(void* future);
+		bool PromiseFulFillment_DeadlockDetection(void* future);
 
 		/**
-			FutureResolutionMoment is used to bracket a piece of code that is going to resolve
-			the state of an Future. When FutureResolutionMoment begins, the future should
+			PromiseFulfillmentMoment is used to bracket a piece of code that is going to resolve
+			the state of an Future. When PromiseFulfillmentMoment begins, the future should
 			be in Pending state, and when it ends, it should be in either Ready or Invalid state
 			(or at least have that state change queued to happen at the next frame barrier)
 
@@ -147,14 +147,14 @@ namespace Assets
 			It's used to detect deadlock scenarios. That is, we can't stall waiting for a future
 			during it's own resolution moment.
 		*/
-		template<typename Type>
-			class FutureResolutionMoment
+		class PromiseFulfillmentMoment
 		{
 		public:
-			FutureResolutionMoment(Future<Type>& future) : _future(&future)
+			template<typename Type>
+				PromiseFulfillmentMoment(Future<Type>& future) : _promise(&future)
 			{
 				assert(future.GetAssetState() == AssetState::Pending);
-				FutureResolution_BeginMoment(
+				PromiseFulFillment_BeginMoment(
 					&future,
 					[](void* inputFuture) {
 						DependencyValidation depVal;
@@ -162,12 +162,12 @@ namespace Assets
 						return ((Future<Type>*)inputFuture)->CheckStatusBkgrnd(depVal, actualizationLog);
 					});
 			}
-			~FutureResolutionMoment()
+			~PromiseFulfillmentMoment()
 			{
-				FutureResolution_EndMoment(_future);
+				PromiseFulFillment_EndMoment(_promise);
 			}
 		private:
-			Future<Type>* _future;
+			void* _promise;
 		};
 
 		template<typename Future, typename AssetType>
@@ -375,7 +375,7 @@ namespace Assets
 	template<typename Type>
         std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::microseconds timeout) const
 	{
-		if (Internal::FutureResolution_DeadlockDetection((void*)this)) {
+		if (Internal::PromiseFulFillment_DeadlockDetection((void*)this)) {
 			// This future is currently in a "resolution moment"
 			// This means that the code that will assign this future to either ready or invalid is
 			// higher up in the callstack on this same thread. If we attempt to stall for it here, 

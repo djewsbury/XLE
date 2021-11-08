@@ -114,7 +114,7 @@ namespace Assets
 		// after the future has been constructed but before we complete AutoConstructToFuture, the asset is considered to be
 		// in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
 		// another thread grabs the future before AutoConstructToFuture is done
-		AutoConstructToFuture(*newFuture, std::forward<Params>(initialisers)...);
+		AutoConstructToPromise(newFuture->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return newFuture;
 	}
 

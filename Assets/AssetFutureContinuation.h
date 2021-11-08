@@ -8,7 +8,7 @@
 
 #include "AssetFuture.h"
 #include "AssetUtils.h"
-#include "AssetTraits.h"		// just for ConstructFinalAssetObject
+#include "AssetTraits.h"		// just for InvokeAssetConstructor
 #include "../Utility/Threading/Mutex.h"
 #include "thousandeyes/futures/then.h"
 #include <tuple>
@@ -59,7 +59,7 @@ namespace Assets
 		// index the tuple
 		template<typename Ty, typename Tuple, std::size_t ... I>
 		auto ApplyConstructFinalAssetObject_impl(Tuple&& t, std::index_sequence<I...>) {
-			return ConstructFinalAssetObject<Ty>(std::get<I>(std::forward<Tuple>(t))...);
+			return InvokeAssetConstructor<Ty>(std::get<I>(std::forward<Tuple>(t))...);
 		}
 		template<typename Ty, typename Tuple>
 		auto ApplyConstructFinalAssetObject(Tuple&& t) {

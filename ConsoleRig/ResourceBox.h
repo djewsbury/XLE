@@ -29,11 +29,11 @@ namespace ConsoleRig
 	// invalidated objects TryActualizeCachedBox() can only be used with classes that have
 	// a method like:
 	//
-	//		static void ConstructToFuture(::Assets::FuturePtr<Type>& future);
+	//		static void ConstructToPromise(std::promise<Type>&& promise);
 	//
 	// implemented. This will invoke a background compile on first access and return nullptr
 	// until the object is aready to go.
-	// FindCachedBox<> can also be used with assets with a ConstructToFuture() method, but
+	// FindCachedBox<> can also be used with assets with a ConstructToPromise() method, but
 	// will throw ::Assets::Exceptions::PendingAsset if the asset is not ready
 	//
 	///////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +68,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -90,7 +90,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -109,7 +109,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -118,14 +118,14 @@ namespace ConsoleRig
 		if (i!=boxTable.end() && i->first==hashValue) {
 			if (::Assets::IsInvalidated(*i->second)) {
 				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
-				Box::ConstructToFuture(*i->second, std::forward<Params>(params)...);
+				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
 				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
 			}
 			return *i->second->Actualize();
 		}
 
 		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
-		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
 		return *i2->second->Actualize();
@@ -133,7 +133,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -144,7 +144,7 @@ namespace ConsoleRig
 		}
 
 		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
-		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
 		return *i2->second->Actualize();
@@ -154,7 +154,7 @@ namespace ConsoleRig
 	
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box*> TryActualizeCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -163,7 +163,7 @@ namespace ConsoleRig
 		if (i!=boxTable.end() && i->first==hashValue) {
 			if (::Assets::IsInvalidated(*i->second)) {
 				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
-				Box::ConstructToFuture(*i->second, std::forward<Params>(params)...);
+				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
 				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
 			}
 			auto* res = i->second->TryActualize();
@@ -172,7 +172,7 @@ namespace ConsoleRig
 		}
 
 		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
-		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
 		auto* res = i2->second->TryActualize();
@@ -182,7 +182,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToFutureOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
 			Box*> TryActualizeCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -195,7 +195,7 @@ namespace ConsoleRig
 		}
 
 		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
-		Box::ConstructToFuture(*future, std::forward<Params>(params)...);
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
 		auto* res = i2->second->TryActualize();

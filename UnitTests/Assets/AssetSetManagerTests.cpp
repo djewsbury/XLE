@@ -7,10 +7,15 @@
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/IFileSystem.h"
+#include "../../Assets/MemoryFile.h"
+#include "../../Assets/Assets.h"
+#include "../../Assets/MountingTree.h"
 #include "../../OSServices/Log.h"
 #include <stdexcept>
 #include <random>
 #include <future>
+#include <unordered_map>
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include "thousandeyes/futures/Executor.h"
@@ -25,7 +30,7 @@ namespace UnitTests
 	{
 	public:
 		static void ConstructToPromise(
-			std::promise<AssetWithRandomConstructionTime>& promise,
+			std::promise<AssetWithRandomConstructionTime>&& promise,
 			std::chrono::nanoseconds constructionTime,
 			Assets::AssetState finalState)
 		{
@@ -81,7 +86,7 @@ namespace UnitTests
 							globalServices->GetLongTaskThreadPool().Enqueue(
 								[promise=std::move(promiseToFulfill), duration, invalid]() mutable {
 									AssetWithRandomConstructionTime::ConstructToPromise(
-										promise,
+										std::move(promise),
 										duration,
 										invalid ? ::Assets::AssetState::Invalid : ::Assets::AssetState::Ready);
 								});
@@ -91,7 +96,7 @@ namespace UnitTests
 						[future, duration, invalid]() {
 							auto promise = future->AdoptPromise();
 							AssetWithRandomConstructionTime::ConstructToPromise(
-								promise,
+								std::move(promise),
 								duration, 
 								invalid ? ::Assets::AssetState::Invalid : ::Assets::AssetState::Ready);
 						});
@@ -358,6 +363,58 @@ namespace UnitTests
 		failedChain3.StallWhilePending();
 		REQUIRE(failedChain3.GetAssetState() == ::Assets::AssetState::Invalid);
 		REQUIRE(::Assets::AsString(failedChain3.GetActualizationLog()) == "runtime_error");
+	}
+
+	class ExampleAsset
+	{
+	public:
+		std::string _contents;
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ExampleAsset>>&& promise,
+			StringSection<> filename)
+		{
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[promise=std::move(promise), fn=filename.AsString()]() mutable {
+					TRY {
+						auto file = ::Assets::MainFileSystem::OpenFileInterface(fn, "rb");
+						auto size = file->GetSize();
+						std::string contents;
+						contents.resize(size);
+						file->Read(contents.data(), size);
+						auto res = std::make_shared<ExampleAsset>();
+						res->_contents = std::move(contents);
+						promise.set_value(res);
+					} CATCH(...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+	};
+
+	TEST_CASE( "Assets-ConstructToPromise", "[assets]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+
+		std::string fileContents = "This is the contents of the file";
+		static std::unordered_map<std::string, ::Assets::Blob> s_utData {
+			std::make_pair("file.dat", ::Assets::AsBlob(fileContents))
+		};
+		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
+
+		auto futureAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/file.dat");
+		futureAsset->StallWhilePending();
+		auto actualAsset = futureAsset->Actualize();
+		REQUIRE(actualAsset->_contents == fileContents);
+
+		// Expecting a failure for this one -- we should get InvalidAsset with something useful in the actualization log 
+		auto failedAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/no-file.data");
+		failedAsset->StallWhilePending();
+		REQUIRE(failedAsset->GetAssetState() == ::Assets::AssetState::Invalid);
+		auto log = ::Assets::AsString(failedAsset->GetActualizationLog());
+		REQUIRE(!log.empty());
+		Log(Debug) << "Failed MakeAsset<> reported: " << log << std::endl;
 	}
 
 	TEST_CASE( "General-StandardFutures", "[assets]" )

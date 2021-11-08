@@ -49,7 +49,7 @@ namespace ToolsRig
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().EnqueueBasic(
 			[future=future, constructor=std::move(constructor)]() {
-				::Assets::Internal::FutureResolutionMoment<typename Future::PromisedType> moment(*future);
+				::Assets::Internal::PromiseFulfillmentMoment<typename Future::PromisedType> moment(*future);
 				TRY {
 					auto asset = constructor();
 					future->SetAsset(std::move(asset), {});
