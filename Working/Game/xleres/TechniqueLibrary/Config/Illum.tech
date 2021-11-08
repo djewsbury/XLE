@@ -210,7 +210,7 @@ DepthMotion_PerPixelAndEarlyRejection=~
 	Selectors=~
 		VSOUT_HAS_PREV_POSITION=1
 		DEPTH_PLUS_MOTION=1
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusEarlyRejection
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

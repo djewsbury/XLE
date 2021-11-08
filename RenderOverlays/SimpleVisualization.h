@@ -11,6 +11,7 @@
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; }}
 namespace RenderCore { class IThreadContext; }
+namespace RenderOverlays { class Rect; }
 
 namespace RenderOverlays
 {
@@ -27,5 +28,10 @@ namespace RenderOverlays
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
 		StringSection<> msg);
+
+	void RenderLoadingIndicator(
+		RenderOverlays::IOverlayContext& context,
+		const RenderOverlays::Rect& viewport,
+		unsigned animationCounter);
 }
 

@@ -13,7 +13,7 @@ namespace RenderCore { namespace ImplDX11
     void RegisterCreation()
     {
         // (we can also use __attribute__((constructor)) with clang/gcc)
-        static_constructor<&RegisterCreation>::c;
+        (void)static_constructor<&RegisterCreation>::c;
         RegisterDeviceCreationFunction(UnderlyingAPI::DX11, &CreateDevice);
     }
 }}

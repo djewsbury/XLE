@@ -7,6 +7,7 @@
 #include "SimpleVisualization.h"
 #include "OverlayContext.h"
 #include "Font.h"
+#include "DebuggingDisplay.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
@@ -147,6 +148,70 @@ namespace RenderOverlays
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext, RenderCore::LoadStore::Clear);
 		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
 		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(parsingContext, rpi);
+	}
+
+	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::Rect& rect, RenderOverlays::ColorB colour)
+	{
+		if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
+			return;
+		}
+
+		using namespace RenderOverlays;
+		using namespace RenderOverlays::DebuggingDisplay;
+		context.DrawTriangle(
+			ProjectionMode::P2D, 
+			AsPixelCoords(Coord2(rect._bottomRight[0],								0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour,
+			AsPixelCoords(Coord2(0.5f * (rect._topLeft[0] + rect._bottomRight[0]),	rect._topLeft[1])), colour,
+			AsPixelCoords(Coord2(rect._topLeft[0],									0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour);
+
+		context.DrawTriangle(
+			ProjectionMode::P2D, 
+			AsPixelCoords(Coord2(rect._topLeft[0],									0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour,
+			AsPixelCoords(Coord2(0.5f * (rect._topLeft[0] + rect._bottomRight[0]),	rect._bottomRight[1])), colour,
+			AsPixelCoords(Coord2(rect._bottomRight[0],								0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour);
+	}
+
+	void RenderLoadingIndicator(
+		RenderOverlays::IOverlayContext& context,
+		const RenderOverlays::Rect& viewport,
+		unsigned animationCounter)
+	{
+		using namespace RenderOverlays::DebuggingDisplay;
+
+		const unsigned indicatorWidth = 80;
+		const unsigned indicatorHeight = 120;
+		RenderOverlays::Rect outerRect;
+		outerRect._topLeft[0] = std::max(viewport._topLeft[0]+12u, viewport._bottomRight[0]-indicatorWidth-12u);
+		outerRect._topLeft[1] = std::max(viewport._topLeft[1]+12u, viewport._bottomRight[1]-indicatorHeight-12u);
+		outerRect._bottomRight[0] = viewport._bottomRight[0]-12u;
+		outerRect._bottomRight[1] = viewport._bottomRight[1]-12u;
+
+		Float2 center {
+			(outerRect._bottomRight[0] + outerRect._topLeft[0]) / 2.0f,
+			(outerRect._bottomRight[1] + outerRect._topLeft[1]) / 2.0f };
+
+		const unsigned cycleCount = 1080;
+		// there are always 3 diamonds, distributed evenly throughout the animation....
+		unsigned oldestIdx = (unsigned)std::ceil(animationCounter / float(cycleCount/3));
+		int oldestStartPoint = -int(animationCounter % (cycleCount/3));
+		float phase = -oldestStartPoint / float(cycleCount/3);
+		for (unsigned c=0; c<3; ++c) {
+			unsigned idx = oldestIdx+c;
+
+			float a = (phase + (2-c)) / 3.0f;
+			float a2 = std::fmodf(idx / 10.f, 1.0f);
+			a2 = 0.5f + 0.5f * a2;
+
+			RenderOverlays::Rect r;
+			r._topLeft[0] = unsigned(center[0] - a * 0.5f * (outerRect._bottomRight[0] - outerRect._topLeft[0]));
+			r._topLeft[1] = unsigned(center[1] - a * 0.5f * (outerRect._bottomRight[1] - outerRect._topLeft[1]));
+			r._bottomRight[0] = unsigned(center[0] + a * 0.5f * (outerRect._bottomRight[0] - outerRect._topLeft[0]));
+			r._bottomRight[1] = unsigned(center[1] + a * 0.5f * (outerRect._bottomRight[1] - outerRect._topLeft[1]));
+
+			using namespace RenderOverlays::DebuggingDisplay;
+			float fadeOff = std::min((1.0f - a) * 10.f, 1.0f);
+			DrawDiamond(context, r, RenderOverlays::ColorB { uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), 0xff });
+		}
 	}
 }
 

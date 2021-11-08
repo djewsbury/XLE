@@ -448,7 +448,7 @@ namespace RenderCore { namespace ImplOpenGLES
 
     void RegisterCreation()
     {
-        static_constructor<&RegisterCreation>::c;
+        (void)static_constructor<&RegisterCreation>::c;
         RegisterDeviceCreationFunction(UnderlyingAPI::OpenGLES, &CreateDevice);
     }
 
