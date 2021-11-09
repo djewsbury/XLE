@@ -12,6 +12,8 @@
 #include "../../Assets/ChunkFile.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/InitializerPack.h"
+#include "../../Assets/DeferredConstruction.h"
+#include "../../Assets/AssetServices.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -19,6 +21,7 @@
 #include "../../Utility/StringUtils.h"
 #include <stdexcept>
 #include <filesystem>
+#include "thousandeyes/futures/DefaultExecutor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
@@ -29,8 +32,8 @@
 using namespace Catch::literals;
 namespace UnitTests
 {
-	static uint64_t Type_UnitTestArtifact = ConstHash64<'unit', 'test', 'arti', 'fact'>::Value;
-	static uint64_t Type_UnitTestExtraArtifact = ConstHash64<'unit', 'test', 'extr', 'a'>::Value;
+	static constexpr uint64_t Type_UnitTestArtifact = ConstHash64<'unit', 'test', 'arti', 'fact'>::Value;
+	static constexpr uint64_t Type_UnitTestExtraArtifact = ConstHash64<'unit', 'test', 'extr', 'a'>::Value;
 
 	class TestCompileOperation : public ::Assets::ICompileOperation
 	{
@@ -282,7 +285,6 @@ namespace UnitTests
 			REQUIRE(marker0 != marker2);
 
 			compilers->DeregisterCompiler(registration);
-
 		}
 	}
 
@@ -481,6 +483,47 @@ namespace UnitTests
 
 			// still expecting no new compiles started. We should be getting this error log from the intermediates store
 			REQUIRE(TestCompileOperation::s_constructionCount == initialCompileCount+1);
+		}
+	}
+
+	class TestChunkRequestsAssetWithCompileProcessType : public TestChunkRequestsAsset
+	{
+	public:
+		static const uint64_t CompileProcessType = Type_UnitTestArtifact;
+		using TestChunkRequestsAsset::TestChunkRequestsAsset;
+	};
+
+	TEST_CASE( "AssetCompilers-ImplicitCompilation", "[assets]" )
+	{
+		UnitTest_SetWorkingDirectory();
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
+
+		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		uint64_t outputTypes[] = { Type_UnitTestArtifact };
+		auto registration = compilers.RegisterCompiler(
+			"UnitTestCompiler",
+			"UnitTestCompiler",
+			ConsoleRig::GetLibVersionDesc(),
+			{},
+			[](auto initializers) {
+				assert(!initializers.IsEmpty());
+				return std::make_shared<TestCompileOperation>(initializers);
+			});
+
+		compilers.AssociateRequest(
+			registration,
+			MakeIteratorRange(outputTypes),
+			"unit-test-asset-.*");
+
+		// start a compile via MakeFuture, and ensure that it gets propagated to the registered compiler and generates
+		// the asset as expected
+		{
+			auto futureByPtr = ::Assets::MakeFuture<std::shared_ptr<TestChunkRequestsAssetWithCompileProcessType>>("unit-test-asset-implicit");
+			futureByPtr->StallWhilePending();
+			auto actualPtr = futureByPtr->Actualize();
+			REQUIRE(actualPtr != nullptr);
 		}
 	}
 

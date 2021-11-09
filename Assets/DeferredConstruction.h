@@ -11,7 +11,9 @@
 #include "IArtifact.h"
 #include "IntermediateCompilers.h"
 #include "InitializerPack.h"
+#include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/Log.h"
+#include "../Utility/Threading/CompletionThreadPool.h"
 #include <memory>
 
 namespace Assets
@@ -130,45 +132,42 @@ namespace Assets
 		// Begin a compilation operation via the registered compilers for this type.
 		// Our deferred constructor will wait for the completion of that compilation operation,
 		// and then construct the final asset from the result
-
-		#if defined(_DEBUG)
-			std::string debugLabel = InitializerPack{args...}.ArchivableName();		// (note no forward here, because we reuse args below)
-		#endif
-
-		TRY { 
-			auto marker = Internal::BeginCompileOperation(targetCode, InitializerPack{std::forward<Args>(args)...});
-			if (!marker) {
-				#if defined(_DEBUG)
-					promise.set_exception(std::make_exception_ptr(std::runtime_error("No compiler found for asset " + debugLabel)));
-				#else
-					promise.set_exception(std::make_exception_ptr(std::runtime_error("No compiler found for asset")));
-				#endif
-				return;
-			}
-
-			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
-			// version number is bad). We could attempt to push this into a background thread, also
-
-			auto existingArtifact = marker->GetExistingAsset(targetCode);
-			if (existingArtifact && existingArtifact->GetDependencyValidation() && existingArtifact->GetDependencyValidation().GetValidationIndex()==0) {
-				bool doRecompile = false;
-				AutoConstructToPromiseFromArtifactCollection(std::move(promise), *existingArtifact, targetCode);
-				if (!doRecompile) return;
-			}
+		// We use the "short" task pool here, because we're assuming that construction of the asset
+		// from a precompiled result is quick, but actual compilation would take much longer
 		
-			auto pendingCompile = marker->InvokeCompile();
-			AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
-			
-		} CATCH (const Exceptions::InvalidAsset& e) {
-			Exceptions::InvalidAsset copiedException = e;
-			promise.set_exception(std::current_exception());
-			throw copiedException;	// Have to rethrow InvalidAsset, otherwise we loose our dependency validation. This can occur when the AutoConstructAsset function itself loads some other asset
-		} CATCH(...) {
-			#if defined(_DEBUG)
-				Log(Warning) << "No dependency validation associated with asset (" << debugLabel << ") after construction failure. Hot reloading will not function for this asset." << std::endl;
-			#endif
-			promise.set_exception(std::current_exception());
-		} CATCH_END
+		InitializerPack initPack{args...};
+		ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+			[initPack=std::move(initPack), promise=std::move(promise), targetCode]() mutable {
+				TRY {
+					#if defined(_DEBUG)
+						std::string debugLabel = initPack.ArchivableName();
+					#endif
+
+					auto marker = Internal::BeginCompileOperation(targetCode, std::move(initPack));
+					if (!marker) {
+						#if defined(_DEBUG)
+							Throw(std::runtime_error("No compiler found for asset " + debugLabel));
+						#else
+							Throw(std::runtime_error("No compiler found for asset"));
+						#endif
+					}
+
+					// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
+					// version number is bad). We could attempt to push this into a background thread, also
+
+					auto existingArtifact = marker->GetExistingAsset(targetCode);
+					if (existingArtifact && existingArtifact->GetDependencyValidation() && existingArtifact->GetDependencyValidation().GetValidationIndex()==0) {
+						bool doRecompile = false;
+						AutoConstructToPromiseFromArtifactCollection(std::move(promise), *existingArtifact, targetCode);
+						if (!doRecompile) return;
+					}
+				
+					auto pendingCompile = marker->InvokeCompile();
+					AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);			
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 	}
 
 	template<

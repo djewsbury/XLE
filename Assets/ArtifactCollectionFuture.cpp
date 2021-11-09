@@ -67,15 +67,29 @@ namespace Assets
 
 	AssetState ArtifactCollectionFuture::GetAssetState() const
 	{
-		assert(0);
-		return AssetState::Pending;
+		// Unfortunately we can't implement this safely and efficiently without a lot of extra
+		// infrastructure in this class
+		auto s = _rootSharedFuture.wait_for(std::chrono::seconds(0));
+		if (s == std::future_status::timeout)
+			return AssetState::Pending;
+		TRY {
+			(void)_rootSharedFuture.get();
+			return AssetState::Ready;
+		} CATCH(...) {
+			return AssetState::Invalid;
+		} CATCH_END
 	}
 
 	std::optional<AssetState> ArtifactCollectionFuture::StallWhilePending(std::chrono::microseconds timeout) const
 	{
-		auto s = _rootSharedFuture.wait_for(timeout);
-		if (s == std::future_status::ready) return AssetState::Ready;
-		return {};
+		if (timeout.count() == 0) {
+			_rootSharedFuture.wait();
+			return AssetState::Ready;		// we don't know if it's invalid or ready at this point
+		} else {
+			auto s = _rootSharedFuture.wait_for(timeout);
+			if (s == std::future_status::ready) return AssetState::Ready;
+			return {};
+		}
 	}
 
     const char* ArtifactCollectionFuture::GetDebugLabel() const
