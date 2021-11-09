@@ -296,9 +296,9 @@ namespace Assets
 			} CATCH_END
 		}
 
-		template<typename Fn, typename... Futures>
+		template<typename Promise, typename Fn, typename... Futures>
 			static void FulfillContinuationFunction(
-				std::promise<std::invoke_result_t<Fn, FutureResult<Futures>...>>& promise, 
+				Promise& promise, 
 				Fn&& continuationFunction,
 				std::tuple<Futures...>& completedFutures)
 		{
@@ -312,9 +312,9 @@ namespace Assets
 			} CATCH_END
 		}
 
-		template<typename Fn, typename... Futures>
+		template<typename Promise, typename Fn, typename... Futures>
 			static void FulfillContinuationFunction(
-				std::promise<std::invoke_result_t<Fn, FutureResult<Futures>...>>& promise, 
+				Promise& promise, 
 				Fn&& continuationFunction,
 				std::future<std::tuple<Futures...>>& completedFutures)
 		{
@@ -329,7 +329,7 @@ namespace Assets
 		}
 
 		template<typename Promise, typename Fn, typename... Futures>
-			static void FulfillContinuationFunction2(
+			static void FulfillContinuationFunctionPassPromise(
 				Promise&& promise,
 				Fn&& continuationFunction,
 				std::future<std::tuple<Futures...>>& completedFutures)
@@ -340,6 +340,41 @@ namespace Assets
 				auto completed = completedFutures.get();
 				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
 				std::apply(std::move(continuationFunction), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(actualized)));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
+
+		template<
+			typename Promise, typename Fn, typename... Futures,
+			typename std::enable_if<!std::is_void_v<std::invoke_result_t<Fn, Futures...>>>::type* =nullptr>
+			static void FulfillContinuationFunctionPassFutures(
+				Promise& promise, 
+				Fn&& continuationFunction,
+				std::future<std::tuple<Futures...>>& completedFutures)
+		{
+			TRY {
+				auto completed = completedFutures.get();
+				auto finalResult = std::apply(std::move(continuationFunction), std::move(completed));
+				promise.set_value(std::move(finalResult));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
+
+		template<
+			typename Fn, typename... Futures,
+			typename std::enable_if<std::is_void_v<std::invoke_result_t<Fn, Futures...>>>::type* =nullptr>
+			static void FulfillContinuationFunctionPassFutures(
+				std::promise<void>& promise, 
+				Fn&& continuationFunction,
+				std::future<std::tuple<Futures...>>& completedFutures)
+		{
+			// this variation is for continuation functions that return void
+			TRY {
+				auto completed = completedFutures.get();
+				std::apply(std::move(continuationFunction), std::move(completed));
+				promise.set_value();
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
 			} CATCH_END
@@ -399,7 +434,7 @@ namespace Assets
 				Fn&& fn)
 		{
 			using FunctionResult = std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>;
-			static_assert(std::is_same_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
+			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
 			thousandeyes::futures::then(
 				std::move(*this),
 				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
@@ -415,20 +450,20 @@ namespace Assets
 			thousandeyes::futures::then(
 				std::move(*this),
 				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
-					Internal::FulfillContinuationFunction2(std::move(promise), std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassPromise(std::move(promise), std::move(func), completedFutures);
 				});
 		}
 
 		template<typename Fn>
-			std::future<std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>> Then(Fn&& continuationFunction)
+			std::future<std::invoke_result_t<Fn, FutureTypes...>> Then(Fn&& continuationFunction)
 		{
-			using FunctionResult = std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>;
+			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
 			std::promise<FunctionResult> promise;
 			auto result = promise.get_future();
 			thousandeyes::futures::then(
 				std::move(*this),
 				[promise=std::move(promise), func=std::move(continuationFunction)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
-					Internal::FulfillContinuationFunction(promise, std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), completedFutures);
 				});
 			return result;
 		}

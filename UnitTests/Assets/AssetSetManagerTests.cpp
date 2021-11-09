@@ -238,7 +238,7 @@ namespace UnitTests
 		REQUIRE(finalFuture2.Actualize() == 3);
 
 		auto continuation = ::Assets::WhenAll(futureZero, futureOne, futureTwo).Then(
-			[](auto zero, auto one, auto two) { return zero+one+two; });
+			[](auto zero, auto one, auto two) { return zero.get()+one.get()+two.get(); });
 		continuation.wait();
 		REQUIRE(continuation.get() == 3);
 
@@ -255,7 +255,7 @@ namespace UnitTests
 
 		auto continuation2 = ::Assets::WhenAll(futureZero, futureOne, futureTwo, std::move(basicFuture), basicFuture2, std::move(futureThree)).Then(
 			[](auto zero, auto one, auto two, auto three, auto four, auto five) {
-				return zero+one+two+three+four+five; 
+				return zero.get()+one.get()+two.get()+three.get()+four.get()+five.get(); 
 			});
 		continuation2.wait();
 		REQUIRE(continuation2.get() == 15);
@@ -321,14 +321,20 @@ namespace UnitTests
 		auto successfulChain = ::Assets::WhenAll(
 			AssetTypeOne::SuccessfulAssetFuture("zero"), 
 			AssetTypeOne::SuccessfulStdFuture(" one"))
-			.Then([](auto zero, auto one) { return zero._value + one._value; });
+			.Then([](auto zero, auto one) { return zero.get()._value + one.get()._value; });
 		successfulChain.wait();
 		REQUIRE(successfulChain.get() == "zero one");
+
+		auto successfulChainVoidReturn = ::Assets::WhenAll(
+			AssetTypeOne::SuccessfulAssetFuture("zero"), 
+			AssetTypeOne::SuccessfulStdFuture(" one"))
+			.Then([](auto zero, auto one) { zero.get(); one.get(); });
+		successfulChainVoidReturn.wait();
 
 		auto failedChain = ::Assets::WhenAll(
 			AssetTypeOne::SuccessfulAssetFuture("zero"), 
 			AssetTypeOne::FailedAssetFuture(::Assets::AsBlob("Failed asset")))
-			.Then([](auto zero, auto one) { return zero._value + one._value; });
+			.Then([](auto zero, auto one) { return zero.get()._value + one.get()._value; });
 		failedChain.wait();
 		{
 			::Assets::AssetState state;
@@ -343,7 +349,7 @@ namespace UnitTests
 		auto failedChain2 = ::Assets::WhenAll(
 			AssetTypeOne::SuccessfulAssetFuture("zero"), 
 			AssetTypeOne::FailedStdFuture(std::make_exception_ptr(std::runtime_error("runtime_error"))))
-			.Then([](auto zero, auto one) { return zero._value + one._value; });
+			.Then([](auto zero, auto one) { return zero.get()._value + one.get()._value; });
 		failedChain2.wait();
 		{
 			::Assets::AssetState state;
