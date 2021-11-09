@@ -74,7 +74,7 @@ namespace Assets
 		void AutoConstructToPromise(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
-			promise.SetInvalidAsset(artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection));
+			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
 			return;
 		}
 
@@ -88,12 +88,12 @@ namespace Assets
 				artifactCollection.GetDependencyValidation(),
 				artifactCollection.GetRequestParameters());
 		} else {
-			promise.SetInvalidAsset(artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found"));
+			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found")}));
 		}
 	}
 
 	template<typename Promise, typename std::enable_if_t<Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests>* =nullptr>
-		void AutoConstructToPromiseFromArtifactCollection(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
+		void AutoConstructToPromise(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
@@ -115,11 +115,11 @@ namespace Assets
 			[targetCode](Promise&& promise, const ArtifactCollectionFuture::ArtifactCollectionSet& collections) mutable {
 				for (const auto&artifactCollection:collections)
 					if (artifactCollection.first == targetCode) {
-						AutoConstructToPromiseFromArtifactCollection(std::move(promise), *artifactCollection.second, targetCode);
+						AutoConstructToPromise(std::move(promise), *artifactCollection.second, targetCode);
 						return;
 					}
 
-				Throw(std::runtime_error("No artifact collection of the requested type was found"));
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("No artifact collection of the requested type was found")));
 			});
 	}
 
@@ -157,9 +157,8 @@ namespace Assets
 
 					auto existingArtifact = marker->GetExistingAsset(targetCode);
 					if (existingArtifact && existingArtifact->GetDependencyValidation() && existingArtifact->GetDependencyValidation().GetValidationIndex()==0) {
-						bool doRecompile = false;
-						AutoConstructToPromiseFromArtifactCollection(std::move(promise), *existingArtifact, targetCode);
-						if (!doRecompile) return;
+						AutoConstructToPromise(std::move(promise), *existingArtifact, targetCode);
+						return;
 					}
 				
 					auto pendingCompile = marker->InvokeCompile();

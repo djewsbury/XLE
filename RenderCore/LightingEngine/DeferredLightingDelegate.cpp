@@ -339,7 +339,7 @@ namespace RenderCore { namespace LightingEngine
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
 			resolveOperators=std::move(resolveOperators), pipelineCollection, lightingOperatorLayout, flags](
-				std::promise<CompiledLightingTechnique>&& thatPromise,
+				std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise,
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators) {
 
@@ -432,7 +432,7 @@ namespace RenderCore { namespace LightingEngine
 							return lightingTechnique;
 						});
 				} CATCH(...) {
-					promise.set_exception(std::current_exception());
+					thatPromise.set_exception(std::current_exception());
 				} CATCH_END
 			});
 

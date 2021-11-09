@@ -207,7 +207,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToPromise(
-		std::promise<std::shared_ptr<ShaderProgram>>& promise,
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> psName,
@@ -224,7 +224,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToPromise(
-		std::promise<std::shared_ptr<ShaderProgram>>& promise,
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -243,7 +243,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ShaderProgram::ConstructToPromise(
-		std::promise<std::shared_ptr<ShaderProgram>>& promise,
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -271,7 +271,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void ComputeShader::ConstructToPromise(
-		std::promise<std::shared_ptr<ShaderProgram>>& promise,
+		std::promise<std::shared_ptr<ComputeShader>>&& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> codeName,
 		StringSection<::Assets::ResChar> definesTable)

@@ -332,7 +332,7 @@ namespace RenderCore { namespace LightingEngine
 
 				finalResult->_stencilingGeometry = LightStencilingGeometry(*device);
 
-				future.SetAsset(decltype(finalResult){finalResult}, nullptr);
+				future.SetAsset(decltype(finalResult){finalResult});
 				return false;
 			});
 		return result;

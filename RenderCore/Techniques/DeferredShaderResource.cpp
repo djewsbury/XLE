@@ -144,13 +144,13 @@ namespace RenderCore { namespace Techniques
 
 		auto pkt = Services::GetInstance().CreateTextureDataSource(splitter.AllExceptParameters(), flags);
         if (!pkt) {
-            future.SetInvalidAsset({}, ::Assets::AsBlob("Could not find matching texture loader"));
+            promise.set_exception(std::make_exception_ptr(std::runtime_error("Could not find matching texture loader")));
 			return;
         }
 
         auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
-			future.SetInvalidAsset({}, ::Assets::AsBlob("Could not begin buffer uploads transaction"));
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Could not begin buffer uploads transaction")));
 			return;
 		}
 
@@ -220,13 +220,13 @@ namespace RenderCore { namespace Techniques
         using namespace BufferUploads;
 		auto pkt = artifact.BeginDataSource();
         if (!pkt) {
-            future.SetInvalidAsset(artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not find matching texture loader"));
+            promise.set_exception(std::make_exception_ptr(::Assets::Exceptions::InvalidAsset{{}, artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not find matching texture loader")}));
 			return;
         }
 
         auto transactionMarker = RenderCore::Techniques::Services::GetBufferUploads().Transaction_Begin(pkt, BindFlag::ShaderResource);
 		if (!transactionMarker.IsValid()) {
-			future.SetInvalidAsset(artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not begin buffer uploads transaction"));
+			promise.set_exception(std::make_exception_ptr(::Assets::Exceptions::InvalidAsset{{}, artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not begin buffer uploads transaction")}));
 			return;
 		}
 
@@ -275,8 +275,8 @@ namespace RenderCore { namespace Techniques
 		auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(containerInitializer);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=splitter.FullFilename().AsString()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
-                ConstructToPromiseArtifact(thatFuture, *containerActual, originalRequest);
+            [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
             });
     }
 
@@ -287,8 +287,8 @@ namespace RenderCore { namespace Techniques
         auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(compileRequest);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=compileRequest._srcFile](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
-                ConstructToPromiseArtifact(thatFuture, *containerActual, originalRequest);
+            [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
             });
     }
 

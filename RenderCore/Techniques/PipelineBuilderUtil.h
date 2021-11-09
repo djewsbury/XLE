@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
 			::Assets::WhenAll(pipelineDescFuture).ThenConstructToPromise(
 				result->AdoptPromise(), 
-				[](auto& resultFuture, auto pipelineDesc) { InitializeFuture(resultFuture, pipelineDesc); });
+				[](std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>>&& resultPromise, auto pipelineDesc) { InitializePromise(std::move(resultPromise), pipelineDesc); });
 			return result;
 		}
 
@@ -41,7 +41,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>();
-			InitializeFuture(result->AdoptPromise(), pipelineDesc);
+			InitializePromise(result->AdoptPromise(), pipelineDesc);
 			return result;
 		}
 
@@ -394,7 +394,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	}
 
 	static void MakeGraphicsPipelineFuture0(
-		std::promise<std::shared_ptr<GraphicsPipelineAndLayout>>&& promise,
+		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
 		const PipelineLayoutOptions& pipelineLayout,
@@ -456,7 +456,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	}
 
 	static void MakeGraphicsPipelineFuture1(
-		std::promise<std::shared_ptr<GraphicsPipelineAndLayout>>&& promise,
+		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
 		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
@@ -489,7 +489,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	}
 
 	static void MakeComputePipelineFuture0(
-		std::promise<std::shared_ptr<ComputePipelineAndLayout>>&& promise,
+		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& csCode,
 		const PipelineLayoutOptions& pipelineLayout)
@@ -628,7 +628,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					#if defined(_DEBUG)
 						pipelineAndLayout._debugInfo = completedi->second._debugInfo;
 					#endif
-					result->SetAsset(std::move(pipelineAndLayout), {});
+					result->SetAsset(std::move(pipelineAndLayout));
 					return result;
 				}
 			}
@@ -679,9 +679,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 			auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("pipeline-accelerator");
 			if (pipelineLayout._predefinedPipelineLayout) {
-				MakeGraphicsPipelineFuture1(*result, _device, _samplerPool, byteCodeFutures, pipelineLayout._predefinedPipelineLayout, std::move(constructionParams));
+				MakeGraphicsPipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFutures, pipelineLayout._predefinedPipelineLayout, std::move(constructionParams));
 			} else {
-				MakeGraphicsPipelineFuture0(*result, _device, byteCodeFutures, pipelineLayout, std::move(constructionParams));
+				MakeGraphicsPipelineFuture0(result->AdoptPromise(), _device, byteCodeFutures, pipelineLayout, std::move(constructionParams));
 			}
 
 			AddGraphicsPipelineFuture(result, hash);
@@ -696,35 +696,46 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			} else
 				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
 
-			::Assets::WhenAll(future).Then(
-				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> completedFuture) {
+			std::weak_ptr<::Assets::Future<GraphicsPipelineAndLayout>> capturedFuture = future;	
+			::Assets::WhenAll(future->ShareFuture()).Then(
+				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<GraphicsPipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
-					// Invalid futures stay in the "_pendingGraphicsPipelines" list
-					if (completedFuture->GetAssetState() == ::Assets::AssetState::Invalid) return;
-					ScopedLock(t->_lock);
+					
+					TRY {
+						ScopedLock(t->_lock);
 
-					auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
-					assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
-					if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
-						if (i->second.get() != completedFuture.get())
-							return;		// possibly scheduled a replacement while the first was still pending
-						t->_pendingGraphicsPipelines.erase(i);
-					}
+						auto actualized = completedFuture.get();
 
-					WeakGraphicsPipelineAndLayout weakPtrs;
-					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
-					weakPtrs._layout = completedFuture->TryActualize()->_layout;
-					weakPtrs._depVal = completedFuture->TryActualize()->_depVal;
-					#if defined(_DEBUG)
-						weakPtrs._debugInfo = completedFuture->TryActualize()->_debugInfo;
-					#endif
+						{
+							auto f = capturedFuture.lock();
+							if (f) {
+								auto i = LowerBound(t->_pendingGraphicsPipelines, hash);
+								assert(i!=t->_pendingGraphicsPipelines.end() && i->first == hash);
+								if (i!=t->_pendingGraphicsPipelines.end() && i->first == hash) {
+									if (i->second.get() != f.get())
+										return;		// possibly scheduled a replacement while the first was still pending
+									t->_pendingGraphicsPipelines.erase(i);
+								}
+							}
+						}
 
-					auto completedi = LowerBound(t->_completedGraphicsPipelines, hash);
-					if (completedi != t->_completedGraphicsPipelines.end() && completedi->first == hash) {
-						completedi->second = std::move(weakPtrs);
-					} else
-						t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
+						WeakGraphicsPipelineAndLayout weakPtrs;
+						weakPtrs._pipeline = actualized._pipeline;
+						weakPtrs._layout = actualized._layout;
+						weakPtrs._depVal = actualized._depVal;
+						#if defined(_DEBUG)
+							weakPtrs._debugInfo = actualized._debugInfo;
+						#endif
+
+						auto completedi = LowerBound(t->_completedGraphicsPipelines, hash);
+						if (completedi != t->_completedGraphicsPipelines.end() && completedi->first == hash) {
+							completedi->second = std::move(weakPtrs);
+						} else
+							t->_completedGraphicsPipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
+					} CATCH(...) {
+						// Invalid futures stay in the "_pendingGraphicsPipelines" list
+					} CATCH_END
 				});
 		}
 
@@ -743,7 +754,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				if (pipeline && completedi->second._depVal.GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
 					auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
-					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal}, {});
+					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal});
 					return result;
 				}
 			}
@@ -757,9 +768,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
 			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
 			if (pipelineLayout._predefinedPipelineLayout) {
-				MakeComputePipelineFuture1(*result, _device, _samplerPool, byteCodeFuture, pipelineLayout._predefinedPipelineLayout);
+				MakeComputePipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFuture, pipelineLayout._predefinedPipelineLayout);
 			} else {
-				MakeComputePipelineFuture0(*result, _device, byteCodeFuture, pipelineLayout);
+				MakeComputePipelineFuture0(result->AdoptPromise(), _device, byteCodeFuture, pipelineLayout);
 			}
 			AddComputePipelineFuture(result, hash);
 			return result;
@@ -773,33 +784,44 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			} else
 				_pendingComputePipelines.insert(i, std::make_pair(hash, future));
 
-			::Assets::WhenAll(future).Then(
-				[weakThis=weak_from_this(), hash](std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> completedFuture) {
+			std::weak_ptr<::Assets::Future<ComputePipelineAndLayout>> capturedFuture = future;
+			::Assets::WhenAll(future->ShareFuture()).Then(
+				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<ComputePipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
 					if (!t) return;
-					// Invalid futures stay in the "_pendingComputePipelines" list
-					if (completedFuture->GetAssetState() == ::Assets::AssetState::Invalid) return;
 
-					ScopedLock(t->_lock);
+					TRY {
+						ScopedLock(t->_lock);
 
-					auto i = LowerBound(t->_pendingComputePipelines, hash);
-					assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
-					if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
-						if (i->second.get() != completedFuture.get())
-							return;		// possibly scheduled a replacement while the first was still pending
-						t->_pendingComputePipelines.erase(i);
-					}
+						auto actualized = completedFuture.get();
 
-					WeakComputePipelineAndLayout weakPtrs;
-					weakPtrs._pipeline = completedFuture->TryActualize()->_pipeline;
-					weakPtrs._layout = completedFuture->TryActualize()->_layout;
-					weakPtrs._depVal = completedFuture->TryActualize()->_depVal;
+						{
+							auto f = capturedFuture.lock();
+							if (f) {
+								auto i = LowerBound(t->_pendingComputePipelines, hash);
+								assert(i!=t->_pendingComputePipelines.end() && i->first == hash);
+								if (i!=t->_pendingComputePipelines.end() && i->first == hash) {
+									if (i->second.get() != f.get())
+										return;		// possibly scheduled a replacement while the first was still pending
+									t->_pendingComputePipelines.erase(i);
+								}
+							}
+						}
 
-					auto completedi = LowerBound(t->_completedComputePipelines, hash);
-					if (completedi != t->_completedComputePipelines.end() && completedi->first == hash) {
-						completedi->second = std::move(weakPtrs);
-					} else
-						t->_completedComputePipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
+						WeakComputePipelineAndLayout weakPtrs;
+						weakPtrs._pipeline = actualized._pipeline;
+						weakPtrs._layout = actualized._layout;
+						weakPtrs._depVal = actualized._depVal;
+
+						auto completedi = LowerBound(t->_completedComputePipelines, hash);
+						if (completedi != t->_completedComputePipelines.end() && completedi->first == hash) {
+							completedi->second = std::move(weakPtrs);
+						} else
+							t->_completedComputePipelines.insert(completedi, std::make_pair(hash, std::move(weakPtrs)));
+
+					} CATCH(...) {
+						// Invalid futures stay in the "_pendingComputePipelines" list
+					} CATCH_END
 				});
 		}
 

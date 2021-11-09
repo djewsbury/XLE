@@ -93,7 +93,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 		::Assets::FuturePtr<Techniques::IShaderResourceDelegate> result("gbuffer-srdelegate");
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
-			result->AdoptPromise(),
+			result.AdoptPromise(),
 			[](auto nft) { return std::make_shared<BuildGBufferResourceDelegate>(*nft); });
 		return result;
 	}

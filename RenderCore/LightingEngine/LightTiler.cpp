@@ -292,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
 	RasterizationLightTileOperator::~RasterizationLightTileOperator() {}
 
 	void RasterizationLightTileOperator::ConstructToPromise(
-		std::promise<std::shared_ptr<RasterizationLightTileOperator>>& promise,
+		std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise,
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Configuration& config)
 	{

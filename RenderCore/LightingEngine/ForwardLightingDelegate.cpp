@@ -328,7 +328,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]
-			(	std::promise<CompiledLightingTechnique>&& thatPromise,
+			(	std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise,
 				std::shared_ptr<ForwardPlusLightScene> lightScene,
 				std::shared_ptr<Techniques::DeferredShaderResource> balancedNoiseTexture) {
 

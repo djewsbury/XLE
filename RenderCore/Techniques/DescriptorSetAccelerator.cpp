@@ -23,7 +23,7 @@
 namespace RenderCore { namespace Techniques 
 {
 	void ConstructDescriptorSet(
-		::Assets::Future<ActualizedDescriptorSet>& future,
+		std::promise<ActualizedDescriptorSet>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		const Utility::ParameterBox& constantBindings,
@@ -205,7 +205,7 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
-				thatFuture.SetAsset(std::move(actualized), {});
+				thatFuture.SetAsset(std::move(actualized));
 				return false;
 			});
 	}

@@ -1408,13 +1408,13 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToPromise(std::move(intermediateSkeletonInterface));
 
 		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, intermediateSkeletonInterfaceFuture).ThenConstructToPromise(
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, std::move(intermediateSkeletonInterfaceFuture)).ThenConstructToPromise(
 			std::move(rendererPromise),
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, 
 				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
 				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual,
-				std::shared_ptr<RendererSkeletonInterface> skeletonInterface) {
+				std::shared_ptr<RendererSkeletonInterface> skeletonInterface) mutable {
 				
 				auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
 					MakeStringSection(deformOperationString),

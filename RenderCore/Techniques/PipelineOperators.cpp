@@ -188,7 +188,7 @@ namespace RenderCore { namespace Techniques
 				result->AdoptPromise(),
 				[pool=pool, subType, pixelShader=pixelShader.AsString(), selectors=selectors,
 				fbDesc=*fbTarget._fbDesc, subPassIdx=fbTarget._subpassIdx,
-				usi=usi](std::promise<FullViewportOperator>&& resultPromise,
+				usi=usi](std::promise<std::shared_ptr<FullViewportOperator>>&& resultPromise,
 					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
 					FullViewportOperator::ConstructToPromise(
 						std::move(resultPromise), pool, (unsigned)subType, pixelShader, selectors, 

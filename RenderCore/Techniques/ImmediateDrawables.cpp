@@ -62,7 +62,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 
 				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			} else {
 				return _pipelineDescFuture[dsMode];
@@ -104,7 +104,7 @@ namespace RenderCore { namespace Techniques
 				_pipelineDesc[c]->_depthStencil = dsModes[c];
 
 				_pipelineDescFuture[c] = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
-				_pipelineDescFuture[c]->SetAsset(std::shared_ptr<GraphicsPipelineDesc>{_pipelineDesc[c]}, {});
+				_pipelineDescFuture[c]->SetAsset(std::shared_ptr<GraphicsPipelineDesc>{_pipelineDesc[c]});
 			}
 		}
 		~ImmediateRendererTechniqueDelegate() {}

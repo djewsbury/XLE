@@ -14,6 +14,8 @@
 namespace Utility { template<typename> class StringSection; template<typename> class IteratorRange; }
 using namespace Utility;
 
+namespace std { template<typename T> class promise; }
+
 namespace Assets
 {
     using ResChar = char;

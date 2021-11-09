@@ -90,7 +90,7 @@ namespace RenderCore { namespace Techniques
 		SimpleModelRenderer(const SimpleModelRenderer&) = delete;
 		
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
+			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
@@ -100,7 +100,7 @@ namespace RenderCore { namespace Techniques
 			const std::string& materialScaffoldNameString = {});
 		
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
+			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
+			std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
 

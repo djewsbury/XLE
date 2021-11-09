@@ -337,7 +337,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<ICompiledShadowPreparer>>();
-		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout), nullptr);
+		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
 		return result;
 	}
 
@@ -349,7 +349,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<DynamicShadowPreparationOperators>>();
 		if (shadowGenerators.empty()) {
-			result->SetAsset(std::make_shared<DynamicShadowPreparationOperators>(), {});
+			result->SetAsset(std::make_shared<DynamicShadowPreparationOperators>());
 			return result;
 		}
 
@@ -390,7 +390,7 @@ namespace RenderCore { namespace LightingEngine
 				for (auto&a:actualized)
 					finalResult->_operators.push_back(DynamicShadowPreparationOperators::Operator{std::move(a), *i++});
 
-				future.SetAsset(std::move(finalResult), nullptr);
+				future.SetAsset(std::move(finalResult));
 				return false;
 			});
 		return result;

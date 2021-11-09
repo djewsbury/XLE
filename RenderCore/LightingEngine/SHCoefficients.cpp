@@ -31,7 +31,7 @@ namespace RenderCore { namespace LightingEngine
 		auto srcFuture = ::Assets::MakeFuture<std::shared_ptr<RenderCore::Assets::TextureArtifact>>(request);
 		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
 			std::move(promise),
-			[](::Assets::FuturePtr<SHCoefficientsAsset>& thatFuture, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
+			[](std::promise<std::shared_ptr<SHCoefficientsAsset>>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
 				struct Captures
 				{
 					std::future<RenderCore::Assets::TextureArtifact::RawData> _futureData;
@@ -40,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
 				auto captures = std::make_shared<Captures>();
 				captures->_futureData = textureArtifact->BeginLoadRawData();
 				captures->_depVal = textureArtifact->GetDependencyValidation();
-				thatFuture.SetPollingFunction(
+				thatPromise.SetPollingFunction(
 					[captures=std::move(captures)](::Assets::FuturePtr<SHCoefficientsAsset>& thatFuture) {
 						auto resStatus = captures->_futureData.wait_for(std::chrono::seconds{0});
 						if (resStatus == std::future_status::timeout)
@@ -56,7 +56,7 @@ namespace RenderCore { namespace LightingEngine
 						auto data = MakeIteratorRange((const Float4*)AsPointer(rawData._data.begin()), (const Float4*)AsPointer(rawData._data.end()));
 						auto res = std::make_shared<SHCoefficientsAsset>(data);
 						res->_depVal = captures->_depVal;
-						thatFuture.SetAsset(std::move(res), {});
+						thatFuture.SetAsset(std::move(res));
 						return false;
 					});
 			});

@@ -706,7 +706,7 @@ namespace RenderCore { namespace Techniques
 			// future continuation functions
 			if (auto* patchCollection = patchCollectionFuture->TryActualize()) {
 				ConstructDescriptorSet(
-					*result->_descriptorSet,
+					result->_descriptorSet->AdoptPromise(),
 					_device,
 					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
 					constantBindings,
@@ -1070,7 +1070,7 @@ namespace RenderCore { namespace Techniques
 		_flags = flags;
 		_pipelineCollection = std::make_shared<PipelineCollection>(_device);
 		_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
-		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(), nullptr);
+		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
 		_matDescSetLayout = matDescSetLayout;
 		assert(_matDescSetLayout.GetLayout());
 	}

@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depVal = actualTechnique.GetDependencyValidation();
 			auto& entry = actualTechnique.GetEntry(_techniqueIndex);
 			PrepareShadersFromTechniqueEntry(nascentDesc, entry);
-			result->SetAsset(std::move(nascentDesc), {});
+			result->SetAsset(std::move(nascentDesc));
 		} else {
 			// We need to poll until the technique file is ready, and then continue on to figuring out the shader
 			// information as usual
