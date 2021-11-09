@@ -326,74 +326,83 @@ namespace ToolsRig
 		//
 		_preparedSceneFuture = std::make_shared<::Assets::FuturePtr<PreparedScene>>("simple-scene-layer");
 
-		::Assets::WhenAll(_envSettingsFuture).ThenConstructToFuture(
-			*_preparedSceneFuture,
+		::Assets::WhenAll(_envSettingsFuture).ThenConstructToPromise(
+			_preparedSceneFuture->AdoptPromise(),
 			[	targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
 				sceneFuture = _sceneFuture, pipelineAccelerators = _pipelineAccelerators,
 				sceneIsRefreshable = !!_refreshableSceneFuture, envSettingsIsRefreshable = !!_refreshableEnvSettingsFuture](
-				::Assets::FuturePtr<PreparedScene>& thatFuture, 
+				std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, 
 				std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) {
 
-				RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
-				ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
-				auto operators = envSettings->GetOperators();
-				auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
-					lightingApparatus,
-					operators._lightResolveOperators,
-					operators._shadowResolveOperators,
-					ambientLightOperatorDesc,
-					targets, fbProps);
-				/*auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
-					lightingApparatus,
-					operators._lightResolveOperators,
-					operators._shadowResolveOperators,
-					targets, fbProps);*/
+				TRY {
+					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
+					ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
+					auto operators = envSettings->GetOperators();
+					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
+						lightingApparatus,
+						operators._lightResolveOperators,
+						operators._shadowResolveOperators,
+						ambientLightOperatorDesc,
+						targets, fbProps);
+					/*auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+						lightingApparatus,
+						operators._lightResolveOperators,
+						operators._shadowResolveOperators,
+						targets, fbProps);*/
 
-				::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToFuture(
-					thatFuture,
-					[pipelineAccelerators, envSettings, sceneIsRefreshable, envSettingsIsRefreshable, sceneDepVal=sceneFuture->GetDependencyValidation()](Assets::FuturePtr<PreparedScene>& thatFuture, auto scene, auto compiledLightingTechnique) {
-						auto preparedScene = std::make_shared<PreparedScene>();
-						preparedScene->_envSettings = envSettings;
-						preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
-						preparedScene->_scene = std::move(scene);
+					::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToPromise(
+						std::move(thatPromise),
+						[pipelineAccelerators, envSettings, sceneIsRefreshable, envSettingsIsRefreshable, sceneDepVal=sceneFuture->GetDependencyValidation()](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto scene, auto compiledLightingTechnique) {
+							
+							TRY {
+								auto preparedScene = std::make_shared<PreparedScene>();
+								preparedScene->_envSettings = envSettings;
+								preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
+								preparedScene->_scene = std::move(scene);
 
-						if (sceneIsRefreshable || envSettingsIsRefreshable) {
-							preparedScene->_depVal = ::Assets::GetDepValSys().Make();
-							if (envSettingsIsRefreshable)
-								preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
-							if (sceneIsRefreshable)
-								preparedScene->_depVal.RegisterDependency(sceneDepVal);
-							preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
-						} else {
-							preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
-						}
+								if (sceneIsRefreshable || envSettingsIsRefreshable) {
+									preparedScene->_depVal = ::Assets::GetDepValSys().Make();
+									if (envSettingsIsRefreshable)
+										preparedScene->_depVal.RegisterDependency(preparedScene->_envSettings->GetDependencyValidation());
+									if (sceneIsRefreshable)
+										preparedScene->_depVal.RegisterDependency(sceneDepVal);
+									preparedScene->_depVal.RegisterDependency(RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique));
+								} else {
+									preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
+								}
 
-						auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
-						preparedScene->_envSettings->BindScene(lightScene);
+								auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
+								preparedScene->_envSettings->BindScene(lightScene);
 
-						auto pendingResources = SceneEngine::PrepareResources(
-							*RenderCore::Techniques::GetThreadContext(),
-							*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
-						if (pendingResources) {
-							thatFuture.SetPollingFunction(
-								[pendingResources, preparedScene](::Assets::FuturePtr<PreparedScene>& thatFuture) {
-									auto state = pendingResources->GetAssetState();
-									if (state == ::Assets::AssetState::Pending) return true;
-									if (state == ::Assets::AssetState::Invalid) {
-										// We should still actually set the asset here. Some resources might be valid, and might still render
-										// Also, if we don't set the asset, there will be no dependency validation chain for hot reloading a fix
-										Log(Warning) << "Got invalid asset during PrepareResources for scene." << std::endl;
-										thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
-									} else {
-										thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
-									}
-									return false;
-								});
-						} else {
-							thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
-						}
-						return false;
-					});
+								auto pendingResources = SceneEngine::PrepareResources(
+									*RenderCore::Techniques::GetThreadContext(),
+									*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
+								if (pendingResources) {
+									thatFuture.SetPollingFunction(
+										[pendingResources, preparedScene](::Assets::FuturePtr<PreparedScene>& thatFuture) {
+											auto state = pendingResources->GetAssetState();
+											if (state == ::Assets::AssetState::Pending) return true;
+											if (state == ::Assets::AssetState::Invalid) {
+												// We should still actually set the asset here. Some resources might be valid, and might still render
+												// Also, if we don't set the asset, there will be no dependency validation chain for hot reloading a fix
+												Log(Warning) << "Got invalid asset during PrepareResources for scene." << std::endl;
+												thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
+											} else {
+												thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
+											}
+											return false;
+										});
+								} else {
+									thatPromise.set_value(std::shared_ptr<PreparedScene>{preparedScene});
+								}
+								return false;
+							} CATCH(...) {
+								thatPromise.set_exception(std::current_exception());
+							} CATCH_END
+						});
+				} CATCH(...) {
+					thatPromise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 
 	}

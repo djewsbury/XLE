@@ -42,26 +42,23 @@ namespace ToolsRig
 		unsigned _completionCommandList = 0;
 	};
 
-	template<typename Future>
-		static void ConstructToFutureAsync(
-			std::shared_ptr<Future>& future,
-			std::function<typename Future::PromisedType()>&& constructor)
+	template<typename Function, typename... Args>
+		void AsyncConstructToPromise(
+			std::promise<
+				std::decay_t<std::invoke_result_t<std::decay_t<Function>, std::decay_t<Args>...>>
+			>&& promise,
+			Function&& function, Args&&... args)
 	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().EnqueueBasic(
-			[future=future, constructor=std::move(constructor)]() {
-				::Assets::Internal::PromiseFulfillmentMoment<typename Future::PromisedType> moment(*future);
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[function=std::move(function), promise=std::move(promise)](Args&&... args) mutable -> void {
 				TRY {
-					auto asset = constructor();
-					future->SetAsset(std::move(asset), {});
-				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
-					future->SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
-				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
-					future->SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
-				} CATCH (const std::exception& e) {
-					Log(Warning) << "No dependency validation associated with asset after construction failure. Hot reloading will not function for this asset." << std::endl;
-					future->SetInvalidAsset({}, ::Assets::AsBlob(e));
+					auto object = function(std::forward<Args>(args)...);
+					future->set_value(std::move(object));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
 				} CATCH_END
-			});
+			},
+			std::forward<Args>(args)...);
 	}
 	
 	::Assets::PtrToFuturePtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
@@ -72,8 +69,8 @@ namespace ToolsRig
 		auto result = std::make_shared<::Assets::FuturePtr<ShaderLab::ICompiledOperation>>();
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> preregAttachments { preregAttachmentsInit.begin(), preregAttachmentsInit.end() };
 		auto weakThis = weak_from_this();
-		ConstructToFutureAsync(
-			result,
+		AsyncConstructToPromise(
+			result->AdoptPromise(),
 			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), weakThis]() {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
@@ -149,8 +146,8 @@ namespace ToolsRig
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<ShaderLab::IVisualizeStep>>();
 		auto weakThis = weak_from_this();
-		ConstructToFutureAsync(
-			result,
+		AsyncConstructToPromise(
+			result->AdoptPromise(),
 			[futureFormatter=std::move(futureFormatter), weakThis]() {
 				auto l = weakThis.lock();
 				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));

@@ -149,8 +149,8 @@ namespace RenderCore { namespace LightingEngine
     }
     SSAOOperator::~SSAOOperator() {}
 
-    void SSAOOperator::ConstructToFuture(
-        ::Assets::FuturePtr<SSAOOperator>& future,
+    void SSAOOperator::ConstructToPromise(
+        std::promise<std::shared_ptr<SSAOOperator>>&& promise,
         std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
     {
         UniformsStreamInterface usi;
@@ -178,7 +178,7 @@ namespace RenderCore { namespace LightingEngine
             GENERAL_OPERATOR_PIPELINE ":ComputeMain",
             usi);
 
-        ::Assets::WhenAll(computeOp, upsampleOp).ThenConstructToFuture(future);
+        ::Assets::WhenAll(computeOp, upsampleOp).ThenConstructToPromise(std::move(promise));
     }
 
 }}

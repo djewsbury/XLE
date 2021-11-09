@@ -49,7 +49,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	void ConstructDescriptorSet(
-		::Assets::Future<ActualizedDescriptorSet>& future,
+		std::promise<std::shared_ptr<ActualizedDescriptorSet>>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
 		const Utility::ParameterBox& constantBindings,

@@ -109,8 +109,8 @@ namespace RenderCore { namespace LightingEngine
 
 	HierarchicalDepthsOperator::~HierarchicalDepthsOperator() {}
 
-	void HierarchicalDepthsOperator::ConstructToFuture(
-		::Assets::FuturePtr<HierarchicalDepthsOperator>& future,
+	void HierarchicalDepthsOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<HierarchicalDepthsOperator>>&& promise,
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
 	{
 		UniformsStreamInterface usi;
@@ -128,8 +128,8 @@ namespace RenderCore { namespace LightingEngine
 			SSR_PIPELINE ":DownsampleDepths",
 			usi);
 
-		::Assets::WhenAll(resolveOp).ThenConstructToFuture(
-			future, 
+		::Assets::WhenAll(resolveOp).ThenConstructToPromise(
+			std::move(promise), 
 			[dev=pipelinePool->GetDevice()](auto resolveOp) { return std::make_shared<HierarchicalDepthsOperator>(std::move(resolveOp), std::move(dev)); });
 	}
 

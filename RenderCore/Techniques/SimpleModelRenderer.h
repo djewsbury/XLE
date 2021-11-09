@@ -89,8 +89,8 @@ namespace RenderCore { namespace Techniques
 		SimpleModelRenderer& operator=(const SimpleModelRenderer&) = delete;
 		SimpleModelRenderer(const SimpleModelRenderer&) = delete;
 		
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SimpleModelRenderer>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
@@ -99,16 +99,16 @@ namespace RenderCore { namespace Techniques
 			const std::string& modelScaffoldNameString = {},
 			const std::string& materialScaffoldNameString = {});
 		
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SimpleModelRenderer>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName,
 			StringSection<> materialScaffoldName,
 			StringSection<> deformOperations = {},
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {});
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SimpleModelRenderer>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SimpleModelRenderer>>& promise,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<> modelScaffoldName);
 
@@ -169,9 +169,9 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<RenderCore::Assets::SkeletonScaffold>& skeletonActual);
 		~RendererSkeletonInterface();
 
-		static void ConstructToFuture(
-			::Assets::PtrToFuturePtr<RendererSkeletonInterface>& skeletonInterfaceFuture,
-			::Assets::PtrToFuturePtr<SimpleModelRenderer>& rendererFuture,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfaceFuture,
+			std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererFuture,
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,

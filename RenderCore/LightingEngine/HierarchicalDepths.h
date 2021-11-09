@@ -37,8 +37,8 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<RenderCore::IDevice> device);
 		~HierarchicalDepthsOperator();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<HierarchicalDepthsOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<HierarchicalDepthsOperator>>&& future,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool);
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _resolveOp;

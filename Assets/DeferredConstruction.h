@@ -59,7 +59,7 @@ namespace Assets
 	template<
 		typename Promise, typename... Params, 
 		typename std::enable_if<Internal::HasDirectAutoConstructAsset<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
-		void ConstructToPromiseSynchronously(Promise& promise, Params... initialisers)
+		void AutoConstructToPromiseSynchronously(Promise& promise, Params... initialisers)
 	{
 		// Internal::PromiseFulfillmentMoment moment(future);
 		TRY {
@@ -82,7 +82,7 @@ namespace Assets
 		auto reqRes = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
 		if (!reqRes.empty()) {
 			auto p = std::move(promise);		// rvalue to lvalue
-			ConstructToPromiseSynchronously(
+			AutoConstructToPromiseSynchronously(
 				p,
 				reqRes[0]._sharedBlob, 
 				artifactCollection.GetDependencyValidation(),
@@ -102,7 +102,7 @@ namespace Assets
 
 		auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::PromisedTypeRemPtr<Promise>::ChunkRequests));
 		auto p = std::move(promise);		// rvalue to lvalue
-		ConstructToPromiseSynchronously(p, MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
+		AutoConstructToPromiseSynchronously(p, MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
 	}
 
 	template<typename Promise>
@@ -198,7 +198,7 @@ namespace Assets
 		void AutoConstructToPromise(Promise&& promise, Params... initialisers)
 	{
 		auto p = std::move(promise);		// rvalue to lvalue
-		ConstructToPromiseSynchronously(p, std::forward<Params>(initialisers)...);
+		AutoConstructToPromiseSynchronously(p, std::forward<Params>(initialisers)...);
 	}
 
 	template<

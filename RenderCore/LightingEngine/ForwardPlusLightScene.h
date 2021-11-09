@@ -58,8 +58,8 @@ namespace RenderCore { namespace LightingEngine
 
 		ForwardPlusLightScene(const AmbientLightOperatorDesc& ambientLightOperator);
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ForwardPlusLightScene>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 			const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 			const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,

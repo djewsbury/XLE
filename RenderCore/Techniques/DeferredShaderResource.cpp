@@ -118,8 +118,8 @@ namespace RenderCore { namespace Techniques
         return viewDesc;
     }
 
-	static void ConstructToFutureImageFile(
-		::Assets::FuturePtr<DeferredShaderResource>& future,
+	static void ConstructToPromiseImageFile(
+		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const FileNameSplitter<char>& splitter)
     {
         DecodedInitializer init(splitter);
@@ -212,8 +212,8 @@ namespace RenderCore { namespace Techniques
 			});
     }
 
-    static void ConstructToFutureArtifact(
-		::Assets::FuturePtr<DeferredShaderResource>& future,
+    static void ConstructToPromiseArtifact(
+		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const RenderCore::Assets::TextureArtifact& artifact,
         std::string originalRequest)
     {
@@ -267,40 +267,40 @@ namespace RenderCore { namespace Techniques
 			});
     }
 
-    static void ConstructToFutureTextureCompile(
-		::Assets::FuturePtr<DeferredShaderResource>& future,
+    static void ConstructToPromiseTextureCompile(
+		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const FileNameSplitter<char>& splitter)
     {
         auto containerInitializer = splitter.AllExceptParameters();
 		auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(containerInitializer);
-        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
-            future,
+        ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+            std::move(promise),
             [originalRequest=splitter.FullFilename().AsString()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
-                ConstructToFutureArtifact(thatFuture, *containerActual, originalRequest);
+                ConstructToPromiseArtifact(thatFuture, *containerActual, originalRequest);
             });
     }
 
-    void DeferredShaderResource::ConstructToFuture(
-        ::Assets::FuturePtr<DeferredShaderResource>& future,
+    void DeferredShaderResource::ConstructToPromise(
+        std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         const Assets::TextureCompilationRequest& compileRequest)
     {
         auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(compileRequest);
-        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
-            future,
+        ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+            std::move(promise),
             [originalRequest=compileRequest._srcFile](::Assets::FuturePtr<DeferredShaderResource>& thatFuture, auto containerActual) {
-                ConstructToFutureArtifact(thatFuture, *containerActual, originalRequest);
+                ConstructToPromiseArtifact(thatFuture, *containerActual, originalRequest);
             });
     }
 
-    void DeferredShaderResource::ConstructToFuture(
-		::Assets::FuturePtr<DeferredShaderResource>& future,
+    void DeferredShaderResource::ConstructToPromise(
+		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
         if (XlEqStringI(splitter.Extension(), "texture")) {
-            ConstructToFutureTextureCompile(future, splitter);
+            ConstructToPromiseTextureCompile(std::move(promise), splitter);
         } else {
-            ConstructToFutureImageFile(future, splitter);
+            ConstructToPromiseImageFile(std::move(promise), splitter);
         }
     }
 

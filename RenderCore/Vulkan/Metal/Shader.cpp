@@ -206,8 +206,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			dst.RegisterDependency(dependency);
 	}
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> psName,
@@ -216,15 +216,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, *vsActual, *psActual);
 			});
 	}
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -235,15 +235,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, *vsActual, *gsActual, *psActual);
 			});
 	}
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
@@ -258,8 +258,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto hsFuture = MakeByteCodeFuture(ShaderStage::Hull, hsName, definesTable);
 		auto dsFuture = MakeByteCodeFuture(ShaderStage::Domain, dsName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineLayout](	const std::shared_ptr<CompiledShaderByteCode>& vsActual,
 				std::shared_ptr<CompiledShaderByteCode> gsActual,
 				std::shared_ptr<CompiledShaderByteCode> psActual,
@@ -270,16 +270,16 @@ namespace RenderCore { namespace Metal_Vulkan
 			});
 	}
 
-	void ComputeShader::ConstructToFuture(
-		::Assets::FuturePtr<ComputeShader>& future,
+	void ComputeShader::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>& promise,
 		std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 		StringSection<::Assets::ResChar> codeName,
 		StringSection<::Assets::ResChar> definesTable)
 	{
 		auto code = MakeByteCodeFuture(ShaderStage::Compute, codeName, definesTable);
 
-		::Assets::WhenAll(code).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(code).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> csActual) {
 				return std::make_shared<ComputeShader>(GetObjectFactory(), pipelineLayout, *csActual);
 			});

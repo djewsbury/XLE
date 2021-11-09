@@ -88,8 +88,8 @@ namespace ToolsRig
 			animState._changeEvent.Invoke();
 		}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ModelSceneRendererState>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ModelSceneRendererState>>&& promise,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const ModelVisSettings& settings)
 		{
@@ -98,8 +98,8 @@ namespace ToolsRig
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
 				auto skeletonFuture = ::Assets::MakeAsset<SkeletonScaffold>(settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToFuture(
-					future, 
+				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToPromise(
+					std::move(promise), 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
 						std::shared_ptr<SkeletonScaffold> skeleton) {
@@ -122,8 +122,8 @@ namespace ToolsRig
 					});
 			} else if (!settings._animationFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToFuture(
-					future, 
+				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToPromise(
+					std::move(promise), 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet) {
 						
@@ -143,8 +143,8 @@ namespace ToolsRig
 							});
 					});
 			} else {
-				::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
-					future, 
+				::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
+					std::move(promise), 
 					[](std::shared_ptr<SimpleModelRenderer> renderer) {
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
@@ -318,8 +318,8 @@ namespace ToolsRig
 	{
 		auto rendererFuture = ::Assets::MakeFuture<std::shared_ptr<ModelSceneRendererState>>(pipelineAcceleratorPool, settings);
 		auto result = std::make_shared<Assets::FuturePtr<SceneEngine::IScene>>();
-		::Assets::WhenAll(rendererFuture).ThenConstructToFuture(
-			*result,
+		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
+			result->AdoptPromise(),
 			[pipelineAcceleratorPool, settings](auto renderer) {
 				return std::make_shared<ModelScene>(pipelineAcceleratorPool, renderer, settings);
 			});

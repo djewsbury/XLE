@@ -118,8 +118,8 @@ namespace SceneEngine
 		BasicLightingStateDelegate(Formatters::IDynamicFormatter& formatter);
 		~BasicLightingStateDelegate();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<BasicLightingStateDelegate>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<BasicLightingStateDelegate>>&& promise,
 			StringSection<> envSettingFileName);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override;
@@ -414,13 +414,13 @@ namespace SceneEngine
         }
     }
 
-	void BasicLightingStateDelegate::ConstructToFuture(
-		::Assets::FuturePtr<BasicLightingStateDelegate>& future,
+	void BasicLightingStateDelegate::ConstructToPromise(
+		std::promise<std::shared_ptr<BasicLightingStateDelegate>>& promise,
 		StringSection<> envSettingFileName)
 	{
         auto fmttrFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter(envSettingFileName);
-        ::Assets::WhenAll(fmttrFuture).ThenConstructToFuture(
-            future,
+        ::Assets::WhenAll(fmttrFuture).ThenConstructToPromise(
+            std::move(promise),
             [](auto fmttr) { return std::make_shared<BasicLightingStateDelegate>(*fmttr); });
 	}
 
@@ -449,7 +449,7 @@ namespace SceneEngine
     ::Assets::PtrToFuturePtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings)
     {
         auto result = std::make_shared<::Assets::FuturePtr<BasicLightingStateDelegate>>(envSettings.AsString());
-        BasicLightingStateDelegate::ConstructToFuture(*result, envSettings);
+        BasicLightingStateDelegate::ConstructToPromise(result->AdoptPromise(), envSettings);
         return std::reinterpret_pointer_cast<::Assets::FuturePtr<ILightingStateDelegate>>(result);
     }
 

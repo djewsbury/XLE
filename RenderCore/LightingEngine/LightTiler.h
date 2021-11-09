@@ -66,8 +66,8 @@ namespace RenderCore { namespace LightingEngine
 			const Configuration& config);
 		~RasterizationLightTileOperator();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<RasterizationLightTileOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 			const Configuration& config);
 

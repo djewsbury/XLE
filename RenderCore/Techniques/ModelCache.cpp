@@ -65,7 +65,7 @@ namespace RenderCore { namespace Techniques
 		auto modelScaffold = _pimpl->_modelScaffolds.Get(modelFilename);
 		auto materialScaffold = _pimpl->_materialScaffolds.Get(materialFilename, modelFilename);
 
-		::Assets::AutoConstructToFuture(*newFuture, _pimpl->_pipelineAcceleratorPool, modelScaffold, materialScaffold);
+		::Assets::AutoConstructToPromise(newFuture->AdoptPromise(), _pimpl->_pipelineAcceleratorPool, modelScaffold, materialScaffold);
 		return newFuture;
     }
 

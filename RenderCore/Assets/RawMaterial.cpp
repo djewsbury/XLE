@@ -411,8 +411,8 @@ namespace RenderCore { namespace Assets
 
 	static bool IsMaterialFile(StringSection<::Assets::ResChar> extension) { return XlEqStringI(extension, "material") || XlEqStringI(extension, "hlsl"); }
 
-	void RawMaterial::ConstructToFuture(
-		::Assets::FuturePtr<RawMaterial>& future,
+	void RawMaterial::ConstructToPromise(
+		std::promise<std::shared_ptr<RawMaterial>>&& promise,
 		StringSection<::Assets::ResChar> initializer)
 	{
 		// If we're loading from a .material file, then just go head and use the
@@ -420,7 +420,7 @@ namespace RenderCore { namespace Assets
 		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
 		auto splitName = MakeFileNameSplitter(initializer);
 		if (IsMaterialFile(splitName.Extension())) {
-			AutoConstructToFutureDirect(future, initializer);
+			AutoConstructToPromiseSynchronously(future, initializer);
 			return;
 		}
 
@@ -429,13 +429,13 @@ namespace RenderCore { namespace Assets
 		std::string containerInitializerString = containerInitializer.AsString();
 		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
 		::Assets::DefaultCompilerConstruction(
-			*containerFuture, 
+			containerFuture->AdoptPromise(), 
             s_MaterialCompileProcessType,
 			containerInitializer);
 
 		std::string section = splitName.Parameters().AsString();
-        ::Assets::WhenAll(containerFuture).ThenConstructToFuture(
-            future,
+        ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+            std::move(promise),
             [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
                 auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
                 return std::make_shared<RawMaterial>(
@@ -451,8 +451,8 @@ namespace RenderCore { namespace Assets
     static void MergeIn(ResolvedMaterial& dest, const RawMaterial& source);
     static void AddDep(std::vector<::Assets::DependentFileState>& deps, StringSection<> newDep);
 
-    void ResolvedMaterial::ConstructToFuture(
-        ::Assets::FuturePtr<ResolvedMaterial>& futureMaterial,
+    void ResolvedMaterial::ConstructToPromise(
+        std::promise<std::shared_ptr<ResolvedMaterial>>&& promisedMaterial,
         StringSection<> initializer)
     {
         // We have to load an entire tree of RawMaterials and their inherited items.

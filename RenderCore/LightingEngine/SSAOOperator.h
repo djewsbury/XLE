@@ -40,8 +40,8 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> upsampleOp);
 		~SSAOOperator();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SSAOOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SSAOOperator>>&& promise,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool);
 	private:
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _computeOp;

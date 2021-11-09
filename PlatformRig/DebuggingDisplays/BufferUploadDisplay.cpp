@@ -156,11 +156,11 @@ namespace PlatformRig { namespace Overlays
         FontBox(std::shared_ptr<RenderOverlays::Font> font, std::shared_ptr<RenderOverlays::Font> smallFont)
         : _font(std::move(font)), _smallFont(std::move(smallFont)) {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<FontBox>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<FontBox>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("OrbitronBlack", 18),
-                RenderOverlays::MakeFont("Vera", 16)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("Vera", 16)).ThenConstructToPromise(std::move(promise));
         }
     };
 

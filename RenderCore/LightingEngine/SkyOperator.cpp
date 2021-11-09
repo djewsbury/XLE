@@ -70,8 +70,8 @@ namespace RenderCore { namespace LightingEngine
 	SkyOperator::~SkyOperator()
 	{}
 
-	void SkyOperator::ConstructToFuture(
-		::Assets::FuturePtr<SkyOperator>& future,
+	void SkyOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<SkyOperator>>&& promise,
 		const SkyOperatorDesc& desc,
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget)
@@ -88,8 +88,8 @@ namespace RenderCore { namespace LightingEngine
 			params,
 			GENERAL_OPERATOR_PIPELINE ":GraphicsWithMaterial",
 			fbTarget, usi);
-		::Assets::WhenAll(futureShader).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(futureShader).ThenConstructToPromise(
+			std::move(promise),
 			[desc, device=pipelinePool->GetDevice()](auto shader) {
 				return std::make_shared<SkyOperator>(desc, std::move(shader), std::move(device));
 			});

@@ -27,8 +27,8 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SHCoefficientsAsset>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SHCoefficientsAsset>>&&,
 			StringSection<> initializer);
 	protected:
 		::Assets::DependencyValidation _depVal;

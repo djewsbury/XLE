@@ -601,8 +601,8 @@ namespace RenderCore { namespace Metal_OpenGLES
         return stream;
     }
 
-    void ShaderProgram::ConstructToFuture(
-        ::Assets::FuturePtr<ShaderProgram>&,
+    void ShaderProgram::ConstructToPromise(
+        std::promise<std::shared_ptr<ShaderProgram>>&&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> psName,
         StringSection<::Assets::ResChar> definesTable)
@@ -610,8 +610,8 @@ namespace RenderCore { namespace Metal_OpenGLES
         assert(0);      // unimplemented
     }
 
-    void ShaderProgram::ConstructToFuture(
-        ::Assets::FuturePtr<ShaderProgram>&,
+    void ShaderProgram::ConstructToPromise(
+        std::promise<std::shared_ptr<ShaderProgram>>&&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> gsName,
         StringSection<::Assets::ResChar> psName,
@@ -620,8 +620,8 @@ namespace RenderCore { namespace Metal_OpenGLES
         assert(0);      // unimplemented
     }
 
-    void ShaderProgram::ConstructToFuture(
-        ::Assets::FuturePtr<ShaderProgram>&,
+    void ShaderProgram::ConstructToPromise(
+        std::promise<std::shared_ptr<ShaderProgram>>&&,
         StringSection<::Assets::ResChar> vsName,
         StringSection<::Assets::ResChar> gsName,
         StringSection<::Assets::ResChar> psName,

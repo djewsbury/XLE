@@ -79,8 +79,8 @@ namespace RenderCore { namespace Techniques
 		} else {
 			// We need to poll until the technique file is ready, and then continue on to figuring out the shader
 			// information as usual
-			::Assets::WhenAll(_techniqueFuture).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFuture).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[techniqueIndex = _techniqueIndex, nascentDesc](std::shared_ptr<Technique> technique) {
 					nascentDesc->_depVal = technique->GetDependencyValidation();
 					auto& entry = technique->GetEntry(techniqueIndex);
@@ -211,8 +211,8 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
@@ -258,7 +258,7 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
@@ -337,8 +337,8 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, illumType, hasDeformVertex](
 					std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
@@ -383,7 +383,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
@@ -473,8 +473,8 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
@@ -512,8 +512,8 @@ namespace RenderCore { namespace Techniques
 			std::optional<ShadowGenType> shadowGen)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
-				*_techniqueFileHelper, 
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+				_techniqueFileHelper->AdoptPromise(), 
 				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
 
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
@@ -629,8 +629,8 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_psNoPatchesSrc;
@@ -675,8 +675,8 @@ namespace RenderCore { namespace Techniques
 		: _preDepthType(preDepthType)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
-				*_techniqueFileHelper,
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+				_techniqueFileHelper->AdoptPromise(),
 				[preDepthType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, preDepthType); });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
@@ -764,8 +764,8 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_psNoPatchesSrc;
@@ -810,8 +810,8 @@ namespace RenderCore { namespace Techniques
 		: _utilityType(utilityType)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(
-				*_techniqueFileHelper,
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
+				_techniqueFileHelper->AdoptPromise(),
 				[utilityType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, utilityType); });
 
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
@@ -897,8 +897,8 @@ namespace RenderCore { namespace Techniques
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, illumType, hasDeformVertex](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					switch (illumType) {
@@ -940,7 +940,7 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 		}
 	private:
 		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
@@ -1009,8 +1009,8 @@ namespace RenderCore { namespace Techniques
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
 
-			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[nascentDesc, hasEarlyRejectionTest, hasDeformVertex, testType=_testTypeParameter](std::shared_ptr<TechniqueFileHelper> techniqueFileHelper) {
 					const TechniqueEntry* psTechEntry = &techniqueFileHelper->_noPatches;
 					if (hasEarlyRejectionTest) {
@@ -1050,7 +1050,7 @@ namespace RenderCore { namespace Techniques
 		: _testTypeParameter(testTypeParameter)
 		{
 			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
-			::Assets::WhenAll(techniqueSet).ThenConstructToFuture(*_techniqueFileHelper);
+			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 
 			_soElements = NormalizeInputAssembly(soInit._outputElements);
 			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());

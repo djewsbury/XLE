@@ -108,8 +108,8 @@ namespace RenderCore { namespace LightingEngine
 		auto result = std::make_shared<::Assets::FuturePtr<RenderStepFragmentInterface>>("build-gbuffer");
 		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
-		::Assets::WhenAll(normalsFittingTexture).ThenConstructToFuture(
-			*result,
+		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
+			result->AdoptPromise(),
 			[defIllumDel = techDelBox._deferredIllumDelegate, gbufferType, precisionTargets](std::shared_ptr<Techniques::DeferredShaderResource> normalsFitting) {
 
 				// This render pass will include just rendering to the gbuffer and doing the initial
@@ -334,102 +334,106 @@ namespace RenderCore { namespace LightingEngine
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
-		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToFuture(
-			*result,
+		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToPromise(
+			result->AdoptPromise(),
 			[device, pipelineAccelerators, techDelBox, fbProps, 
 			preregisteredAttachments=std::move(preregisteredAttachments),
 			resolveOperators=std::move(resolveOperators), pipelineCollection, lightingOperatorLayout, flags](
-				::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
+				std::promise<CompiledLightingTechnique>&& thatPromise,
 				std::shared_ptr<RenderStepFragmentInterface> buildGbuffer,
 				std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators) {
 
-				auto lightScene = std::make_shared<DeferredLightScene>();
-				lightScene->_shadowPreparationOperators = shadowPreparationOperators;
+				TRY {
+					auto lightScene = std::make_shared<DeferredLightScene>();
+					lightScene->_shadowPreparationOperators = shadowPreparationOperators;
 
-				Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
-				PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
+					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps};
+					PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
 
-				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
-				auto captures = std::make_shared<DeferredLightingCaptures>();
-				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
-				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-				captures->_shadowPreparationOperators = std::move(shadowPreparationOperators);
-				captures->_lightScene = lightScene;
-				captures->_lightingOperatorLayout = lightingOperatorLayout;
-				captures->_pipelineCollection = pipelineCollection;
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
+					auto captures = std::make_shared<DeferredLightingCaptures>();
+					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
+					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
+					captures->_shadowPreparationOperators = std::move(shadowPreparationOperators);
+					captures->_lightScene = lightScene;
+					captures->_lightingOperatorLayout = lightingOperatorLayout;
+					captures->_pipelineCollection = pipelineCollection;
 
-				// Reset captures
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-					});
-
-				// Prepare shadows
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->DoShadowPrepare(iterator);
-					});
-
-				// Draw main scene
-				lightingTechnique->CreateStep_RunFragments(std::move(*buildGbuffer));
-
-				// Lighting resolve (gbuffer -> HDR color image)
-				auto lightingResolveFragment = CreateLightingResolveFragment(
-					[captures](LightingTechniqueIterator& iterator) {
-						// do lighting resolve here
-						captures->DoLightResolve(iterator);
-					});
-				auto resolveFragmentRegistration = lightingTechnique->CreateStep_RunFragments(std::move(lightingResolveFragment));
-
-				auto toneMapFragment = CreateToneMapFragment(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->DoToneMap(iterator);
-					});
-				lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
-
-				// generate debugging outputs
-				if (flags & DeferredLightingTechniqueFlags::GenerateDebuggingTextures) {
+					// Reset captures
 					lightingTechnique->CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
-							captures->GenerateDebuggingOutputs(iterator);
 						});
-				}
 
-				// unbind operations
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->_preparedShadows.clear();
-					});
+					// Prepare shadows
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->DoShadowPrepare(iterator);
+						});
 
-				// prepare-only steps
-				for (const auto&shadowPreparer:captures->_shadowPreparationOperators->_operators) {
-					lightingTechnique->CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter::General);
-					lightingTechnique->CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
-				}
+					// Draw main scene
+					lightingTechnique->CreateStep_RunFragments(std::move(*buildGbuffer));
 
-				lightingTechnique->CompleteConstruction();
+					// Lighting resolve (gbuffer -> HDR color image)
+					auto lightingResolveFragment = CreateLightingResolveFragment(
+						[captures](LightingTechniqueIterator& iterator) {
+							// do lighting resolve here
+							captures->DoLightResolve(iterator);
+						});
+					auto resolveFragmentRegistration = lightingTechnique->CreateStep_RunFragments(std::move(lightingResolveFragment));
 
-				//
-				// Now that we've finalized the frame buffer layout, build the light resolve operators
-				// And then we'll complete the technique when the future from BuildLightResolveOperators() is completed
-				//
-				auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(resolveFragmentRegistration);
-				std::vector<ShadowOperatorDesc> shadowOp;
-				shadowOp.reserve(captures->_shadowPreparationOperators->_operators.size());
-				for (const auto& c:captures->_shadowPreparationOperators->_operators) shadowOp.push_back(c._desc);
-				auto lightResolveOperators = BuildLightResolveOperators(
-					*pipelineCollection, lightingOperatorLayout,
-					resolveOperators, shadowOp,
-					*resolvedFB.first, resolvedFB.second+1,
-					false, GBufferType::PositionNormalParameters);
+					auto toneMapFragment = CreateToneMapFragment(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->DoToneMap(iterator);
+						});
+					lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
 
-				::Assets::WhenAll(lightResolveOperators).ThenConstructToFuture(
-					thatFuture,
-					[lightingTechnique, captures, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
-						captures->_lightResolveOperators = resolveOperators;
-						captures->_lightScene->_lightResolveOperators = resolveOperators;
-						lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
-						return lightingTechnique;
-					});
+					// generate debugging outputs
+					if (flags & DeferredLightingTechniqueFlags::GenerateDebuggingTextures) {
+						lightingTechnique->CreateStep_CallFunction(
+							[captures](LightingTechniqueIterator& iterator) {
+								captures->GenerateDebuggingOutputs(iterator);
+							});
+					}
+
+					// unbind operations
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->_preparedShadows.clear();
+						});
+
+					// prepare-only steps
+					for (const auto&shadowPreparer:captures->_shadowPreparationOperators->_operators) {
+						lightingTechnique->CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter::General);
+						lightingTechnique->CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
+					}
+
+					lightingTechnique->CompleteConstruction();
+
+					//
+					// Now that we've finalized the frame buffer layout, build the light resolve operators
+					// And then we'll complete the technique when the future from BuildLightResolveOperators() is completed
+					//
+					auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(resolveFragmentRegistration);
+					std::vector<ShadowOperatorDesc> shadowOp;
+					shadowOp.reserve(captures->_shadowPreparationOperators->_operators.size());
+					for (const auto& c:captures->_shadowPreparationOperators->_operators) shadowOp.push_back(c._desc);
+					auto lightResolveOperators = BuildLightResolveOperators(
+						*pipelineCollection, lightingOperatorLayout,
+						resolveOperators, shadowOp,
+						*resolvedFB.first, resolvedFB.second+1,
+						false, GBufferType::PositionNormalParameters);
+
+					::Assets::WhenAll(lightResolveOperators).ThenConstructToPromise(
+						std::move(thatPromise),
+						[lightingTechnique, captures, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
+							captures->_lightResolveOperators = resolveOperators;
+							captures->_lightScene->_lightResolveOperators = resolveOperators;
+							lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
+							return lightingTechnique;
+						});
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 
 		return result;

@@ -62,11 +62,11 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::DependencyValidation& depVal);
         ~DeferredShaderResource();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<DeferredShaderResource>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
 			StringSection<> initializer);
-        static void ConstructToFuture(
-			::Assets::FuturePtr<DeferredShaderResource>&,
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
 			const Assets::TextureCompilationRequest& compileRequest);
     private:
 		std::shared_ptr<IResourceView> _srv;

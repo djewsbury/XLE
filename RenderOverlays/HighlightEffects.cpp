@@ -67,16 +67,16 @@ namespace RenderOverlays
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
 
         HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors);
-        static void ConstructToFuture(
-			::Assets::FuturePtr<HighlightShaders>&,
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<HighlightShaders>>&&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
     protected:
         ::Assets::DependencyValidation  _validationCallback;
         
     };
 
-    void HighlightShaders::ConstructToFuture(
-        ::Assets::FuturePtr<HighlightShaders>& result,
+    void HighlightShaders::ConstructToPromise(
+        std::promise<std::shared_ptr<HighlightShaders>>&& promise,
         const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
     {
         //// ////
@@ -91,7 +91,7 @@ namespace RenderOverlays
 
         auto tex = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
 
-        ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToFuture(result);
+        ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToPromise(std::move(promise));
     }
 
     HighlightShaders::HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors)

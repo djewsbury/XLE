@@ -106,8 +106,8 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<Assets::PredefinedPipelineLayout> predefinedLayout,
 			ShaderLanguage shaderLanguage = Techniques::GetDefaultShaderLanguage());
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
 			const std::shared_ptr<IDevice>& device,
 			StringSection<> srcFile,
 			ShaderLanguage shaderLanguage = GetDefaultShaderLanguage());

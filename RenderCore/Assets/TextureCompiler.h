@@ -55,12 +55,12 @@ namespace RenderCore { namespace Assets
 		};
 		std::future<RawData> BeginLoadRawData(TextureLoaderFlags::BitField loadedFlags = 0) const;
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<TextureArtifact>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TextureArtifact>>&&,
 			StringSection<> initializer);
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<TextureArtifact>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TextureArtifact>>&&,
 			const TextureCompilationRequest& request);
 
 		TextureArtifact();

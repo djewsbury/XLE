@@ -47,21 +47,21 @@ namespace RenderCore { namespace Metal_OpenGLES
         friend std::ostream& operator<<(std::ostream&, const ShaderProgram&);
 
         // Legacy asset based API --
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable);
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,

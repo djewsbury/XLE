@@ -39,10 +39,10 @@ namespace RenderCore { namespace Techniques
 			return _sharedPools->CreateComputePipelineAlreadyLocked(shader, pipelineLayout, filteredSelectors);
 		} else {
 			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>(shader.AsString());
-			::Assets::WhenAll(filteringFuture).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout]( 
-					::Assets::Future<ComputePipelineAndLayout>& resultFuture,
+					std::promise<ComputePipelineAndLayout>&& promise,
 					std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {
 
 					const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
@@ -53,7 +53,7 @@ namespace RenderCore { namespace Techniques
 						ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), *automaticFiltering, 
 						{}, nullptr, nullptr, {});
 					auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, pipelineLayout, filteredSelectors);
-					::Assets::WhenAll(chainedFuture).ThenConstructToFuture(resultFuture);
+					::Assets::WhenAll(chainedFuture).ThenConstructToPromise(std::move(promise));
 				});
 			return result;
 		}	
@@ -116,17 +116,17 @@ namespace RenderCore { namespace Techniques
 				inputStates, pipelineDescWithFiltering,
 				pipelineLayout, compiledPatchCollection,
 				filteredSelectors, fbTarget);
-			::Assets::WhenAll(chainFuture).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(chainFuture).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
 		} else {
-			::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout, compiledPatchCollection,
 					inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
 			 		fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](
 
-					::Assets::Future<GraphicsPipelineAndLayout>& resultFuture,
+					std::promise<GraphicsPipelineAndLayout>&& promise,
 					auto pipelineDescWithFiltering) {
 						
 					auto cfgDepVal = MakeConfigurationDepVal(*pipelineDescWithFiltering);
@@ -153,8 +153,8 @@ namespace RenderCore { namespace Techniques
 						VertexInputStates{inputAssembly, miniInputAssembly, topology}, pipelineDescWithFiltering,
 						pipelineLayout, compiledPatchCollection,
 						filteredSelectors, {&fbDesc, spIdx});
-					::Assets::WhenAll(chainFuture).ThenConstructToFuture(
-						resultFuture,
+					::Assets::WhenAll(chainFuture).ThenConstructToPromise(
+						std::move(promise),
 						[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
 				});
 		}

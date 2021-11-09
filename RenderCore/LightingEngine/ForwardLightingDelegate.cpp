@@ -315,8 +315,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RasterizationLightTileOperator::Configuration tilingConfig;
 		auto lightSceneFuture = std::make_shared<::Assets::FuturePtr<ForwardPlusLightScene>>("forward-light-scene");
-		ForwardPlusLightScene::ConstructToFuture(
-			*lightSceneFuture, pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
+		ForwardPlusLightScene::ConstructToPromise(
+			lightSceneFuture->AdoptPromise(), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
 
 		auto balancedNoiseTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
@@ -325,113 +325,117 @@ namespace RenderCore { namespace LightingEngine
 		PreregisterAttachments(stitchingContext);
 
 		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
-		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToFuture(
-			*result,
+		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToPromise(
+			result->AdoptPromise(),
 			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]
-			(	::Assets::FuturePtr<CompiledLightingTechnique>& thatFuture,
+			(	std::promise<CompiledLightingTechnique>&& thatPromise,
 				std::shared_ptr<ForwardPlusLightScene> lightScene,
 				std::shared_ptr<Techniques::DeferredShaderResource> balancedNoiseTexture) {
 
-				auto captures = std::make_shared<ForwardLightingCaptures>();
-				captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
-				captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-				captures->_lightScene = lightScene;
+				TRY {
+					auto captures = std::make_shared<ForwardLightingCaptures>();
+					captures->_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(pipelineAccelerators->GetDevice());
+					captures->_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
+					captures->_lightScene = lightScene;
 
-				auto stitchingContext = stitchingContextCap;
-				lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
-				lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-				if (lightScene->HasScreenSpaceReflectionsOperator())
-					lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+					auto stitchingContext = stitchingContextCap;
+					lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+					lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+					if (lightScene->HasScreenSpaceReflectionsOperator())
+						lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
 
-				auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
-				lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-				lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
-				lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
-				if (lightScene->HasScreenSpaceReflectionsOperator())
-					lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(pipelineAccelerators, stitchingContext, lightScene);
+					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
+					lightingTechnique->_depVal.RegisterDependency(lightScene->GetHierarchicalDepthsOperator().GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(lightScene->GetLightTiler().GetDependencyValidation());
+					if (lightScene->HasScreenSpaceReflectionsOperator())
+						lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
 
-				// Reset captures
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
-						PreregisterAttachments(stitchingContext);
-						captures->_lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
-						captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-						if (captures->_lightScene->HasScreenSpaceReflectionsOperator())
-							captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
-						captures->_lightScene->SetupProjection(*iterator._parsingContext);
-					});
+					// Reset captures
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
+							PreregisterAttachments(stitchingContext);
+							captures->_lightScene->GetHierarchicalDepthsOperator().PreregisterAttachments(stitchingContext);
+							captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
+							if (captures->_lightScene->HasScreenSpaceReflectionsOperator())
+								captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
+							captures->_lightScene->SetupProjection(*iterator._parsingContext);
+						});
 
-				// Prepare shadows
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->DoShadowPrepare(iterator);
-					});
+					// Prepare shadows
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->DoShadowPrepare(iterator);
+						});
 
-				// Pre depth
-				if (lightScene->HasScreenSpaceReflectionsOperator()) {
-					lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
-				} else {
-					lightingTechnique->CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
-				}
+					// Pre depth
+					if (lightScene->HasScreenSpaceReflectionsOperator()) {
+						lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
+					} else {
+						lightingTechnique->CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
+					}
 
-				lightingTechnique->CreateStep_CallFunction(
-					[](LightingTechniqueIterator& iterator) {
-						iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-						iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
-					});
+					lightingTechnique->CreateStep_CallFunction(
+						[](LightingTechniqueIterator& iterator) {
+							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
+							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
+						});
 
-				// Build hierarchical depths
-				lightingTechnique->CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
+					// Build hierarchical depths
+					lightingTechnique->CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
 
-				// Light tiling & configure lighting descriptors
-				lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
-				lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
+					// Light tiling & configure lighting descriptors
+					lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
+					lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
-				// Calculate SSRs
-				if (lightScene->HasScreenSpaceReflectionsOperator())
-					lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
+					// Calculate SSRs
+					if (lightScene->HasScreenSpaceReflectionsOperator())
+						lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
 
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->_lightScene->ConfigureParsingContext(*iterator._parsingContext);
-					});
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->_lightScene->ConfigureParsingContext(*iterator._parsingContext);
+						});
 
-				// Draw main scene
-				auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(
-					CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture, captures->_lightScene->HasScreenSpaceReflectionsOperator()));
+					// Draw main scene
+					auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(
+						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture, captures->_lightScene->HasScreenSpaceReflectionsOperator()));
 
-				// Post processing
-				auto toneMapFragment = CreateToneMapFragment(
-					[captures](LightingTechniqueIterator& iterator) {
-						captures->DoToneMap(iterator);
-					});
-				lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
+					// Post processing
+					auto toneMapFragment = CreateToneMapFragment(
+						[captures](LightingTechniqueIterator& iterator) {
+							captures->DoToneMap(iterator);
+						});
+					lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
 
-				lightingTechnique->CreateStep_CallFunction(
-					[captures](LightingTechniqueIterator& iterator) {
-						iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
-						captures->_lightScene->_preparedShadows.clear();
-						captures->_lightScene->_preparedDominantShadow = nullptr;
-					});
+					lightingTechnique->CreateStep_CallFunction(
+						[captures](LightingTechniqueIterator& iterator) {
+							iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
+							captures->_lightScene->_preparedShadows.clear();
+							captures->_lightScene->_preparedDominantShadow = nullptr;
+						});
 
-				lightingTechnique->CompleteConstruction();
+					lightingTechnique->CompleteConstruction();
 
-				// Any final operators that depend on the resolved frame buffer:
-				auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
-				auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
-				::Assets::WhenAll(skyOpFuture).ThenConstructToFuture(
-					thatFuture,
-					[captures, lightingTechnique](auto skyOp) {
-						captures->_skyOperator = skyOp;
-						captures->_lightScene->_onChangeSkyTexture.Bind(
-							[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](std::shared_ptr<Techniques::DeferredShaderResource> texture) {
-								auto l=weakSkyOperator.lock();
-								if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
-							});
-						lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
-						return lightingTechnique;
-					});
+					// Any final operators that depend on the resolved frame buffer:
+					auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
+					auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
+					::Assets::WhenAll(skyOpFuture).ThenConstructToPromise(
+						std::move(thatPromise),
+						[captures, lightingTechnique](auto skyOp) {
+							captures->_skyOperator = skyOp;
+							captures->_lightScene->_onChangeSkyTexture.Bind(
+								[weakSkyOperator=std::weak_ptr<SkyOperator>(skyOp)](std::shared_ptr<Techniques::DeferredShaderResource> texture) {
+									auto l=weakSkyOperator.lock();
+									if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
+								});
+							lightingTechnique->_depVal.RegisterDependency(skyOp->GetDependencyValidation());
+							return lightingTechnique;
+						});
+				} CATCH(...) {
+					thatPromise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 		return result;
 	}

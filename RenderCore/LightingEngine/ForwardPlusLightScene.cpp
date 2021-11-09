@@ -522,8 +522,8 @@ namespace RenderCore { namespace LightingEngine
 		return lightScene;
 	}
 
-	void ForwardPlusLightScene::ConstructToFuture(
-		::Assets::FuturePtr<ForwardPlusLightScene>& future,
+	void ForwardPlusLightScene::ConstructToPromise(
+		std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -569,13 +569,13 @@ namespace RenderCore { namespace LightingEngine
 		using namespace std::placeholders;
 		if (ambientLightOperator._ssrOperator) {
 			auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool, ambientLightOperator._ssrOperator.value());
-			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToPromise(
+				std::move(promise),
 				std::bind(CreateInternal, _1, _2, _3, _4, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
 
 		} else {
-			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture).ThenConstructToPromise(
+				std::move(promise),
 				std::bind(CreateInternal, _1, _2, _3, nullptr, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));
 		}
 

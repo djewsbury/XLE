@@ -110,10 +110,10 @@ namespace Assets
 				_assets.insert(i, std::make_pair(hash, newFuture));
 		}
 
-		// note -- call AutoConstructToFuture outside of the mutex lock, because this operation can be expensive
-		// after the future has been constructed but before we complete AutoConstructToFuture, the asset is considered to be
+		// note -- call AutoConstructToPromise outside of the mutex lock, because this operation can be expensive
+		// after the future has been constructed but before we complete AutoConstructToPromise, the asset is considered to be
 		// in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
-		// another thread grabs the future before AutoConstructToFuture is done
+		// another thread grabs the future before AutoConstructToPromise is done
 		AutoConstructToPromise(newFuture->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return newFuture;
 	}

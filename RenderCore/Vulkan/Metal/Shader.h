@@ -72,23 +72,23 @@ namespace RenderCore { namespace Metal_Vulkan
         ShaderProgram& operator=(const ShaderProgram&) = default;
 
 		// Legacy asset based API --
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable);
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&&,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
@@ -132,8 +132,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		uint64_t GetInterfaceBindingGUID() const { return _interfaceBindingHash; }
 
 		// Legacy asset based API --
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ComputeShader>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ComputeShader>>&&,
 			std::shared_ptr<ICompiledPipelineLayout> pipelineLayout,
 			StringSection<::Assets::ResChar> codeName,
 			StringSection<::Assets::ResChar> definesTable = {});

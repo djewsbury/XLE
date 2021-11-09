@@ -251,8 +251,8 @@ namespace ToolsRig
         VisGeoBox();
         ~VisGeoBox();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<VisGeoBox>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<VisGeoBox>>&&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool);
     };
 
@@ -280,8 +280,8 @@ namespace ToolsRig
 		return geo;
 	}
     
-    void VisGeoBox::ConstructToFuture(
-		::Assets::FuturePtr<VisGeoBox>& future,
+    void VisGeoBox::ConstructToPromise(
+		std::promise<std::shared_ptr<VisGeoBox>>&& promise,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
     {
 		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
@@ -291,8 +291,8 @@ namespace ToolsRig
 			nullptr,
 			ParameterBox {}, ParameterBox {}, ParameterBox {});
 
-		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineAcceleratorPool, dsa](
 				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> sphereMat,
 				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tubeMat,

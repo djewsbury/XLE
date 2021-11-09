@@ -9,11 +9,11 @@
 
 namespace RenderOverlays { namespace CommonWidgets
 {
-	void DefaultFontsBox::ConstructToFuture(::Assets::FuturePtr<DefaultFontsBox>& future)
+	void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 	{
 		::Assets::WhenAll(
 			RenderOverlays::MakeFont("DosisBook", 16),
-			RenderOverlays::MakeFont("DosisExtraBold", 20)).ThenConstructToFuture(future);
+			RenderOverlays::MakeFont("DosisExtraBold", 20)).ThenConstructToPromise(std::move(promise));
 	}
 
 	void Draw::SectionHeader(Rect rectangle, StringSection<> name, bool expanded) const

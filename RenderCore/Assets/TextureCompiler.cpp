@@ -490,23 +490,23 @@ namespace RenderCore { namespace Assets
 		::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::Filename }
 	};
 
-	void TextureArtifact::ConstructToFuture(
-		::Assets::FuturePtr<TextureArtifact>& future,
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
 		StringSection<> initializer)
 	{
 		auto splitter = MakeFileNameSplitter(initializer);
 		if (XlEqStringI(splitter.Extension(), "texture")) {
-			::Assets::DefaultCompilerConstruction(future, TextureCompilerProcessType, 0u, initializer);
+			::Assets::DefaultCompilerConstruction(std::move(promise), TextureCompilerProcessType, 0u, initializer);
 		} else {
-			future.SetAsset(std::make_shared<TextureArtifact>(initializer.AsString()), nullptr);
+			promise.set_value(std::make_shared<TextureArtifact>(initializer.AsString()), nullptr);
 		}
 	}
 
-	void TextureArtifact::ConstructToFuture(
-		::Assets::FuturePtr<TextureArtifact>& future,
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
 		const TextureCompilationRequest& request)
 	{
-		::Assets::DefaultCompilerConstruction(future, TextureCompilerProcessType, 1u, request);
+		::Assets::DefaultCompilerConstruction(std::move(promise), TextureCompilerProcessType, 1u, request);
 	}
 }}
 

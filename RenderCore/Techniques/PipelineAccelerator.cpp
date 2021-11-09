@@ -124,10 +124,10 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the 
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		::Assets::WhenAll(patchCollectionFuture, cfg->_pipelineLayout).ThenConstructToFuture(
-			*pipelineFuture,
+		::Assets::WhenAll(patchCollectionFuture, cfg->_pipelineLayout).ThenConstructToPromise(
+			pipelineFuture->AdoptPromise(),
 			[pipelineCollection, copyGlobalSelectors, cfg, weakThis](
-				::Assets::Future<IPipelineAcceleratorPool::Pipeline>& resultFuture,
+				std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 				std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 				std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayoutAsset) {
 
@@ -149,8 +149,8 @@ namespace RenderCore { namespace Techniques
 					MakeIteratorRange(paramBoxes), 
 					vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
 
-				::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToFuture(
-					resultFuture,
+				::Assets::WhenAll(metalPipelineFuture, pipelineDescFuture).ThenConstructToPromise(
+					std::move(resultPromise),
 					[cfg, weakThis](
 						GraphicsPipelineAndLayout metalPipeline, auto pipelineDesc) {
 
@@ -720,10 +720,10 @@ namespace RenderCore { namespace Techniques
 
 				std::weak_ptr<IDevice> weakDevice = _device;
 				bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-				::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
-					*result->_descriptorSet,
+				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
+					result->_descriptorSet->AdoptPromise(),
 					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, generateBindingInfo](
-						::Assets::Future<ActualizedDescriptorSet>& future,
+						std::promise<ActualizedDescriptorSet>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
 						auto d = weakDevice.lock();
@@ -731,7 +731,7 @@ namespace RenderCore { namespace Techniques
 							Throw(std::runtime_error("Device has been destroyed"));
 						
 						ConstructDescriptorSet(
-							future,
+							std::move(promise),
 							d,
 							patchCollection->GetInterface().GetMaterialDescriptorSet(),
 							constantBindingsCopy,
@@ -743,7 +743,7 @@ namespace RenderCore { namespace Techniques
 			}
 		} else {
 			ConstructDescriptorSet(
-				*result->_descriptorSet,
+				result->_descriptorSet->AdoptPromise(),
 				_device,
 				*_matDescSetLayout.GetLayout(),
 				constantBindings,

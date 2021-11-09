@@ -201,8 +201,8 @@ namespace ToolsRig
 			std::weak_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> weakPipelineAcceleratorPool = _pipelineAcceleratorPool;
 
 			_pipelineFuture = std::make_shared<::Assets::FuturePtr<PendingPipeline>>("MaterialVisualizationScene pipeline");
-			::Assets::WhenAll(patchCollectionFuture).ThenConstructToFuture(
-				*_pipelineFuture,
+			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
+				_pipelineFuture->AdoptPromise(),
 				[weakPipelineAcceleratorPool, mat](const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& patchCollection) {
 
 					auto strongPipelineAcceleratorPool = weakPipelineAcceleratorPool.lock();
@@ -343,7 +343,7 @@ namespace ToolsRig
 				profileStr, definesTable);
 
 			auto result = std::make_shared<::Assets::FuturePtr<CompiledShaderByteCode>>();
-			::Assets::AutoConstructToFuture(*result, artifactFuture);
+			::Assets::AutoConstructToPromise(result->AdoptPromise(), artifactFuture);
 			return result;
 		}
 
@@ -501,30 +501,19 @@ namespace ToolsRig
 	}
 
 	template<typename Function, typename... Args>
-		void AsyncConstructToFuture(
-			const ::Assets::PtrToFuturePtr<
-				std::decay_t<decltype(*std::declval<std::invoke_result_t<std::decay_t<Function>, std::decay_t<Args>...>>())>
-			>& future,
+		void AsyncConstructToPromise(
+			std::promise<
+				std::decay_t<std::invoke_result_t<std::decay_t<Function>, std::decay_t<Args>...>>
+			>&& promise,
 			Function&& function, Args&&... args)
 	{
-		// We have to wrap up the uncopyable objects in a packet, because
-		// there's a forced copy of the functor when we convert to a std::function<void>()
-		struct Packet
-		{
-			Function _function;
-		};
-		auto pkt = std::make_shared<Packet>(Packet{std::move(function)});
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[pkt, future](Args&&... args) mutable -> void {
+			[function=std::move(function), promise=std::move(promise)](Args&&... args) mutable -> void {
 				TRY {
-					auto object = pkt->_function(std::forward<Args>(args)...);
-					future->SetAsset(std::move(object), {});
-				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
-					future->SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());	
-				} CATCH (const ::Assets::Exceptions::InvalidAsset& e) {
-					future->SetInvalidAsset(e.GetDependencyValidation(), e.GetActualizationLog());
-				} CATCH (const std::exception& e) {
-					future->SetInvalidAsset({}, ::Assets::AsBlob(e));
+					auto object = function(std::forward<Args>(args)...);
+					future->set_value(std::move(object));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
 				} CATCH_END
 			},
 			std::forward<Args>(args)...);
@@ -537,8 +526,8 @@ namespace ToolsRig
 		const std::shared_ptr<GraphLanguage::INodeGraphProvider>& subProvider)
 	{
 		auto future = std::make_shared<::Assets::FuturePtr<RenderCore::Techniques::CompiledShaderPatchCollection>>("MakeCompiledShaderPatchCollectionAsync");
-		AsyncConstructToFuture(
-			future,
+		AsyncConstructToPromise(
+			future->AdoptPromise(),
 			[nodeGraph{std::move(nodeGraph)}, nodeGraphSignature{std::move(nodeGraphSignature)}, previewNodeId, subProvider]() {
 				return MakeCompiledShaderPatchCollection(nodeGraph, nodeGraphSignature, previewNodeId, subProvider);
 			});

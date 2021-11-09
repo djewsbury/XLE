@@ -182,7 +182,7 @@ namespace UnitTests
 	static ByteCodeFuture BeginShaderCompile(StringSection<> fn)
 	{
 		static_assert(::Assets::Internal::AssetTraits<RenderCore::CompiledShaderByteCode>::HasCompileProcessType);
-		static_assert(!::Assets::Internal::HasConstructToFutureOverride<RenderCore::CompiledShaderByteCode, const char*>::value);
+		static_assert(!::Assets::Internal::HasConstructToPromiseOverride<RenderCore::CompiledShaderByteCode, const char*>::value);
 		ByteCodeFuture byteCodeFuture("unit test compile for " + fn.AsString());
 		::Assets::DefaultCompilerConstruction(byteCodeFuture, RenderCore::CompiledShaderByteCode::CompileProcessType, fn);
 		return byteCodeFuture;

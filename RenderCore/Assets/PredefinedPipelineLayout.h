@@ -90,8 +90,8 @@ namespace RenderCore { namespace Assets
             const PredefinedPipelineLayoutFile& srcFile,
             std::string name);
 
-        static void ConstructToFuture(
-            ::Assets::FuturePtr<PredefinedPipelineLayout>& future,
+        static void ConstructToPromise(
+            std::promise<std::shared_ptr<PredefinedPipelineLayout>>&& promise,
             StringSection<::Assets::ResChar> src);
     protected:
         ::Assets::DependencyValidation _depVal;

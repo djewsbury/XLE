@@ -257,8 +257,8 @@ namespace RenderCore { namespace Metal_DX11
 		}
 	}
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> psName,
 		StringSection<::Assets::ResChar> definesTable)
@@ -266,15 +266,15 @@ namespace RenderCore { namespace Metal_DX11
 		auto vsFuture = MakeByteCodeFuture(ShaderStage::Vertex, vsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToPromise(
+			std::move(promise),
 			[](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), *vsActual, *psActual);
 			});
 	}
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
 		StringSection<::Assets::ResChar> psName,
@@ -284,8 +284,8 @@ namespace RenderCore { namespace Metal_DX11
 		auto gsFuture = MakeByteCodeFuture(ShaderStage::Geometry, gsName, definesTable);
 		auto psFuture = MakeByteCodeFuture(ShaderStage::Pixel, psName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToPromise(
+			std::move(promise),
 			[](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<ShaderProgram>(GetObjectFactory(), *vsActual, *gsActual, *psActual);
 			});
@@ -293,8 +293,8 @@ namespace RenderCore { namespace Metal_DX11
 
 	StreamOutputInitializers g_defaultStreamOutputInitializers = {};
 
-	void ShaderProgram::ConstructToFuture(
-		::Assets::FuturePtr<ShaderProgram>& future,
+	void ShaderProgram::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		StringSection<::Assets::ResChar> vsName,
 		StringSection<::Assets::ResChar> gsName,
 		StringSection<::Assets::ResChar> psName,
@@ -308,8 +308,8 @@ namespace RenderCore { namespace Metal_DX11
 		auto hsFuture = MakeByteCodeFuture(ShaderStage::Hull, hsName, definesTable);
 		auto dsFuture = MakeByteCodeFuture(ShaderStage::Domain, dsName, definesTable);
 
-		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToPromise(
+			std::move(promise),
 			[](	std::shared_ptr<CompiledShaderByteCode> vsActual,
 				std::shared_ptr<CompiledShaderByteCode> gsActual,
 				std::shared_ptr<CompiledShaderByteCode> psActual,
@@ -320,15 +320,15 @@ namespace RenderCore { namespace Metal_DX11
 			});
 	}
 
-	void ComputeShader::ConstructToFuture(
-		::Assets::FuturePtr<ComputeShader>& future,
+	void ComputeShader::ConstructToPromise(
+		std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 		StringSection<::Assets::ResChar> codeName,
 		StringSection<::Assets::ResChar> definesTable)
 	{
 		auto code = MakeByteCodeFuture(ShaderStage::Compute, codeName, definesTable);
 
-		::Assets::WhenAll(code).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(code).ThenConstructToPromise(
+			std::move(promise),
 			[](std::shared_ptr<CompiledShaderByteCode> csActual) {
 				return std::make_shared<ComputeShader>(GetObjectFactory(), *csActual);
 			});

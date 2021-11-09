@@ -41,10 +41,10 @@ namespace RenderOverlays
         : _font(std::move(font))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<SkeletonPreviewResourceBox>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<SkeletonPreviewResourceBox>>&& promise)
         {
             ::Assets::WhenAll(
-                RenderOverlays::MakeFont("Vera", 12)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("Vera", 12)).ThenConstructToPromise(std::move(promise));
         }
 	};
 

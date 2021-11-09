@@ -150,14 +150,14 @@ namespace RenderCore { namespace Techniques
 		return _technique->GetDependencyValidation();
 	}
 
-	void TechniqueShaderVariationSet::ConstructToFuture(
-		::Assets::FuturePtr<TechniqueShaderVariationSet>& future,
+	void TechniqueShaderVariationSet::ConstructToPromise(
+		std::promise<std::shared_ptr<TechniqueShaderVariationSet>>&& promise,
 		StringSection<::Assets::ResChar> modelScaffoldName,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
 	{
 		auto scaffoldFuture = ::Assets::MakeAsset<Technique>(modelScaffoldName);
-		::Assets::WhenAll(scaffoldFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(scaffoldFuture).ThenConstructToPromise(
+			std::move(promise),
 			[pipelineLayout](std::shared_ptr<Technique> technique) {
 				return std::make_shared<TechniqueShaderVariationSet>(technique, pipelineLayout);
 			});

@@ -332,16 +332,16 @@ namespace RenderCore { namespace Assets
 		_depVal = srcFile.GetDependencyValidation();
 	}
 
-	void PredefinedPipelineLayout::ConstructToFuture(
-		::Assets::FuturePtr<PredefinedPipelineLayout>& future,
+	void PredefinedPipelineLayout::ConstructToPromise(
+		std::promise<std::shared_ptr<PredefinedPipelineLayout>>&& promise,
 		StringSection<::Assets::ResChar> src)
 	{
 		auto split = MakeFileNameSplitter(src);
 		if (split.Parameters().IsEmpty())
 			Throw(std::runtime_error("Missing pipeline layout name when loading pipeline layout (expecting <filename>:<layout name>). For request: " + src.AsString()));
 		auto fileFuture = ::Assets::MakeAsset<PredefinedPipelineLayoutFile>(split.AllExceptParameters());
-		::Assets::WhenAll(fileFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(fileFuture).ThenConstructToPromise(
+			std::move(promise),
 			[layoutName=split.Parameters().AsString()](auto file) {
 				return std::make_shared<PredefinedPipelineLayout>(*file, layoutName);
 			});

@@ -166,10 +166,10 @@ namespace ToolsRig
         : _headingFont(std::move(headingFont))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<WidgetResources>& future)
+        static void ConstructToPromise(std::future<stD::shared_ptr<WidgetResources>>&& promise)
         {
             ::Assets::WhenAll(
-                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToPromise(std::move(promise));
         }
     };
 

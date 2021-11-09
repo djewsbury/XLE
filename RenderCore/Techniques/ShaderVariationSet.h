@@ -68,8 +68,8 @@ namespace RenderCore { namespace Techniques
 		///////////////////////////////////////
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
-		static void ConstructToFuture(
-			::Assets::FuturePtr<TechniqueShaderVariationSet>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TechniqueShaderVariationSet>>&& promise,
 			StringSection<::Assets::ResChar> techniqueName,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
 

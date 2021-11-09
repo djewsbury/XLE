@@ -152,8 +152,8 @@ namespace RenderCore { namespace LightingEngine
 		auto balancedNoiseFuture = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/balanced_noise.dds:LT");
 
 		auto result = std::make_shared<::Assets::FuturePtr<IDescriptorSet>>();
-		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToFuture(
-			*result,
+		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToPromise(
+			result->AdoptPromise(),
 			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
 				DescriptorSetInitializer::BindTypeAndIdx bindTypes[4];
 				bindTypes[0] = { DescriptorSetInitializer::BindType::Empty };

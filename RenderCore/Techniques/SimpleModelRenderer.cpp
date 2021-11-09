@@ -1237,8 +1237,8 @@ namespace RenderCore { namespace Techniques
 		std::vector<DeformOperationInstantiation> _deformOps;
 	};
 
-	void SimpleModelRenderer::ConstructToFuture(
-		::Assets::FuturePtr<SimpleModelRenderer>& future,
+	void SimpleModelRenderer::ConstructToPromise(
+		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
@@ -1250,8 +1250,8 @@ namespace RenderCore { namespace Techniques
 		auto modelScaffoldNameString = !modelScaffoldNameStringInit.empty() ? modelScaffoldNameStringInit : modelScaffoldFuture->Initializer();
 		auto materialScaffoldNameString = !materialScaffoldNameStringInit.empty() ? materialScaffoldNameStringInit : materialScaffoldFuture->Initializer();
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
+			std::move(promise),
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) {
 				
@@ -1267,8 +1267,8 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
-	void SimpleModelRenderer::ConstructToFuture(
-		::Assets::FuturePtr<SimpleModelRenderer>& future,
+	void SimpleModelRenderer::ConstructToPromise(
+		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName,
 		StringSection<> materialScaffoldName,
@@ -1277,15 +1277,15 @@ namespace RenderCore { namespace Techniques
 	{
 		auto scaffoldFuture = ::Assets::MakeAsset<RenderCore::Assets::ModelScaffold>(modelScaffoldName);
 		auto materialFuture = ::Assets::MakeAsset<RenderCore::Assets::MaterialScaffold>(materialScaffoldName, modelScaffoldName);
-		ConstructToFuture(future, pipelineAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
+		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
 	}
 
-	void SimpleModelRenderer::ConstructToFuture(
-		::Assets::FuturePtr<SimpleModelRenderer>& future,
+	void SimpleModelRenderer::ConstructToPromise(
+		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		ConstructToFuture(future, pipelineAcceleratorPool, modelScaffoldName, modelScaffoldName);
+		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, modelScaffoldName, modelScaffoldName);
 	}
 
 	static IResourcePtr LoadVertexBuffer(
@@ -1392,9 +1392,9 @@ namespace RenderCore { namespace Techniques
 	{
 	}
 
-	void RendererSkeletonInterface::ConstructToFuture(
-		::Assets::PtrToFuturePtr<RendererSkeletonInterface>& skeletonInterfaceFuture,
-		::Assets::PtrToFuturePtr<SimpleModelRenderer>& rendererFuture,
+	void RendererSkeletonInterface::ConstructToPromise(
+		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
+		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
@@ -1402,12 +1402,16 @@ namespace RenderCore { namespace Techniques
 		StringSection<> deformOperations,
 		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
 	{
-		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToFuture(*skeletonInterfaceFuture);
+		// note -- skeletonInterfacePromise will never be fulfilled if renderPromise becomes invalid
+		std::promise<std::shared_ptr<RendererSkeletonInterface>> intermediateSkeletonInterface;
+		auto intermediateSkeletonInterfaceFuture = intermediateSkeletonInterface.get_future();
+		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToPromise(std::move(intermediateSkeletonInterface));
 
 		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, skeletonInterfaceFuture).ThenConstructToFuture(
-			*rendererFuture,
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings](
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, intermediateSkeletonInterfaceFuture).ThenConstructToPromise(
+			std::move(rendererPromise),
+			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, 
+				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
 				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual,
 				std::shared_ptr<RendererSkeletonInterface> skeletonInterface) {
@@ -1422,6 +1426,8 @@ namespace RenderCore { namespace Techniques
 				// Add a uniform buffer binding delegate for the joint transforms
 				auto ubb = uniformBufferBindings;
 				ubb.push_back({Hash64("BoneTransforms"), skeletonInterface});
+
+				skeletonInterfacePromise.set_value(skeletonInterface);
 
 				return std::make_shared<SimpleModelRenderer>(
 					pipelineAcceleratorPool, scaffoldActual, materialActual, 

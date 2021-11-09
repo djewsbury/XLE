@@ -33,8 +33,8 @@ namespace SceneEngine
 			const ::Assets::DependencyValidation& depVal);
         WorldPlacementsConfig();
 
-        static void ConstructToFuture(
-			::Assets::FuturePtr<WorldPlacementsConfig>&,
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<WorldPlacementsConfig>>&&,
 			StringSection<::Assets::ResChar> initializer);
 
 	private:

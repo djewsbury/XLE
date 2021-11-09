@@ -173,9 +173,9 @@ namespace PlatformRig { namespace Overlays
         : _largeFont(std::move(largeFont))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<SpikesProfilerResources>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<SpikesProfilerResources>>&& promise)
         {
-            ::Assets::WhenAll(RenderOverlays::MakeFont("Petra", 64)).ThenConstructToFuture(future);
+            ::Assets::WhenAll(RenderOverlays::MakeFont("Petra", 64)).ThenConstructToPromise(std::move(promise));
         }
     };
 

@@ -103,12 +103,12 @@ namespace PlatformRig
         : _frameRateFont(std::move(frameRateFont)), _smallFrameRateFont(std::move(smallFrameRateFont)), _tabHeadingFont(std::move(tabHeadingFont))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<FrameRigResources>& future)
+        static void ConstructToPromise(std::promise<FrameRigResources>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("Shojumaru", 32),
                 RenderOverlays::MakeFont("PoiretOne", 14),
-                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToPromise(std::move(promise));
         }
     };
 

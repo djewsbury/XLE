@@ -57,8 +57,8 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(vsCode && psCode);
 		auto future = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>(programName);
-		::Assets::WhenAll(vsCode, psCode).ThenConstructToFuture(
-			*future,
+		::Assets::WhenAll(vsCode, psCode).ThenConstructToPromise(
+			future->AdoptPromise(),
 			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
 				return std::make_shared<Metal::ShaderProgram>(
 					RenderCore::Metal::GetObjectFactory(), pipelineLayout, *vsActual, *psActual);
@@ -78,8 +78,8 @@ namespace RenderCore { namespace Techniques
 		std::vector<RenderCore::InputElementDesc> soElements { soInit._outputElements.begin(), soInit._outputElements.end() };
 		std::vector<unsigned> soStrides { soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end() };
 		auto future = std::make_shared<::Assets::FuturePtr<Metal::ShaderProgram>>(programName);
-		::Assets::WhenAll(vsCode, gsCode, psCode).ThenConstructToFuture(
-			*future,
+		::Assets::WhenAll(vsCode, gsCode, psCode).ThenConstructToPromise(
+			future->AdoptPromise(),
 			[soElements, soStrides, pipelineLayout](
 				std::shared_ptr<CompiledShaderByteCode> vsActual, 
 				std::shared_ptr<CompiledShaderByteCode> gsActual, 

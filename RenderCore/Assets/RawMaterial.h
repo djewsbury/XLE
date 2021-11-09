@@ -172,8 +172,8 @@ namespace RenderCore { namespace Assets
 			const ::Assets::DependencyValidation& depVal);
         ~RawMaterial();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<RawMaterial>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<RawMaterial>>&&,
 			StringSection<::Assets::ResChar> initializer);
 
     private:
@@ -214,8 +214,8 @@ namespace RenderCore { namespace Assets
         ResolvedMaterial();
         ~ResolvedMaterial();
 
-        static void ConstructToFuture(
-			::Assets::FuturePtr<ResolvedMaterial>&,
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<ResolvedMaterial>>&&,
 			StringSection<> initializer);
     private:
         ::Assets::DependencyValidation _depVal;

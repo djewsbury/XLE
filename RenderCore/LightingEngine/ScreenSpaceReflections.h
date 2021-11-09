@@ -59,8 +59,8 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<IDevice> device);
 		~ScreenSpaceReflectionsOperator();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const ScreenSpaceReflectionsOperatorDesc& desc);
 	private:

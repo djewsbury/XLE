@@ -19,8 +19,8 @@ namespace RenderCore { namespace LightingEngine
 			_coefficients[c] = coefficients[c];
 	}
 
-	void SHCoefficientsAsset::ConstructToFuture(
-		::Assets::FuturePtr<SHCoefficientsAsset>& future,
+	void SHCoefficientsAsset::ConstructToPromise(
+		std::promise<std::shared_ptr<SHCoefficientsAsset>>&& promise,
 		StringSection<> srcTexture)
 	{
 		Assets::TextureCompilationRequest request;
@@ -29,8 +29,8 @@ namespace RenderCore { namespace LightingEngine
 		request._format = Format::R32G32B32A32_FLOAT;
 		request._coefficientCount = 25;
 		auto srcFuture = ::Assets::MakeFuture<std::shared_ptr<RenderCore::Assets::TextureArtifact>>(request);
-		::Assets::WhenAll(srcFuture).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
+			std::move(promise),
 			[](::Assets::FuturePtr<SHCoefficientsAsset>& thatFuture, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
 				struct Captures
 				{

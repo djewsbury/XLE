@@ -190,12 +190,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
         : _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<DefaultFontsBox>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("Petra", 16),
                 RenderOverlays::MakeFont("DosisExtraBold", 20),
-                RenderOverlays::MakeFont("Petra", 20)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("Petra", 20)).ThenConstructToPromise(std::move(promise));
         }
     };
 
@@ -264,7 +264,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
         }
 
-        static void ConstructToFuture(::Assets::FuturePtr<StandardResources>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
         {
             auto horizTweakerBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
             auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
@@ -278,7 +278,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToFuture(future);
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToPromise(std::move(future));
         }
     };
 

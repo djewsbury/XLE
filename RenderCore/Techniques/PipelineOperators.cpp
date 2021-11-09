@@ -36,16 +36,16 @@ namespace RenderCore { namespace Techniques
 		_pipelineLayout = device->CreatePipelineLayout(initializer);
 	}
 
-	void CompiledPipelineLayoutAsset::ConstructToFuture(
-		::Assets::FuturePtr<CompiledPipelineLayoutAsset>& future,
+	void CompiledPipelineLayoutAsset::ConstructToPromise(
+		std::promise<std::shared_ptr<CompiledPipelineLayoutAsset>>&& promise,
 		const std::shared_ptr<RenderCore::IDevice>& device,
 		StringSection<> srcFile,
 		RenderCore::ShaderLanguage shaderLanguage)
 	{
 		using namespace RenderCore;
 		auto src = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
-		::Assets::WhenAll(src).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(src).ThenConstructToPromise(
+			std::move(promise),
 			[device, shaderLanguage](auto predefinedLayout) {
 				return std::make_shared<CompiledPipelineLayoutAsset>(device, predefinedLayout, shaderLanguage);
 			});
@@ -105,8 +105,8 @@ namespace RenderCore { namespace Techniques
 			return *_predefinedPipelineLayout;
 		}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<FullViewportOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			unsigned subType,
 			StringSection<> pixelShader,
@@ -134,8 +134,8 @@ namespace RenderCore { namespace Techniques
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
-			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+				std::move(promise),
 				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<FullViewportOperator>();
 					op->_usi = std::move(usi);
@@ -184,14 +184,14 @@ namespace RenderCore { namespace Techniques
 			return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
 		} else {
 			auto result = std::make_shared<::Assets::FuturePtr<FullViewportOperator>>();
-			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[pool=pool, subType, pixelShader=pixelShader.AsString(), selectors=selectors,
 				fbDesc=*fbTarget._fbDesc, subPassIdx=fbTarget._subpassIdx,
-				usi=usi](::Assets::FuturePtr<FullViewportOperator>& resultFuture,
+				usi=usi](std::promise<FullViewportOperator>&& resultPromise,
 					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
-					FullViewportOperator::ConstructToFuture(
-						resultFuture, pool, (unsigned)subType, pixelShader, selectors, 
+					FullViewportOperator::ConstructToPromise(
+						std::move(resultPromise), pool, (unsigned)subType, pixelShader, selectors, 
 						pipelineLayout->GetPipelineLayout(), pipelineLayout->GetPredefinedPipelineLayout(), pipelineLayout->GetDependencyValidation(),
 						{&fbDesc, subPassIdx}, usi);
 				});
@@ -309,8 +309,8 @@ namespace RenderCore { namespace Techniques
 			return *_predefinedPipelineLayout;
 		}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ComputeOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			StringSection<> computeShader,
@@ -319,8 +319,8 @@ namespace RenderCore { namespace Techniques
 		{
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, MakeIteratorRange(selectorList));
-			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+				std::move(promise),
 				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
 					op->_usi = std::move(usi);
@@ -332,8 +332,8 @@ namespace RenderCore { namespace Techniques
 				});
 		}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ComputeOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			StringSection<> computeShader,
 			const ParameterBox& selectors,
@@ -341,8 +341,8 @@ namespace RenderCore { namespace Techniques
 		{
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = pool->CreateComputePipeline({}, computeShader, MakeIteratorRange(selectorList));
-			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+				std::move(promise),
 				[usi=usi](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
 					op->_usi = std::move(usi);
@@ -353,8 +353,8 @@ namespace RenderCore { namespace Techniques
 				});
 		}
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ComputeOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& futurePipelineLayout,
 			uint64_t futurePipelineLayoutGuid,
@@ -364,8 +364,8 @@ namespace RenderCore { namespace Techniques
 		{
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = pool->CreateComputePipeline({futurePipelineLayout, futurePipelineLayoutGuid}, computeShader, MakeIteratorRange(selectorList));
-			::Assets::WhenAll(pipelineFuture).ThenConstructToFuture(
-				future,
+			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+				std::move(promise),
 				[usi=usi](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
 					op->_usi = std::move(usi);

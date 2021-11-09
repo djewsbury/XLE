@@ -47,7 +47,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont)
 		: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)) {}
 
-		static void ConstructToFuture(::Assets::FuturePtr<DefaultFontsBox>& future);
+		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
 	class Draw

@@ -291,8 +291,8 @@ namespace RenderCore { namespace LightingEngine
 
 	RasterizationLightTileOperator::~RasterizationLightTileOperator() {}
 
-	void RasterizationLightTileOperator::ConstructToFuture(
-		::Assets::FuturePtr<RasterizationLightTileOperator>& future,
+	void RasterizationLightTileOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<RasterizationLightTileOperator>>& promise,
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Configuration& config)
 	{
@@ -324,8 +324,8 @@ namespace RenderCore { namespace LightingEngine
 			{},
 			inputStates, fbTarget);
 
-		::Assets::WhenAll(futurePipeline).ThenConstructToFuture(
-			future,
+		::Assets::WhenAll(futurePipeline).ThenConstructToPromise(
+			std::move(promise),
 			[pipelinePool, config](auto pipeline) {
 				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline._pipeline), std::move(pipeline._layout), config);
 			});

@@ -91,8 +91,8 @@ namespace EntityInterface
 
 			using UnderlyingFormatter = InputStreamFormatter<>;
 			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
-			::Assets::WhenAll(_srcFile).ThenConstructToFuture(
-				*result,
+			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
+				result->AdoptPromise(),
 				[ip=internalPoint.AsString()](auto cfgFileContainer) {
 					return EntityInterface::CreateDynamicFormatter(std::move(cfgFileContainer), ip);
 				});

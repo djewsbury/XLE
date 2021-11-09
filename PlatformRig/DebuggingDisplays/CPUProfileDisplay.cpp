@@ -94,12 +94,12 @@ namespace PlatformRig { namespace Overlays
         : _leftFont(std::move(leftFont)), _middleFont(std::move(middleFont)), _rightFont(std::move(rightFont))
         {}
 
-        static void ConstructToFuture(::Assets::FuturePtr<DrawProfilerResources>& future)
+        static void ConstructToPromise(std::promise<std::shared_ptr<DrawProfilerResources>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("DosisBook", 20),
                 RenderOverlays::MakeFont("Shojumaru", 32),
-                RenderOverlays::MakeFont("PoiretOne", 24)).ThenConstructToFuture(future);
+                RenderOverlays::MakeFont("PoiretOne", 24)).ThenConstructToPromise(std::move(promise));
         }
     };
 

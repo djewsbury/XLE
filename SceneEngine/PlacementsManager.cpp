@@ -2752,19 +2752,19 @@ namespace SceneEngine
     {
     }
 
-    void WorldPlacementsConfig::ConstructToFuture(
-		::Assets::FuturePtr<WorldPlacementsConfig>& future,
+    void WorldPlacementsConfig::ConstructToPromise(
+		std::promise<std::shared_ptr<WorldPlacementsConfig>>&& promise,
         StringSection<::Assets::ResChar> initializer)
     {
         auto splitName = MakeFileNameSplitter(initializer);
 		if (XlEqStringI(splitName.Extension(), "dat")) {
-			AutoConstructToFutureDirect(future, initializer);
+			AutoConstructToPromiseSynchronously(std::move(promise), initializer);
 			return;
 		}
 
 		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(initializer.AsString());
 		::Assets::DefaultCompilerConstruction(
-			future, 
+			std::move(promise), 
             CompileProcessType_WorldPlacementsConfig,
 			initializer);
     }

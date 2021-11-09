@@ -110,21 +110,21 @@ namespace RenderCore { namespace Metal_DX11
         ShaderProgram& operator=(const ShaderProgram&) = default;
 
 		// Legacy asset based API --
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable = {});
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
 			StringSection<::Assets::ResChar> definesTable);
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ShaderProgram>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ShaderProgram>>&& promise,
 			StringSection<::Assets::ResChar> vsName,
 			StringSection<::Assets::ResChar> gsName,
 			StringSection<::Assets::ResChar> psName,
@@ -172,8 +172,8 @@ namespace RenderCore { namespace Metal_DX11
 		const CompiledShaderByteCode&       GetCompiledCode() const { return _compiledCode; }
 
 		// Legacy asset based API --
-		static void ConstructToFuture(
-			::Assets::FuturePtr<ComputeShader>&,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ComputeShader>>&&,
 			StringSection<::Assets::ResChar> codeName,
 			StringSection<::Assets::ResChar> definesTable = {});
 

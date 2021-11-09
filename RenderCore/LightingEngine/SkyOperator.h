@@ -50,8 +50,8 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<IDevice> device);
 		~SkyOperator();
 
-		static void ConstructToFuture(
-			::Assets::FuturePtr<SkyOperator>& future,
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<SkyOperator>>&& promise,
 			const SkyOperatorDesc& desc,
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const Techniques::FrameBufferTarget& fbTarget);

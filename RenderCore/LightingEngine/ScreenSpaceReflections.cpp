@@ -557,8 +557,8 @@ namespace RenderCore { namespace LightingEngine
 		Throw(std::runtime_error("Missing CBLayout named (" + name.AsString() + ")"));
 	}
 	
-	void ScreenSpaceReflectionsOperator::ConstructToFuture(
-		::Assets::FuturePtr<ScreenSpaceReflectionsOperator>& future,
+	void ScreenSpaceReflectionsOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const ScreenSpaceReflectionsOperatorDesc& desc)
 	{
@@ -662,8 +662,8 @@ namespace RenderCore { namespace LightingEngine
 
 		auto pipelineLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayout>(SSR_PIPELINE ":Main");
 
-		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur, pipelineLayoutFuture).ThenConstructToFuture(
-			future, 
+		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur, pipelineLayoutFuture).ThenConstructToPromise(
+			std::move(promise), 
 			[dev=pipelinePool->GetDevice(), desc](auto classifyTiles, auto prepareIndirectArgs, auto intersect, auto resolveSpatial, auto resolveTemporal, auto reflectionsBlur, auto pipelineLayout) { 
 				return std::make_shared<ScreenSpaceReflectionsOperator>(
 					desc,
