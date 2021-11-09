@@ -11,6 +11,7 @@
 #include "../../Assets/DeferredConstruction.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
@@ -420,7 +421,7 @@ namespace RenderCore { namespace Assets
 		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
 		auto splitName = MakeFileNameSplitter(initializer);
 		if (IsMaterialFile(splitName.Extension())) {
-			AutoConstructToPromiseSynchronously(future, initializer);
+			::Assets::AutoConstructToPromiseSynchronously(promise, initializer);
 			return;
 		}
 
@@ -483,8 +484,9 @@ namespace RenderCore { namespace Assets
         }
         assert(!pendingTree->_subFutures.empty());
 
-        futureMaterial.SetPollingFunction(
-            [pendingTree](::Assets::FuturePtr<ResolvedMaterial>& thatFuture) {
+        ::Assets::PollToPromise(
+            std::move(promisedMaterial),
+            [pendingTree](std::promise<std::shared_ptr<ResolvedMaterial>>&& thatPromise) {
                 for (;;) {
                     ::Assets::AssetState currentState = ::Assets::AssetState::Ready;
                     std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> subMaterials;
@@ -548,7 +550,7 @@ namespace RenderCore { namespace Assets
                         finalMaterial->_depVal.RegisterDependency(m.second->GetDependencyValidation());
                 }
                 finalMaterial->_depFileStates = std::move(pendingTree->_deps);
-                thatFuture.SetAsset(std::move(finalMaterial), {});
+                thatPromise.set_value(std::move(finalMaterial));
                 return false;
             });
     }

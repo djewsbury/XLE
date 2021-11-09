@@ -130,7 +130,7 @@ namespace Assets
 			assert(0);
 			// shadowing->second->SimulateChange(); 
 			if (newShadowingAsset) {
-				shadowing->second->SetAssetForeground(std::move(newShadowingAsset), nullptr);
+				shadowing->second->SetAssetForeground(std::move(newShadowingAsset));
 			} else {
 				_shadowingAssets.erase(shadowing);
 			}
@@ -140,7 +140,7 @@ namespace Assets
 		if (newShadowingAsset) {
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
 			auto newShadowingFuture = std::make_shared<Future<AssetType>>(stringInitializer);
-			newShadowingFuture->SetAssetForeground(std::move(newShadowingAsset), nullptr);
+			newShadowingFuture->SetAssetForeground(std::move(newShadowingAsset));
 			_shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
 		}
 

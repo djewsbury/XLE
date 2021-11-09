@@ -103,7 +103,7 @@ namespace PlatformRig
         : _frameRateFont(std::move(frameRateFont)), _smallFrameRateFont(std::move(smallFrameRateFont)), _tabHeadingFont(std::move(tabHeadingFont))
         {}
 
-        static void ConstructToPromise(std::promise<FrameRigResources>&& promise)
+        static void ConstructToPromise(std::promise<std::shared_ptr<FrameRigResources>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("Shojumaru", 32),

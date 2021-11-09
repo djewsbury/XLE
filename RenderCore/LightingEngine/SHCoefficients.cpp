@@ -6,6 +6,7 @@
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/AssetFutureContinuation.h"
 #include "../Assets/DeferredConstruction.h"
+#include "../../Assets/AssetFutureContinuation.h"
 
 namespace RenderCore { namespace LightingEngine 
 {
@@ -32,32 +33,20 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
 			std::move(promise),
 			[](std::promise<std::shared_ptr<SHCoefficientsAsset>>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
-				struct Captures
-				{
-					std::future<RenderCore::Assets::TextureArtifact::RawData> _futureData;
-					::Assets::DependencyValidation _depVal;
-				};
-				auto captures = std::make_shared<Captures>();
-				captures->_futureData = textureArtifact->BeginLoadRawData();
-				captures->_depVal = textureArtifact->GetDependencyValidation();
-				thatPromise.SetPollingFunction(
-					[captures=std::move(captures)](::Assets::FuturePtr<SHCoefficientsAsset>& thatFuture) {
-						auto resStatus = captures->_futureData.wait_for(std::chrono::seconds{0});
-						if (resStatus == std::future_status::timeout)
-							return true;
-
-						auto rawData = captures->_futureData.get();
+				::Assets::WhenAll(textureArtifact->BeginLoadRawData()).ThenConstructToPromise(
+					std::move(thatPromise),
+					[depVal = textureArtifact->GetDependencyValidation()](auto rawData) {
 						if (rawData._data.size() < 8*sizeof(Float4)
 							|| rawData._desc._format != Format::R32G32B32A32_FLOAT) {
-							thatFuture.SetInvalidAsset(captures->_depVal, ::Assets::AsBlob("Not enough SH coefficients or unexpected format"));
-							return false;
+							Throw(::Assets::Exceptions::ConstructionError(
+								::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
+								depVal, ::Assets::AsBlob("Not enough SH coefficients or unexpected format")));
 						}
 
 						auto data = MakeIteratorRange((const Float4*)AsPointer(rawData._data.begin()), (const Float4*)AsPointer(rawData._data.end()));
 						auto res = std::make_shared<SHCoefficientsAsset>(data);
-						res->_depVal = captures->_depVal;
-						thatFuture.SetAsset(std::move(res));
-						return false;
+						res->_depVal = depVal;
+						return res;
 					});
 			});
 	}

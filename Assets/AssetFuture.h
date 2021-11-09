@@ -520,7 +520,7 @@ namespace Assets
 		ScopedLock(_lock);
 		DisableFrameBarrierCallbackAlreadyLocked();
 		_actualized = std::move(newAsset);
-		_actualizationLog = log;
+		_actualizationLog = {};
 		_actualizedDepVal = Internal::GetDependencyValidation(newAsset);
 		_state = _actualized ? AssetState::Ready : AssetState::Invalid;
 	}

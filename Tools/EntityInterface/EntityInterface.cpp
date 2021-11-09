@@ -213,7 +213,9 @@ namespace EntityInterface
 
 		FormatOverlappingDocuments(
 			IteratorRange<std::shared_ptr<Formatters::IDynamicFormatter>*> mounts,
-			IteratorRange<const std::string*> externalMountPoints)
+			IteratorRange<const std::string*> externalMountPoints,
+			::Assets::Blob log)
+		: _log(std::move(log))
 		{
 			assert(mounts.size() == externalMountPoints.size());
 			assert(!mounts.empty());
@@ -241,6 +243,7 @@ namespace EntityInterface
 		State _state;
 		bool _pendingVirtualBeginElement = false;
 		mutable ::Assets::DependencyValidation _depVal;
+		::Assets::Blob _log;
 
 		void BeginActiveFormatter()
 		{
@@ -408,8 +411,7 @@ namespace EntityInterface
 
 					thatFuture.SetAsset(
 						std::make_shared<FormatOverlappingDocuments>(
-							MakeIteratorRange(actualized, actualized+futureFormatters.size()), MakeIteratorRange(externalPosition)), 
-							actualizationLog);
+							MakeIteratorRange(actualized, actualized+futureFormatters.size()), MakeIteratorRange(externalPosition), actualizationLog)); 
 					return false;
 				});
 			return future;

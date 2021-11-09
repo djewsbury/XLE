@@ -18,10 +18,73 @@
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/ParameterBox.h"
 
 namespace RenderCore { namespace Techniques 
 {
+	struct DescriptorSetInProgress : public ::Assets::IAsyncMarker
+	{
+		struct Resource
+		{
+			::Assets::PtrToFuturePtr<DeferredShaderResource> _pendingResource;
+			std::shared_ptr<IResourceView> _fixedResource;
+		};
+		std::vector<Resource> _resources;
+		std::vector<std::shared_ptr<ISampler>> _samplers;
+
+		struct Slot
+		{
+			DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::Empty;
+			unsigned _resourceIdx = ~0u;
+			std::string _slotName;
+			DescriptorType _slotType;
+		};
+		std::vector<Slot> _slots;
+
+		DescriptorSetSignature _signature;
+		DescriptorSetBindingInfo _bindingInfo;
+
+		::Assets::AssetState GetAssetState() const override
+		{
+			// just check status right now
+			auto result = ::Assets::AssetState::Ready;
+			for (const auto&d:_resources) {
+				if (d._pendingResource) {
+					::Assets::DependencyValidation depVal;
+					::Assets::Blob actualizationLog;
+					auto status = d._pendingResource->CheckStatusBkgrnd(depVal, actualizationLog);
+					// return true only when everything is ready/invalid
+					if (status == ::Assets::AssetState::Pending) {
+						return ::Assets::AssetState::Pending;
+					} else if (status == ::Assets::AssetState::Invalid)
+						result = ::Assets::AssetState::Invalid;
+				}
+			}
+			return result;
+		}
+
+		std::optional<::Assets::AssetState> StallWhilePending(std::chrono::microseconds timeout) const override
+		{
+			auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+			auto result = ::Assets::AssetState::Ready;
+			for (const auto&d:_resources) {
+				if (d._pendingResource) {
+					auto now = std::chrono::steady_clock::now();
+					auto partialTimeout = std::chrono::duration_cast<std::chrono::microseconds>(timeoutTime-now);
+					if (now >= timeoutTime || partialTimeout.count() == 0)
+						return {};		// timed out before we can even begin
+					auto status = d._pendingResource->StallWhilePending(partialTimeout);
+					if (!status.has_value() || status.value() == ::Assets::AssetState::Pending)
+						return status;		// timed out during StallWhilePending
+					if (status.value() == ::Assets::AssetState::Invalid)
+						result = ::Assets::AssetState::Invalid;
+				}
+			}
+			return result;
+		}
+	};
+
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
 		const std::shared_ptr<IDevice>& device,
@@ -33,29 +96,7 @@ namespace RenderCore { namespace Techniques
 		bool generateBindingInfo)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
-
-		struct DescriptorSetInProgress
-		{
-			struct Resource
-			{
-				::Assets::PtrToFuturePtr<DeferredShaderResource> _pendingResource;
-				std::shared_ptr<IResourceView> _fixedResource;
-			};
-			std::vector<Resource> _resources;
-			std::vector<std::shared_ptr<ISampler>> _samplers;
-
-			struct Slot
-			{
-				DescriptorSetInitializer::BindType _bindType = DescriptorSetInitializer::BindType::Empty;
-				unsigned _resourceIdx = ~0u;
-				std::string _slotName;
-				DescriptorType _slotType;
-			};
-			std::vector<Slot> _slots;
-
-			DescriptorSetSignature _signature;
-			DescriptorSetBindingInfo _bindingInfo;
-		};
+		
 		DescriptorSetInProgress working;
 		working._slots.reserve(layout._slots.size());
 		working._signature._slots.reserve(working._slots.size());
@@ -133,9 +174,11 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		future.SetPollingFunction(
-			[working, device, pipelineType](::Assets::Future<ActualizedDescriptorSet>& thatFuture) -> bool {
+		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 
+		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
+			std::move(promise),
+			[device, pipelineType](DescriptorSetInProgress working) {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
@@ -150,7 +193,7 @@ namespace RenderCore { namespace Techniques
 						::Assets::Blob actualizationLog;
 						auto status = d._pendingResource->CheckStatusBkgrnd(actualized, depVal, actualizationLog);
 						if (status == ::Assets::AssetState::Pending) {
-							return true;		// keep waiting
+							Throw(std::runtime_error("Unexpected pending asset"));		// should not happen, because the future should not have triggered until we are ready
 						} else if (status == ::Assets::AssetState::Ready) {
 							finalResources.push_back(actualized->GetShaderResource());
 
@@ -167,8 +210,9 @@ namespace RenderCore { namespace Techniques
 							std::stringstream str;
 							str << "Failed to actualize subasset resource (" << d._pendingResource->Initializer() << "): ";
 							if (actualizationLog) { str << ::Assets::AsString(actualizationLog); } else { str << std::string("<<no log>>"); }
-							thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob(str.str()));
-							return false;
+							Throw(::Assets::Exceptions::ConstructionError(
+								::Assets::Exceptions::ConstructionError::Reason::Unknown,
+								depVal, ::Assets::AsBlob(str.str())));
 						}
 
 						if (depVal)
@@ -205,8 +249,7 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
-				thatFuture.SetAsset(std::move(actualized));
-				return false;
+				return actualized;
 			});
 	}
 

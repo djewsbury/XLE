@@ -38,6 +38,7 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../Math/Transformations.h"
 #include "../../ConsoleRig/Console.h"
@@ -378,24 +379,21 @@ namespace ToolsRig
 									*RenderCore::Techniques::GetThreadContext(),
 									*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
 								if (pendingResources) {
-									thatFuture.SetPollingFunction(
-										[pendingResources, preparedScene](::Assets::FuturePtr<PreparedScene>& thatFuture) {
+									::Assets::WhenAll(::Assets::MakeASyncMarkerBridge(pendingResources)).Then(
+										[pendingResources, preparedScene, thatPromise=std::move(thatPromise)](auto) mutable {
 											auto state = pendingResources->GetAssetState();
-											if (state == ::Assets::AssetState::Pending) return true;
+											assert(state != ::Assets::AssetState::Pending);
 											if (state == ::Assets::AssetState::Invalid) {
 												// We should still actually set the asset here. Some resources might be valid, and might still render
 												// Also, if we don't set the asset, there will be no dependency validation chain for hot reloading a fix
 												Log(Warning) << "Got invalid asset during PrepareResources for scene." << std::endl;
-												thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
-											} else {
-												thatFuture.SetAsset(std::shared_ptr<PreparedScene>{preparedScene}, {});
 											}
-											return false;
+
+											thatPromise.set_value(std::move(preparedScene));
 										});
 								} else {
-									thatPromise.set_value(std::shared_ptr<PreparedScene>{preparedScene});
+									thatPromise.set_value(std::move(preparedScene));
 								}
-								return false;
 							} CATCH(...) {
 								thatPromise.set_exception(std::current_exception());
 							} CATCH_END

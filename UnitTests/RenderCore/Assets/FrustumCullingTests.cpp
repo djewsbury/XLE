@@ -78,7 +78,7 @@ namespace UnitTests
 			templateDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWrite;
 
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("unit-test-delegate");
-			result->SetAsset(std::move(templateDesc), {});
+			result->SetAsset(std::move(templateDesc));
 			return result;
 		}
 

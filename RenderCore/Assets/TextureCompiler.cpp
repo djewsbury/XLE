@@ -498,7 +498,7 @@ namespace RenderCore { namespace Assets
 		if (XlEqStringI(splitter.Extension(), "texture")) {
 			::Assets::DefaultCompilerConstruction(std::move(promise), TextureCompilerProcessType, 0u, initializer);
 		} else {
-			promise.set_value(std::make_shared<TextureArtifact>(initializer.AsString()), nullptr);
+			promise.set_value(std::make_shared<TextureArtifact>(initializer.AsString()));
 		}
 	}
 

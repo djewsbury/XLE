@@ -166,7 +166,7 @@ namespace ToolsRig
         : _headingFont(std::move(headingFont))
         {}
 
-        static void ConstructToPromise(std::future<stD::shared_ptr<WidgetResources>>&& promise)
+        static void ConstructToPromise(std::promise<std::shared_ptr<WidgetResources>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToPromise(std::move(promise));

@@ -1305,10 +1305,10 @@ namespace SceneEngine
                 if (depVals.size() > 1) {
                     auto newDepVal = ::Assets::GetDepValSys().Make();
                     for (const auto& dv:depVals) if (dv) newDepVal.RegisterDependency(dv);
-                    thatFuture.SetAsset(std::move(newDepVal), {});
+                    thatFuture.SetAsset(std::move(newDepVal));
                 } else {
                     assert(!depVals.empty());
-                    thatFuture.SetAsset(std::move(depVals[0]), {});
+                    thatFuture.SetAsset(std::move(depVals[0]));
                 }
                 return false;
             });
@@ -2758,7 +2758,7 @@ namespace SceneEngine
     {
         auto splitName = MakeFileNameSplitter(initializer);
 		if (XlEqStringI(splitName.Extension(), "dat")) {
-			AutoConstructToPromiseSynchronously(std::move(promise), initializer);
+			::Assets::AutoConstructToPromiseSynchronously(promise, initializer);
 			return;
 		}
 

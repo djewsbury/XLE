@@ -23,6 +23,9 @@
 #include "../../../Assets/AssetServices.h"
 #include "../../../ConsoleRig/GlobalServices.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
+#include "thousandeyes/futures/then.h"
+#include "thousandeyes/futures/DefaultExecutor.h"
+#include "thousandeyes/futures/Executor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <filesystem>
@@ -65,6 +68,8 @@ namespace UnitTests
 		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
 		auto testHelper = MakeTestHelper();
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		SECTION("UnitTestHelper shaders") {
 			// Ensure that we can compile a shader from string input, via the MakeShaderProgram
@@ -184,7 +189,7 @@ namespace UnitTests
 		static_assert(::Assets::Internal::AssetTraits<RenderCore::CompiledShaderByteCode>::HasCompileProcessType);
 		static_assert(!::Assets::Internal::HasConstructToPromiseOverride<RenderCore::CompiledShaderByteCode, const char*>::value);
 		ByteCodeFuture byteCodeFuture("unit test compile for " + fn.AsString());
-		::Assets::DefaultCompilerConstruction(byteCodeFuture, RenderCore::CompiledShaderByteCode::CompileProcessType, fn);
+		::Assets::DefaultCompilerConstruction(byteCodeFuture.AdoptPromise(), RenderCore::CompiledShaderByteCode::CompileProcessType, fn);
 		return byteCodeFuture;
 	}
 	
@@ -219,6 +224,8 @@ namespace UnitTests
 		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto testHelper = MakeTestHelper();
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto countingShaderSource = std::make_shared<CountingShaderSource>(testHelper->_shaderSource);

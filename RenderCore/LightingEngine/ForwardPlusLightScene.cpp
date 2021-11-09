@@ -263,14 +263,23 @@ namespace RenderCore { namespace LightingEngine
 			[weakThis](auto specularIBLFuture, auto diffuseIBLFuture, auto ambientRawCubemapFuture) {
 				auto l = weakThis.lock();
 				if (!l) return;
-				if (specularIBLFuture->GetAssetState() != ::Assets::AssetState::Ready
-					|| diffuseIBLFuture->GetAssetState() != ::Assets::AssetState::Ready) {
+
+				std::shared_ptr<Techniques::DeferredShaderResource> specularIBL;
+				std::shared_ptr<SHCoefficientsAsset> diffuseIBL;
+				TRY {
+					specularIBL = specularIBLFuture.get();
+					diffuseIBL = diffuseIBLFuture.get();
+				} CATCH(...) {
+					// suppress bad textures
+				} CATCH_END
+
+				if (!specularIBL || !diffuseIBL) {
 					if (l->_ssrOperator)
 						l->_ssrOperator->SetSpecularIBL(nullptr);
 					l->_onChangeSkyTexture(nullptr);
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
 				} else {
-					auto ambientRawCubemap = ambientRawCubemapFuture->Actualize();
+					auto ambientRawCubemap = ambientRawCubemapFuture.get();
 					{
 						TextureViewDesc adjustedViewDesc;
 						adjustedViewDesc._mipRange._min = 2;
@@ -278,9 +287,8 @@ namespace RenderCore { namespace LightingEngine
 						if (l->_ssrOperator)
 							l->_ssrOperator->SetSpecularIBL(adjustedView);
 					}
-					auto actualDiffuse = diffuseIBLFuture->Actualize();
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-					std::memcpy(l->_diffuseSHCoefficients, actualDiffuse->GetCoefficients().begin(), sizeof(Float4*)*std::min(actualDiffuse->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
+					std::memcpy(l->_diffuseSHCoefficients, diffuseIBL->GetCoefficients().begin(), sizeof(Float4*)*std::min(diffuseIBL->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
 					l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
 					l->_onChangeSkyTexture(ambientRawCubemap);
 				}

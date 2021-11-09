@@ -318,7 +318,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
 				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			}
 
@@ -425,7 +425,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/amplifying_geo_shader.hlsl:ps_main";
 				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
 				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			}
 
@@ -539,7 +539,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/instancing_multiprobe_shader.hlsl:ps_main";
 				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
 				nascentDesc->_manualSelectorFiltering._setValues.SetParameter("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			}
 
@@ -738,7 +738,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
 				nascentDesc->_selectorPreconfigurationFile = "xleres/TechniqueLibrary/Framework/SelectorPreconfiguration.hlsl";
-				result->SetAsset(std::move(nascentDesc), {});
+				result->SetAsset(std::move(nascentDesc));
 				return result;
 			}
 

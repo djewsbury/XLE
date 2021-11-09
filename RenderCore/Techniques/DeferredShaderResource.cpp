@@ -154,62 +154,70 @@ namespace RenderCore { namespace Techniques
 			return;
 		}
 
-		struct Captures
-        {
-            std::future<BufferUploads::ResourceLocator> _futureResource;
-        };
-        auto captures = std::make_shared<Captures>();
-        captures->_futureResource = std::move(transactionMarker._future);
+        if (metaDataFuture) {
+            WhenAll(std::move(transactionMarker._future), metaDataFuture).ThenConstructToPromiseWithFutures(
+                std::move(promise),
+                [   init, initializerStr = splitter.FullFilename().AsString(), 
+                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator, std::shared_future<std::shared_ptr<TextureMetaData>> metaDataFuture) {
 
-        future.SetPollingFunction(
-			[   metaDataFuture, init, 
-                initializerStr = splitter.FullFilename().AsString(), 
-                pkt,
-                captures](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
+                    BufferUploads::ResourceLocator locator;
+                    TRY {
+                        locator = futureLocator.get();
+                    } CATCH(const std::exception& e) {
+                        Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+                    } CATCH_END
                     
-                using namespace std::chrono_literals;
-                auto resStatus = captures->_futureResource.wait_for(0s);
-                if (resStatus == std::future_status::timeout)
-                    return true;
+                    auto desc = locator.GetContainingResource()->GetDesc();
+                    auto metaData = metaDataFuture.get();
 
-                ::Assets::Blob metaDataLog;
-			    ::Assets::DependencyValidation metaDataDepVal;
-                std::shared_ptr<TextureMetaData> actualizedMetaData;
-                if (metaDataFuture) {
-                    auto metaDataState = metaDataFuture->CheckStatusBkgrnd(actualizedMetaData, metaDataDepVal, metaDataLog);
-                    if (metaDataState == ::Assets::AssetState::Pending)
-                        return true;        // still waiting to see if there's attached metadata
-                }
+                    auto finalDepVal = depVal;
+                    if (metaData->GetDependencyValidation()) {
+                        auto parentDepVal = ::Assets::GetDepValSys().Make();
+                        parentDepVal.RegisterDependency(finalDepVal);
+                        parentDepVal.RegisterDependency(metaData->GetDependencyValidation());
+                        finalDepVal = parentDepVal;
+                    }
 
-                BufferUploads::ResourceLocator locator;
-                TRY {
-                    locator = captures->_futureResource.get();
-                } CATCH(const std::exception& e) {
-                    Throw(::Assets::Exceptions::ConstructionError(e, pkt->GetDependencyValidation()));
-                } CATCH_END
-                auto desc = locator.GetContainingResource()->GetDesc();
-                auto depVal = pkt->GetDependencyValidation();
+                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, metaData.get());
+                    auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
+                    if (!view) {
+                        Throw(::Assets::Exceptions::ConstructionError(
+                            ::Assets::Exceptions::ConstructionError::Reason::Unknown, 
+                            finalDepVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource")));
+                    }
 
-                if (actualizedMetaData) {
-                    auto parentDepVal = ::Assets::GetDepValSys().Make();
-                    parentDepVal.RegisterDependency(depVal);
-                    parentDepVal.RegisterDependency(metaDataDepVal);
-                    depVal = parentDepVal;
-                }
+                    return std::make_shared<DeferredShaderResource>(
+                        std::move(view), initializerStr,
+                        locator.GetCompletionCommandList(), finalDepVal);
+                });
+        } else {
+            ::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromiseWithFutures(
+                std::move(promise),
+                [   init, initializerStr = splitter.FullFilename().AsString(), 
+                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator) {
+                        
+                    BufferUploads::ResourceLocator locator;
+                    TRY {
+                        locator = futureLocator.get();
+                    } CATCH(const std::exception& e) {
+                        Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+                    } CATCH_END
+                    
+                    auto desc = locator.GetContainingResource()->GetDesc();
 
-                auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, actualizedMetaData.get());
-                auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
-				if (!view) {
-					thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource"));
-					return false;
-				}
+                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init);
+                    auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
+                    if (!view) {
+                        Throw(::Assets::Exceptions::ConstructionError(
+                            ::Assets::Exceptions::ConstructionError::Reason::Unknown, 
+                            depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource")));
+                    }
 
-				auto finalAsset = std::make_shared<DeferredShaderResource>(
-                    std::move(view), initializerStr,
-                    locator.GetCompletionCommandList(), depVal);
-				thatFuture.SetAsset(std::move(finalAsset), nullptr);
-				return false;
-			});
+                    return std::make_shared<DeferredShaderResource>(
+                        std::move(view), initializerStr,
+                        locator.GetCompletionCommandList(), depVal);
+                });
+        }
     }
 
     static void ConstructToPromiseArtifact(
@@ -230,23 +238,13 @@ namespace RenderCore { namespace Techniques
 			return;
 		}
 
-		struct Captures
-        {
-            std::future<BufferUploads::ResourceLocator> _futureResource;
-        };
-        auto captures = std::make_shared<Captures>();
-        captures->_futureResource = std::move(transactionMarker._future);
-
-        future.SetPollingFunction(
-			[originalRequest, captures, depVal=artifact.GetDependencyValidation()](::Assets::FuturePtr<DeferredShaderResource>& thatFuture) -> bool {
-                using namespace std::chrono_literals;
-                auto resStatus = captures->_futureResource.wait_for(0s);
-                if (resStatus == std::future_status::timeout)
-                    return true;
+        ::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromiseWithFutures(
+            std::move(promise),
+			[originalRequest, depVal=artifact.GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator) {
 
                 BufferUploads::ResourceLocator locator;
                 TRY {
-                    locator = captures->_futureResource.get();
+                    locator = futureLocator.get();
                 } CATCH(const std::exception& e) {
                     Throw(::Assets::Exceptions::ConstructionError(e, depVal));
                 } CATCH_END
@@ -255,15 +253,14 @@ namespace RenderCore { namespace Techniques
 				auto viewDesc = MakeTextureViewDesc(desc._textureDesc, DecodedInitializer{originalRequest});
                 auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
 				if (!view) {
-					thatFuture.SetInvalidAsset(depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource"));
-					return false;
+					Throw(::Assets::Exceptions::ConstructionError(
+                        ::Assets::Exceptions::ConstructionError::Reason::Unknown, 
+                        depVal, ::Assets::AsBlob("Buffer upload transaction completed, but with invalid resource")));
 				}
 
-				auto finalAsset = std::make_shared<DeferredShaderResource>(
+				return std::make_shared<DeferredShaderResource>(
                     std::move(view), originalRequest,
                     locator.GetCompletionCommandList(), depVal);
-				thatFuture.SetAsset(std::move(finalAsset), nullptr);
-				return false;
 			});
     }
 

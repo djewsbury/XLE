@@ -176,7 +176,7 @@ namespace EntityInterface
 			}
 
 			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
-			result->SetAsset(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}), {});
+			result->SetAsset(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}));
 			return result;
 		}
 

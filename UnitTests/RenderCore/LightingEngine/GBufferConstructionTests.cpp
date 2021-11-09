@@ -94,7 +94,7 @@ namespace UnitTests
 			pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
 
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>();
-			result->SetAsset(std::move(pipelineDesc), nullptr);
+			result->SetAsset(std::move(pipelineDesc));
 			return result;
 		}
 

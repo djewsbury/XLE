@@ -162,7 +162,7 @@ namespace Assets
 					}
 				
 					auto pendingCompile = marker->InvokeCompile();
-					AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);			
+					AutoConstructToPromiseFromPendingCompile(std::move(promise), *pendingCompile, targetCode);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END

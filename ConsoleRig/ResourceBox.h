@@ -29,7 +29,7 @@ namespace ConsoleRig
 	// invalidated objects TryActualizeCachedBox() can only be used with classes that have
 	// a method like:
 	//
-	//		static void ConstructToPromise(std::promise<Type>&& promise);
+	//		static void ConstructToPromise(std::promise<std::shared_ptr<Type>>&& promise);
 	//
 	// implemented. This will invoke a background compile on first access and return nullptr
 	// until the object is aready to go.

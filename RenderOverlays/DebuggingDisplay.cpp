@@ -190,7 +190,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         : _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont))
         {}
 
-        static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>& promise)
+        static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
         {
             ::Assets::WhenAll(
                 RenderOverlays::MakeFont("Petra", 16),
@@ -278,7 +278,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToPromise(std::move(future));
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToPromise(std::move(promise));
         }
     };
 

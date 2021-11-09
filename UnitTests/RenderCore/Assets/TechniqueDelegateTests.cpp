@@ -330,7 +330,7 @@ namespace UnitTests
 				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
 			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
-			result->SetAsset(std::move(desc), {});
+			result->SetAsset(std::move(desc));
 			return result;
 		}
 

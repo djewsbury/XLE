@@ -415,7 +415,7 @@ namespace SceneEngine
     }
 
 	void BasicLightingStateDelegate::ConstructToPromise(
-		std::promise<std::shared_ptr<BasicLightingStateDelegate>>& promise,
+		std::promise<std::shared_ptr<BasicLightingStateDelegate>>&& promise,
 		StringSection<> envSettingFileName)
 	{
         auto fmttrFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter(envSettingFileName);

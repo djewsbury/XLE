@@ -53,7 +53,7 @@ namespace ToolsRig
 			[function=std::move(function), promise=std::move(promise)](Args&&... args) mutable -> void {
 				TRY {
 					auto object = function(std::forward<Args>(args)...);
-					future->set_value(std::move(object));
+					promise.set_value(std::move(object));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
