@@ -380,6 +380,21 @@ namespace Assets
 			} CATCH_END
 		}
 
+		template<typename Promise, typename Fn, typename... Futures>
+			static void FulfillContinuationFunctionPassPromisePassFutures(
+				Promise&& promise,
+				Fn&& continuationFunction,
+				std::future<std::tuple<Futures...>>& completedFutures)
+		{
+			// In this variation, we pass both the promise and the (un-queried) futures
+			TRY {
+				auto completed = completedFutures.get();
+				std::apply(std::move(continuationFunction), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(completed)));
+			} CATCH(...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
+
 		template<typename... Futures>
 			static void FulfillOpaquePromise(
 				std::promise<void>& promise, 
@@ -451,6 +466,32 @@ namespace Assets
 				std::move(*this),
 				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
 					Internal::FulfillContinuationFunctionPassPromise(std::move(promise), std::move(func), completedFutures);
+				});
+		}
+
+		template<typename PromisedType, typename Fn, typename std::enable_if<!std::is_void_v<std::invoke_result_t<Fn, FutureTypes...>>>::type* =nullptr>
+			void ThenConstructToPromiseWithFutures(
+				std::promise<PromisedType>&& promise,
+				Fn&& fn)
+		{
+			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
+			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
+			thousandeyes::futures::then(
+				std::move(*this),
+				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), completedFutures);
+				});
+		}
+
+		template<typename PromisedType, typename Fn, typename std::enable_if<std::is_void_v<std::invoke_result_t<Fn, std::promise<PromisedType>&&, FutureTypes...>>>::type* =nullptr>
+			void ThenConstructToPromiseWithFutures(
+				std::promise<PromisedType>&& promise,
+				Fn&& fn)
+		{
+			thousandeyes::futures::then(
+				std::move(*this),
+				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+					Internal::FulfillContinuationFunctionPassPromisePassFutures(std::move(promise), std::move(func), completedFutures);
 				});
 		}
 
