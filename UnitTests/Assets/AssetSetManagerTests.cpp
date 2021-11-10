@@ -46,8 +46,6 @@ namespace UnitTests
 	TEST_CASE( "AssetSetManager-ThrashFutures", "[assets]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		const int targetAssetsInFlight = 32;
 		int assetsCompleted = 0;
@@ -182,8 +180,6 @@ namespace UnitTests
 	TEST_CASE( "AssetFuture-Continuation", "[assets]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto futureZero = std::make_shared<::Assets::Future<unsigned>>();
 		auto futureOne = std::make_shared<::Assets::Future<unsigned>>();
@@ -272,8 +268,6 @@ namespace UnitTests
 	TEST_CASE( "AssetFuture-ContinuationException", "[assets]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		struct AssetTypeOne
 		{
@@ -400,8 +394,6 @@ namespace UnitTests
 	TEST_CASE( "Assets-ConstructToPromise", "[assets]" )
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		std::string fileContents = "This is the contents of the file";
 		static std::unordered_map<std::string, ::Assets::Blob> s_utData {

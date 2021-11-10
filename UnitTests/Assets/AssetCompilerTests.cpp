@@ -497,8 +497,6 @@ namespace UnitTests
 	{
 		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };

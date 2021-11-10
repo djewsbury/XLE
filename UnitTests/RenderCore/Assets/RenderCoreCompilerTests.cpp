@@ -63,8 +63,6 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
@@ -119,8 +117,6 @@ namespace UnitTests
 		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
@@ -173,8 +169,6 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		{
 			auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");

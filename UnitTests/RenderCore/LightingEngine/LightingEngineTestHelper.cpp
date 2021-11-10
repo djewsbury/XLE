@@ -51,9 +51,6 @@ namespace UnitTests
 		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
-		_futureExecutor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		_futureExecSetter = std::make_unique<thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter>(_futureExecutor);
-
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_compilerRegistrations.push_back(ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers));
 		_compilerRegistrations.push_back(RenderCore::RegisterShaderCompiler(_metalTestHelper->_shaderSource, compilers));

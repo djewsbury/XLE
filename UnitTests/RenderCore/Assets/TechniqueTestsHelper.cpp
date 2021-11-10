@@ -11,7 +11,6 @@
 namespace UnitTests
 {
 	TechniqueTestApparatus::TechniqueTestApparatus(MetalTestHelper& testHelper)
-	: _futureSetter(std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2)))
 	{
 		using namespace RenderCore;
 

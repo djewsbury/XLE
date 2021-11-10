@@ -122,8 +122,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _materialCompilerRegistration;
 		::Assets::CompilerRegistration _textureCompilerRegistration;
 
-		class ContinuationExecutor;
-		std::unique_ptr<ContinuationExecutor> _continuationExecutor;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 
 		SignalDelegateId _prePresentBinding;

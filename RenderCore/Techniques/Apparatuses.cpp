@@ -35,8 +35,6 @@
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
-#include "thousandeyes/futures/DefaultExecutor.h"
-#include "thousandeyes/futures/Default.h"
 #include <regex>
 
 namespace RenderCore { namespace Techniques
@@ -168,25 +166,11 @@ namespace RenderCore { namespace Techniques
 		//   P R I M A R Y   R E S O U R C E S   //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class PrimaryResourcesApparatus::ContinuationExecutor
-	{
-	public:
-		std::shared_ptr<thousandeyes::futures::DefaultExecutor> _continuationExecutor;
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter _continuationExecutorSetter;
-
-		ContinuationExecutor()
-		: _continuationExecutor(std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2)))
-		, _continuationExecutorSetter(_continuationExecutor)
-		{
-		}
-	};
-
 	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device)
 	{
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(device);
 
-		_continuationExecutor = std::make_unique<ContinuationExecutor>();
 		_bufferUploads = BufferUploads::CreateManager(*device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 

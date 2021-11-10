@@ -12,8 +12,6 @@
 #include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
-#include "thousandeyes/futures/then.h"
-#include "thousandeyes/futures/DefaultExecutor.h"
 #include <regex>
 
 namespace RenderCore { namespace Techniques { class TechniqueContext; }}
@@ -23,8 +21,6 @@ namespace UnitTests
 	class TechniqueTestApparatus
 	{
 	public:
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter _futureSetter;
-
 		ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<RenderCore::Techniques::CommonResourceBox> _commonResources;

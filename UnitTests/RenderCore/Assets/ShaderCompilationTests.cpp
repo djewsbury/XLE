@@ -68,8 +68,6 @@ namespace UnitTests
 		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
 		auto testHelper = MakeTestHelper();
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		SECTION("UnitTestHelper shaders") {
 			// Ensure that we can compile a shader from string input, via the MakeShaderProgram
@@ -224,8 +222,6 @@ namespace UnitTests
 		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto testHelper = MakeTestHelper();
-		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		auto countingShaderSource = std::make_shared<CountingShaderSource>(testHelper->_shaderSource);

@@ -40,9 +40,6 @@ namespace UnitTests
 		ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 
-		std::shared_ptr<thousandeyes::futures::DefaultExecutor> _futureExecutor;
-		std::unique_ptr<thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter> _futureExecSetter;
-
 		std::vector<::Assets::CompilerRegistration> _compilerRegistrations;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
