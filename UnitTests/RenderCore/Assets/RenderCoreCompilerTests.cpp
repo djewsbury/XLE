@@ -23,6 +23,8 @@
 #include "../../../Math/MathSerialization.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../ConsoleRig/GlobalServices.h"
+#include "thousandeyes/futures/DefaultExecutor.h"
+#include "thousandeyes/futures/Executor.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <filesystem>
@@ -61,6 +63,8 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
@@ -115,6 +119,8 @@ namespace UnitTests
 		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
@@ -166,6 +172,9 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
+		auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
+		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
 		{
 			auto discoveredCompilations = ::Assets::DiscoverCompileOperations(compilers, "ColladaConversion.dll");
@@ -180,6 +189,11 @@ namespace UnitTests
 			auto scaffold = scaffoldFuture->Actualize();
 			auto& cmdStream = scaffold->CommandStream();
 			REQUIRE(cmdStream.GetGeoCallCount() != 0);
+
+			auto matScaffoldFuture = ::Assets::MakeAsset<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
+			matScaffoldFuture->StallWhilePending();
+			INFO(::Assets::AsString(matScaffoldFuture->GetActualizationLog()));
+			REQUIRE(matScaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);

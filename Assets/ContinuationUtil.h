@@ -80,9 +80,14 @@ namespace Assets
 			class PollingFunctionBridge : public thousandeyes::futures::TimedWaitable
 		{
 		public:
-			bool timedWait(const std::chrono::microseconds&) override
+			bool timedWait(const std::chrono::microseconds& timeout) override
 			{
 				_pollingCompleted |= !_fn(std::move(_promise));
+				if (!_pollingCompleted) {
+					// thousandeyes::futures will busy-loop if we don't actually yield the thread at all
+					// So let's make sure we sleep at least for a bit here
+					std::this_thread::sleep_for(timeout);
+				}
 				return _pollingCompleted;
 			}
 

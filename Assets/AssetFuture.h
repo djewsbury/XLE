@@ -331,6 +331,11 @@ namespace Assets
 	template<typename Type>
 		std::promise<Type> Future<Type>::AdoptPromise()
 	{
+		// We won't be able to track when the promise is fulfilled, so we'll need to start polling
+		// immediately. The polling function will move the state into the foreground after the promise
+		// is fulfilled
+		ScopedLock(_lock);
+		RegisterFrameBarrierCallbackAlreadyLocked();
 		return std::move(_pendingPromise);
 	}
 
