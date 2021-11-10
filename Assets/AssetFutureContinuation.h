@@ -15,6 +15,8 @@
 #include <tuple>
 #include <utility>
 
+#define CONTINUATION_DETAILED_LOGGING 1
+
 namespace Assets
 {
 	namespace Internal
@@ -96,53 +98,35 @@ namespace Assets
 			return future.wait_for(timeout) == std::future_status::ready;
 		}
 
-		// based on thousandeyes::futures::detail::FutureWithTuple, this generates fullfills a promise
-		// with our tuple of futures
-		template<typename... FutureTypes>
-			struct FlexTimedWaitable : public thousandeyes::futures::TimedWaitable
-		{
-		public:
-			using TupleOfFutures = std::tuple<FutureTypes...>;
-			FlexTimedWaitable(
-				std::chrono::microseconds waitLimit,
-				TupleOfFutures subFutures,
-				std::promise<TupleOfFutures> p)
-			: TimedWaitable(std::move(waitLimit)), _subFutures(std::move(subFutures)), _promise(std::move(p))
-			{}
-
-			template<std::size_t I>
-				bool timedWait_(const std::chrono::microseconds& timeout)
+		#if CONTINUATION_DETAILED_LOGGING 
+			template<int I, typename... Types>
+				void SerializeNames(std::ostream& str)
 			{
-				if (!TimedWait(std::get<I>(_subFutures), timeout))
-					return false;
-				if constexpr(I+1 != sizeof...(FutureTypes))
-					if (!timedWait_<I+1>(timeout))
-						return false;
-				return true;
+				if (I!=0) str << ", ";
+				str << typeid(std::tuple_element_t<I, std::tuple<Types...>>).name();
+				if constexpr ((I+1) != sizeof...(Types))
+					SerializeNames<I+1, Types...>(str);
 			}
 
-			bool timedWait(const std::chrono::microseconds& timeout) override
+			template<typename PromisedType, typename... Types>
+				void LogBeginWatch()
 			{
-				return timedWait_<0>(timeout);
+				Log(Debug) << "BeginWatch {";
+				SerializeNames<0, Types...>(Log(Debug));
+				Log(Debug) << "} -> " << typeid(PromisedType).name() << std::endl;
 			}
 
-			void dispatch(std::exception_ptr err) override
+			template<typename PromisedType, typename... Types>
+				void LogBeginFulfillPromise()
 			{
-				if (err) {
-					_promise.set_exception(err);
-					return;
-				}
-
-				TRY {
-					_promise.set_value(std::move(_subFutures));
-				} CATCH (...) {
-					_promise.set_exception(std::current_exception());
-				} CATCH_END
+				Log(Debug) << "BeginFulfillPromise {";
+				SerializeNames<0, Types...>(Log(Debug));
+				Log(Debug) << "} -> " << typeid(PromisedType).name() << std::endl;
 			}
-
-			TupleOfFutures _subFutures;
-			std::promise<TupleOfFutures> _promise;
-		};
+		#else
+			template<typename PromisedType, typename... Types> inline void LogBeginWatch() {}
+			template<typename PromisedType, typename... Types> inline void LogBeginFulfillPromise() {}
+		#endif
 
 		template<typename T> static auto FutureResult_(int) -> decltype(std::declval<RemoveSmartPtrType<T>>().get());
 		template<typename T> static auto FutureResult_(int) -> typename std::enable_if<std::is_copy_constructible_v<typename RemoveSmartPtrType<T>::PromisedType>, decltype(std::declval<RemoveSmartPtrType<T>>().ActualizeBkgrnd())>::type;
@@ -271,26 +255,10 @@ namespace Assets
 		template<typename PromisedAssetType, typename... Futures>
 			static void FulfillPromise(
 				std::promise<PromisedAssetType>& promise, 
-				std::tuple<Futures...>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
-				auto finalConstruction = ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
-				promise.set_value(std::move(finalConstruction));	
-			} CATCH(...) {
-				promise.set_exception(std::current_exception());
-			} CATCH_END
-		}
-
-		template<typename PromisedAssetType, typename... Futures>
-			static void FulfillPromise(
-				std::promise<PromisedAssetType>& promise, 
-				std::future<std::tuple<Futures...>>& completedFutures)
-		{
-			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto actualized = QueryToTuple(completedFutures, std::make_index_sequence<sizeof...(Futures)>());
 				auto finalConstruction = ApplyConstructFinalAssetObject<PromisedAssetType>(std::move(actualized));
 				promise.set_value(std::move(finalConstruction));	
 			} CATCH(...) {
@@ -302,27 +270,10 @@ namespace Assets
 			static void FulfillContinuationFunction(
 				Promise& promise, 
 				Fn&& continuationFunction,
-				std::tuple<Futures...>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
-				auto finalResult = std::apply(std::move(continuationFunction), std::move(actualized));
-				promise.set_value(std::move(finalResult));
-			} CATCH(...) {
-				promise.set_exception(std::current_exception());
-			} CATCH_END
-		}
-
-		template<typename Promise, typename Fn, typename... Futures>
-			static void FulfillContinuationFunction(
-				Promise& promise, 
-				Fn&& continuationFunction,
-				std::future<std::tuple<Futures...>>& completedFutures)
-		{
-			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto actualized = QueryToTuple(completedFutures, std::make_index_sequence<sizeof...(Futures)>());
 				auto finalResult = std::apply(std::move(continuationFunction), std::move(actualized));
 				promise.set_value(std::move(finalResult));
 			} CATCH(...) {
@@ -334,13 +285,12 @@ namespace Assets
 			static void FulfillContinuationFunctionPassPromise(
 				Promise&& promise,
 				Fn&& continuationFunction,
-				std::future<std::tuple<Futures...>>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			// In this variation, the continuation function takes a reference to the promise, and the promise must be fulfilled within that continuation function
 			// If the continuation function throws, we still pass that exception to the promise
 			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto actualized = QueryToTuple(completedFutures, std::make_index_sequence<sizeof...(Futures)>());
 				std::apply(std::move(continuationFunction), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(actualized)));
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
@@ -353,11 +303,10 @@ namespace Assets
 			static void FulfillContinuationFunctionPassFutures(
 				Promise& promise, 
 				Fn&& continuationFunction,
-				std::future<std::tuple<Futures...>>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			TRY {
-				auto completed = completedFutures.get();
-				auto finalResult = std::apply(std::move(continuationFunction), std::move(completed));
+				auto finalResult = std::apply(std::move(continuationFunction), std::move(completedFutures));
 				promise.set_value(std::move(finalResult));
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
@@ -370,12 +319,11 @@ namespace Assets
 			static void FulfillContinuationFunctionPassFutures(
 				std::promise<void>& promise, 
 				Fn&& continuationFunction,
-				std::future<std::tuple<Futures...>>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			// this variation is for continuation functions that return void
 			TRY {
-				auto completed = completedFutures.get();
-				std::apply(std::move(continuationFunction), std::move(completed));
+				std::apply(std::move(continuationFunction), std::move(completedFutures));
 				promise.set_value();
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
@@ -386,12 +334,11 @@ namespace Assets
 			static void FulfillContinuationFunctionPassPromisePassFutures(
 				Promise&& promise,
 				Fn&& continuationFunction,
-				std::future<std::tuple<Futures...>>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			// In this variation, we pass both the promise and the (un-queried) futures
 			TRY {
-				auto completed = completedFutures.get();
-				std::apply(std::move(continuationFunction), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(completed)));
+				std::apply(std::move(continuationFunction), std::tuple_cat(std::make_tuple(std::move(promise)), std::move(completedFutures)));
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
 			} CATCH_END
@@ -400,12 +347,11 @@ namespace Assets
 		template<typename... Futures>
 			static void FulfillOpaquePromise(
 				std::promise<void>& promise, 
-				std::future<std::tuple<Futures...>>& completedFutures)
+				std::tuple<Futures...>&& completedFutures)
 		{
 			// We must query the futures just to see if there's an exception within them
 			TRY {
-				auto completed = completedFutures.get();
-				auto actualized = QueryToTuple(completed, std::make_index_sequence<sizeof...(Futures)>());
+				auto actualized = QueryToTuple(completedFutures, std::make_index_sequence<sizeof...(Futures)>());
 				(void)actualized;
 				promise.set_value();
 			} CATCH(...) {
@@ -430,45 +376,111 @@ namespace Assets
 		template<typename Type> static const Type& GetContinuableFuture(const Type& input) { return input; }
 		template<typename Type> static Type&& GetContinuableFuture(Type&& input) { return std::move(input); }
 
-		template<int I, typename... Types>
-			void SerializeNames(std::ostream& str)
+		// based on thousandeyes::futures::detail::FutureWithTuple, this generates fullfills a promise
+		// with our tuple of futures
+		template<typename... FutureTypes>
+			struct FlexTimedWaitable : public thousandeyes::futures::TimedWaitable
 		{
-			if (I!=0) str << ", ";
-			str << typeid(std::tuple_element_t<I, std::tuple<Types...>>).name();
-			if constexpr ((I+1) != sizeof...(Types))
-				SerializeNames<I+1, Types...>(str);
-		}
+		public:
+			using TupleOfFutures = std::tuple<FutureTypes...>;
+			FlexTimedWaitable(
+				std::chrono::microseconds waitLimit,
+				TupleOfFutures subFutures)
+			: TimedWaitable(waitLimit), _subFutures(std::move(subFutures))
+			{}
 
-		template<typename PromisedType, typename... Types>
-			void LogBeginWatch()
-		{
-			Log(Debug) << "BeginWatch {";
-			SerializeNames<0, Types...>(Log(Debug));
-			Log(Debug) << "} -> " << typeid(PromisedType).name() << std::endl;
-		}
+			template<std::size_t I>
+				bool timedWait_(const std::chrono::microseconds& timeout)
+			{
+				if (!TimedWait(std::get<I>(_subFutures), timeout))
+					return false;
+				if constexpr(I+1 != sizeof...(FutureTypes))
+					if (!timedWait_<I+1>(timeout))
+						return false;
+				return true;
+			}
 
-		template<typename PromisedType, typename... Types>
-			void LogBeginFulfillPromise()
+			bool timedWait(const std::chrono::microseconds& timeout) override
+			{
+				return timedWait_<0>(timeout);
+			}
+
+			TupleOfFutures _subFutures;
+		};
+
+		template<typename... FutureTypes>
+			struct FlexTimedWaitableSimple : public FlexTimedWaitable<FutureTypes...>
 		{
-			Log(Debug) << "BeginFulfillPromise {";
-			SerializeNames<0, Types...>(Log(Debug));
-			Log(Debug) << "} -> " << typeid(PromisedType).name() << std::endl;
-		}
+			using TupleOfFutures = std::tuple<FutureTypes...>;
+			FlexTimedWaitableSimple(
+				std::chrono::microseconds waitLimit,
+				TupleOfFutures&& subFutures,
+				std::promise<TupleOfFutures>&& p)
+			: FlexTimedWaitable<FutureTypes...>(waitLimit, std::move(subFutures)), _promise(std::move(p))
+			{}
+
+			void dispatch(std::exception_ptr err) override
+			{
+				if (err) {
+					_promise.set_exception(err);
+					return;
+				}
+
+				TRY {
+					_promise.set_value(std::move(FlexTimedWaitable<FutureTypes...>::_subFutures));
+				} CATCH (...) {
+					_promise.set_exception(std::current_exception());
+				} CATCH_END
+			}
+
+			std::promise<TupleOfFutures> _promise;
+		};
+
+		template<typename ContinuationFn, typename PromisedType, typename... FutureTypes>
+			struct FlexTimedWaitableWithContinuation : public FlexTimedWaitable<FutureTypes...>
+		{
+		public:
+			using TupleOfFutures = std::tuple<FutureTypes...>;
+			FlexTimedWaitableWithContinuation(
+				std::chrono::microseconds waitLimit,
+				TupleOfFutures&& subFutures,
+				ContinuationFn&& continuation,
+				std::promise<PromisedType>&& p)
+			: FlexTimedWaitable<FutureTypes...>(waitLimit, std::move(subFutures)), _continuation(std::move(continuation)), _promise(std::move(p))
+			{}
+
+			void dispatch(std::exception_ptr err) override
+			{
+				if (err) {
+					_promise.set_exception(err);
+					return;
+				}
+
+				TRY {
+					_continuation(std::move(_promise), std::move(FlexTimedWaitable<FutureTypes...>::_subFutures));
+				} CATCH (...) {
+					_promise.set_exception(std::current_exception());
+				} CATCH_END
+			}
+
+			std::promise<PromisedType> _promise;
+			ContinuationFn _continuation;
+		};
 	}
 
 	template<typename... FutureTypes>
-		class MultiAssetFuture : public std::future<std::tuple<FutureTypes...>>
+		class MultiAssetFuture
 	{
 	public:
 		template<typename PromisedType>
 			void ThenConstructToPromise(std::promise<PromisedType>&& promise)
 		{
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[](std::promise<PromisedType>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<PromisedType, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillPromise(promise, completedFutures);
+					Internal::FulfillPromise(promise, std::move(completedFutures));
 				});
 		}
 
@@ -480,11 +492,11 @@ namespace Assets
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			using FunctionResult = std::invoke_result_t<Fn, Internal::FutureResult<FutureTypes>...>;
 			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[func=std::move(fn)](std::promise<PromisedType>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<PromisedType, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillContinuationFunction(promise, std::move(func), completedFutures);
+					Internal::FulfillContinuationFunction(promise, std::move(func), std::move(completedFutures));
 				});
 		}
 
@@ -494,11 +506,11 @@ namespace Assets
 				Fn&& fn)
 		{
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[func=std::move(fn)](std::promise<PromisedType>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<PromisedType, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillContinuationFunctionPassPromise(std::move(promise), std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassPromise(std::move(promise), std::move(func), std::move(completedFutures));
 				});
 		}
 
@@ -510,11 +522,11 @@ namespace Assets
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
 			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
 			static_assert(std::is_constructible_v<std::decay_t<PromisedType>, std::decay_t<FunctionResult>>, "Mismatch between function result and promise type");
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[func=std::move(fn)](std::promise<PromisedType>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<PromisedType, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), std::move(completedFutures));
 				});
 		}
 
@@ -524,26 +536,26 @@ namespace Assets
 				Fn&& fn)
 		{
 			Internal::LogBeginWatch<PromisedType, Internal::FutureResult<FutureTypes>...>();
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise), func=std::move(fn)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[func=std::move(fn)](std::promise<PromisedType>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<PromisedType, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillContinuationFunctionPassPromisePassFutures(std::move(promise), std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassPromisePassFutures(std::move(promise), std::move(func), std::move(completedFutures));
 				});
 		}
 
 		template<typename Fn>
-			std::future<std::invoke_result_t<Fn, FutureTypes...>> Then(Fn&& continuationFunction)
+			std::future<std::invoke_result_t<Fn, FutureTypes...>> Then(Fn&& fn)
 		{
 			using FunctionResult = std::invoke_result_t<Fn, FutureTypes...>;
 			Internal::LogBeginWatch<FunctionResult, Internal::FutureResult<FutureTypes>...>();
 			std::promise<FunctionResult> promise;
 			auto result = promise.get_future();
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise), func=std::move(continuationFunction)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[func=std::move(fn)](std::promise<FunctionResult>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<FunctionResult, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), completedFutures);
+					Internal::FulfillContinuationFunctionPassFutures(promise, std::move(func), std::move(completedFutures));
 				});
 			return result;
 		}
@@ -553,21 +565,29 @@ namespace Assets
 			Internal::LogBeginWatch<void, Internal::FutureResult<FutureTypes>...>();
 			std::promise<void> promise;
 			auto result = promise.get_future();
-			thousandeyes::futures::then(
-				std::move(*this),
-				[promise=std::move(promise)](std::future<std::tuple<FutureTypes...>>&& completedFutures) mutable {
+			MakeContinuation(
+				std::move(promise),
+				[](std::promise<void>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<void, Internal::FutureResult<FutureTypes>...>();
-					Internal::FulfillOpaquePromise(promise, completedFutures);
+					Internal::FulfillOpaquePromise(promise, std::move(completedFutures));
 				});
 			return result;
 		}
 
+		std::future<std::tuple<FutureTypes...>> AsCombinedFuture()
+		{
+			return MakeFuture();
+		}
+
 		MultiAssetFuture(FutureTypes... subFutures) 
-		: std::future<std::tuple<FutureTypes...>>{MakeFuture(std::forward<FutureTypes>(subFutures)...)}
+		: _futures{std::forward<FutureTypes>(subFutures)...}
 		{
 		}
 
-		static std::future<std::tuple<FutureTypes...>> MakeFuture(FutureTypes... subFutures)
+	private:
+		std::tuple<FutureTypes...> _futures;
+
+		std::future<std::tuple<FutureTypes...>> MakeFuture()
 		{
 			std::promise<std::tuple<FutureTypes...>> mergedPromise;
 			auto mergedFuture = mergedPromise.get_future();
@@ -578,14 +598,32 @@ namespace Assets
 				mergedPromise.set_exception(std::make_exception_ptr("Continuation executor has expired"));
 				return mergedFuture;
 			}
-			executor->watch(std::make_unique<Internal::FlexTimedWaitable<FutureTypes...>>(
+			executor->watch(std::make_unique<Internal::FlexTimedWaitableSimple<FutureTypes...>>(
 				std::chrono::hours(1),		// timeout for FlexTimedWaitable from now, following the patterns present in thousandeyes::futures
-				std::make_tuple(std::forward<FutureTypes>(subFutures)...),
+				std::move(_futures),
 				std::move(mergedPromise)
 			));
 
 			return mergedFuture;
-		}		
+		}
+
+		template<typename PromisedType, typename ContinuationFn>
+			void MakeContinuation(std::promise<PromisedType>&& promise, ContinuationFn&& continuation)
+		{
+			std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
+			if (!executor) {
+				// might happen during shutdown
+				promise.set_exception(std::make_exception_ptr("Continuation executor has expired"));
+				return;
+			}
+
+			executor->watch(std::make_unique<Internal::FlexTimedWaitableWithContinuation<ContinuationFn, PromisedType, FutureTypes...>>(
+				std::chrono::hours(1),		// timeout for FlexTimedWaitable from now, following the patterns present in thousandeyes::futures
+				std::move(_futures),
+				std::move(continuation),
+				std::move(promise)
+			));
+		}
 	};
 
 	template<typename... FutureTypes>

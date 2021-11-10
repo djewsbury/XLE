@@ -195,7 +195,7 @@ namespace UnitTests
 
 		std::atomic<bool> test = false;
 		thousandeyes::futures::then(
-			::Assets::WhenAll(futureZero, futureOne, futureTwo),
+			::Assets::WhenAll(futureZero, futureOne, futureTwo).AsCombinedFuture(),
 			[&test](auto futureTuple) {
 
 				auto tuple = futureTuple.get();
