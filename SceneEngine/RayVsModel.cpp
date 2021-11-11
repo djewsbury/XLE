@@ -236,11 +236,13 @@ namespace SceneEngine
 		FrameBufferDesc _fbDesc;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _rayTestTechniqueDelegate;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _frustumTechniqueDelegate;
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _rayTestSequencerCfg;
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _frustumTestSequencerCfg;
 		::Assets::DependencyValidation _depVal;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		ModelIntersectionTechniqueBox()
+		ModelIntersectionTechniqueBox(Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
 			auto device = RenderCore::Techniques::Services::GetDevicePtr();
 			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
@@ -251,6 +253,16 @@ namespace SceneEngine
 			subpasses.emplace_back(SubpassDesc{});
 			_fbDesc = FrameBufferDesc { {}, std::move(subpasses) };
 			_depVal = techniqueSetFile->GetDependencyValidation();
+
+			_frustumTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig(
+				"frustum-test",
+				_frustumTechniqueDelegate,
+				{}, _fbDesc);
+
+			_rayTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig(
+				"ray-vs-model",
+				_rayTestTechniqueDelegate,
+				{}, _fbDesc);
 		}
 	};
 
@@ -278,7 +290,7 @@ namespace SceneEngine
         // Viewport newViewport(0.f, 0.f, float(255.f), float(255.f), 0.f, 1.f);
         // metalContext.Bind(MakeIteratorRange(&newViewport, &newViewport+1), {});
 
-		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>();
+		auto& box = ConsoleRig::FindCachedBox<ModelIntersectionTechniqueBox>(std::ref(pipelineAcceleratorPool));
 		_pimpl->_queryId = _pimpl->_res->_streamOutputQueryPool->Begin(metalContext);
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
@@ -287,17 +299,7 @@ namespace SceneEngine
 			{} };
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
-		if (testType == TestType::FrustumTest) {
-			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				"frustum-test",
-				box._frustumTechniqueDelegate,
-				{}, box._fbDesc);
-		} else {
-			_pimpl->_sequencerConfig = pipelineAcceleratorPool.CreateSequencerConfig(
-				"ray-vs-model",
-				box._rayTestTechniqueDelegate,
-				{}, box._fbDesc);
-		}
+		_pimpl->_sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
 
 		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayoutFuture(*_pimpl->_sequencerConfig);
 		pipelineLayout->StallWhilePending();
