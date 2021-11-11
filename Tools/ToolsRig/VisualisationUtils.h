@@ -158,16 +158,20 @@ namespace ToolsRig
 	class VisualisationOverlay : public PlatformRig::IOverlaySystem
     {
     public:
-        virtual void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
-		virtual OverlayState GetOverlayState() const override;
-
 		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);
 		void Set(const std::shared_ptr<VisCameraSettings>&);
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
 
 		const VisOverlaySettings& GetOverlaySettings() const;
+
+        virtual void Render(
+            RenderCore::Techniques::ParsingContext& parserContext) override;
+		virtual OverlayState GetOverlayState() const override;
+
+        virtual void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps) override;
 
         VisualisationOverlay(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,

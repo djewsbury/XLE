@@ -585,6 +585,13 @@ namespace ToolsRig
 		bool _pendingAnimStateBind = false;
 
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
+		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _visWireframeDelegate;
+		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _visNormalsDelegate;
+		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _primeStencilBufferDelegate;
+
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visWireframeCfg;
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _visNormalsCfg;
+		std::shared_ptr<RenderCore::Techniques::SequencerConfig> _primeStencilCfg;
 
 		Pimpl()
 		{
@@ -619,6 +626,18 @@ namespace ToolsRig
 					<< ")");
     }
 
+	static RenderCore::Techniques::FrameBufferDescFragment CreateVisFBFrag()
+	{
+		using namespace RenderCore;
+		Techniques::FrameBufferDescFragment fbDesc;
+		SubpassDesc mainPass;
+		mainPass.SetName("VisualisationOverlay");
+		mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
+		mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0));		// ensure stencil is cleared (but ok to keep depth)
+		fbDesc.AddSubpass(std::move(mainPass));
+		return fbDesc;
+	}
+
     void VisualisationOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
@@ -650,63 +669,43 @@ namespace ToolsRig
 			|| (_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver);
 
 		if (_pimpl->_settings._drawWireframe || _pimpl->_settings._drawNormals || _pimpl->_settings._skeletonMode || doColorByMaterial) {
+
+			bool drawImmediateDrawables = false;
+			if (_pimpl->_settings._skeletonMode) {
+				CATCH_ASSETS_BEGIN
+					auto* visContent = dynamic_cast<IVisContent*>(scene->get());
+					if (visContent) {
+						// awkwardly, we don't call RenderSkeleton during an rpi because it can render glyphs to a font texture
+						RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
+						visContent->RenderSkeleton(
+							overlays, parserContext,
+							_pimpl->_settings._skeletonMode == 2);
+						drawImmediateDrawables = true;
+					}
+				CATCH_ASSETS_END(parserContext)
+			}
 			
-			Techniques::FrameBufferDescFragment fbDesc;
-			SubpassDesc mainPass;
-			mainPass.SetName("VisualisationOverlay");
-			mainPass.AppendOutput(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR));
-			mainPass.SetDepthStencil(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear, 0));		// ensure stencil is cleared (but ok to keep depth)
-			fbDesc.AddSubpass(std::move(mainPass));
-			Techniques::RenderPassInstance rpi { parserContext, fbDesc };
-
-			static auto visWireframeDelegate =
-				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-					Techniques::TechniqueIndex::VisWireframe, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
-			static auto visNormals =
-				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-					Techniques::TechniqueIndex::VisNormals, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
-
-			DepthStencilDesc ds {
-				RenderCore::CompareOp::GreaterEqual, true, true,
-				0xff, 0xff,
-				RenderCore::StencilDesc::AlwaysWrite,
-				RenderCore::StencilDesc::NoEffect };
-			static auto primeStencilBuffer =
-				RenderCore::Techniques::CreateTechniqueDelegateLegacy(
-					Techniques::TechniqueIndex::DepthOnly, {}, {}, ds);
+			auto fbFrag = CreateVisFBFrag();
+			Techniques::RenderPassInstance rpi { parserContext, fbFrag };
 
 			if (_pimpl->_settings._drawWireframe) {
-				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-wireframe", visWireframeDelegate, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
-					*sequencerConfig,
+					*_pimpl->_visWireframeCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);
 			}
 
 			if (_pimpl->_settings._drawNormals) {
-				auto sequencerConfig = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-normals", visNormals, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
-					*sequencerConfig,
+					*_pimpl->_visNormalsCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);
 			}
 
-			if (_pimpl->_settings._skeletonMode) {
-				auto* visContent = dynamic_cast<IVisContent*>(scene->get());
-				if (visContent) {
-					CATCH_ASSETS_BEGIN
-						rpi = {};		// awkwardly, we don't call RenderSkeleton during an rpi because it can render glyphs to a font texture
-						RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
-						visContent->RenderSkeleton(
-							overlays, parserContext,
-							_pimpl->_settings._skeletonMode == 2);
-						rpi = Techniques::RenderPassInstance { parserContext, fbDesc };
-						_pimpl->_immediateDrawables->ExecuteDraws(parserContext, rpi);
-					CATCH_ASSETS_END(parserContext)
-				}
-			}
+			if (drawImmediateDrawables)
+				_pimpl->_immediateDrawables->ExecuteDraws(parserContext, rpi);
 
 			if (doColorByMaterial) {
 				auto *visContent = dynamic_cast<IVisContent*>(scene->get());
@@ -714,10 +713,9 @@ namespace ToolsRig
 				if (visContent)
 					oldDelegate = visContent->SetCustomDrawDelegate(_pimpl->_stencilPrimeDelegate);
 				// Prime the stencil buffer with draw call indices
-				auto sequencerCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", primeStencilBuffer, ParameterBox{}, rpi.GetFrameBufferDesc());
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
-					*sequencerCfg,
+					*_pimpl->_primeStencilCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);
 				if (visContent)
@@ -818,17 +816,68 @@ namespace ToolsRig
 		return { refreshMode };
 	}
 
+	void VisualisationOverlay::OnRenderTargetUpdate(
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+		const RenderCore::FrameBufferProperties& fbProps)
+	{
+		using namespace RenderCore;
+
+		RenderCore::Techniques::FragmentStitchingContext stitching{{}, fbProps};
+
+		// We can't register the given preregistered attachments directly -- instead we have to 
+		// register what we're expecting to be given when we actually begin our render
+		auto color = std::find_if(
+			preregAttachments.begin(), preregAttachments.end(), 
+			[](auto c) { return c._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		if (color != preregAttachments.end()) {
+			// register an initialized color texture
+			auto colorPreg = *color;
+			colorPreg._state = Techniques::PreregisteredAttachment::State::Initialized;
+			stitching.DefineAttachment(colorPreg);
+
+			// register a default depth texture
+			auto depthDesc = colorPreg._desc;
+			depthDesc._bindFlags = BindFlag::DepthStencil;
+			depthDesc._textureDesc._format = Format::D24_UNORM_S8_UINT;
+			stitching.DefineAttachment({Techniques::AttachmentSemantics::MultisampleDepth, depthDesc, Techniques::PreregisteredAttachment::State::Initialized});
+		}
+
+		auto fbFrag = CreateVisFBFrag();
+		auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1});
+
+		_pimpl->_visWireframeCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-wireframe", _pimpl->_visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
+		_pimpl->_visNormalsCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-normals", _pimpl->_visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
+		_pimpl->_primeStencilCfg = _pimpl->_pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", _pimpl->_primeStencilBufferDelegate, ParameterBox{}, stitched._fbDesc);
+	}
+
     VisualisationOverlay::VisualisationOverlay(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
 		const VisOverlaySettings& overlaySettings,
         std::shared_ptr<VisMouseOver> mouseOver)
     {
+		using namespace RenderCore;
         _pimpl = std::make_unique<Pimpl>();
 		_pimpl->_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
 		_pimpl->_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
 		_pimpl->_fontRenderingManager = immediateDrawingApparatus->_fontRenderingManager;
         _pimpl->_settings = overlaySettings;
         _pimpl->_mouseOver = std::move(mouseOver);
+
+		_pimpl->_visWireframeDelegate =
+			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+				Techniques::TechniqueIndex::VisWireframe, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
+		_pimpl->_visNormalsDelegate =
+			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+				Techniques::TechniqueIndex::VisNormals, {}, {}, Techniques::CommonResourceBox::s_dsReadWrite);
+
+		DepthStencilDesc ds {
+			RenderCore::CompareOp::GreaterEqual, true, true,
+			0xff, 0xff,
+			RenderCore::StencilDesc::AlwaysWrite,
+			RenderCore::StencilDesc::NoEffect };
+		_pimpl->_primeStencilBufferDelegate =
+			RenderCore::Techniques::CreateTechniqueDelegateLegacy(
+				Techniques::TechniqueIndex::DepthOnly, {}, {}, ds);
     }
 
     VisualisationOverlay::~VisualisationOverlay() {}
