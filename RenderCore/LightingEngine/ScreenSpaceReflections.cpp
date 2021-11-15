@@ -18,7 +18,7 @@
 #include "../Metal/Resource.h"
 #include "../IAnnotator.h"
 #include "../../Math/Transformations.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../xleres/FileList.h"

@@ -35,7 +35,7 @@
 
 #include "../../Math/Transformations.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Streams/PathUtils.h"

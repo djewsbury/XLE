@@ -5,7 +5,7 @@
 #include "PipelineCollection.h"
 #include "PipelineBuilderUtil.h"
 #include "RenderPass.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ArithmeticUtils.h"

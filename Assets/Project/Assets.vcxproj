@@ -70,7 +70,7 @@
     <ClInclude Include="..\IntermediatesStore.h" />
     <ClInclude Include="..\MemoryFile.h" />
     <ClInclude Include="..\MountingTree.h" />
-    <ClInclude Include="..\AssetFutureContinuation.h" />
+    <ClInclude Include="..\Continuation.h" />
     <ClInclude Include="..\NascentChunk.h" />
     <ClInclude Include="..\OSFileSystem.h" />
     <ClInclude Include="..\RawFileAsset.h" />

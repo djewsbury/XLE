@@ -11,7 +11,7 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/ConfigFileContainer.h"
-#include "../../../Assets/AssetFutureContinuation.h"
+#include "../../../Assets/Continuation.h"
 #include "../../../Assets/Assets.h"
 #include "../../../ConsoleRig/GlobalServices.h"
 #include "../../../Utility/Streams/FormatterUtils.h"

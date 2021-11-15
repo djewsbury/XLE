@@ -32,7 +32,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/IFileSystem.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>

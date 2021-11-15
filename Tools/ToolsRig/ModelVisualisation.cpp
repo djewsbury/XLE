@@ -16,7 +16,7 @@
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetFuture.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"
 
 #pragma warning(disable:4505)

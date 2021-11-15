@@ -22,7 +22,7 @@
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../IThreadContext.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../xleres/FileList.h"

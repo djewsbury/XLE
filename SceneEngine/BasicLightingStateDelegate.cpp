@@ -12,7 +12,7 @@
 #include "../Tools/EntityInterface/EntityInterface.h"
 #include "../Tools/ToolsRig/ToolsRigServices.h"
 #include "../Assets/Assets.h"
-#include "../Assets/AssetFutureContinuation.h"
+#include "../Assets/Continuation.h"
 #include "../Assets/ConfigFileContainer.h"
 #include "../Math/Transformations.h"
 #include "../Math/MathSerialization.h"

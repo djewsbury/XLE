@@ -61,7 +61,7 @@
       <Filter>CompileAndAsync</Filter>
     </ClInclude>
     <ClInclude Include="..\RawFileAsset.h" />
-    <ClInclude Include="..\AssetFutureContinuation.h">
+    <ClInclude Include="..\Continuation.h">
       <Filter>AssetHeaps</Filter>
     </ClInclude>
     <ClInclude Include="..\AsyncMarkerGroup.h">

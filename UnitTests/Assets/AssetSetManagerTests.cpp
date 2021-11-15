@@ -6,7 +6,7 @@
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/AssetServices.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/Assets.h"

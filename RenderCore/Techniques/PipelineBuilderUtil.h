@@ -14,7 +14,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Assets/AssetFuture.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/Streams/PathUtils.h"
 

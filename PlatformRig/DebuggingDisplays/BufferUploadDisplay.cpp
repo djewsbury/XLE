@@ -8,7 +8,7 @@
 #include "../../BufferUploads/Metrics.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../ConsoleRig/ResourceBox.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"

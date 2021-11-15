@@ -7,7 +7,7 @@
 #include "CPUProfileDisplay.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../OSServices/TimeUtils.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"

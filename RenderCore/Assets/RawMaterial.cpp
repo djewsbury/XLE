@@ -10,7 +10,7 @@
 #include "../../Assets/IntermediatesStore.h"		// (for GetDependentFileState)
 #include "../../Assets/DeferredConstruction.h"
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"

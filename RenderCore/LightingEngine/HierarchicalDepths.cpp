@@ -11,7 +11,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../Metal/Resource.h"
 #include "../IAnnotator.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 

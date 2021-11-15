@@ -18,7 +18,7 @@
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../../Assets/AssetFuture.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetHeapLRU.h"
 #include "../../Utility/MemoryUtils.h"

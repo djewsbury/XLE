@@ -12,7 +12,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../FrameBufferDesc.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../OSServices/Log.h"
 

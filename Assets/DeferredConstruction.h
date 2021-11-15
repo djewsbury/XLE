@@ -7,7 +7,7 @@
 #include "InitializerPack.h"
 #include "AssetFuture.h"
 #include "AssetTraits.h"
-#include "AssetFutureContinuation.h"
+#include "Continuation.h"
 #include "IArtifact.h"
 #include "IntermediateCompilers.h"
 #include "InitializerPack.h"

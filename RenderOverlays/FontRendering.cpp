@@ -13,7 +13,7 @@
 #include "../RenderCore/Types.h"
 #include "../RenderCore/Format.h"
 #include "../Assets/Assets.h"
-#include "../Assets/AssetFutureContinuation.h"
+#include "../Assets/Continuation.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/PtrUtils.h"

@@ -28,7 +28,7 @@
 #include "../../RenderCore/IDevice.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/IFileSystem.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Math/Transformations.h"

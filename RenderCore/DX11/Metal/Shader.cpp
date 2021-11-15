@@ -14,7 +14,7 @@
 #include <D3D11Shader.h>
 
 #include "../../../Assets/Assets.h"
-#include "../../../Assets/AssetFutureContinuation.h"
+#include "../../../Assets/Continuation.h"
 
 namespace RenderCore { namespace Metal_DX11
 {

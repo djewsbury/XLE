@@ -17,7 +17,7 @@
 #include "../IAnnotator.h"
 #include "../BufferView.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Utility/BitUtils.h"

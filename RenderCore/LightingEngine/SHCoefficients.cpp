@@ -4,9 +4,8 @@
 
 #include "SHCoefficients.h"
 #include "../Assets/TextureCompiler.h"
-#include "../Assets/AssetFutureContinuation.h"
 #include "../Assets/DeferredConstruction.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 
 namespace RenderCore { namespace LightingEngine 
 {

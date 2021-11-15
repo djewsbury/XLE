@@ -5,7 +5,7 @@
 #include "CommonWidgets.h"
 #include "Font.h"
 #include "../ConsoleRig/ResourceBox.h"
-#include "../Assets/AssetFutureContinuation.h"
+#include "../Assets/Continuation.h"
 
 namespace RenderOverlays { namespace CommonWidgets
 {

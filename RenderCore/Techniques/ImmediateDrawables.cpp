@@ -17,7 +17,7 @@
 #include "../Metal/DeviceContext.h"		// for CalculateFrameBufferRelevance
 #include "../Format.h"
 #include "../FrameBufferDesc.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Utility/MemoryUtils.h"

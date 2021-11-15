@@ -16,7 +16,7 @@
 #include "../Metal/Shader.h"
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 #include <sstream>
 

@@ -11,7 +11,7 @@
 #include "../Format.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Streams/PathUtils.h"

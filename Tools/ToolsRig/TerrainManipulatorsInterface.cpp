@@ -12,7 +12,7 @@
 #include "../../Tools/ToolsRig/IManipulator.h"
 #include "../../Tools/ToolsRig/ManipulatorsUtil.h"
 #include "../../RenderOverlays/CommonWidgets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/IntrusivePtr.h"
 

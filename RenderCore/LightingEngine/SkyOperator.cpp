@@ -12,7 +12,7 @@
 #include "../Techniques/CommonResources.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace LightingEngine

@@ -16,7 +16,7 @@
 #include "../../ShaderParser/ShaderAnalysis.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFutureContinuation.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/Streams/PreprocessorInterpreter.h"
 
 namespace RenderCore { namespace Techniques

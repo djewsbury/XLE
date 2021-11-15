@@ -6,7 +6,7 @@
 
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING	// warning generated inside of thousandeyes/futures/then.h
 
-#include "AssetFutureContinuation.h"
+#include "Continuation.h"
 #include "IAsyncMarker.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "thousandeyes/futures/then.h"
