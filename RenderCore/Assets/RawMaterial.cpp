@@ -497,7 +497,7 @@ namespace RenderCore { namespace Assets
                         std::shared_ptr<RawMaterial> subMat;
                         auto state = f.second->CheckStatusBkgrnd(subMat, queriedDepVal, queriedLog);
                         if (state == ::Assets::AssetState::Pending)
-                            return true;
+                            return ::Assets::PollStatus::Continue;
 
                         // "invalid" is actually ok here. we include the dep val as normal, but ignore
                         // the RawMaterial
@@ -536,7 +536,7 @@ namespace RenderCore { namespace Assets
                     if (pendingTree->_subFutures.empty()) break;
                 }
                 // survived the gauntlet -- everything is ready to dispatch now
-                return false;
+                return ::Assets::PollStatus::Finish;
             },
             [pendingTree]() {
                 // All of the RawMaterials in the tree are loaded; and we can just merge them together

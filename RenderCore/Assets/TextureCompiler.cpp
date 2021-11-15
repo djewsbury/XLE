@@ -441,6 +441,7 @@ namespace RenderCore { namespace Assets
 
 		auto futureDesc = pkt->GetDesc();	
 		return thousandeyes::futures::then(
+			ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
 			std::move(futureDesc),
 			[pkt](auto descFuture) {
 				auto desc = descFuture.get();
@@ -459,6 +460,7 @@ namespace RenderCore { namespace Assets
 						sr._pitches = srOffset._pitches;
 					}
 				return thousandeyes::futures::then(
+					ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
 					pkt->PrepareData(MakeIteratorRange(srs, &srs[mipCount*elementCount])),
 					[tDesc=desc._textureDesc, data=std::move(data), pkt](auto) {		// need to retain "pkt" as load as PrepareData() is working
 						RawData result;

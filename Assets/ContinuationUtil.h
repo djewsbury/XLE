@@ -8,12 +8,15 @@
 
 #include "AssetFutureContinuation.h"
 #include "IAsyncMarker.h"
+#include "../ConsoleRig/GlobalServices.h"
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/TimedWaitable.h"
 #include "thousandeyes/futures/Executor.h"
 
 namespace Assets
 {
+	enum PollStatus { Continue, Finish };
+
 	namespace Internal
 	{
 		template<typename Marker>
@@ -83,7 +86,7 @@ namespace Assets
 			bool timedWait(const std::chrono::microseconds& timeout) override
 			{
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				_pollingCompleted |= !_checkFn();
+				_pollingCompleted |= (_checkFn() == PollStatus::Finish);
 				if (!_pollingCompleted) {
 					// thousandeyes::futures will busy-loop if we don't actually yield the thread at all
 					// So let's make sure we sleep at least for a bit here
@@ -127,8 +130,13 @@ namespace Assets
 		auto bridge = std::make_unique<Internal::ASyncMarkerBridge<Marker>>(std::move(marker));
 		auto result = bridge->_promise.get_future();
 
-		std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
-		executor->watch(std::move(bridge));
+		auto* executor = ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
+		if (executor) {
+			executor->watch(std::move(bridge));
+		} else {
+			// might happen during shutdown
+			bridge->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Continuation executor has expired")));
+		}
 
 		return result;
 	}
@@ -138,8 +146,13 @@ namespace Assets
 		auto bridge = std::make_unique<Internal::ASyncMarkerPtrBridge>(std::move(marker));
 		auto result = bridge->_promise.get_future();
 
-		std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
-		executor->watch(std::move(bridge));
+		auto* executor = ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
+		if (executor) {
+			executor->watch(std::move(bridge));
+		} else {
+			// might happen during shutdown
+			bridge->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Continuation executor has expired")));
+		}
 
 		return result;
 	}
@@ -151,7 +164,12 @@ namespace Assets
 			DispatchFn&& dispatchFn)
 	{
 		auto bridge = std::make_unique<Internal::PollingFunctionBridge<Promise, CheckFn, DispatchFn>>(std::move(promise), std::move(checkFn), std::move(dispatchFn));
-		std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
-		executor->watch(std::move(bridge));
+		auto* executor = ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
+		if (executor) {
+			executor->watch(std::move(bridge));
+		} else {
+			// might happen during shutdown
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Continuation executor has expired")));
+		}
 	}
 }

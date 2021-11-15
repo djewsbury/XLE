@@ -140,7 +140,7 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>();
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 				[weakThis{weak_from_this()}, captures=std::move(cap)]() {
 					try
 					{
@@ -197,7 +197,7 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>(subResources);
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 				[weakThis{weak_from_this()}, captures = std::move(cap)]() mutable {
 					try
 					{
@@ -341,7 +341,7 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>();
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 				[weakThis{weak_from_this()}, captures=std::move(cap)]() {
 					try
 					{
@@ -406,7 +406,7 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>(subResources);
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 				[weakThis{weak_from_this()}, captures = std::move(cap)]() mutable {
 					try
 					{
@@ -469,7 +469,7 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>();
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 				[weakThis{weak_from_this()}, captures=std::move(cap)]() {
 					try
 					{
@@ -544,8 +544,8 @@ namespace RenderCore { namespace Assets
 			};
 			auto cap = std::make_shared<Captures>(subResources);
 			auto result = cap->_promise.get_future();
-			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().EnqueueBasic(
-				[weakThis{weak_from_this()}, captures = std::move(cap)]() mutable {
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[weakThis{weak_from_this()}, captures = std::move(cap)]() {
 					try
 					{
 						auto that = weakThis.lock();

@@ -12,6 +12,7 @@
 
 namespace Utility { class ThreadPool; }
 namespace OSServices { class PollingThread; }
+namespace thousandeyes { namespace futures { class Executor; }}
 
 namespace ConsoleRig
 {
@@ -38,6 +39,7 @@ namespace ConsoleRig
         Utility::ThreadPool& GetLongTaskThreadPool();
         const std::shared_ptr<OSServices::PollingThread>& GetPollingThread();
         PluginSet& GetPluginSet();
+        const std::shared_ptr<thousandeyes::futures::Executor>& GetContinuationExecutor();
 
         static GlobalServices& GetInstance() { assert(s_instance); return *s_instance; }
 

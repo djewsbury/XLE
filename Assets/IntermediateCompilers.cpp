@@ -282,7 +282,7 @@ namespace Assets
         }
 
 		auto fn = std::move(operation);
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().EnqueueBasic(
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[future, fn]() {
 				TRY
 				{

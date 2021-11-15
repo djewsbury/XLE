@@ -31,7 +31,6 @@
 #include "../Utility/Conversion.h"
 #include "../Core/SelectConfiguration.h"
 #include "thousandeyes/futures/Executor.h"
-#include "thousandeyes/futures/Default.h"
 #include <assert.h>
 #include <random>
 #include <typeinfo>
@@ -198,9 +197,7 @@ namespace ConsoleRig
         std::shared_ptr<OSServices::PollingThread> _pollingThread;
 		StartupConfig _cfg;
 		std::shared_ptr<PluginSet> _pluginSet;
-        		
-        struct ContinuationExecutor;
-		std::unique_ptr<ContinuationExecutor> _continuationExecutor;
+        std::shared_ptr<thousandeyes::futures::Executor> _continuationExecutor;
 
         AttachablePtr<Internal::CachedBoxManager> _cachedBoxManager;
         AttachablePtr<::Assets::IDependencyValidationSystem> _depValSys;
@@ -208,20 +205,6 @@ namespace ConsoleRig
         std::shared_ptr<::Assets::MountingTree> _mountingTree;
         AttachablePtr<::Assets::CompileAndAsyncManager> _compileAndAsyncManager;
         AttachablePtr<::Assets::AssetSetManager> _assetsSetsManager;
-	};
-
-    struct GlobalServices::Pimpl::ContinuationExecutor
-	{
-	public:
-		std::shared_ptr<Assets::ContinuationExecutor> _continuationExecutor;
-		thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter _continuationExecutorSetter;
-
-		ContinuationExecutor(ThreadPool& threadPool)
-		: _continuationExecutor(std::make_shared<::Assets::ContinuationExecutor>(
-			std::chrono::microseconds(500),
-			thousandeyes::futures::detail::InvokerWithNewThread{},
-			::Assets::InvokerToThreadPool{threadPool}))
-		, _continuationExecutorSetter(_continuationExecutor) {}
 	};
 
     GlobalServices* GlobalServices::s_instance = nullptr;
@@ -237,7 +220,10 @@ namespace ConsoleRig
 
         MainRig_Startup(cfg);
 
-        _pimpl->_continuationExecutor = std::make_unique<Pimpl::ContinuationExecutor>(*_pimpl->_shortTaskPool);
+        _pimpl->_continuationExecutor = std::make_shared<::Assets::ContinuationExecutor>(
+            std::chrono::microseconds(500),
+			thousandeyes::futures::detail::InvokerWithNewThread{},
+			::Assets::InvokerToThreadPool{*_pimpl->_shortTaskPool});
 
         if (!_pimpl->_depValSys)
             _pimpl->_depValSys = ::Assets::CreateDepValSys();
@@ -308,8 +294,8 @@ namespace ConsoleRig
 
     void GlobalServices::PrepareForDestruction()
     {
-        if (_pimpl->_continuationExecutor && _pimpl->_continuationExecutor->_continuationExecutor)
-            _pimpl->_continuationExecutor->_continuationExecutor->stop();
+        if (_pimpl->_continuationExecutor)
+            _pimpl->_continuationExecutor->stop();
         _pimpl->_shortTaskPool->StallAndDrainQueue();
         _pimpl->_longTaskPool->StallAndDrainQueue();
         _pimpl->_cachedBoxManager->Clear();
@@ -341,6 +327,11 @@ namespace ConsoleRig
     ThreadPool& GlobalServices::GetLongTaskThreadPool() { return *_pimpl->_longTaskPool; }
     const std::shared_ptr<OSServices::PollingThread>& GlobalServices::GetPollingThread() { return _pimpl->_pollingThread; }
     PluginSet& GlobalServices::GetPluginSet() { return *_pimpl->_pluginSet; }
+
+    const std::shared_ptr<thousandeyes::futures::Executor>& GlobalServices::GetContinuationExecutor()
+    {
+        return _pimpl->_continuationExecutor;
+    }
 
     IStep::~IStep() {}
     IProgress::~IProgress() {}

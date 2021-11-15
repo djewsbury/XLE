@@ -68,6 +68,7 @@ namespace Assets
 		AssetState		CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog);
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);
 		const Type& 	ActualizeBkgrnd();
+		bool			IsBkgrndPending() const;
 
 		std::shared_future<Type> ShareFuture() const;
 		std::promise<Type> AdoptPromise();
@@ -319,6 +320,14 @@ namespace Assets
 		}
 
 		return _pendingFuture.get();
+	}
+
+	template<typename Type>
+		bool Future<Type>::IsBkgrndPending() const
+	{
+		if (_state == AssetState::Ready)
+			return false;
+		return _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready;	
 	}
 
 	template<typename Type>

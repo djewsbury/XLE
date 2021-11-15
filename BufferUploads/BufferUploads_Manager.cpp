@@ -327,6 +327,7 @@ namespace BufferUploads
             auto weakThis = weak_from_this();
             assert(!transaction->_waitingFuture.valid());
             transaction->_waitingFuture = thousandeyes::futures::then(
+                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
                 std::move(descFuture),
                 [weakThis, transactionID, data, bindFlags](std::future<ResourceDesc> completedFuture) {
                     auto t = weakThis.lock();
@@ -1384,6 +1385,7 @@ namespace BufferUploads
             auto weakThis = weak_from_this();
             assert(!transaction->_waitingFuture.valid());
             transaction->_waitingFuture = thousandeyes::futures::then(
+                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
                 std::move(future),
                 [   captureMaps{std::move(maps)}, 
                     weakThis, 
