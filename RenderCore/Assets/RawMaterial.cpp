@@ -486,7 +486,7 @@ namespace RenderCore { namespace Assets
 
         ::Assets::PollToPromise(
             std::move(promisedMaterial),
-            [pendingTree](std::promise<std::shared_ptr<ResolvedMaterial>>&& thatPromise) {
+            [pendingTree]() {
                 for (;;) {
                     ::Assets::AssetState currentState = ::Assets::AssetState::Ready;
                     std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> subMaterials;
@@ -535,7 +535,10 @@ namespace RenderCore { namespace Assets
                     // we'll do this immediately, just incase everything is already loaded
                     if (pendingTree->_subFutures.empty()) break;
                 }
-
+                // survived the gauntlet -- everything is ready to dispatch now
+                return false;
+            },
+            [pendingTree]() {
                 // All of the RawMaterials in the tree are loaded; and we can just merge them together
                 // into a final resolved material
                 auto finalMaterial = std::make_shared<ResolvedMaterial>();
@@ -550,8 +553,7 @@ namespace RenderCore { namespace Assets
                         finalMaterial->_depVal.RegisterDependency(m.second->GetDependencyValidation());
                 }
                 finalMaterial->_depFileStates = std::move(pendingTree->_deps);
-                thatPromise.set_value(std::move(finalMaterial));
-                return false;
+                return finalMaterial;
             });
     }
 

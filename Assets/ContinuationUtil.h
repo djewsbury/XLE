@@ -76,17 +76,18 @@ namespace Assets
 			std::shared_ptr<IAsyncMarker> _marker;
 		};
 
-		template<typename Promise, typename Fn>
+		template<typename Promise, typename CheckFn, typename DispatchFn>
 			class PollingFunctionBridge : public thousandeyes::futures::TimedWaitable
 		{
 		public:
 			bool timedWait(const std::chrono::microseconds& timeout) override
 			{
-				_pollingCompleted |= !_fn(std::move(_promise));
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				_pollingCompleted |= !_checkFn();
 				if (!_pollingCompleted) {
 					// thousandeyes::futures will busy-loop if we don't actually yield the thread at all
 					// So let's make sure we sleep at least for a bit here
-					std::this_thread::sleep_for(timeout);
+					std::this_thread::sleep_until(timeoutTime);
 				}
 				return _pollingCompleted;
 			}
@@ -100,14 +101,21 @@ namespace Assets
 				}
 
 				assert(_pollingCompleted);
+				TRY {
+					_promise.set_value(_dispatchFn());
+				} CATCH(...) {
+					_promise.set_exception(std::current_exception());
+				} CATCH_END
 			}
 
-			PollingFunctionBridge(Promise&& promise, Fn&& fn)
+			PollingFunctionBridge(Promise&& promise, CheckFn&& checkFn, DispatchFn&& dispatchFn)
 			: TimedWaitable(std::chrono::hours(1))
 			, _promise(std::move(promise))
-			, _fn(std::move(fn)) {}
+			, _checkFn(std::move(checkFn))
+			, _dispatchFn(std::move(dispatchFn)) {}
 
-			Fn _fn;
+			CheckFn _checkFn;
+			DispatchFn _dispatchFn;
 			Promise _promise;
 			bool _pollingCompleted = false;
 		};
@@ -136,12 +144,13 @@ namespace Assets
 		return result;
 	}
 
-	template<typename Promise, typename Fn>
+	template<typename Promise, typename CheckFn, typename DispatchFn>
 		static void PollToPromise(
 			Promise&& promise,
-			Fn&& fn)
+			CheckFn&& checkFn,
+			DispatchFn&& dispatchFn)
 	{
-		auto bridge = std::make_unique<Internal::PollingFunctionBridge<Promise, Fn>>(std::move(promise), std::move(fn));
+		auto bridge = std::make_unique<Internal::PollingFunctionBridge<Promise, CheckFn, DispatchFn>>(std::move(promise), std::move(checkFn), std::move(dispatchFn));
 		std::shared_ptr<thousandeyes::futures::Executor> executor = thousandeyes::futures::Default<thousandeyes::futures::Executor>();
 		executor->watch(std::move(bridge));
 	}
