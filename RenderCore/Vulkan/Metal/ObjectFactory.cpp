@@ -541,7 +541,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			{
 			public:
                 Threading::Mutex _lock;
-				CircularBuffer<std::pair<Marker, unsigned>, 64> _markerCounts;
+				ResizableCircularBuffer<std::pair<Marker, unsigned>, 32> _markerCounts;
 				std::deque<Type> _objects;
 			};
 
@@ -585,24 +585,15 @@ namespace RenderCore { namespace Metal_Vulkan
         //          isn't supported on VS2013
 		auto marker = _gpuTracker->GetProducerMarker();
         auto& q = std::get<Index>(_queues);
-		bool success = true;
         ScopedLock(q._lock);
 		if (q._markerCounts.empty()) {
 			assert(q._objects.empty());
-			success = q._markerCounts.try_emplace_back(std::make_pair(marker, 1u));
+			q._markerCounts.emplace_back(std::make_pair(marker, 1u));
 		} else if (q._markerCounts.back().first == marker) {
 			++q._markerCounts.back().second;
 		} else {
 			assert(q._markerCounts.front().first < marker);
-			success = q._markerCounts.try_emplace_back(std::make_pair(marker, 1u));
-		}
-
-		// if we can't fit in the marker, it is a fatal error. We can't safely through an exception from here
-		// because this function is frequently called from a smart pointer destructor -- which could be triggered
-		// during stack unwinding, or some other case that is not safe for exceptions
-		if (!success) {
-			Log(Error) << "Circular buffer wrapped around in destruction queue. Not enough buffers to support desynchronisation" << std::endl;
-			std::terminate();
+			q._markerCounts.emplace_back(std::make_pair(marker, 1u));
 		}
 
 		q._objects.push_back(obj);

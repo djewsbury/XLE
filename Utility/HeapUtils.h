@@ -706,6 +706,82 @@ namespace Utility
 		#pragma pop_macro("new")
 		return *this;
 	}
+
+    template<typename Type, unsigned Count>
+		class ResizableCircularBuffer
+	{
+    public:
+        Type& front();
+		Type& back();
+		void pop_front();
+		template<typename... Params>
+			void emplace_back(Params... p);
+		bool empty() const;
+
+        size_t page_count() const;
+
+		ResizableCircularBuffer() = default;
+		~ResizableCircularBuffer() = default;
+		ResizableCircularBuffer(ResizableCircularBuffer&& moveFrom) never_throws = default;
+		ResizableCircularBuffer& operator=(ResizableCircularBuffer&& moveFrom) never_throws = default;
+    protected:
+        std::vector<CircularBuffer<Type, Count>> _activePages;
+        std::vector<CircularBuffer<Type, Count>> _inactivePages;
+    };
+
+    template<typename Type, unsigned Count>
+        Type& ResizableCircularBuffer<Type,Count>::front()
+    {
+        assert(!empty());
+        return _activePages.begin()->front();
+    }
+
+    template<typename Type, unsigned Count>
+        Type& ResizableCircularBuffer<Type,Count>::back()
+    {
+        assert(!empty());
+        return (_activePages.end()-1)->back();
+    }
+
+    template<typename Type, unsigned Count>
+        void ResizableCircularBuffer<Type,Count>::pop_front()
+    {
+        assert(!empty());
+        _activePages.begin()->pop_front();
+        if (_activePages.begin()->empty()) {
+            _inactivePages.emplace_back(std::move(*_activePages.begin()));
+            _activePages.erase(_activePages.begin());
+        }
+    }
+
+    template<typename Type, unsigned Count>
+        template<typename... Params>
+            void ResizableCircularBuffer<Type,Count>::emplace_back(Params... p)
+    {
+        if (!_activePages.empty() && (_activePages.end()-1)->try_emplace_back(std::forward<Params>(p)...))
+            return;
+        if (!_inactivePages.empty()) {
+            _activePages.push_back(std::move(*(_inactivePages.end()-1)));
+            _inactivePages.erase(_inactivePages.end()-1);
+        } else {
+            _activePages.push_back({});
+        }
+
+        bool res = (_activePages.end()-1)->try_emplace_back(std::forward<Params>(p)...);
+        assert(res); (void)res;
+    }
+
+    template<typename Type, unsigned Count>
+        bool ResizableCircularBuffer<Type,Count>::empty() const
+    {
+        return _activePages.empty();
+    }
+
+    template<typename Type, unsigned Count>
+        size_t ResizableCircularBuffer<Type,Count>::page_count() const
+    {
+        return _activePages.size();
+    }
 }
 
 using namespace Utility;

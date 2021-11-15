@@ -89,7 +89,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned		_pageId = ~0u;
 
 		unsigned		_pendingNewFront = ~0u;
-		CircularBuffer<MarkedDestroys, 32>	_markedDestroys;		// Note! we should only use _markedDestroys on the manager bound thread!
+		ResizableCircularBuffer<MarkedDestroys, 32>	_markedDestroys;		// Note! we should only use _markedDestroys on the manager bound thread!
 
 		unsigned		_lastBarrier;
 		DeviceContext*	_lastBarrierContext;
@@ -300,7 +300,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!_manager) return;
 
 		// We can only access "_markedDestroys" from a specific thread
-		// assert(std::this_thread::get_id() == _manager->_boundThreadId);
+		assert(std::this_thread::get_id() == _manager->_boundThreadId);
 
 		// There's no actual thread protection for "_reservedPages" and "_pendingNewFront" here
 		// We're assuming that since this happens when the command list is being submitted, that there
@@ -309,8 +309,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(page->_pendingNewFront != ~0u);		// this would mean we never actually allocated anything from this page
 
 			if (page->_markedDestroys.empty() || page->_markedDestroys.back()._marker != trackerMarker) {
-				bool fitsInHeap = page->_markedDestroys.try_emplace_back(MarkedDestroys {trackerMarker, ~0u});
-				assert(fitsInHeap);
+				page->_markedDestroys.emplace_back(MarkedDestroys {trackerMarker, ~0u});
 			}
 			page->_markedDestroys.back()._front = page->_pendingNewFront;
 			page->_pendingNewFront = ~0u;

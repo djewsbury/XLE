@@ -28,6 +28,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void UpdateConsumer();
 		bool WaitForFence(Marker marker, std::optional<std::chrono::nanoseconds> timeout = {});	///< returns true iff the marker has completed, or false if we timed out waiting for it
 
+		float GetThreadingPressure();
+
 		FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth);
 		~FenceBasedTracker();
 	private:
@@ -43,7 +45,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<VulkanUniquePtr<VkFence>> _fences;				// protected by _trackersSubmittedToQueueLock
 		std::vector<VkFence> _fencesCurrentlyInWaitOperation;		// protected by _trackersSubmittedToQueueLock
 		BitHeap _fenceAllocationFlags;								// protected by _trackersSubmittedToQueueLock
-		unsigned _unallocatedFenceCount = 0;						// protected by _trackersSubmittedToQueueLock
 		Marker _nextSubmittedToQueueMarker = Marker_Invalid;		// protected by _trackersSubmittedToQueueLock
 		Threading::Mutex _trackersSubmittedToQueueLock;
 
@@ -57,6 +58,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkDevice _device;
 
 		std::thread::id _queueThreadId;
+		unsigned _requestedQueueDepth;
 
 		void CheckFenceResetAlreadyLocked(VkFence fence);
 		VkFence FindAvailableFence(IteratorRange<const Marker*> marker, std::unique_lock<Threading::Mutex>& lock);

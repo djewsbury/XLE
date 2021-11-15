@@ -53,6 +53,7 @@ namespace RenderCore
 	public:
 		virtual const std::shared_ptr<Metal_Vulkan::DeviceContext>& GetMetalContext() = 0;
 		virtual void CommitPrimaryCommandBufferToQueue(Metal_Vulkan::CommandList& cmdList) = 0;
+		virtual float GetThreadingPressure() = 0;
 		~IThreadContextVulkan();
 	};
 

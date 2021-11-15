@@ -47,9 +47,11 @@ namespace Utility
     XL_UTILITY_API void  printbytes(const void* blob, int len);
     XL_UTILITY_API void  printbytes2(const void* blob, int len);
 
-    uint32      popcount(uint32 v);
+    int         popcount(uint32_t v);
+    int         popcount(uint64_t v);
     uint32      parity(uint32 v);
-    int         countbits(uint32 v);
+    int         countbits(uint32_t v);
+    int         countbits(uint64_t v);
     int         countbits(std::vector<uint32>& v);
     int         countbits(const void* blob, int len);
     void        invert(std::vector<uint32>& v);
@@ -298,14 +300,29 @@ namespace Utility
     //-----------------------------------------------------------------------------
     // Bit-level manipulation
     // These two are from the "Bit Twiddling Hacks" webpage
-    inline uint32 popcount(uint32 v)
-    {
-        v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
-        v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
-        uint32 c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
+    #if (COMPILER_ACTIVE == COMPILER_TYPE_GCC) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
+        inline int popcount(uint32_t v)
+        {
+            return __builtin_popcount(v);
+        }
+        inline int popcount(uint64_t v)
+        {
+            return __builtin_popcountll(v);
+        }
+    #else
+        inline int popcount(uint32_t v)
+        {
+            v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
+            v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
+            uint32 c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
 
-        return c;
-    }
+            return c;
+        }
+        inline int popcount(uint64_t v)
+        {
+            assert(0);
+        }
+    #endif
 
     inline uint32 parity(uint32 v)
     {
@@ -376,15 +393,8 @@ namespace Utility
         if (byte < len) {b[byte] ^= (1 << bit);}
     }
 
-    inline int countbits(uint32 v)
-    {
-		// (note -- this is the same as popcount)
-        v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
-        v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
-        int c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
-
-        return c;
-    }
+    inline int countbits(uint32_t v) { return popcount(v); }
+    inline int countbits(uint64_t v) { return popcount(v); }
 
     //----------
 

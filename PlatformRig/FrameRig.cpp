@@ -40,6 +40,7 @@
 #include <iomanip>
 
 #include "../RenderCore/Metal/DeviceContext.h"
+#include "../RenderCore/Vulkan/IDeviceVulkan.h"
 
 #include "../Assets/CompileAndAsyncManager.h"
 #include "../Assets/IntermediatesStore.h"
@@ -281,7 +282,19 @@ namespace PlatformRig
         if (parserContext.HasPendingAssets()) {
             ::Threading::Sleep(16);  // slow down while we're building pending resources
         } else {
-            Threading::YieldTimeSlice();    // this might be too extreme. We risk not getting execution back for a long while
+
+            float threadingPressure = 0.f;
+            auto* vulkanContext = (RenderCore::IThreadContextVulkan*)context->QueryInterface(typeid(RenderCore::IThreadContextVulkan).hash_code());
+            if (vulkanContext)
+                threadingPressure = vulkanContext->GetThreadingPressure();
+
+            if (threadingPressure > 0.f) {
+                // Start dropping frames if we have high threading pressure
+                // This happens when there is some expensive background thread generating long cmd lists (or just not submitting frequently)
+                ::Threading::Sleep(16 * std::min(60.f, threadingPressure));
+            } else {
+                Threading::YieldTimeSlice();    // this might be too extreme. We risk not getting execution back for a long while
+            }
         }
 
         return { frameElapsedTime, parserContext.HasPendingAssets() };

@@ -1061,6 +1061,11 @@ namespace RenderCore { namespace ImplVulkan
 		CommitPrimaryCommandBufferToQueue_Internal(cmdList, {});
 	}
 
+	float ThreadContext::GetThreadingPressure()
+	{
+		return _submissionQueue->GetTracker()->GetThreadingPressure();
+	}
+
 	Metal_Vulkan::IAsyncTracker::Marker ThreadContext::CommitPrimaryCommandBufferToQueue_Internal(
 		Metal_Vulkan::CommandList& cmdList,
 		IteratorRange<const VkSemaphore*> completionSignals)

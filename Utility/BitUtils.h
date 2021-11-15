@@ -90,6 +90,7 @@ namespace Utility
         bool    IsAllocated(uint32_t value) const;
         void    Reserve(uint32_t count);
         unsigned FirstUnallocated() const;
+        unsigned AllocatedCount() const;
 
         BitHeap(unsigned slotCount = 8 * 64);
         BitHeap(BitHeap&& moveFrom) = default;

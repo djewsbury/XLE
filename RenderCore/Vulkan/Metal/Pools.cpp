@@ -50,37 +50,23 @@ namespace RenderCore { namespace Metal_Vulkan
 	void CommandPool::QueueDestroy(VkCommandBuffer buffer)
 	{
 		auto currentMarker = _gpuTracker ? _gpuTracker->GetProducerMarker() : ~0u;
-        bool success = false;
-        for (auto& page:_markedDestroys) {
-            if (!page._buffer.empty() && page._buffer.back()._marker == currentMarker) {
-                ++page._buffer.back()._pendingCount;
-                success = true;
-                break;
-            }
+        if (!_markedDestroys.empty() && _markedDestroys.back()._marker == currentMarker) {
+            ++_markedDestroys.back()._pendingCount;
+        } else {
+            _markedDestroys.emplace_back(MarkedDestroys{currentMarker, 1u});
         }
 
-		if (!success) {
-            // push a new entry into the first page in which it can fit
-            for (auto& page:_markedDestroys) {
-                success = page._buffer.try_emplace_back(MarkedDestroys{currentMarker, 1u});
-                if (success) break;
+        #if defined(_DEBUG)
+            if (_markedDestroys.page_count() > 2) {
+                static auto lastMsg = std::chrono::steady_clock::now();
+                auto now = std::chrono::steady_clock::now();
+                if ((now-lastMsg) > std::chrono::seconds(1)) {
+                    Log(Warning) << "High number of _markedDestroys pages in CommandPool." << std::endl;
+                    lastMsg = now;
+                }
             }
-            if (!success) {
-                #if defined(_DEBUG)
-                    if (_markedDestroys.size() > 16) {
-                        static auto lastMsg = std::chrono::steady_clock::now();
-                        auto now = std::chrono::steady_clock::now();
-                        if ((now-lastMsg) > std::chrono::seconds(1)) {
-                            Log(Warning) << "High number of _markedDestroys pages in CommandPool." << std::endl;
-                            lastMsg = now;
-                        }
-                    }
-                #endif
-                _markedDestroys.push_back({});
-                success = (_markedDestroys.end()-1)->_buffer.try_emplace_back(MarkedDestroys{currentMarker, 1u});
-                assert(success);
-            }
-		}
+        #endif
+
 		_pendingDestroys.push_back(buffer);
 	}
 
@@ -94,17 +80,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
 		size_t countToDestroy = 0;
-        // Note that we can end up iterating through the "MarkedDestroys" objects in a different order to
-        // which they were created here. But it doesn't matter for the end result
-        for (auto page=_markedDestroys.begin();page!=_markedDestroys.end();) {
-            while (!page->_buffer.empty() && page->_buffer.front()._marker <= trackerMarker) {
-                countToDestroy += page->_buffer.front()._pendingCount;
-                page->_buffer.pop_front();
-            }
-            if (page->_buffer.empty() && _markedDestroys.size() > 1) {
-                page = _markedDestroys.erase(page);     // no need to keep extra pages around after they are drained
-            } else
-                ++page;
+        while (!_markedDestroys.empty() && _markedDestroys.front()._marker <= trackerMarker) {
+            countToDestroy += _markedDestroys.front()._pendingCount;
+            _markedDestroys.pop_front();
         }
 
 		assert(countToDestroy <= _pendingDestroys.size());
@@ -258,10 +236,7 @@ namespace RenderCore { namespace Metal_Vulkan
         ScopedLock(_lock);
 		auto currentMarker = _gpuTracker ? _gpuTracker->GetProducerMarker() : ~0u;
 		if (_markedDestroys.empty() || _markedDestroys.back()._marker != currentMarker) {
-			bool success = _markedDestroys.try_emplace_back(MarkedDestroys{ currentMarker, 1u });
-			assert(success);	// failure means eating our tail
-			if (!success)
-				Throw(::Exceptions::BasicLabel("Ran out of buffers in command pool"));
+			_markedDestroys.emplace_back(MarkedDestroys{ currentMarker, 1u });
 		} else {
 			++_markedDestroys.back()._pendingCount;
 		}

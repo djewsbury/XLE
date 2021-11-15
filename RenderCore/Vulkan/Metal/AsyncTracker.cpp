@@ -11,6 +11,22 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+	static VulkanUniquePtr<VkFence> CreateFenceOutsideOfFactory(VkDevice device)
+	{
+		// We can't use ObjectFactory::CreateFence(), because the object factory uses FenceBasedTracker internally
+		// for it's destruction tracking
+		VkFenceCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        createInfo.pNext = nullptr;
+        createInfo.flags = 0;		// can onlt be 0 or VK_FENCE_CREATE_SIGNALED_BIT
+
+		VkFence rawFence = nullptr;
+        auto res = vkCreateFence(device, &createInfo, g_allocationCallbacks, &rawFence);
+        return VulkanUniquePtr<VkFence>(
+            rawFence,
+            [device](VkFence fence) { vkDestroyFence(device, fence, g_allocationCallbacks ); });
+	}
+
 	auto FenceBasedTracker::IncrementProducerFrame() -> Marker
 	{
 		ScopedLock(_trackersWritingCommandsLock);
@@ -29,50 +45,47 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	VkFence FenceBasedTracker::FindAvailableFence(IteratorRange<const Marker*> markers, std::unique_lock<Threading::Mutex>& lock)
 	{
-		assert(!markers.empty());
-		std::optional<std::chrono::steady_clock::time_point> nextMsg;
-		for (;;) {
-			// We need to reserve enough fences for every marker in _trackersWritingCommands that is not part of "markers" and is earlier than
-			// the highest marker. We need to do this to ensure that those markers will complete (without themselves stalling due to and exhausted fence heap!)
-			// This can cause problems if there are 2 threads each with a large nunmber of interleaved
-			// markers at the same time 
-			auto highestMarker = *(markers.end()-1);
-			unsigned fencesToReserve = 0;
-			{
-				ScopedLock(_trackersWritingCommandsLock);	// warning -- locking both _trackersWritingCommandsLock & _trackersSubmittedToQueueLock here
-				for (auto& t:_trackersWritingCommands)
-					if (t.first < highestMarker && std::find(markers.begin(), markers.end(), t.first) == markers.end())
-						++fencesToReserve;
-			}
-
-			if (_unallocatedFenceCount >= fencesToReserve+1) {
-				auto firstAvailable = _fenceAllocationFlags.FirstUnallocated();
-				if (firstAvailable != ~0u) {
-					_fenceAllocationFlags.Allocate(firstAvailable);
-					--_unallocatedFenceCount;
-					return _fences[firstAvailable].get();
-				}
-			}
-
+		if (_fenceAllocationFlags.AllocatedCount() > _requestedQueueDepth) {
+			// we incur this penalty on all threads, however it will have greated impact on threads that are submitting frequently -- which is why it can help correct the situation
 			lock.unlock();
-			
-			auto now = std::chrono::steady_clock::now();
-			if (!nextMsg || nextMsg.value() < now) {
-				// We still here, because this can be a very problematic case.
-				// Because we don't track object reservations per command list, while there
-				// is a long life command list out here, no vulkan objects are going to be destroyed. That helps us keep the memory usage tracking efficient,
-				// but it means that we should try to avoid these kinds of cases.
-				// Plus this probably means that there's a command list out there that is taking a large number of frames to complete, which isn't great in the
-				// first place
-				Log(Warning) << "Stalling due to insufficient fences in FenceBasedTracker. This happens when a command list submitted in the background takes longer than multiple frames. Stalling until we can resynchronize" << std::endl;
-				nextMsg = now + std::chrono::milliseconds(250);
-			}
-			Threading::Sleep(1);
+			auto pressure = GetThreadingPressure();
+			Log(Warning) << "Stalling due to too many fences in FenceBasedTracker (pressure: " << pressure << "). This happens when a command list submitted in the background takes longer than multiple frames. Slowing down to try to reduce pressure" << std::endl;
+			Threading::Sleep(4 * pressure);
 			if (std::this_thread::get_id() == _queueThreadId)
 				UpdateConsumer();
-
 			lock.lock();
 		}
+
+		assert(!markers.empty());
+		auto highestMarker = *(markers.end()-1);
+		auto firstAvailable = _fenceAllocationFlags.Allocate();
+		if (firstAvailable == ~0u)
+			Throw(std::runtime_error("Failed to allocate fence in FenceBaseTracker"));
+
+		if (firstAvailable >= _fences.size()) {
+			_fences.reserve(firstAvailable+1);
+			auto& factory = GetObjectFactory();
+			while (firstAvailable >= _fences.size())
+				_fences.push_back(CreateFenceOutsideOfFactory(factory.GetDevice().get()));
+		}
+
+		assert(_fences[firstAvailable]);
+		return _fences[firstAvailable].get();
+	}
+
+	float FenceBasedTracker::GetThreadingPressure()
+	{
+		// When there are multiple CPU threads generating cmdlists, and one or more of those cmdlists are kept
+		// alive for multiple frames, we end up in a situation where the tracker can never advance. This is
+		// very bad for the system, and it probably means that objects are never being destroyed.
+		// The "pressure" value returned here represents how bad this has gotten. We compare the number of 
+		// current allocated fences to the requested "queueDepth" provided at startup. 
+		//  less than queueDepth is pressure 0
+		//	between 1*queueDepth to 2*queueDepth is pressure 0 to 1
+		//	more than 2*queueDepth , the pressure will increase continually
+		auto allocated = _fenceAllocationFlags.AllocatedCount();
+		if (allocated < _requestedQueueDepth) return 0.f;
+		return std::pow((allocated-_requestedQueueDepth) / float(_requestedQueueDepth), 4.f);
 	}
 
 	VkFence FenceBasedTracker::OnSubmitToQueue(IteratorRange<const Marker*> markers)
@@ -86,6 +99,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::unique_lock<Threading::Mutex> lock(_trackersSubmittedToQueueLock);
 
 			fence = FindAvailableFence(markers, lock);
+			assert(fence);
 
 			for (auto marker:markers) {
 				Tracker tracker { fence, marker, State::SubmittedToQueue };
@@ -106,7 +120,6 @@ namespace RenderCore { namespace Metal_Vulkan
 					}
 				} else {
 					if (_trackersSubmittedPendingOrdering.size() > 16) {
-						Log(Warning) << "Large number of command lists pending ordering in async tracker. Marker (" << _nextSubmittedToQueueMarker << ") has not be submitted" << std::endl;
 						Log(Warning) << "There are " << _trackersSubmittedPendingOrdering.size() << " pending command lists. This will slow now destruction queue efficiency because destructions related to the pending command lists won't be processed until the missing one is submitted or abandoned." << std::endl;
 					}
 					_trackersSubmittedPendingOrdering.push_back(tracker);
@@ -191,7 +204,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(fenceIndex < _fences.size());
 		assert(_fenceAllocationFlags.IsAllocated(fenceIndex));
 		_fenceAllocationFlags.Deallocate(fenceIndex);
-		++_unallocatedFenceCount;
 		vkResetFences(_device, 1, &fence);
 	}
 
@@ -261,7 +273,6 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (tracker._frameMarker == marker) {
 					assert(tracker._state == State::SubmittedToQueue);
 					fence = tracker._fence;
-					
 					break;
 				}
 			if (!fence)
@@ -307,16 +318,17 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	FenceBasedTracker::FenceBasedTracker(ObjectFactory& factory, unsigned queueDepth)
-	: _fenceAllocationFlags(queueDepth)
+	: _fenceAllocationFlags(2*queueDepth)
+	, _requestedQueueDepth(queueDepth)
 	{
 		_trackersSubmittedToQueue.reserve(queueDepth);
 		_trackersSubmittedPendingOrdering.reserve(queueDepth);
 		_trackersWritingCommands.reserve(queueDepth);
 		_trackersPendingAbandon.reserve(queueDepth);
 
-		_fences.resize(queueDepth);
-		for (unsigned c=0; c<queueDepth; ++c)
-			_fences[c] = factory.CreateFence();
+		_fences.resize(2*queueDepth);
+		for (unsigned c=0; c<(2*queueDepth); ++c)
+			_fences[c] = CreateFenceOutsideOfFactory(factory.GetDevice().get());
 
 		// We start with frame 1;
 		_currentProducerFrameMarker = 1;
@@ -325,7 +337,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		_initialMarker = true;
 		_device = factory.GetDevice().get();
 		_queueThreadId = std::this_thread::get_id();
-		_unallocatedFenceCount = queueDepth;
 	}
 
 	FenceBasedTracker::~FenceBasedTracker() {}

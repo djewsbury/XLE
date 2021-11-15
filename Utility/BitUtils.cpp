@@ -84,6 +84,13 @@ namespace Utility
         return ~0u;
     }
 
+    unsigned BitHeap::AllocatedCount() const
+    {
+        unsigned result = 0;
+        for (auto i:_heap) result += 64u-popcount(i);
+        return result;
+    }
+
     BitHeap::BitHeap(unsigned slotCount)
     {
         unsigned longLongCount = (slotCount + 64 - 1) / 64;
