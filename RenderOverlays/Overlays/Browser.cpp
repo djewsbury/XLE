@@ -638,7 +638,7 @@ namespace Overlays
         if (!res) {
             utf8 utf8Filename[MaxPath];
             ucs2_2_utf8(AsPointer(filename.cbegin()), filename.size(), utf8Filename, dimof(utf8Filename));
-            res = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>((const char*)utf8Filename);
+            res = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>((const char*)utf8Filename);
             _pimpl->_resources.Insert(hashedName, res);
         }
 

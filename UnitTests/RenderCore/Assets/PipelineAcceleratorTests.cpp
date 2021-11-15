@@ -194,7 +194,7 @@ namespace UnitTests
 		auto testHelper = MakeTestHelper();
 		TechniqueTestApparatus testApparatus(*testHelper);
 
-		auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+		auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 		auto techniqueDelegate = Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 		auto mainPool = testApparatus._pipelineAccelerators;
@@ -456,7 +456,7 @@ namespace UnitTests
 			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
 
 			// Put together the pieces we need to create a pipeline
-			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
@@ -540,7 +540,7 @@ namespace UnitTests
 				"temporary-out");
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
 
-			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),

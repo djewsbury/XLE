@@ -73,10 +73,9 @@ namespace Assets
 		// We must check the "background state" here. If it's invalidated in the
 		// background, we can restart the compile; even if that invalidated state hasn't
 		// reached the "foreground" yet.
-		AssetType actualized;
 		DependencyValidation depVal;
 		Blob actualizationLog;
-		auto state = future.CheckStatusBkgrnd(actualized, depVal, actualizationLog);
+		auto state = future.CheckStatusBkgrnd(depVal, actualizationLog);
 		if (state == AssetState::Pending)
 			return false;
 		if (!depVal)

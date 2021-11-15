@@ -194,7 +194,7 @@ namespace UnitTests
 				patches,
 				ParameterBox {}, constantBindings, resourceBindings, MakeIteratorRange(samplerBindings));
 
-			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
@@ -265,14 +265,14 @@ namespace UnitTests
 			#endif
 			REQUIRE(!discoveredCompilations.empty());
 
-			auto techniqueSetFile = ::Assets::MakeAsset<Techniques::TechniqueSetFile>("ut-data/basic.tech");
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
 				Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile),
 				ParameterBox {},
 				fbHelper.GetDesc());
 
-			auto renderer = ::Assets::MakeAsset<Techniques::SimpleModelRenderer>(
+			auto renderer = ::Assets::MakeAssetPtr<Techniques::SimpleModelRenderer>(
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",
 				"xleres/DefaultResources/materialsphere.material");

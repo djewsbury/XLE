@@ -39,6 +39,7 @@ namespace PlatformRig
 			InputStreamFormatter<utf8>& formatter,
 			const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal);
+        TableOfKeys() = default;
         ~TableOfKeys();
     private:
         ::Assets::DependencyValidation                             _validationCallback;
@@ -73,7 +74,7 @@ namespace PlatformRig
         if (evnt.IsHeld(ctrlKey)) {
             auto* t = Assets::MakeAsset<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
             if (t) {
-                for (auto i=(*t)->GetTable().cbegin(); i!=(*t)->GetTable().cend(); ++i) {
+                for (auto i=t->GetTable().cbegin(); i!=t->GetTable().cend(); ++i) {
                     if (evnt.IsPress(i->first)) {
                         ConsoleRig::Console::GetInstance().Execute(i->second);
                         return true;

@@ -42,6 +42,7 @@ namespace RenderCore { namespace Techniques
 			InputStreamFormatter<utf8>& input, 
 			const ::Assets::DirectorySearchRules&, 
 			const ::Assets::DependencyValidation& depVal);
+        TextureMetaData() = default;
 	private:
 		::Assets::DependencyValidation _depVal;
 	};
@@ -125,7 +126,7 @@ namespace RenderCore { namespace Techniques
         DecodedInitializer init(splitter);
 		assert(!splitter.File().IsEmpty());
 
-		std::shared_ptr<::Assets::FuturePtr<TextureMetaData>> metaDataFuture;
+		std::shared_ptr<::Assets::Future<TextureMetaData>> metaDataFuture;
 		{
             ::Assets::ResChar filename[MaxPath];
                 // Some resources might have a little xml ".metadata" file attached. This 
@@ -158,7 +159,7 @@ namespace RenderCore { namespace Techniques
             WhenAll(std::move(transactionMarker._future), metaDataFuture).ThenConstructToPromiseWithFutures(
                 std::move(promise),
                 [   init, initializerStr = splitter.FullFilename().AsString(), 
-                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator, std::shared_future<std::shared_ptr<TextureMetaData>> metaDataFuture) {
+                    depVal = pkt->GetDependencyValidation()](std::future<BufferUploads::ResourceLocator> futureLocator, std::shared_future<TextureMetaData> metaDataFuture) {
 
                     BufferUploads::ResourceLocator locator;
                     TRY {
@@ -171,14 +172,14 @@ namespace RenderCore { namespace Techniques
                     auto metaData = metaDataFuture.get();
 
                     auto finalDepVal = depVal;
-                    if (metaData->GetDependencyValidation()) {
+                    if (metaData.GetDependencyValidation()) {
                         auto parentDepVal = ::Assets::GetDepValSys().Make();
                         parentDepVal.RegisterDependency(finalDepVal);
-                        parentDepVal.RegisterDependency(metaData->GetDependencyValidation());
+                        parentDepVal.RegisterDependency(metaData.GetDependencyValidation());
                         finalDepVal = parentDepVal;
                     }
 
-                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, metaData.get());
+                    auto viewDesc = MakeTextureViewDesc(desc._textureDesc, init, &metaData);
                     auto view = locator.CreateTextureView(BindFlag::ShaderResource, viewDesc);
                     if (!view) {
                         Throw(::Assets::Exceptions::ConstructionError(
@@ -269,7 +270,7 @@ namespace RenderCore { namespace Techniques
 		const FileNameSplitter<char>& splitter)
     {
         auto containerInitializer = splitter.AllExceptParameters();
-		auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(containerInitializer);
+		auto containerFuture = ::Assets::MakeFuturePtr<Assets::TextureArtifact>(containerInitializer);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
             [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
@@ -281,7 +282,7 @@ namespace RenderCore { namespace Techniques
         std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         const Assets::TextureCompilationRequest& compileRequest)
     {
-        auto containerFuture = ::Assets::MakeFuture<std::shared_ptr<Assets::TextureArtifact>>(compileRequest);
+        auto containerFuture = ::Assets::MakeFuturePtr<Assets::TextureArtifact>(compileRequest);
         ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
             std::move(promise),
             [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {

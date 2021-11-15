@@ -152,7 +152,7 @@ namespace ToolsRig
 	template<typename AssetType, typename... Params>
 		std::shared_ptr<DivergentAsset<AssetType>> CreateDivergentAsset(Params... params)
 	{
-		auto& set = ::Assets::Services::GetAssetSets().GetSetForType<AssetType>();
+		auto& set = ::Assets::Services::GetAssetSets().GetSetForType<std::shared_ptr<AssetType>>();
 		std::shared_ptr<AssetType> originalAsset;
 
 		TRY {

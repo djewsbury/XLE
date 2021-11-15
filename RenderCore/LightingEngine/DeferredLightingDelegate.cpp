@@ -106,7 +106,7 @@ namespace RenderCore { namespace LightingEngine
 		bool precisionTargets = false)
 	{
 		auto result = std::make_shared<::Assets::FuturePtr<RenderStepFragmentInterface>>("build-gbuffer");
-		auto normalsFittingTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
+		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
 			result->AdoptPromise(),
@@ -243,7 +243,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
 		auto pipelineLayout = _lightResolveOperators->_pipelineLayout;
-		auto& copyShader = *::Assets::Actualize<Metal::ShaderProgram>(
+		auto copyShader = ::Assets::ActualizeAssetPtr<Metal::ShaderProgram>(
 			pipelineLayout,
 			BASIC2D_VERTEX_HLSL ":fullscreen",
 			BASIC_PIXEL_HLSL ":copy_inputattachment");
@@ -251,8 +251,8 @@ namespace RenderCore { namespace LightingEngine
 		auto encoder = metalContext.BeginGraphicsEncoder_ProgressivePipeline(pipelineLayout);
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
-		Metal::BoundUniforms uniforms(copyShader, usi);
-		encoder.Bind(copyShader);
+		Metal::BoundUniforms uniforms(*copyShader, usi);
+		encoder.Bind(*copyShader);
 		encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		encoder.Bind({&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1});
 		UniformsStream us;

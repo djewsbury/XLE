@@ -29,7 +29,7 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const ParameterBox**> selectors)
 	{
 		// accelerated return when the filtering rules are already available
-		auto filteringFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
+		auto filteringFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
 		if (filteringFuture->GetAssetState() == ::Assets::AssetState::Ready) {
 			ScopedLock(_sharedPools->_lock);
 

@@ -123,7 +123,7 @@ namespace RenderCore { namespace Techniques
 				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 				slotInProgress._resourceIdx = (unsigned)working._resources.size();
 				DescriptorSetInProgress::Resource res;
-				res._pendingResource = ::Assets::MakeAsset<DeferredShaderResource>(MakeStringSection(boundResource.value()));
+				res._pendingResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
 				working._resources.push_back(res);
 				gotBinding = true;
 

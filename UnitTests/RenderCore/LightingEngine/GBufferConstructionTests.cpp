@@ -237,7 +237,7 @@ namespace UnitTests
 			BindImmediateData(1, Hash64("LocalTransform"));
 			BindResourceView(0, Hash64("NormalsFittingTexture"));
 
-			auto normalsFittingTexture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
+			auto normalsFittingTexture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 			_normalsFittingSRV = normalsFittingTexture->GetShaderResource();
 		}
 
@@ -364,7 +364,7 @@ namespace UnitTests
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("write gbuffer")
 		{
-			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			auto deferredIllumDelegate = RenderCore::Techniques::CreateTechniqueDelegate_Deferred(techniqueSetFile);
 
 			auto pipelinePool = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);

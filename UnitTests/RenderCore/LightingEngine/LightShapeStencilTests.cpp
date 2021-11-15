@@ -77,7 +77,7 @@ namespace UnitTests
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
 			_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
-			auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
+			auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";

@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques
 	, _depthStencil(depthStencil)
 	{
 		const char* techFile = ILLUM_LEGACY_TECH;
-		_techniqueFuture = ::Assets::MakeAsset<Technique>(techFile);
+		_techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
 	}
 
 	TechniqueDelegate_Legacy::~TechniqueDelegate_Legacy()

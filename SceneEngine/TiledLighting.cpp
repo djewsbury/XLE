@@ -152,7 +152,7 @@ namespace SceneEngine
         const IResourceView* srvs[] { 
             tileLightingResources._lightOutputTextureSRV.get(), 
             tileLightingResources._debuggingTextureSRV[0].get(), tileLightingResources._debuggingTextureSRV[1].get(), tileLightingResources._debuggingTextureSRV[2].get(),
-            ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/digits.dds:T")->GetShaderResource().get()
+            ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/digits.dds:T")->GetShaderResource().get()
         };
         us._resourceViews = MakeIteratorRange(srvs);
 
@@ -393,10 +393,10 @@ namespace SceneEngine
 
                 auto& tileLightingResources = GetTileLightingResources(*threadContext.GetDevice(), mainViewportWidth, mainViewportHeight, 16);
                 const bool isShadowsPass = false;
-                auto& pipelineLayoutAsset = *::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
+                auto& pipelineLayoutAsset = *::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
                     pool->GetDevice(),
                     "xleres/Deferred/tiled.pipeline:BeamsDebugging");
-                auto& debuggingShader = *::Assets::Actualize<Metal::ShaderProgram>(
+                auto& debuggingShader = *::Assets::ActualizeAssetPtr<Metal::ShaderProgram>(
                     pipelineLayoutAsset.GetPipelineLayout(),
                     "xleres/Deferred/debugging/beams.vertex.hlsl:main:vs_*", 
                     "xleres/Deferred/debugging/beams.geo.hlsl:main:gs_*", 
@@ -432,7 +432,7 @@ namespace SceneEngine
                 if (!isShadowsPass && Tweakable("TiledBeamsTransparent", false)) {
                     AttachmentBlendDesc abd[] {Techniques::CommonResourceBox::s_abStraightAlpha};
                     encoder.Bind(MakeIteratorRange(abd));
-                    auto& predepth = *::Assets::Actualize<Metal::ShaderProgram>(
+                    auto& predepth = *::Assets::ActualizeAssetPtr<Metal::ShaderProgram>(
                         pipelineLayoutAsset.GetPipelineLayout(),
                         "xleres/Deferred/debugging/beams.vertex.hlsl:main:vs_*", 
                         "xleres/Deferred/debugging/beams.geo.hlsl:main:gs_*", 
@@ -449,7 +449,7 @@ namespace SceneEngine
                 encoder.Draw(globals[0]*globals[1]);
 
                 if (!isShadowsPass) {
-                    encoder.Bind(*::Assets::Actualize<Metal::ShaderProgram>(
+                    encoder.Bind(*::Assets::ActualizeAssetPtr<Metal::ShaderProgram>(
                         pipelineLayoutAsset.GetPipelineLayout(),
                         "xleres/Deferred/debugging/beams.vertex.hlsl:main:vs_*", 
                         "xleres/Deferred/debugging/beams.geo.hlsl:Outlines:gs_*", 

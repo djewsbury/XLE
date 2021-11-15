@@ -60,12 +60,12 @@ namespace RenderCore { namespace Techniques
 		_commonResources = std::make_shared<CommonResourceBox>(*_device);
 		_drawablesPacketsPool = std::make_shared<DrawablesPacketPool>();
 
-		auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
+		auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(MAIN_PIPELINE);
 		pipelineLayoutFileFuture->StallWhilePending();
 		_pipelineLayoutFile = pipelineLayoutFileFuture->Actualize();
 		_depValPtr.RegisterDependency(_pipelineLayoutFile->GetDependencyValidation());
 
-		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
+		auto descSetLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 		descSetLayoutFuture->StallWhilePending();
 		auto descSetLayoutContainer = descSetLayoutFuture->Actualize();
 		auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");

@@ -123,7 +123,7 @@ namespace UnitTests
 		LightingOperatorsPipelineLayout(const MetalTestHelper& testHelper)
 		{	
 			_samplerPool = std::make_shared<RenderCore::SamplerPool>(*testHelper._device);
-			auto pipelineLayoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
+			auto pipelineLayoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 			_pipelineLayoutFile = StallAndRequireReady(*pipelineLayoutFileFuture);
 
 			const std::string pipelineLayoutName = "LightingOperator";
@@ -525,7 +525,7 @@ namespace UnitTests
 				lightScene.TryGetShadowProjectionInterface<LightingEngine::ISunSourceShadows>(shadowProjectionId)->FixMainSceneCamera(
 					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
 
-				auto generalPipelineFuture = ::Assets::MakeAsset<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, GENERAL_OPERATOR_PIPELINE ":GraphicsMain");
+				auto generalPipelineFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::CompiledPipelineLayoutAsset>(testHelper->_device, GENERAL_OPERATOR_PIPELINE ":GraphicsMain");
 				generalPipelineFuture->StallWhilePending();
 				REQUIRE(generalPipelineFuture->GetAssetState() == ::Assets::AssetState::Ready);
 				auto generalPipeline = generalPipelineFuture->Actualize();

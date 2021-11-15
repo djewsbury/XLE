@@ -150,7 +150,7 @@ namespace UnitTests
 
 		// Try drawing with a texture and a little bit of material information
 		{
-			auto tex = ::Assets::MakeAsset<Techniques::DeferredShaderResource>("xleres/DefaultResources/waternoise.png");
+			auto tex = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>("xleres/DefaultResources/waternoise.png");
 			tex->StallWhilePending();
 			bufferUploads->StallUntilCompletion(*threadContext, tex->Actualize()->GetCompletionCommandList());
 

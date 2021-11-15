@@ -245,7 +245,7 @@ namespace SceneEngine
 		ModelIntersectionTechniqueBox(Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
 			auto device = RenderCore::Techniques::Services::GetDevicePtr();
-			auto techniqueSetFile = ::Assets::MakeAsset<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			auto techniqueSetFile = ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 			_rayTestTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 0);
 			_frustumTechniqueDelegate = CreateTechniqueDelegate(techniqueSetFile, 1);
 

@@ -524,8 +524,8 @@ namespace RenderCore { namespace Metal_DX11
         auto state = future->StallWhilePending();
         if (state != ::Assets::AssetState::Ready)
             Throw(::Exceptions::BasicLabel("Shader compile failure while building function linking module (%s)", initializer));
-		auto byteCode = future->Actualize();
-        auto code = byteCode->GetByteCode();
+		const auto& byteCode = future->Actualize();
+        auto code = byteCode.GetByteCode();
 
         ID3D11Module* rawModule = nullptr;
         auto compiler = D3DShaderCompiler::GetInstance(); 
@@ -537,7 +537,7 @@ namespace RenderCore { namespace Metal_DX11
         ID3D11LibraryReflection* reflectionRaw = nullptr;
         compiler->D3DReflectLibrary_Wrapper(code.begin(), code.size(), IID_ID3D11LibraryReflection, (void**)&reflectionRaw);
         _reflection = moveptr(reflectionRaw);
-		_dependencyValidation = byteCode->GetDependencyValidation();
+		_dependencyValidation = byteCode.GetDependencyValidation();
     }
 
     FunctionLinkingModule::~FunctionLinkingModule() {}

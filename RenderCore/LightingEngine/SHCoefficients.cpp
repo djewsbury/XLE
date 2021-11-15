@@ -20,7 +20,7 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void SHCoefficientsAsset::ConstructToPromise(
-		std::promise<std::shared_ptr<SHCoefficientsAsset>>&& promise,
+		std::promise<SHCoefficientsAsset>&& promise,
 		StringSection<> srcTexture)
 	{
 		Assets::TextureCompilationRequest request;
@@ -28,10 +28,10 @@ namespace RenderCore { namespace LightingEngine
 		request._srcFile = srcTexture.AsString();
 		request._format = Format::R32G32B32A32_FLOAT;
 		request._coefficientCount = 25;
-		auto srcFuture = ::Assets::MakeFuture<std::shared_ptr<RenderCore::Assets::TextureArtifact>>(request);
+		auto srcFuture = ::Assets::MakeFuturePtr<RenderCore::Assets::TextureArtifact>(request);
 		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
 			std::move(promise),
-			[](std::promise<std::shared_ptr<SHCoefficientsAsset>>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
+			[](std::promise<SHCoefficientsAsset>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
 				::Assets::WhenAll(textureArtifact->BeginLoadRawData()).ThenConstructToPromise(
 					std::move(thatPromise),
 					[depVal = textureArtifact->GetDependencyValidation()](auto rawData) {
@@ -43,8 +43,8 @@ namespace RenderCore { namespace LightingEngine
 						}
 
 						auto data = MakeIteratorRange((const Float4*)AsPointer(rawData._data.begin()), (const Float4*)AsPointer(rawData._data.end()));
-						auto res = std::make_shared<SHCoefficientsAsset>(data);
-						res->_depVal = depVal;
+						SHCoefficientsAsset res{data};
+						res._depVal = depVal;
 						return res;
 					});
 			});

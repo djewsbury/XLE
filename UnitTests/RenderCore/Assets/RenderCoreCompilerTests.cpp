@@ -147,18 +147,18 @@ namespace UnitTests
 
 		SECTION("Get material settings from a model file")
 		{
-			auto& cfgs = *::Assets::Actualize<RenderCore::Assets::RawMatConfigurations>("fake-model");
+			auto& cfgs = ::Assets::ActualizeAsset<RenderCore::Assets::RawMatConfigurations>("fake-model");
 			REQUIRE(cfgs._configurations.size() == 2);
 			REQUIRE(cfgs._configurations[0] == "Material0");
 			REQUIRE(cfgs._configurations[1] == "Material1");
 
-			auto& material0 = *::Assets::Actualize<RenderCore::Assets::RawMaterial>("fake-model:Material0");
-			REQUIRE(material0._constants.GetParameter<float>("Brightness") == 50_a);
-			REQUIRE(Equivalent(material0._constants.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
+			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material0");
+			REQUIRE(material0->_constants.GetParameter<float>("Brightness") == 50_a);
+			REQUIRE(Equivalent(material0->_constants.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
 
-			auto& material1 = *::Assets::Actualize<RenderCore::Assets::RawMaterial>("fake-model:Material1");
-			REQUIRE(material1._constants.GetParameter<float>("Brightness") == 33_a);
-			REQUIRE(Equivalent(material1._constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
+			auto material1 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material1");
+			REQUIRE(material1->_constants.GetParameter<float>("Brightness") == 33_a);
+			REQUIRE(Equivalent(material1->_constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}
 	}
 
@@ -175,7 +175,7 @@ namespace UnitTests
 			REQUIRE(!discoveredCompilations.empty());
 
 			const char* testModelFile = "xleres/DefaultResources/materialsphere.dae";
-			auto scaffoldFuture = ::Assets::MakeAsset<RenderCore::Assets::ModelScaffold>(testModelFile);
+			auto scaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::ModelScaffold>(testModelFile);
 			scaffoldFuture->StallWhilePending();
 			INFO(::Assets::AsString(scaffoldFuture->GetActualizationLog()));
 			REQUIRE(scaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);
@@ -184,7 +184,7 @@ namespace UnitTests
 			auto& cmdStream = scaffold->CommandStream();
 			REQUIRE(cmdStream.GetGeoCallCount() != 0);
 
-			auto matScaffoldFuture = ::Assets::MakeAsset<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
+			auto matScaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
 			matScaffoldFuture->StallWhilePending();
 			INFO(::Assets::AsString(matScaffoldFuture->GetActualizationLog()));
 			REQUIRE(matScaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);

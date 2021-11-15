@@ -518,7 +518,7 @@ namespace UnitTests
 		// start a compile via MakeFuture, and ensure that it gets propagated to the registered compiler and generates
 		// the asset as expected
 		{
-			auto futureByPtr = ::Assets::MakeFuture<std::shared_ptr<TestChunkRequestsAssetWithCompileProcessType>>("unit-test-asset-implicit");
+			auto futureByPtr = ::Assets::MakeFuturePtr<TestChunkRequestsAssetWithCompileProcessType>("unit-test-asset-implicit");
 			futureByPtr->StallWhilePending();
 			auto actualPtr = futureByPtr->Actualize();
 			REQUIRE(actualPtr != nullptr);

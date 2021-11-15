@@ -17,6 +17,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		IteratorRange<const Float4*> GetCoefficients() const { assert(_coefficientCount!=0); return MakeIteratorRange(_coefficients, &_coefficients[_coefficientCount]); }
 		SHCoefficients(IteratorRange<const Float4*> coefficients);
+		SHCoefficients() = default;
 	private:
 		Float4 _coefficients[25];
 		unsigned _coefficientCount = 0;
@@ -28,8 +29,9 @@ namespace RenderCore { namespace LightingEngine
 		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SHCoefficientsAsset>>&&,
+			std::promise<SHCoefficientsAsset>&&,
 			StringSection<> initializer);
+		SHCoefficientsAsset() = default;
 	protected:
 		::Assets::DependencyValidation _depVal;
 		using SHCoefficients::SHCoefficients;

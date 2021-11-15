@@ -343,7 +343,7 @@ namespace RenderCore { namespace Techniques
 		ImmediateDrawables(const std::shared_ptr<IDevice>& device)
 		{
 			_techniqueDelegate = std::make_shared<ImmediateRendererTechniqueDelegate>();
-			auto pipelineLayout = ::Assets::MakeAsset<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
+			auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(_techniqueDelegate->GetPipelineLayout());
 			pipelineLayout->StallWhilePending();
 			auto matDescSetLayout = FindLayout(*pipelineLayout->Actualize(), "Material");
 			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, matDescSetLayout, 0);

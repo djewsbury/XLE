@@ -370,7 +370,7 @@ namespace UnitTests
 	public:
 		std::string _contents;
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<ExampleAsset>>&& promise,
+			std::promise<ExampleAsset>&& promise,
 			StringSection<> filename)
 		{
 			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
@@ -381,14 +381,20 @@ namespace UnitTests
 						std::string contents;
 						contents.resize(size);
 						file->Read(contents.data(), size);
-						auto res = std::make_shared<ExampleAsset>();
-						res->_contents = std::move(contents);
-						promise.set_value(res);
+						ExampleAsset res;
+						res._contents = std::move(contents);
+						promise.set_value(std::move(res));
 					} CATCH(...) {
 						promise.set_exception(std::current_exception());
 					} CATCH_END
 				});
 		}
+
+		ExampleAsset() = default;
+		ExampleAsset(ExampleAsset&&) = default;
+		ExampleAsset& operator=(ExampleAsset&&) = default;
+		ExampleAsset(const ExampleAsset&) = delete;
+		ExampleAsset& operator=(const ExampleAsset&) = delete;
 	};
 
 	TEST_CASE( "Assets-ConstructToPromise", "[assets]" )
@@ -403,8 +409,8 @@ namespace UnitTests
 
 		auto futureAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/file.dat");
 		futureAsset->StallWhilePending();
-		auto actualAsset = futureAsset->Actualize();
-		REQUIRE(actualAsset->_contents == fileContents);
+		auto& actualAsset = futureAsset->Actualize();
+		REQUIRE(actualAsset._contents == fileContents);
 
 		// Expecting a failure for this one -- we should get InvalidAsset with something useful in the actualization log 
 		auto failedAsset = ::Assets::MakeAsset<ExampleAsset>("ut-data/no-file.data");

@@ -569,7 +569,7 @@ namespace PlatformRig
 
                         FillRectangle(context, rect, menuBkgrnd);
 
-                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
+                        auto texture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
                         context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 
@@ -584,7 +584,7 @@ namespace PlatformRig
                     } else {
 
                         rect = Rect(pt - Coord2(iconSize[0], 0), pt + Coord2(0, iconSize[1]));
-                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
+                        auto texture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[c] + String_IconEnd);
                         context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 
@@ -617,7 +617,7 @@ namespace PlatformRig
                             Rect(rect._topLeft - Coord2(2 + margin + smallIconSize[0],2), rect._bottomRight + Coord2(2,2)), 
                             interfaceState.HasMouseOver(i->_hashCode) ? menuBkgrndHigh : menuBkgrnd);
 
-                        auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd);
+                        auto texture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(String_IconBegin + categories[_subMenuOpen-1] + String_IconEnd);
                         context.RequireCommandList(texture->GetCompletionCommandList());
                         context.DrawTexturedQuad(
                             ProjectionMode::P2D, 

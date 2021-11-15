@@ -36,14 +36,14 @@ namespace RenderOverlays
 		StringSection<> ps,
 		StringSection<> definesTable = {})
 	{
-		return ::Assets::MakeAsset<Metal::ShaderProgram>(
+		return ::Assets::MakeAssetPtr<Metal::ShaderProgram>(
             pipelineLayout,
             vs, ps, definesTable);
 	}
 
     static std::shared_ptr<ICompiledPipelineLayout> GetMainPipelineLayout(std::shared_ptr<IDevice> device)
     {
-        return ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout();
+        return ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(device, MAIN_PIPELINE ":GraphicsMain")->GetPipelineLayout();
     }
 
     HighlightByStencilSettings::HighlightByStencilSettings()
@@ -67,8 +67,9 @@ namespace RenderOverlays
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
 
         HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors);
+        HighlightShaders() = default;
         static void ConstructToPromise(
-			std::promise<std::shared_ptr<HighlightShaders>>&&,
+			std::promise<HighlightShaders>&&,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
     protected:
         ::Assets::DependencyValidation  _validationCallback;
@@ -76,7 +77,7 @@ namespace RenderOverlays
     };
 
     void HighlightShaders::ConstructToPromise(
-        std::promise<std::shared_ptr<HighlightShaders>>&& promise,
+        std::promise<HighlightShaders>&& promise,
         const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
     {
         //// ////
@@ -89,7 +90,7 @@ namespace RenderOverlays
             BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
             OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
 
-        auto tex = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
+        auto tex = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
 
         ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToPromise(std::move(promise));
     }
@@ -136,10 +137,10 @@ namespace RenderOverlays
         auto numericUniforms = encoder.BeginNumericUniformsInterface();
         numericUniforms.BindConstantBuffers(3, cbData);
         if (inputAttachmentMode) {
-            IResourceView* srvs[] = { (*shaders)->_distinctColorsSRV.get(), stencilSrv };
+            IResourceView* srvs[] = { shaders->_distinctColorsSRV.get(), stencilSrv };
             numericUniforms.Bind(1, MakeIteratorRange(srvs));
         } else {
-            IResourceView* srvs[] = { stencilSrv, (*shaders)->_distinctColorsSRV.get() };
+            IResourceView* srvs[] = { stencilSrv, shaders->_distinctColorsSRV.get() };
             numericUniforms.Bind(0, MakeIteratorRange(srvs));
         }
         numericUniforms.Apply(metalContext, encoder);
@@ -321,8 +322,8 @@ namespace RenderOverlays
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);
             us._immediateData = MakeIteratorRange(immd);
-            (*shaders)->_drawHighlightUniforms.ApplyLooseUniforms(metalContext, encoder, us);
-			encoder.Bind(*(*shaders)->_drawHighlight);
+            shaders->_drawHighlightUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			encoder.Bind(*shaders->_drawHighlight);
 			encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abAlphaPremultiplied, &Techniques::CommonResourceBox::s_abAlphaPremultiplied+1));
 			encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 			encoder.Bind({}, Topology::TriangleStrip);
@@ -355,8 +356,8 @@ namespace RenderOverlays
             UniformsStream us;
             us._resourceViews = MakeIteratorRange(rvs);
             us._immediateData = MakeIteratorRange(immd);
-			(*shaders)->_drawShadowUniforms.ApplyLooseUniforms(metalContext, encoder, us);
-			encoder.Bind(*(*shaders)->_drawShadow);
+			shaders->_drawShadowUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			encoder.Bind(*shaders->_drawShadow);
 			encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abStraightAlpha, &Techniques::CommonResourceBox::s_abStraightAlpha+1));
 			encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
 			encoder.Bind({}, Topology::TriangleStrip);

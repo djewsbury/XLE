@@ -100,17 +100,17 @@ namespace RenderCore { namespace Assets
 							::Assets::AsString(modelMatFuture->GetActualizationLog()).c_str()));
 				}
 
-				auto modelMat = modelMatFuture->Actualize();
+				const auto& modelMat = modelMatFuture->Actualize();
 
 					//  for each configuration, we want to build a resolved material
 					//  Note that this is a bit crazy, because we're going to be loading
 					//  and re-parsing the same files over and over again!
 				SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> resolvedNames;
-				std::vector<std::pair<MaterialGuid, ::Assets::PtrToFuturePtr<ResolvedMaterial>>> materialFutures;
-				resolvedNames.reserve(modelMat->_configurations.size());
-				materialFutures.reserve(modelMat->_configurations.size());
+				std::vector<std::pair<MaterialGuid, std::shared_ptr<::Assets::Future<ResolvedMaterial>>>> materialFutures;
+				resolvedNames.reserve(modelMat._configurations.size());
+				materialFutures.reserve(modelMat._configurations.size());
 
-				for (const auto& cfg:modelMat->_configurations) {
+				for (const auto& cfg:modelMat._configurations) {
 					MaterialScaffold::Material resMat;
 					ShaderPatchCollection patchCollection;
 					std::basic_stringstream<::Assets::ResChar> resName;
@@ -162,24 +162,24 @@ namespace RenderCore { namespace Assets
 				for (const auto&m:materialFutures) {
 					auto state = m.second->StallWhilePending();
 					assert(state.value() == ::Assets::AssetState::Ready);
-					auto resolvedMat = m.second->Actualize();
+					auto& resolvedMat = m.second->Actualize();
 
 					MaterialScaffold::Material scaffoldMat;
-					scaffoldMat._bindings = resolvedMat->_resourceBindings;
-					scaffoldMat._matParams = resolvedMat->_matParamBox;
-					scaffoldMat._stateSet = resolvedMat->_stateSet;
-					scaffoldMat._constants = resolvedMat->_constants;
-					scaffoldMat._patchCollection = resolvedMat->_patchCollection.GetHash();
+					scaffoldMat._bindings = resolvedMat._resourceBindings;
+					scaffoldMat._matParams = resolvedMat._matParamBox;
+					scaffoldMat._stateSet = resolvedMat._stateSet;
+					scaffoldMat._constants = resolvedMat._constants;
+					scaffoldMat._patchCollection = resolvedMat._patchCollection.GetHash();
 					resolved.push_back({m.first, std::move(scaffoldMat)});
 
 					bool gotExisting = false;
 					for (const auto&p:patchCollections)
-						gotExisting |= p.GetHash() == resolvedMat->_patchCollection.GetHash();
+						gotExisting |= p.GetHash() == resolvedMat._patchCollection.GetHash();
 
 					if (!gotExisting)
-						patchCollections.emplace_back(resolvedMat->_patchCollection);
+						patchCollections.emplace_back(resolvedMat._patchCollection);
 
-					for (const auto& d:resolvedMat->_depFileStates)
+					for (const auto& d:resolvedMat._depFileStates)
 						AddDep(_dependencies, d);
 				}
 

@@ -307,7 +307,7 @@ namespace RenderCore { namespace LightingEngine
 		pipelineDesc->_rasterization._flags |= RasterizationDescFlags::ConservativeRaster;
 		pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
 
-		auto& pipelineLayout = *::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
+		auto& pipelineLayout = *::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
 			pipelinePool->GetDevice(),
 			TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain");
 

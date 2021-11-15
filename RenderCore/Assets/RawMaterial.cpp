@@ -453,7 +453,7 @@ namespace RenderCore { namespace Assets
     static void AddDep(std::vector<::Assets::DependentFileState>& deps, StringSection<> newDep);
 
     void ResolvedMaterial::ConstructToPromise(
-        std::promise<std::shared_ptr<ResolvedMaterial>>&& promisedMaterial,
+        std::promise<ResolvedMaterial>&& promisedMaterial,
         StringSection<> initializer)
     {
         // We have to load an entire tree of RawMaterials and their inherited items.
@@ -479,7 +479,7 @@ namespace RenderCore { namespace Assets
             if (i2==i) break;
 
             AddDep(pendingTree->_deps, MakeFileNameSplitter(MakeStringSection(i, i2)).AllExceptParameters());
-            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAsset<RawMaterial>(MakeStringSection(i, i2))));
+            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAssetPtr<RawMaterial>(MakeStringSection(i, i2))));
             i = i2;
         }
         assert(!pendingTree->_subFutures.empty());
@@ -527,7 +527,7 @@ namespace RenderCore { namespace Assets
                         auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
                         for (const auto&i:inheritted) {
                             AddDep(pendingTree->_deps, MakeFileNameSplitter(i).AllExceptParameters());
-                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAsset<RawMaterial>(i)));
+                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAssetPtr<RawMaterial>(i)));
                         }
                     }
 
@@ -541,18 +541,18 @@ namespace RenderCore { namespace Assets
             [pendingTree]() {
                 // All of the RawMaterials in the tree are loaded; and we can just merge them together
                 // into a final resolved material
-                auto finalMaterial = std::make_shared<ResolvedMaterial>();
+                ResolvedMaterial finalMaterial;
                 assert(!pendingTree->_loadedSubMaterials.empty());
                 for (const auto& m:pendingTree->_loadedSubMaterials)
-                    MergeIn(*finalMaterial, *m.second);
+                    MergeIn(finalMaterial, *m.second);
                 if (pendingTree->_loadedSubMaterials.size() == 1) {
-                    finalMaterial->_depVal = pendingTree->_loadedSubMaterials[0].second->GetDependencyValidation();
+                    finalMaterial._depVal = pendingTree->_loadedSubMaterials[0].second->GetDependencyValidation();
                 } else {
-                    finalMaterial->_depVal = ::Assets::GetDepValSys().Make();
+                    finalMaterial._depVal = ::Assets::GetDepValSys().Make();
                     for (const auto& m:pendingTree->_loadedSubMaterials)
-                        finalMaterial->_depVal.RegisterDependency(m.second->GetDependencyValidation());
+                        finalMaterial._depVal.RegisterDependency(m.second->GetDependencyValidation());
                 }
-                finalMaterial->_depFileStates = std::move(pendingTree->_deps);
+                finalMaterial._depFileStates = std::move(pendingTree->_deps);
                 return finalMaterial;
             });
     }

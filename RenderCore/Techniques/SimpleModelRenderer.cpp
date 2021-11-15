@@ -1275,8 +1275,8 @@ namespace RenderCore { namespace Techniques
 		StringSection<> deformOperations,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
-		auto scaffoldFuture = ::Assets::MakeAsset<RenderCore::Assets::ModelScaffold>(modelScaffoldName);
-		auto materialFuture = ::Assets::MakeAsset<RenderCore::Assets::MaterialScaffold>(materialScaffoldName, modelScaffoldName);
+		auto scaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::ModelScaffold>(modelScaffoldName);
+		auto materialFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(materialScaffoldName, modelScaffoldName);
 		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
 	}
 

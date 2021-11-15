@@ -1404,7 +1404,7 @@ namespace ToolsRig
                 Coord2 iconTopLeft(buttonsArea._topLeft + Coord2(buttonsRectPadding + c * (iconSize[0] + iconPadding), buttonsRectVertPad));
                 Rect iconRect(iconTopLeft, iconTopLeft + iconSize);
 
-                auto texture = ::Assets::Actualize<RenderCore::Techniques::DeferredShaderResource>(icons[c]);
+                auto texture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(icons[c]);
                 context.RequireCommandList(texture->GetCompletionCommandList());
                 context.DrawTexturedQuad(
                     ProjectionMode::P2D, 

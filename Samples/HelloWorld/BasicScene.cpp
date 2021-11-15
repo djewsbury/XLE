@@ -83,7 +83,7 @@ namespace Sample
             RenderCore::Assets::Services::GetTechniqueConfigDirs());
 
 		RenderCore::Techniques::SkinDeformer::Register();
-		_simpleModelRenderer = ::Assets::MakeAsset<RenderCore::Techniques::SimpleModelRenderer>(
+		_simpleModelRenderer = ::Assets::MakeAssetPtr<RenderCore::Techniques::SimpleModelRenderer>(
 			pipelineAcceleratorPool,
 			"game/model/character/skin.dae",
 			"game/model/character/skin.dae",

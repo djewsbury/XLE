@@ -190,6 +190,7 @@ namespace RenderCore { namespace Assets
 			const ::Assets::Blob& locator,
 			const ::Assets::DependencyValidation& depVal,
 			StringSection<::Assets::ResChar> requestParameters);
+        RawMatConfigurations() = default;
 
         static const auto CompileProcessType = ConstHash64<'RawM', 'at'>::Value;
 
@@ -215,7 +216,7 @@ namespace RenderCore { namespace Assets
         ~ResolvedMaterial();
 
         static void ConstructToPromise(
-			std::promise<std::shared_ptr<ResolvedMaterial>>&&,
+			std::promise<ResolvedMaterial>&&,
 			StringSection<> initializer);
     private:
         ::Assets::DependencyValidation _depVal;

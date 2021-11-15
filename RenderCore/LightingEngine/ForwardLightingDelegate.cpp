@@ -137,7 +137,7 @@ namespace RenderCore { namespace LightingEngine
 		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
 	{
-		return ::Assets::MakeFuture<std::shared_ptr<SkyOperator>>(desc, pipelinePool, fbTarget);
+		return ::Assets::MakeFuturePtr<SkyOperator>(desc, pipelinePool, fbTarget);
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, bool precisionTargets = false)
@@ -319,7 +319,7 @@ namespace RenderCore { namespace LightingEngine
 			lightSceneFuture->AdoptPromise(), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
 
-		auto balancedNoiseTexture = ::Assets::MakeAsset<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		auto balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 		
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		PreregisterAttachments(stitchingContext);

@@ -268,7 +268,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
 		_pimpl->_multiViewUniformsDelegate = std::make_shared<MultiViewUniformsDelegate>();
 
-		auto descSetLayoutFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
+		auto descSetLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 		descSetLayoutFuture->StallWhilePending();
 		auto descSetLayoutContainer = descSetLayoutFuture->Actualize();
 		auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");

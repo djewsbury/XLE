@@ -112,7 +112,7 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> patchCollectionFuture;
 		if (_shaderPatches) {
-			patchCollectionFuture = ::Assets::MakeAsset<CompiledShaderPatchCollection>(*_shaderPatches, matDescSetLayout);
+			patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*_shaderPatches, matDescSetLayout);
 		} else {
 			patchCollectionFuture = emptyPatchCollection;
 		}
@@ -700,7 +700,7 @@ namespace RenderCore { namespace Techniques
 			metalSamplers.push_back(std::make_pair(c.first, _samplerPool.GetSampler(c.second)));
 
 		if (shaderPatches) {
-			auto patchCollectionFuture = ::Assets::MakeAsset<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
+			auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
 
 			// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 			// future continuation functions
@@ -787,7 +787,7 @@ namespace RenderCore { namespace Techniques
 				// onto the result, it's just going to expire once more
 				if (!result) {
 					result = std::make_shared<SequencerConfig>(std::move(cfg));
-					result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
+					result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
 					result->_cfgId = cfgId;
 					result->_name = name;
 					i->second = result;
@@ -811,7 +811,7 @@ namespace RenderCore { namespace Techniques
 
 		auto cfgId = SequencerConfigId(_sequencerConfigById.size()) | (SequencerConfigId(_guid) << 32ull);
 		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
-		result->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
+		result->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, result->_delegate->GetPipelineLayout());
 		result->_cfgId = cfgId;
 		result->_name = name;
 
@@ -875,7 +875,7 @@ namespace RenderCore { namespace Techniques
 			if (cfg && cfg->_pipelineLayout->GetDependencyValidation().GetValidationIndex() != 0) {
 				assert(c == unsigned(cfg->_cfgId));
 				// rebuild pipeline layout asset
-				cfg->_pipelineLayout = ::Assets::MakeAsset<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout());
+				cfg->_pipelineLayout = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(_device, cfg->_delegate->GetPipelineLayout());
 				invalidSequencerIndices[invalidSequencerCount++] = c;
 			}
 			lockedSequencerConfigs[c] = std::move(cfg);

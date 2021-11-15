@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 
 		if (!src.GetDescriptorSetFileName().empty()) {
-			auto layoutFileFuture = ::Assets::MakeAsset<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
+			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
 			layoutFileFuture->StallWhilePending();
 			auto actualLayoutFile =layoutFileFuture->Actualize();
 			auto i = actualLayoutFile->_descriptorSets.find("Material");
@@ -119,7 +119,7 @@ namespace RenderCore { namespace Techniques
 
 		ShaderSourceParser::SelectorFilteringRules filteringRules = inst._selectorRelevance;
 		for (const auto& rawShader:inst._rawShaderFileIncludes) {
-			auto rawIncludeFilteringRules = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(rawShader);
+			auto rawIncludeFilteringRules = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(rawShader);
 			rawIncludeFilteringRules->StallWhilePending();
 			filteringRules.MergeIn(*rawIncludeFilteringRules->Actualize());
 		}

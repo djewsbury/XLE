@@ -86,7 +86,7 @@ namespace ToolsRig
 		void BuildDrawables(
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 			const ParameterBox& materialParams,
-			const Float4x4& localToWorld = Identity<Float4x4>());
+			const Float4x4& localToWorld = Identity<Float4x4>()) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
@@ -96,6 +96,7 @@ namespace ToolsRig
 		SimpleModel(
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			StringSection<::Assets::ResChar> filename);
+		SimpleModel() = default;
 		~SimpleModel();
 	private:
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _drawableGeo;
@@ -113,7 +114,7 @@ namespace ToolsRig
 	void SimpleModel::BuildDrawables(
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
 		const ParameterBox& materialParams,
-		const Float4x4& localToWorld)
+		const Float4x4& localToWorld) const
 	{
 #if 0
 		auto shader = _material.FindVariation(parserContext, techniqueIndex, techniqueConfig);
@@ -252,7 +253,7 @@ namespace ToolsRig
         ~VisGeoBox();
 
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<VisGeoBox>>&&,
+			std::promise<VisGeoBox>&&,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool);
     };
 
@@ -281,7 +282,7 @@ namespace ToolsRig
 	}
     
     void VisGeoBox::ConstructToPromise(
-		std::promise<std::shared_ptr<VisGeoBox>>&& promise,
+		std::promise<VisGeoBox>&& promise,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
     {
 		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
@@ -294,21 +295,21 @@ namespace ToolsRig
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineAcceleratorPool, dsa](
-				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> sphereMat,
-				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tubeMat,
-				std::shared_ptr<RenderCore::Assets::ResolvedMaterial> rectangleMat) {
+				const RenderCore::Assets::ResolvedMaterial& sphereMat,
+				const RenderCore::Assets::ResolvedMaterial& tubeMat,
+				const RenderCore::Assets::ResolvedMaterial& rectangleMat) {
 
-				auto res = std::make_shared<VisGeoBox>();
-				res->_genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, *sphereMat);
-				res->_genTube = BuildPipelineAccelerator(pipelineAcceleratorPool, *tubeMat);
-				res->_genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, *rectangleMat);
-				res->_cubeGeo = CreateCubeDrawableGeo(*pipelineAcceleratorPool->GetDevice());
-				res->_justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
+				VisGeoBox res;
+				res._genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, sphereMat);
+				res._genTube = BuildPipelineAccelerator(pipelineAcceleratorPool, tubeMat);
+				res._genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, rectangleMat);
+				res._cubeGeo = CreateCubeDrawableGeo(*pipelineAcceleratorPool->GetDevice());
+				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
-				res->_descriptorSetAccelerator = dsa;
-				res->_usi = std::make_shared<UniformsStreamInterface>();
-				res->_usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+				res._descriptorSetAccelerator = dsa;
+				res._usi = std::make_shared<UniformsStreamInterface>();
+				res._usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 				return res;
 			});
     }
@@ -364,7 +365,7 @@ namespace ToolsRig
     {
 		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset)
-			(*asset)->BuildDrawables(pkts, matParams, localToWorld);
+			asset->BuildDrawables(pkts, matParams, localToWorld);
     }
 
 	static void DrawPointerStandIn(
@@ -375,12 +376,12 @@ namespace ToolsRig
 	{
 		auto* asset = ::Assets::MakeAsset<SimpleModel>(pipelineAcceleratorPool, "game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset)
-			(*asset)->BuildDrawables(pkts, matParams, localToWorld);
+			asset->BuildDrawables(pkts, matParams, localToWorld);
 	}
 
 	static void DrawTriMeshMarker(
         IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
-		VisGeoBox& visBox,
+		const VisGeoBox& visBox,
 		const RetainedEntity& obj,
         EntityInterface::RetainedEntities& objs)
     {
@@ -451,8 +452,7 @@ namespace ToolsRig
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::BatchFilter::Max];
 		pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
 		if (Tweakable("DrawMarkers", true)) {
-			auto visBoxTry = ::Assets::MakeAsset<VisGeoBox>(_pipelineAcceleratorPool)->TryActualize();
-			VisGeoBox* visBox = visBoxTry ? visBoxTry->get() : nullptr;
+			auto* visBox = ::Assets::MakeAsset<VisGeoBox>(_pipelineAcceleratorPool)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeId);
 				for (const auto&o:objects) {

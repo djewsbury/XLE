@@ -230,7 +230,7 @@ namespace RenderOverlays
 
 	::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size)
 	{
-		return std::reinterpret_pointer_cast<::Assets::FuturePtr<Font>>(::Assets::MakeAsset<FTFont>(path, size));
+		return std::reinterpret_pointer_cast<::Assets::FuturePtr<Font>>(::Assets::MakeAssetPtr<FTFont>(path, size));
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////

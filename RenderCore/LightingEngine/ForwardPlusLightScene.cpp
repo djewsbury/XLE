@@ -42,7 +42,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _specularIBL;
 		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _ambientRawCubemap;
-		::Assets::PtrToFuturePtr<SHCoefficientsAsset> _diffuseIBL;
+		std::shared_ptr<::Assets::Future<SHCoefficientsAsset>> _diffuseIBL;
 
 		enum class SourceImageType { Equirectangular };
 		SourceImageType _sourceImageType = SourceImageType::Equirectangular;
@@ -63,7 +63,7 @@ namespace RenderCore { namespace LightingEngine
 			request._srcFile = _sourceImage;
 			request._format = Format::BC6H_UF16;
 			request._faceDim = 512;
-			_specularIBL = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request);
+			_specularIBL = ::Assets::MakeFuturePtr<Techniques::DeferredShaderResource>(request);
 
 			Assets::TextureCompilationRequest request2;
 			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
@@ -71,7 +71,7 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = Format::BC6H_UF16;
 			request2._faceDim = 1024;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::MakeFuture<std::shared_ptr<Techniques::DeferredShaderResource>>(request2);
+			_ambientRawCubemap = ::Assets::MakeFuturePtr<Techniques::DeferredShaderResource>(request2);
 		}
 	};
 
@@ -265,7 +265,7 @@ namespace RenderCore { namespace LightingEngine
 				if (!l) return;
 
 				std::shared_ptr<Techniques::DeferredShaderResource> specularIBL;
-				std::shared_ptr<SHCoefficientsAsset> diffuseIBL;
+				std::optional<SHCoefficientsAsset> diffuseIBL;
 				TRY {
 					specularIBL = specularIBLFuture.get();
 					diffuseIBL = diffuseIBLFuture.get();
@@ -273,7 +273,7 @@ namespace RenderCore { namespace LightingEngine
 					// suppress bad textures
 				} CATCH_END
 
-				if (!specularIBL || !diffuseIBL) {
+				if (!specularIBL || !diffuseIBL.has_value()) {
 					if (l->_ssrOperator)
 						l->_ssrOperator->SetSpecularIBL(nullptr);
 					l->_onChangeSkyTexture(nullptr);
@@ -288,7 +288,7 @@ namespace RenderCore { namespace LightingEngine
 							l->_ssrOperator->SetSpecularIBL(adjustedView);
 					}
 					std::memset(l->_diffuseSHCoefficients, 0, sizeof(l->_diffuseSHCoefficients));
-					std::memcpy(l->_diffuseSHCoefficients, diffuseIBL->GetCoefficients().begin(), sizeof(Float4*)*std::min(diffuseIBL->GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
+					std::memcpy(l->_diffuseSHCoefficients, diffuseIBL.value().GetCoefficients().begin(), sizeof(Float4*)*std::min(diffuseIBL.value().GetCoefficients().size(), dimof(l->_diffuseSHCoefficients)));
 					l->_completionCommandListID = std::max(l->_completionCommandListID, ambientRawCubemap->GetCompletionCommandList());
 					l->_onChangeSkyTexture(ambientRawCubemap);
 				}
@@ -570,13 +570,13 @@ namespace RenderCore { namespace LightingEngine
 				pipelineAccelerators, techDelBox, shadowDescSet);
 		}
 
-		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuture<std::shared_ptr<HierarchicalDepthsOperator>>(pipelinePool);
-		auto lightTilerFuture = ::Assets::MakeFuture<std::shared_ptr<RasterizationLightTileOperator>>(pipelinePool, tilerCfg);
+		auto hierarchicalDepthsOperatorFuture = ::Assets::MakeFuturePtr<HierarchicalDepthsOperator>(pipelinePool);
+		auto lightTilerFuture = ::Assets::MakeFuturePtr<RasterizationLightTileOperator>(pipelinePool, tilerCfg);
 		std::vector<LightSourceOperatorDesc> positionalLightOperators { positionalLightOperatorsInit.begin(), positionalLightOperatorsInit.end() };
 
 		using namespace std::placeholders;
 		if (ambientLightOperator._ssrOperator) {
-			auto ssrFuture = ::Assets::MakeFuture<std::shared_ptr<ScreenSpaceReflectionsOperator>>(pipelinePool, ambientLightOperator._ssrOperator.value());
+			auto ssrFuture = ::Assets::MakeFuturePtr<ScreenSpaceReflectionsOperator>(pipelinePool, ambientLightOperator._ssrOperator.value());
 			::Assets::WhenAll(shadowPreparationOperatorsFuture, hierarchicalDepthsOperatorFuture, lightTilerFuture, ssrFuture).ThenConstructToPromise(
 				std::move(promise),
 				std::bind(CreateInternal, _1, _2, _3, _4, positionalLightOperators, ambientLightOperator, std::move(shadowOperatorMapping), pipelineAccelerators, techDelBox));

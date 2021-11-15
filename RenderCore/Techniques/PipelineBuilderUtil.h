@@ -54,7 +54,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				for (unsigned c=0; c<3; ++c) {
 					auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
 					if (!fn.IsEmpty())
-						filteringFuture[c] = ::Assets::MakeAsset<ShaderSourceParser::SelectorFilteringRules>(fn);
+						filteringFuture[c] = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(fn);
 				}
 
 				if (!filteringFuture[(unsigned)ShaderStage::Vertex])
@@ -75,7 +75,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -141,7 +141,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAsset<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_selectorPreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -276,7 +276,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		return str.str();
 	}
 
-	static ::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
+	static std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(
 		ShaderStage stage, StringSection<> initializer, const std::string& definesTable,
 		const std::shared_ptr<CompiledShaderPatchCollection>& patchCollection,
 		IteratorRange<const uint64_t*> patchExpansions,
@@ -321,7 +321,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
 			auto res = ::Assets::MakeAsset<CompiledShaderByteCode_InstantiateShaderGraph>(
 				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
-			return *reinterpret_cast<::Assets::PtrToFuturePtr<CompiledShaderByteCode>*>(&res);
+			return *reinterpret_cast<std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>*>(&res);
 		} else {
 			return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
 		}
@@ -396,7 +396,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeGraphicsPipelineFuture0(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
+		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFuture[3],
 		const PipelineLayoutOptions& pipelineLayout,
 		GraphicsPipelineRetainedConstructionParams&& params)
 	{
@@ -407,31 +407,31 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel]).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
-					std::shared_ptr<CompiledShaderByteCode> vsCode, 
-					std::shared_ptr<CompiledShaderByteCode> psCode) {
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& psCode) {
 					auto d = weakDevice.lock();
 					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
-					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *psCode);
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, vsCode, psCode);
 					Metal::ShaderProgram shaderProgram{
 						Metal::GetObjectFactory(),
-						pipelineLayoutActual, *vsCode, *psCode};
+						pipelineLayoutActual, vsCode, psCode};
 					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
 		} else if (byteCodeFuture[(unsigned)ShaderStage::Pixel] && byteCodeFuture[(unsigned)ShaderStage::Geometry]) {
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Pixel], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
-					std::shared_ptr<CompiledShaderByteCode> vsCode, 
-					std::shared_ptr<CompiledShaderByteCode> psCode,
-					std::shared_ptr<CompiledShaderByteCode> gsCode) {
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& psCode,
+					const CompiledShaderByteCode& gsCode) {
 					auto d = weakDevice.lock();
 					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
-					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *psCode, *gsCode);
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, vsCode, psCode, gsCode);
 					Metal::ShaderProgram shaderProgram(
 						Metal::GetObjectFactory(),
-						pipelineLayoutActual, *vsCode, *gsCode, *psCode,
+						pipelineLayoutActual, vsCode, gsCode, psCode,
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
 					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
@@ -439,15 +439,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			::Assets::WhenAll(byteCodeFuture[(unsigned)ShaderStage::Vertex], byteCodeFuture[(unsigned)ShaderStage::Geometry]).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}, params=std::move(params)](
-					std::shared_ptr<CompiledShaderByteCode> vsCode, 
-					std::shared_ptr<CompiledShaderByteCode> gsCode) {
+					const CompiledShaderByteCode& vsCode, 
+					const CompiledShaderByteCode& gsCode) {
 					auto d = weakDevice.lock();
 					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
-					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *vsCode, *gsCode);
+					auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, vsCode, gsCode);
 					Metal::ShaderProgram shaderProgram(
 						Metal::GetObjectFactory(),
-						pipelineLayoutActual, *vsCode, *gsCode, CompiledShaderByteCode{},
+						pipelineLayoutActual, vsCode, gsCode, CompiledShaderByteCode{},
 						StreamOutputInitializers{params._pipelineDesc->_soElements, params._pipelineDesc->_soBufferStrides});
 					return MakeGraphicsPipelineAndLayout(shaderProgram, pipelineLayoutActual, {}, params);
 				});
@@ -459,7 +459,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFuture[3],
+		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFuture[3],
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
@@ -491,17 +491,17 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeComputePipelineFuture0(
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& csCode,
+		const std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>& csCode,
 		const PipelineLayoutOptions& pipelineLayout)
 	{
 		// Variation without a PredefinedPipelineLayout
 		::Assets::WhenAll(csCode).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}](auto csCodeActual) {
+			[pipelineLayout, weakDevice=std::weak_ptr<IDevice>{device}](const auto& csCodeActual) {
 				auto d = weakDevice.lock();
 				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
-				auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, *csCodeActual);
-				return MakeComputePipelineAndLayout(*csCodeActual, pipelineLayoutActual, {});
+				auto pipelineLayoutActual = MakeCompiledPipelineLayout(*d, pipelineLayout, csCodeActual);
+				return MakeComputePipelineAndLayout(csCodeActual, pipelineLayoutActual, {});
 			});
 	}
 
@@ -509,13 +509,13 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		const ::Assets::PtrToFuturePtr<CompiledShaderByteCode>& csCode,
+		const std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>& csCode,
 		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout)
 	{
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
 		::Assets::WhenAll(csCode, pipelineLayout).ThenConstructToPromise(
 			std::move(promise),
-			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool](auto csCodeActual, auto predefinedPipelineLayout) {
+			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool](const auto& csCodeActual, auto predefinedPipelineLayout) {
 				auto d = weakDevice.lock();
 				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
@@ -523,7 +523,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				// (potentially using the shader byte code)
 				std::shared_ptr<ICompiledPipelineLayout> finalPipelineLayout;
 				if (predefinedPipelineLayout->HasAutoDescriptorSets()) {
-					auto autoInitializer = Metal::BuildPipelineLayoutInitializer(*csCodeActual);
+					auto autoInitializer = Metal::BuildPipelineLayoutInitializer(csCodeActual);
 					auto initializer = predefinedPipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
 						autoInitializer, GetDefaultShaderLanguage(), samplers.get());
 					finalPipelineLayout = d->CreatePipelineLayout(initializer);
@@ -532,7 +532,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					finalPipelineLayout = d->CreatePipelineLayout(initializer);
 				}
 
-				return MakeComputePipelineAndLayout(*csCodeActual, finalPipelineLayout, predefinedPipelineLayout->GetDependencyValidation());
+				return MakeComputePipelineAndLayout(csCodeActual, finalPipelineLayout, predefinedPipelineLayout->GetDependencyValidation());
 			});
 	}
 
@@ -656,7 +656,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			StreamOutputInitializers so;
 			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
-			::Assets::PtrToFuturePtr<CompiledShaderByteCode> byteCodeFutures[3];
+			std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFutures[3];
 			for (unsigned c=0; c<3; ++c) {
 				if (pipelineDesc->_shaders[c].empty())
 					continue;
@@ -883,7 +883,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 	private:
-		::Assets::PtrToFuturePtr<CompiledShaderByteCode> MakeByteCodeFuture(
+		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(
 			ShaderStage shaderStage,
 			StringSection<> shader,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,

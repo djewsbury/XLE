@@ -218,29 +218,29 @@ namespace RenderOverlays { namespace DebuggingDisplay
         ::Assets::DependencyValidation _depVal;
 
         StandardResources(
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> horizTweakerBarMaterial,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> tagShaderMaterial,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> gridBackgroundMaterial,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillAndOutlineRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillRaisedRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillReverseRaisedRoundedRect,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> fillEllipse,
-            std::shared_ptr<RenderCore::Assets::ResolvedMaterial> outlineEllipse)
+            const RenderCore::Assets::ResolvedMaterial& horizTweakerBarMaterial,
+            const RenderCore::Assets::ResolvedMaterial& tagShaderMaterial,
+            const RenderCore::Assets::ResolvedMaterial& gridBackgroundMaterial,
+            const RenderCore::Assets::ResolvedMaterial& fillRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillAndOutlineRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& outlineRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillRaisedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillRaisedRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillReverseRaisedRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillEllipse,
+            const RenderCore::Assets::ResolvedMaterial& outlineEllipse)
         {
-            _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(*horizTweakerBarMaterial);
-            _tagShaderMaterial = BuildImmediateDrawableMaterial(*tagShaderMaterial);
-            _gridBackgroundMaterial = BuildImmediateDrawableMaterial(*gridBackgroundMaterial);
-            _fillRoundedRect = BuildImmediateDrawableMaterial(*fillRoundedRect);
-            _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(*fillAndOutlineRoundedRect);
-            _outlineRoundedRect = BuildImmediateDrawableMaterial(*outlineRoundedRect);
-            _fillRaisedRect = BuildImmediateDrawableMaterial(*fillRaisedRect);
-            _fillRaisedRoundedRect = BuildImmediateDrawableMaterial(*fillRaisedRoundedRect);
-            _fillReverseRaisedRoundedRect = BuildImmediateDrawableMaterial(*fillReverseRaisedRoundedRect);
-            _fillEllipse = BuildImmediateDrawableMaterial(*fillEllipse);
-            _outlineEllipse = BuildImmediateDrawableMaterial(*outlineEllipse);
+            _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(horizTweakerBarMaterial);
+            _tagShaderMaterial = BuildImmediateDrawableMaterial(tagShaderMaterial);
+            _gridBackgroundMaterial = BuildImmediateDrawableMaterial(gridBackgroundMaterial);
+            _fillRoundedRect = BuildImmediateDrawableMaterial(fillRoundedRect);
+            _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(fillAndOutlineRoundedRect);
+            _outlineRoundedRect = BuildImmediateDrawableMaterial(outlineRoundedRect);
+            _fillRaisedRect = BuildImmediateDrawableMaterial(fillRaisedRect);
+            _fillRaisedRoundedRect = BuildImmediateDrawableMaterial(fillRaisedRoundedRect);
+            _fillReverseRaisedRoundedRect = BuildImmediateDrawableMaterial(fillReverseRaisedRoundedRect);
+            _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
+            _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
 
             auto roundedRectUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
             roundedRectUSI->BindImmediateData(0, Hash64("RoundedRectSettings"));
@@ -251,17 +251,17 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillReverseRaisedRoundedRect._uniformStreamInterface = roundedRectUSI;
 
             _depVal = ::Assets::GetDepValSys().Make();
-            _depVal.RegisterDependency(horizTweakerBarMaterial->GetDependencyValidation());
-            _depVal.RegisterDependency(tagShaderMaterial->GetDependencyValidation());
-            _depVal.RegisterDependency(gridBackgroundMaterial->GetDependencyValidation());
-            _depVal.RegisterDependency(fillRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(fillAndOutlineRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(outlineRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(fillRaisedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(fillRaisedRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(fillReverseRaisedRoundedRect->GetDependencyValidation());
-            _depVal.RegisterDependency(fillEllipse->GetDependencyValidation());
-            _depVal.RegisterDependency(outlineEllipse->GetDependencyValidation());
+            _depVal.RegisterDependency(horizTweakerBarMaterial.GetDependencyValidation());
+            _depVal.RegisterDependency(tagShaderMaterial.GetDependencyValidation());
+            _depVal.RegisterDependency(gridBackgroundMaterial.GetDependencyValidation());
+            _depVal.RegisterDependency(fillRoundedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(fillAndOutlineRoundedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(outlineRoundedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(fillRaisedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(fillRaisedRoundedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(fillReverseRaisedRoundedRect.GetDependencyValidation());
+            _depVal.RegisterDependency(fillEllipse.GetDependencyValidation());
+            _depVal.RegisterDependency(outlineEllipse.GetDependencyValidation());
         }
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)

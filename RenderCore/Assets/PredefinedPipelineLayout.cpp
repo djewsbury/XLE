@@ -368,7 +368,7 @@ namespace RenderCore { namespace Assets
 		auto split = MakeFileNameSplitter(src);
 		if (split.Parameters().IsEmpty())
 			Throw(std::runtime_error("Missing pipeline layout name when loading pipeline layout (expecting <filename>:<layout name>). For request: " + src.AsString()));
-		auto fileFuture = ::Assets::MakeAsset<PredefinedPipelineLayoutFile>(split.AllExceptParameters());
+		auto fileFuture = ::Assets::MakeAssetPtr<PredefinedPipelineLayoutFile>(split.AllExceptParameters());
 		::Assets::WhenAll(fileFuture).ThenConstructToPromise(
 			std::move(promise),
 			[layoutName=split.Parameters().AsString()](auto file) {

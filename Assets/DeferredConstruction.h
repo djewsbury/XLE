@@ -278,5 +278,13 @@ namespace Assets
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return future;
 	}
+
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<FuturePtr<AssetType>> MakeFuturePtr(Params... initialisers)
+	{
+		auto future = std::make_shared<FuturePtr<AssetType>>(Internal::AsString(initialisers...));
+		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
+		return future;
+	}
 }
 

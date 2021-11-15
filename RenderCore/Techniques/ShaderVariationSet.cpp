@@ -127,9 +127,9 @@ namespace RenderCore { namespace Techniques
 			assert(!techEntry._vertexShaderName.empty());
 			assert(!techEntry._pixelShaderName.empty());
 			if (techEntry._geometryShaderName.empty()) {
-				variation._shaderFuture = ::Assets::MakeAsset<Metal::ShaderProgram>(_pipelineLayout, techEntry._vertexShaderName, techEntry._pixelShaderName, filteredSelectors._selectors);
+				variation._shaderFuture = ::Assets::MakeAssetPtr<Metal::ShaderProgram>(_pipelineLayout, techEntry._vertexShaderName, techEntry._pixelShaderName, filteredSelectors._selectors);
 			} else {
-				variation._shaderFuture = ::Assets::MakeAsset<Metal::ShaderProgram>(_pipelineLayout, techEntry._vertexShaderName, techEntry._geometryShaderName, techEntry._pixelShaderName, filteredSelectors._selectors);
+				variation._shaderFuture = ::Assets::MakeAssetPtr<Metal::ShaderProgram>(_pipelineLayout, techEntry._vertexShaderName, techEntry._geometryShaderName, techEntry._pixelShaderName, filteredSelectors._selectors);
 			}
 			i = _filteredSelectorsToVariation.insert(i, std::make_pair(filteredSelectors._hashValue, variation));
 			return i->second._shaderFuture;
@@ -155,7 +155,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<::Assets::ResChar> modelScaffoldName,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
 	{
-		auto scaffoldFuture = ::Assets::MakeAsset<Technique>(modelScaffoldName);
+		auto scaffoldFuture = ::Assets::MakeAssetPtr<Technique>(modelScaffoldName);
 		::Assets::WhenAll(scaffoldFuture).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineLayout](std::shared_ptr<Technique> technique) {

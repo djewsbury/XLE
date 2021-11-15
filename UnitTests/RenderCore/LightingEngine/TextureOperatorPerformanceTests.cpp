@@ -310,7 +310,7 @@ namespace UnitTests
 		ISampler* samplers[] = { commonResourceBox->_unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
 
-		auto pipelineLayouts = ::Assets::Actualize<Techniques::CompiledPipelineLayoutAsset>(
+		auto pipelineLayouts = ::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
 			testApparatus._metalTestHelper->_device,
 			"ut-data/minimal_compute.pipeline:ComputeMain");
 		

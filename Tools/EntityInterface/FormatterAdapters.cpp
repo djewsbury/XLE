@@ -87,7 +87,7 @@ namespace EntityInterface
 		virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
-				_srcFile = ::Assets::MakeAsset<::Assets::ConfigFileContainer<>>(_src);
+				_srcFile = ::Assets::MakeAssetPtr<::Assets::ConfigFileContainer<>>(_src);
 
 			using UnderlyingFormatter = InputStreamFormatter<>;
 			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();

@@ -93,11 +93,11 @@ namespace ToolsRig
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const ModelVisSettings& settings)
 		{
-			auto rendererFuture = ::Assets::MakeAsset<SimpleModelRenderer>(pipelineAcceleratorPool, settings._modelName, settings._materialName, "skin");
+			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, settings._modelName, settings._materialName, "skin");
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
-				auto skeletonFuture = ::Assets::MakeAsset<SkeletonScaffold>(settings._skeletonFileName);
+				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
+				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture).ThenConstructToPromise(
 					std::move(promise), 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
@@ -121,7 +121,7 @@ namespace ToolsRig
 							});
 					});
 			} else if (!settings._animationFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAsset<AnimationSetScaffold>(settings._animationFileName);
+				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture).ThenConstructToPromise(
 					std::move(promise), 
 					[](	std::shared_ptr<SimpleModelRenderer> renderer,
@@ -316,7 +316,7 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::MakeFuture<std::shared_ptr<ModelSceneRendererState>>(pipelineAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(pipelineAcceleratorPool, settings);
 		auto result = std::make_shared<Assets::FuturePtr<SceneEngine::IScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),

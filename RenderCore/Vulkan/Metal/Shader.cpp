@@ -176,7 +176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<::Assets::FuturePtr<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	static std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";
 		switch (stage) {
@@ -218,8 +218,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		::Assets::WhenAll(vsFuture, psFuture).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
-				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, *vsActual, *psActual);
+			[pipelineLayout](const CompiledShaderByteCode& vsActual, const CompiledShaderByteCode& psActual) {
+				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, vsActual, psActual);
 			});
 	}
 
@@ -237,8 +237,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		::Assets::WhenAll(vsFuture, gsFuture, psFuture).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> vsActual, std::shared_ptr<CompiledShaderByteCode> gsActual, std::shared_ptr<CompiledShaderByteCode> psActual) {
-				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, *vsActual, *gsActual, *psActual);
+			[pipelineLayout](const CompiledShaderByteCode& vsActual, const CompiledShaderByteCode& gsActual, const CompiledShaderByteCode& psActual) {
+				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, vsActual, gsActual, psActual);
 			});
 	}
 
@@ -260,13 +260,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		::Assets::WhenAll(vsFuture, gsFuture, psFuture, hsFuture, dsFuture).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineLayout](	const std::shared_ptr<CompiledShaderByteCode>& vsActual,
-				std::shared_ptr<CompiledShaderByteCode> gsActual,
-				std::shared_ptr<CompiledShaderByteCode> psActual,
-				std::shared_ptr<CompiledShaderByteCode> hsActual,
-				std::shared_ptr<CompiledShaderByteCode> dsActual) {
-
-				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, *vsActual, *gsActual, *psActual, *hsActual, *dsActual);
+			[pipelineLayout](const auto& vsActual, const auto& gsActual, const auto& psActual, const auto& hsActual, const auto& dsActual) {
+				return std::make_shared<ShaderProgram>(GetObjectFactory(), pipelineLayout, vsActual, gsActual, psActual, hsActual, dsActual);
 			});
 	}
 
@@ -280,8 +275,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		::Assets::WhenAll(code).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineLayout](std::shared_ptr<CompiledShaderByteCode> csActual) {
-				return std::make_shared<ComputeShader>(GetObjectFactory(), pipelineLayout, *csActual);
+			[pipelineLayout](const auto& csActual) {
+				return std::make_shared<ComputeShader>(GetObjectFactory(), pipelineLayout, csActual);
 			});
 	}
 
