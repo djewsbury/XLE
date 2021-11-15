@@ -9,6 +9,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/MemoryUtils.h"	// for DefaultSeed64
 #include <unordered_map>
 #include <string>
 #include <iosfwd>
@@ -61,7 +62,7 @@ namespace RenderCore { namespace Assets
 		static void OptimizeElementOrder(IteratorRange<NameAndType*> elements, ShaderLanguage lang);
         std::vector<NameAndType> GetNamesAndTypes();
 
-        uint64_t CalculateHash() const;
+        uint64_t CalculateHash(uint64_t seed=DefaultSeed64) const;
 
         PredefinedCBLayout Filter(const std::unordered_map<std::string, int>& definedTokens);
 

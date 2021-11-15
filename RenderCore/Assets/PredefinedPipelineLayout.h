@@ -8,6 +8,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/MemoryUtils.h"	// for DefaultSeed64
 #include <unordered_map>
 #include <memory>
 
@@ -85,6 +86,8 @@ namespace RenderCore { namespace Assets
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         const PredefinedDescriptorSetLayout* FindDescriptorSet(StringSection<>) const;
+
+        uint64_t CalculateHash(uint64_t seed=DefaultSeed64) const;
 
         PredefinedPipelineLayout(
             const PredefinedPipelineLayoutFile& srcFile,

@@ -42,9 +42,11 @@ namespace Assets
 
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetHash(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetGUID(), std::true_type{});
+		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().CalculateHash(uint64_t(0)), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetHash(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetGUID(), std::true_type{});
+		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()), std::true_type{});
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_integral<T>::value, std::true_type>::type;
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value, std::true_type>::type;
@@ -64,6 +66,9 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().GetGUID())* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.GetGUID(), seed); }
 
+		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
+			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.CalculateHash(seed); }
+
 		template<typename T, decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p, seed); }
 
@@ -72,6 +77,9 @@ namespace Assets
 
 		template<typename T, decltype(std::declval<const T&>().get().GetGUID())* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.get().GetGUID(), seed); }
+
+		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
+			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.get().CalculateHash(seed); }
 
 		template<typename T, decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()))* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p.get(), seed); }
@@ -110,6 +118,9 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().GetGUID())* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.GetGUID(); }
 
+		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
+			uint64_t HashParam_Single(const T& p) { return p.CalculateHash(DefaultSeed64); }
+
 		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p); }
 
@@ -118,6 +129,9 @@ namespace Assets
 
 		template<typename T, decltype(std::declval<const T&>().get().GetGUID())* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.get().GetGUID(); }
+
+		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
+			uint64_t HashParam_Single(const T& p) { return p.get().CalculateHash(DefaultSeed64); }
 
 		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p.get()); }

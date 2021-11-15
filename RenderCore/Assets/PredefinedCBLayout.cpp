@@ -347,9 +347,9 @@ namespace RenderCore { namespace Assets
         return result;
     }
     
-    uint64_t PredefinedCBLayout::CalculateHash() const
+    uint64_t PredefinedCBLayout::CalculateHash(uint64_t seed) const
     {
-        uint64_t result = DefaultSeed64;
+        uint64_t result = seed;
         for (const auto&e:_elements) {
             // note -- we have to carefully hash only the elements that meaningfully effect the
             //

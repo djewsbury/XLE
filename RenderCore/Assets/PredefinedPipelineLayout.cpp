@@ -299,6 +299,35 @@ namespace RenderCore { namespace Assets
 		return false;
 	}
 
+	uint64_t PredefinedPipelineLayout::CalculateHash(uint64_t seed) const
+	{
+		auto result = seed;
+		for (const auto&ds:_descriptorSets) {
+			result = Hash64(ds._name, result);
+			result = ds._descSet->CalculateHash(result);
+			result = rotl64(result, unsigned(ds._pipelineType));
+			if (ds._isAuto)
+				result = ~result;			
+		}
+		if (_vsPushConstants.second) {
+			result = Hash64(_vsPushConstants.first, result);
+			result = _vsPushConstants.second->CalculateHash(result);
+		}
+		if (_psPushConstants.second) {
+			result = Hash64(_psPushConstants.first, result);
+			result = _psPushConstants.second->CalculateHash(result);
+		}
+		if (_gsPushConstants.second) {
+			result = Hash64(_gsPushConstants.first, result);
+			result = _gsPushConstants.second->CalculateHash(result);
+		}
+		if (_csPushConstants.second) {
+			result = Hash64(_csPushConstants.first, result);
+			result = _csPushConstants.second->CalculateHash(result);
+		}
+		return result;
+	}
+
 	PredefinedPipelineLayout::PredefinedPipelineLayout(
 		const PredefinedPipelineLayoutFile& srcFile,
 		std::string name)

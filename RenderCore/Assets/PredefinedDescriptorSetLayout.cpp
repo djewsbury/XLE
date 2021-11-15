@@ -244,9 +244,9 @@ namespace RenderCore { namespace Assets
 			Throw(FormatException("Additional tokens found, expecting end of file", iterator.GetLocation()));
 	}
 
-	uint64_t PredefinedDescriptorSetLayout::CalculateHash() const
+	uint64_t PredefinedDescriptorSetLayout::CalculateHash(uint64_t seed) const
 	{
-		uint64_t result = DefaultSeed64;
+		uint64_t result = seed;
 		for (const auto& slot:_slots) {
 			result = Hash64(slot._name, result);
 			if (!slot._conditions.empty())

@@ -7,6 +7,7 @@
 #include "../StateDesc.h"
 #include "../../Assets/DepVal.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/MemoryUtils.h"	// for DefaultSeed64
 #include <string>
 #include <vector>
 #include <memory>
@@ -37,7 +38,7 @@ namespace RenderCore { namespace Assets
 
 		DescriptorSetSignature MakeDescriptorSetSignature(SamplerPool*) const;
 
-		uint64_t CalculateHash() const;
+		uint64_t CalculateHash(uint64_t seed=DefaultSeed64) const;
 
 		PredefinedDescriptorSetLayout(
 			StringSection<> inputData,
