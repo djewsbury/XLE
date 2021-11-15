@@ -843,7 +843,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(imageDesc._type == Resource::Desc::Type::Texture);
 
 		auto arrayCount = ActualArrayLayerCount(imageDesc._textureDesc);
-		auto mips = (unsigned)std::min(imageDesc._textureDesc._mipCount, bufferDesc._textureDesc._mipCount);
+		auto mips = imageDesc._textureDesc._mipCount;
+		if (bufferDesc._type == Resource::Desc::Type::Texture)
+			mips = (unsigned)std::min(mips, bufferDesc._textureDesc._mipCount);
 		unsigned width = imageDesc._textureDesc._width, height = imageDesc._textureDesc._height, depth = imageDesc._textureDesc._depth;
 		auto minDims = (GetCompressionType(imageDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
 		auto dstAspectMask = AsImageAspectMask(imageDesc._textureDesc._format);

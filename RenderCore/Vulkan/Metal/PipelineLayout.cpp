@@ -110,6 +110,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			const std::string& name,
 			VkShaderStageFlags stageFlags)
 		{
+			ScopedLock(_lock);
 			auto hash = HashCombine(signature.GetHashIgnoreNames(), stageFlags);
 			auto i = LowerBound(_cache, hash);
 			if (i != _cache.end() && i->first == hash)

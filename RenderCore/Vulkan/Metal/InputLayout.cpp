@@ -1412,6 +1412,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
+	static std::string s_auto{"auto"};
+
 	PipelineLayoutInitializer BuildPipelineLayoutInitializer(const CompiledShaderByteCode& byteCode)
 	{
 		SPIRVReflection reflection(byteCode.GetByteCode());
@@ -1436,6 +1438,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (!pushConstants._cbElements.empty())
 					Throw(std::runtime_error("Multiple separate push constant structures detected"));
 				assert(reflectionVariable._isStructType);
+				pushConstants._name = reflectionVariable._name.AsString();
 
 				auto typeToLookup = v.second._type;
 				auto p = LowerBound(reflection._pointerTypes, typeToLookup);
@@ -1456,12 +1459,13 @@ namespace RenderCore { namespace Metal_Vulkan
 					member._arrayElementCount = 1;
 					pushConstants._cbElements.push_back(member);
 				}
+				continue;
 			}
 
 			if (reflectionVariable._binding._bindingPoint == ~0u || reflectionVariable._binding._descriptorSet == ~0u) continue;
 
 			if (descriptorSets.size() <= reflectionVariable._binding._descriptorSet)
-				descriptorSets.resize(reflectionVariable._binding._descriptorSet+1, {{}, {}, pipelineType});
+				descriptorSets.resize(reflectionVariable._binding._descriptorSet+1, {s_auto, {}, pipelineType});
 
 			auto& descSet = descriptorSets[reflectionVariable._binding._descriptorSet];
 			if (descSet._signature._slots.size() <= reflectionVariable._binding._bindingPoint) {

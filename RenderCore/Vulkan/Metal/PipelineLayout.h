@@ -183,6 +183,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		private:
 			ObjectFactory*	_objectFactory;
 			GlobalPools*	_globalPools;
+			Threading::Mutex _lock;
 
 			std::vector<std::pair<uint64_t, std::unique_ptr<DescriptorSetCacheResult>>> _cache;
 		};
