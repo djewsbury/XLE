@@ -22,6 +22,7 @@
 
 #include "../../Assets/AssetFuture.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/StringFormat.h"
 #include "../../xleres/FileList.h"
 
@@ -273,37 +274,28 @@ namespace RenderCore { namespace LightingEngine
 		auto device = pipelineCollection.GetDevice();
 
 		auto result = std::make_shared<::Assets::FuturePtr<LightResolveOperators>>("light-operators");
-		result->SetPollingFunction(
-			[pipelineFutures=std::move(pipelineFutures), fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)](::Assets::FuturePtr<LightResolveOperators>& future) -> bool {
+		::Assets::PollToPromise(
+			result->AdoptPromise(),
+			[pipelineFutures, fixedDescSetFuture]() {
+				for (const auto& p:pipelineFutures)
+					if (p->IsBkgrndPending()) 
+						return ::Assets::PollStatus::Continue;
+				if (fixedDescSetFuture->IsBkgrndPending())
+					return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[pipelineFutures, fixedDescSetFuture, finalResult=std::move(finalResult), operatorToPipelineMap=std::move(operatorToPipelineMap), attachedData=std::move(attachedData), device=std::move(device)]() {
 				using namespace ::Assets;
 				std::vector<Techniques::GraphicsPipelineAndLayout> actualized;
 				actualized.resize(pipelineFutures.size());
 				auto a=actualized.begin();
-				Blob queriedLog;
-				DependencyValidation queriedDepVal;
 				for (const auto& p:pipelineFutures) {
-					auto state = p->CheckStatusBkgrnd(*a, queriedDepVal, queriedLog);
-					if (state != AssetState::Ready) {
-						if (state == AssetState::Invalid) {
-							future.SetInvalidAsset(queriedDepVal, queriedLog);
-							return false;
-						} else 
-							return true;
-					}
+					*a = p->ActualizeBkgrnd();
 					assert(a->_pipeline);
 					++a;
 				}
 
-				{
-					auto state = fixedDescSetFuture->CheckStatusBkgrnd(finalResult->_fixedDescriptorSet, queriedDepVal, queriedLog);
-					if (state != AssetState::Ready) {
-						if (state == AssetState::Invalid) {
-							future.SetInvalidAsset(queriedDepVal, queriedLog);
-							return false;
-						} else 
-							return true;
-					}
-				}
+				finalResult->_fixedDescriptorSet = fixedDescSetFuture->ActualizeBkgrnd();
 
 				finalResult->_depVal = ::Assets::GetDepValSys().Make();
 				finalResult->_pipelines.reserve(actualized.size());
@@ -331,9 +323,7 @@ namespace RenderCore { namespace LightingEngine
 					usi, sharedUsi};
 
 				finalResult->_stencilingGeometry = LightStencilingGeometry(*device);
-
-				future.SetAsset(decltype(finalResult){finalResult});
-				return false;
+				return finalResult;
 			});
 		return result;
 	}

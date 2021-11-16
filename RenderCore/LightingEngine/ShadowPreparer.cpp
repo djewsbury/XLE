@@ -17,6 +17,7 @@
 #include "../Techniques/Services.h"
 #include "../Metal/DeviceContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
+#include "../Assets/ContinuationUtil.h"
 #include "../IDevice.h"
 #include "../IThreadContext.h"
 #include "../../Assets/AssetFuture.h"
@@ -363,25 +364,21 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
-		result->SetPollingFunction(
-			[futures=std::move(futures),shadowGeneratorCopy=std::move(shadowGeneratorCopy)](::Assets::FuturePtr<DynamicShadowPreparationOperators>& future) -> bool {
+		::Assets::PollToPromise(
+			result->AdoptPromise(),
+			[futures]() {
+				for (const auto& p:futures)
+					if (p->IsBkgrndPending()) 
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[futures,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
 				using namespace ::Assets;
 				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
 				actualized.resize(futures.size());
 				auto a=actualized.begin();
-				for (const auto& p:futures) {
-					Blob queriedLog;
-					DependencyValidation queriedDepVal;
-					auto state = p->CheckStatusBkgrnd(*a, queriedDepVal, queriedLog);
-					if (state != AssetState::Ready) {
-						if (state == AssetState::Invalid) {
-							future.SetInvalidAsset(queriedDepVal, queriedLog);
-							return false;
-						} else 
-							return true;
-					}
-					++a;
-				}
+				for (const auto& p:futures)
+					*a++ = p->ActualizeBkgrnd();
 
 				auto finalResult = std::make_shared<DynamicShadowPreparationOperators>();
 				finalResult->_operators.reserve(actualized.size());
@@ -390,8 +387,7 @@ namespace RenderCore { namespace LightingEngine
 				for (auto&a:actualized)
 					finalResult->_operators.push_back(DynamicShadowPreparationOperators::Operator{std::move(a), *i++});
 
-				future.SetAsset(std::move(finalResult));
-				return false;
+				return finalResult;
 			});
 		return result;
 	}

@@ -609,7 +609,7 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if ((_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) || _pollingFunction)
+		if (_state == AssetState::Pending || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 	}
 
@@ -640,7 +640,7 @@ namespace Assets
 
 		_pollingFunction = std::move(moveFrom._pollingFunction);
 		_initializer = std::move(moveFrom._initializer);
-		if ((_state == AssetState::Pending && _pendingFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) || _pollingFunction)
+		if (_state == AssetState::Pending || _pollingFunction)
 			RegisterFrameBarrierCallbackAlreadyLocked();
 
 		return *this;
@@ -663,6 +663,8 @@ namespace Assets
 	template<typename Type>
 		Future<Type>::~Future() 
 	{
+		// note -- if you get a broken_promise exception from here, it means that the future is begin
+		// destroyed without anyone adopting the promise to fulfill it
 	}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////

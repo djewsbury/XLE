@@ -23,6 +23,7 @@
 #include "../Assets/Assets.h"
 #include "../Assets/ChunkFile.h"
 #include "../Assets/AssetHeapLRU.h"
+#include "../Assets/ContinuationUtil.h"
 
 #include "../RenderCore/RenderUtils.h"
 
@@ -1282,8 +1283,15 @@ namespace SceneEngine
         // a std::future<void>
 
         auto result = std::make_shared<::Assets::Future<::Assets::DependencyValidation>>("placements-future");
-        result->SetPollingFunction(
-            [placementsFutures=std::move(placementsFutures)](::Assets::Future<::Assets::DependencyValidation>& thatFuture) -> bool {
+        ::Assets::PollToPromise(
+            result->AdoptPromise(),
+            [placementsFutures]() {
+                for (const auto& p:placementsFutures)
+					if (p->IsBkgrndPending()) 
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+            },
+            [placementsFutures=std::move(placementsFutures)]() {
                 using namespace Assets;
                 std::vector<DependencyValidation> depVals;
                 depVals.reserve(placementsFutures.size());
@@ -1292,25 +1300,21 @@ namespace SceneEngine
                     ::Assets::Blob actualizationBlob;
                     DependencyValidation queriedDepVal;
                     auto state = p->CheckStatusBkgrnd(queriedDepVal, actualizationBlob);
-                    if (state == AssetState::Invalid) {
-                        thatFuture.SetInvalidAsset(queriedDepVal, actualizationBlob);
-                        return false;
-                    } else if (state == AssetState::Pending) {
-                        hasPending = true;  // continue iterating, looking for an invalid
-                    } else if (!hasPending)
-                        depVals.push_back(std::move(queriedDepVal));
+                    if (state == AssetState::Invalid)
+                        Throw(::Assets::Exceptions::ConstructionError{::Assets::Exceptions::ConstructionError::Reason::Unknown, queriedDepVal, actualizationBlob});
+                    
+                    assert(state != AssetState::Pending);
+                    depVals.push_back(std::move(queriedDepVal));
                 }
-                if (hasPending) return true;
 
                 if (depVals.size() > 1) {
                     auto newDepVal = ::Assets::GetDepValSys().Make();
                     for (const auto& dv:depVals) if (dv) newDepVal.RegisterDependency(dv);
-                    thatFuture.SetAsset(std::move(newDepVal));
+                    return newDepVal;
                 } else {
                     assert(!depVals.empty());
-                    thatFuture.SetAsset(std::move(depVals[0]));
+                    return std::move(depVals[0]);
                 }
-                return false;
             });
 
         return result;
@@ -2762,7 +2766,6 @@ namespace SceneEngine
 			return;
 		}
 
-		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(initializer.AsString());
 		::Assets::DefaultCompilerConstruction(
 			std::move(promise), 
             CompileProcessType_WorldPlacementsConfig,

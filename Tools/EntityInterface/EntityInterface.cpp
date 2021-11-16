@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "EntityInterface.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/Mutex.h"
@@ -390,29 +391,25 @@ namespace EntityInterface
 			}
 
 			auto future = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
-			future->SetPollingFunction(
-				[futureFormatters=std::move(futureFormatters), externalPosition=std::move(externalPosition), actualizationLog](::Assets::FuturePtr<Formatters::IDynamicFormatter>& thatFuture) {
+			::Assets::PollToPromise(
+				future->AdoptPromise(),
+				[futureFormatters]() {
+					for (const auto& p:futureFormatters)
+						if (p->IsBkgrndPending()) 
+							return ::Assets::PollStatus::Continue;
+					return ::Assets::PollStatus::Finish;
+				},
+				[futureFormatters, externalPosition=std::move(externalPosition), actualizationLog]() {
 					std::shared_ptr<Formatters::IDynamicFormatter> actualized[futureFormatters.size()];
 					auto a=actualized;
-					::Assets::Blob queriedLog;
-					::Assets::DependencyValidation queriedDepVal;
 					for (const auto& p:futureFormatters) {
-						auto state = p->CheckStatusBkgrnd(*a, queriedDepVal, queriedLog);
-						if (state != ::Assets::AssetState::Ready) {
-							if (state == ::Assets::AssetState::Invalid) {
-								thatFuture.SetInvalidAsset(queriedDepVal, queriedLog);
-								return false;
-							} else 
-								return true;
-						}
+						*a = p->ActualizeBkgrnd();
 						assert(*a);
 						++a;
 					}
 
-					thatFuture.SetAsset(
-						std::make_shared<FormatOverlappingDocuments>(
-							MakeIteratorRange(actualized, actualized+futureFormatters.size()), MakeIteratorRange(externalPosition), actualizationLog)); 
-					return false;
+					return std::make_shared<FormatOverlappingDocuments>(
+						MakeIteratorRange(actualized, actualized+futureFormatters.size()), MakeIteratorRange(externalPosition), actualizationLog);
 				});
 			return future;
 		}
