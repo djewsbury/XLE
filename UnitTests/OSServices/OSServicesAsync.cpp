@@ -8,6 +8,7 @@
 #include "../../OSServices/FileSystemMonitor.h"
 #include "../../OSServices/RawFS.h"
 #include "../../OSServices/TimeUtils.h"
+#include "../../OSServices/Log.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/Threading/LockFree.h"
 #include "../../Utility/Threading/CompletionThreadPool.h"
@@ -30,6 +31,7 @@
 #endif
 
 using namespace Catch::literals;
+using namespace std::chrono_literals;
 namespace UnitTests
 {
     TEST_CASE( "PollingThread-UnderlyingInterface", "[osservices]" )
@@ -395,6 +397,70 @@ namespace UnitTests
             threadPool.StallAndDrainQueue();
 
             REQUIRE(InstanceCountingObject::s_instanceCount.load() == 0);
+        }
+    }
+
+    TEST_CASE( "ThreadPool-WaitBetweenBlocks", "[osservices]" )
+    {
+        // Some threadpool blocks might wait on the result of other blocks. This can be 
+        // dangerous because if all of the threads in the pool end up in this kind of waiting
+        // state, nothing will complete
+
+        ThreadPool threadPool(4);
+
+        SECTION("Wait on condition variable")
+        {
+            // This spawns a number of blocks that do nothing but wait on the result of other blocks
+            // With a trivial thread pool, this is essentially guaranteed to lock up very quickly
+            const auto itemCount = 64;
+            const auto maxDependencyCount = 16;
+            struct Item
+            {
+                std::condition_variable _variable;
+                std::mutex _lock;
+                unsigned _currentValue = 0;
+                std::stringstream _str;
+            };
+            Item items[itemCount];
+            std::mt19937_64 rng(15394628);
+
+            for (unsigned c=0; c<itemCount; ++c) {
+                std::vector<unsigned> pairList;
+                for (unsigned q=0; q<maxDependencyCount; ++q) {
+                    auto offset = std::uniform_int<>(-20, 0)(rng);
+                    pairList.push_back(std::max(int(0), int(c)+offset));
+                }
+
+                threadPool.Enqueue(
+                    [&items, c, pairList]() {
+                        for (auto pair:pairList) {
+                            {
+                                std::unique_lock<std::mutex> lock(items[c]._lock);
+                                ++items[c]._currentValue;
+                            }
+                            items[c]._variable.notify_all();
+
+                            if (pair != c) {
+                                std::unique_lock<std::mutex> lock(items[pair]._lock);
+                                auto initialValue = items[pair]._currentValue;
+                                if (initialValue < maxDependencyCount) {
+                                    auto start = std::chrono::steady_clock::now();
+                                    YieldToPool(items[pair]._variable, lock);
+                                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+                                    items[c]._str << "Stall{" << pair << "," << duration.count() << "ms}, ";
+                                }
+                            } else {
+                                std::this_thread::sleep_for(250ms);
+                            }
+                        }
+                    });
+            }
+
+            threadPool.StallAndDrainQueue();
+
+            for (unsigned c=0; c<itemCount; ++c) {
+                Log(Debug) << "Thread[" << c << "] " << items[c]._str.str() << std::endl;
+            }
         }
     }
 }

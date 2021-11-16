@@ -7,9 +7,6 @@
 #include "CompletionThreadPool.h"
 #include "ThreadLocalPtr.h"
 #include "ThreadingUtils.h"
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
-    #include "../../OSServices/WinAPI/System_WinAPI.h"
-#endif
 #include "../../OSServices/Log.h"
 #include "../../OSServices/RawFS.h"
 #include "../../Core/Exceptions.h"
@@ -19,150 +16,34 @@ namespace Utility
 {
     namespace Internal
     {
-        class YieldToPoolInterace : public Internal::IYieldToPool
+        class IYieldToPoolHelper
         {
         public:
-            virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) override;
-            virtual void SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction) override;
+            virtual void SetYieldToPoolInterface(Internal::IYieldToPool*) = 0;
+            virtual Internal::IYieldToPool* GetYieldToPoolInterface() = 0;
+            virtual ~IYieldToPoolHelper() = default;
         };
+
+        class YieldToPoolHelper : public IYieldToPoolHelper
+        {
+        public:
+            virtual void SetYieldToPoolInterface(Internal::IYieldToPool*) override;
+            virtual Internal::IYieldToPool* GetYieldToPoolInterface() override;
+        };
+
+        IYieldToPool* GetYieldToPoolInterface();
+        void SetYieldToPoolInterface(IYieldToPool* newValue);
     }
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
-    void CompletionThreadPool::EnqueueBasic(PendingTask&& task)
+    class ThreadPool::YieldToPoolInterface : public Internal::IYieldToPool
     {
-        assert(IsGood());
-        _pendingTasks.push_overflow(std::forward<PendingTask>(task));
-
-            // set event should wake one thread -- and that thread should
-            // then take over and execute the task
-        OSServices::XlSetEvent(_events[0]);
-    }
-
-    CompletionThreadPool::CompletionThreadPool(unsigned threadCount)
-    {
-            // once event is an "auto-reset" event, which should wake a single thread
-            // another event is a "manual-reset" event. This should 
-        _events[0] = OSServices::XlCreateEvent(false);
-        _events[1] = OSServices::XlCreateEvent(true);
-        _workerQuit = false;
-        if (!_yieldToPoolInterface)
-            _yieldToPoolInterface = std::make_shared<Internal::YieldToPoolInterace>();
-
-        for (unsigned i = 0; i<threadCount; ++i)
-            _workerThreads.emplace_back(
-                [this]
-                {
-                    _yieldToPoolInterface->SetFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
-                        assert(0);      // "waitUntilTime" must be respected
-
-                        bool gotTask = false;
-                        std::function<void()> task;
-
-                        {
-                            ScopedLock(this->_pendingsTaskLock);
-                            std::function<void()>* t = nullptr;
-                            if (_pendingTasks.try_front(t)) {
-                                task = std::move(*t);
-                                _pendingTasks.pop();
-                                gotTask = true;
-                            }
-                        }
-
-                        // Attempt a short wait if we didn't get a task
-                        if (!gotTask) {
-                            OSServices::XlWaitForMultipleSyncObjects(
-                                2, this->_events,
-                                false, 1, true);
-
-                            {
-                               ScopedLock(this->_pendingsTaskLock);
-                                std::function<void()>* t = nullptr;
-                                if (_pendingTasks.try_front(t)) {
-                                    task = std::move(*t);
-                                    _pendingTasks.pop();
-                                    gotTask = true;
-                                }
-                            }
-                        }
-
-                        if (gotTask) {
-                            TRY
-                            {
-                                task();
-                            } CATCH(const std::exception& e) {
-                                Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
-								(void)e;
-                            } CATCH(...) {
-                                Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
-                            } CATCH_END
-                        }
-                    });
-
-                    while (!this->_workerQuit) {
-                        bool gotTask = false;
-                        std::function<void()> task;
-
-                        {
-                                // note that _pendingTasks is safe for multiple pushing threads,
-                                // but not safe for multiple popping threads. So we have to
-                                // lock to prevent more than one thread from attempt to pop
-                                // from it at the same time.
-                            ScopedLock(this->_pendingsTaskLock);
-
-                            std::function<void()>*t = nullptr;
-                            if (_pendingTasks.try_front(t)) {
-                                task = std::move(*t);
-                                _pendingTasks.pop();
-                                gotTask = true;
-                            }
-                        }
-
-                        if (gotTask) {
-                                // if we got this far, we can execute the task....
-                            TRY
-                            {
-                                task();
-                            } CATCH(const std::exception& e) {
-                                Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
-								(void)e;
-                            } CATCH(...) {
-                                Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
-                            } CATCH_END
-
-                                // That that when using completion routines, we want to attempt to
-                                // distribute the tasks evenly between threads (so that the completion
-                                // routines will also be distributed evenly between threads.). To achieve
-                                // this, let's not attempt to search for another task immediately... Instead
-                                // when after we complete a task, let's encourage this thread to go back into
-                                // a stall (unless all of our threads are saturated)
-                            Threading::YieldTimeSlice();
-                            continue;
-                        }
-
-                            // Wait for the event with the "alertable" flag set true
-                            // note -- this is why we can't use std::condition_variable
-                            //      (because threads waiting on a condition variable won't
-                            //      be woken to execute completion routines)
-                        OSServices::XlWaitForMultipleSyncObjects(
-                            2, this->_events,
-                            false, OSServices::XL_INFINITE, true);
-                    }
-
-                    _yieldToPoolInterface->SetFunction(nullptr);
-                }
-            );
-    }
-
-    CompletionThreadPool::~CompletionThreadPool()
-    {
-        _workerQuit = true;
-        OSServices::XlSetEvent(_events[1]);   // trigger a manual reset event should wake all threads (and keep them awake)
-        for (auto&t : _workerThreads) t.join();
-
-        OSServices::XlCloseSyncObject(_events[0]);
-        OSServices::XlCloseSyncObject(_events[1]);
-    }
-#endif
+    public:
+        virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) override;
+        virtual std::future_status YieldWith(std::function<std::future_status()>&& yieldingFunction) override;
+        YieldToPoolInterface(ThreadPool&);
+    private:
+        ThreadPool* _pool;
+    };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -171,72 +52,51 @@ namespace Utility
     , _heap(PageSize)
     {}
 
-    void ThreadPool::RunBlocks(bool finishWhenEmpty)
+    void ThreadPool::RunBlocks()
     {
-        ++_runningWorkerCount;
+        ++_workersOwningABlockCount;
+        ++_workersTotalCount;
+        ++_workersNonFrozenCount;
 
-        _yieldToPoolInterface->SetFunction([this](std::chrono::steady_clock::time_point waitUntilTime) {
-            StoredFunction task;
-            void* fnObjectPtr;
-            {
-                // slightly awkwardly, we can't actually use std::timed_mutex and try_lock_until
-                // here, because std::timed_mutex can't be used with std::condition_variable
-                std::unique_lock<decltype(this->_pendingTaskLock)> autoLock(this->_pendingTaskLock);
-                if (this->_workerQuit) 
-                    return;
-
-                DrainPendingReleaseAlreadyLocked();
-                if (_pendingTasks.empty()) {
-                    this->_pendingTaskVariable.wait_until(autoLock, waitUntilTime);
-                    if (this->_workerQuit) return;
-                    if (_pendingTasks.empty())
-                        return;
-                }
-
-                task = std::move(_pendingTasks.front());
-                _pendingTasks.pop();
-                fnObjectPtr = PtrAdd(AsPointer(_pages[task._pageIdx]._storage.begin()), task._offset);
-            }
-
-            TRY
-            {
-                task._caller(fnObjectPtr);
-                task._destructor(fnObjectPtr);
-            } CATCH(const std::exception& e) {
-                Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
-                (void)e;
-            } CATCH(...) {
-                Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
-            } CATCH_END
-
-            AddPendingRelease(task);
-        });
+        YieldToPoolInterface yieldToPool{*this};
+        Internal::SetYieldToPoolInterface(&yieldToPool);
 
         for (;;) {
             StoredFunction task;
             void* fnObjectPtr;
 
             {
-                    // note that _pendingTasks is safe for multiple pushing threads,
-                    // but not safe for multiple popping threads. So we have to
-                    // lock to prevent more than one thread from attempt to pop
-                    // from it at the same time.
                 std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
                 if (_workerQuit) {
-                    --_runningWorkerCount;
+                    --_workersOwningABlockCount;
+                    --_workersNonFrozenCount;
                     break;
                 }
 
                 DrainPendingReleaseAlreadyLocked();
                 if (_pendingTasks.empty()) {
-                    --_runningWorkerCount;
-                    if (finishWhenEmpty) {
-                        _yieldToPoolInterface->SetFunction(nullptr);
-                        return;
-                    }
+                    --_workersOwningABlockCount;
+
                     _pendingTaskVariable.wait(autoLock);
-                    if (_workerQuit) break;
-                    ++_runningWorkerCount;
+                    if (_workerQuit) {
+                        --_workersNonFrozenCount;
+                        break;
+                    }
+
+                    // If we have too many workers at this point, we should shutdown this thread
+                    // This occurs when recovering from a freezing and unfreezing a thread
+                    // Note the double-check here, and notify_one() to wake up another thread
+                    if (_workersNonFrozenCount.load() > _requestedWorkerCount) {
+                        auto prevValue = _workersNonFrozenCount.fetch_add(-1);
+                        if (prevValue > _requestedWorkerCount) {
+                            _pendingTaskVariable.notify_one();
+                            break;
+                        } else {
+                            ++_workersNonFrozenCount;
+                        }
+                    }
+
+                    ++_workersOwningABlockCount;
                     if (_pendingTasks.empty())
                         continue;
                 }
@@ -260,7 +120,44 @@ namespace Utility
             AddPendingRelease(task);
         }
 
-        _yieldToPoolInterface->SetFunction(nullptr);
+        Internal::SetYieldToPoolInterface(nullptr);
+        --_workersTotalCount;
+    }
+
+    void ThreadPool::RunBlocksDrainThread()
+    {
+        // This is used when draining the pool using StallAndDrainQueue()
+        // we avoid some of the thread counting behaviour in RunBlocks, because we don't
+        // actually want this thread to be counted as a thread pool thread
+        for (;;) {
+            StoredFunction task;
+            void* fnObjectPtr;
+
+            {
+                std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
+
+                DrainPendingReleaseAlreadyLocked();
+                if (_pendingTasks.empty())
+                    return;
+
+                task = std::move(_pendingTasks.front());
+                _pendingTasks.pop();
+                fnObjectPtr = PtrAdd(AsPointer(_pages[task._pageIdx]._storage.begin()), task._offset);
+            }
+
+            TRY
+            {
+                task._caller(fnObjectPtr);
+                task._destructor(fnObjectPtr);
+            } CATCH(const std::exception& e) {
+                Log(Error) << "Suppressing exception in thread pool thread: " << e.what() << std::endl;
+                (void)e;
+            } CATCH(...) {
+                Log(Error) << "Suppressing unknown exception in thread pool thread." << std::endl;
+            } CATCH_END
+
+            AddPendingRelease(task);
+        }
     }
 
     void ThreadPool::EnqueueBasic(std::function<void()>&& fn)
@@ -326,26 +223,29 @@ namespace Utility
     }
 
     ThreadPool::ThreadPool(unsigned threadCount)
+    : _requestedWorkerCount(threadCount)
     {
         _workerQuit = false;
-        _runningWorkerCount.store(0);
-        if (!_yieldToPoolInterface)
-            _yieldToPoolInterface = std::make_shared<Internal::YieldToPoolInterace>();
-
+        _workersOwningABlockCount.store(0);
+        _workersFrozenCount.store(0);
+        _workersNonFrozenCount.store(0);
+        _workersTotalCount.store(0);
+        if (!_yieldToPoolHelper)
+            _yieldToPoolHelper = std::make_shared<Internal::YieldToPoolHelper>();
         for (unsigned i = 0; i<threadCount; ++i)
-            _workerThreads.emplace_back([this] { this->RunBlocks(false); });
+            _workerThreads.emplace_back([this] { this->RunBlocks(); });
     }
 
     bool ThreadPool::StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration)
     {
         if (stallDuration.has_value()) {
             auto timeoutPt = std::chrono::steady_clock::now() + stallDuration.value();
-            RunBlocks(true);
+            RunBlocksDrainThread();
             if (std::chrono::steady_clock::now() >= timeoutPt)
-                return _runningWorkerCount == 0;
-            while (_runningWorkerCount) {
+                return _workersOwningABlockCount == 0;
+            while (_workersOwningABlockCount) {
                 Threading::YieldTimeSlice();
-                RunBlocks(true);
+                RunBlocksDrainThread();
                 if (std::chrono::steady_clock::now() >= timeoutPt)
                     return false;
             }
@@ -353,10 +253,10 @@ namespace Utility
             DrainPendingReleaseAlreadyLocked();
             return true;
         } else {
-            RunBlocks(true);
-            while (_runningWorkerCount) {
+            RunBlocksDrainThread();
+            while (_workersOwningABlockCount) {
                 Threading::YieldTimeSlice();
-                RunBlocks(true);
+                RunBlocksDrainThread();
             }
             std::unique_lock<decltype(_pendingTaskLock)> autoLock(_pendingTaskLock);
             DrainPendingReleaseAlreadyLocked();
@@ -371,62 +271,61 @@ namespace Utility
         for (auto&t : _workerThreads) t.join();
     }
 
+    void ThreadPool::YieldToPoolInterface::YieldUntil(std::chrono::steady_clock::time_point timeoutTime)
+    {
+        assert(0);
+    }
+
+    std::future_status ThreadPool::YieldToPoolInterface::YieldWith(std::function<std::future_status()>&& yieldingFunction)
+    {
+        // set this thread into frozen state and spin up a replacement thread
+        ++_pool->_workersFrozenCount;
+        auto prevWorkersNonFrozenCount = _pool->_workersNonFrozenCount.fetch_add(-1);
+        if ((prevWorkersNonFrozenCount-1) < _pool->_requestedWorkerCount) {
+            ScopedLock(_pool->_pendingTaskLock);
+            _pool->_workerThreads.emplace_back([pool=_pool] { pool->RunBlocks(); });
+        }
+        auto resultStatus = yieldingFunction();
+        // unfreeze this thread; which should encourage the new thread we spun up to shut itself down
+        --_pool->_workersFrozenCount;
+        ++_pool->_workersNonFrozenCount;
+        return resultStatus;
+    }
+
+    ThreadPool::YieldToPoolInterface::YieldToPoolInterface(ThreadPool& pool) : _pool(&pool) {}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
     namespace Internal
     {
+        
     #if !FEATURE_THREAD_LOCAL_KEYWORD
-        static thread_local_ptr<std::function<void(std::chrono::steady_clock::time_point)>> s_threadPoolYieldFunction;
-
-        void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
-        {
-            auto* yieldFn = s_threadPoolYieldFunction.get();
-            if (yieldFn) {
-                (*yieldFn)(timeoutTime);
-            } else {
-                std::this_thread::sleep_until(timeoutTime);
-            }
-        }
-
-        void SetYieldToPoolFunctionInternal(const std::function<void(std::chrono::steady_clock::time_point)>& yieldToPoolFunction)
-        {
-            s_threadPoolYieldFunction.allocate(yieldToPoolFunction);
-        }
+        static thread_local_ptr<Internal::IYieldToPool> s_threadPoolYield;
+        void YieldToPoolHelper::SetYieldToPoolInterface(Internal::IYieldToPool* newValue) { s_threadPoolYield = newValue; }
+        Internal::IYieldToPool* YieldToPoolHelper::GetYieldToPoolInterface() { return s_threadPoolYield.get(); }
     #else
-        static thread_local std::function<void(std::chrono::steady_clock::time_point)> s_threadPoolYieldFunction;
-
-        void YieldToPoolUntilInternal(std::chrono::steady_clock::time_point timeoutTime)
-        {
-            if (s_threadPoolYieldFunction) {
-                s_threadPoolYieldFunction(timeoutTime);
-            } else {
-                std::this_thread::sleep_until(timeoutTime);
-            }
-        }
-
-        void SetYieldToPoolFunctionInternal(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction)
-        {
-            s_threadPoolYieldFunction = yieldToPoolFunction;
-        }
-
+        static thread_local Internal::IYieldToPool* s_threadPoolYield;
+        void YieldToPoolHelper::SetYieldToPoolInterface(Internal::IYieldToPool* newValue) { s_threadPoolYield = newValue; }
+        Internal::IYieldToPool* YieldToPoolHelper::GetYieldToPoolInterface() { return s_threadPoolYield; }
     #endif
 
-        void YieldToPoolInterace::YieldUntil(std::chrono::steady_clock::time_point timeoutTime)
+        IYieldToPoolHelper* GetYieldToPoolHelper()
         {
-            YieldToPoolUntilInternal(timeoutTime);
+            // Use attachable ptrs to guarantee cross-module support
+            static ConsoleRig::WeakAttachablePtr<Internal::IYieldToPoolHelper> result;
+            return result.lock().get();
         }
 
-        void YieldToPoolInterace::SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction)
-        {
-            SetYieldToPoolFunctionInternal(std::move(yieldToPoolFunction));
+        IYieldToPool* GetYieldToPoolInterface()
+        {            
+            auto* helper = GetYieldToPoolHelper();
+            return helper ? helper->GetYieldToPoolInterface() : nullptr;
         }
 
-        IYieldToPool& GetYieldToPoolInterface()
-        {
-            static ConsoleRig::WeakAttachablePtr<Internal::IYieldToPool> result;
-            auto res = result.lock();
-            assert(res);
-            return *res;
+        void SetYieldToPoolInterface(IYieldToPool* newValue)
+        {            
+            auto* helper = GetYieldToPoolHelper();
+            if (helper) helper->SetYieldToPoolInterface(newValue);
         }
     }
 }

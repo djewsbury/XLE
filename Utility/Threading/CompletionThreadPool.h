@@ -7,17 +7,16 @@
 #pragma once
 
 #include "Mutex.h"
+#include "LockFree.h"
 #include "../HeapUtils.h"
-#include "../ConsoleRig/AttachablePtr.h"
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
-    #include "LockFree.h"
-    #include "../../OSServices/WinAPI/System_WinAPI.h"
-#endif
+#include "../../ConsoleRig/AttachablePtr.h"
 #include <vector>
 #include <thread>
 #include <functional>
 #include <queue>
 #include <optional>
+#include <future>
+#include <chrono>
 
 namespace Utility
 {
@@ -27,10 +26,11 @@ namespace Utility
         {
         public:
             virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) = 0;
-            virtual void SetFunction(std::function<void(std::chrono::steady_clock::time_point)>&& yieldToPoolFunction) = 0;
+            virtual std::future_status YieldWith(std::function<std::future_status()>&& yieldingFunction) = 0;
             virtual ~IYieldToPool() = default;
         };
-        IYieldToPool& GetYieldToPoolInterface();
+        IYieldToPool* GetYieldToPoolInterface();
+        class IYieldToPoolHelper;
     }
 
     /** <summary>Temporarily yield execution of this thread to whatever pool manages it</summary>
@@ -42,63 +42,38 @@ namespace Utility
      * worker threads are stalled waiting on some pool operation that can never execute.
      * 
      * Rather than stalling or yielding worker thread time, we should instead attempt to 
-     * find some other operation that can take over this worker thread temporarily.
-     * 
-     * When run on a thread pool worker thread, YieldToPool does exactly that. It does not
-     * stall, but it will attempt pop another operation from the pending queue. It will
-     * return execution back to the caller after this operation has completed, so that the
-     * original operation can resume from where it left off.
+     * find some other thread pool block to take it's place. The thread pool will do this
+     * by putting the current thread into a frozen state, and spin up another thread to
+     * take it's place. This attempts to maintain a fixed number of non-stalled threads in 
+     * the thread pool at all times. Assuming no cyclic dependencies, this can solve cases
+     * where one thread pool block is waiting on the result of another thread pool block.
      * 
      * When run on some other thread, it will just yield back to the OS.
     */
     template<typename Rep, typename Period>
         void YieldToPoolFor(const std::chrono::duration<Rep, Period>& timeout)
     {
-        return Internal::GetYieldToPoolInterface().YieldUntil(std::chrono::steady_clock::now() + timeout);
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            return interface->YieldUntil(std::chrono::steady_clock::now() + timeout);
+        } else {
+            std::this_thread::sleep_for(timeout);
+        }
     }
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
-    class CompletionThreadPool
+    inline void YieldToPool(std::condition_variable& cv, std::unique_lock<std::mutex>& lock)
     {
-    public:
-        template<class Fn, class... Args>
-            void Enqueue(Fn&& fn, Args... args);
-
-		void EnqueueBasic(std::function<void()>&& task);
-
-        bool IsGood() const { return !_workerThreads.empty(); }
-
-        CompletionThreadPool(unsigned threadCount);
-        ~CompletionThreadPool();
-
-        CompletionThreadPool(const CompletionThreadPool&) = delete;
-        CompletionThreadPool& operator=(const CompletionThreadPool&) = delete;
-        CompletionThreadPool(CompletionThreadPool&&) = delete;
-        CompletionThreadPool& operator=(CompletionThreadPool&&) = delete;
-    private:
-        std::vector<std::thread> _workerThreads;
-        
-        Threading::Mutex _pendingsTaskLock;
-        typedef std::function<void()> PendingTask;
-        LockFreeFixedSizeQueue<PendingTask, 256> _pendingTasks;
-
-        OSServices::XlHandle _events[2];
-        volatile bool _workerQuit;
-
-        ConsoleRig::AttachablePtr<Internal::IYieldToPool> _yieldToPoolInterface;
-    };
-
-    template<class Fn, class... Args>
-        void CompletionThreadPool::Enqueue(Fn&& fn, Args... args)
-        {
-			// note -- we seem to get a forced invocation of the copy constructor
-			// for std::function<void> here, for an input lambda (even if that lamdba
-			// takes no parameters and returns void). It seems like there is no way to
-			// move from a lamdba of any kind into a std::function<void()> (presumably
-			// because of the fake/unnamed type given with lamdbas by the compile)
-			EnqueueBasic(std::bind(std::move(fn), std::forward<Args>(args)...));
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith(
+                [&cv, &lock]() {
+                    cv.wait(lock);
+                    return std::future_status::ready;
+                });
+        } else {
+            cv.wait(lock);
         }
-#endif
+    }
 
     class ThreadPool
     {
@@ -147,13 +122,20 @@ namespace Utility
         std::vector<Page> _pages;
         
         volatile bool _workerQuit;
-        std::atomic<signed> _runningWorkerCount;
+        std::atomic<signed> _workersOwningABlockCount;
+        std::atomic<signed> _workersFrozenCount;
+        std::atomic<signed> _workersNonFrozenCount;
+        std::atomic<signed> _workersTotalCount;
+        unsigned _requestedWorkerCount;
 
-        ConsoleRig::AttachablePtr<Internal::IYieldToPool> _yieldToPoolInterface;
+        ConsoleRig::AttachablePtr<Internal::IYieldToPoolHelper> _yieldToPoolHelper;
 
-        void RunBlocks(bool finishWhenEmpty);
+        void RunBlocks();
+        void RunBlocksDrainThread();
         void DrainPendingReleaseAlreadyLocked();
         void AddPendingRelease(StoredFunction fn);
+
+        class YieldToPoolInterface;
     };
 
     template<class Fn, class... Args>
