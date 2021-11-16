@@ -560,48 +560,6 @@ namespace Assets
 			auto& compilers = Services::GetAsyncMan().GetIntermediateCompilers();
 			return compilers.Prepare(targetCode, std::move(initializers));
 		}
-
-        struct ActivePromiseFulFillmentMoment
-        {
-            void* _future;
-            PromiseFulFillment_CheckStatusFn _checkStatusFn;
-        };
-        static thread_local std::unique_ptr<std::vector<ActivePromiseFulFillmentMoment>> s_activeFutureResolutionMoments;
-        void PromiseFulFillment_BeginMoment(void* future, PromiseFulFillment_CheckStatusFn checkStatusFn)
-        {
-            assert((*checkStatusFn)(future) == AssetState::Pending);
-            if (!s_activeFutureResolutionMoments)
-                s_activeFutureResolutionMoments = std::make_unique<std::vector<ActivePromiseFulFillmentMoment>>();
-            s_activeFutureResolutionMoments->push_back({future, checkStatusFn});
-        }
-
-		void PromiseFulFillment_EndMoment(void* future)
-        {
-            assert(s_activeFutureResolutionMoments);
-            for (auto i=s_activeFutureResolutionMoments->rbegin(); i!=s_activeFutureResolutionMoments->rend(); ++i) {
-                if (i->_future != future)
-                    continue;
-
-                // _checkStatusFn could potentially modify the s_activeFutureResolutionMoments array. So to be safe we should erase
-                // before we call it
-                auto checkStatusFn = std::move(i->_checkStatusFn);
-                s_activeFutureResolutionMoments->erase((i+1).base());
-
-                auto newState = checkStatusFn(future);
-                assert(newState == AssetState::Ready || newState == AssetState::Invalid);
-                return;
-            }
-            assert(0);      // didn't find this resolution item
-        }
-
-		bool PromiseFulFillment_DeadlockDetection(void* future)
-        {
-            if (!s_activeFutureResolutionMoments) return false;
-            for (auto i=s_activeFutureResolutionMoments->rbegin(); i!=s_activeFutureResolutionMoments->rend(); ++i)
-                if (i->_future == future)
-                    return true;
-            return false;
-        }
 	}
 
 

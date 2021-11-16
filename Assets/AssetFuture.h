@@ -133,44 +133,6 @@ namespace Assets
 
 		void CheckMainThreadStall(std::chrono::steady_clock::time_point& stallStartTime);
 
-		using PromiseFulFillment_CheckStatusFn = AssetState(*)(void*);
-		void PromiseFulFillment_BeginMoment(void* future, PromiseFulFillment_CheckStatusFn);
-		void PromiseFulFillment_EndMoment(void* future);
-		bool PromiseFulFillment_DeadlockDetection(void* future);
-
-		/**
-			PromiseFulfillmentMoment is used to bracket a piece of code that is going to resolve
-			the state of an Future. When PromiseFulfillmentMoment begins, the future should
-			be in Pending state, and when it ends, it should be in either Ready or Invalid state
-			(or at least have that state change queued to happen at the next frame barrier)
-
-			This will bracket resolution code fairly tightly (and only a single thread).
-			It's used to detect deadlock scenarios. That is, we can't stall waiting for a future
-			during it's own resolution moment.
-		*/
-		class PromiseFulfillmentMoment
-		{
-		public:
-			template<typename Type>
-				PromiseFulfillmentMoment(Future<Type>& future) : _promise(&future)
-			{
-				assert(future.GetAssetState() == AssetState::Pending);
-				PromiseFulFillment_BeginMoment(
-					&future,
-					[](void* inputFuture) {
-						DependencyValidation depVal;
-						Blob actualizationLog;
-						return ((Future<Type>*)inputFuture)->CheckStatusBkgrnd(depVal, actualizationLog);
-					});
-			}
-			~PromiseFulfillmentMoment()
-			{
-				PromiseFulFillment_EndMoment(_promise);
-			}
-		private:
-			void* _promise;
-		};
-
 		template<typename Future, typename AssetType>
 			void TryGetAssetFromFuture(
 				Future& future,
@@ -389,15 +351,6 @@ namespace Assets
 	template<typename Type>
         std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::microseconds timeout) const
 	{
-		if (Internal::PromiseFulFillment_DeadlockDetection((void*)this)) {
-			// This future is currently in a "resolution moment"
-			// This means that the code that will assign this future to either ready or invalid is
-			// higher up in the callstack on this same thread. If we attempt to stall for it here, 
-			// the stall will be infinite -- because we need to pass execution back to that resolution
-			// moment in order for the future to be resolved
-			Throw(std::runtime_error("Detected asset future deadlock scenario in StallWhilePending. Future initializer: " + _initializer));
-		}
-
 		auto startTime = std::chrono::steady_clock::now();
         auto timeToCancel = startTime + timeout;
 

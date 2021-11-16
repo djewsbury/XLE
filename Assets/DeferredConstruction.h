@@ -61,7 +61,6 @@ namespace Assets
 		typename std::enable_if<Internal::HasDirectAutoConstructAsset<Internal::PromisedType<Promise>, Params...>::value>::type* = nullptr>
 		void AutoConstructToPromiseSynchronously(Promise& promise, Params... initialisers)
 	{
-		// Internal::PromiseFulfillmentMoment moment(future);
 		TRY {
 			auto asset = AutoConstructAsset<Internal::PromisedType<Promise>>(std::forward<Params>(initialisers)...);
 			promise.set_value(std::move(asset));
