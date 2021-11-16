@@ -561,5 +561,45 @@ namespace UnitTests
                 Log(Debug) << "Thread[" << c << "] " << items[c]._str.str() << std::endl;
             }
         }
+
+        SECTION("Basic functions") 
+        {
+            std::promise<unsigned> p;
+            p.set_value(3);
+            auto future = p.get_future();
+            YieldToPool(future);
+            std::future_status status0 = YieldToPoolFor(future, 10ms);
+            std::future_status status1 = YieldToPoolUntil(future, std::chrono::steady_clock::now() + 10ms);
+            REQUIRE(status0 == std::future_status::ready);
+            REQUIRE(status1 == std::future_status::ready);
+
+            auto shared_future = future.share();
+            YieldToPool(shared_future);
+            status0 = YieldToPoolFor(shared_future, 10ms);
+            status1 = YieldToPoolUntil(shared_future, std::chrono::steady_clock::now() + 10ms);
+            REQUIRE(status0 == std::future_status::ready);
+            REQUIRE(status1 == std::future_status::ready);
+
+            std::condition_variable cv0, cv1;
+            std::mutex m;
+            std::thread t{
+                [&]() {
+                    std::unique_lock<std::mutex> l(m);
+                    cv1.notify_all();
+                    YieldToPool(cv0, l);
+                }};
+            {
+                std::unique_lock<std::mutex> l(m);
+                YieldToPool(cv1, l);
+                cv0.notify_all();
+            }
+            t.join();
+
+            std::unique_lock<std::mutex> l(m);
+            std::cv_status status2 = YieldToPoolFor(cv0, l, 10ms);
+            std::cv_status status3 = YieldToPoolUntil(cv0, l, std::chrono::steady_clock::now() + 10ms);
+            REQUIRE(status2 == std::cv_status::timeout);
+            REQUIRE(status3 == std::cv_status::timeout);
+        }
     }
 }

@@ -477,15 +477,14 @@ namespace Assets
 				DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 				return (AssetState)that->_state;
 			}
-			std::future_status waitResult;
 			if (timeout.count() != 0) {
-				waitResult = that->_pendingFuture.wait_until(timeToCancel);
+				auto waitResult = YieldToPoolUntil(that->_pendingFuture, timeToCancel);
 				if (waitResult == std::future_status::timeout) {
 					DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
 					return {};
 				}
 			} else
-				that->_pendingFuture.wait();
+				YieldToPool(that->_pendingFuture);
 
 			// Force the background version into the foreground (see OnFrameBarrier)
 			// This is required because we can be woken up by SetAsset, which only set the
@@ -500,11 +499,16 @@ namespace Assets
 			Internal::TryGetAssetFromFuture(that->_pendingFuture, newState, newActualized, newActualizationLog, newDepVal);
 			
 			lock = std::unique_lock<Threading::Mutex>(that->_lock);
-			assert(that->_state == AssetState::Pending);
-			that->_actualized = std::move(newActualized);
-			that->_actualizationLog = std::move(newActualizationLog);
-			that->_actualizedDepVal = std::move(newDepVal);
-			that->_state = newState;
+			if (that->_state == AssetState::Pending) {
+				that->_actualized = std::move(newActualized);
+				that->_actualizationLog = std::move(newActualizationLog);
+				that->_actualizedDepVal = std::move(newDepVal);
+				that->_state = newState;
+			} else {
+				assert(that->_state == newState);
+				assert(that->_actualizedDepVal == newDepVal);
+				assert(that->_actualizationLog == newActualizationLog);
+			}
 
 			that->DisableFrameBarrierCallbackAlreadyLocked();
 			DEBUG_ONLY(Internal::CheckMainThreadStall(startTime));
