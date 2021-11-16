@@ -20,7 +20,7 @@
 #include "../IAnnotator.h"
 #include "../BufferView.h"
 
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/StringFormat.h"
@@ -81,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		true, StencilSky, 0xff, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
-	static std::shared_ptr<::Assets::Future<Techniques::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
+	static std::shared_ptr<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>> BuildLightResolveOperator(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const LightSourceOperatorDesc& desc,
@@ -146,13 +146,13 @@ namespace RenderCore { namespace LightingEngine
 			inputStates, fbTarget);
 	}
 
-	::Assets::PtrToFuturePtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
+	::Assets::PtrToMarkerPtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(
 		std::shared_ptr<IDevice> device,
 		const DescriptorSetSignature& descSetLayout)
 	{
 		auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/balanced_noise.dds:LT");
 
-		auto result = std::make_shared<::Assets::FuturePtr<IDescriptorSet>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<IDescriptorSet>>();
 		::Assets::WhenAll(balancedNoiseFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[device, descSetLayout=descSetLayout](std::shared_ptr<RenderCore::Techniques::DeferredShaderResource> balancedNoise) {
@@ -183,7 +183,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	::Assets::PtrToFuturePtr<LightResolveOperators> BuildLightResolveOperators(
+	::Assets::PtrToMarkerPtr<LightResolveOperators> BuildLightResolveOperators(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
@@ -198,7 +198,7 @@ namespace RenderCore { namespace LightingEngine
 			LightSourceOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
 		};
-		using PipelineFuture = std::shared_ptr<::Assets::Future<Techniques::GraphicsPipelineAndLayout>>;
+		using PipelineFuture = std::shared_ptr<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>;
 		std::vector<PipelineFuture> pipelineFutures;
 		std::vector<AttachedData> attachedData;
 		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
@@ -273,7 +273,7 @@ namespace RenderCore { namespace LightingEngine
 		auto fixedDescSetFuture = BuildFixedLightResolveDescriptorSet(pipelineCollection.GetDevice(), *sig);
 		auto device = pipelineCollection.GetDevice();
 
-		auto result = std::make_shared<::Assets::FuturePtr<LightResolveOperators>>("light-operators");
+		auto result = std::make_shared<::Assets::MarkerPtr<LightResolveOperators>>("light-operators");
 		::Assets::PollToPromise(
 			result->AdoptPromise(),
 			[pipelineFutures, fixedDescSetFuture]() {

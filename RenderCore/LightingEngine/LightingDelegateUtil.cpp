@@ -88,10 +88,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	::Assets::FuturePtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate()
+	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate()
 	{
 		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
-		::Assets::FuturePtr<Techniques::IShaderResourceDelegate> result("gbuffer-srdelegate");
+		::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> result("gbuffer-srdelegate");
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
 			result.AdoptPromise(),
 			[](auto nft) { return std::make_shared<BuildGBufferResourceDelegate>(*nft); });

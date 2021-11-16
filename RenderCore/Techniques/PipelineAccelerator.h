@@ -76,12 +76,12 @@ namespace RenderCore { namespace Techniques
 		virtual const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const = 0;
 		virtual std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const = 0;
 
-		// These "Get...Future" functions are less optimal than the "TryGet..." ones, and should not be called frequently
+		// These "Get...Marker" functions are less optimal than the "TryGet..." ones, and should not be called frequently
 		// They are find to use during construction tasks (eg, stalling until a pipeline is ready, etc), but during the render
 		// loop use the "TryGet..." versions
-		virtual std::shared_ptr<::Assets::Future<Pipeline>> GetPipelineFuture(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
-		virtual std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> GetDescriptorSetFuture(DescriptorSetAccelerator& accelerator) const = 0;
-		virtual ::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutFuture(const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::shared_ptr<::Assets::Marker<Pipeline>> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const = 0;
+		virtual std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const = 0;
+		virtual ::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const = 0;
 
 		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
 		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);

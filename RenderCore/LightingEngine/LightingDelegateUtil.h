@@ -5,7 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
-#include "Assets/AssetFuture.h"
+#include "Assets/Marker.h"
 #include <memory>
 
 namespace RenderCore { namespace Techniques
@@ -31,6 +31,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::AttachmentPool& shadowGenAttachmentPool);
 
-    ::Assets::FuturePtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
+    ::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 }}}
 

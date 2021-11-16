@@ -64,6 +64,6 @@ namespace RenderOverlays
     };
 
     class Font;
-    ::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size);
+    ::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
 
 }

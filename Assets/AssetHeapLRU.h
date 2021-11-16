@@ -9,7 +9,7 @@ namespace Assets
         class AssetHeapLRU : public IDefaultAssetHeap
     {
     public:
-        using PtrToFuture = std::shared_ptr<Future<AssetType>>;
+        using PtrToFuture = std::shared_ptr<Marker<AssetType>>;
 
         template<typename... Params>
             PtrToFuture Get(Params...);
@@ -60,7 +60,7 @@ namespace Assets
                 return *i;
 
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
+            newFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
             _assets.Insert(hash, PtrToFuture{newFuture});
 
             #if defined(_DEBUG)
@@ -119,7 +119,7 @@ namespace Assets
 
         if (newShadowingAsset) {
             auto stringInitializer = Internal::AsString(initialisers...);    // (used for tracking/debugging purposes)
-            auto newShadowingFuture = std::make_shared<Future<AssetType>>(stringInitializer);
+            auto newShadowingFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
             newShadowingFuture->SetAsset(std::move(newShadowingAsset), nullptr);
             _shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
         }

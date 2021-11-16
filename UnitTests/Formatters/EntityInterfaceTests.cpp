@@ -106,7 +106,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static Type RequireActualize(::Assets::Future<Type>& future)
+		static Type RequireActualize(::Assets::Marker<Type>& future)
 	{
 		future.StallWhilePending();
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);

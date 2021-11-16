@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/ImpliedTyping.h"
 #include "../../Utility/StringUtils.h"
@@ -39,7 +39,7 @@ namespace EntityInterface
     class IEntityDocument
     {
     public:
-        virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) = 0;
+        virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) = 0;
         virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
         virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 
@@ -61,7 +61,7 @@ namespace EntityInterface
         // returns a dependency validation that advances if any properties at that mount point,
         // (or underneath) change 
         virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const = 0;
-        virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> mountPoint) const = 0;
+        virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
     };

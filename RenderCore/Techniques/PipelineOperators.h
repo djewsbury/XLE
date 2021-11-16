@@ -56,7 +56,7 @@ namespace RenderCore { namespace Techniques
 
 	enum class FullViewportOperatorSubType { DisableDepth, MaxDepth };
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
@@ -65,7 +65,7 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget,
 		const UniformsStreamInterface& usi);
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
@@ -74,21 +74,21 @@ namespace RenderCore { namespace Techniques
 		const FrameBufferTarget& fbTarget,
 		const UniformsStreamInterface& usi);
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi);
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,
 		const UniformsStreamInterface& usi);
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,

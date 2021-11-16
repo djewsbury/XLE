@@ -22,7 +22,7 @@
 #include "../../SceneEngine/Tonemap.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetUtils.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/IntermediateAssets.h"
 #include "../../Math/Geometry.h"
 #include "../../PlatformRig/PlatformRigUtil.h"
@@ -55,7 +55,7 @@ namespace Sample
         std::unique_ptr<FixedFunctionModel::SharedStateSet> _sharedStateSet;
         mutable std::unique_ptr<FixedFunctionModel::ModelRenderer> _modelRenderer;
 
-		::Assets::PtrToFuturePtr<RenderCore::Techniques::SimpleModelRenderer> _simpleModelRenderer;
+		::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> _simpleModelRenderer;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

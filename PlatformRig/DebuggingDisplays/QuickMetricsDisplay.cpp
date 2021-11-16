@@ -5,7 +5,7 @@
 #include "QuickMetricsDisplay.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Techniques/Services.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 
 namespace PlatformRig { namespace Overlays

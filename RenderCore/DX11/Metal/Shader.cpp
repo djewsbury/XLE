@@ -236,7 +236,7 @@ namespace RenderCore { namespace Metal_DX11
 		return false;
     }
 
-	static std::shared_ptr<::Assets::FuturePtr<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	static std::shared_ptr<::Assets::MarkerPtr<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";
 		switch (stage) {

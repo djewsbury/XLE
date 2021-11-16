@@ -37,7 +37,7 @@ namespace SceneEngine
     using namespace RenderCore;
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
 		unsigned testTypeParameter);
 
 	class RayDefinitionUniformDelegate : public Techniques::IShaderResourceDelegate
@@ -301,7 +301,7 @@ namespace SceneEngine
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };
 		_pimpl->_sequencerConfig = (testType == TestType::FrustumTest) ? box._frustumTestSequencerCfg : box._rayTestSequencerCfg;
 
-		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayoutFuture(*_pimpl->_sequencerConfig);
+		auto pipelineLayout = pipelineAcceleratorPool.GetCompiledPipelineLayoutMarker(*_pimpl->_sequencerConfig);
 		pipelineLayout->StallWhilePending();
 
 		_pimpl->_encoder = metalContext.BeginStreamOutputEncoder(pipelineLayout->Actualize()->GetPipelineLayout(), MakeIteratorRange(&sov, &sov+1));
@@ -373,7 +373,7 @@ namespace SceneEngine
     static const unsigned s_soStrides[] = { sizeof(ModelIntersectionStateContext::ResultEntry) };
 
 	static std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> CreateTechniqueDelegate(
-		const ::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile>& techniqueSet,
 		unsigned testTypeParameter)
 	{
 		return RenderCore::Techniques::CreateTechniqueDelegate_RayTest(

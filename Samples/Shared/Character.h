@@ -58,9 +58,9 @@ namespace Sample
         const RenderCore::Assets::ModelScaffold& GetModelScaffold() const;
 
     protected:
-        ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold> _model;
-        ::Assets::PtrToFuturePtr<RenderCore::Assets::SkeletonScaffold> _skeleton;
-        ::Assets::PtrToFuturePtr<RenderCore::Assets::AnimationSetScaffold> _animationSet;
+        ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold> _model;
+        ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold> _skeleton;
+        ::Assets::PtrToMarkerPtr<RenderCore::Assets::AnimationSetScaffold> _animationSet;
 
         std::unique_ptr<RenderCore::Assets::ModelRenderer> _renderer;
         std::unique_ptr<RenderCore::Assets::SkinPrepareMachine> _prepareMachine;

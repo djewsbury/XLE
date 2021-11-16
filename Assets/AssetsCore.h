@@ -27,11 +27,11 @@ namespace Assets
     enum class AssetState { Pending, Ready, Invalid };
     class DependencyValidation;
 
-	template<typename AssetType> class Future;
+	template<typename AssetType> class Marker;
     template<typename AssetType>
-		using FuturePtr = Future<std::shared_ptr<AssetType>>;
+		using MarkerPtr = Marker<std::shared_ptr<AssetType>>;
 	template<typename AssetType>
-		using PtrToFuturePtr = std::shared_ptr<FuturePtr<AssetType>>;
+		using PtrToMarkerPtr = std::shared_ptr<MarkerPtr<AssetType>>;
 
 	Blob AsBlob(const std::exception& e);
 	Blob AsBlob(IteratorRange<const void*> copyFrom);

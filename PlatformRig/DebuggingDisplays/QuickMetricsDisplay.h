@@ -37,6 +37,6 @@ namespace PlatformRig { namespace Overlays
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _scrollOffset = 0.f;
 
-		::Assets::PtrToFuturePtr<RenderOverlays::Font> _headingFont;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
 	};
 }}

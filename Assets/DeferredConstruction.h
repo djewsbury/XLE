@@ -5,7 +5,7 @@
 #pragma once
 
 #include "InitializerPack.h"
-#include "AssetFuture.h"
+#include "Marker.h"
 #include "AssetTraits.h"
 #include "Continuation.h"
 #include "IArtifact.h"
@@ -271,17 +271,17 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Future<AssetType>> MakeFuture(Params... initialisers)
+		std::shared_ptr<Marker<AssetType>> MakeFuture(Params... initialisers)
 	{
-		auto future = std::make_shared<Future<AssetType>>(Internal::AsString(initialisers...));
+		auto future = std::make_shared<Marker<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return future;
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<FuturePtr<AssetType>> MakeFuturePtr(Params... initialisers)
+		std::shared_ptr<MarkerPtr<AssetType>> MakeFuturePtr(Params... initialisers)
 	{
-		auto future = std::make_shared<FuturePtr<AssetType>>(Internal::AsString(initialisers...));
+		auto future = std::make_shared<MarkerPtr<AssetType>>(Internal::AsString(initialisers...));
 		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return future;
 	}

@@ -42,5 +42,5 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::FuturePtr<RenderCore::LightingEngine::CompiledLightingTechnique>&);
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::MarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique>&);
 }

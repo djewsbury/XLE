@@ -43,7 +43,7 @@
     <ClInclude Include="..\IFileSystem.h">
       <Filter>FileSystems</Filter>
     </ClInclude>
-    <ClInclude Include="..\AssetFuture.h">
+    <ClInclude Include="..\Marker.h">
       <Filter>AssetHeaps</Filter>
     </ClInclude>
     <ClInclude Include="..\MemoryFile.h">

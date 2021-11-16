@@ -91,7 +91,7 @@ namespace FixedFunctionModel
 		~BoundShaderVariationSet();
 
 		static void ConstructToFuture(
-			::Assets::FuturePtr<BoundShaderVariationSet>& future,
+			::Assets::MarkerPtr<BoundShaderVariationSet>& future,
 			StringSection<::Assets::ResChar> techniqueName);
 
 	protected:

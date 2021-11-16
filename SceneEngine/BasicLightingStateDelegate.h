@@ -27,7 +27,7 @@ namespace SceneEngine
     /// This provides implementations of the basic lighting related interfaces of
     /// ISceneParser that will hook into an EnvironmentSettings object.
     /// Derived classes should implement the accessor GetEnvSettings().
-    ::Assets::PtrToFuturePtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
+    ::Assets::PtrToMarkerPtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
 
     EnvironmentalLightingDesc   DefaultEnvironmentalLightingDesc();
     SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();

@@ -30,7 +30,7 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/Continuation.h"
 #include "../../Utility/ArithmeticUtils.h"
@@ -1240,8 +1240,8 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
 		StringSection<> deformOperations,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
 		const std::string& modelScaffoldNameStringInit,
@@ -1396,9 +1396,9 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
 		StringSection<> deformOperations,
 		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
 	{

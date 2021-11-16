@@ -12,7 +12,7 @@
 #include "../IDevice.h"
 #include "../IThreadContext.h"
 #include "../../BufferUploads/IBufferUploads.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 		usi.BindResourceView(0, Hash64("Input"));
 		const auto pushConstantsBinding = Hash64("FilterPassParams");
 
-		::Assets::PtrToFuturePtr<IComputeShaderOperator> computeOpFuture;
+		::Assets::PtrToMarkerPtr<IComputeShaderOperator> computeOpFuture;
 		if (filter == EquRectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, Hash64("OutputArray"));
  			computeOpFuture = CreateComputeOperator(

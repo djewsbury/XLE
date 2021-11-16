@@ -61,7 +61,7 @@ namespace RenderOverlays
 		uint64_t _hashCode;
     };
 
-	::Assets::PtrToFuturePtr<Font> MakeFont(StringSection<> path, int size);
+	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
 
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev);
 

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "AssetsCore.h"
-#include "AssetFuture.h"
+#include "Marker.h"
 #include "IAsyncMarker.h"
 #include "AssetTraits.h"		// just for InvokeAssetConstructor
 #include "../OSServices/Log.h"
@@ -26,7 +26,7 @@ namespace Assets { namespace Internal
 			Blob& actualizationBlob, 
 			DependencyValidation& exceptionDepVal,
 			std::tuple<Tp...>& actualized,
-			const std::tuple<std::shared_ptr<Future<Tp>>...>& futures)
+			const std::tuple<std::shared_ptr<Marker<Tp>>...>& futures)
 	{
 		Blob queriedLog;
 		DependencyValidation queriedDepVal;
@@ -47,7 +47,7 @@ namespace Assets { namespace Internal
 	}
 
 	template<size_t I = 0, typename... Tp>
-		bool AnyForegroundPendingAssets(const std::tuple<std::shared_ptr<Future<Tp>>...>& futures)
+		bool AnyForegroundPendingAssets(const std::tuple<std::shared_ptr<Marker<Tp>>...>& futures)
 	{
 		if (std::get<I>(futures)->GetAssetState() == AssetState::Pending)
 			return true;
@@ -73,7 +73,7 @@ namespace Assets { namespace Internal
 	void DeregisterFrameBarrierCallback(unsigned);
 
 	template<typename PromisedType>
-		bool TimedWait(const std::shared_ptr<Future<PromisedType>>& future, std::chrono::microseconds timeout)
+		bool TimedWait(const std::shared_ptr<Marker<PromisedType>>& future, std::chrono::microseconds timeout)
 	{
 		auto stallResult = future->StallWhilePending(timeout);
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
@@ -136,7 +136,7 @@ namespace Assets { namespace Internal
 	////////////////////////////////////////////////////////////////////////////////////////////////
 	template<typename Payload>
 		static AssetState TryQueryFuture(
-			Future<Payload>& future,
+			Marker<Payload>& future,
 			Payload& actualized,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
@@ -146,7 +146,7 @@ namespace Assets { namespace Internal
 
 	template<typename Payload>
 		static AssetState TryQueryFuture(
-			std::shared_ptr<Future<Payload>>& future,
+			std::shared_ptr<Marker<Payload>>& future,
 			Payload& actualized,
 			Blob& actualizationBlob,
 			DependencyValidation& exceptionDepVal)
@@ -218,10 +218,10 @@ namespace Assets { namespace Internal
 
 	////////////////////////////////////////////////////////////////////////////////////////////////
 	template<typename Payload>
-		static auto QueryFuture(Future<Payload>& future) -> decltype(future.ActualizeBkgrnd()) { return future.ActualizeBkgrnd(); }
+		static auto QueryFuture(Marker<Payload>& future) -> decltype(future.ActualizeBkgrnd()) { return future.ActualizeBkgrnd(); }
 
 	template<typename Payload>
-		static auto QueryFuture(std::shared_ptr<Future<Payload>>& future) -> decltype(future->ActualizeBkgrnd()) { return future->ActualizeBkgrnd(); }
+		static auto QueryFuture(std::shared_ptr<Marker<Payload>>& future) -> decltype(future->ActualizeBkgrnd()) { return future->ActualizeBkgrnd(); }
 
 	template<typename Payload>
 		static Payload QueryFuture(std::future<Payload>& future) { return future.get(); }
@@ -362,15 +362,15 @@ namespace Assets { namespace Internal
 		static void CheckValidForContinuation()
 	{
 		using Test = std::tuple_element_t<I, std::tuple<FutureTypes...>>;
-		static_assert(!std::is_void_v<FutureResult<Test>>, "The given future type can't be used with continuation functions. This can happen when using Asset::Future<> with a non-copyable object");
+		static_assert(!std::is_void_v<FutureResult<Test>>, "The given future type can't be used with continuation functions. This can happen when using Asset::Marker<> with a non-copyable object");
 		if constexpr ((I+1) != sizeof...(FutureTypes))
 			CheckValidForContinuation<I+1, FutureTypes...>();
 	}
 
-	template<typename Type> static std::shared_future<Type> GetContinuableFuture(const Future<Type>& input) { return input.ShareFuture(); }
-	template<typename Type> static std::shared_future<Type> GetContinuableFuture(const std::shared_ptr<Future<Type>>& input) { return input->ShareFuture(); }
-	template<typename Type> static std::shared_future<Type> GetContinuableFuture(Future<Type>&& input) { return input.ShareFuture(); }
-	template<typename Type> static std::shared_future<Type> GetContinuableFuture(std::shared_ptr<Future<Type>>&& input) { return input->ShareFuture(); }
+	template<typename Type> static std::shared_future<Type> GetContinuableFuture(const Marker<Type>& input) { return input.ShareFuture(); }
+	template<typename Type> static std::shared_future<Type> GetContinuableFuture(const std::shared_ptr<Marker<Type>>& input) { return input->ShareFuture(); }
+	template<typename Type> static std::shared_future<Type> GetContinuableFuture(Marker<Type>&& input) { return input.ShareFuture(); }
+	template<typename Type> static std::shared_future<Type> GetContinuableFuture(std::shared_ptr<Marker<Type>>&& input) { return input->ShareFuture(); }
 
 	template<typename Type> static const Type& GetContinuableFuture(const Type& input) { return input; }
 	template<typename Type> static Type&& GetContinuableFuture(Type&& input) { return std::move(input); }

@@ -38,13 +38,13 @@ namespace ToolsRig
 			virtual ~ICompiledOperation() = default;
 		};
 
-		::Assets::PtrToFuturePtr<ICompiledOperation> BuildCompiledTechnique(
-			::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> futureFormatter,
+		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
+			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 			const RenderCore::FrameBufferProperties& fBProps);
 
-		::Assets::PtrToFuturePtr<IVisualizeStep> BuildVisualizeStep(
-			::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> futureFormatter);
+		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
+			::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter);
 
 		struct OperationConstructorContext
 		{

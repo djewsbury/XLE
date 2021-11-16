@@ -243,7 +243,7 @@ namespace RenderCore { namespace Techniques
 		for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
 			const auto& drawable = *(Drawable*)d.get();
 			assert(drawable._pipeline);
-			auto pipelineFuture = pipelineAccelerators.GetPipelineFuture(*drawable._pipeline, sequencerConfig);
+			auto pipelineFuture = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
 			if (pipelineFuture && pipelineFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 				if (!result)
 					result = std::make_shared<::Assets::AsyncMarkerGroup>();
@@ -251,7 +251,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			if (drawable._descriptorSet) {
-				auto descriptorSetFuture = pipelineAccelerators.GetDescriptorSetFuture(*drawable._descriptorSet);
+				auto descriptorSetFuture = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
 				if (descriptorSetFuture && descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 					if (!result)
 						result = std::make_shared<::Assets::AsyncMarkerGroup>();

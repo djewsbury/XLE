@@ -50,10 +50,10 @@ namespace RenderCore { namespace Techniques
 
 		auto GetModelRenderer(
             StringSection<ResChar> modelFilename, 
-            StringSection<ResChar> materialFilename) -> ::Assets::PtrToFuturePtr<SimpleModelRenderer>;
+            StringSection<ResChar> materialFilename) -> ::Assets::PtrToMarkerPtr<SimpleModelRenderer>;
 
-        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>;
-		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::MaterialScaffold>;
+        auto GetModelScaffold(StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
+		auto GetMaterialScaffold(StringSection<ResChar>, StringSection<ResChar>) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>;
 
         uint32_t GetReloadId() const;
         void OnFrameBarrier();

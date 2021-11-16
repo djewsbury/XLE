@@ -13,7 +13,7 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/DeviceContext.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -27,20 +27,20 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> _preconfiguration;
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc;
 
-		static ::Assets::PtrToFuturePtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
-			const ::Assets::PtrToFuturePtr<GraphicsPipelineDesc>& pipelineDescFuture)
+		static ::Assets::PtrToMarkerPtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
+			const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture)
 		{
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDescWithFilteringRules>>(pipelineDescFuture->Initializer());
 			::Assets::WhenAll(pipelineDescFuture).ThenConstructToPromise(
 				result->AdoptPromise(), 
 				[](std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>>&& resultPromise, auto pipelineDesc) { InitializePromise(std::move(resultPromise), pipelineDesc); });
 			return result;
 		}
 
-		static ::Assets::PtrToFuturePtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
+		static ::Assets::PtrToMarkerPtr<GraphicsPipelineDescWithFilteringRules> CreateFuture(
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDescWithFilteringRules>>();
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDescWithFilteringRules>>();
 			InitializePromise(result->AdoptPromise(), pipelineDesc);
 			return result;
 		}
@@ -50,7 +50,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
 			TRY {
-				::Assets::PtrToFuturePtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
+				::Assets::PtrToMarkerPtr<ShaderSourceParser::SelectorFilteringRules> filteringFuture[3];
 				for (unsigned c=0; c<3; ++c) {
 					auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
 					if (!fn.IsEmpty())
@@ -276,7 +276,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		return str.str();
 	}
 
-	static std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(
+	static std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> MakeByteCodeFuture(
 		ShaderStage stage, StringSection<> initializer, const std::string& definesTable,
 		const std::shared_ptr<CompiledShaderPatchCollection>& patchCollection,
 		IteratorRange<const uint64_t*> patchExpansions,
@@ -321,7 +321,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
 			auto res = ::Assets::MakeAsset<CompiledShaderByteCode_InstantiateShaderGraph>(
 				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
-			return *reinterpret_cast<std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>*>(&res);
+			return *reinterpret_cast<std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>*>(&res);
 		} else {
 			return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
 		}
@@ -396,7 +396,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeGraphicsPipelineFuture0(
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFuture[3],
+		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFuture[3],
 		const PipelineLayoutOptions& pipelineLayout,
 		GraphicsPipelineRetainedConstructionParams&& params)
 	{
@@ -459,8 +459,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<GraphicsPipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFuture[3],
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout,
+		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFuture[3],
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
 		assert(0);
@@ -491,7 +491,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static void MakeComputePipelineFuture0(
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
-		const std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>& csCode,
+		const std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>& csCode,
 		const PipelineLayoutOptions& pipelineLayout)
 	{
 		// Variation without a PredefinedPipelineLayout
@@ -509,8 +509,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::promise<ComputePipelineAndLayout>&& promise,
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
-		const std::shared_ptr<::Assets::Future<CompiledShaderByteCode>>& csCode,
-		const ::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout)
+		const std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>& csCode,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout>& pipelineLayout)
 	{
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
 		::Assets::WhenAll(csCode, pipelineLayout).ThenConstructToPromise(
@@ -591,9 +591,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			#endif
 		};
 		std::vector<std::pair<uint64_t, WeakGraphicsPipelineAndLayout>> _completedGraphicsPipelines;
-		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>>>> _pendingGraphicsPipelines;
 
-		std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> CreateGraphicsPipelineAlreadyLocked(
+		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipelineAlreadyLocked(
 			const VertexInputStates& ia,
 			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
 			const PipelineLayoutOptions& pipelineLayout,
@@ -623,7 +623,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto layout = completedi->second._layout.lock();
 				if (pipeline && pipeline->GetDependencyValidation().GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+					auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("pipeline-accelerator");
 					GraphicsPipelineAndLayout pipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal};
 					#if defined(_DEBUG)
 						pipelineAndLayout._debugInfo = completedi->second._debugInfo;
@@ -656,7 +656,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			StreamOutputInitializers so;
 			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
-			std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> byteCodeFutures[3];
+			std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFutures[3];
 			for (unsigned c=0; c<3; ++c) {
 				if (pipelineDesc->_shaders[c].empty())
 					continue;
@@ -677,7 +677,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				constructionParams._debugInfo._gsDescription = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
 			#endif
 
-			auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("pipeline-accelerator");
+			auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("pipeline-accelerator");
 			if (pipelineLayout._predefinedPipelineLayout) {
 				MakeGraphicsPipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFutures, pipelineLayout._predefinedPipelineLayout, std::move(constructionParams));
 			} else {
@@ -688,7 +688,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			return result;
 		}
 
-		void AddGraphicsPipelineFuture(const std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>>& future, uint64_t hash)
+		void AddGraphicsPipelineFuture(const std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>>& future, uint64_t hash)
 		{
 			auto i = LowerBound(_pendingGraphicsPipelines, hash);
 			if (i!=_pendingGraphicsPipelines.end() && i->first == hash) {
@@ -696,7 +696,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			} else
 				_pendingGraphicsPipelines.insert(i, std::make_pair(hash, future));
 
-			std::weak_ptr<::Assets::Future<GraphicsPipelineAndLayout>> capturedFuture = future;	
+			std::weak_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> capturedFuture = future;	
 			::Assets::WhenAll(future->ShareFuture()).Then(
 				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<GraphicsPipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
@@ -739,7 +739,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				});
 		}
 
-		std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
+		std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
 			StringSection<> shader,
 			const PipelineLayoutOptions& pipelineLayout,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
@@ -753,7 +753,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto layout = completedi->second._layout.lock();
 				if (pipeline && completedi->second._depVal.GetValidationIndex() == 0 && layout) {
 					// we can return an already completed pipeline
-					auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
+					auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>("compute-pipeline");
 					result->SetAsset(ComputePipelineAndLayout{std::move(pipeline), std::move(layout), completedi->second._depVal});
 					return result;
 				}
@@ -766,7 +766,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 			// Make the futures and setup caching
 			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
-			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>("compute-pipeline");
+			auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>("compute-pipeline");
 			if (pipelineLayout._predefinedPipelineLayout) {
 				MakeComputePipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFuture, pipelineLayout._predefinedPipelineLayout);
 			} else {
@@ -776,7 +776,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			return result;
 		};
 
-		void AddComputePipelineFuture(const std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>& future, uint64_t hash)
+		void AddComputePipelineFuture(const std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>& future, uint64_t hash)
 		{
 			auto i = LowerBound(_pendingComputePipelines, hash);
 			if (i!=_pendingComputePipelines.end() && i->first == hash) {
@@ -784,7 +784,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			} else
 				_pendingComputePipelines.insert(i, std::make_pair(hash, future));
 
-			std::weak_ptr<::Assets::Future<ComputePipelineAndLayout>> capturedFuture = future;
+			std::weak_ptr<::Assets::Marker<ComputePipelineAndLayout>> capturedFuture = future;
 			::Assets::WhenAll(future->ShareFuture()).Then(
 				[weakThis=weak_from_this(), hash, capturedFuture=std::move(capturedFuture)](std::shared_future<ComputePipelineAndLayout> completedFuture) {
 					auto t = weakThis.lock();
@@ -832,7 +832,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			::Assets::DependencyValidation _depVal;
 		};
 		std::vector<std::pair<uint64_t, WeakComputePipelineAndLayout>> _completedComputePipelines;
-		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>>>> _pendingComputePipelines;
+		std::vector<std::pair<uint64_t, std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>>> _pendingComputePipelines;
 
 		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
 			ShaderStage shaderStage,
@@ -883,7 +883,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 	private:
-		std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(
+		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> MakeByteCodeFuture(
 			ShaderStage shaderStage,
 			StringSection<> shader,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,

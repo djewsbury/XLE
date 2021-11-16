@@ -15,7 +15,7 @@
 #include "../Math/Transformations.h"
 #include "../Math/ProjectionMath.h"
 #include "../ConsoleRig/ResourceBox.h"       // for FindCachedBox
-#include "../Assets/AssetFuture.h"
+#include "../Assets/Marker.h"
 #include "../Assets/Assets.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/MemoryUtils.h"

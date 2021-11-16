@@ -42,7 +42,7 @@ namespace ToolsRig
 		ModelVisSettings();
 	};
 
-	Assets::PtrToFuturePtr<SceneEngine::IScene> MakeScene(
+	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ModelVisSettings& settings);
 }

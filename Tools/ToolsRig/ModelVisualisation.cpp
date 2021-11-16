@@ -15,7 +15,7 @@
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"
 
@@ -312,12 +312,12 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Assets::PtrToFuturePtr<SceneEngine::IScene> MakeScene(
+	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
 		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(pipelineAcceleratorPool, settings);
-		auto result = std::make_shared<Assets::FuturePtr<SceneEngine::IScene>>();
+		auto result = std::make_shared<Assets::MarkerPtr<SceneEngine::IScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[pipelineAcceleratorPool, settings](auto renderer) {

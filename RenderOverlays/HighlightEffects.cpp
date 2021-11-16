@@ -30,7 +30,7 @@ namespace RenderOverlays
 {
     using namespace RenderCore;
 
-	::Assets::PtrToFuturePtr<Metal::ShaderProgram> LoadShaderProgram(
+	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> LoadShaderProgram(
         const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> vs,
 		StringSection<> ps,

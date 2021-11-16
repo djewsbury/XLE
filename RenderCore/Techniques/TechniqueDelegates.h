@@ -42,7 +42,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		using GraphicsPipelineDesc = Techniques::GraphicsPipelineDesc;
-		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::string GetPipelineLayout() = 0;
@@ -53,18 +53,18 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderPatchCollection;
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet);
 
 	namespace TechniqueDelegateForwardFlags { 
 		enum { DisableDepthWrite = 1<<0 };
 		using BitField = unsigned;
 	}
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags = 0);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
         const RSDepthBias& doubleSidedBias = RSDepthBias{},
         CullMode cullMode = CullMode::Back,
@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 
 	enum class ShadowGenType { GSAmplify, VertexIdViewInstancing };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		ShadowGenType shadowGenType = ShadowGenType::GSAmplify,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
         const RSDepthBias& doubleSidedBias = RSDepthBias{},
@@ -80,22 +80,22 @@ namespace RenderCore { namespace Techniques
 		FaceWinding faceWinding = FaceWinding::CCW);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
 	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, DepthMotionNormalRoughness };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType);
 
 	enum class UtilityDelegateType { FlatColor };
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		UtilityDelegateType utilityType);
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet);
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet);
 
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.

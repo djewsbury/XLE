@@ -176,7 +176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<::Assets::Future<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
+	static std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";
 		switch (stage) {

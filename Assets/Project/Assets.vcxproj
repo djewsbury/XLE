@@ -44,7 +44,7 @@
   <PropertyGroup />
   <ItemGroup>
     <ClInclude Include="..\ArchiveCache.h" />
-    <ClInclude Include="..\AssetFuture.h" />
+    <ClInclude Include="..\Marker.h" />
     <ClInclude Include="..\AssetHeap.h" />
     <ClInclude Include="..\AssetLRUHeap.h" />
     <ClInclude Include="..\Assets.h" />

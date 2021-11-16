@@ -2,7 +2,7 @@
 
 #include "DepVal.h"
 #if !defined(__CLR_VER)
-#include "AssetFuture.h"
+#include "Marker.h"
 #include "DeferredConstruction.h"
 #include "../Utility/Threading/Mutex.h"
 #endif
@@ -43,7 +43,7 @@ namespace Assets
 		class DefaultAssetHeap : public IDefaultAssetHeap
 	{
 	public:
-		using PtrToFuture = std::shared_ptr<Future<AssetType>>;
+		using PtrToFuture = std::shared_ptr<Marker<AssetType>>;
 
 		template<typename... Params>
 			PtrToFuture Get(Params...);
@@ -68,7 +68,7 @@ namespace Assets
 	};
 
 	template<typename AssetType>
-		static bool IsInvalidated(Future<AssetType>& future)
+		static bool IsInvalidated(Marker<AssetType>& future)
 	{
 		// We must check the "background state" here. If it's invalidated in the
 		// background, we can restart the compile; even if that invalidated state hasn't
@@ -102,7 +102,7 @@ namespace Assets
 					return i->second;
 
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			newFuture = std::make_shared<Future<AssetType>>(stringInitializer);
+			newFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
 			if (i != _assets.end() && i->first == hash) {
 				i->second = newFuture;
 			} else 
@@ -138,7 +138,7 @@ namespace Assets
 
 		if (newShadowingAsset) {
 			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
-			auto newShadowingFuture = std::make_shared<Future<AssetType>>(stringInitializer);
+			auto newShadowingFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
 			newShadowingFuture->SetAssetForeground(std::move(newShadowingAsset));
 			_shadowingAssets.emplace(shadowing, std::make_pair(hash, std::move(newShadowingFuture)));
 		}

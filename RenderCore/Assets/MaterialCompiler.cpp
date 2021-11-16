@@ -106,7 +106,7 @@ namespace RenderCore { namespace Assets
 					//  Note that this is a bit crazy, because we're going to be loading
 					//  and re-parsing the same files over and over again!
 				SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> resolvedNames;
-				std::vector<std::pair<MaterialGuid, std::shared_ptr<::Assets::Future<ResolvedMaterial>>>> materialFutures;
+				std::vector<std::pair<MaterialGuid, std::shared_ptr<::Assets::Marker<ResolvedMaterial>>>> materialFutures;
 				resolvedNames.reserve(modelMat._configurations.size());
 				materialFutures.reserve(modelMat._configurations.size());
 

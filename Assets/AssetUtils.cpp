@@ -6,7 +6,7 @@
 
 #include "AssetUtils.h"
 #include "ICompileOperation.h"
-#include "AssetFuture.h"
+#include "Marker.h"
 #include "DepVal.h"
 #include "IFileSystem.h"
 #include "NascentChunk.h"		// (for AsBlob)

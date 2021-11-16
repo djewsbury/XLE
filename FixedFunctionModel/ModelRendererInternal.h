@@ -63,7 +63,7 @@ namespace FixedFunctionModel
             #endif
         };
 
-        std::vector<::Assets::PtrToFuturePtr<RenderCore::Techniques::DeferredShaderResource>> _boundTextures;
+        std::vector<::Assets::PtrToMarkerPtr<RenderCore::Techniques::DeferredShaderResource>> _boundTextures;
         size_t  _texturesPerMaterial;
 
         ///////////////////////////////////////////////////////////////////////////////

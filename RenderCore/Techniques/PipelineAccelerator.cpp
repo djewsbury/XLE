@@ -17,7 +17,7 @@
 #include "../Metal/ObjectFactory.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetHeapLRU.h"
@@ -41,7 +41,7 @@ namespace RenderCore { namespace Techniques
 		SequencerConfigId _cfgId = ~0ull;
 
 		std::shared_ptr<ITechniqueDelegate> _delegate;
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> _pipelineLayout;
+		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> _pipelineLayout;
 		ParameterBox _sequencerSelectors;
 
 		FrameBufferDesc _fbDesc;
@@ -74,7 +74,7 @@ namespace RenderCore { namespace Techniques
 
 		// "_pendingGraphicsPipelines" is protected by the _constructionLock in the pipeline accelerator pool
 		using Pipeline = IPipelineAcceleratorPool::Pipeline;
-		using PtrToPipelineFuture = std::shared_ptr<::Assets::Future<Pipeline>>;
+		using PtrToPipelineFuture = std::shared_ptr<::Assets::Marker<Pipeline>>;
 		std::vector<std::pair<SequencerConfigId, PtrToPipelineFuture>> _pendingGraphicsPipelines;
 
 		void BeginPrepareForSequencerStateAlreadyLocked(
@@ -82,7 +82,7 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& globalSelectors,
 			const DescriptorSetLayoutAndBinding& matDescSetLayout,
 			const std::shared_ptr<PipelineCollection>& pipelineCollection,
-			const ::Assets::PtrToFuturePtr<CompiledShaderPatchCollection>& emptyPatchCollection);
+			const ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection>& emptyPatchCollection);
 		bool PipelineValidPipelineOrFuture(const SequencerConfig& cfg) const;
 
 		Pipeline* TryGetPipeline(const SequencerConfig& cfg);
@@ -104,13 +104,13 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& globalSelectors,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
 		const std::shared_ptr<PipelineCollection>& pipelineCollection,
-		const ::Assets::PtrToFuturePtr<CompiledShaderPatchCollection>& emptyPatchCollection)
+		const ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection>& emptyPatchCollection)
 	{
-		PtrToPipelineFuture pipelineFuture = std::make_shared<::Assets::Future<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
+		PtrToPipelineFuture pipelineFuture = std::make_shared<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>("PipelineAccelerator Pipeline");
 		ParameterBox copyGlobalSelectors = globalSelectors;
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 
-		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> patchCollectionFuture;
+		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> patchCollectionFuture;
 		if (_shaderPatches) {
 			patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*_shaderPatches, matDescSetLayout);
 		} else {
@@ -342,7 +342,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator
 	{
 	public:
-		std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> _descriptorSet;
+		std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 	};
 
@@ -381,13 +381,13 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex = 0) override;
 
-		std::shared_ptr<::Assets::Future<Pipeline>> GetPipelineFuture(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
+		std::shared_ptr<::Assets::Marker<Pipeline>> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 		const Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 
-		std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> GetDescriptorSetFuture(DescriptorSetAccelerator& accelerator) const override;
+		std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const override;
 		const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator) const override;
 
-		::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutFuture(const SequencerConfig& sequencerConfig) const override;
+		::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const override;
 		std::shared_ptr<ICompiledPipelineLayout> TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig) const override;
 
 		void			SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override;
@@ -447,7 +447,7 @@ namespace RenderCore { namespace Techniques
 		SamplerPool _samplerPool;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
-		::Assets::PtrToFuturePtr<CompiledShaderPatchCollection> _emptyPatchCollection;
+		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _emptyPatchCollection;
 		PipelineAcceleratorPoolFlags::BitField _flags;
 
 		Threading::Mutex _usisLock;
@@ -476,9 +476,9 @@ namespace RenderCore { namespace Techniques
 		_pipelineUsageLock.unlock_shared();	
 	}
 
-	auto PipelineAcceleratorPool::GetPipelineFuture(
+	auto PipelineAcceleratorPool::GetPipelineMarker(
 		PipelineAccelerator& pipelineAccelerator, 
-		const SequencerConfig& sequencerConfig) const -> std::shared_ptr<::Assets::Future<Pipeline>>
+		const SequencerConfig& sequencerConfig) const -> std::shared_ptr<::Assets::Marker<Pipeline>>
 	{
 		// We must lock the "_constructionLock" for this -- so it's less advisable to call this often
 		// TryGetPipeline doesn't take a lock and is more efficient to call frequently
@@ -507,7 +507,7 @@ namespace RenderCore { namespace Techniques
 		return pipelineAccelerator.TryGetPipeline(sequencerConfig);
 	}
 
-	std::shared_ptr<::Assets::Future<ActualizedDescriptorSet>> PipelineAcceleratorPool::GetDescriptorSetFuture(DescriptorSetAccelerator& accelerator) const
+	std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>> PipelineAcceleratorPool::GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const
 	{
 		ScopedLock(_constructionLock);
 		return accelerator._descriptorSet;
@@ -521,7 +521,7 @@ namespace RenderCore { namespace Techniques
 		return accelerator._descriptorSet->TryActualize();
 	}
 
-	::Assets::PtrToFuturePtr<CompiledPipelineLayoutAsset> PipelineAcceleratorPool::GetCompiledPipelineLayoutFuture(const SequencerConfig& sequencerConfig) const
+	::Assets::PtrToMarkerPtr<CompiledPipelineLayoutAsset> PipelineAcceleratorPool::GetCompiledPipelineLayoutMarker(const SequencerConfig& sequencerConfig) const
 	{
 		ScopedLock(_constructionLock);
 		return sequencerConfig._pipelineLayout;
@@ -694,7 +694,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			result = std::make_shared<DescriptorSetAccelerator>();
-			result->_descriptorSet = std::make_shared<::Assets::Future<ActualizedDescriptorSet>>("descriptorset-accelerator");
+			result->_descriptorSet = std::make_shared<::Assets::Marker<ActualizedDescriptorSet>>("descriptorset-accelerator");
 
 			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
 				cachei->second = result;		// (we replaced one that expired)
@@ -703,7 +703,7 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		// We don't need to have "_constructionLock" after we've added the Future to _descriptorSetAccelerators, so let's do the
+		// We don't need to have "_constructionLock" after we've added the Marker to _descriptorSetAccelerators, so let's do the
 		// rest outside of the lock
 
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
@@ -1075,7 +1075,7 @@ namespace RenderCore { namespace Techniques
 		_device = device;
 		_flags = flags;
 		_pipelineCollection = std::make_shared<PipelineCollection>(_device);
-		_emptyPatchCollection = std::make_shared<::Assets::FuturePtr<CompiledShaderPatchCollection>>("empty-patch-collection");
+		_emptyPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
 		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
 		_matDescSetLayout = matDescSetLayout;
 		assert(_matDescSetLayout.GetLayout());

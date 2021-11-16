@@ -19,18 +19,18 @@ namespace Assets
 
 	namespace Internal
 	{
-		class FutureShared : public IAsyncMarker
+		class MarkerShared : public IAsyncMarker
 		{
 		public:
 			const std::string& 			Initializer() const { return _initializer; }
 
-			explicit FutureShared(const std::string& initializer = {});
-			~FutureShared();
+			explicit MarkerShared(const std::string& initializer = {});
+			~MarkerShared();
 		protected:
 			mutable Threading::Mutex		_lock;
 			struct CallbackMarker
 			{
-				std::atomic<FutureShared*> _parent;
+				std::atomic<MarkerShared*> _parent;
 				unsigned _markerId;
 				Threading::Mutex _callbackActive;
 			};
@@ -53,7 +53,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		class Future : public Internal::FutureShared
+		class Marker : public Internal::MarkerShared
 	{
 	public:
 		const Type& Actualize() const;
@@ -75,16 +75,16 @@ namespace Assets
 
 		using PromisedType = Type;
 
-		explicit Future(const std::string& initializer = {});
-		~Future();
+		explicit Marker(const std::string& initializer = {});
+		~Marker();
 
-		Future(Future&&);
-		Future& operator=(Future&&);
+		Marker(Marker&&);
+		Marker& operator=(Marker&&);
 
 		void SetAsset(Type&&);
 		void SetInvalidAsset(DependencyValidation depVal, const Blob& log);
 		void SetAssetForeground(Type&& newAsset);
-		void SetPollingFunction(std::function<bool(Future<Type>&)>&&);
+		void SetPollingFunction(std::function<bool(Marker<Type>&)>&&);
 		
 	private:
 		volatile AssetState 	_state;
@@ -95,7 +95,7 @@ namespace Assets
 		std::promise<Type> _pendingPromise;
 		Internal::SharedFutureFallback<Type> _pendingFuture;
 
-		std::function<bool(Future<Type>&)> _pollingFunction;
+		std::function<bool(Marker<Type>&)> _pollingFunction;
 
 		bool TryRunPollingFunction(std::unique_lock<Threading::Mutex>&);
 		void CheckFrameBarrierCallbackAlreadyLocked();
@@ -104,7 +104,7 @@ namespace Assets
 	};
 
 	template<typename Type>
-		using PtrToFuturePtr = std::shared_ptr<FuturePtr<Type>>;
+		using PtrToMarkerPtr = std::shared_ptr<MarkerPtr<Type>>;
 
 	namespace Internal
 	{
@@ -172,7 +172,7 @@ namespace Assets
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename Type>
-		const Type& Future<Type>::Actualize() const
+		const Type& Marker<Type>::Actualize() const
 	{
 		auto state = _state;
 		if (state == AssetState::Ready)
@@ -189,18 +189,18 @@ namespace Assets
 	}
 
 	template<typename Type>
-		const Type* Future<Type>::TryActualize() const
+		const Type* Marker<Type>::TryActualize() const
 	{
 		return (_state == AssetState::Ready) ? &_actualized : nullptr;
 	}
 
 	template<typename Type>
-		bool Future<Type>::TryRunPollingFunction(std::unique_lock<Threading::Mutex>& lock)
+		bool Marker<Type>::TryRunPollingFunction(std::unique_lock<Threading::Mutex>& lock)
 	{
 		if (!_pollingFunction)
 			return false;
 
-		std::function<bool(Future<Type>&)> pollingFunction;
+		std::function<bool(Marker<Type>&)> pollingFunction;
 		std::swap(pollingFunction, _pollingFunction);
 		lock = {};
 		TRY {
@@ -220,7 +220,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		AssetState		Future<Type>::CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog)
+		AssetState		Marker<Type>::CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog)
 	{
 		if (_state == AssetState::Ready) {
 			actualized = _actualized;
@@ -245,7 +245,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		AssetState Future<Type>::CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog)
+		AssetState Marker<Type>::CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog)
 	{
 		if (_state == AssetState::Ready) {
 			depVal = _actualizedDepVal;
@@ -270,7 +270,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		const Type& Future<Type>::ActualizeBkgrnd()
+		const Type& Marker<Type>::ActualizeBkgrnd()
 	{
 		static_assert(std::is_copy_constructible_v<Type>, "ActualizeBkgrnd() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
 		if (_state == AssetState::Ready)
@@ -285,7 +285,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		bool Future<Type>::IsBkgrndPending() const
+		bool Marker<Type>::IsBkgrndPending() const
 	{
 		if (_state == AssetState::Ready)
 			return false;
@@ -293,14 +293,14 @@ namespace Assets
 	}
 
 	template<typename Type>
-		std::shared_future<Type> Future<Type>::ShareFuture() const
+		std::shared_future<Type> Marker<Type>::ShareFuture() const
 	{
 		static_assert(std::is_copy_constructible_v<Type>, "ShareFuture() and future continuations require an asset type that is copy constructable. This functionality cannot be used on this type.");
 		return _pendingFuture;
 	}
 
 	template<typename Type>
-		std::promise<Type> Future<Type>::AdoptPromise()
+		std::promise<Type> Marker<Type>::AdoptPromise()
 	{
 		// We won't be able to track when the promise is fulfilled, so we'll need to start polling
 		// immediately. The polling function will move the state into the foreground after the promise
@@ -311,7 +311,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) 
+		void Marker<Type>::OnFrameBarrier(std::unique_lock<Threading::Mutex>& lock) 
 	{
 		auto state = _state;
 		if (state != AssetState::Pending) {
@@ -338,7 +338,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::CheckFrameBarrierCallbackAlreadyLocked()
+		void Marker<Type>::CheckFrameBarrierCallbackAlreadyLocked()
 	{
 		// Two reasons to run the frame barrier callback
 		//		1. run polling function
@@ -349,12 +349,12 @@ namespace Assets
 	}
 
 	template<typename Type>
-        std::optional<AssetState>   Future<Type>::StallWhilePending(std::chrono::microseconds timeout) const
+        std::optional<AssetState>   Marker<Type>::StallWhilePending(std::chrono::microseconds timeout) const
 	{
 		auto startTime = std::chrono::steady_clock::now();
         auto timeToCancel = startTime + timeout;
 
-		auto* that = const_cast<Future<Type>*>(this);	// hack to defeat the "const" on this method
+		auto* that = const_cast<Marker<Type>*>(this);	// hack to defeat the "const" on this method
 		std::unique_lock<Threading::Mutex> lock(that->_lock);
 
 		// If we have polling function assigned, we have to poll waiting for
@@ -470,7 +470,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::SetAsset(Type&& newAsset)
+		void Marker<Type>::SetAsset(Type&& newAsset)
 	{
 		// If we are already in invalid / ready state, we will never move the pending
 		// asset into the foreground. We also cannot change from those states to pending, 
@@ -483,7 +483,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::SetAssetForeground(Type&& newAsset)
+		void Marker<Type>::SetAssetForeground(Type&& newAsset)
 	{
 		// this is intended for "shadowing" assets only; it sets the asset directly into the foreground
 		// asset and goes immediately into ready state
@@ -497,7 +497,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
+		void Marker<Type>::SetInvalidAsset(DependencyValidation depVal, const Blob& log)
 	{
 		Internal::SetPromiseInvalidAsset(_pendingPromise, depVal, log);
 		ScopedLock(_lock);
@@ -505,7 +505,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		void Future<Type>::SetPollingFunction(std::function<bool(Future<Type>&)>&& newFunction)
+		void Marker<Type>::SetPollingFunction(std::function<bool(Marker<Type>&)>&& newFunction)
 	{
 		// We can often just resolve the polling operation immediately. So go ahead and
 		// execute it now to see if we can resolve the polling operation straight out of the block
@@ -540,7 +540,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		Future<Type>::Future(Future&& moveFrom)
+		Marker<Type>::Marker(Marker&& moveFrom)
 	{
 		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
 		moveFrom.EnsureFrameBarrierCallbackStopped();
@@ -567,7 +567,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		Future<Type>& Future<Type>::operator=(Future&& moveFrom)
+		Marker<Type>& Marker<Type>::operator=(Marker&& moveFrom)
 	{
 		// Note calls to EnsureFrameBarrierCallbackStopped outside of the main lock
 		EnsureFrameBarrierCallbackStopped();
@@ -600,8 +600,8 @@ namespace Assets
 	}
 
 	template<typename Type>
-		Future<Type>::Future(const std::string& initializer)
-	: FutureShared(initializer)
+		Marker<Type>::Marker(const std::string& initializer)
+	: MarkerShared(initializer)
 	{
 		// Technically, we're not actually "pending" yet, because no background operation has begun.
 		// If this future is not bound to a specific operation, we'll be stuck in pending state
@@ -614,7 +614,7 @@ namespace Assets
 	}
 
 	template<typename Type>
-		Future<Type>::~Future() 
+		Marker<Type>::~Marker() 
 	{
 		// note -- if you get a broken_promise exception from here, it means that the future is begin
 		// destroyed without anyone adopting the promise to fulfill it
@@ -624,7 +624,7 @@ namespace Assets
 
 	namespace Internal
 	{
-		inline void FutureShared::RegisterFrameBarrierCallbackAlreadyLocked()
+		inline void MarkerShared::RegisterFrameBarrierCallbackAlreadyLocked()
 		{
 			if (_frameBarrierCallbackMarker && _frameBarrierCallbackMarker->_parent.load())
 				return;
@@ -657,7 +657,7 @@ namespace Assets
 				});
 		}
 
-		inline void FutureShared::DisableFrameBarrierCallbackAlreadyLocked() const
+		inline void MarkerShared::DisableFrameBarrierCallbackAlreadyLocked() const
 		{
 			// Deregistered the callback, but don't stall waiting if we're currently within a callback. That callback
 			// might be waiting on _lock right now, and so could complete when _lock is released
@@ -669,7 +669,7 @@ namespace Assets
 				Internal::DeregisterFrameBarrierCallback(_frameBarrierCallbackMarker->_markerId);
 		}
 
-		inline void FutureShared::EnsureFrameBarrierCallbackStopped() const
+		inline void MarkerShared::EnsureFrameBarrierCallbackStopped() const
 		{
 			// This is similar to DisableFrameBarrierCallbackAlreadyLocked(), except it also stalls waiting
 			// for the callback if it is currently running in a different thread.
@@ -702,11 +702,11 @@ namespace Assets
 			}
 		}
 
-		inline FutureShared::FutureShared(const std::string& initializer)
+		inline MarkerShared::MarkerShared(const std::string& initializer)
 		: _initializer(initializer)
 		{}
 
-		inline FutureShared::~FutureShared() 
+		inline MarkerShared::~MarkerShared() 
 		{
 			EnsureFrameBarrierCallbackStopped();
 		}

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../Assets/AssetFuture.h"
+#include "../Assets/Marker.h"
 #include "../Utility/StringUtils.h"
 #include <cstdint>
 #include <memory>
@@ -20,7 +20,7 @@ namespace ToolsRig
 	{
 	public:
 		virtual std::vector<std::string> EnumerateScenes() = 0;
-		virtual ::Assets::PtrToFuturePtr<SceneEngine::IScene> CreateScene(StringSection<>, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&) = 0;
+		virtual ::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(StringSection<>, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&) = 0;
 		virtual ~IPreviewSceneRegistrySet();
 	};
 
@@ -28,7 +28,7 @@ namespace ToolsRig
 	{
 	public:
 		virtual std::vector<std::string> EnumerateScenes() = 0;
-		virtual ::Assets::PtrToFuturePtr<SceneEngine::IScene> CreateScene(StringSection<>, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&) = 0;
+		virtual ::Assets::PtrToMarkerPtr<SceneEngine::IScene> CreateScene(StringSection<>, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&) = 0;
 
 		using RegistrySetId = uint64_t;
 		virtual RegistrySetId Register(const std::shared_ptr<IPreviewSceneRegistrySet>&) = 0;

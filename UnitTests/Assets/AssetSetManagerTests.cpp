@@ -4,7 +4,7 @@
 
 #include "../UnitTestHelper.h"
 #include "../../Assets/AssetSetManager.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/IFileSystem.h"
@@ -50,7 +50,7 @@ namespace UnitTests
 		const int targetAssetsInFlight = 32;
 		int assetsCompleted = 0;
 		int targetAssetsCompleted = 10 * 1000;
-		using TestFuture = ::Assets::Future<AssetWithRandomConstructionTime>;
+		using TestFuture = ::Assets::Marker<AssetWithRandomConstructionTime>;
 		std::vector<std::shared_ptr<TestFuture>> futuresInFlight;
 		std::vector<TestFuture> futuresInFlight2;
 
@@ -181,9 +181,9 @@ namespace UnitTests
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 
-		auto futureZero = std::make_shared<::Assets::Future<unsigned>>();
-		auto futureOne = std::make_shared<::Assets::Future<unsigned>>();
-		auto futureTwo = std::make_shared<::Assets::Future<unsigned>>();
+		auto futureZero = std::make_shared<::Assets::Marker<unsigned>>();
+		auto futureOne = std::make_shared<::Assets::Marker<unsigned>>();
+		auto futureTwo = std::make_shared<::Assets::Marker<unsigned>>();
 		
 		futureZero->SetAsset(0);
 		futureOne->SetAsset(1);
@@ -220,13 +220,13 @@ namespace UnitTests
 			TripleConstructor(TripleConstructor&&) = default;
 			TripleConstructor& operator=(TripleConstructor&&) = default;
 		};
-		::Assets::Future<TripleConstructor> finalFuture;
+		::Assets::Marker<TripleConstructor> finalFuture;
 
 		::Assets::WhenAll(futureZero, futureOne, futureTwo).ThenConstructToPromise(finalFuture.AdoptPromise());
 		finalFuture.StallWhilePending();
 		REQUIRE(finalFuture.Actualize()._result == 3);
 
-		::Assets::Future<unsigned> finalFuture2;
+		::Assets::Marker<unsigned> finalFuture2;
 		::Assets::WhenAll(futureZero, futureOne, futureTwo).ThenConstructToPromise(
 			finalFuture2.AdoptPromise(),
 			[](auto one, auto zero, auto three) { return one+zero+three; });
@@ -246,7 +246,7 @@ namespace UnitTests
 		auto basicFuture2 = basicPromise2.get_future().share();
 		basicPromise2.set_value(4);
 
-		::Assets::Future<unsigned> futureThree;
+		::Assets::Marker<unsigned> futureThree;
 		futureThree.SetAsset(5);
 
 		auto continuation2 = ::Assets::WhenAll(futureZero, futureOne, futureTwo, std::move(basicFuture), basicFuture2, std::move(futureThree)).Then(
@@ -257,9 +257,9 @@ namespace UnitTests
 		REQUIRE(continuation2.get() == 15);
 
 		// Moving Asset::Future after registering a continuation 
-		::Assets::Future<unsigned> futureFour;
+		::Assets::Marker<unsigned> futureFour;
 		auto continuation3 = ::Assets::WhenAll(futureFour.ShareFuture()).ThenOpaqueFuture();
-		::Assets::Future<unsigned> movedFutureFour = std::move(futureFour);
+		::Assets::Marker<unsigned> movedFutureFour = std::move(futureFour);
 		movedFutureFour.SetAsset(4);
 		continuation3.wait();
 		continuation3.get();
@@ -279,16 +279,16 @@ namespace UnitTests
 			AssetTypeOne(const AssetTypeOne&) = delete;
 			AssetTypeOne& operator=(const AssetTypeOne&) = delete;*/
 
-			static ::Assets::Future<AssetTypeOne> SuccessfulAssetFuture(std::string v)
+			static ::Assets::Marker<AssetTypeOne> SuccessfulAssetFuture(std::string v)
 			{
-				::Assets::Future<AssetTypeOne> result;
+				::Assets::Marker<AssetTypeOne> result;
 				result.SetAsset(v);
 				return result;
 			}
 
-			static ::Assets::Future<AssetTypeOne> FailedAssetFuture(::Assets::Blob blob)
+			static ::Assets::Marker<AssetTypeOne> FailedAssetFuture(::Assets::Blob blob)
 			{
-				::Assets::Future<AssetTypeOne> result;
+				::Assets::Marker<AssetTypeOne> result;
 				result.SetInvalidAsset({}, blob);
 				return result;
 			}
@@ -308,7 +308,7 @@ namespace UnitTests
 			}
 		};
 
-		static_assert(std::is_same_v<::Assets::Internal::FutureResult<::Assets::Future<unsigned>>, const unsigned&>);
+		static_assert(std::is_same_v<::Assets::Internal::FutureResult<::Assets::Marker<unsigned>>, const unsigned&>);
 		static_assert(std::is_same_v<::Assets::Internal::FutureResult<std::future<AssetTypeOne>>, AssetTypeOne>);
 		static_assert(std::is_same_v<::Assets::Internal::FutureResult<std::shared_future<AssetTypeOne>>, const AssetTypeOne&>);
 
@@ -355,7 +355,7 @@ namespace UnitTests
 			REQUIRE(::Assets::AsString(blob) == "runtime_error");
 		}
 
-		::Assets::Future<std::string> failedChain3;
+		::Assets::Marker<std::string> failedChain3;
 		::Assets::WhenAll(
 			AssetTypeOne::SuccessfulAssetFuture("zero"), 
 			AssetTypeOne::FailedStdFuture(std::make_exception_ptr(std::runtime_error("runtime_error"))))

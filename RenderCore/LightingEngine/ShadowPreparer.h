@@ -101,7 +101,7 @@ namespace RenderCore { namespace LightingEngine
 
 	class ShadowOperatorDesc;
 	class SharedTechniqueDelegateBox;
-	::Assets::PtrToFuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
+	::Assets::PtrToMarkerPtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
@@ -119,7 +119,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::unique_ptr<Internal::ILightBase> CreateShadowProjection(unsigned operatorIdx);
 	};
-	::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
+	::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,

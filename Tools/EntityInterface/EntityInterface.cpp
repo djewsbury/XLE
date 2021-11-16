@@ -315,7 +315,7 @@ namespace EntityInterface
 			return {};
 		}
 
-		::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> inputMountPoint) const
+		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> inputMountPoint) const
 		{
 			ScopedLock(_mountsLock);
 
@@ -381,7 +381,7 @@ namespace EntityInterface
 				actualizationLog = ::Assets::AsBlob(str.str());
 			}
 
-			std::vector<Assets::PtrToFuturePtr<Formatters::IDynamicFormatter>> futureFormatters;
+			std::vector<Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter>> futureFormatters;
 			std::vector<std::string> externalPosition;
 			futureFormatters.reserve(overlappingMounts.size());
 			externalPosition.reserve(overlappingMounts.size());
@@ -390,7 +390,7 @@ namespace EntityInterface
 				externalPosition.push_back(o._externalPosition);
 			}
 
-			auto future = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
+			auto future = std::make_shared<::Assets::MarkerPtr<Formatters::IDynamicFormatter>>();
 			::Assets::PollToPromise(
 				future->AdoptPromise(),
 				[futureFormatters]() {

@@ -31,7 +31,7 @@ namespace RenderCore { namespace Techniques
 	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -61,7 +61,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc));
 				return result;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
@@ -71,7 +71,7 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
 				result->SetAsset(std::move(nascentDesc));
 				return result;
 			} else {
@@ -103,13 +103,13 @@ namespace RenderCore { namespace Techniques
 				_pipelineDesc[c] = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
 				_pipelineDesc[c]->_depthStencil = dsModes[c];
 
-				_pipelineDescFuture[c] = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("immediate-renderer");
+				_pipelineDescFuture[c] = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("immediate-renderer");
 				_pipelineDescFuture[c]->SetAsset(std::shared_ptr<GraphicsPipelineDesc>{_pipelineDesc[c]});
 			}
 		}
 		~ImmediateRendererTechniqueDelegate() {}
 	private:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> _pipelineDescFuture[3];
 		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc[3];
 	};
 

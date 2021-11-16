@@ -20,7 +20,7 @@
 #include "../Assets/ContinuationUtil.h"
 #include "../IDevice.h"
 #include "../IThreadContext.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include <vector>
 
 namespace RenderCore { namespace LightingEngine
@@ -331,30 +331,30 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToFuturePtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
+	::Assets::PtrToMarkerPtr<ICompiledShadowPreparer> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<ICompiledShadowPreparer>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<ICompiledShadowPreparer>>();
 		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
 		return result;
 	}
 
-	::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
+	::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> CreateDynamicShadowPreparationOperators(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox,
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<DynamicShadowPreparationOperators>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<DynamicShadowPreparationOperators>>();
 		if (shadowGenerators.empty()) {
 			result->SetAsset(std::make_shared<DynamicShadowPreparationOperators>());
 			return result;
 		}
 
-		using PreparerFuture = ::Assets::PtrToFuturePtr<ICompiledShadowPreparer>;
+		using PreparerFuture = ::Assets::PtrToMarkerPtr<ICompiledShadowPreparer>;
 		std::vector<PreparerFuture> futures;
 		futures.reserve(shadowGenerators.size());
 		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {

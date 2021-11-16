@@ -70,7 +70,7 @@ namespace ToolsRig
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
     void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
 
-    Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource);
+    Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource);
 
 	class VisOverlaySettings
 	{
@@ -135,13 +135,13 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     template<typename AssetType>
-        using RefreshableFuture = std::function<::Assets::PtrToFuturePtr<AssetType>()>;
+        using RefreshableFuture = std::function<::Assets::PtrToMarkerPtr<AssetType>()>;
 
     class ISimpleSceneLayer : public PlatformRig::IOverlaySystem
     {
     public:
-        virtual void Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
-		virtual void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) = 0;
+        virtual void Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
+		virtual void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) = 0;
 
         virtual void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) = 0;
 		virtual void Set(RefreshableFuture<SceneEngine::IScene> scene) = 0;
@@ -158,7 +158,7 @@ namespace ToolsRig
 	class VisualisationOverlay : public PlatformRig::IOverlaySystem
     {
     public:
-		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);
+		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene);
 		void Set(const std::shared_ptr<VisCameraSettings>&);
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
@@ -193,7 +193,7 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
-		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene);
+		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene);
 
 		MouseOverTrackingOverlay(
             const std::shared_ptr<VisMouseOver>& mouseOver,

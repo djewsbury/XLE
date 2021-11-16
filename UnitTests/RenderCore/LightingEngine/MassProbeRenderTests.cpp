@@ -306,12 +306,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
@@ -411,12 +411,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
@@ -526,12 +526,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
@@ -726,12 +726,12 @@ namespace UnitTests
 		class TechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 		{
 		public:
-			virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+			virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates)
 			{
 				using namespace RenderCore;
-				auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+				auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);

@@ -84,7 +84,7 @@ namespace ToolsRig
 	class TechniqueBox
 	{
 	public:
-		::Assets::PtrToFuturePtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
+		::Assets::PtrToMarkerPtr<RenderCore::Techniques::TechniqueSetFile> _techniqueSetFile;
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _forwardIllumDelegate;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _techniqueSetFile->GetDependencyValidation(); }
@@ -172,7 +172,7 @@ namespace ToolsRig
 
     static void DrawAutoFullscreenImmediately(
         IThreadContext& threadContext,
-        ::Assets::FuturePtr<Metal::ShaderProgram>& shader,
+        ::Assets::MarkerPtr<Metal::ShaderProgram>& shader,
         const UniformsStreamInterface& uniformStreamInterface,
         const UniformsStream& uniforms,
         const AttachmentBlendDesc& ab = Techniques::CommonResourceBox::s_abStraightAlpha,

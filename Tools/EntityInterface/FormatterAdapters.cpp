@@ -84,13 +84,13 @@ namespace EntityInterface
     class TextEntityDocument : public IEntityDocument
 	{
 	public:
-		virtual ::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
+		virtual ::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> BeginFormatter(StringSection<> internalPoint) override
 		{
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
 				_srcFile = ::Assets::MakeAssetPtr<::Assets::ConfigFileContainer<>>(_src);
 
 			using UnderlyingFormatter = InputStreamFormatter<>;
-			auto result = std::make_shared<::Assets::FuturePtr<Formatters::IDynamicFormatter>>();
+			auto result = std::make_shared<::Assets::MarkerPtr<Formatters::IDynamicFormatter>>();
 			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
 				result->AdoptPromise(),
 				[ip=internalPoint.AsString()](auto cfgFileContainer) {
@@ -127,7 +127,7 @@ namespace EntityInterface
 		Threading::Mutex _readMutex;
 		std::unique_lock<Threading::Mutex> _lock;
 		std::string _src;
-		::Assets::PtrToFuturePtr<::Assets::ConfigFileContainer<>> _srcFile;
+		::Assets::PtrToMarkerPtr<::Assets::ConfigFileContainer<>> _srcFile;
 		::Assets::DirectorySearchRules _directorySearchRules;
 	};
 

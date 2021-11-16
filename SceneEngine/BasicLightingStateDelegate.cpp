@@ -446,11 +446,11 @@ namespace SceneEngine
 
 	BasicLightingStateDelegate::~BasicLightingStateDelegate() {}
 
-    ::Assets::PtrToFuturePtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings)
+    ::Assets::PtrToMarkerPtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings)
     {
-        auto result = std::make_shared<::Assets::FuturePtr<BasicLightingStateDelegate>>(envSettings.AsString());
+        auto result = std::make_shared<::Assets::MarkerPtr<BasicLightingStateDelegate>>(envSettings.AsString());
         BasicLightingStateDelegate::ConstructToPromise(result->AdoptPromise(), envSettings);
-        return std::reinterpret_pointer_cast<::Assets::FuturePtr<ILightingStateDelegate>>(result);
+        return std::reinterpret_pointer_cast<::Assets::MarkerPtr<ILightingStateDelegate>>(result);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

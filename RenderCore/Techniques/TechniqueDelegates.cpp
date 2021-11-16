@@ -27,7 +27,7 @@ namespace RenderCore { namespace Techniques
 	class TechniqueDelegate_Legacy : public ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 		AttachmentBlendDesc _blend;
 		RasterizationDesc _rasterization;
 		DepthStencilDesc _depthStencil;
-		::Assets::PtrToFuturePtr<Technique> _techniqueFuture;
+		::Assets::PtrToMarkerPtr<Technique> _techniqueFuture;
 	};
 
 	static void PrepareShadersFromTechniqueEntry(
@@ -60,9 +60,9 @@ namespace RenderCore { namespace Techniques
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
 		const CompiledShaderPatchCollection::Interface& shaderPatches,
-		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::PtrToFuturePtr<GraphicsPipelineDesc>
+		const RenderCore::Assets::RenderStateSet& input) -> ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("resolved-technique");
+		auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("resolved-technique");
 
 		auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 		nascentDesc->_blend.push_back(_blend);
@@ -188,7 +188,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -197,7 +197,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-deferred-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-deferred-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 			bool deferredDecal = 
@@ -255,17 +255,17 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Deferred(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Deferred(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
 	{
 		return std::make_shared<TechniqueDelegate_Deferred>(techniqueSet);
 	}
@@ -312,7 +312,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -321,7 +321,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -379,10 +379,10 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Forward(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
@@ -392,12 +392,12 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 		DepthStencilDesc _depthStencil;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Forward(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
 		return std::make_shared<TechniqueDelegate_Forward>(techniqueSet, flags);
@@ -450,7 +450,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -459,7 +459,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -505,13 +505,13 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_DepthOnly(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
 				_techniqueFileHelper->AdoptPromise(), 
 				[shadowGen](std::shared_ptr<TechniqueSetFile> techniqueSet) { return std::make_shared<TechniqueFileHelper>(techniqueSet, shadowGen); });
@@ -520,12 +520,12 @@ namespace RenderCore { namespace Techniques
             _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_DepthOnly(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
@@ -534,7 +534,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ShadowGen(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
@@ -601,7 +601,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -610,7 +610,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 			
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-predepth-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-predepth-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -670,11 +670,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_PreDepth(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 			PreDepthType preDepthType)
 		: _preDepthType(preDepthType)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
 				_techniqueFileHelper->AdoptPromise(),
 				[preDepthType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, preDepthType); });
@@ -683,13 +683,13 @@ namespace RenderCore { namespace Techniques
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		PreDepthType _preDepthType;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_PreDepth(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		PreDepthType preDepthType)
 	{
 		return std::make_shared<TechniqueDelegate_PreDepth>(techniqueSet, preDepthType);
@@ -742,7 +742,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -751,7 +751,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-utility-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-utility-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
 			unsigned cullDisable = 0;
@@ -805,11 +805,11 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_Utility(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 			UtilityDelegateType utilityType)
 		: _utilityType(utilityType)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(
 				_techniqueFileHelper->AdoptPromise(),
 				[utilityType](auto techSet) { return std::make_shared<TechniqueFileHelper>(techSet, utilityType); });
@@ -818,13 +818,13 @@ namespace RenderCore { namespace Techniques
             _rs[0x1] = CommonResourceBox::s_rsCullDisable;			
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 		RasterizationDesc _rs[2];
 		UtilityDelegateType _utilityType;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_Utility(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		UtilityDelegateType type)
 	{
 		return std::make_shared<TechniqueDelegate_Utility>(techniqueSet, type);
@@ -872,7 +872,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -881,7 +881,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-probe-prepare-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
 
@@ -937,17 +937,17 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_ProbePrepare(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_ProbePrepare(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet)
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet)
 	{
 		return std::make_shared<TechniqueDelegate_ProbePrepare>(techniqueSet);
 	}
@@ -990,7 +990,7 @@ namespace RenderCore { namespace Techniques
 			}
 		};
 
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -999,7 +999,7 @@ namespace RenderCore { namespace Techniques
 					Log(Warning) << "Technique delegate configuration invalidated, but cannot be hot-loaded" << std::endl;
 			#endif
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("from-forward-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("from-forward-delegate");
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
 
@@ -1044,26 +1044,26 @@ namespace RenderCore { namespace Techniques
 		}
 
 		TechniqueDelegate_RayTest(
-			const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+			const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 			unsigned testTypeParameter,
 			const StreamOutputInitializers& soInit)
 		: _testTypeParameter(testTypeParameter)
 		{
-			_techniqueFileHelper = std::make_shared<::Assets::FuturePtr<TechniqueFileHelper>>();
+			_techniqueFileHelper = std::make_shared<::Assets::MarkerPtr<TechniqueFileHelper>>();
 			::Assets::WhenAll(techniqueSet).ThenConstructToPromise(_techniqueFileHelper->AdoptPromise());
 
 			_soElements = NormalizeInputAssembly(soInit._outputElements);
 			_soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
 		}
 	private:
-		::Assets::PtrToFuturePtr<TechniqueFileHelper> _techniqueFileHelper;
+		::Assets::PtrToMarkerPtr<TechniqueFileHelper> _techniqueFileHelper;
 		std::vector<InputElementDesc> _soElements;
 		std::vector<unsigned> _soStrides;
 		unsigned _testTypeParameter;
 	};
 
 	std::shared_ptr<ITechniqueDelegate> CreateTechniqueDelegate_RayTest(
-		const ::Assets::PtrToFuturePtr<TechniqueSetFile>& techniqueSet,
+		const ::Assets::PtrToMarkerPtr<TechniqueSetFile>& techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{

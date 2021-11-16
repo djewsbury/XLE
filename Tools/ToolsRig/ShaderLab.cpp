@@ -61,12 +61,12 @@ namespace ToolsRig
 			std::forward<Args>(args)...);
 	}
 	
-	::Assets::PtrToFuturePtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
-		::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> futureFormatter,
+	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
+		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 		const RenderCore::FrameBufferProperties& fBProps)
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<ShaderLab::ICompiledOperation>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::ICompiledOperation>>();
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> preregAttachments { preregAttachmentsInit.begin(), preregAttachmentsInit.end() };
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
@@ -141,10 +141,10 @@ namespace ToolsRig
 		return result;
 	}
 
-	::Assets::PtrToFuturePtr<ShaderLab::IVisualizeStep> ShaderLab::BuildVisualizeStep(
-		::Assets::PtrToFuturePtr<Formatters::IDynamicFormatter> futureFormatter)
+	::Assets::PtrToMarkerPtr<ShaderLab::IVisualizeStep> ShaderLab::BuildVisualizeStep(
+		::Assets::PtrToMarkerPtr<Formatters::IDynamicFormatter> futureFormatter)
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<ShaderLab::IVisualizeStep>>();
+		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::IVisualizeStep>>();
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),

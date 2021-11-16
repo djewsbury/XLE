@@ -428,7 +428,7 @@ namespace RenderCore { namespace Assets
 		// 
         auto containerInitializer = splitName.AllExceptParameters();
 		std::string containerInitializerString = containerInitializer.AsString();
-		auto containerFuture = std::make_shared<::Assets::FuturePtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
+		auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
 		::Assets::DefaultCompilerConstruction(
 			containerFuture->AdoptPromise(), 
             s_MaterialCompileProcessType,
@@ -465,7 +465,7 @@ namespace RenderCore { namespace Assets
         {
         public:
             unsigned _nextId = 1;
-            std::vector<std::pair<unsigned, ::Assets::PtrToFuturePtr<RawMaterial>>> _subFutures;
+            std::vector<std::pair<unsigned, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
             std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
             std::vector<::Assets::DependentFileState> _deps;
         };

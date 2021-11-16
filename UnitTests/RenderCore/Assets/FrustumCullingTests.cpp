@@ -63,7 +63,7 @@ namespace UnitTests
 	class SimpleTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -77,7 +77,7 @@ namespace UnitTests
 			templateDesc->_blend.push_back(Techniques::CommonResourceBox::s_abStraightAlpha);
 			templateDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWrite;
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("unit-test-delegate");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("unit-test-delegate");
 			result->SetAsset(std::move(templateDesc));
 			return result;
 		}
@@ -92,7 +92,7 @@ namespace UnitTests
 	};
 
 	template<typename Type>
-		void RequireReady(::Assets::Future<Type>& future)
+		void RequireReady(::Assets::Marker<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);

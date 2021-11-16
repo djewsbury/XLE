@@ -81,7 +81,7 @@ namespace FixedFunctionModel
             SupplementRange supplements = SupplementRange(),
             unsigned LOD = 0); 
 
-        auto				GetModelScaffold(StringSection<ResChar> modelFilename) -> ::Assets::PtrToFuturePtr<RenderCore::Assets::ModelScaffold>;
+        auto				GetModelScaffold(StringSection<ResChar> modelFilename) -> ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>;
         SharedStateSet&     GetSharedStateSet();
 
         uint32              GetReloadId();

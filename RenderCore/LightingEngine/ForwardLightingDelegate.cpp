@@ -83,7 +83,7 @@ namespace RenderCore { namespace LightingEngine
 	class ToneMapStandin
 	{
 	public:
-		::Assets::PtrToFuturePtr<Techniques::IShaderOperator> _operator;
+		::Assets::PtrToMarkerPtr<Techniques::IShaderOperator> _operator;
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
 		ToneMapStandin(
 			const std::shared_ptr<Techniques::PipelineCollection>& pool,
@@ -132,7 +132,7 @@ namespace RenderCore { namespace LightingEngine
 		return fragment;
 	}
 
-	static ::Assets::PtrToFuturePtr<SkyOperator> CreateSkyOperator(
+	static ::Assets::PtrToMarkerPtr<SkyOperator> CreateSkyOperator(
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const Techniques::FrameBufferTarget& fbTarget,
 		const SkyOperatorDesc& desc)
@@ -287,7 +287,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
@@ -302,7 +302,7 @@ namespace RenderCore { namespace LightingEngine
 			preregisteredAttachments, fbProps);
 	}
 
-	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
+	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateForwardLightingTechnique(
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -314,7 +314,7 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferProperties& fbProps)
 	{
 		RasterizationLightTileOperator::Configuration tilingConfig;
-		auto lightSceneFuture = std::make_shared<::Assets::FuturePtr<ForwardPlusLightScene>>("forward-light-scene");
+		auto lightSceneFuture = std::make_shared<::Assets::MarkerPtr<ForwardPlusLightScene>>("forward-light-scene");
 		ForwardPlusLightScene::ConstructToPromise(
 			lightSceneFuture->AdoptPromise(), pipelineAccelerators, pipelinePool, techDelBox, shadowDescSet,
 			positionalLightOperators, shadowGenerators, ambientLightOperator, tilingConfig);
@@ -324,7 +324,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps };
 		PreregisterAttachments(stitchingContext);
 
-		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("forward-lighting-technique");
+		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("forward-lighting-technique");
 		::Assets::WhenAll(lightSceneFuture, balancedNoiseTexture).ThenConstructToPromise(
 			result->AdoptPromise(),
 			[techDelBox, stitchingContextCap=std::move(stitchingContext), pipelineAccelerators, pipelinePool]

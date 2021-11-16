@@ -178,7 +178,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::Future<Type>& future)
+		void RequireReady(::Assets::Marker<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
@@ -221,7 +221,7 @@ namespace UnitTests
 				Topology::TriangleList,
 				doubledSidedStateSet);
 
-			auto finalPipeline = mainPool->GetPipelineFuture(*pipelineAccelerator, *cfgId);
+			auto finalPipeline = mainPool->GetPipelineMarker(*pipelineAccelerator, *cfgId);
 			REQUIRE(finalPipeline);
 			finalPipeline->StallWhilePending();
 			RequireReady(*finalPipeline);
@@ -245,7 +245,7 @@ namespace UnitTests
 					//	We should get a valid pipeline in this case; since there are no texture coordinates
 					//	on the geometry, this disables the code that triggers a compiler warning
 					//
-				auto finalPipelineFuture = mainPool->GetPipelineFuture(*pipelineNoTexCoord, *cfgId);
+				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineNoTexCoord, *cfgId);
 				REQUIRE(finalPipelineFuture);
 				finalPipelineFuture->StallWhilePending();
 				RequireReady(*finalPipelineFuture);
@@ -264,7 +264,7 @@ namespace UnitTests
 					//	error message -- that is the shader compile error should propagate through
 					//	to the pipeline error log
 					//
-				auto finalPipelineFuture = mainPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgId);
+				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
 				REQUIRE(finalPipelineFuture);
 				finalPipelineFuture->StallWhilePending();
 				REQUIRE(finalPipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid);
@@ -290,7 +290,7 @@ namespace UnitTests
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
 			{
-				auto finalPipelineFuture = mainPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgIdWithColor);
+				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgIdWithColor);
 				REQUIRE(finalPipelineFuture);
 				finalPipelineFuture->StallWhilePending();
 				RequireReady(*finalPipelineFuture);
@@ -299,7 +299,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipelineFuture->Actualize()._metalPipeline,
-					mainPool->GetCompiledPipelineLayoutFuture(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
+					mainPool->GetCompiledPipelineLayoutMarker(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
 			}
 
 			// We should have filled the entire framebuffer with red 
@@ -316,7 +316,7 @@ namespace UnitTests
 				MakeSimpleFrameBufferDesc());
 
 			{
-				auto finalPipelineFuture = mainPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgIdWithColor);
+				auto finalPipelineFuture = mainPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgIdWithColor);
 				REQUIRE(finalPipelineFuture);
 				finalPipelineFuture->StallWhilePending();
 				RequireReady(*finalPipelineFuture);
@@ -325,7 +325,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipelineFuture->Actualize()._metalPipeline,
-					mainPool->GetCompiledPipelineLayoutFuture(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
+					mainPool->GetCompiledPipelineLayoutMarker(*cfgIdWithColor)->Actualize()->GetPipelineLayout());
 			}
 
 			auto breakdown1 = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -337,7 +337,7 @@ namespace UnitTests
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
 
-	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<RenderCore::Techniques::ActualizedDescriptorSet>& descriptorSetFuture)
+	static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Marker<RenderCore::Techniques::ActualizedDescriptorSet>& descriptorSetFuture)
 	{
 		auto state = descriptorSetFuture.StallWhilePending();
 		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
@@ -377,7 +377,7 @@ namespace UnitTests
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				patches,
 				materialSelectors, constantBindings, resourceBindings);
-			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 			if (descriptorSetFuture) descriptorSetFuture->StallWhilePending();
 			auto& descSet = descriptorSetFuture->Actualize();
 			auto* bindingInfo = &descSet._bindingInfo;
@@ -453,7 +453,7 @@ namespace UnitTests
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 				patches,
 				ParameterBox {}, constantBindings, resourceBindings);
-			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+			auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 
 			// Put together the pieces we need to create a pipeline
 			auto techniqueSetFile = ::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech");
@@ -477,7 +477,7 @@ namespace UnitTests
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
 			{
-				auto finalPipeline = pipelineAcceleratorPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgId);
+				auto finalPipeline = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
 				finalPipeline->StallWhilePending();
 				RequireReady(*finalPipeline);
 
@@ -495,7 +495,7 @@ namespace UnitTests
 				RenderQuad(
 					*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 					*finalPipeline->Actualize()._metalPipeline, 
-					pipelineAcceleratorPool->GetCompiledPipelineLayoutFuture(*cfgId)->Actualize()->GetPipelineLayout(),
+					pipelineAcceleratorPool->GetCompiledPipelineLayoutMarker(*cfgId)->Actualize()->GetPipelineLayout(),
 					descriptorSetFuture->Actualize()._descriptorSet.get());
 			}
 
@@ -557,7 +557,7 @@ namespace UnitTests
 				GlobalInputLayouts::PCT,
 				Topology::TriangleList,
 				doubledSidedStateSet);
-			auto finalPipeline = pipelineAcceleratorPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgId);
+			auto finalPipeline = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
 			REQUIRE(finalPipeline);
 			finalPipeline->StallWhilePending();
 			RequireReady(*finalPipeline);
@@ -571,7 +571,7 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, ParameterBox {}, ParameterBox {});
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				RequireReady(*descriptorSetFuture);
 				auto& descSet = descriptorSetFuture->Actualize();
@@ -583,7 +583,7 @@ namespace UnitTests
 					RenderQuad(
 						*testHelper, *threadContext, *vertexBuffer, (unsigned)dimof(vertices_fullViewport), 
 						*finalPipeline->Actualize()._metalPipeline,
-						pipelineAcceleratorPool->GetCompiledPipelineLayoutFuture(*cfgId)->Actualize()->GetPipelineLayout(),
+						pipelineAcceleratorPool->GetCompiledPipelineLayoutMarker(*cfgId)->Actualize()->GetPipelineLayout(),
 						descriptorSetFuture->Actualize()._descriptorSet.get());
 				}
 
@@ -600,7 +600,7 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, ParameterBox {}, resourceBindings);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				REQUIRE_THROWS(descriptorSetFuture->Actualize());		// if any texture is bad, the entire descriptor set is considered bad
 			}
@@ -613,7 +613,7 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, ParameterBox {}, resourceBindings);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				REQUIRE_THROWS(descriptorSetFuture->Actualize());		// if any texture is bad, the entire descriptor set is considered bad
 			}
@@ -628,7 +628,7 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, constantBindings, ParameterBox {});
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				REQUIRE(descriptorSetFuture);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				RequireReady(*descriptorSetFuture);
@@ -655,7 +655,7 @@ namespace UnitTests
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, constantBindings, resourceBindings);
-				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				auto descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				REQUIRE_THROWS(descriptorSetFuture->Actualize());
 
@@ -670,7 +670,7 @@ namespace UnitTests
 				descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					patches,
 					ParameterBox {}, ParameterBox {}, resourceBindings, samplerBindings);
-				descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+				descriptorSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 				StallForDescriptorSet(*threadContext, *descriptorSetFuture);
 				REQUIRE_THROWS(descriptorSetFuture->Actualize());
 			}

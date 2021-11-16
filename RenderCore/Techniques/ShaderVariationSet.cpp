@@ -107,10 +107,10 @@ namespace RenderCore { namespace Techniques
 	class TechniqueShaderVariationSet::Variation
 	{
 	public:
-		::Assets::PtrToFuturePtr<Metal::ShaderProgram> _shaderFuture;
+		::Assets::PtrToMarkerPtr<Metal::ShaderProgram> _shaderFuture;
 	};
 
-	::Assets::PtrToFuturePtr<Metal::ShaderProgram> TechniqueShaderVariationSet::FindVariation(
+	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> TechniqueShaderVariationSet::FindVariation(
 		int techniqueIndex,
 		const ParameterBox* shaderSelectors[SelectorStages::Max])
 	{

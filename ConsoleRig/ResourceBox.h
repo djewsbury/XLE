@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "../Assets/AssetFuture.h"
+#include "../Assets/Marker.h"
 #include "../Assets/AssetTraits.h"
 #include "../Assets/InitializerPack.h"
 #include "../OSServices/Log.h"
@@ -46,7 +46,7 @@ namespace ConsoleRig
 		template <typename Box> struct BoxTable : public IBoxTable
 		{
 			std::vector<std::pair<uint64_t, std::unique_ptr<Box>>>    			_internalTable;
-			std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Box>>>		_internalFuturesTable;
+			std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<Box>>>		_internalFuturesTable;
 		};
 
 		template <typename Box> std::vector<std::pair<uint64_t, std::unique_ptr<Box>>>& GetBoxTable()
@@ -57,7 +57,7 @@ namespace ConsoleRig
 			return table->_internalTable;
 		}
 
-		template <typename Box> std::vector<std::pair<uint64_t, ::Assets::PtrToFuturePtr<Box>>>& GetBoxFutureTable()
+		template <typename Box> std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<Box>>>& GetBoxFutureTable()
 		{
 			static BoxTable<Box>* table = nullptr;
 			if (!table)
@@ -117,14 +117,14 @@ namespace ConsoleRig
 		auto i = LowerBound(boxTable, hashValue);
 		if (i!=boxTable.end() && i->first==hashValue) {
 			if (::Assets::IsInvalidated(*i->second)) {
-				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
+				i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
 				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
 				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
 			}
 			return *i->second->Actualize();
 		}
 
-		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
 		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
@@ -143,7 +143,7 @@ namespace ConsoleRig
 			return *i->second->Actualize();
 		}
 
-		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
 		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
@@ -162,7 +162,7 @@ namespace ConsoleRig
 		auto i = LowerBound(boxTable, hashValue);
 		if (i!=boxTable.end() && i->first==hashValue) {
 			if (::Assets::IsInvalidated(*i->second)) {
-				i->second = std::make_shared<::Assets::FuturePtr<Box>>();
+				i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
 				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
 				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
 			}
@@ -171,7 +171,7 @@ namespace ConsoleRig
 			return res->get();
 		}
 
-		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
 		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
@@ -194,7 +194,7 @@ namespace ConsoleRig
 			return res->get();
 		}
 
-		auto future = std::make_shared<::Assets::FuturePtr<Box>>();
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
 		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
 		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
 		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));

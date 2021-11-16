@@ -30,7 +30,7 @@
 #include "../../RenderOverlays/FontRendering.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"

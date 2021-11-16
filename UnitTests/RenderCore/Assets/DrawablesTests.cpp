@@ -87,7 +87,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Future<Type>& descriptorSetFuture)
+		static void StallForDescriptorSet(RenderCore::IThreadContext& threadContext, ::Assets::Marker<Type>& descriptorSetFuture)
 	{
 		auto state = descriptorSetFuture.StallWhilePending();
 		if (state.has_value() && state.value() == ::Assets::AssetState::Ready)
@@ -95,7 +95,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void RequireReady(::Assets::Future<Type>& future)
+		void RequireReady(::Assets::Marker<Type>& future)
 	{
 		INFO(::Assets::AsString(future.GetActualizationLog()));
 		REQUIRE(future.GetAssetState() == ::Assets::AssetState::Ready);
@@ -208,12 +208,12 @@ namespace UnitTests
 				Topology::TriangleList,
 				RenderCore::Assets::RenderStateSet{});
 
-			auto descSetFuture = pipelineAcceleratorPool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+			auto descSetFuture = pipelineAcceleratorPool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 			REQUIRE(descSetFuture);
 			StallForDescriptorSet(*threadContext, *descSetFuture);
 			RequireReady(*descSetFuture);
 
-			auto pipelineFuture = pipelineAcceleratorPool->GetPipelineFuture(*pipelineWithTexCoord, *cfgId);
+			auto pipelineFuture = pipelineAcceleratorPool->GetPipelineMarker(*pipelineWithTexCoord, *cfgId);
 			REQUIRE(pipelineFuture);
 			pipelineFuture->StallWhilePending();
 			RequireReady(*pipelineFuture);
@@ -305,7 +305,7 @@ namespace UnitTests
 					parsingContext.GetUniformDelegateManager()->AddShaderResourceDelegate(globalDelegate);
 					
 					auto* d = (Techniques::Drawable*)pkts[0]._drawables.begin().get();
-					auto future = pipelineAcceleratorPool->GetPipelineFuture(*d->_pipeline, *cfgId);
+					auto future = pipelineAcceleratorPool->GetPipelineMarker(*d->_pipeline, *cfgId);
 					if (future) {
 						future->StallWhilePending();
 						INFO(::Assets::AsString(future->GetActualizationLog()));

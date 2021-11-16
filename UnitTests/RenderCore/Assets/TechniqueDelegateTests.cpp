@@ -298,7 +298,7 @@ namespace UnitTests
 	class UnitTestTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
@@ -329,7 +329,7 @@ namespace UnitTests
 			if (hasDeformPosition)
 				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>("pipeline-for-unit-test");
 			result->SetAsset(std::move(desc));
 			return result;
 		}
@@ -363,7 +363,7 @@ namespace UnitTests
 		const std::shared_ptr<RenderCore::Techniques::SequencerConfig>& cfg,		
 		const RenderCore::IResource& vb, size_t vertexCount)
 	{
-		auto pipelineFuture = pipelinePool->GetPipelineFuture(*pipelineAccelerator, *cfg);
+		auto pipelineFuture = pipelinePool->GetPipelineMarker(*pipelineAccelerator, *cfg);
 		REQUIRE(pipelineFuture != nullptr);
 		pipelineFuture->StallWhilePending();
 		if (pipelineFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
@@ -373,7 +373,7 @@ namespace UnitTests
 
 		std::shared_ptr<RenderCore::IDescriptorSet> descriptorSet;
 		if (descriptorSetAccelerator) {
-			auto descSetFuture = pipelinePool->GetDescriptorSetFuture(*descriptorSetAccelerator);
+			auto descSetFuture = pipelinePool->GetDescriptorSetMarker(*descriptorSetAccelerator);
 			REQUIRE(descSetFuture != nullptr);
 			descSetFuture->StallWhilePending();
 			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
@@ -395,7 +395,7 @@ namespace UnitTests
 			auto rpi = fbHelper.BeginRenderPass(*threadContext);
 
 			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayoutFuture(*cfg);
+			auto pipelineLayoutAsset = pipelinePool->GetCompiledPipelineLayoutMarker(*cfg);
 			pipelineLayoutAsset->StallWhilePending();
 			auto encoder = metalContext.BeginGraphicsEncoder(pipelineLayoutAsset->Actualize()->GetPipelineLayout());
 

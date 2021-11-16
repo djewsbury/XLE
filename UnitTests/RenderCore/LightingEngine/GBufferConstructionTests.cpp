@@ -78,7 +78,7 @@ namespace UnitTests
 	class WriteWorldCoordsDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
-		virtual ::Assets::PtrToFuturePtr<GraphicsPipelineDesc> GetPipelineDesc(
+		virtual ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc> GetPipelineDesc(
 			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
@@ -93,7 +93,7 @@ namespace UnitTests
 			pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 			pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
 
-			auto result = std::make_shared<::Assets::FuturePtr<GraphicsPipelineDesc>>();
+			auto result = std::make_shared<::Assets::MarkerPtr<GraphicsPipelineDesc>>();
 			result->SetAsset(std::move(pipelineDesc));
 			return result;
 		}
@@ -190,7 +190,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		static std::shared_ptr<Type> StallAndRequireReady(::Assets::FuturePtr<Type>& future)
+		static std::shared_ptr<Type> StallAndRequireReady(::Assets::MarkerPtr<Type>& future)
 	{
 		future.StallWhilePending();
 		INFO(::Assets::AsString(future.GetActualizationLog()));

@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<::Assets::Future<ComputePipelineAndLayout>> PipelineCollection::CreateComputePipeline(
+	std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> PipelineCollection::CreateComputePipeline(
 		const PipelineLayoutOptions& pipelineLayout,
 		StringSection<> shader,
 		IteratorRange<const ParameterBox**> selectors)
@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 				{}, nullptr, nullptr, {});
 			return _sharedPools->CreateComputePipelineAlreadyLocked(shader, pipelineLayout, filteredSelectors);
 		} else {
-			auto result = std::make_shared<::Assets::Future<ComputePipelineAndLayout>>(shader.AsString());
+			auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>(shader.AsString());
 			::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
 				result->AdoptPromise(),
 				[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout]( 
@@ -84,15 +84,15 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipelineInternal(
+	std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipelineInternal(
 		const PipelineLayoutOptions& pipelineLayout,
-		const ::Assets::PtrToFuturePtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
+		const ::Assets::PtrToMarkerPtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
 		IteratorRange<const ParameterBox**> selectors,
 		const VertexInputStates& inputStates,
 		const FrameBufferTarget& fbTarget,
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
-		auto result = std::make_shared<::Assets::Future<GraphicsPipelineAndLayout>>("graphics-pipeline");
+		auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("graphics-pipeline");
 		if (pipelineDescWithFilteringFuture->GetAssetState() == ::Assets::AssetState::Ready) {
 			auto pipelineDescWithFiltering = pipelineDescWithFilteringFuture->Actualize();
 			auto* pipelineDesc = pipelineDescWithFiltering->_pipelineDesc.get();
@@ -161,7 +161,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipeline(
+	std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipeline(
 		const PipelineLayoutOptions& pipelineLayout,
 		const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 		IteratorRange<const ParameterBox**> selectors,
@@ -175,9 +175,9 @@ namespace RenderCore { namespace Techniques
 			selectors, inputStates, fbTarget, compiledPatchCollection);
 	}
 
-	std::shared_ptr<::Assets::Future<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipeline(
+	std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> PipelineCollection::CreateGraphicsPipeline(
 		const PipelineLayoutOptions& pipelineLayout,
-		const ::Assets::PtrToFuturePtr<GraphicsPipelineDesc>& pipelineDescFuture,
+		const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture,
 		IteratorRange<const ParameterBox**> selectors,
 		const VertexInputStates& inputStates,
 		const FrameBufferTarget& fbTarget,
@@ -240,7 +240,7 @@ namespace RenderCore { namespace Techniques
 		_hashCode = _prebuiltPipelineLayout->GetGUID();
 	}
 
-	PipelineLayoutOptions::PipelineLayoutOptions(::Assets::PtrToFuturePtr<RenderCore::Assets::PredefinedPipelineLayout> future, uint64_t guid)
+	PipelineLayoutOptions::PipelineLayoutOptions(::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> future, uint64_t guid)
 	: _predefinedPipelineLayout(std::move(future))
 	, _hashCode(guid)
 	{}

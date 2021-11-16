@@ -21,7 +21,7 @@
 #include "../Techniques/CommonResources.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 
 namespace RenderCore { namespace LightingEngine
@@ -40,9 +40,9 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
-		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _specularIBL;
-		::Assets::PtrToFuturePtr<Techniques::DeferredShaderResource> _ambientRawCubemap;
-		std::shared_ptr<::Assets::Future<SHCoefficientsAsset>> _diffuseIBL;
+		::Assets::PtrToMarkerPtr<Techniques::DeferredShaderResource> _specularIBL;
+		::Assets::PtrToMarkerPtr<Techniques::DeferredShaderResource> _ambientRawCubemap;
+		std::shared_ptr<::Assets::Marker<SHCoefficientsAsset>> _diffuseIBL;
 
 		enum class SourceImageType { Equirectangular };
 		SourceImageType _sourceImageType = SourceImageType::Equirectangular;
@@ -546,7 +546,7 @@ namespace RenderCore { namespace LightingEngine
 
 		ShadowOperatorIdMapping shadowOperatorMapping;
 		shadowOperatorMapping._operatorToDynamicShadowOperator.resize(shadowGenerators.size(), ~0u);
-		::Assets::PtrToFuturePtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
+		::Assets::PtrToMarkerPtr<DynamicShadowPreparationOperators> shadowPreparationOperatorsFuture;
 
 		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{

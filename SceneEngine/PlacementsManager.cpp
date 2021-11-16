@@ -276,12 +276,12 @@ namespace SceneEngine
     class PlacementsCache : protected ::Assets::AssetHeapLRU<Placements>
     {
     public:
-        std::shared_ptr<::Assets::Future<Placements>> GetPlacements(uint64_t filenameHash, StringSection<> filename);
+        std::shared_ptr<::Assets::Marker<Placements>> GetPlacements(uint64_t filenameHash, StringSection<> filename);
         PlacementsCache();
         ~PlacementsCache();
     };
 
-    std::shared_ptr<::Assets::Future<Placements>> PlacementsCache::GetPlacements(uint64_t filenameHash, StringSection<> filename)
+    std::shared_ptr<::Assets::Marker<Placements>> PlacementsCache::GetPlacements(uint64_t filenameHash, StringSection<> filename)
     {
         return ::Assets::AssetHeapLRU<Placements>::Get(filenameHash, filename);
     }
@@ -408,7 +408,7 @@ namespace SceneEngine
 
         struct CellRenderInfo
         {
-            std::shared_ptr<::Assets::Future<Placements>> _placements;
+            std::shared_ptr<::Assets::Marker<Placements>> _placements;
             std::shared_ptr<GenericQuadTree> _quadTree;
         };
         CellRenderInfo& GetCellRenderInfo(const PlacementCell& cell);
@@ -626,7 +626,7 @@ namespace SceneEngine
         protected:
             uint64_t _currentModel, _currentMaterial;
             unsigned _currentSupplements;
-            ::Assets::PtrToFuturePtr<RenderCore::Techniques::SimpleModelRenderer> _current;
+            ::Assets::PtrToMarkerPtr<RenderCore::Techniques::SimpleModelRenderer> _current;
             float _imposterDistSq;
             bool _currentModelRendered;
             DynamicImposters* _imposters;
@@ -1261,7 +1261,7 @@ namespace SceneEngine
     std::shared_ptr<::Assets::IAsyncMarker> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
     {
         auto& cells = cellSet._pimpl->_cells;
-        std::vector<std::shared_ptr<::Assets::Future<Placements>>> placementsFutures;
+        std::vector<std::shared_ptr<::Assets::Marker<Placements>>> placementsFutures;
         placementsFutures.reserve(cells.size());
 
         for (auto i=cells.begin(); i!=cells.end(); ++i) {
@@ -1282,7 +1282,7 @@ namespace SceneEngine
         // Note that we're using a future to a dependency validation here. This works a little like
         // a std::future<void>
 
-        auto result = std::make_shared<::Assets::Future<::Assets::DependencyValidation>>("placements-future");
+        auto result = std::make_shared<::Assets::Marker<::Assets::DependencyValidation>>("placements-future");
         ::Assets::PollToPromise(
             result->AdoptPromise(),
             [placementsFutures]() {

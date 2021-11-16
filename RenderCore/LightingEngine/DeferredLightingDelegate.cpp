@@ -100,12 +100,12 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	static ::Assets::PtrToFuturePtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
+	static ::Assets::PtrToMarkerPtr<RenderStepFragmentInterface> CreateBuildGBufferSceneFragment(
 		SharedTechniqueDelegateBox& techDelBox,
 		GBufferType gbufferType, 
 		bool precisionTargets = false)
 	{
-		auto result = std::make_shared<::Assets::FuturePtr<RenderStepFragmentInterface>>("build-gbuffer");
+		auto result = std::make_shared<::Assets::MarkerPtr<RenderStepFragmentInterface>>("build-gbuffer");
 		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
 		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
@@ -315,7 +315,7 @@ namespace RenderCore { namespace LightingEngine
 			stitchingContext.DefineAttachment(a);
 	}
 
-	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
@@ -332,7 +332,7 @@ namespace RenderCore { namespace LightingEngine
 		auto shadowPreparationOperators = CreateDynamicShadowPreparationOperators(shadowGenerators, pipelineAccelerators, techDelBox, shadowDescSet);
 		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
 
-		auto result = std::make_shared<::Assets::FuturePtr<CompiledLightingTechnique>>("deferred-lighting-technique");
+		auto result = std::make_shared<::Assets::MarkerPtr<CompiledLightingTechnique>>("deferred-lighting-technique");
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
 		::Assets::WhenAll(buildGBufferFragment, shadowPreparationOperators).ThenConstructToPromise(
 			result->AdoptPromise(),
@@ -439,7 +439,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	::Assets::PtrToFuturePtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
+	::Assets::PtrToMarkerPtr<CompiledLightingTechnique> CreateDeferredLightingTechnique(
 		const std::shared_ptr<LightingEngineApparatus>& apparatus,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,

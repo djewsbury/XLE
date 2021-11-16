@@ -8,7 +8,7 @@
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
-#include "../Assets/AssetFuture.h"
+#include "../Assets/Marker.h"
 
 namespace SceneEngine
 {
@@ -56,7 +56,7 @@ namespace SceneEngine
 		return prepareLightingIterator.GetResourcePreparationMarker();
 	}
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::FuturePtr<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> StallAndActualize(::Assets::MarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique>& future)
 	{
 		future.StallWhilePending();
 		return future.Actualize();

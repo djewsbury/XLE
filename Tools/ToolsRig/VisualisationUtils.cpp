@@ -114,7 +114,7 @@ namespace ToolsRig
         return result;
     }
 
-	Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource)
+	Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> MakeLightingStateDelegate(StringSection<> cfgSource)
 	{
 		return SceneEngine::CreateBasicLightingStateDelegate(cfgSource);
 	}
@@ -127,8 +127,8 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
-        void Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings) override;
-		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) override;
+        void Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings) override;
+		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) override;
 		void Set(RefreshableFuture<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(RefreshableFuture<SceneEngine::IScene> scene) override;
 
@@ -168,10 +168,10 @@ namespace ToolsRig
 			PreparedScene(PreparedScene&&) = default;
 			PreparedScene& operator=(PreparedScene&&) = default;
 		};
-		::Assets::PtrToFuturePtr<PreparedScene> _preparedSceneFuture;
+		::Assets::PtrToMarkerPtr<PreparedScene> _preparedSceneFuture;
 
-		::Assets::PtrToFuturePtr<SceneEngine::IScene> _sceneFuture;
-		::Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> _envSettingsFuture;
+		::Assets::PtrToMarkerPtr<SceneEngine::IScene> _sceneFuture;
+		::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> _envSettingsFuture;
 		RefreshableFuture<SceneEngine::IScene> _refreshableSceneFuture;
 		RefreshableFuture<SceneEngine::ILightingStateDelegate> _refreshableEnvSettingsFuture;
 		void RebuildPreparedScene();
@@ -325,7 +325,7 @@ namespace ToolsRig
 		// envSettings -> compiledLightingTechnique -> preparedShaders -> PreparedScene
 		//                SceneEngine::IScene ----------------^
 		//
-		_preparedSceneFuture = std::make_shared<::Assets::FuturePtr<PreparedScene>>("simple-scene-layer");
+		_preparedSceneFuture = std::make_shared<::Assets::MarkerPtr<PreparedScene>>("simple-scene-layer");
 
 		::Assets::WhenAll(_envSettingsFuture).ThenConstructToPromise(
 			_preparedSceneFuture->AdoptPromise(),
@@ -405,14 +405,14 @@ namespace ToolsRig
 
 	}
 
-    void SimpleSceneLayer::Set(Assets::PtrToFuturePtr<SceneEngine::ILightingStateDelegate> envSettings)
+    void SimpleSceneLayer::Set(Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> envSettings)
     {
 		_envSettingsFuture = std::move(envSettings);
 		_refreshableEnvSettingsFuture = nullptr;
 		RebuildPreparedScene();
     }
 
-	void SimpleSceneLayer::Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene)
+	void SimpleSceneLayer::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
 	{
 		_sceneFuture = std::move(scene);
 		_refreshableSceneFuture = nullptr;
@@ -581,7 +581,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 
-		::Assets::PtrToFuturePtr<SceneEngine::IScene> _scene;
+		::Assets::PtrToMarkerPtr<SceneEngine::IScene> _scene;
 		bool _pendingAnimStateBind = false;
 
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> _stencilPrimeDelegate;
@@ -769,7 +769,7 @@ namespace ToolsRig
 		}
     }
 
-	void VisualisationOverlay::Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene)
+	void VisualisationOverlay::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
 	{
 		_pimpl->_scene = scene;
 		_pimpl->_pendingAnimStateBind = true;
@@ -1038,7 +1038,7 @@ namespace ToolsRig
 			}
         }
 
-		void Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
+		void Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
 
         MouseOverTrackingListener(
             const std::shared_ptr<VisMouseOver>& mouseOver,
@@ -1055,7 +1055,7 @@ namespace ToolsRig
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<VisCameraSettings> _camera;
         
-		Assets::PtrToFuturePtr<SceneEngine::IScene> _scene;
+		Assets::PtrToMarkerPtr<SceneEngine::IScene> _scene;
 		std::chrono::time_point<std::chrono::steady_clock> _timeOfLastCalculate;
 
 		PlatformRig::InputContext _timeoutContext;
@@ -1079,7 +1079,7 @@ namespace ToolsRig
 		}
     }
 
-	void MouseOverTrackingOverlay::Set(Assets::PtrToFuturePtr<SceneEngine::IScene> scene)
+	void MouseOverTrackingOverlay::Set(Assets::PtrToMarkerPtr<SceneEngine::IScene> scene)
 	{
 		_inputListener->Set(std::move(scene));
 	}
@@ -1139,14 +1139,14 @@ namespace ToolsRig
 			marker->StallWhilePending();
 	}
 	
-	/*const std::shared_ptr<SceneEngine::IScene>& TryActualize(const ::Assets::FuturePtr<SceneEngine::IScene>& future)
+	/*const std::shared_ptr<SceneEngine::IScene>& TryActualize(const ::Assets::MarkerPtr<SceneEngine::IScene>& future)
 	{
 		// This function exists because we can't call TryActualize() from a C++/CLR source file because
 		// of the problem related to including <mutex>
 		return future.TryActualize();
 	}
 
-	std::optional<std::string> GetActualizationError(const ::Assets::FuturePtr<SceneEngine::IScene>& future)
+	std::optional<std::string> GetActualizationError(const ::Assets::MarkerPtr<SceneEngine::IScene>& future)
 	{
 		auto state = future.GetAssetState();
 		if (state != ::Assets::AssetState::Invalid)

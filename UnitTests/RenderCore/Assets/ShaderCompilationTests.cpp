@@ -181,7 +181,7 @@ namespace UnitTests
 		mutable std::atomic<unsigned> _compileFromFileCount = 0;
 	};
 
-	using ByteCodeFuture = ::Assets::FuturePtr<RenderCore::CompiledShaderByteCode>;
+	using ByteCodeFuture = ::Assets::MarkerPtr<RenderCore::CompiledShaderByteCode>;
 	static ByteCodeFuture BeginShaderCompile(StringSection<> fn)
 	{
 		static_assert(::Assets::Internal::AssetTraits<RenderCore::CompiledShaderByteCode>::HasCompileProcessType);
@@ -192,7 +192,7 @@ namespace UnitTests
 	}
 	
 	template<typename Type>
-		void StallAndRequireReady(::Assets::FuturePtr<Type>& future)
+		void StallAndRequireReady(::Assets::MarkerPtr<Type>& future)
 	{
 		future.StallWhilePending();
 		INFO(::Assets::AsString(future.GetActualizationLog()));
@@ -200,7 +200,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		void StallAndRequireInvalid(::Assets::FuturePtr<Type>& future)
+		void StallAndRequireInvalid(::Assets::MarkerPtr<Type>& future)
 	{
 		future.StallWhilePending();
 		REQUIRE(!future.GetActualizationLog()->empty());

@@ -11,7 +11,7 @@
 #include "../IThreadContext.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetFuture.h"
+#include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetServices.h"
 
@@ -126,7 +126,7 @@ namespace RenderCore { namespace Techniques
         DecodedInitializer init(splitter);
 		assert(!splitter.File().IsEmpty());
 
-		std::shared_ptr<::Assets::Future<TextureMetaData>> metaDataFuture;
+		std::shared_ptr<::Assets::Marker<TextureMetaData>> metaDataFuture;
 		{
             ::Assets::ResChar filename[MaxPath];
                 // Some resources might have a little xml ".metadata" file attached. This 

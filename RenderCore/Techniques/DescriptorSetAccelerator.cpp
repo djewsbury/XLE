@@ -27,7 +27,7 @@ namespace RenderCore { namespace Techniques
 	{
 		struct Resource
 		{
-			::Assets::PtrToFuturePtr<DeferredShaderResource> _pendingResource;
+			::Assets::PtrToMarkerPtr<DeferredShaderResource> _pendingResource;
 			std::shared_ptr<IResourceView> _fixedResource;
 		};
 		std::vector<Resource> _resources;

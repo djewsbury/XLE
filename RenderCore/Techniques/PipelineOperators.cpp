@@ -158,7 +158,7 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
@@ -169,10 +169,10 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, (unsigned)subType, pixelShader, selectors, pipelineLayout, std::shared_ptr<Assets::PredefinedPipelineLayout>{}, ::Assets::DependencyValidation{}, fbTarget, usi);
-		return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
-	::Assets::PtrToFuturePtr<IShaderOperator> CreateFullViewportOperator(
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
@@ -186,9 +186,9 @@ namespace RenderCore { namespace Techniques
 		if (fastLayout) {
 			assert(!pixelShader.IsEmpty());
 			auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, (unsigned)subType, pixelShader, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetPredefinedPipelineLayout(), (*fastLayout)->GetDependencyValidation(), fbTarget, usi);
-			return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&op);
+			return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 		} else {
-			auto result = std::make_shared<::Assets::FuturePtr<FullViewportOperator>>();
+			auto result = std::make_shared<::Assets::MarkerPtr<FullViewportOperator>>();
 			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToPromise(
 				result->AdoptPromise(),
 				[pool=pool, subType, pixelShader=pixelShader.AsString(), selectors=selectors,
@@ -200,7 +200,7 @@ namespace RenderCore { namespace Techniques
 						pipelineLayout->GetPipelineLayout(), pipelineLayout->GetPredefinedPipelineLayout(), pipelineLayout->GetDependencyValidation(),
 						{&fbDesc, subPassIdx}, usi);
 				});
-			return *reinterpret_cast<::Assets::PtrToFuturePtr<IShaderOperator>*>(&result);
+			return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&result);
 		}
 	}
 
@@ -385,7 +385,7 @@ namespace RenderCore { namespace Techniques
 		bool _betweenBeginEnd = false;
 	};
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
@@ -395,10 +395,10 @@ namespace RenderCore { namespace Techniques
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
 		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(pool, pipelineLayout, computeShader, selectors, usi);
-		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
@@ -408,17 +408,17 @@ namespace RenderCore { namespace Techniques
 		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(
 			pool, pipelineLayoutAssetName,
 			computeShader, selectors, usi);
-		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
-	::Assets::PtrToFuturePtr<IComputeShaderOperator> CreateComputeOperator(
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)
 	{
 		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(pool, computeShader, selectors, usi);
-		return *reinterpret_cast<::Assets::PtrToFuturePtr<IComputeShaderOperator>*>(&op);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
 	IShaderOperator::~IShaderOperator() {}
