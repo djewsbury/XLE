@@ -8,7 +8,6 @@
 #include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/IDevice.h"
-#include "../../../RenderCore/IThreadContext.h"
 #include "../../../RenderCore/IAnnotator.h"
 #include "../../../RenderCore/OpenGLES/IDeviceOpenGLES.h"
 #include "../../../RenderCore/Vulkan/IDeviceVulkan.h"

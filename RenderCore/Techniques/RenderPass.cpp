@@ -14,7 +14,7 @@
 #include "../Metal/Resource.h"
 #include "../Format.h"
 #include "../ResourceUtils.h"
-#include "../IThreadContext.h"
+#include "../IDevice.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/StreamUtils.h"

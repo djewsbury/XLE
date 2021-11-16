@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../UniformsStream.h"
 #include "Metal/VulkanForward.h"
 #include <memory>

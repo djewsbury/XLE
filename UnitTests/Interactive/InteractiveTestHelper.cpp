@@ -19,7 +19,6 @@
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Init.h"
 #include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/IThreadContext.h"
 
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"

@@ -7,7 +7,7 @@
 #include "../RenderCore/Metal/Metal.h"
 #include "../RenderCore/Metal/Resource.h"
 #include "../RenderCore/Metal/DeviceContext.h"
-#include "../RenderCore/IThreadContext.h"
+#include "../RenderCore/IDevice.h"
 #include "../OSServices/Log.h"
 #include "../Utility/StringFormat.h"
 #include <assert.h>

@@ -17,7 +17,6 @@
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Init.h"
 #include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/IThreadContext.h"
 
 #include "../../Tools/ToolsRig/PreviewSceneRegistry.h"
 #include "../../Tools/EntityInterface/EntityInterface.h"

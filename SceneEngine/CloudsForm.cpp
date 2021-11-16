@@ -10,7 +10,7 @@
 #include "FluidHelper.h"
 #include "Fluid.h"
 #include "FluidAdvection.h"
-#include "../RenderCore/IThreadContext.h"
+#include "../RenderCore/IDevice.h"
 #include "../Math/Noise.h"
 #include "../Utility/Meta/ClassAccessorsImpl.h"
 

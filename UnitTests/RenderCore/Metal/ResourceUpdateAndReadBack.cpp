@@ -15,7 +15,7 @@
 #include "../../../RenderCore/OpenGLES/IDeviceOpenGLES.h"
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/BufferView.h"
-#include "../../../RenderCore/IThreadContext.h"
+#include "../../../RenderCore/IDevice.h"
 #include "../../../Math/Vector.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Utility/MemoryUtils.h"

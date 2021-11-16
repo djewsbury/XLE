@@ -25,7 +25,7 @@
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
-#include "../../../RenderCore/IThreadContext.h"
+#include "../../../RenderCore/IDevice.h"
 #include "../../../RenderOverlays/OverlayContext.h"
 #include "../../../RenderOverlays/DebuggingDisplay.h"
 #include "../../../RenderOverlays/FontRendering.h"

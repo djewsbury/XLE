@@ -8,7 +8,6 @@
 #include "CommonBindings.h"
 #include "Techniques.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../Format.h"
 #include "../../Utility/IteratorUtils.h"
 

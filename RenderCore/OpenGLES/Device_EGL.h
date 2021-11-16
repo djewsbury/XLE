@@ -6,7 +6,6 @@
 #include "Metal/ObjectFactory.h"
 #include "Metal/Resource.h"
 #include "../../Utility/IntrusivePtr.h"
-#include "../IThreadContext.h"
 
 #include <EGL/egl.h>
 #undef None

@@ -12,7 +12,6 @@
 #include "../../../RenderCore/ResourceDesc.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/IDevice.h"
-#include "../../../RenderCore/IThreadContext.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/Resource.h"
 #include "../../../ConsoleRig/GlobalServices.h"

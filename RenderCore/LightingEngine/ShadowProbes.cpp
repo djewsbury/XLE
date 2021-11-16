@@ -15,7 +15,6 @@
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 

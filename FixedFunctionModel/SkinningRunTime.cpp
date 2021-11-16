@@ -14,7 +14,6 @@
 #include "../RenderCore/BufferView.h"
 
 #include "../RenderCore/IDevice.h"
-#include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/Metal/Shader.h"
 #include "../RenderCore/Metal/InputLayout.h"
 #include "../RenderCore/Metal/DeviceContext.h"

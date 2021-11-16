@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ThreadContext.h"
-#include "../RenderCore/IThreadContext.h"
+#include "../RenderCore/IDevice.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Vulkan/IDeviceVulkan.h"

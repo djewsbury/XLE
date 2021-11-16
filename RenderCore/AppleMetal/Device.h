@@ -6,7 +6,6 @@
 
 #include "IDeviceAppleMetal.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../IAnnotator.h"
 #include "Metal/FeatureSet.h"
 #include "../../Utility/OCUtils.h"

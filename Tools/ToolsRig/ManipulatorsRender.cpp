@@ -20,7 +20,7 @@
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Format.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/Transformations.h"

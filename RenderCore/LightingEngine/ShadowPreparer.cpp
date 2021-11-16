@@ -19,7 +19,6 @@
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/ContinuationUtil.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../../Assets/Marker.h"
 #include <vector>
 

@@ -33,7 +33,7 @@
 
 #include "../../RenderCore/Metal/DeviceContext.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../Utility/StringUtils.h"
 #include "../../ConsoleRig/Console.h"
 

@@ -5,7 +5,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../IAnnotator.h"
-#include "../IThreadContext.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
 #include "../Core/Types.h"

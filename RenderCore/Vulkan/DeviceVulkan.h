@@ -5,7 +5,6 @@
 #pragma once
 
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "IDeviceVulkan.h"
 #include "Metal/VulkanCore.h"
 #include "Metal/ObjectFactory.h"

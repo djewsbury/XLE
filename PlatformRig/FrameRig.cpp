@@ -7,7 +7,6 @@
 #include "OverlaySystem.h"
 #include "PlatformApparatuses.h"
 
-#include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/DebuggingDisplay.h"

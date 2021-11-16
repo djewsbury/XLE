@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "Metal/DX11.h"
 
 namespace RenderCore

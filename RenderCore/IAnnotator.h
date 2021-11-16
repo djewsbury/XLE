@@ -4,9 +4,7 @@
 
 #pragma once
 
-#include "IThreadContext.h"
-#include "IDevice_Forward.h"
-#include "../Core/Types.h"
+#include "IDevice.h"
 #include <utility>
 #include <memory>
 #include <functional>

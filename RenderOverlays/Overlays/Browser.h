@@ -8,7 +8,6 @@
 
 #include "../DebuggingDisplay.h"
 #include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/IThreadContext.h"
 #include <memory>
 
 namespace Overlays

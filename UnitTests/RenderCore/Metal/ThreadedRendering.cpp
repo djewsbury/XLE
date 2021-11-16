@@ -11,7 +11,7 @@
 #include "../../../RenderCore/Metal/State.h"
 #include "../../../RenderCore/Format.h"
 #include "../../../RenderCore/BufferView.h"
-#include "../../../RenderCore/IThreadContext.h"
+#include "../../../RenderCore/IDevice.h"
 #include "../../../RenderCore/Vulkan/IDeviceVulkan.h"
 #include "../../../Math/Vector.h"
 #include "../../../Utility/StringFormat.h"

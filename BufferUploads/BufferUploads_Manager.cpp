@@ -7,7 +7,6 @@
 #include "ResourceUploadHelper.h"
 #include "ResourceSource.h"
 #include "../RenderCore/IDevice.h"
-#include "../RenderCore/IThreadContext.h"
 #include "../RenderCore/ResourceUtils.h"
 #include "../RenderCore/ResourceDesc.h"
 #include "../RenderCore/Metal/Resource.h"

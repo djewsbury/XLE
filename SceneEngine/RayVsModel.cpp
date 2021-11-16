@@ -10,7 +10,7 @@
 #include "../RenderCore/Metal/QueryPool.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
-#include "../RenderCore/IThreadContext.h"
+#include "../RenderCore/IDevice.h"
 #include "../RenderCore/BufferView.h"
 #include "../RenderCore/Techniques/CommonResources.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"

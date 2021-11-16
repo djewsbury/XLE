@@ -10,7 +10,6 @@
 #include "Format.h"
 #include "BasicLabelWithNSError.h"
 #include "../IDeviceAppleMetal.h"
-#include "../../IThreadContext.h"
 #include "../../Types.h"
 #include "../../FrameBufferDesc.h"
 #include "../../../OSServices/Log.h"

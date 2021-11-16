@@ -10,7 +10,6 @@
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IntermediatesStore.h"

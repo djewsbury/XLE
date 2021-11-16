@@ -7,7 +7,6 @@
 #include "TextureView.h"
 #include "DeviceContext.h"
 #include "../Device.h"
-#include "../../IThreadContext.h"
 #include "../../ResourceUtils.h"
 #include "../../../OSServices/Log.h"
 #include <stdexcept>

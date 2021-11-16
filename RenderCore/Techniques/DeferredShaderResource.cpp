@@ -8,7 +8,6 @@
 #include "../Assets/TextureCompiler.h"
 #include "../Format.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"

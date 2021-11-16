@@ -15,7 +15,7 @@
 #include "CompiledShaderPatchCollection.h"		// for DescriptorSetLayoutAndBinding
 #include "../UniformsStream.h"
 #include "../BufferView.h"
-#include "../IThreadContext.h"
+#include "../IDevice.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"

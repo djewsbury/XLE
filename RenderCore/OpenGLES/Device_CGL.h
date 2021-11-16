@@ -6,7 +6,6 @@
 
 #include "IDeviceOpenGLES.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../ResourceDesc.h"
 #include "Metal/ObjectFactory.h"
 #include "../../Utility/IntrusivePtr.h"

@@ -22,7 +22,7 @@
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../RenderCore/Assets/Services.h"
 #include "../../RenderCore/Metal/DeviceContextImpl.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Types.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/BufferView.h"

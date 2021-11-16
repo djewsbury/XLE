@@ -20,7 +20,7 @@
 #include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/BufferView.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../Assets/Assets.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"

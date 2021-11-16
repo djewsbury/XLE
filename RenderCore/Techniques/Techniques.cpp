@@ -7,7 +7,6 @@
 #include "Services.h"
 #include "../UniformsStream.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../Metal/Metal.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/DepVal.h"

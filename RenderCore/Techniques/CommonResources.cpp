@@ -5,7 +5,6 @@
 #include "CommonResources.h"
 #include "CommonBindings.h"
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "../Metal/Metal.h"
 #include "../Metal/Resource.h"          // for Metal::CompleteInitialization
 #include "../Metal/DeviceContext.h"     // for Metal::CompleteInitialization

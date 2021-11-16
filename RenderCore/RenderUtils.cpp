@@ -11,7 +11,6 @@
 #include "Format.h"
 
 #include "IDevice.h"
-#include "IThreadContext.h"
 #include "IAnnotator.h"
 
 #include "../ConsoleRig/GlobalServices.h"

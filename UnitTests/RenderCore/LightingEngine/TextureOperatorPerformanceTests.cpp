@@ -18,7 +18,6 @@
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
-#include "../../../RenderCore/IThreadContext.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"

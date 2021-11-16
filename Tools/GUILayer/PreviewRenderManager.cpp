@@ -25,7 +25,6 @@
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../RenderCore/MinimalShaderSource.h"
 #include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/IThreadContext.h"
 #include "../../RenderCore/ResourceUtils.h"
 
 // #include "../../BufferUploads/IBufferUploads.h"

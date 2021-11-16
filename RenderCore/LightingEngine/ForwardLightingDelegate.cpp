@@ -21,7 +21,7 @@
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DrawableDelegates.h"
-#include "../IThreadContext.h"
+#include "../IDevice.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../ConsoleRig/ResourceBox.h"

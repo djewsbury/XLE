@@ -11,7 +11,7 @@
 #include "Buffer.h"
 #include "Format.h"
 #include "ExtensionFunctions.h"
-#include "../../IThreadContext.h"
+#include "../../IDevice.h"
 #include "../../../OSServices/Log.h"
 
 #include "IncludeGLES.h"

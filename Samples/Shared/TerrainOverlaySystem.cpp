@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TerrainOverlaySystem.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../Tools/ToolsRig/TerrainManipulatorsInterface.h"

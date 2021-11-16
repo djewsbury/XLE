@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../IDevice.h"
-#include "../IThreadContext.h"
 #include "IDeviceDX11.h"
 #include "Metal/DX11.h"
 #include "../../ConsoleRig/AttachablePtr.h"

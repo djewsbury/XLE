@@ -19,7 +19,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/Overlays/Browser.h"
 //#include "../../RenderOverlays/OverlayUtils.h"
-#include "../../RenderCore/IThreadContext.h"
+#include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
 
