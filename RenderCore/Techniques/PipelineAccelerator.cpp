@@ -669,30 +669,42 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings)
 	{
-		ScopedLock(_constructionLock);
+		std::shared_ptr<DescriptorSetAccelerator> result;
+		{
+			ScopedLock(_constructionLock);
 
-		uint64_t hash = HashCombine(materialSelectors.GetHash(), materialSelectors.GetParameterNamesHash());
-		hash = HashCombine(constantBindings.GetHash(), hash);
-		hash = HashCombine(constantBindings.GetParameterNamesHash(), hash);
-		hash = HashCombine(resourceBindings.GetHash(), hash);
-		hash = HashCombine(resourceBindings.GetParameterNamesHash(), hash);
-		for (const auto&s:samplerBindings) {		// (note, different ordering will result in different hashes)
-			hash = HashCombine(s.first, hash);
-			hash = HashCombine(s.second.Hash(), hash);
+			uint64_t hash = HashCombine(materialSelectors.GetHash(), materialSelectors.GetParameterNamesHash());
+			hash = HashCombine(constantBindings.GetHash(), hash);
+			hash = HashCombine(constantBindings.GetParameterNamesHash(), hash);
+			hash = HashCombine(resourceBindings.GetHash(), hash);
+			hash = HashCombine(resourceBindings.GetParameterNamesHash(), hash);
+			for (const auto&s:samplerBindings) {		// (note, different ordering will result in different hashes)
+				hash = HashCombine(s.first, hash);
+				hash = HashCombine(s.second.Hash(), hash);
+			}
+			if (shaderPatches)
+				hash = HashCombine(shaderPatches->GetHash(), hash);
+
+			// If it already exists in the cache, just return it now
+			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
+			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
+				auto l = cachei->second.lock();
+				if (l)
+					return l;
+			}
+
+			result = std::make_shared<DescriptorSetAccelerator>();
+			result->_descriptorSet = std::make_shared<::Assets::Future<ActualizedDescriptorSet>>("descriptorset-accelerator");
+
+			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
+				cachei->second = result;		// (we replaced one that expired)
+			} else {
+				_descriptorSetAccelerators.insert(cachei, std::make_pair(hash, result));
+			}
 		}
-		if (shaderPatches)
-			hash = HashCombine(shaderPatches->GetHash(), hash);
 
-		// If it already exists in the cache, just return it now
-		auto cachei = LowerBound(_descriptorSetAccelerators, hash);
-		if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
-			auto l = cachei->second.lock();
-			if (l)
-				return l;
-		}
-
-		auto result = std::make_shared<DescriptorSetAccelerator>();
-		result->_descriptorSet = std::make_shared<::Assets::Future<ActualizedDescriptorSet>>("descriptorset-accelerator");
+		// We don't need to have "_constructionLock" after we've added the Future to _descriptorSetAccelerators, so let's do the
+		// rest outside of the lock
 
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
 		metalSamplers.reserve(samplerBindings.size());
@@ -751,12 +763,6 @@ namespace RenderCore { namespace Techniques
 				MakeIteratorRange(metalSamplers),
 				PipelineType::Graphics,
 				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
-		}
-
-		if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
-			cachei->second = result;		// (we replaced one that expired)
-		} else {
-			_descriptorSetAccelerators.insert(cachei, std::make_pair(hash, result));
 		}
 
 		return result;

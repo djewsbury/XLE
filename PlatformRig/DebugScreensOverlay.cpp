@@ -12,6 +12,7 @@
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
+#include "../RenderCore/Techniques/CommonBindings.h"
 #include "../Math/Vector.h"
 
 namespace PlatformRig
@@ -44,7 +45,15 @@ namespace PlatformRig
                 assert(viewportDims[0] * viewportDims[1]);
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
 
-                auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
+                RenderCore::Techniques::RenderPassInstance rpi;
+                auto i = std::find_if(
+                    parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().begin(), parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end(),
+                    [](const auto& c) { return c._semantic == RenderCore::Techniques::AttachmentSemantics::MultisampleDepth; });
+                if (i != parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end()) {
+                    rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
+                } else {
+                    rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext);
+                }
                 parserContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
                 _immediateDrawables->ExecuteDraws(parserContext, rpi);
             } CATCH (...) {
