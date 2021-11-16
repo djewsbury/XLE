@@ -400,6 +400,65 @@ namespace UnitTests
         }
     }
 
+	struct YieldToFutureItem
+	{
+		std::shared_future<unsigned> _rootFuture;
+		std::stringstream _str;
+	};
+
+	static void YieldingToFutureTest(
+		std::vector<YieldToFutureItem>& items,
+		Threading::Mutex& itemsLock,
+		ThreadPool& threadPool,
+		std::mt19937_64& rng,
+		std::shared_ptr<std::promise<unsigned>> promise,
+		unsigned thisItemIndex)
+	{
+		for (unsigned c=0; c<9; ++c) {
+			unsigned rngValue;
+			{
+				ScopedLock(itemsLock);
+				rngValue = std::uniform_int<>(0, 11)(rng);
+			}
+			if (rngValue < 6 && thisItemIndex) {
+				if (!thisItemIndex) break;
+				std::shared_future<unsigned> future;
+				{
+					ScopedLock(itemsLock);
+					auto v = std::uniform_int<>(0, thisItemIndex-1)(rng);
+					future = items[v]._rootFuture;
+				}
+				auto start = std::chrono::steady_clock::now();
+				YieldToPool(future);
+				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+				items[thisItemIndex]._str << "StallForExisting{" << duration.count() << "ms}, ";
+			} else if (rngValue < 11) {
+				std::chrono::milliseconds t;
+				{
+					ScopedLock(itemsLock);
+					t = std::chrono::milliseconds{std::uniform_int<>(10, 250)(rng)};
+				}
+				YieldToPoolFor(t);
+			} else {
+				std::shared_future<unsigned> newFuture;
+				{
+					auto newPromise = std::make_shared<std::promise<unsigned>>();
+					ScopedLock(itemsLock);
+					YieldToFutureItem item;
+					newFuture = item._rootFuture = newPromise->get_future().share();
+					items.push_back(std::move(item));
+					auto newThisItemIndex = items.size()-1;
+					threadPool.Enqueue(
+						YieldingToFutureTest,
+						std::ref(items), std::ref(itemsLock), std::ref(threadPool), std::ref(rng),
+						std::move(newPromise), newThisItemIndex);
+					items[thisItemIndex]._str << "SpawnNewBlock, ";
+				}
+			}
+		}
+		promise->set_value(3);
+	}
+
     TEST_CASE( "ThreadPool-WaitBetweenBlocks", "[osservices]" )
     {
         // Some threadpool blocks might wait on the result of other blocks. This can be 
@@ -459,6 +518,46 @@ namespace UnitTests
             threadPool.StallAndDrainQueue();
 
             for (unsigned c=0; c<itemCount; ++c) {
+                Log(Debug) << "Thread[" << c << "] " << items[c]._str.str() << std::endl;
+            }
+        }
+
+        SECTION("Wait on future")
+        {
+            std::vector<YieldToFutureItem> items;
+            Threading::Mutex itemsLock;
+            std::mt19937_64 rng(7646294629);
+
+            {
+                ScopedLock(itemsLock);
+                for (unsigned c=0; c<64; ++c) {
+                    auto promise = std::make_shared<std::promise<unsigned>>();
+                    YieldToFutureItem item;
+                    item._rootFuture = promise->get_future().share();
+                    items.push_back(std::move(item));
+                    auto waitTime = std::chrono::milliseconds(std::uniform_int<>(10, 500)(rng));
+                    threadPool.Enqueue(
+                        [&, promise=std::move(promise), waitTime]() mutable {
+                            YieldToPoolFor(waitTime);
+                            promise->set_value(waitTime.count());
+                        });
+                }
+
+                for (unsigned c=0; c<128; ++c) {
+                    auto promise = std::make_shared<std::promise<unsigned>>();
+                    YieldToFutureItem item;
+                    item._rootFuture = promise->get_future().share();
+                    items.push_back(std::move(item));
+                    auto thisItemIndex = items.size()-1;
+					threadPool.Enqueue(
+						YieldingToFutureTest,
+						std::ref(items), std::ref(itemsLock), std::ref(threadPool), std::ref(rng),
+						std::move(promise), thisItemIndex);
+                }
+            }
+
+			threadPool.StallAndDrainQueue();
+			for (unsigned c=0; c<items.size(); ++c) {
                 Log(Debug) << "Thread[" << c << "] " << items[c]._str.str() << std::endl;
             }
         }

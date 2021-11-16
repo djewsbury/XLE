@@ -38,7 +38,6 @@ namespace Utility
     class ThreadPool::YieldToPoolInterface : public Internal::IYieldToPool
     {
     public:
-        virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) override;
         virtual std::future_status YieldWith(std::function<std::future_status()>&& yieldingFunction) override;
         YieldToPoolInterface(ThreadPool&);
     private:
@@ -269,11 +268,6 @@ namespace Utility
         _workerQuit = true;
         _pendingTaskVariable.notify_all();
         for (auto&t : _workerThreads) t.join();
-    }
-
-    void ThreadPool::YieldToPoolInterface::YieldUntil(std::chrono::steady_clock::time_point timeoutTime)
-    {
-        assert(0);
     }
 
     std::future_status ThreadPool::YieldToPoolInterface::YieldWith(std::function<std::future_status()>&& yieldingFunction)

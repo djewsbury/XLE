@@ -25,7 +25,6 @@ namespace Utility
         class IYieldToPool
         {
         public:
-            virtual void YieldUntil(std::chrono::steady_clock::time_point timeoutTime) = 0;
             virtual std::future_status YieldWith(std::function<std::future_status()>&& yieldingFunction) = 0;
             virtual ~IYieldToPool() = default;
         };
@@ -51,29 +50,24 @@ namespace Utility
      * When run on some other thread, it will just yield back to the OS.
     */
     template<typename Rep, typename Period>
-        void YieldToPoolFor(const std::chrono::duration<Rep, Period>& timeout)
-    {
-        auto* interface = Internal::GetYieldToPoolInterface();
-        if (interface) {
-            return interface->YieldUntil(std::chrono::steady_clock::now() + timeout);
-        } else {
-            std::this_thread::sleep_for(timeout);
-        }
-    }
-
-    inline void YieldToPool(std::condition_variable& cv, std::unique_lock<std::mutex>& lock)
-    {
-        auto* interface = Internal::GetYieldToPoolInterface();
-        if (interface) {
-            interface->YieldWith(
-                [&cv, &lock]() {
-                    cv.wait(lock);
-                    return std::future_status::ready;
-                });
-        } else {
-            cv.wait(lock);
-        }
-    }
+        void YieldToPoolFor(std::chrono::duration<Rep, Period> duration);
+    void YieldToPool(std::condition_variable& cv, std::unique_lock<std::mutex>& lock);
+    template<typename Rep, typename Period>
+        void YieldToPoolFor(std::condition_variable& cv, std::unique_lock<std::mutex>& lock, std::chrono::duration<Rep, Period> duration);
+    template<typename Clock, typename Duration>
+        void YieldToPoolUntil(std::condition_variable& cv, std::unique_lock<std::mutex>& lock, std::chrono::time_point<Clock, Duration> timepoint);
+    template<typename FutureType>
+        void YieldToPool(std::future<FutureType>& future);
+    template<typename FutureType, typename Rep, typename Period>
+        void YieldToPoolFor(std::future<FutureType>& future, std::chrono::duration<Rep, Period> duration);
+    template<typename FutureType, typename Clock, typename Duration>
+        void YieldToPoolUntil(std::future<FutureType>& future, std::chrono::time_point<Clock, Duration> timepoint);
+    template<typename FutureType>
+        void YieldToPool(std::shared_future<FutureType>& future);
+    template<typename FutureType, typename Rep, typename Period>
+        void YieldToPoolFor(std::shared_future<FutureType>& future, std::chrono::duration<Rep, Period> duration);
+    template<typename FutureType, typename Clock, typename Duration>
+        void YieldToPoolUntil(std::shared_future<FutureType>& future, std::chrono::time_point<Clock, Duration> timepoint);
 
     class ThreadPool
     {
@@ -188,6 +182,129 @@ namespace Utility
 
         _pendingTasks.push(storedFunction);
         _pendingTaskVariable.notify_one();
+    }
+
+    template<typename Rep, typename Period>
+        void YieldToPoolFor(std::chrono::duration<Rep, Period> duration)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([duration]() { std::this_thread::sleep_for(duration); return std::future_status::ready; });
+        } else {
+            std::this_thread::sleep_for(duration);
+        }
+    }
+
+    inline void YieldToPool(std::condition_variable& cv, std::unique_lock<std::mutex>& lock)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith(
+                [&cv, &lock]() {
+                    cv.wait(lock);
+                    return std::future_status::ready;
+                });
+        } else {
+            cv.wait(lock);
+        }
+    }
+
+    template<typename Rep, typename Period>
+        inline void YieldToPoolFor(std::condition_variable& cv, std::unique_lock<std::mutex>& lock, std::chrono::duration<Rep, Period> duration)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith(
+                [&cv, &lock, duration]() {
+                    auto result = cv.wait_for(lock, duration);
+                    return result == std::cv_status::no_timeout ? std::future_status::ready : std::future_status::timeout;
+                });
+        } else {
+            auto result = cv.wait_for(lock, duration);
+            return result == std::cv_status::no_timeout ? std::future_status::ready : std::future_status::timeout;
+        }
+    }
+
+    template<typename Clock, typename Duration>
+        inline void YieldToPoolUntil(std::condition_variable& cv, std::unique_lock<std::mutex>& lock, std::chrono::time_point<Clock, Duration> timepoint)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith(
+                [&cv, &lock, timepoint]() {
+                    auto result = cv.wait_until(lock, timepoint);
+                    return result == std::cv_status::no_timeout ? std::future_status::ready : std::future_status::timeout;
+                });
+        } else {
+            auto result = cv.wait_until(lock, timepoint);
+            return result == std::cv_status::no_timeout ? std::future_status::ready : std::future_status::timeout;
+        }
+    }
+
+    template<typename FutureType>
+        inline void YieldToPool(std::future<FutureType>& future)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&]() { future.wait(); return std::future_status::ready; });
+        } else {
+            future.wait();
+        }
+    }
+
+    template<typename FutureType, typename Rep, typename Period>
+        inline void YieldToPoolFor(std::future<FutureType>& future, std::chrono::duration<Rep, Period> duration)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&future, duration]() { return future.wait_for(duration); });
+        } else {
+            future.wait_for(duration)
+        }
+    }
+
+    template<typename FutureType, typename Clock, typename Duration>
+        inline void YieldToPoolUntil(std::future<FutureType>& future, std::chrono::time_point<Clock, Duration> timepoint)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&future, timepoint]() { return future.wait_until(timepoint); });
+        } else {
+            future.wait_until(timepoint)
+        }
+    }
+
+    template<typename FutureType>
+        inline void YieldToPool(std::shared_future<FutureType>& future)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&]() { future.wait(); return std::future_status::ready; });
+        } else {
+            future.wait();
+        }
+    }
+
+    template<typename FutureType, typename Rep, typename Period>
+        inline void YieldToPoolFor(std::shared_future<FutureType>& future, std::chrono::duration<Rep, Period> duration)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&future, duration]() { return future.wait_for(duration); });
+        } else {
+            future.wait_for(duration)
+        }
+    }
+
+    template<typename FutureType, typename Clock, typename Duration>
+        inline void YieldToPoolUntil(std::shared_future<FutureType>& future, std::chrono::time_point<Clock, Duration> timepoint)
+    {
+        auto* interface = Internal::GetYieldToPoolInterface();
+        if (interface) {
+            interface->YieldWith([&future, timepoint]() { return future.wait_until(timepoint); });
+        } else {
+            future.wait_until(timepoint)
+        }
     }
 }
 
