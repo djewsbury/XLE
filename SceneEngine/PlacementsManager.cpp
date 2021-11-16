@@ -1291,7 +1291,7 @@ namespace SceneEngine
 						return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
             },
-            [placementsFutures=std::move(placementsFutures)]() {
+            [placementsFutures=placementsFutures]() {
                 using namespace Assets;
                 std::vector<DependencyValidation> depVals;
                 depVals.reserve(placementsFutures.size());
