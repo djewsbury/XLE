@@ -288,13 +288,10 @@ namespace ToolsRig
 		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
 		auto tubeMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
 		auto rectangleMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":rectangle");
-		auto dsa = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-			nullptr,
-			ParameterBox {}, ParameterBox {}, ParameterBox {});
 
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
-			[pipelineAcceleratorPool, dsa](
+			[pipelineAcceleratorPool](
 				const RenderCore::Assets::ResolvedMaterial& sphereMat,
 				const RenderCore::Assets::ResolvedMaterial& tubeMat,
 				const RenderCore::Assets::ResolvedMaterial& rectangleMat) {
@@ -307,7 +304,9 @@ namespace ToolsRig
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
-				res._descriptorSetAccelerator = dsa;
+				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
+					nullptr,
+					ParameterBox {}, ParameterBox {}, ParameterBox {});
 				res._usi = std::make_shared<UniformsStreamInterface>();
 				res._usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
 				return res;

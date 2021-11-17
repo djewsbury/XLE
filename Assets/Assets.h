@@ -40,6 +40,12 @@ namespace Assets
 		return future->Actualize();
 	}
 
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<Marker<AssetType>> MakeFuture(Params... initialisers);		// (implemented in DeferredConstruction.h)
+
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<MarkerPtr<AssetType>> MakeFuturePtr(Params... initialisers);		// (implemented in DeferredConstruction.h)
+
 	namespace Legacy
 	{
 		template<typename AssetType, typename... Params>

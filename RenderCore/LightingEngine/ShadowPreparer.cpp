@@ -337,7 +337,14 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout)
 	{
 		auto result = std::make_shared<::Assets::MarkerPtr<ICompiledShadowPreparer>>();
-		result->SetAsset(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[desc, pipelineAccelerators, delegatesBox, descSetLayout, promise=result->AdoptPromise()]() mutable {
+				TRY {
+					promise.set_value(std::make_shared<DMShadowPreparer>(desc, pipelineAccelerators, delegatesBox, descSetLayout));
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 		return result;
 	}
 

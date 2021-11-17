@@ -419,30 +419,43 @@ namespace RenderCore { namespace Assets
 		// If we're loading from a .material file, then just go head and use the
 		// default asset construction
 		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
-		auto splitName = MakeFileNameSplitter(initializer);
-		if (IsMaterialFile(splitName.Extension())) {
-			::Assets::AutoConstructToPromiseSynchronously(promise, initializer);
+		if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
+            ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
+                    TRY {
+                        promise.set_value(::Assets::AutoConstructAsset<std::shared_ptr<RawMaterial>>(init));
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
 			return;
 		}
 
-		// 
-        auto containerInitializer = splitName.AllExceptParameters();
-		std::string containerInitializerString = containerInitializer.AsString();
-		auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
-		::Assets::DefaultCompilerConstruction(
-			containerFuture->AdoptPromise(), 
-            s_MaterialCompileProcessType,
-			containerInitializer);
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString()]() mutable {
+                TRY {
+                    auto splitName = MakeFileNameSplitter(init);
+                    auto containerInitializer = splitName.AllExceptParameters();
+                    std::string containerInitializerString = containerInitializer.AsString();
+                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
+                    ::Assets::DefaultCompilerConstructionSynchronously(
+                        containerFuture->AdoptPromise(), 
+                        s_MaterialCompileProcessType,
+                        containerInitializer);
 
-		std::string section = splitName.Parameters().AsString();
-        ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
-            std::move(promise),
-            [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
-                auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
-                return std::make_shared<RawMaterial>(
-                    fmttr, 
-                    ::Assets::DefaultDirectorySearchRules(containerInitializerString),
-                    containerActual->GetDependencyValidation());
+                    std::string section = splitName.Parameters().AsString();
+                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+                        std::move(promise),
+                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
+                            auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
+                            return std::make_shared<RawMaterial>(
+                                fmttr, 
+                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
+                                containerActual->GetDependencyValidation());
+                        });
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
             });
 	}
 

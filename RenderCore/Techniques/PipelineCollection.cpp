@@ -28,23 +28,15 @@ namespace RenderCore { namespace Techniques
 		StringSection<> shader,
 		IteratorRange<const ParameterBox**> selectors)
 	{
-		// accelerated return when the filtering rules are already available
+		auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>(shader.AsString());
 		auto filteringFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
-		if (filteringFuture->GetAssetState() == ::Assets::AssetState::Ready) {
-			ScopedLock(_sharedPools->_lock);
+		::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
+			result->AdoptPromise(),
+			[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout]( 
+				std::promise<ComputePipelineAndLayout>&& promise,
+				std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {
 
-			auto filteredSelectors = _sharedPools->FilterSelectorsAlreadyLocked(
-				ShaderStage::Compute, selectors, *filteringFuture->Actualize(), 
-				{}, nullptr, nullptr, {});
-			return _sharedPools->CreateComputePipelineAlreadyLocked(shader, pipelineLayout, filteredSelectors);
-		} else {
-			auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>(shader.AsString());
-			::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout]( 
-					std::promise<ComputePipelineAndLayout>&& promise,
-					std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) {
-
+				TRY {
 					const ParameterBox* selectorsList[selectorsCopy._selectors.size()];
 					for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
 						selectorsList[c] = &selectorsCopy._selectors[c];
@@ -54,9 +46,11 @@ namespace RenderCore { namespace Techniques
 						{}, nullptr, nullptr, {});
 					auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, pipelineLayout, filteredSelectors);
 					::Assets::WhenAll(chainedFuture).ThenConstructToPromise(std::move(promise));
-				});
-			return result;
-		}	
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+		return result;
 	}
 
 	static ::Assets::DependencyValidation MakeConfigurationDepVal(const Internal::GraphicsPipelineDescWithFilteringRules& pipelineDescWithFiltering)
@@ -93,42 +87,16 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection)
 	{
 		auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("graphics-pipeline");
-		if (pipelineDescWithFilteringFuture->GetAssetState() == ::Assets::AssetState::Ready) {
-			auto pipelineDescWithFiltering = pipelineDescWithFilteringFuture->Actualize();
-			auto* pipelineDesc = pipelineDescWithFiltering->_pipelineDesc.get();
+		::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
+			result->AdoptPromise(),
+			[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout, compiledPatchCollection,
+				inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
+				fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](
 
-			auto cfgDepVal = MakeConfigurationDepVal(*pipelineDescWithFiltering);
-
-			ScopedLock(_sharedPools->_lock);
-			UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
-
-			for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-				if (!pipelineDesc->_shaders[c].empty())
-					filteredSelectors[c] = _sharedPools->FilterSelectorsAlreadyLocked(
-						(ShaderStage)c,
-						selectors,
-						*pipelineDescWithFiltering->_automaticFiltering[c],
-						pipelineDesc->_manualSelectorFiltering,
-						pipelineDescWithFiltering->_preconfiguration.get(),
-						compiledPatchCollection,
-						pipelineDesc->_patchExpansions);
-			auto chainFuture = _sharedPools->CreateGraphicsPipelineAlreadyLocked(
-				inputStates, pipelineDescWithFiltering,
-				pipelineLayout, compiledPatchCollection,
-				filteredSelectors, fbTarget);
-			::Assets::WhenAll(chainFuture).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
-		} else {
-			::Assets::WhenAll(pipelineDescWithFilteringFuture).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[sharedPools=_sharedPools, selectorsCopy=RetainedSelectors{selectors}, pipelineLayout, compiledPatchCollection,
-					inputAssembly=Internal::AsVector(inputStates._inputAssembly), miniInputAssembly=Internal::AsVector(inputStates._miniInputAssembly), topology=inputStates._topology,
-			 		fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](
-
-					std::promise<GraphicsPipelineAndLayout>&& promise,
-					auto pipelineDescWithFiltering) {
-						
+				std::promise<GraphicsPipelineAndLayout>&& promise,
+				auto pipelineDescWithFiltering) {
+					
+				TRY {
 					auto cfgDepVal = MakeConfigurationDepVal(*pipelineDescWithFiltering);
 
 					ScopedLock(sharedPools->_lock);
@@ -156,8 +124,10 @@ namespace RenderCore { namespace Techniques
 					::Assets::WhenAll(chainFuture).ThenConstructToPromise(
 						std::move(promise),
 						[cfgDepVal](auto chainActual) { return MergeDepVal(chainActual, cfgDepVal); });
-				});
-		}
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 		return result;
 	}
 

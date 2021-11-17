@@ -296,38 +296,45 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const Configuration& config)
 	{
-		auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
-		// pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
-		pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_OBJECT_INDEX", 1);
-		// pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
-		pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
-		pipelineDesc->_rasterization._flags |= RasterizationDescFlags::ConservativeRaster;
-		pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
-
-		auto& pipelineLayout = *::Assets::ActualizeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
+		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<Techniques::CompiledPipelineLayoutAsset>(
 			pipelinePool->GetDevice(),
 			TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain");
-
-		Techniques::VertexInputStates inputStates;
-		MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
-		Techniques::VertexInputStates vInput;
-		inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
-		vInput._topology = Topology::TriangleList;
-		FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
-		Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};
-		auto futurePipeline = pipelinePool->CreateGraphicsPipeline(
-			pipelineLayout.GetPipelineLayout(),
-			pipelineDesc,
-			{},
-			inputStates, fbTarget);
-
-		::Assets::WhenAll(futurePipeline).ThenConstructToPromise(
+		::Assets::WhenAll(pipelineLayoutMarker).ThenConstructToPromise(
 			std::move(promise),
-			[pipelinePool, config](auto pipeline) {
-				return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline._pipeline), std::move(pipeline._layout), config);
+			[pipelinePool, config](std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise, std::shared_ptr<Techniques::CompiledPipelineLayoutAsset> pipelineLayout) {
+				TRY {
+					auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
+					// pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("LIGHT_SHAPE", 1);
+					pipelineDesc->_manualSelectorFiltering._setValues.SetParameter("GS_OBJECT_INDEX", 1);
+					// pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
+					pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
+					pipelineDesc->_rasterization._flags |= RasterizationDescFlags::ConservativeRaster;
+					pipelineDesc->_depthStencil = Techniques::CommonResourceBox::s_dsDisable;
+
+					Techniques::VertexInputStates inputStates;
+					MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
+					Techniques::VertexInputStates vInput;
+					inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
+					vInput._topology = Topology::TriangleList;
+					FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
+					Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};
+					auto futurePipeline = pipelinePool->CreateGraphicsPipeline(
+						pipelineLayout->GetPipelineLayout(),
+						pipelineDesc,
+						{},
+						inputStates, fbTarget);
+
+					::Assets::WhenAll(futurePipeline).ThenConstructToPromise(
+						std::move(promise),
+						[pipelinePool, config](auto pipeline) {
+							return std::make_shared<RasterizationLightTileOperator>(std::move(pipelinePool), std::move(pipeline._pipeline), std::move(pipeline._layout), config);
+						});
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 

@@ -2762,14 +2762,25 @@ namespace SceneEngine
     {
         auto splitName = MakeFileNameSplitter(initializer);
 		if (XlEqStringI(splitName.Extension(), "dat")) {
-			::Assets::AutoConstructToPromiseSynchronously(promise, initializer);
+            ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
+                    TRY {
+                        promise.set_value(::Assets::AutoConstructAsset<std::shared_ptr<WorldPlacementsConfig>>(init));
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
 			return;
 		}
 
-		::Assets::DefaultCompilerConstruction(
-			std::move(promise), 
-            CompileProcessType_WorldPlacementsConfig,
-			initializer);
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+            [init=initializer.AsString(), promise=std::move(promise)]() mutable {
+                TRY {
+                    ::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), CompileProcessType_WorldPlacementsConfig, init);
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
     }
 
     ::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*> placements)
