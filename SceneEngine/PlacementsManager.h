@@ -13,6 +13,7 @@
 #include "../Math/Matrix.h"
 #include <string>
 #include <functional>
+#include <future>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class ModelCache; class DrawablesPacket; class ICustomDrawDelegate; } }
 namespace Utility { class OutputStream; template<typename CharType> class InputStreamFormatter; }
@@ -108,7 +109,7 @@ namespace SceneEngine
 
         void SetImposters(std::shared_ptr<DynamicImposters> imposters);
 
-        std::shared_ptr<::Assets::IAsyncMarker> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
+        std::future<void> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
 
         PlacementsRenderer(
             std::shared_ptr<PlacementsCache> placementsCache, 

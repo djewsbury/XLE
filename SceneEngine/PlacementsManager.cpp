@@ -1258,7 +1258,7 @@ namespace SceneEngine
         return {};
     }
 
-    std::shared_ptr<::Assets::IAsyncMarker> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
+    std::future<void> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
     {
         auto& cells = cellSet._pimpl->_cells;
         std::vector<std::shared_ptr<::Assets::Marker<Placements>>> placementsFutures;
@@ -1282,39 +1282,54 @@ namespace SceneEngine
         // Note that we're using a future to a dependency validation here. This works a little like
         // a std::future<void>
 
-        auto result = std::make_shared<::Assets::Marker<::Assets::DependencyValidation>>("placements-future");
+        std::promise<void> promise;
+        auto result = promise.get_future();
         ::Assets::PollToPromise(
-            result->AdoptPromise(),
+            std::move(promise),
             [placementsFutures]() {
                 for (const auto& p:placementsFutures)
 					if (p->IsBkgrndPending()) 
 						return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
             },
-            [placementsFutures=placementsFutures]() {
-                using namespace Assets;
-                std::vector<DependencyValidation> depVals;
-                depVals.reserve(placementsFutures.size());
-                bool hasPending = false;
-                for (const auto&p:placementsFutures) {
-                    ::Assets::Blob actualizationBlob;
-                    DependencyValidation queriedDepVal;
-                    auto state = p->CheckStatusBkgrnd(queriedDepVal, actualizationBlob);
-                    if (state == AssetState::Invalid)
-                        Throw(::Assets::Exceptions::ConstructionError{::Assets::Exceptions::ConstructionError::Reason::Unknown, queriedDepVal, actualizationBlob});
-                    
-                    assert(state != AssetState::Pending);
-                    depVals.push_back(std::move(queriedDepVal));
+            [placementsFutures, cache=_pimpl->_cache]() {
+                struct ModelRendererRef 
+                {
+                    std::string _model, _material;
+                };
+                std::vector<std::pair<uint64_t, ModelRendererRef>> modelRendererRefs;
+
+                for (const auto& p:placementsFutures) {
+                    const auto& actual = p->ActualizeBkgrnd();
+                    std::set<uint64_t> modelMaterialCombos;
+                    for (unsigned o=0; o<actual.GetObjectReferenceCount(); ++o) {
+                        const auto& ref = actual.GetObjectReferences()[o];
+                        modelMaterialCombos.insert((uint64_t(ref._materialFilenameOffset) << 32ull) | uint64_t(ref._modelFilenameOffset));
+                    }
+                    for (auto c:modelMaterialCombos) {
+                        ModelRendererRef ref {
+                            (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c) + sizeof(uint64_t)),
+                            (const char*)PtrAdd(actual.GetFilenamesBuffer(), uint32_t(c>>32ull) + sizeof(uint64_t))};
+                        modelRendererRefs.push_back(std::make_pair(Hash64(ref._material, Hash64(ref._model)), ref));
+                    }
                 }
 
-                if (depVals.size() > 1) {
-                    auto newDepVal = ::Assets::GetDepValSys().Make();
-                    for (const auto& dv:depVals) if (dv) newDepVal.RegisterDependency(dv);
-                    return newDepVal;
-                } else {
-                    assert(!depVals.empty());
-                    return std::move(depVals[0]);
+                std::sort(modelRendererRefs.begin(), modelRendererRefs.end(), CompareFirst<uint64_t, ModelRendererRef>());
+                auto i = std::unique(modelRendererRefs.begin(), modelRendererRefs.end(), [](const auto& lhs, const auto& rhs) { return lhs.first == rhs.first; });
+                modelRendererRefs.erase(i, modelRendererRefs.end());
+
+                std::vector<std::shared_future<std::shared_ptr<RenderCore::Techniques::SimpleModelRenderer>>> rendererFutures;
+                for (const auto&ref:modelRendererRefs) {
+                    auto marker = cache->GetModelRenderer(ref.second._model, ref.second._material);
+                    rendererFutures.push_back(marker->ShareFuture());
                 }
+
+                // It would be preferable here to create another continuation. However that would require expanding
+                // the interface of PollToPromuse() to support passing in the promise to this dispatch function
+                // We achieve something similar with just yields, though
+                for (auto&future:rendererFutures)
+                    if (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+                        YieldToPool(future);
             });
 
         return result;
