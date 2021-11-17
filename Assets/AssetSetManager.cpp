@@ -26,6 +26,7 @@ namespace Assets
 		std::vector<unsigned> _pendingRemoveFrameBarrierFunctions;
 		unsigned _nextFrameBufferMarkerId = 1;
 		Threading::RecursiveMutex _lock;
+		Threading::ThreadId _boundThreadId;
 
 		bool _inIterationOperation = false;
 	};
@@ -101,6 +102,7 @@ namespace Assets
 
 	void AssetSetManager::OnFrameBarrier()
 	{
+		assert(_pimpl->_boundThreadId == Threading::CurrentThreadId());
 		std::unique_lock<decltype(_pimpl->_lock)> lock(_pimpl->_lock);
 		_pimpl->_inIterationOperation = true;
 		
@@ -159,7 +161,7 @@ namespace Assets
     AssetSetManager::AssetSetManager()
     {
         _pimpl = std::make_unique<Pimpl>();
-		s_mainThreadId = Threading::CurrentThreadId();
+		_pimpl->_boundThreadId = s_mainThreadId = Threading::CurrentThreadId();
     }
 
     AssetSetManager::~AssetSetManager()

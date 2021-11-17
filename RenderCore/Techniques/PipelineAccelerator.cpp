@@ -455,6 +455,7 @@ namespace RenderCore { namespace Techniques
 
 		#if defined(_DEBUG)
 			mutable std::optional<std::thread::id> _lockForThreadingThread;
+			std::thread::id _boundThreadId;
 		#endif
 	};
 
@@ -854,6 +855,9 @@ namespace RenderCore { namespace Techniques
 
 	void PipelineAcceleratorPool::RebuildAllOutOfDatePipelines()
 	{
+		#if defined(_DEBUG)
+			assert(std::this_thread::get_id() == _boundThreadId);
+		#endif
 		// We're locking 2 lock here, so we have to be a little careful of deadlocks here
 		// _constructionLock will be locked for short durations of arbitrary threads -- including the main thread and threadpool threads
 		//   This lock isn't exposed to the user, and fully controlled by this system
@@ -1079,6 +1083,9 @@ namespace RenderCore { namespace Techniques
 		_emptyPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>());
 		_matDescSetLayout = matDescSetLayout;
 		assert(_matDescSetLayout.GetLayout());
+		#if defined(_DEBUG)
+			_boundThreadId = std::this_thread::get_id();
+		#endif
 	}
 
 	PipelineAcceleratorPool::~PipelineAcceleratorPool() {}
