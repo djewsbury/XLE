@@ -46,25 +46,66 @@ namespace RenderCore { namespace Techniques
 	constexpr unsigned s_uniformGroupDraw = 2;
 	static const auto s_materialDescSetName = Hash64("Material");
 
-	static void Draw(
-		RenderCore::Metal::DeviceContext& metalContext,
-        RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
-		ParsingContext& parserContext,
-		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt,
-		const TemporaryStorageLocator& temporaryVB, 
-		const TemporaryStorageLocator& temporaryIB)
+	struct PreStalledResources
+	{
+		std::vector<std::shared_ptr<::Assets::Marker<IPipelineAcceleratorPool::Pipeline>>> _pendingPipelineMarkers;
+		std::vector<std::shared_ptr<::Assets::Marker<ActualizedDescriptorSet>>> _pendingDescriptorSetMarkers;
+
+		void Setup(const IPipelineAcceleratorPool& pipelineAccelerators, const SequencerConfig& sequencerConfig, const DrawablesPacket& drawablePkt)
+		{
+			_pendingPipelineMarkers.resize(drawablePkt._drawables.size());
+			_pendingDescriptorSetMarkers.resize(drawablePkt._drawables.size());
+
+			bool stallOnMarkers = false;
+			unsigned idx=0;
+			PipelineAccelerator* lastPipelineAccelerator = nullptr;
+			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
+				const auto& drawable = *(Drawable*)d.get();
+				if (drawable._pipeline.get() != lastPipelineAccelerator) {
+					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
+					if (!pipeline) {
+						_pendingPipelineMarkers[idx] = pipelineAccelerators.GetPipelineMarker(*drawable._pipeline, sequencerConfig);
+						stallOnMarkers = true;
+					}
+					lastPipelineAccelerator = drawable._pipeline.get();
+				}
+				if (drawable._descriptorSet) {
+					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
+					if (!actualizedDescSet) {
+						_pendingDescriptorSetMarkers[idx] = pipelineAccelerators.GetDescriptorSetMarker(*drawable._descriptorSet);
+						stallOnMarkers = true;
+					}
+				}
+			}
+
+			// we should avoid being in the lock while stalling for these resources -- since this can lock up other threads
+			pipelineAccelerators.UnlockForReading();
+			for (const auto& c:_pendingPipelineMarkers) if (c) c->StallWhilePending();
+			for (const auto& c:_pendingDescriptorSetMarkers) if (c) c->StallWhilePending();
+			pipelineAccelerators.LockForReading();
+		}
+	};
+
+	template<bool UsePreStalledResources>
+		static void Draw(
+			RenderCore::Metal::DeviceContext& metalContext,
+			RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
+			ParsingContext& parserContext,
+			const IPipelineAcceleratorPool& pipelineAccelerators,
+			const SequencerConfig& sequencerConfig,
+			const DrawablesPacket& drawablePkt,
+			const TemporaryStorageLocator& temporaryVB, 
+			const TemporaryStorageLocator& temporaryIB,
+			PreStalledResources& preStalledResources)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
-		UniformsStreamInterface globalUSI = uniformDelegateMan.GetInterface();
-		// auto matDescSetLayout = pipelineAccelerators.GetMaterialDescriptorSetLayout().GetLayout()->MakeDescriptorSetSignature(&parserContext.GetTechniqueContext()._commonResources->_samplerPool);
+		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
 		
 		UniformsStreamInterface materialUSI;
-		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName); // , &matDescSetLayout);
+		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
 		if (parserContext._extraSequencerDescriptorSet.second)
 			materialUSI.BindFixedDescriptorSet(1, parserContext._extraSequencerDescriptorSet.first);
 
@@ -75,6 +116,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t currentSequencerUniformRules = 0;
 		UniformsStreamInterface* currentLooseUniformsInterface = nullptr;
 		Metal::BoundUniforms* currentBoundUniforms = nullptr;
+		unsigned idx = 0;
 
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
@@ -86,13 +128,14 @@ namespace RenderCore { namespace Techniques
 		unsigned executeCount = 0;
 
 		TRY {
-			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d) {
+			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
 				const auto& drawable = *(Drawable*)d.get();
 				assert(drawable._pipeline);
 				if (drawable._pipeline.get() != currentPipelineAccelerator) {
 					auto* pipeline = pipelineAccelerators.TryGetPipeline(*drawable._pipeline, sequencerConfig);
-					if (!pipeline)
-						continue;
+					if (UsePreStalledResources && !pipeline && preStalledResources._pendingPipelineMarkers[idx])
+						pipeline = &preStalledResources._pendingPipelineMarkers[idx]->ActualizeBkgrnd();
+					if (!pipeline) continue;
 
 					currentPipeline = pipeline;
 					currentPipelineAccelerator = drawable._pipeline.get();
@@ -116,8 +159,9 @@ namespace RenderCore { namespace Techniques
 				const IDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
 					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-					if (!actualizedDescSet)
-						continue;
+					if (UsePreStalledResources && !actualizedDescSet && preStalledResources._pendingDescriptorSetMarkers[idx])
+						actualizedDescSet = &preStalledResources._pendingDescriptorSetMarkers[idx]->ActualizeBkgrnd();
+					if (!actualizedDescSet) continue;
 					matDescSet = actualizedDescSet->GetDescriptorSet().get();
 					parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
 				}
@@ -183,7 +227,8 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt)
+		const DrawablesPacket& drawablePkt,
+		const DrawOptions& drawOptions)
 	{
 		TemporaryStorageLocator temporaryVB, temporaryIB;
 		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::VB).empty()) {
@@ -201,14 +246,21 @@ namespace RenderCore { namespace Techniques
 			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
 
-		Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB);
+		PreStalledResources preStalledResources;
+		if (drawOptions._stallForResources) {
+			preStalledResources.Setup(pipelineAccelerators, sequencerConfig, drawablePkt);
+			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+		} else {
+			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+		}
 	}
 
 	void Draw(
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt)
+		const DrawablesPacket& drawablePkt,
+		const DrawOptions& drawOptions)
 	{
 		pipelineAccelerators.LockForReading();
 		TRY {
@@ -222,7 +274,7 @@ namespace RenderCore { namespace Techniques
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt);
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, drawOptions);
 		} CATCH (...) {
 			pipelineAccelerators.UnlockForReading();
 			throw;

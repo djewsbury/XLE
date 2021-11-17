@@ -15,7 +15,8 @@ namespace RenderCore { namespace Techniques
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
 		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt);
+		const DrawablesPacket& drawablePkt,
+		const DrawOptions& drawOptions = {});
 
 	class IUniformDelegateManager;
 	void ApplyUniformsGraphics(

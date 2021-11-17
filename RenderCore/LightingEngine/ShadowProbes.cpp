@@ -158,9 +158,14 @@ namespace RenderCore { namespace LightingEngine
 						_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
 						_staticPrepareHelper->_parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 						auto rpi = _staticPrepareHelper->BeginRPI(_probeIterator*6, _pendingViews.size());
-						Techniques::Draw(
-							*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
-							*_pimpl->_probePrepareCfg, _drawablePkt);
+						Techniques::DrawOptions drawOptions;
+						drawOptions._stallForResources = true;
+						TRY {
+							Techniques::Draw(
+								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
+								*_pimpl->_probePrepareCfg, _drawablePkt, drawOptions);
+						} CATCH (...) {
+						} CATCH_END
 						_drawablePkt.Reset();
 
 						auto staticTable = rpi.GetDepthStencilAttachmentResource();
