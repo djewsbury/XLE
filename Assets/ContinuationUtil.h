@@ -104,11 +104,21 @@ namespace Assets
 				}
 
 				assert(_pollingCompleted);
-				TRY {
-					_promise.set_value(_dispatchFn());
-				} CATCH(...) {
-					_promise.set_exception(std::current_exception());
-				} CATCH_END
+				if constexpr (!std::is_void_v<FutureResult<decltype(_promise.get_future())>>) {
+					TRY {
+						_promise.set_value(_dispatchFn());
+					} CATCH(...) {
+						_promise.set_exception(std::current_exception());
+					} CATCH_END
+				} else {
+					TRY {
+						_dispatchFn();
+						_promise.set_value();
+					} CATCH(...) {
+						_promise.set_exception(std::current_exception());
+					} CATCH_END
+
+				}
 			}
 
 			PollingFunctionBridge(Promise&& promise, CheckFn&& checkFn, DispatchFn&& dispatchFn)
