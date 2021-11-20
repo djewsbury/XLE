@@ -26,9 +26,6 @@
 #include "../IDevice.h"
 #include "../UniformsStream.h"
 #include "../BufferView.h"
-#include "../Metal/DeviceContext.h"
-#include "../Metal/InputLayout.h"
-#include "../Metal/Resource.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
@@ -145,6 +142,7 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<Techniques::DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
+		unsigned deformInstanceIdx,
 		uint32_t viewMask) const
 	{
 		assert(viewMask != 0);
@@ -190,6 +188,7 @@ namespace RenderCore { namespace Techniques
 				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = viewMask;
+				drawable._deformInstanceIdx = deformInstanceIdx;
 				++drawCallCounter;
             }
 
@@ -226,6 +225,7 @@ namespace RenderCore { namespace Techniques
 				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = viewMask;
+				drawable._deformInstanceIdx = deformInstanceIdx;
 
 				++drawCallCounter;
             }
@@ -263,10 +263,11 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<Techniques::DrawablesPacket** const> pkts,
 		const Float4x4& localToWorld,
+		unsigned deformInstanceIdx,
 		const std::shared_ptr<ICustomDrawDelegate>& delegate) const
 	{
 		if (!delegate) {
-			BuildDrawables(pkts, localToWorld);
+			BuildDrawables(pkts, localToWorld, deformInstanceIdx, 1u);
 			return;
 		}
 
@@ -311,6 +312,7 @@ namespace RenderCore { namespace Techniques
                 drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = ~0u;
+				drawable._deformInstanceIdx = deformInstanceIdx;
 
 				++drawCallCounter;
             }
@@ -349,6 +351,7 @@ namespace RenderCore { namespace Techniques
 				drawable._localTransform._localToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&rawGeo._geoSpaceToNodeSpace, nodeSpaceToWorld);
 				drawable._localTransform._localSpaceView = Float3{0,0,0};
 				drawable._localTransform._viewMask = ~0u;
+				drawable._deformInstanceIdx = deformInstanceIdx;
 
 				++drawCallCounter;
             }
@@ -427,79 +430,6 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	struct SimpleModelRenderer::DeformOp
-	{
-		std::shared_ptr<IDeformOperation> _deformOp;
-
-		struct Element { Format _format = Format(0); unsigned _offset = 0; unsigned _stride = 0; unsigned _vbIdx = ~0u; };
-		std::vector<Element> _inputElements;
-		std::vector<Element> _outputElements;
-	};
-
-	static unsigned VB_StaticData = 0;
-	static unsigned VB_TemporaryDeform = 1;
-	static unsigned VB_PostDeform = 2;
-
-	void SimpleModelRenderer::GenerateDeformBuffer(IThreadContext& context)
-	{
-		if (!_dynVB) return;
-
-		auto& metalContext = *RenderCore::Metal::DeviceContext::Get(context);
-
-		auto* res = (Metal::Resource*)_dynVB->QueryInterface(typeid(Metal::Resource).hash_code());
-		assert(res);
-
-		Metal::ResourceMap map(metalContext, *res, Metal::ResourceMap::Mode::WriteDiscardPrevious);
-		auto dst = map.GetData();
-
-		auto staticDataPartRange = MakeIteratorRange(_deformStaticDataInput);
-		auto temporaryDeformRange = MakeIteratorRange(_deformTemporaryBuffer);
-
-		for (const auto&d:_deformOps) {
-
-			IDeformOperation::VertexElementRange inputElementRanges[16];
-			assert(d._inputElements.size() <= dimof(inputElementRanges));
-			for (unsigned c=0; c<d._inputElements.size(); ++c) {
-				if (d._inputElements[c]._vbIdx == VB_StaticData) {
-					inputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(staticDataPartRange.begin()), d._inputElements[c]._offset), AsPointer(staticDataPartRange.end())),
-						d._inputElements[c]._stride, d._inputElements[c]._format);
-				} else {
-					assert(d._inputElements[c]._vbIdx == VB_TemporaryDeform);
-					inputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._inputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
-						d._inputElements[c]._stride, d._inputElements[c]._format);
-				}
-			}
-
-			auto outputPartRange = dst;
-			assert(outputPartRange.begin() < outputPartRange.end() && PtrDiff(outputPartRange.end(), dst.begin()) <= ptrdiff_t(dst.size()));
-
-			IDeformOperation::VertexElementRange outputElementRanges[16];
-			assert(d._outputElements.size() <= dimof(outputElementRanges));
-			for (unsigned c=0; c<d._outputElements.size(); ++c) {
-				if (d._outputElements[c]._vbIdx == VB_PostDeform) {
-					outputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(outputPartRange.begin(), d._outputElements[c]._offset), outputPartRange.end()),
-						d._outputElements[c]._stride, d._outputElements[c]._format);
-				} else {
-					assert(d._outputElements[c]._vbIdx == VB_TemporaryDeform);
-					outputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._outputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
-						d._outputElements[c]._stride, d._outputElements[c]._format);
-				}
-			}
-
-			// Execute the actual deform op
-			d._deformOp->Execute(
-				MakeIteratorRange(inputElementRanges, &inputElementRanges[d._inputElements.size()]),
-				MakeIteratorRange(outputElementRanges, &outputElementRanges[d._outputElements.size()]));
-		}
-	}
-
-	unsigned SimpleModelRenderer::DeformOperationCount() const { return (unsigned)_deformOps.size(); }
-	IDeformOperation& SimpleModelRenderer::DeformOperation(unsigned idx) { return *_deformOps[idx]._deformOp; } 
-
 	static Techniques::DrawableGeo::VertexStream MakeVertexStream(
 		IDevice& device,
 		const RenderCore::Assets::ModelScaffold& modelScaffold,
@@ -512,340 +442,6 @@ namespace RenderCore { namespace Techniques
 
 	namespace Internal
 	{
-		struct SourceDataTransform
-		{
-			unsigned	_geoId;
-			uint64_t	_sourceStream;
-			Format		_targetFormat;
-			unsigned	_targetOffset;
-			unsigned	_targetStride;
-			unsigned	_vertexCount;
-		};
-
-		struct NascentDeformStream
-		{
-			std::vector<SimpleModelRenderer::DeformOp> _deformOps;
-
-			std::vector<uint64_t> _suppressedElements;
-			std::vector<InputElementDesc> _generatedElements;
-			std::vector<SourceDataTransform> _staticDataLoadRequests;
-
-			unsigned _vbOffsets[3] = {0,0,0};
-			unsigned _vbSizes[3] = {0,0,0};
-		};
-
-		static NascentDeformStream BuildNascentDeformStream(
-			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
-			unsigned geoId,
-			unsigned vertexCount,
-			unsigned& preDeformStaticDataVBIterator,
-			unsigned& deformTemporaryVBIterator,
-			unsigned& postDeformVBIterator)
-		{
-			// Calculate which elements are suppressed by the deform operations
-			// We can only support a single deform operation per geo
-			std::vector<const DeformOperationInstantiation*> deformAttachments;
-			for (const auto& def:globalDeformAttachments)
-				if (def._geoId == geoId) {
-					deformAttachments.push_back(&def);
-				}
-
-			if (!deformAttachments.size()) return {};
-
-			std::vector<uint64_t> workingSuppressedElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingGeneratedElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingTemporarySpaceElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingSourceDataElements;
-			unsigned nextStreamId = 0;
-
-			struct WorkingDeformOp
-			{
-				std::shared_ptr<IDeformOperation> _deformOp;
-				std::vector<unsigned> _inputStreamIds;
-				std::vector<unsigned> _outputStreamIds;
-			};
-			std::vector<WorkingDeformOp> workingDeformOps;
-
-			for (auto d=deformAttachments.begin(); d!=deformAttachments.end(); ++d) {
-				const auto&def = **d;
-				WorkingDeformOp workingDeformOp;
-
-				for (auto&e:def._upstreamSourceElements) {
-					// find a matching source element generated from another deform op
-					auto i = std::find_if(
-						workingGeneratedElements.begin(), workingGeneratedElements.end(),
-						[e](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& wge) {
-							return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
-						});
-					if (i != workingGeneratedElements.end()) {
-						assert(i->first._format == e._format);
-						workingDeformOp._inputStreamIds.push_back(i->second);
-						workingTemporarySpaceElements.push_back(*i);
-						workingGeneratedElements.erase(i);
-					} else {
-						// If it's not generated by some deform op, we look for it in the static data
-						auto streamId = nextStreamId++;
-						workingDeformOp._inputStreamIds.push_back(streamId);
-						workingSourceDataElements.push_back(std::make_pair(e, streamId));
-					}
-				}
-
-				// Before we add our own static data, we should remove any working elements that have been
-				// suppressed
-				auto i = std::remove_if(
-					workingGeneratedElements.begin(), workingGeneratedElements.end(),
-					[&def](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& wge) {
-						auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
-						return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
-							|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
-					});
-				workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
-
-				for (auto e=def._generatedElements.begin(); e!=def._generatedElements.end(); ++e) {
-					auto streamId = nextStreamId++;
-					workingGeneratedElements.push_back(std::make_pair(*e, streamId));
-					workingDeformOp._outputStreamIds.push_back(streamId);
-				}
-
-				workingSuppressedElements.insert(
-					workingSuppressedElements.end(),
-					def._suppressElements.begin(), def._suppressElements.end());
-
-				workingDeformOp._deformOp = def._operation;
-				workingDeformOps.push_back(workingDeformOp);
-			}
-
-			NascentDeformStream result;
-			result._suppressedElements = workingSuppressedElements;
-			for (const auto&wge:workingGeneratedElements)
-				result._suppressedElements.push_back(Hash64(wge.first._semantic) + wge.first._semanticIndex);		// (also suppress all elements generated by the final deform step, because they are effectively overriden)
-			std::sort(result._suppressedElements.begin(), result._suppressedElements.end());
-			result._suppressedElements.erase(
-				std::unique(result._suppressedElements.begin(), result._suppressedElements.end()),
-				result._suppressedElements.end());
-
-			// Figure out how to arrange all of the input and output vertices in the 
-			// deform VBs.
-			// We've got 3 to use
-			//		1. an input static data buffer; which contains values read directly from the source data (perhaps processed for format)
-			//		2. a deform temporary buffer; which contains data written out from deform operations, and read in by others
-			//		3. a final output buffer; which contains resulting vertex data that is fed into the render operation
-			
-			std::vector<SourceDataTransform> sourceDataTransforms;
-			std::vector<SimpleModelRenderer::DeformOp::Element> sourceDataStreams;
-			{
-				sourceDataTransforms.reserve(workingSourceDataElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingSourceDataElements.size(); ++c)
-					targetStride += BitsPerPixel(workingSourceDataElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingSourceDataElements.size(); ++c) {
-					const auto& workingE = workingSourceDataElements[c];
-					sourceDataTransforms.push_back({
-						geoId, Hash64(workingE.first._semantic) + workingE.first._semanticIndex,
-						workingE.first._format, preDeformStaticDataVBIterator + offsetIterator, targetStride, vertexCount});
-					sourceDataStreams.push_back({workingE.first._format, preDeformStaticDataVBIterator + offsetIterator, targetStride, VB_StaticData});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
-				result._vbOffsets[VB_StaticData] = preDeformStaticDataVBIterator;
-				result._vbSizes[VB_StaticData] = targetStride * vertexCount;
-				preDeformStaticDataVBIterator += targetStride * vertexCount;
-			}
-
-			std::vector<SimpleModelRenderer::DeformOp::Element> temporaryDataStreams;
-			{
-				temporaryDataStreams.reserve(workingTemporarySpaceElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingTemporarySpaceElements.size(); ++c)
-					targetStride += BitsPerPixel(workingTemporarySpaceElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingTemporarySpaceElements.size(); ++c) {
-					const auto& workingE = workingTemporarySpaceElements[c];
-					temporaryDataStreams.push_back({workingE.first._format, deformTemporaryVBIterator + offsetIterator, targetStride, VB_TemporaryDeform});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
-				result._vbOffsets[VB_TemporaryDeform] = deformTemporaryVBIterator;
-				result._vbSizes[VB_TemporaryDeform] = targetStride * vertexCount;
-				deformTemporaryVBIterator += targetStride * vertexCount;
-			}
-
-			std::vector<SimpleModelRenderer::DeformOp::Element> generatedDataStreams;
-			{
-				generatedDataStreams.reserve(workingGeneratedElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingGeneratedElements.size(); ++c)
-					targetStride += BitsPerPixel(workingGeneratedElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingGeneratedElements.size(); ++c) {
-					const auto& workingE = workingGeneratedElements[c];
-					generatedDataStreams.push_back({workingE.first._format, postDeformVBIterator + offsetIterator, targetStride, VB_PostDeform});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
-				result._vbOffsets[VB_PostDeform] = postDeformVBIterator;
-				result._vbSizes[VB_PostDeform] = targetStride * vertexCount;
-				postDeformVBIterator += targetStride * vertexCount;
-			}
-
-			// Collate the WorkingDeformOp into the SimpleModelRenderer::DeformOp format
-			result._deformOps.reserve(workingDeformOps.size());
-			for (const auto&wdo:workingDeformOps) {
-				SimpleModelRenderer::DeformOp finalDeformOp;
-				// input streams
-				for (auto s:wdo._inputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-					if (i != workingGeneratedElements.end()) {
-						finalDeformOp._inputElements.push_back(generatedDataStreams[i-workingGeneratedElements.begin()]);
-					} else {
-						i = std::find_if(workingTemporarySpaceElements.begin(), workingTemporarySpaceElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-						if (i != workingTemporarySpaceElements.end()) {
-							finalDeformOp._inputElements.push_back(temporaryDataStreams[i-workingTemporarySpaceElements.begin()]);
-						} else {
-							i = std::find_if(workingSourceDataElements.begin(), workingSourceDataElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-							if (i != workingSourceDataElements.end()) {
-								finalDeformOp._inputElements.push_back(sourceDataStreams[i-workingSourceDataElements.begin()]);
-							} else {
-								finalDeformOp._inputElements.push_back({});
-							}
-						}
-					}
-				}
-				// output streams
-				for (auto s:wdo._outputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-					if (i != workingGeneratedElements.end()) {
-						finalDeformOp._outputElements.push_back(generatedDataStreams[i-workingGeneratedElements.begin()]);
-					} else {
-						i = std::find_if(workingTemporarySpaceElements.begin(), workingTemporarySpaceElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-						if (i != workingTemporarySpaceElements.end()) {
-							finalDeformOp._outputElements.push_back(temporaryDataStreams[i-workingTemporarySpaceElements.begin()]);
-						} else {
-							finalDeformOp._outputElements.push_back({});
-						}
-					}
-				}
-				finalDeformOp._deformOp = wdo._deformOp;
-				result._deformOps.emplace_back(std::move(finalDeformOp));
-			}
-
-			result._generatedElements.reserve(workingGeneratedElements.size());
-			for (const auto&wge:workingGeneratedElements)
-				result._generatedElements.push_back(InputElementDesc{wge.first._semantic, wge.first._semanticIndex, wge.first._format});
-
-			result._staticDataLoadRequests = std::move(sourceDataTransforms);
-
-			return result;
-		}
-
-		static const RenderCore::Assets::VertexElement* FindElement(IteratorRange<const RenderCore::Assets::VertexElement*> ele, uint64_t semanticHash)
-		{
-			return std::find_if(
-				ele.begin(), ele.end(),
-				[semanticHash](const RenderCore::Assets::VertexElement& ele) {
-					return (Hash64(ele._semanticName) + ele._semanticIndex) == semanticHash;
-				});
-		}
-
-		static IteratorRange<VertexElementIterator> AsVertexElementIteratorRange(
-			IteratorRange<void*> vbData,
-			Format format,
-			unsigned byteOffset,
-			unsigned vertexStride)
-		{
-			VertexElementIterator begin {
-				MakeIteratorRange(PtrAdd(vbData.begin(), byteOffset), AsPointer(vbData.end())),
-				vertexStride, format };
-			VertexElementIterator end {
-				MakeIteratorRange(AsPointer(vbData.end()), AsPointer(vbData.end())),
-				vertexStride, format };
-			return { begin, end };
-		}
-
-		static void ReadStaticData(
-			IteratorRange<void*> destinationVB,
-			IteratorRange<void*> sourceVB,
-			const SourceDataTransform& transform,
-			const RenderCore::Assets::VertexElement& srcElement,
-			unsigned srcStride)
-		{
-			assert(destinationVB.size() >= transform._targetStride * transform._vertexCount);
-			assert(sourceVB.size() >= srcStride * transform._vertexCount);
-			auto dstRange = AsVertexElementIteratorRange(destinationVB, transform._targetFormat, transform._targetOffset, transform._targetStride);
-			auto srcRange = AsVertexElementIteratorRange(sourceVB, srcElement._nativeFormat, srcElement._alignedByteOffset, srcStride);
-			auto dstCount = dstRange.size();
-			auto srcCount = srcRange.size();
-			(void)dstCount; (void)srcCount;
-			Assets::GeoProc::Copy(dstRange, srcRange, transform._vertexCount);
-		}
-
-		static std::vector<uint8_t> GenerateDeformStaticInput(
-			const RenderCore::Assets::ModelScaffold& modelScaffold,
-			IteratorRange<const SourceDataTransform*> inputLoadRequests,
-			unsigned destinationBufferSize)
-		{
-			if (inputLoadRequests.empty())
-				return {};
-
-			std::vector<uint8_t> result;
-			result.resize(destinationBufferSize, 0);
-
-			std::vector<SourceDataTransform> loadRequests { inputLoadRequests.begin(), inputLoadRequests.end() };
-			std::stable_sort(
-				loadRequests.begin(), loadRequests.end(),
-				[](const SourceDataTransform& lhs, const SourceDataTransform& rhs) {
-					return lhs._geoId < rhs._geoId;
-				});
-
-			auto largeBlocks = modelScaffold.OpenLargeBlocks();
-			auto base = largeBlocks->TellP();
-
-			auto& immData = modelScaffold.ImmutableData();
-			for (const auto&r:loadRequests) {
-				bool initializedElement = false;
-				if (r._geoId < immData._geoCount) {
-					auto& geo = immData._geos[r._geoId];
-					auto& vb = geo._vb;
-					auto sourceEle = FindElement(MakeIteratorRange(vb._ia._elements), r._sourceStream);
-					if (sourceEle != vb._ia._elements.end()) {
-						auto vbData = std::make_unique<uint8_t[]>(vb._size);
-						largeBlocks->Seek(base + vb._offset);
-						largeBlocks->Read(vbData.get(), vb._size);
-						ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), vb._size)), r, *sourceEle, vb._ia._vertexStride);
-						initializedElement = true;
-					}
-				} else {
-					auto& geo = immData._boundSkinnedControllers[r._geoId - immData._geoCount];
-					auto sourceEle = FindElement(MakeIteratorRange(geo._vb._ia._elements), r._sourceStream);
-					if (sourceEle != geo._vb._ia._elements.end()) {
-						auto vbData = std::make_unique<uint8_t[]>(geo._vb._size);
-						largeBlocks->Seek(base + geo._vb._offset);
-						largeBlocks->Read(vbData.get(), geo._vb._size);
-						ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._vb._size)), r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
-						initializedElement = true;
-					} else {
-						sourceEle = FindElement(MakeIteratorRange(geo._animatedVertexElements._ia._elements), r._sourceStream);
-						if (sourceEle != geo._animatedVertexElements._ia._elements.end()) {
-							auto vbData = std::make_unique<uint8_t[]>(geo._animatedVertexElements._size);
-							largeBlocks->Seek(base + geo._animatedVertexElements._offset);
-							largeBlocks->Read(vbData.get(), geo._animatedVertexElements._size);
-							ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._animatedVertexElements._size)), r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
-							initializedElement = true;
-						} else {
-							sourceEle = FindElement(MakeIteratorRange(geo._skeletonBinding._ia._elements), r._sourceStream);
-							if (sourceEle != geo._skeletonBinding._ia._elements.end()) {
-								auto vbData = std::make_unique<uint8_t[]>(geo._skeletonBinding._size);
-								largeBlocks->Seek(base + geo._skeletonBinding._offset);
-								largeBlocks->Read(vbData.get(), geo._skeletonBinding._size);
-								ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._skeletonBinding._size)), r, *sourceEle, geo._skeletonBinding._ia._vertexStride);
-								initializedElement = true;
-							}
-						}
-					}
-				}
-
-				if (!initializedElement)
-					Throw(std::runtime_error("Could not initialize deform input element"));
-			}
-
-			return result;
-		}
-
 		static std::vector<RenderCore::InputElementDesc> MakeIA(IteratorRange<const RenderCore::Assets::VertexElement*> elements, IteratorRange<const uint64_t*> suppressedElements, unsigned streamIdx)
 		{
 			std::vector<RenderCore::InputElementDesc> result;
@@ -880,23 +476,27 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::RawGeometry& geo,
-			const NascentDeformStream& deformStream)
+			const RendererGeoDeformInterface* deformStream)
 		{
-			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), MakeIteratorRange(deformStream._suppressedElements), 0);
-			auto t = MakeIA(MakeIteratorRange(deformStream._generatedElements), 1);
-			result.insert(result.end(), t.begin(), t.end());
+			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
+			if (deformStream) {
+				auto t = MakeIA(MakeIteratorRange(deformStream->_generatedElements), 1);
+				result.insert(result.end(), t.begin(), t.end());
+			}
 			return result;
 		}
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::BoundSkinnedGeometry& geo,
-			const NascentDeformStream& deformStream)
+			const RendererGeoDeformInterface* deformStream)
 		{
-			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), MakeIteratorRange(deformStream._suppressedElements), 0);
-			auto t0 = MakeIA(MakeIteratorRange(geo._animatedVertexElements._ia._elements), MakeIteratorRange(deformStream._suppressedElements), 1);
-			auto t1 = MakeIA(MakeIteratorRange(deformStream._generatedElements), 2);
+			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
+			auto t0 = MakeIA(MakeIteratorRange(geo._animatedVertexElements._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 1);
 			result.insert(result.end(), t0.begin(), t0.end());
-			result.insert(result.end(), t1.begin(), t1.end());
+			if (deformStream) {
+				auto t1 = MakeIA(MakeIteratorRange(deformStream->_generatedElements), 2);
+				result.insert(result.end(), t1.begin(), t1.end());
+			}
 			return result;
 		}
 	}
@@ -924,7 +524,7 @@ namespace RenderCore { namespace Techniques
 				Techniques::IPipelineAcceleratorPool& acceleratorPool,
 				uint64_t materialGuid,
 				const RawGeoType& rawGeo,
-				const Internal::NascentDeformStream& deformStream)
+				const RendererGeoDeformInterface* deformStream)
 		{
 			GeoCall resultGeoCall;
 			const auto* mat = _materialScaffold->GetMaterial(materialGuid);
@@ -1009,10 +609,11 @@ namespace RenderCore { namespace Techniques
 	};
 
 	SimpleModelRenderer::SimpleModelRenderer(
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
-		IteratorRange<const DeformOperationInstantiation*> deformAttachments,
+		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+		IteratorRange<const RendererGeoDeformInterface*> deformInterface,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
 		const std::string& modelScaffoldName,
 		const std::string& materialScaffoldName)
@@ -1032,24 +633,12 @@ namespace RenderCore { namespace Techniques
         _baseTransforms = std::make_unique<Float4x4[]>(_baseTransformCount);
         skeleton.GenerateOutputTransforms(MakeIteratorRange(_baseTransforms.get(), _baseTransforms.get() + _baseTransformCount), &skeleton.GetDefaultParameters());
 
-		unsigned preDeformStaticDataVBIterator = 0;
-		unsigned deformTemporaryVBIterator = 0;
-		unsigned postDeformVBIterator = 0;
-		std::vector<Internal::SourceDataTransform> deformStaticLoadDataRequests;
-
-		std::vector<Internal::NascentDeformStream> geoDeformStreams;
-		std::vector<Internal::NascentDeformStream> skinControllerDeformStreams;
-
 		_geos.reserve(modelScaffold->ImmutableData()._geoCount);
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
-		geoDeformStreams.reserve(modelScaffold->ImmutableData()._geoCount);
+		auto simpleGeoCount = modelScaffold->ImmutableData()._geoCount;
+		
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
-
-			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			auto deform = Internal::BuildNascentDeformStream(
-				deformAttachments, geo, vertexCount, 
-				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
 			// Build the main non-deformed vertex stream
 			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
@@ -1057,32 +646,23 @@ namespace RenderCore { namespace Techniques
 			drawableGeo->_vertexStreamCount = 1;
 
 			// Attach those vertex streams that come from the deform operation
-			if (deform._vbSizes[VB_PostDeform]) {
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount] = DrawableGeo::VertexStream{nullptr, deform._vbOffsets[VB_PostDeform]};
+			if (deformInterface.size() > geo && !deformInterface[geo]._generatedElements.empty()) {
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._vbOffset;
 				++drawableGeo->_vertexStreamCount;
+				drawableGeo->_deformAccelerator = deformAccelerator;
 			}
-			_deformOps.insert(_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
-
-			deformStaticLoadDataRequests.insert(
-				deformStaticLoadDataRequests.end(),
-				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
-
+			
 			drawableGeo->_ib = LoadIndexBuffer(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._ib);
 			drawableGeo->_ibFormat = rg._ib._format;
 			_geos.push_back(std::move(drawableGeo));
-			geoDeformStreams.push_back(std::move(deform));
 		}
 
 		_boundSkinnedControllers.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
-		skinControllerDeformStreams.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+		
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
-
-			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			auto deform = Internal::BuildNascentDeformStream(
-				deformAttachments, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
 			// Build the main non-deformed vertex stream
 			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
@@ -1091,20 +671,16 @@ namespace RenderCore { namespace Techniques
 			drawableGeo->_vertexStreamCount = 2;
 
 			// Attach those vertex streams that come from the deform operation
-			if (deform._vbSizes[VB_PostDeform]) {
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount] = DrawableGeo::VertexStream{nullptr, deform._vbOffsets[VB_PostDeform]};
+			if ((geo+simpleGeoCount) < deformInterface.size() && !deformInterface[geo+simpleGeoCount]._generatedElements.empty()) {
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._vbOffset;
 				++drawableGeo->_vertexStreamCount;
+				drawableGeo->_deformAccelerator = deformAccelerator;
 			}
-			_deformOps.insert(_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
-
-			deformStaticLoadDataRequests.insert(
-				deformStaticLoadDataRequests.end(),
-				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
 
 			drawableGeo->_ib = LoadIndexBuffer(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._ib);
 			drawableGeo->_ibFormat = rg._ib._format;
 			_boundSkinnedControllers.push_back(std::move(drawableGeo));
-			skinControllerDeformStreams.push_back(std::move(deform));
 		}
 
 		// Setup the materials
@@ -1114,7 +690,7 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
             const auto& geoCall = cmdStream.GetGeoCall(c);
 			auto& rawGeo = modelScaffold->ImmutableData()._geos[geoCall._geoId];
-			auto& deform = geoDeformStreams[geoCall._geoId];
+			auto* deform = (geoCall._geoId < deformInterface.size()) ? &deformInterface[geoCall._geoId] : nullptr;
 			// todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
@@ -1127,7 +703,7 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
             const auto& geoCall = cmdStream.GetSkinCall(c);
 			auto& rawGeo = modelScaffold->ImmutableData()._boundSkinnedControllers[geoCall._geoId];
-			auto& deform = skinControllerDeformStreams[geoCall._geoId];
+			auto* deform = ((geoCall._geoId+simpleGeoCount) < deformInterface.size()) ? &deformInterface[geoCall._geoId+simpleGeoCount] : nullptr;
             // todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
@@ -1138,37 +714,6 @@ namespace RenderCore { namespace Techniques
 		}
 
 		_drawableIAs = std::move(geoCallBuilder._ias);
-
-		// Create the dynamic VB and assign it to all of the slots it needs to go to
-		if (postDeformVBIterator) {
-			_dynVB = Services::GetDevice().CreateResource(
-				CreateDesc(
-					BindFlag::VertexBuffer,
-					CPUAccess::WriteDynamic, GPUAccess::Read,
-					LinearBufferDesc::Create(postDeformVBIterator),
-					"ModelRendererDynVB"));
-
-			for (auto&g:_geos)
-				for (unsigned s=0; s<g->_vertexStreamCount; ++s)
-					if (!g->_vertexStreams[s]._resource)
-						g->_vertexStreams[s]._resource = _dynVB;
-
-			for (auto&g:_boundSkinnedControllers)
-				for (unsigned s=0; s<g->_vertexStreamCount; ++s)
-					if (!g->_vertexStreams[s]._resource)
-						g->_vertexStreams[s]._resource = _dynVB;
-		}
-
-		if (preDeformStaticDataVBIterator) {
-			_deformStaticDataInput = Internal::GenerateDeformStaticInput(
-				*_modelScaffold,
-				MakeIteratorRange(deformStaticLoadDataRequests),
-				preDeformStaticDataVBIterator);
-		}
-
-		if (deformTemporaryVBIterator) {
-			_deformTemporaryBuffer.resize(deformTemporaryVBIterator, 0);
-		}
 
 		_usi = std::make_shared<UniformsStreamInterface>();
 		// HACK --> use the fallback LocalTransform -->
@@ -1240,6 +785,7 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
 		StringSection<> deformOperations,
@@ -1255,13 +801,13 @@ namespace RenderCore { namespace Techniques
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) {
 				
-				auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
+				/*auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
 					MakeStringSection(deformOperationString),
-					scaffoldActual);
+					scaffoldActual);*/
 
 				return std::make_shared<SimpleModelRenderer>(
 					pipelineAcceleratorPool, scaffoldActual, materialActual, 
-					MakeIteratorRange(deformOps), 
+					nullptr, IteratorRange<const RendererGeoDeformInterface*>{},
 					MakeIteratorRange(uniformBufferBindings),
 					modelScaffoldNameString, materialScaffoldNameString);
 			});
@@ -1270,6 +816,7 @@ namespace RenderCore { namespace Techniques
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<Techniques::IDeformAcceleratorPool>& deformAcceleratorPool,
 		StringSection<> modelScaffoldName,
 		StringSection<> materialScaffoldName,
 		StringSection<> deformOperations,
@@ -1277,7 +824,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto scaffoldFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::ModelScaffold>(modelScaffoldName);
 		auto materialFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::MaterialScaffold>(materialScaffoldName, modelScaffoldName);
-		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
+		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, deformAcceleratorPool, scaffoldFuture, materialFuture, deformOperations, uniformBufferDelegates, modelScaffoldName.AsString(), materialScaffoldName.AsString());
 	}
 
 	void SimpleModelRenderer::ConstructToPromise(
@@ -1285,7 +832,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, modelScaffoldName, modelScaffoldName);
+		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, nullptr, modelScaffoldName, modelScaffoldName);
 	}
 
 	static IResourcePtr LoadVertexBuffer(
@@ -1365,8 +912,6 @@ namespace RenderCore { namespace Techniques
 			MakeIteratorRange(defaultTransforms),
 			&skeletonActual->GetTransformationMachine().GetDefaultParameters());
 
-		auto& device = Services::GetDevice();
-
 		auto& immutableData = scaffoldActual->ImmutableData();
 		for (const auto&skinnedGeo:MakeIteratorRange(immutableData._boundSkinnedControllers, &immutableData._boundSkinnedControllers[immutableData._boundSkinnedControllerCount])) {
 			for (const auto&section:skinnedGeo._preskinningSections) {
@@ -1396,6 +941,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
 		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
 		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
@@ -1410,13 +956,13 @@ namespace RenderCore { namespace Techniques
 		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, std::move(intermediateSkeletonInterfaceFuture)).ThenConstructToPromise(
 			std::move(rendererPromise),
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, 
+			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, deformAcceleratorPool, uniformBufferBindings, 
 				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
 				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual,
 				std::shared_ptr<RendererSkeletonInterface> skeletonInterface) mutable {
 				
-				auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
+				/*auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
 					MakeStringSection(deformOperationString),
 					scaffoldActual);
 
@@ -1425,14 +971,14 @@ namespace RenderCore { namespace Techniques
 
 				// Add a uniform buffer binding delegate for the joint transforms
 				auto ubb = uniformBufferBindings;
-				ubb.push_back({Hash64("BoneTransforms"), skeletonInterface});
+				ubb.push_back({Hash64("BoneTransforms"), skeletonInterface});*/
 
 				skeletonInterfacePromise.set_value(skeletonInterface);
 
 				return std::make_shared<SimpleModelRenderer>(
 					pipelineAcceleratorPool, scaffoldActual, materialActual, 
-					MakeIteratorRange(deformOps), 
-					MakeIteratorRange(ubb));
+					nullptr, IteratorRange<const RendererGeoDeformInterface*>{}, 
+					uniformBufferBindings);
 			});
 	}
 

@@ -36,16 +36,21 @@ namespace RenderCore { namespace Techniques
 			destination[c] = Identity<Float3x4>();
     }
 
-	void SkinDeformer::FeedInSkeletonMachineResults(
-		IteratorRange<const Float4x4*> skeletonMachineOutput,
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface)
+	RenderCore::Assets::SkeletonBinding SkinDeformer::CreateBinding(
+		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
 	{
-		_skeletonMachineOutput.clear();
-		_skeletonMachineOutput.insert(_skeletonMachineOutput.end(), skeletonMachineOutput.begin(), skeletonMachineOutput.end());
-		_skeletonBinding = RenderCore::Assets::SkeletonBinding{skeletonMachineOutputInterface, _jointInputInterface};
+		return RenderCore::Assets::SkeletonBinding{skeletonMachineOutputInterface, _jointInputInterface};
+	}
+
+	void SkinDeformer::FeedInSkeletonMachineResults(
+		unsigned instanceIdx,
+		IteratorRange<const Float4x4*> skeletonMachineOutput,
+		const RenderCore::Assets::SkeletonBinding& binding)
+	{
 	}
 
 	void SkinDeformer::Execute(
+		unsigned instanceId,
 		IteratorRange<const VertexElementRange*> sourceElements,
 		IteratorRange<const VertexElementRange*> destinationElements) const
 	{
@@ -190,6 +195,15 @@ namespace RenderCore { namespace Techniques
 		}
 
 		_jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+	}
+
+	void* SkinDeformer::QueryInterface(size_t typeId)
+	{
+		if (typeId == typeid(SkinDeformer).hash_code())
+			return this;
+		else if (typeId == typeid(IDeformOperation).hash_code())
+			return (IDeformOperation*)this;
+		return nullptr;
 	}
 
 	SkinDeformer::~SkinDeformer()

@@ -139,6 +139,7 @@ namespace ToolsRig
 				drawable._pipeline = pipeline->_pipelineAccelerator;
 				drawable._geo = std::make_shared<Techniques::DrawableGeo>();
 				drawable._geo->_vertexStreams[0]._vbOffset = space._startOffset;
+				drawable._geo->_vertexStreams[0]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
 				drawable._geo->_vertexStreamCount = 1;
 				drawable._drawFn = (Techniques::ExecuteDrawableFn*)&MaterialSceneParserDrawable::DrawFn;
 				drawable._vertexCount = (unsigned)dimof(vertices);

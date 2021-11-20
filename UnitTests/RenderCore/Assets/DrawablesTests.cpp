@@ -246,7 +246,7 @@ namespace UnitTests
 				}
 				Techniques::Draw(
 					parsingContext, 
-					*pipelineAcceleratorPool,
+					*pipelineAcceleratorPool, nullptr,
 					*cfgId,
 					pkt);
 			}
@@ -273,7 +273,7 @@ namespace UnitTests
 				fbHelper.GetDesc());
 
 			auto renderer = ::Assets::MakeAssetPtr<Techniques::SimpleModelRenderer>(
-				pipelineAcceleratorPool,
+				pipelineAcceleratorPool, nullptr,
 				"xleres/DefaultResources/materialsphere.dae",
 				"xleres/DefaultResources/materialsphere.material");
 			INFO(::Assets::AsString(renderer->GetActualizationLog()));
@@ -315,7 +315,7 @@ namespace UnitTests
 					for (const auto&pkt:pkts)
 						Techniques::Draw(
 							parsingContext, 
-							*pipelineAcceleratorPool,
+							*pipelineAcceleratorPool, nullptr,
 							*cfgId,
 							pkt);
 

@@ -188,7 +188,7 @@ namespace RenderCore { namespace Techniques
 				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::VB, vertexDataSize);
 				auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 				drawable->_geo = AllocateDrawableGeo();
-				drawable->_geo->_vertexStreams[0]._resource = nullptr;
+				drawable->_geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
 				drawable->_geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
 				drawable->_geo->_vertexStreamCount = 1;
 				drawable->_geo->_ibFormat = Format(0);
@@ -317,7 +317,7 @@ namespace RenderCore { namespace Techniques
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			Draw(
 				parserContext,
-				*_pipelineAcceleratorPool,
+				*_pipelineAcceleratorPool, nullptr,
 				sequencerConfig,
 				_workingPkt);
 

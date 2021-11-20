@@ -8,6 +8,7 @@
 #include "Techniques.h"
 #include "TechniqueDelegates.h"
 #include "PipelineAccelerator.h"
+#include "DeformAccelerator.h"
 #include "ImmediateDrawables.h"
 #include "RenderPass.h"
 #include "SubFrameEvents.h"
@@ -179,6 +180,7 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
 
 		_techniqueServices->GetDeformOperationFactory().RegisterDeformOperation("skin", SkinDeformer::InstantiationFunction);
+		_deformAccelerators = CreateDeformAcceleratorPool(device);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);

@@ -29,6 +29,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         UniformDelegateManager.cpp
         PipelineCollection.cpp
         TextureCompilerUtil.cpp
+        DeformAccelerator.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers

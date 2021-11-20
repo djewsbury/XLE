@@ -20,12 +20,18 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual void Execute(
+			unsigned instanceId,
 			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const;
+			IteratorRange<const VertexElementRange*> destinationElements) const override;
+		virtual void* QueryInterface(size_t) override;
+
+		RenderCore::Assets::SkeletonBinding CreateBinding(
+			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const;
 
 		void FeedInSkeletonMachineResults(
+			unsigned instanceIdx,
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface);
+			const RenderCore::Assets::SkeletonBinding& binding);
 		
 		SkinDeformer(
 			const RenderCore::Assets::ModelScaffold& modelScaffold,
@@ -51,6 +57,13 @@ namespace RenderCore { namespace Techniques
 		std::vector<Section> _sections;
 
 		Float4x4 _bindShapeMatrix;
+
+		struct Instance
+		{
+			IteratorRange<const Float4x4*> _skeletonMachineOutput;
+			const RenderCore::Assets::SkeletonBinding* _binding;
+		};
+		std::vector<Instance> _instanceData;
 		std::vector<Float4x4> _skeletonMachineOutput;
 		RenderCore::Assets::SkeletonBinding _skeletonBinding;
 

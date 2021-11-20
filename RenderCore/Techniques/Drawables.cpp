@@ -9,6 +9,7 @@
 #include "ParsingContext.h"
 #include "PipelineAcceleratorInternal.h"
 #include "DescriptorSetAccelerator.h"
+#include "DeformAccelerator.h"
 #include "BasicDelegates.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
@@ -92,6 +93,7 @@ namespace RenderCore { namespace Techniques
 			RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
 			ParsingContext& parserContext,
 			const IPipelineAcceleratorPool& pipelineAccelerators,
+			const IDeformAcceleratorPool* deformAccelerators,
 			const SequencerConfig& sequencerConfig,
 			const DrawablesPacket& drawablePkt,
 			const TemporaryStorageLocator& temporaryVB, 
@@ -172,20 +174,28 @@ namespace RenderCore { namespace Techniques
 				if (drawable._geo.get() != currentGeo && drawable._geo.get()) {
 					for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
 						auto& stream = drawable._geo->_vertexStreams[c];
-						if (stream._resource) {
+						if (stream._type == DrawableGeo::StreamType::Resource) {
 							vbv[c]._resource = stream._resource.get();
 							vbv[c]._offset = stream._vbOffset;
+						} else if (stream._type == DrawableGeo::StreamType::Deform) {
+							assert(drawable._geo->_deformAccelerator);
+							assert(deformAccelerators);
+							auto deformVbv = deformAccelerators->GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
+							vbv[c]._resource = deformVbv._resource;
+							vbv[c]._offset = stream._vbOffset + deformVbv._offset;
 						} else {
+							assert(stream._type == DrawableGeo::StreamType::PacketStorage);
 							vbv[c]._resource = temporaryVB._res;
 							vbv[c]._offset = stream._vbOffset + temporaryVB._begin;
 						}
 					}
 
 					if (drawable._geo->_ibFormat != Format(0)) {
-						if (drawable._geo->_ib) {
-							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat});
+						if (drawable._geo->_ibStreamType == DrawableGeo::StreamType::Resource) {
+							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{drawable._geo->_ib.get(), drawable._geo->_ibFormat, drawable._geo->_ibOffset});
 						} else {
-							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB._res, drawable._geo->_ibFormat, unsigned(drawable._geo->_dynIBBegin + temporaryIB._begin)});
+							assert(drawable._geo->_ibStreamType == DrawableGeo::StreamType::PacketStorage);
+							encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{temporaryIB._res, drawable._geo->_ibFormat, unsigned(drawable._geo->_ibOffset + temporaryIB._begin)});
 						}
 					} else {
 						encoder.Bind(MakeIteratorRange(vbv, &vbv[drawable._geo->_vertexStreamCount]), IndexBufferView{});
@@ -226,6 +236,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
@@ -249,15 +260,16 @@ namespace RenderCore { namespace Techniques
 		PreStalledResources preStalledResources;
 		if (drawOptions._stallForResources) {
 			preStalledResources.Setup(pipelineAccelerators, sequencerConfig, drawablePkt);
-			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
 		} else {
-			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
 		}
 	}
 
 	void Draw(
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
@@ -274,7 +286,7 @@ namespace RenderCore { namespace Techniques
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, drawOptions);
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, drawOptions);
 		} CATCH (...) {
 			pipelineAccelerators.UnlockForReading();
 			throw;

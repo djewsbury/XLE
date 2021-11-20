@@ -20,14 +20,22 @@ namespace RenderCore { namespace Techniques
 	public:
 		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
 		virtual void Execute(
+			unsigned instanceId,
 			IteratorRange<const VertexElementRange*> sourceElements,
 			IteratorRange<const VertexElementRange*> destinationElements) const = 0;
+		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IDeformOperation();
 	};
 
-	class DeformOperationInstantiation
+	struct RendererGeoDeformInterface
 	{
-	public:
+		std::vector<InputElementDesc> _generatedElements;
+		std::vector<uint64_t> _suppressedElements;
+		unsigned _vbOffset = 0;
+	};
+
+	struct DeformOperationInstantiation
+	{
 		std::shared_ptr<IDeformOperation> _operation;
 		unsigned _geoId = ~0u;
 		struct NameAndFormat { std::string _semantic; unsigned _semanticIndex; Format _format = Format(0); };

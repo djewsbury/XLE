@@ -32,6 +32,7 @@ namespace RenderCore { namespace Techniques
 {
 	class Services;
 	class IPipelineAcceleratorPool;
+	class IDeformAcceleratorPool;
 	class ITechniqueDelegate;
 	class IImmediateDrawables;
 	class TechniqueContext;
@@ -123,6 +124,8 @@ namespace RenderCore { namespace Techniques
 		::Assets::CompilerRegistration _textureCompilerRegistration;
 
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+
+		std::shared_ptr<IDeformAcceleratorPool> _deformAccelerators;
 
 		SignalDelegateId _prePresentBinding;
 		SignalDelegateId _frameBarrierBinding;

@@ -253,6 +253,7 @@ namespace RenderCore { namespace LightingEngine
 	, _threadContext(&parsingContext.GetThreadContext())
 	, _parsingContext(&parsingContext)
 	, _pipelineAcceleratorPool(compiledTechnique._pipelineAccelerators.get())
+	, _deformAcceleratorPool(nullptr)
 	, _compiledTechnique(&compiledTechnique)
 	{
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
@@ -297,6 +298,7 @@ namespace RenderCore { namespace LightingEngine
 						Techniques::Draw(
 							*_iterator->_parsingContext,
 							*_iterator->_pipelineAcceleratorPool,
+							_iterator->_deformAcceleratorPool,
 							*next->_sequencerConfig,
 							_iterator->_drawablePkt);
 						_iterator->_drawablePkt.Reset();

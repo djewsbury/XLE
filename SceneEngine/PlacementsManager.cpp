@@ -701,7 +701,8 @@ namespace SceneEngine
                 //  if we have internal transforms, we must use them.
                 //  But some models don't have any internal transforms -- in these
                 //  cases, the _defaultTransformCount will be zero
-            (*current)->BuildDrawables(pkts, AsFloat4x4(localToWorld), viewMask);
+            const auto instanceIdx = ~0u;
+            (*current)->BuildDrawables(pkts, AsFloat4x4(localToWorld), instanceIdx, viewMask);
 
             ++_metrics._instancesPrepared;
             _metrics._uniqueModelsPrepared += !_currentModelRendered;

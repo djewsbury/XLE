@@ -15,13 +15,14 @@ namespace SceneEngine
 	void ExecuteSceneRaw(
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+		const RenderCore::Techniques::IDeformAcceleratorPool* deformAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
 		const SceneView& view, RenderCore::Techniques::BatchFilter batchFilter,
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
         scene.ExecuteScene(parserContext.GetThreadContext(), ExecuteSceneContext{view, batchFilter, &pkt});
-		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
+		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, pkt);
     }
 
     RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(

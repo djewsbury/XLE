@@ -22,6 +22,7 @@ namespace RenderCore { namespace Techniques
 {
     class SimpleModelRenderer;
 	class IPipelineAcceleratorPool;
+    class IDeformAcceleratorPool;
 
 	class ModelCacheModel
     {
@@ -62,7 +63,8 @@ namespace RenderCore { namespace Techniques
         Records LogRecords() const;
 
         ModelCache(
-			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool, 
+            std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 			const Config& cfg = Config());
         ~ModelCache();
     protected:

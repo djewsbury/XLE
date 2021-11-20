@@ -10,7 +10,7 @@
 #include <string>
 
 namespace SceneEngine { class IScene; }
-namespace RenderCore { namespace Techniques { class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { class IPipelineAcceleratorPool; class IDeformAcceleratorPool; } }
 
 namespace ToolsRig
 {
@@ -43,7 +43,8 @@ namespace ToolsRig
 	};
 
 	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
-		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+        std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		const ModelVisSettings& settings);
 }
 

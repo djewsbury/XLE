@@ -76,7 +76,7 @@ namespace ToolsRig
 
 		Techniques::Draw(
 			parserContext,
-            pipelineAccelerators,
+            pipelineAccelerators, nullptr,
 			sequencerConfig, 
 			pkt);
     }

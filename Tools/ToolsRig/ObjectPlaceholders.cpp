@@ -420,8 +420,7 @@ namespace ToolsRig
 		auto geo = std::make_shared<Techniques::DrawableGeo>();
 		geo->_vertexStreams[0]._vbOffset = vbData._startOffset;
 		geo->_vertexStreamCount = 1;
-		geo->_dynIBBegin = ibData._startOffset;
-		geo->_dynIBEnd = ibData._startOffset + ibData._data.size();
+		geo->_ibOffset = ibData._startOffset;
 		geo->_ibFormat = RenderCore::Format::R32_UINT;
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable 

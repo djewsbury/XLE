@@ -37,7 +37,7 @@ namespace Sample
 		ToolsRig::ModelVisSettings visSettings {};
 		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.txt"));
 
-		auto scene = ToolsRig::MakeScene(pipelineAccelerators, visSettings);
+		auto scene = ToolsRig::MakeScene(pipelineAccelerators, globals._primaryResourcesApparatus->_deformAccelerators, visSettings);
 		modelLayer->Set(scene);
 		modelLayer->Set([]() { return ToolsRig::MakeLightingStateDelegate("cfg/lighting"); });
 		AddSystem(modelLayer);

@@ -94,6 +94,7 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext* _threadContext = nullptr;
 		Techniques::ParsingContext* _parsingContext = nullptr;
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
+		Techniques::IDeformAcceleratorPool* _deformAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
 
 		void PushFollowingStep(std::function<CompiledLightingTechnique::StepFnSig>&& fn);

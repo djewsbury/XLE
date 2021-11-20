@@ -18,6 +18,8 @@
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 
+namespace RenderCore { namespace Techniques { class IDeformAcceleratorPool; }}
+
 namespace RenderCore { namespace LightingEngine
 {
 	struct CB_StaticShadowProbeDesc
@@ -76,6 +78,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::SequencerConfig> _probePrepareCfg;
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _sequencerDescSetLayout;
 		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
+		std::shared_ptr<Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		bool _pendingRebuild = false;
 
 		struct StaticProbePrepareHelper
@@ -162,7 +165,7 @@ namespace RenderCore { namespace LightingEngine
 						drawOptions._stallForResources = true;
 						TRY {
 							Techniques::Draw(
-								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, 
+								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators.get(),
 								*_pimpl->_probePrepareCfg, _drawablePkt, drawOptions);
 						} CATCH (...) {
 						} CATCH_END

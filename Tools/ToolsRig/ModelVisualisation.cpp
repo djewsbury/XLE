@@ -12,6 +12,7 @@
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/SimpleModelDeform.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
 #include "../../SceneEngine/IScene.h"
 #include "../../Assets/Assets.h"
@@ -91,9 +92,10 @@ namespace ToolsRig
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ModelSceneRendererState>>&& promise,
 			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
 			const ModelVisSettings& settings)
 		{
-			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, settings._modelName, settings._materialName, "skin");
+			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(pipelineAcceleratorPool, deformAccelerators, settings._modelName, settings._materialName, "skin");
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
 				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
@@ -205,7 +207,8 @@ namespace ToolsRig
 			RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
 			XlZeroMemory(pkts);
 			pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
-			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), _preDrawDelegate);
+			const auto instanceIdx = ~0u;
+			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), instanceIdx, _preDrawDelegate);
 		}
 
 		void ExecuteScene(
@@ -294,9 +297,11 @@ namespace ToolsRig
 
 		ModelScene(
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+			std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 			std::shared_ptr<ModelSceneRendererState> actualized,
 			const ModelVisSettings& settings)
 		: _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
+		, _deformAcceleratorPool(std::move(deformAcceleratorPool))
 		, _actualized(std::move(actualized))
 		{
 			if (settings._materialBindingFilter)
@@ -306,6 +311,7 @@ namespace ToolsRig
 	protected:
 		std::shared_ptr<ICustomDrawDelegate>			_preDrawDelegate;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<ModelSceneRendererState>		_actualized;
 		std::shared_ptr<VisAnimationState>				_animationState;
     };
@@ -313,15 +319,16 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
-		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(pipelineAcceleratorPool, settings);
+		auto rendererFuture = ::Assets::MakeFuturePtr<ModelSceneRendererState>(pipelineAcceleratorPool, deformAcceleratorPool, settings);
 		auto result = std::make_shared<Assets::MarkerPtr<SceneEngine::IScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
-			[pipelineAcceleratorPool, settings](auto renderer) {
-				return std::make_shared<ModelScene>(pipelineAcceleratorPool, renderer, settings);
+			[pipelineAcceleratorPool, deformAcceleratorPool, settings](auto renderer) {
+				return std::make_shared<ModelScene>(pipelineAcceleratorPool, deformAcceleratorPool, renderer, settings);
 			});
 		return result;
 	}

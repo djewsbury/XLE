@@ -24,22 +24,25 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
+	class DeformAccelerator;
 
 	class DrawableGeo
     {
     public:
-        struct VertexStream
+        enum class StreamType { Resource, PacketStorage, Deform };
+		struct VertexStream
         {
             IResourcePtr	_resource;
             unsigned		_vbOffset = 0u;
+			StreamType		_type = StreamType::Resource;
         };
         VertexStream        _vertexStreams[4];
         unsigned            _vertexStreamCount = 0;
 
         IResourcePtr		_ib;
         Format				_ibFormat = Format(0);
-        unsigned			_dynIBBegin = ~0u;
-        unsigned			_dynIBEnd = 0u;
+        unsigned			_ibOffset = 0u;
+		StreamType			_ibStreamType = StreamType::Resource;
 
         struct Flags
         {
@@ -47,6 +50,8 @@ namespace RenderCore { namespace Techniques
             using BitField = unsigned;
         };
         Flags::BitField     _flags = 0u;
+
+		std::shared_ptr<DeformAccelerator> _deformAccelerator;
     };
 
 	class ExecuteDrawableContext
@@ -79,6 +84,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<DrawableGeo>				_geo;
 		std::shared_ptr<UniformsStreamInterface>  	_looseUniformsInterface;
         ExecuteDrawableFn*							_drawFn;
+		unsigned									_deformInstanceIdx = 0;
 	};
 
 	class DrawableInputAssembly
@@ -155,6 +161,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	class IPipelineAcceleratorPool;
+	class IDeformAcceleratorPool;
 	class SequencerConfig;
 
 	struct DrawOptions { bool _stallForResources = false; };
@@ -162,9 +169,20 @@ namespace RenderCore { namespace Techniques
 	void Draw(
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions = {});
+
+	inline void Draw(
+        ParsingContext& parserContext,
+		const IPipelineAcceleratorPool& pipelineAccelerators,
+		const SequencerConfig& sequencerConfig,
+		const DrawablesPacket& drawablePkt,
+		const DrawOptions& drawOptions = {})
+	{
+		Draw(parserContext, pipelineAccelerators, nullptr, sequencerConfig, drawablePkt, drawOptions);
+	}
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		const IPipelineAcceleratorPool& pipelineAccelerators,
