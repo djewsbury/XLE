@@ -445,6 +445,10 @@ namespace RenderCore { namespace LightingEngine
 			for (unsigned l=0; l<set._lights.size(); ++l) {
 				const auto& i = set._lights[l];
 
+				if (set._operatorId == lightResolveOperators._operatorDescs.size()) {
+					continue;	// this is the ambient light
+				}
+
 				assert(i._desc->QueryInterface(typeid(Internal::StandardPositionalLight).hash_code()) == i._desc.get());
 				auto& standardLightDesc = *(Internal::StandardPositionalLight*)i._desc.get();
 
