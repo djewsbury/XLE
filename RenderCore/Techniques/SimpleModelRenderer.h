@@ -66,10 +66,10 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float4x4& localToWorld = Identity<Float4x4>()) const;
 
-		// void GenerateDeformBuffer(IThreadContext& context);
-		// unsigned DeformOperationCount() const;
-		// IDeformOperation& DeformOperation(unsigned idx);
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
+
+		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }
+		const std::shared_ptr<IDeformAcceleratorPool>& GetDeformAcceleratorPool() const { return _deformAcceleratorPool; }
 
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& GetModelScaffold() const { return _modelScaffold; }
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& GetMaterialScaffold() const { return _materialScaffold; }
@@ -82,8 +82,8 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
-			IteratorRange<const RendererGeoDeformInterface*> deformInterface = {},
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
 			const std::string& modelScaffoldName = {},
 			const std::string& materialScaffoldName = {});
@@ -144,6 +144,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<UniformsStreamInterface> _usi;
 
 		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableIAs;
+		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
+		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 
 		std::string _modelScaffoldName;
 		std::string _materialScaffoldName;
@@ -153,18 +155,16 @@ namespace RenderCore { namespace Techniques
 		class GeoCallBuilder;
 	};
 
-	class RendererSkeletonInterface : public IUniformBufferDelegate
+	class RendererSkeletonInterface
 	{
 	public:
 		void FeedInSkeletonMachineResults(
+			unsigned instanceIdx,
 			IteratorRange<const Float4x4*> skeletonMachineOutput);
 
-		void WriteImmediateData(ParsingContext& context, const void* objectContext, IteratorRange<void*> dst) override;
-        size_t GetSize() override;
-
 		RendererSkeletonInterface(
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& scaffoldActual, 
-			const std::shared_ptr<RenderCore::Assets::SkeletonScaffold>& skeletonActual);
+			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+			IteratorRange<const std::shared_ptr<IDeformOperation>*> skinDeformers);
 		~RendererSkeletonInterface();
 
 		static void ConstructToPromise(
@@ -177,6 +177,29 @@ namespace RenderCore { namespace Techniques
 			const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
 			StringSection<> deformOperations = {},
 			IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates = {});
+
+	private:
+		struct Deformer
+		{
+			std::shared_ptr<IDeformOperation> _skinDeformer;
+			RenderCore::Assets::SkeletonBinding _deformerBindings;
+		};
+		std::vector<Deformer> _deformers;
+	};
+
+	class SkinningUniformBufferDelegate : public IUniformBufferDelegate
+	{
+	public:
+		void FeedInSkeletonMachineResults(
+			IteratorRange<const Float4x4*> skeletonMachineOutput);
+
+		void WriteImmediateData(ParsingContext& context, const void* objectContext, IteratorRange<void*> dst) override;
+        size_t GetSize() override;
+
+		SkinningUniformBufferDelegate(
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& scaffoldActual, 
+			const std::shared_ptr<RenderCore::Assets::SkeletonScaffold>& skeletonActual);
+		~SkinningUniformBufferDelegate();
 	private:
 		struct Section
 		{

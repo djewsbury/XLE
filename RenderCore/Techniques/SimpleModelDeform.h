@@ -20,7 +20,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
 		virtual void Execute(
-			unsigned instanceId,
+			unsigned instanceIdx,
 			IteratorRange<const VertexElementRange*> sourceElements,
 			IteratorRange<const VertexElementRange*> destinationElements) const = 0;
 		virtual void* QueryInterface(size_t) = 0;

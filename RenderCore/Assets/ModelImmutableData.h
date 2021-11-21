@@ -79,8 +79,6 @@ namespace RenderCore { namespace Assets
         SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
                             const ModelCommandStream::InputInterface&   input);
         SkeletonBinding();
-        SkeletonBinding(SkeletonBinding&& moveFrom) never_throws;
-        SkeletonBinding& operator=(SkeletonBinding&& moveFrom) never_throws;
         ~SkeletonBinding();
 
     private:

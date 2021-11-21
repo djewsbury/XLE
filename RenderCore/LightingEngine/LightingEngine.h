@@ -7,7 +7,7 @@
 #include "../Techniques/Drawables.h"		// for Techniques::BatchFilter
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace RenderCore { namespace LightingEngine
@@ -33,6 +33,8 @@ namespace RenderCore { namespace LightingEngine
 			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};
 		Step GetNextStep();
+
+		void SetDeformAcceleratorPool(Techniques::IDeformAcceleratorPool&);
 
 		LightingTechniqueInstance(
 			Techniques::ParsingContext&,

@@ -11,6 +11,7 @@
 #include "CommonUtils.h"
 #include "PipelineAccelerator.h"
 #include "DescriptorSetAccelerator.h"
+#include "DeformAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
 #include "DrawableDelegates.h"
 #include "Services.h"
@@ -33,6 +34,9 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>
+
+
+#include "SkinDeformer.h"
 
 namespace RenderCore { namespace Techniques 
 {
@@ -146,6 +150,9 @@ namespace RenderCore { namespace Techniques
 		uint32_t viewMask) const
 	{
 		assert(viewMask != 0);
+		if (_deformAcceleratorPool && _deformAccelerator)
+			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
+
 		SimpleModelDrawable* drawables[dimof(_drawablesCount)];
 		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
 			if (!_drawablesCount[c]) {
@@ -270,6 +277,9 @@ namespace RenderCore { namespace Techniques
 			BuildDrawables(pkts, localToWorld, deformInstanceIdx, 1u);
 			return;
 		}
+
+		if (_deformAcceleratorPool && _deformAccelerator)
+			_deformAcceleratorPool->EnableInstance(*_deformAccelerator, deformInstanceIdx);
 
 		SimpleModelDrawable_Delegate* drawables[dimof(_drawablesCount)];
 		for (unsigned c=0; c<dimof(_drawablesCount); ++c) {
@@ -612,8 +622,8 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-		IteratorRange<const RendererGeoDeformInterface*> deformInterface,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
 		const std::string& modelScaffoldName,
 		const std::string& materialScaffoldName)
@@ -623,6 +633,13 @@ namespace RenderCore { namespace Techniques
 	, _materialScaffoldName(materialScaffoldName)
 	{
 		using namespace RenderCore::Assets;
+
+		IteratorRange<const RendererGeoDeformInterface*> deformInterface;
+		if (deformAccelerator && deformAcceleratorPool) {
+			_deformAccelerator = deformAccelerator;
+			_deformAcceleratorPool = deformAcceleratorPool;
+			deformInterface = _deformAcceleratorPool->GetRendererGeoInterface(*_deformAccelerator);
+		}
 
         const auto& skeleton = modelScaffold->EmbeddedSkeleton();
         _skeletonBinding = SkeletonBinding(
@@ -646,7 +663,7 @@ namespace RenderCore { namespace Techniques
 			drawableGeo->_vertexStreamCount = 1;
 
 			// Attach those vertex streams that come from the deform operation
-			if (deformInterface.size() > geo && !deformInterface[geo]._generatedElements.empty()) {
+			if (geo < deformInterface.size() && !deformInterface[geo]._generatedElements.empty()) {
 				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
 				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._vbOffset;
 				++drawableGeo->_vertexStreamCount;
@@ -798,18 +815,26 @@ namespace RenderCore { namespace Techniques
 		std::vector<UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
 			std::move(promise),
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString](
+			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) {
 				
-				/*auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
-					MakeStringSection(deformOperationString),
-					scaffoldActual);*/
+				if (deformAcceleratorPool && !deformOperationString.empty()) {
+					auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
+						MakeStringSection(deformOperationString),
+						scaffoldActual);
 
-				return std::make_shared<SimpleModelRenderer>(
-					pipelineAcceleratorPool, scaffoldActual, materialActual, 
-					nullptr, IteratorRange<const RendererGeoDeformInterface*>{},
-					MakeIteratorRange(uniformBufferBindings),
-					modelScaffoldNameString, materialScaffoldNameString);
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual, 
+						deformAcceleratorPool, deformAccelerator,
+						MakeIteratorRange(uniformBufferBindings),
+						modelScaffoldNameString, materialScaffoldNameString);
+				} else {
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual, 
+						nullptr, nullptr,
+						MakeIteratorRange(uniformBufferBindings),
+						modelScaffoldNameString, materialScaffoldNameString);
+				}
 			});
 	}
 
@@ -872,6 +897,80 @@ namespace RenderCore { namespace Techniques
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void RendererSkeletonInterface::FeedInSkeletonMachineResults(
+		unsigned instanceIdx,
+		IteratorRange<const Float4x4*> skeletonMachineOutput)
+	{
+		for (const auto&d:_deformers)
+			((SkinDeformer*)d._skinDeformer->QueryInterface(typeid(SkinDeformer).hash_code()))->FeedInSkeletonMachineResults(
+				instanceIdx, skeletonMachineOutput, d._deformerBindings);
+	}
+
+	RendererSkeletonInterface::RendererSkeletonInterface(
+		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+		IteratorRange<const std::shared_ptr<IDeformOperation>*> skinDeformers)
+	{
+		_deformers.resize(skinDeformers.size());
+		for (auto&d:skinDeformers) {
+			SkinDeformer* deformer = (SkinDeformer*)d->QueryInterface(typeid(SkinDeformer).hash_code());
+			if (!deformer)
+				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
+			_deformers.push_back(Deformer{ d, deformer->CreateBinding(smOutputInterface) });
+		}
+	}
+
+	RendererSkeletonInterface::~RendererSkeletonInterface()
+	{}
+
+	void RendererSkeletonInterface::ConstructToPromise(
+		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
+		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
+		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
+		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
+		StringSection<> deformOperations,
+		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
+	{
+		// note -- skeletonInterfacePromise will never be fulfilled if renderPromise becomes invalid
+
+		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
+		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
+			std::move(rendererPromise),
+			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, deformAcceleratorPool, uniformBufferBindings, 
+				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
+				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
+				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) mutable {
+
+				if (!deformOperationString.empty()) deformOperationString += ";skin";
+				else deformOperationString = "skin";
+
+				auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
+					MakeStringSection(deformOperationString),
+					scaffoldActual);
+
+				if (deformAccelerator) {
+					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
+						scaffoldActual->EmbeddedSkeleton().GetOutputInterface(),
+						deformAcceleratorPool->GetOperations(*deformAccelerator, typeid(Techniques::SkinDeformer).hash_code()));
+					
+					skeletonInterfacePromise.set_value(skeletonInterface);
+
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual, 
+						deformAcceleratorPool, deformAccelerator,
+						uniformBufferBindings);
+				} else {
+					skeletonInterfacePromise.set_value(nullptr);
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual, 
+						nullptr, nullptr,
+						uniformBufferBindings);
+				}
+			});
+	}
+
+	void SkinningUniformBufferDelegate::FeedInSkeletonMachineResults(
 		IteratorRange<const Float4x4*> skeletonMachineOutput)
 	{
 		for (auto& section:_sections) {
@@ -888,17 +987,17 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	void RendererSkeletonInterface::WriteImmediateData(ParsingContext& context, const void* objectContext, IteratorRange<void*> dst)
+	void SkinningUniformBufferDelegate::WriteImmediateData(ParsingContext& context, const void* objectContext, IteratorRange<void*> dst)
 	{
 		std::memcpy(dst.begin(), _sections[0]._cbData.data(), std::min(dst.size(), _sections[0]._cbData.size() * sizeof(Float3x4)));
 	}
 
-	size_t RendererSkeletonInterface::GetSize()
+	size_t SkinningUniformBufferDelegate::GetSize()
 	{
 		return _sections[0]._cbData.size() * sizeof(Float3x4);
 	}
 
-	RendererSkeletonInterface::RendererSkeletonInterface(
+	SkinningUniformBufferDelegate::SkinningUniformBufferDelegate(
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& scaffoldActual, 
 		const std::shared_ptr<RenderCore::Assets::SkeletonScaffold>& skeletonActual)
 	{
@@ -933,53 +1032,8 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	RendererSkeletonInterface::~RendererSkeletonInterface()
+	SkinningUniformBufferDelegate::~SkinningUniformBufferDelegate()
 	{
-	}
-
-	void RendererSkeletonInterface::ConstructToPromise(
-		std::promise<std::shared_ptr<RendererSkeletonInterface>>&& skeletonInterfacePromise,
-		std::promise<std::shared_ptr<SimpleModelRenderer>>&& rendererPromise,
-		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold>& modelScaffoldFuture,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold>& materialScaffoldFuture,
-		const ::Assets::PtrToMarkerPtr<RenderCore::Assets::SkeletonScaffold>& skeletonScaffoldFuture,
-		StringSection<> deformOperations,
-		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
-	{
-		// note -- skeletonInterfacePromise will never be fulfilled if renderPromise becomes invalid
-		std::promise<std::shared_ptr<RendererSkeletonInterface>> intermediateSkeletonInterface;
-		auto intermediateSkeletonInterfaceFuture = intermediateSkeletonInterface.get_future();
-		::Assets::WhenAll(modelScaffoldFuture, skeletonScaffoldFuture).ThenConstructToPromise(std::move(intermediateSkeletonInterface));
-
-		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
-		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture, std::move(intermediateSkeletonInterfaceFuture)).ThenConstructToPromise(
-			std::move(rendererPromise),
-			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, deformAcceleratorPool, uniformBufferBindings, 
-				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
-				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
-				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual,
-				std::shared_ptr<RendererSkeletonInterface> skeletonInterface) mutable {
-				
-				/*auto deformOps = DeformOperationFactory::GetInstance().CreateDeformOperations(
-					MakeStringSection(deformOperationString),
-					scaffoldActual);
-
-				auto skinDeform = DeformOperationFactory::GetInstance().CreateDeformOperations("skin", scaffoldActual);
-				deformOps.insert(deformOps.end(), skinDeform.begin(), skinDeform.end());
-
-				// Add a uniform buffer binding delegate for the joint transforms
-				auto ubb = uniformBufferBindings;
-				ubb.push_back({Hash64("BoneTransforms"), skeletonInterface});*/
-
-				skeletonInterfacePromise.set_value(skeletonInterface);
-
-				return std::make_shared<SimpleModelRenderer>(
-					pipelineAcceleratorPool, scaffoldActual, materialActual, 
-					nullptr, IteratorRange<const RendererGeoDeformInterface*>{}, 
-					uniformBufferBindings);
-			});
 	}
 
 

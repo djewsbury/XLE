@@ -12,20 +12,33 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) -> InstantiationSet
 	{
-		auto* colon = XlFindChar(initializer, ':');
-		auto* afterColon = initializer.end();
-		if (colon) {
-			afterColon = colon+1;
-		} else {
-			colon = initializer.end();
+		InstantiationSet result;
+
+		auto* i = initializer.begin();
+		while (i != initializer.end()) {
+			auto* start = i;
+			
+			while (i!=initializer.end() && *i != ';') ++i;
+			auto* end = i;
+			if (i!=initializer.end()) ++i;
+
+			auto* colon = XlFindChar(MakeStringSection(start, end), ':');
+			auto* afterColon = end;
+			if (colon) {
+				afterColon = colon+1;
+			} else {
+				colon = end;
+			}
+
+			auto hash = Hash64(MakeStringSection(start, colon));
+			auto i = LowerBound(_instantiationFunctions, hash);
+			if (i==_instantiationFunctions.end() || i->first != hash)
+				continue;
+
+			auto instantiations = (i->second._instFunction)(MakeStringSection(afterColon, end), modelScaffold);
+			result.insert(result.end(), instantiations.begin(), instantiations.end());
 		}
-
-		auto hash = Hash64(initializer.begin(), colon);
-		auto i = LowerBound(_instantiationFunctions, hash);
-		if (i==_instantiationFunctions.end() || i->first != hash)
-			return {};
-
-		return (i->second._instFunction)(MakeStringSection(afterColon, initializer.end()), modelScaffold);
+		return result;
 	}
 
 	auto DeformOperationFactory::RegisterDeformOperation(StringSection<> name, InitiationFunction&& fn) -> RegisteredDeformId

@@ -179,6 +179,7 @@ namespace RenderCore { namespace Techniques
 							vbv[c]._offset = stream._vbOffset;
 						} else if (stream._type == DrawableGeo::StreamType::Deform) {
 							assert(drawable._geo->_deformAccelerator);
+							// todo -- we can make GetOutputVBV() accessible without the pool and avoid the need for a pool passed to this function
 							assert(deformAccelerators);
 							auto deformVbv = deformAccelerators->GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
 							vbv[c]._resource = deformVbv._resource;

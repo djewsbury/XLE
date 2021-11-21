@@ -5,6 +5,8 @@
 #include "DeformAccelerator.h"
 #include "SimpleModelDeform.h"
 #include "DeformAcceleratorInternal.h"
+#include "Services.h"
+#include "GPUTrackerHeap.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../Metal/DeviceContext.h"
@@ -15,113 +17,119 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include <vector>
 
-
 namespace RenderCore { namespace Techniques
 {
-    class DeformAcceleratorPool : public IDeformAcceleratorPool
-    {
-    public:
-        std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(
-            StringSection<> initializer,
-            const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) override;
-        void DestroyAccelerator(DeformAccelerator&) override;
+	class DeformAcceleratorPool : public IDeformAcceleratorPool
+	{
+	public:
+		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(
+			StringSection<> initializer,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) override;
+		void DestroyAccelerator(DeformAccelerator&) override;
 
-        std::vector<std::shared_ptr<IDeformOperation>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
-        void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
-        void ReadyInstances(IThreadContext&) override;
-        void OnFrameBarrier() override;
+		IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const override;
 
-        VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const override;
+		std::vector<std::shared_ptr<IDeformOperation>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
+		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
+		void ReadyInstances(IThreadContext&) override;
+		void OnFrameBarrier() override;
 
-        DeformAcceleratorPool(std::shared_ptr<IDevice>);
-        ~DeformAcceleratorPool();
+		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const override;
 
-    private:
-        DeformOperationFactory _opFactory;
+		DeformAcceleratorPool(std::shared_ptr<IDevice>);
+		~DeformAcceleratorPool();
 
-        std::vector<std::shared_ptr<DeformAccelerator>> _accelerators;
-        std::shared_ptr<IDevice> _device;
+	private:
+		std::vector<std::weak_ptr<DeformAccelerator>> _accelerators;
+		std::shared_ptr<IDevice> _device;
 
-        void ExecuteInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx);
-    };
+		void ExecuteInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx);
+	};
 
-    class DeformAccelerator
-    {
-    public:
-        std::vector<uint64_t> _instanceStates;
-        unsigned _minActiveInstance = ~0u;
-        unsigned _maxActiveInstance = 0;
+	class DeformAccelerator
+	{
+	public:
+		std::vector<uint64_t> _instanceStates;
+		unsigned _minActiveInstance = ~0u;
+		unsigned _maxActiveInstance = 0;
 
-        std::vector<Internal::DeformOp> _deformOps;
+		std::vector<Internal::DeformOp> _deformOps;
+		std::vector<RendererGeoDeformInterface> _rendererGeoInterface;
 
-        std::shared_ptr<IResource> _dynVB;
-        std::vector<uint8_t> _deformStaticDataInput;
+		std::shared_ptr<IResource> _dynVB;
+		std::vector<uint8_t> _deformStaticDataInput;
 		std::vector<uint8_t> _deformTemporaryBuffer;
-        
-        #if defined(_DEBUG)
-            DeformAcceleratorPool* _containingPool = nullptr;
-        #endif
-    };
 
-    std::shared_ptr<DeformAccelerator> DeformAcceleratorPool::CreateDeformAccelerator(
-        StringSection<> initializer,
-        const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold)
-    {
-        auto deformAttachments = _opFactory.CreateDeformOperations(initializer, modelScaffold);
-        auto newAccelerator = std::make_shared<DeformAccelerator>();
-        newAccelerator->_instanceStates.resize(8);
-        #if defined(_DEBUG)
-            newAccelerator->_containingPool = this;
-        #endif
+		VertexBufferView _outputVBV;
+		
+		#if defined(_DEBUG)
+			DeformAcceleratorPool* _containingPool = nullptr;
+		#endif
+	};
 
-        ////////////////////////////////////////////////////////////////////////////////////
-        // Build deform streams
+	std::shared_ptr<DeformAccelerator> DeformAcceleratorPool::CreateDeformAccelerator(
+		StringSection<> initializer,
+		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold)
+	{
+		auto& opFactory = Services::GetDeformOperationFactory();
+		auto deformInstantiations = opFactory.CreateDeformOperations(initializer, modelScaffold);
+		auto newAccelerator = std::make_shared<DeformAccelerator>();
+		newAccelerator->_instanceStates.resize(8);
+		#if defined(_DEBUG)
+			newAccelerator->_containingPool = this;
+		#endif
 
-        unsigned preDeformStaticDataVBIterator = 0;
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build deform streams
+
+		unsigned preDeformStaticDataVBIterator = 0;
 		unsigned deformTemporaryVBIterator = 0;
 		unsigned postDeformVBIterator = 0;
 		std::vector<Internal::SourceDataTransform> deformStaticLoadDataRequests;
 
 		std::vector<Internal::NascentDeformStream> geoDeformStreams;
 		std::vector<Internal::NascentDeformStream> skinControllerDeformStreams;
-        geoDeformStreams.reserve(modelScaffold->ImmutableData()._geoCount);
+		geoDeformStreams.reserve(modelScaffold->ImmutableData()._geoCount);
 
-        for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
+		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
 
-            unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
+			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
 			auto deform = Internal::BuildNascentDeformStream(
-				deformAttachments, geo, vertexCount, 
+				deformInstantiations, geo, vertexCount, 
 				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
-            newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
+			newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
 
-            deformStaticLoadDataRequests.insert(
+			deformStaticLoadDataRequests.insert(
 				deformStaticLoadDataRequests.end(),
 				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
-            geoDeformStreams.push_back(std::move(deform));
-        }
+			geoDeformStreams.push_back(std::move(deform));
+		}
 
-        skinControllerDeformStreams.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
-        for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
+		skinControllerDeformStreams.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
-            unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
+			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
 			auto deform = Internal::BuildNascentDeformStream(
-				deformAttachments, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
+				deformInstantiations, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
 				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
-            newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
+			newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
 
-            deformStaticLoadDataRequests.insert(
+			deformStaticLoadDataRequests.insert(
 				deformStaticLoadDataRequests.end(),
 				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
-            skinControllerDeformStreams.push_back(std::move(deform));
-        }
+			skinControllerDeformStreams.push_back(std::move(deform));
+		}
 
-        ////////////////////////////////////////////////////////////////////////////////////
+		if (newAccelerator->_deformOps.empty())
+			return nullptr;
 
-        // Create the dynamic VB and assign it to all of the slots it needs to go to
+		////////////////////////////////////////////////////////////////////////////////////
+
+		// Create the dynamic VB and assign it to all of the slots it needs to go to
 		if (postDeformVBIterator) {
 			newAccelerator->_dynVB = _device->CreateResource(
 				CreateDesc(
@@ -152,47 +160,62 @@ namespace RenderCore { namespace Techniques
 			newAccelerator->_deformTemporaryBuffer.resize(deformTemporaryVBIterator, 0);
 		}
 
-        return newAccelerator;
-    }
+		newAccelerator->_rendererGeoInterface.reserve(geoDeformStreams.size() + skinControllerDeformStreams.size());
+		for (const auto&s:geoDeformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
+		for (const auto&s:skinControllerDeformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
 
-    void DeformAcceleratorPool::DestroyAccelerator(DeformAccelerator& accelerator)
-    {
-        auto i = std::find_if(_accelerators.begin(), _accelerators.begin(), [&accelerator](const auto& a) { return a.get() == &accelerator; });
-        assert(i!=_accelerators.end());
-        if (i!=_accelerators.end())
-            _accelerators.erase(i);            
-    }
+		_accelerators.push_back(newAccelerator);
 
-    std::vector<std::shared_ptr<IDeformOperation>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
-    {
-        #if defined(_DEBUG)
-            assert(accelerator._containingPool == this);
-        #endif
-        std::vector<std::shared_ptr<IDeformOperation>> result;
-        for (const auto&i:accelerator._deformOps)
-            if (i._deformOp->QueryInterface(typeId))
-                result.push_back(i._deformOp);
-        return result;
-    }
+		return newAccelerator;
+	}
 
-    void DeformAcceleratorPool::EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx)
-    {
-        assert(instanceIdx!=~0u);
-        #if defined(_DEBUG)
-            assert(accelerator._containingPool == this);
-        #endif
-        auto field = instanceIdx / 64;
-        if (accelerator._instanceStates.size() <= field)
-            accelerator._instanceStates.resize(field+1, 0);
-        accelerator._instanceStates[field] |= instanceIdx & (64-1);
-        accelerator._minActiveInstance = std::min(accelerator._minActiveInstance, instanceIdx);
-        accelerator._maxActiveInstance = std::min(accelerator._maxActiveInstance, instanceIdx);
-    }
+	void DeformAcceleratorPool::DestroyAccelerator(DeformAccelerator& accelerator)
+	{
+		/*auto i = std::find_if(_accelerators.begin(), _accelerators.begin(), [&accelerator](const auto& a) { return a.get() == &accelerator; });
+		assert(i!=_accelerators.end());
+		if (i!=_accelerators.end())
+			_accelerators.erase(i);*/
+	}
 
-    void DeformAcceleratorPool::ExecuteInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx)
-    {
-        assert(instanceIdx!=~0u);
-        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+	IteratorRange<const RendererGeoDeformInterface*> DeformAcceleratorPool::GetRendererGeoInterface(DeformAccelerator& accelerator) const
+	{
+		#if defined(_DEBUG)
+			assert(accelerator._containingPool == this);
+		#endif
+		return accelerator._rendererGeoInterface;
+	}
+
+	std::vector<std::shared_ptr<IDeformOperation>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
+	{
+		#if defined(_DEBUG)
+			assert(accelerator._containingPool == this);
+		#endif
+		std::vector<std::shared_ptr<IDeformOperation>> result;
+		for (const auto&i:accelerator._deformOps)
+			if (i._deformOp->QueryInterface(typeId))
+				result.push_back(i._deformOp);
+		return result;
+	}
+
+	void DeformAcceleratorPool::EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx)
+	{
+		assert(instanceIdx!=~0u);
+		#if defined(_DEBUG)
+			assert(accelerator._containingPool == this);
+		#endif
+		auto field = instanceIdx / 64;
+		if (accelerator._instanceStates.size() <= field)
+			accelerator._instanceStates.resize(field+1, 0);
+		accelerator._instanceStates[field] |= 1ull << (instanceIdx & (64-1));
+		accelerator._minActiveInstance = std::min(accelerator._minActiveInstance, instanceIdx);
+		accelerator._maxActiveInstance = std::min(accelerator._maxActiveInstance, instanceIdx);
+	}
+
+	void DeformAcceleratorPool::ExecuteInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx)
+	{
+		assert(instanceIdx!=~0u);
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+		assert(a._dynVB);
 
 		auto* res = (Metal::Resource*)a._dynVB->QueryInterface(typeid(Metal::Resource).hash_code());
 		assert(res);
@@ -244,55 +267,67 @@ namespace RenderCore { namespace Techniques
 				MakeIteratorRange(inputElementRanges, &inputElementRanges[d._inputElements.size()]),
 				MakeIteratorRange(outputElementRanges, &outputElementRanges[d._outputElements.size()]));
 		}
-    }
+	}
 
-    void DeformAcceleratorPool::ReadyInstances(IThreadContext& threadContext)
-    {
-        for (const auto&a:_accelerators) {
-            if (a->_maxActiveInstance <= a->_minActiveInstance) continue;
-            auto fMin = a->_minActiveInstance / 64, fMax = a->_maxActiveInstance / 64;
-            for (auto f=fMin; f<=fMax; ++f) {
-                auto active = a->_instanceStates[f];
-                while (active) {
-                    auto bit = xl_ctz8(active);
-                    active ^= 1ull<<uint64_t(bit);
-                    
-                    auto instance = f*64+bit;
-                    ExecuteInstance(threadContext, *a, instance);
-                }
-            }
-        }
-    }
+	void DeformAcceleratorPool::ReadyInstances(IThreadContext& threadContext)
+	{
+		for (const auto&a:_accelerators) {
+			auto accelerator = a.lock();
+			if (!accelerator) continue;
+			if (accelerator->_maxActiveInstance < accelerator->_minActiveInstance) continue;
+			auto fMin = accelerator->_minActiveInstance / 64, fMax = accelerator->_maxActiveInstance / 64;
+			for (auto f=fMin; f<=fMax; ++f) {
+				auto active = accelerator->_instanceStates[f];
+				while (active) {
+					auto bit = xl_ctz8(active);
+					active ^= 1ull<<uint64_t(bit);
+					
+					auto instance = f*64+bit;
+					ExecuteInstance(threadContext, *accelerator, instance);
+				}
+			}
+		}
+	}
 
-    VertexBufferView DeformAcceleratorPool::GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceId) const
-    {
-        return {};
-    }
+	VertexBufferView DeformAcceleratorPool::GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceId) const
+	{
+		#if defined(_DEBUG)
+			assert(accelerator._containingPool == this);
+		#endif
+		return accelerator._outputVBV;
+	}
 
-    inline void DeformAcceleratorPool::OnFrameBarrier()
-    {
-        for (auto& a:_accelerators) {
-            for (auto& c:a->_instanceStates) 
-                c = 0;
-            a->_minActiveInstance = ~0u;
-            a->_maxActiveInstance = 0u;
-        }
-    }
+	inline void DeformAcceleratorPool::OnFrameBarrier()
+	{
+		auto i = _accelerators.begin();
+		for (; i!=_accelerators.end();) {
+			auto accelerator = i->lock();
+			if (accelerator) {
+				for (auto& c:accelerator->_instanceStates) 
+					c = 0;
+				accelerator->_minActiveInstance = ~0u;
+				accelerator->_maxActiveInstance = 0u;
+				++i;
+			} else {
+				i = _accelerators.erase(i);
+			}
+		}
+	}
 
-    DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
-    : _device(std::move(device))
-    {}
-    DeformAcceleratorPool::~DeformAcceleratorPool() {}
+	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
+	: _device(std::move(device))
+	{}
+	DeformAcceleratorPool::~DeformAcceleratorPool() {}
 
-    static uint64_t s_nextDeformAcceleratorPool = 1;
-    IDeformAcceleratorPool::IDeformAcceleratorPool() 
-    : _guid(s_nextDeformAcceleratorPool++)
-    {}
-    IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
+	static uint64_t s_nextDeformAcceleratorPool = 1;
+	IDeformAcceleratorPool::IDeformAcceleratorPool() 
+	: _guid(s_nextDeformAcceleratorPool++)
+	{}
+	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
 
-    std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device)
-    {
-        return std::make_shared<DeformAcceleratorPool>(std::move(device));
-    }
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device)
+	{
+		return std::make_shared<DeformAcceleratorPool>(std::move(device));
+	}
 
 }}

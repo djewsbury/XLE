@@ -47,6 +47,9 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float4x4*> skeletonMachineOutput,
 		const RenderCore::Assets::SkeletonBinding& binding)
 	{
+		_skeletonMachineOutput.clear();
+		_skeletonMachineOutput.insert(_skeletonMachineOutput.end(), skeletonMachineOutput.begin(), skeletonMachineOutput.end());
+		_skeletonBinding = binding;
 	}
 
 	void SkinDeformer::Execute(

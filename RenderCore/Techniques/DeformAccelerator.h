@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../../Utility/StringUtils.h"
+#include "../../Utility/IteratorUtils.h"
 #include <memory>
 
 namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; }
@@ -12,6 +13,7 @@ namespace RenderCore { namespace Techniques
 {
     class DeformAccelerator;
     class IDeformOperation;
+    struct RendererGeoDeformInterface;
 
     class IDeformAcceleratorPool
     {
@@ -20,6 +22,8 @@ namespace RenderCore { namespace Techniques
             StringSection<> initializer,
             const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) = 0;
         virtual void DestroyAccelerator(DeformAccelerator&) = 0;
+
+        virtual IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const = 0;
 
         virtual std::vector<std::shared_ptr<IDeformOperation>> GetOperations(DeformAccelerator& accelerator, size_t typeId) = 0;
         virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;

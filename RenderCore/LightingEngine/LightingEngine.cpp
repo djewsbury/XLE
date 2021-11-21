@@ -423,6 +423,11 @@ namespace RenderCore { namespace LightingEngine
 		return marker;
 	}
 
+	void LightingTechniqueInstance::SetDeformAcceleratorPool(Techniques::IDeformAcceleratorPool& pool)
+	{
+		_iterator->_deformAcceleratorPool = &pool;
+	}
+
 	LightingTechniqueInstance::LightingTechniqueInstance(
 		CompiledLightingTechnique& technique)
 	{
