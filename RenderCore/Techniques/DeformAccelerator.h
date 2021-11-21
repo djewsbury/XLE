@@ -21,7 +21,6 @@ namespace RenderCore { namespace Techniques
         virtual std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(
             StringSection<> initializer,
             const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) = 0;
-        virtual void DestroyAccelerator(DeformAccelerator&) = 0;
 
         virtual IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const = 0;
 

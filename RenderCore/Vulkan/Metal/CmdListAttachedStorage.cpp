@@ -83,7 +83,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class TemporaryStoragePage
 	{
 	public:
-		BindFlag::Enum 	_type;
+		BindFlag::BitField 	_type;
 		std::shared_ptr<Resource> _resource;
 		CircularHeap	_heap;
 		unsigned		_pageId = ~0u;
@@ -96,7 +96,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		unsigned		_alignment;
 
-		TemporaryStoragePage(ObjectFactory& factory, size_t size, BindFlag::Enum type, unsigned pageId);
+		TemporaryStoragePage(ObjectFactory& factory, size_t size, BindFlag::BitField type, unsigned pageId);
 		~TemporaryStoragePage();
 		TemporaryStoragePage(TemporaryStoragePage&&) = delete;
 		TemporaryStoragePage& operator=(TemporaryStoragePage&&) = delete;
@@ -117,32 +117,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		Pimpl(ObjectFactory& factory, std::shared_ptr<IAsyncTracker> gpuTracker);
 		~Pimpl();
 
-		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::Enum type);
+		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, size_t defaultPageSize);
 		void ReleaseReservation(TemporaryStoragePage& page);
 		void FlushDestroys();
 	};
 
-	static unsigned GetDefaultPageSize(BindFlag::Enum type)
-	{
-		switch (type) {
-		case BindFlag::ConstantBuffer: return 256 * 1024;
-		case BindFlag::VertexBuffer: return 1024 * 1024;
-		case BindFlag::IndexBuffer: return 256 * 1024;
-		case BindFlag::ShaderResource: return 256 * 1024;
-		default: return 256 * 1024;
-		}
-	}
-
-	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::Enum type)
+	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
 	{
 		assert(byteCount != 0);
+		assert(bindFlags != 0);
+		assert(defaultPageSize != 0);
 		// Find a page with at least the given amount of free space (hopefully significantly more) and the 
 		// given binding type
 		ScopedLock(_lock);
 		auto i = _pageReservations.FirstUnallocated();
 		for (; i!=_pages.size(); ++i) {
 			auto& page = *_pages[i];
-			if (page._type != type) continue;
+			if (page._type != bindFlags) continue;
 			if (_pageReservations.IsAllocated(i)) continue;
 
 			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, page._alignment);
@@ -154,8 +145,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), GetDefaultPageSize(type));
-		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, type, _nextPageId++));
+		auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)defaultPageSize);
+		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, _nextPageId++));
 		_pageReservations.Allocate(_pages.size()-1);
 
 		auto& page = *_pages[_pages.size()-1];
@@ -240,36 +231,41 @@ namespace RenderCore { namespace Metal_Vulkan
 			"RollingTempBuf");
 	}
 
-	TemporaryStoragePage::TemporaryStoragePage(ObjectFactory& factory, size_t byteCount, BindFlag::Enum type, unsigned pageId)
+	TemporaryStoragePage::TemporaryStoragePage(ObjectFactory& factory, size_t byteCount, BindFlag::BitField type, unsigned pageId)
 	: _resource(std::make_shared<Resource>(factory, BuildBufferDesc(type, byteCount)))
 	, _heap((unsigned)byteCount), _type(type), _pageId(pageId)
 	{
 		_lastBarrier = 0u;
 		_lastBarrierContext = nullptr;
 
-		switch (type) {
-		case BindFlag::ConstantBuffer:
-			_alignment = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
-			break;
-		case BindFlag::UnorderedAccess:
-			_alignment = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minStorageBufferOffsetAlignment);
-			break;
-		case BindFlag::ShaderResource:
-			_alignment = std::max(1u, (unsigned)factory.GetPhysicalDeviceProperties().limits.minTexelBufferOffsetAlignment);
-			break;
-		default:
-			_alignment = 1;
-			break;
-		}
+		_alignment = 1;
+		// technically we should be calculating the least common multiple
+		if (type & BindFlag::ConstantBuffer)
+			_alignment = std::max(_alignment, (unsigned)factory.GetPhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
+		
+		if (type & BindFlag::UnorderedAccess)
+			_alignment = std::max(_alignment, (unsigned)factory.GetPhysicalDeviceProperties().limits.minStorageBufferOffsetAlignment);
+		
+		if (type & BindFlag::ShaderResource)
+			_alignment = std::max(_alignment, (unsigned)factory.GetPhysicalDeviceProperties().limits.minTexelBufferOffsetAlignment);
 	}
 
 	TemporaryStoragePage::~TemporaryStoragePage() {}
 
-	TemporaryStorageResourceMap CmdListAttachedStorage::MapStorage(size_t byteCount, BindFlag::Enum type)
+	static unsigned GetDefaultPageSize(BindFlag::BitField type)
+	{
+		if (type & BindFlag::ConstantBuffer) return 256 * 1024;
+		if (type & BindFlag::VertexBuffer) return 1024 * 1024;
+		if (type & BindFlag::IndexBuffer) return 256 * 1024;
+		if (type & BindFlag::ShaderResource) return 256 * 1024;
+		return 256 * 1024;
+	}
+
+	TemporaryStorageResourceMap CmdListAttachedStorage::MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
-			if ((*page)->_type != type) continue;
+			if ((*page)->_type != bindFlags) continue;
 
 			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, (*page)->_alignment); // (probably pow2, but we don't know for sure)
 			auto space = (*page)->_heap.AllocateBack(alignedByteCount);
@@ -288,7 +284,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, type);
+		if (!defaultPageSize)
+			defaultPageSize = GetDefaultPageSize(bindFlags);
+
+		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, defaultPageSize);
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return TemporaryStorageResourceMap {
 			_manager->_factory->GetDevice().get(), 
