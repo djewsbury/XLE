@@ -187,7 +187,8 @@ namespace RenderCore
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	enum class VertexUtilComponentType { Float32, Float16, UNorm8, UNorm16, SNorm8, SNorm16, UInt8, UInt16, UInt32, SInt8, SInt16, SInt32 };
-    static std::pair<VertexUtilComponentType, unsigned> BreakdownFormat(Format fmt);
+    struct BrokenDownFormat { VertexUtilComponentType _type; unsigned _componentCount; };
+	BrokenDownFormat BreakdownFormat(Format fmt);
     
 	inline unsigned short AsFloat16(float input)
     {
@@ -211,9 +212,9 @@ namespace RenderCore
         return half_float::detail::half2float(input);
     }
 
-	inline std::pair<VertexUtilComponentType, unsigned> BreakdownFormat(Format fmt)
+	inline BrokenDownFormat BreakdownFormat(Format fmt)
     {
-        if (fmt == Format::Unknown) return std::make_pair(VertexUtilComponentType::Float32, 0);
+        if (fmt == Format::Unknown) return {VertexUtilComponentType::Float32, 0};
 
         auto componentType = VertexUtilComponentType::Float32;
         unsigned componentCount = GetComponentCount(GetComponents(fmt));
@@ -260,7 +261,7 @@ namespace RenderCore
             assert(0);
         }
 
-        return std::make_pair(componentType, componentCount);
+        return {componentType, componentCount};
     }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -394,32 +395,32 @@ namespace RenderCore
 		auto output = result.begin();
 
 		auto fmtBreakdown = BreakdownFormat(input.begin()._format);
-		switch (fmtBreakdown.first) {
+		switch (fmtBreakdown._type) {
 		case VertexUtilComponentType::Float32:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
 				Float4 value{0.f, 0.f, 0.f, 1.0};
-				GetVertDataF32(value.data(), &(*p).As<float>(), std::min(fmtBreakdown.second, 3u));
+				GetVertDataF32(value.data(), &(*p).As<float>(), std::min(fmtBreakdown._componentCount, 3u));
 				*output = Truncate(value);
 			}
 			break;
 		case VertexUtilComponentType::Float16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
 				Float4 value{0.f, 0.f, 0.f, 1.0};
-				GetVertDataF16(value.data(), &(*p).As<uint16_t>(), std::min(fmtBreakdown.second, 3u));
+				GetVertDataF16(value.data(), &(*p).As<uint16_t>(), std::min(fmtBreakdown._componentCount, 3u));
 				*output = Truncate(value);
 			}
 			break;
 		case VertexUtilComponentType::UNorm16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
 				Float4 value{0.f, 0.f, 0.f, 1.0};
-				GetVertDataUNorm16(value.data(), &(*p).As<uint16_t>(), std::min(fmtBreakdown.second, 3u));
+				GetVertDataUNorm16(value.data(), &(*p).As<uint16_t>(), std::min(fmtBreakdown._componentCount, 3u));
 				*output = Truncate(value);
 			}
 			break;
 		case VertexUtilComponentType::SNorm16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
 				Float4 value{0.f, 0.f, 0.f, 1.0};
-				GetVertDataSNorm16(value.data(), &(*p).As<int16_t>(), std::min(fmtBreakdown.second, 3u));
+				GetVertDataSNorm16(value.data(), &(*p).As<int16_t>(), std::min(fmtBreakdown._componentCount, 3u));
 				*output = Truncate(value);
 			}
 			break;
@@ -437,30 +438,30 @@ namespace RenderCore
 		auto output = result.begin();
 
 		auto fmtBreakdown = BreakdownFormat(input.begin()._format);
-		switch (fmtBreakdown.first) {
+		switch (fmtBreakdown._type) {
 		case VertexUtilComponentType::Float32:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataF32(output->data(), &(*p).As<float>(), fmtBreakdown.second);
+				GetVertDataF32(output->data(), &(*p).As<float>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::Float16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataF16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown.second);
+				GetVertDataF16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::UNorm16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataUNorm16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown.second);
+				GetVertDataUNorm16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::SNorm16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataSNorm16(output->data(), &(*p).As<int16_t>(), fmtBreakdown.second);
+				GetVertDataSNorm16(output->data(), &(*p).As<int16_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::UNorm8:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataUNorm8(output->data(), &(*p).As<uint8_t>(), fmtBreakdown.second);
+				GetVertDataUNorm8(output->data(), &(*p).As<uint8_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::SNorm8:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataSNorm8(output->data(), &(*p).As<int8_t>(), fmtBreakdown.second);
+				GetVertDataSNorm8(output->data(), &(*p).As<int8_t>(), fmtBreakdown._componentCount);
 			break;
 		default:
 			assert(0);
@@ -476,18 +477,18 @@ namespace RenderCore
 		auto output = result.begin();
 
 		auto fmtBreakdown = BreakdownFormat(input.begin()._format);
-		switch (fmtBreakdown.first) {
+		switch (fmtBreakdown._type) {
 		case VertexUtilComponentType::UInt8:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataUInt8(output->data(), &(*p).As<uint8_t>(), fmtBreakdown.second);
+				GetVertDataUInt8(output->data(), &(*p).As<uint8_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::UInt16:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataUInt16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown.second);
+				GetVertDataUInt16(output->data(), &(*p).As<uint16_t>(), fmtBreakdown._componentCount);
 			break;
 		case VertexUtilComponentType::UInt32:
 			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				GetVertDataUInt32(output->data(), &(*p).As<uint32_t>(), fmtBreakdown.second);
+				GetVertDataUInt32(output->data(), &(*p).As<uint32_t>(), fmtBreakdown._componentCount);
 			break;
 		default:
 			assert(0);

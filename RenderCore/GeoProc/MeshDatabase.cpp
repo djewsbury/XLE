@@ -116,21 +116,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	inline void GetVertData(
         float* dst, 
-        const void* src, std::pair<VertexUtilComponentType, unsigned> fmt,
+        const void* src, BrokenDownFormat fmt,
         ProcessingFlags::BitField processingFlags)
     {
-        switch (fmt.first) {
+        switch (fmt._type) {
         case VertexUtilComponentType::Float32:
-            GetVertDataF32(dst, (const float*)src, fmt.second, processingFlags);
+            GetVertDataF32(dst, (const float*)src, fmt._componentCount, processingFlags);
             break;
         case VertexUtilComponentType::Float16:
-            GetVertDataF16(dst, (const uint16*)src, fmt.second, processingFlags);
+            GetVertDataF16(dst, (const uint16*)src, fmt._componentCount, processingFlags);
             break;
 		case VertexUtilComponentType::UNorm16:
-			GetVertDataUNorm16(dst, (const uint16*)src, fmt.second, processingFlags);
+			GetVertDataUNorm16(dst, (const uint16*)src, fmt._componentCount, processingFlags);
 			break;
 		case VertexUtilComponentType::SNorm16:
-			GetVertDataSNorm16(dst, (const int16*)src, fmt.second, processingFlags);
+			GetVertDataSNorm16(dst, (const int16*)src, fmt._componentCount, processingFlags);
 			break;
         default:
             assert(0);
@@ -197,9 +197,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         assert(count != 0);
 
             //      This could be be made more efficient with a smarter loop..
-        if (srcFormat.first == VertexUtilComponentType::Float32) {
+        if (srcFormat._type == VertexUtilComponentType::Float32) {
 
-            if (dstFormat.first == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
+            if (dstFormat._type == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -207,15 +207,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF32(input, (const float*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF32(input, (const float*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((float*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((float*)dst)[c] = input[c];
                     }
                 }
 
-            } else if (dstFormat.first == VertexUtilComponentType::Float16) {  ////////////////////////////////////////////////
+            } else if (dstFormat._type == VertexUtilComponentType::Float16) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -223,15 +223,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF32(input, (const float*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF32(input, (const float*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((unsigned short*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((unsigned short*)dst)[c] = AsFloat16(input[c]);
                     }
                 }
 
-            } else if (dstFormat.first == VertexUtilComponentType::UNorm8) {  ////////////////////////////////////////////////
+            } else if (dstFormat._type == VertexUtilComponentType::UNorm8) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -239,9 +239,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF32(input, (const float*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF32(input, (const float*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((unsigned char*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((unsigned char*)dst)[c] = (unsigned char)Clamp(((float*)input)[c]*255.f, 0.f, 255.f);
                     }
@@ -251,9 +251,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 Throw(std::runtime_error("Error while copying vertex data. Unexpected format for destination parameter."));
             }
 
-		} else if (srcFormat.first == VertexUtilComponentType::Float16) {
+		} else if (srcFormat._type == VertexUtilComponentType::Float16) {
 
-			if (dstFormat.first == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
+			if (dstFormat._type == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -261,15 +261,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((float*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((float*)dst)[c] = input[c];
                     }
                 }
 
-            } else if (dstFormat.first == VertexUtilComponentType::Float16) {  ////////////////////////////////////////////////
+            } else if (dstFormat._type == VertexUtilComponentType::Float16) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -277,15 +277,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((unsigned short*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((unsigned short*)dst)[c] = AsFloat16(input[c]);
                     }
                 }
 
-            } else if (dstFormat.first == VertexUtilComponentType::UNorm8) {  ////////////////////////////////////////////////
+            } else if (dstFormat._type == VertexUtilComponentType::UNorm8) {  ////////////////////////////////////////////////
 
                 for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -293,9 +293,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataF16(input, (const uint16_t*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((unsigned char*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((unsigned char*)dst)[c] = (unsigned char)Clamp(((float*)input)[c]*255.f, 0.f, 255.f);
                     }
@@ -305,7 +305,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 Throw(std::runtime_error("Error while copying vertex data. Unexpected format for destination parameter."));
             }
 
-        } else if (srcFormat.first == dstFormat.first &&  srcFormat.second == dstFormat.second) {
+        } else if (srcFormat._type == dstFormat._type &&  srcFormat._componentCount == dstFormat._componentCount) {
 
                 // simple copy of uint8 data
             for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
@@ -319,9 +319,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 }
             }
 
-		} else if (srcFormat.first == VertexUtilComponentType::UNorm16) {
+		} else if (srcFormat._type == VertexUtilComponentType::UNorm16) {
 
-			if (dstFormat.first == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
+			if (dstFormat._type == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
 
 				for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -329,9 +329,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataUNorm16(input, (const uint16_t*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataUNorm16(input, (const uint16_t*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((float*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((float*)dst)[c] = input[c];
                     }
@@ -341,9 +341,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 Throw(std::runtime_error("Error while copying vertex data. Unexpected format for destination parameter."));
             }
 
-		} else if (srcFormat.first == VertexUtilComponentType::SNorm16) {
+		} else if (srcFormat._type == VertexUtilComponentType::SNorm16) {
 
-			if (dstFormat.first == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
+			if (dstFormat._type == VertexUtilComponentType::Float32) {  ////////////////////////////////////////////////
 
 				for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                     auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
@@ -351,9 +351,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     auto* srcV = PtrAdd(src, srcIndex * srcStride);
 
                     float input[4] = {0.f, 0.f, 0.f, 1.0f};
-                    GetVertDataUNorm16(input, (const uint16_t*)srcV, srcFormat.second, processingFlags);
+                    GetVertDataUNorm16(input, (const uint16_t*)srcV, srcFormat._componentCount, processingFlags);
 
-                    for (unsigned c=0; c<dstFormat.second; ++c) {
+                    for (unsigned c=0; c<dstFormat._componentCount; ++c) {
                         assert(&((float*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
                         ((float*)dst)[c] = input[c];
                     }
@@ -601,20 +601,20 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             //
 
         auto brkdn = BreakdownFormat(source.GetFormat());
-        if (!brkdn.second)
+        if (!brkdn._componentCount)
             return source.GetFormat();
 
         if (source.GetFormatHint() & FormatHint::IsColor) {
-            if (brkdn.second == 1)          return Format::R8_UNORM;
-            else if (brkdn.second == 2)     return Format::R8G8_UNORM;
-            else                            return Format::R8G8B8A8_UNORM;
+            if (brkdn._componentCount == 1)         return Format::R8_UNORM;
+            else if (brkdn._componentCount == 2)    return Format::R8G8_UNORM;
+            else                                    return Format::R8G8B8A8_UNORM;
         }
 
         // If we start with 32 bit floats here, we can decide to convert them to 16 bit
-        if (settings._use16BitFloats && brkdn.first == VertexUtilComponentType::Float32) {
-            if (brkdn.second == 1)          return Format::R16_FLOAT;
-            else if (brkdn.second == 2)     return Format::R16G16_FLOAT;
-            else                            return Format::R16G16B16A16_FLOAT;
+        if (settings._use16BitFloats && brkdn._type == VertexUtilComponentType::Float32) {
+            if (brkdn._componentCount == 1)         return Format::R16_FLOAT;
+            else if (brkdn._componentCount == 2)    return Format::R16G16_FLOAT;
+            else                                    return Format::R16G16B16A16_FLOAT;
         }
 
         // If no conversion is necessary, try to retain the previous format

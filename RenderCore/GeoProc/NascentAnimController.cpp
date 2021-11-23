@@ -202,6 +202,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 }
             }
 
+            assert(totalWeightValue <= (1.f+1e-3f));        // the math below requires that the weight total be equal or less than 1
+
             // the weighting of the dropped elements should be evenly distributed into the
             // remaining weights
             float weightOfUndroppedInfluences = totalWeightValue;
@@ -459,6 +461,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         elementsToBeSkinned.push_back("POSITION");
         if (constant_expression<SkinNormals>::result()) {
             elementsToBeSkinned.push_back("NORMAL");
+            elementsToBeSkinned.push_back("TEXTANGENT");
+            elementsToBeSkinned.push_back("TEXBITANGENT");
         }
 
             //

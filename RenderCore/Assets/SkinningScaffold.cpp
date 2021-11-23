@@ -293,14 +293,6 @@ namespace RenderCore { namespace Assets
     }
 
     SkeletonBinding::SkeletonBinding() {}
-    SkeletonBinding::SkeletonBinding(SkeletonBinding&& moveFrom) never_throws
-    : _modelJointIndexToMachineOutput(std::move(moveFrom._modelJointIndexToMachineOutput))
-    {}
-    SkeletonBinding& SkeletonBinding::operator=(SkeletonBinding&& moveFrom) never_throws
-    {
-        _modelJointIndexToMachineOutput = std::move(moveFrom._modelJointIndexToMachineOutput);
-        return *this;
-    }
     SkeletonBinding::~SkeletonBinding() {}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
