@@ -12,6 +12,7 @@
 #include <functional>
 
 namespace RenderCore { namespace Assets { class ModelScaffold; }}
+namespace RenderCore { class IThreadContext; class IResourceView; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -22,7 +23,12 @@ namespace RenderCore { namespace Techniques
 		virtual void Execute(
 			unsigned instanceIdx,
 			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const = 0;
+			IteratorRange<const VertexElementRange*> destinationElements) const;
+		virtual void ExecuteGPU(
+			IThreadContext& threadContext,
+			unsigned instanceIdx,
+			const IResourceView& sourceElements,
+			const IResourceView& destinationElements) const;
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IDeformOperation();
 	};
