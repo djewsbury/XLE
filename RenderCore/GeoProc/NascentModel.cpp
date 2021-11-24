@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	auto NascentModel::FindGeometryBlock(NascentObjectGuid id) const -> const GeometryBlock*
 	{
 		for (auto&g:_geoBlocks)
-			if (g.first._srcObject == id)
+			if (g.first == id)
 				return &g.second;
 		return nullptr;
 	}
@@ -33,7 +33,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	auto NascentModel::FindSkinControllerBlock(NascentObjectGuid id) const -> const SkinControllerBlock*
 	{
 		for (auto&g:_skinBlocks)
-			if (g.first._srcObject == id)
+			if (g.first == id)
 				return &g.second;
 		return nullptr;
 	}
@@ -41,30 +41,36 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	auto NascentModel::FindCommand(NascentObjectGuid id) const ->  const Command* 
 	{
 		for (auto&g:_commands)
-			if (g.first._srcObject == id)
+			if (g.first == id)
 				return &g.second;
 		return nullptr;
 	}
 
-	void NascentModel::Add(NascentObjectGuid id, const std::string& name, GeometryBlock&& object)
+	void NascentModel::Add(NascentObjectGuid id, GeometryBlock&& object)
 	{
 		if (FindGeometryBlock(id))
 			Throw(std::runtime_error("Attempting to register a GeometryBlock for a id that is already in use"));
-		_geoBlocks.push_back(std::make_pair(Indexor{id, name}, std::move(object)));
+		if (id._namespaceId == 0)
+			_nextAvailableNamespace0Id = std::max(id._objectId+1, _nextAvailableNamespace0Id);
+		_geoBlocks.push_back(std::make_pair(id, std::move(object)));
 	}
 
-	void NascentModel::Add(NascentObjectGuid id, const std::string& name, SkinControllerBlock&& object)
+	void NascentModel::Add(NascentObjectGuid id, SkinControllerBlock&& object)
 	{
 		if (FindSkinControllerBlock(id))
 			Throw(std::runtime_error("Attempting to register a SkinControllerBlock for a id that is already in use"));
-		_skinBlocks.push_back(std::make_pair(Indexor{id, name}, std::move(object)));
+		if (id._namespaceId == 0)
+			_nextAvailableNamespace0Id = std::max(id._objectId+1, _nextAvailableNamespace0Id);
+		_skinBlocks.push_back(std::make_pair(id, std::move(object)));
 	}
 
-	void NascentModel::Add(NascentObjectGuid id, const std::string& name, Command&& object)
+	void NascentModel::Add(NascentObjectGuid id, Command&& object)
 	{
 		if (FindCommand(id))
 			Throw(std::runtime_error("Attempting to register a Command for a id that is already in use"));
-		_commands.push_back(std::make_pair(Indexor{id, name}, std::move(object)));
+		if (id._namespaceId == 0)
+			_nextAvailableNamespace0Id = std::max(id._objectId+1, _nextAvailableNamespace0Id);
+		_commands.push_back(std::make_pair(id, std::move(object)));
 	}
 
 	void NascentModel::ApplyTransform(const std::string& bindingPoint, const Float4x4& transform)

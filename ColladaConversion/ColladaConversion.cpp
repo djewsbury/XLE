@@ -109,7 +109,8 @@ namespace ColladaConversion
 					"Geometry object is empty (%s)", reference.AsString().c_str()));
 			}
 
-			model.Add(geoId, scaffoldGeo->GetName().AsString(), std::move(convertedMesh._geoBlock));
+			model.Add(geoId, std::move(convertedMesh._geoBlock));
+			model.AttachNameToGeometryBlock(geoId, scaffoldGeo->GetName().AsString());
 			geoBlockMatBindings.insert(std::make_pair(geoId, std::move(convertedMesh._matBindingSymbols)));
 		}
 
@@ -138,13 +139,13 @@ namespace ColladaConversion
 
 		model.Add(
 			{ attachedNode.GetId().GetHash() },
-			attachedNode.GetName().AsString(),
 			NascentModel::Command {
 				geoId, std::move(skinControllers),
 				localToModelBinding,
 				materials, 
 				0
 			});
+		model.AttachNameToCommand({ attachedNode.GetId().GetHash() }, attachedNode.GetName().AsString());
 	}
 
 	static bool IsAncestorOf(const Node& node, IteratorRange<const Node*> roots) 
@@ -235,11 +236,11 @@ namespace ColladaConversion
 
 				model.Add(
 					controllerId, 
-					scaffoldController->GetName().AsString(),
 					NascentModel::SkinControllerBlock {
 						std::make_shared<UnboundSkinController>(std::move(controller)),
 						skeleName
 					});
+				model.AttachNameToSkinControllerBlock(controllerId, scaffoldController->GetName().AsString());
 
 				ConvertCommand(
 					model, geoBlockMatBindings,

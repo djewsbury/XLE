@@ -208,14 +208,13 @@ namespace UnitTests
 		geoBlock._indexFormat = RenderCore::Format::R32_UINT;
 		geoBlock._geoSpaceToNodeSpace = Identity<Float4x4>();
 
-		GeoProc::NascentObjectGuid geoBlockGuid {};
-		result.Add(geoBlockGuid, "GeoBlock", std::move(geoBlock));
+		auto geoBlockGuid = result.Add(std::move(geoBlock));
 
 		GeoProc::NascentModel::Command cmd;
 		cmd._geometryBlock = geoBlockGuid;
 		cmd._localToModel = "InternalNode";
 		cmd._materialBindingSymbols = { "Material0", "Material1" };
-		result.Add({}, "Node", std::move(cmd));
+		result.Add(std::move(cmd));
 
 		return result;
 	}
