@@ -122,7 +122,7 @@ namespace RenderCore { namespace Techniques
 		{
 			unsigned _inputStride, _outputStride;
 			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
-			unsigned _dummy[3];
+			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
 		};
 		IAParams _iaParams;
 

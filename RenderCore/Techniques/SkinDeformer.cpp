@@ -304,6 +304,7 @@ namespace RenderCore { namespace Techniques
 		op->EndDispatches();
 	}
 
+#if 0
 	static void CopyWeightsUNorm8(void* dst, IteratorRange<VertexElementIterator> inputRange, unsigned dstStride)
 	{
 		// Since we're going from arbitrary inputs -> uint8, we can end up dropping a lot of precision here
@@ -396,7 +397,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	static std::vector<uint8_t> CreateStaticVertexAttachmentsBuffer(
+	static std::vector<uint8_t> ReconfigureStaticVertexAttachmentsBuffer(
 		unsigned influencesPerVertex,
 		unsigned vertexCount,
 		unsigned parrallelElementsCount,
@@ -431,6 +432,7 @@ namespace RenderCore { namespace Techniques
 
 		return buffer;
 	}
+#endif
 
 	GPUSkinDeformer::GPUSkinDeformer(
 		IDevice& device,
@@ -454,26 +456,46 @@ namespace RenderCore { namespace Techniques
 		}
 
 		_influencesPerVertex = 0;
+		unsigned skelVBStride = skelVb._ia._vertexStride;
+		unsigned weightsOffset = ~0u, indicesOffset = ~0u;
+		Format weightsFormat = Format::Unknown, indicesFormat = Format::Unknown;
 		unsigned parrallelElementsCount = 0;
 		for (unsigned c=0; ; ++c) {
 			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
 			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 			if (!weightsElement || !jointIndicesElement)
 				break;
+			if (!parrallelElementsCount) {
+				weightsOffset = weightsElement->_alignedByteOffset;
+				indicesOffset = jointIndicesElement->_alignedByteOffset;
+				weightsFormat = weightsElement->_nativeFormat;
+				indicesFormat = jointIndicesElement->_nativeFormat;
+			} else {
+				// we must use the same type format for each attribute (though the quantity can differ)
+				assert(GetComponentType(weightsFormat) == GetComponentType(weightsElement->_nativeFormat));
+				assert(GetComponentType(indicesFormat) == GetComponentType(jointIndicesElement->_nativeFormat));
+				auto weightsBitsPerComponent = BitsPerPixel(weightsFormat) / GetComponentCount(GetComponents(weightsFormat));
+				auto indicesBitsPerComponent = BitsPerPixel(indicesFormat) / GetComponentCount(GetComponents(indicesFormat));
+				// Ensure that the attributes are sequential
+				assert(weightsElement->_alignedByteOffset == weightsOffset + _influencesPerVertex*weightsBitsPerComponent/8);
+				assert(jointIndicesElement->_alignedByteOffset == indicesOffset + _influencesPerVertex*indicesBitsPerComponent/8);
+			}
 			assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
 			_influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_nativeFormat));
 			++parrallelElementsCount;
 		}
 
-		if (!parrallelElementsCount)
+		if (weightsOffset == ~0u || indicesOffset == ~0u)
 			Throw(std::runtime_error("Could not create SkinDeformer because there is no position, weights and/or joint indices element in input geometry"));
+		if ((skelVBStride%4)!=0 || (weightsOffset%4)!=0 || (indicesOffset%4)!=0)
+			Throw(std::runtime_error("Could not create SkinDeformer because input skeleton binding data is not correctly aligned"));
 
 		unsigned vertexCount = skelVb._size / skelVb._ia._vertexStride;
 		assert(vertexCount > 0);
 		assert((_influencesPerVertex%1) == 0);		// must be a multiple of 2
 	
-		{
-			auto buffer = CreateStaticVertexAttachmentsBuffer(
+		/*{
+			auto buffer = ReconfigureStaticVertexAttachmentsBuffer(
 				_influencesPerVertex, vertexCount, parrallelElementsCount, 
 				skelVb, MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)));
 			_staticVertexAttachments = device.CreateResource(
@@ -484,6 +506,15 @@ namespace RenderCore { namespace Techniques
 				SubResourceInitData{MakeIteratorRange(buffer)});
 			_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 		}
+		*/
+
+		_staticVertexAttachments = device.CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess, 0, GPUAccess::Read,
+				LinearBufferDesc::Create(skelVb._size),
+				"SkinDeformer-binding"),
+			SubResourceInitData{MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size))});
+		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 
 		unsigned jointMatrixBufferCount = 0;
 		_sections.reserve(skinnedController._preskinningSections.size());
@@ -522,7 +553,15 @@ namespace RenderCore { namespace Techniques
 		}
 		_iaParams._inputStride = _iaParams._outputStride = animIA._vertexStride;
 
+		_iaParams._weightsOffset = weightsOffset;
+		_iaParams._jointIndicesOffset = indicesOffset;
+		_iaParams._staticVertexAttachmentsStride = skelVBStride;
+
 		selectors.SetParameter("INFLUENCE_COUNT", _influencesPerVertex);
+		selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(indicesFormat));
+		selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(indicesFormat));
+		selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(weightsFormat));
+		selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(weightsFormat));
 
 		UniformsStreamInterface usi;
 		usi.BindImmediateData(0, Hash64("IAParams"));
