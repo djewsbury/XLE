@@ -111,34 +111,43 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 		float3 outputNormal = 0.0.xxx;
 		float3 outputTangent = 0.0.xxx;
 
-		// 
-		for (uint c=0; c!=InvocationParams.SoftInfluenceCount; ++c) {
-			uint packedAttachments = StaticVertexAttachments.Load((vertexIdx*INFLUENCE_COUNT+c)*2);
-			
-			uint boneIndex = packedAttachments&0xff;
-			boneIndex += InvocationParams.FirstJointTransform;
-			packedAttachments >>= 8;
-			float weight = (packedAttachments&0xff) / 255.f;
-			packedAttachments >>= 8;
+		if (InvocationParams.SoftInfluenceCount != 0) {
+			uint c=0;
+			for (;;) {
+				uint packedAttachments = StaticVertexAttachments.Load((vertexIdx*INFLUENCE_COUNT+c)*2);
+				
+				uint boneIndex = packedAttachments&0xff;
+				boneIndex += InvocationParams.FirstJointTransform;
+				packedAttachments >>= 8;
+				float weight = (packedAttachments&0xff) / 255.f;
+				packedAttachments >>= 8;
 
-			outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
-			float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-			outputNormal += weight * mul(rotationPart, inputNormal);
-			outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
+				outputNormal += weight * mul(rotationPart, inputNormal);
+				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
 
-			++c;
-			if (c == InvocationParams.SoftInfluenceCount) break;
+				++c;
+				if (c == InvocationParams.SoftInfluenceCount) break;
 
-			boneIndex = packedAttachments&0xff;
-			boneIndex += InvocationParams.FirstJointTransform;
-			packedAttachments >>= 8;
-			weight = (packedAttachments&0xff) / 255.f;
-			packedAttachments >>= 8;
+				boneIndex = packedAttachments&0xff;
+				boneIndex += InvocationParams.FirstJointTransform;
+				packedAttachments >>= 8;
+				weight = (packedAttachments&0xff) / 255.f;
+				packedAttachments >>= 8;
 
-			outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
-			rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-			outputNormal += weight * mul(rotationPart, inputNormal);
-			outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+				rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
+				outputNormal += weight * mul(rotationPart, inputNormal);
+				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+
+				++c;
+				if (c == InvocationParams.SoftInfluenceCount) break;
+			}
+		} else {
+			outputPosition = inputPosition;
+			outputNormal = inputNormal;
+			outputTangent = inputTangent;
 		}
 
 		StoreFloat3(outputPosition, OutputAttributes, POSITION_FORMAT, vertexIdx * OutputStride + PositionsOffset);
