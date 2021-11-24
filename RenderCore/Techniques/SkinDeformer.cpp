@@ -295,7 +295,8 @@ namespace RenderCore { namespace Techniques
 
 		for (const auto&section:_sections) {
 			for (const auto&drawCall:section._preskinningDrawCalls) {
-				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstIndex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first };
+				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
+				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first };
 				op->Dispatch((drawCall._indexCount+s_wavegroupWidth-1)/s_wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
 			}
 		}
