@@ -155,10 +155,10 @@ namespace UnitTests
 		};
 		auto skinController = std::make_shared<GeoProc::UnboundSkinController>(std::move(inverseBindMatrices), Identity<Float4x4>(), std::move(jointNames));
 		for (unsigned vertex=0; vertex<8; ++vertex) {
-			// float weights[8];
-			// unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
-			float weights[1];
-			unsigned indices[] { 0 };
+			float weights[8];
+			unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+			// float weights[1];
+			// unsigned indices[] { 0 };
 			float weightTotal = 0.f;
 			for (unsigned bone=0; bone<dimof(weights); ++bone) {
 				float distance = Magnitude(s_cubeCorners[bone] - s_cubeCorners[vertex]);
@@ -354,9 +354,9 @@ namespace UnitTests
 		for (unsigned v=0; v<vCount; ++v) {
 			auto cpu = cpuPositions[v];
 			auto gpu = gpuPositions[v];
-			REQUIRE(cpu[0] == gpu[0]);
-			REQUIRE(cpu[1] == gpu[1]);
-			REQUIRE(cpu[2] == gpu[2]);
+			// We're not infinitely precise because the CPU path will always work with 32 bit floats,
+			// but the GPU path can work with a wider variety of formats
+			REQUIRE(Equivalent(cpu, gpu, 1e-3f));
 		}
 	}
 	
