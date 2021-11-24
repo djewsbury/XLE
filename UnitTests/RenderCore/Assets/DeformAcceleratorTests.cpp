@@ -8,6 +8,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
+#include "../../../RenderCore/Techniques/DeformAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/SimpleModelDeform.h"
 #include "../../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../../RenderCore/Techniques/Services.h"
@@ -156,14 +157,16 @@ namespace UnitTests
 		};
 		auto skinController = std::make_shared<GeoProc::UnboundSkinController>(std::move(inverseBindMatrices), Identity<Float4x4>(), std::move(jointNames));
 		for (unsigned vertex=0; vertex<8; ++vertex) {
-			float weights[8];
+			// float weights[8];
+			// unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+			float weights[1];
+			unsigned indices[] { 0 };
 			float weightTotal = 0.f;
-			unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
-			for (unsigned bone=0; bone<8; ++bone) {
+			for (unsigned bone=0; bone<dimof(weights); ++bone) {
 				float distance = Magnitude(s_cubeCorners[bone] - s_cubeCorners[vertex]);
 				weightTotal += weights[bone] = std::max(0.f, 1.f - 0.25f*distance);
 			}
-			for (unsigned bone=0; bone<8; ++bone)
+			for (unsigned bone=0; bone<dimof(weights); ++bone)
 				weights[bone] /= weightTotal;
 			skinController->AddInfluences(vertex, weights, indices);
 		}
@@ -199,6 +202,7 @@ namespace UnitTests
 		return result;
 	}
 
+#if 0
 	void RunDeformAcceleratorsTest(
 		std::shared_ptr<RenderCore::IDevice> device,
 		const TestAnimatedModelResources& resources)
@@ -224,6 +228,7 @@ namespace UnitTests
 		threadContext->CommitCommands();
 		pool->OnFrameBarrier();
 	}
+#endif
 
 	static IResourcePtr LoadVertexBuffer(
 		IDevice& device,
@@ -239,6 +244,19 @@ namespace UnitTests
 		return RenderCore::Techniques::CreateStaticVertexBuffer(
 			device,
 			MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size)));
+	}
+
+	std::vector<uint8_t> LoadCPUVertexBuffer(
+		const RenderCore::Assets::ModelScaffold& scaffold,
+		const RenderCore::Assets::VertexData& vb)
+	{
+		std::vector<uint8_t> result;
+		result.resize(vb._size);
+
+		auto inputFile = scaffold.OpenLargeBlocks();
+		inputFile->Seek(vb._offset, OSServices::FileSeekAnchor::Current);
+		inputFile->Read(result.data(), vb._size, 1);
+		return result;
 	}
 
 	TEST_CASE( "DeformAccelerators", "[rendercore_techniques]" )
@@ -259,7 +277,7 @@ namespace UnitTests
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
 
-		Techniques::GPUSkinDeformer deformer { *testHelper->_device, pipelineCollection, *resources._modelScaffold, 0 };
+		Techniques::GPUSkinDeformer deformer { *testHelper->_device, pipelineCollection, resources._modelScaffold, 0 };
 
 		const auto& animVB = resources._modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 		auto inputResource = LoadVertexBuffer(*testHelper->_device, *resources._modelScaffold, animVB);
@@ -268,16 +286,60 @@ namespace UnitTests
 		Float4x4 skeletonOutput[resources._modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount()];
 		resources._modelScaffold->EmbeddedSkeleton().GenerateOutputTransforms(
 			MakeIteratorRange(skeletonOutput, &skeletonOutput[resources._modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount()]), nullptr);
-		auto binding = deformer.CreateBinding(resources._modelScaffold->EmbeddedSkeleton().GetOutputInterface());
 		deformer.FeedInSkeletonMachineResults(
 			0, MakeIteratorRange(skeletonOutput, &skeletonOutput[resources._modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount()]),
-			binding);
+			deformer.CreateBinding(resources._modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
 
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		deformer.ExecuteGPU(*threadContext, 0, *inputView, *outputView);
-
 		testHelper->EndFrameCapture();
+		
+		auto outputReadback = outputResource->ReadBackSynchronized(*threadContext);
+
+		{
+			Techniques::SkinDeformer cpuSkinDeformer { *resources._modelScaffold, 0 };
+
+			auto& animVb = resources._modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
+			auto rawInputBuffer = LoadCPUVertexBuffer(*resources._modelScaffold, animVb);
+
+			auto inputFloat3s = AsFloat3s(
+				Techniques::Internal::AsVertexElementIteratorRange(
+					MakeIteratorRange(rawInputBuffer), 
+					*Techniques::Internal::FindElement(animVb._ia._elements, Hash64("POSITION")), 
+					animVb._ia._vertexStride));
+			
+			std::vector<Techniques::IDeformOperation::VertexElementRange> sourceElements;
+			sourceElements.push_back(
+				Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(inputFloat3s), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
+
+			std::vector<uint8_t> outputBufferData;
+			outputBufferData.resize(sourceElements[0].size() * sizeof(Float3));
+			std::vector<Techniques::IDeformOperation::VertexElementRange> destinationElements;
+			destinationElements.push_back(
+				Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(outputBufferData), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
+
+			cpuSkinDeformer.FeedInSkeletonMachineResults(
+				0, MakeIteratorRange(skeletonOutput, &skeletonOutput[resources._modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount()]),
+				cpuSkinDeformer.CreateBinding(resources._modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
+			cpuSkinDeformer.Execute(0, sourceElements, destinationElements);
+
+			auto cpuPositionResults = destinationElements[0];
+			auto gpuPositionResults = Techniques::Internal::AsVertexElementIteratorRange(
+				MakeIteratorRange(outputReadback), 
+				*Techniques::Internal::FindElement(animVb._ia._elements, Hash64("POSITION")), 
+				animVb._ia._vertexStride);
+			REQUIRE(cpuPositionResults.size() == gpuPositionResults.size());
+			auto vCount = cpuPositionResults.size();
+			auto gpuFloat3s = AsFloat3s(gpuPositionResults);
+			for (unsigned v=0; v<vCount; ++v) {
+				auto cpu = cpuPositionResults[v].As<Float3>();
+				auto gpu = gpuFloat3s[v];
+				REQUIRE(cpu[0] == gpu[0]);
+				REQUIRE(cpu[1] == gpu[1]);
+				REQUIRE(cpu[2] == gpu[2]);
+			}
+		}
 	}
 	
 }

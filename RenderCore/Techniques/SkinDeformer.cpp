@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SkinDeformer.h"
+#include "DeformAcceleratorInternal.h"		// (required for some utility functions)
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
@@ -116,37 +117,6 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	static IteratorRange<VertexElementIterator> AsVertexElementIteratorRange(
-		IteratorRange<void*> vbData,
-		const RenderCore::Assets::VertexElement& ele,
-		unsigned vertexStride)
-	{
-		unsigned vCount = vbData.size() / vertexStride;
-		auto beginPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset);		
-		auto endPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset + vertexStride*vCount);
-		VertexElementIterator begin {
-			MakeIteratorRange(beginPtr, endPtr),
-			vertexStride, ele._nativeFormat };
-		VertexElementIterator end {
-			MakeIteratorRange(endPtr, endPtr),
-			vertexStride, ele._nativeFormat };
-		return { begin, end };
-	}
-
-	static const RenderCore::Assets::VertexElement* FindElement(
-		IteratorRange<const RenderCore::Assets::VertexElement*> ele,
-		StringSection<> semantic, unsigned semanticIndex = 0)
-	{
-		auto i = std::find_if(
-			ele.begin(), ele.end(),
-			[semantic, semanticIndex](const RenderCore::Assets::VertexElement& ele) {
-				return XlEqString(semantic, ele._semanticName) && ele._semanticIndex == semanticIndex;
-			});
-		if (i==ele.end())
-			return nullptr;
-		return i;
-	}
-
 	SkinDeformer::SkinDeformer(
 		const RenderCore::Assets::ModelScaffold& modelScaffold,
 		unsigned geoId)
@@ -168,8 +138,8 @@ namespace RenderCore { namespace Techniques
 		_influencesPerVertex = 0;
 		unsigned elements = 0;
 		for (unsigned c=0; ; ++c) {
-			auto weightsElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-			auto jointIndicesElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
+			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
+			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 			if (!weightsElement || !jointIndicesElement)
 				break;
 			assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
@@ -187,12 +157,12 @@ namespace RenderCore { namespace Techniques
 
 			unsigned componentIterator=0;
 			for (unsigned c=0; c<elements; ++c) {
-				auto weightsElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-				auto jointIndicesElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
+				auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
+				auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 				assert(weightsElement && jointIndicesElement);
 
-				auto subWeights = AsFloat4s(AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride));
-				auto subJoints = AsUInt4s(AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride));
+				auto subWeights = AsFloat4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride));
+				auto subJoints = AsUInt4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride));
 				auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
 
 				for (unsigned q=0; q<vertexCount; ++q) {
@@ -261,30 +231,6 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void GPUSkinDeformer::WriteJointTransforms(
-		const Section& section,
-		IteratorRange<Float3x4*>		destination,
-		IteratorRange<const Float4x4*>	skeletonMachineResult) const
-    {
-		unsigned c=0;
-		if (_skeletonBinding.GetModelJointCount()) {
-			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
-				auto transMachineOutput = _skeletonBinding.ModelJointToMachineOutput(section._jointMatrices[c]);
-				if (transMachineOutput != ~unsigned(0x0)) {
-					destination[c] = Truncate(skeletonMachineResult[transMachineOutput] * section._bindShapeByInverseBindMatrices[c]);
-				} else {
-					destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
-				}
-			}
-		} else {
-			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
-				destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
-		}
-
-		for (; c<destination.size(); ++c)
-			destination[c] = Identity<Float3x4>();
-    }
-
 	RenderCore::Assets::SkeletonBinding GPUSkinDeformer::CreateBinding(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
 	{
@@ -296,11 +242,31 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float4x4*> skeletonMachineOutput,
 		const RenderCore::Assets::SkeletonBinding& binding)
 	{
-		_skeletonMachineOutput.clear();
-		for (const auto&c:skeletonMachineOutput)
-			_skeletonMachineOutput.push_back(AsFloat3x4(c));
-		_skeletonBinding = binding;
+		for (unsigned sectionIdx=0; sectionIdx<_sections.size(); ++sectionIdx) {
+			auto& section = _sections[sectionIdx];
+			auto destination = MakeIteratorRange(_jointMatrices.begin()+section._rangeInJointMatrices.first, _jointMatrices.begin()+section._rangeInJointMatrices.second);
+
+			unsigned c=0;
+			if (binding.GetModelJointCount()) {
+				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
+					auto transMachineOutput = binding.ModelJointToMachineOutput(section._jointMatrices[c]);
+					if (transMachineOutput != ~unsigned(0x0)) {
+						destination[c] = Truncate(skeletonMachineOutput[transMachineOutput] * section._bindShapeByInverseBindMatrices[c]);
+					} else {
+						destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+					}
+				}
+			} else {
+				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
+					destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+			}
+
+			for (; c<destination.size(); ++c)
+				destination[c] = Identity<Float3x4>();
+		}
 	}
+
+	static const unsigned s_wavegroupWidth = 64;
 
 	void GPUSkinDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
@@ -311,14 +277,30 @@ namespace RenderCore { namespace Techniques
 		_operator->StallWhilePending();
 		auto op = _operator->Actualize();
 
-		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &sourceElements, &destinationElements };
-		UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(_shaderParams), MakeIteratorRange(_skeletonMachineOutput) };
+		struct InvocationParams
+		{
+			unsigned _vertexCount, _firstVertex, _softInfluenceCount, _firstJointTransform;
+		};
 
+		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &sourceElements, &destinationElements };
+		UniformsStream::ImmediateData immDatas[] {
+			MakeOpaqueIteratorRange(_iaParams),
+			MakeIteratorRange(_jointMatrices)
+		};
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(rvs);
 		us._immediateData = MakeIteratorRange(immDatas);
 
-		op->Dispatch(threadContext, (_shaderParams._vertexCount+63)/64, 1, 1, us);
+		op->BeginDispatches(threadContext, us, {}, Hash64("InvocationParams"));
+
+		for (const auto&section:_sections) {
+			for (const auto&drawCall:section._preskinningDrawCalls) {
+				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstIndex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first };
+				op->Dispatch((drawCall._indexCount+s_wavegroupWidth-1)/s_wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+			}
+		}
+
+		op->EndDispatches();
 	}
 
 	static void CopyWeightsUNorm8(void* dst, IteratorRange<VertexElementIterator> inputRange, unsigned dstStride)
@@ -428,12 +410,12 @@ namespace RenderCore { namespace Techniques
 
 		unsigned componentIterator=0;
 		for (unsigned c=0; c<parrallelElementsCount; ++c) {
-			auto weightsElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-			auto jointIndicesElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
+			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
+			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 			assert(weightsElement && jointIndicesElement);
 
-			auto subWeights = AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride);
-			auto subJoints = AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride);
+			auto subWeights = Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride);
+			auto subJoints = Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.begin(), PtrAdd(skelVbData.begin(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride);
 			auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
 
 			assert(subWeights.size() == vertexCount);
@@ -452,17 +434,18 @@ namespace RenderCore { namespace Techniques
 	GPUSkinDeformer::GPUSkinDeformer(
 		IDevice& device,
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
-		const RenderCore::Assets::ModelScaffold& modelScaffold,
+		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		unsigned geoId)
+	: _modelScaffold(modelScaffold)			// we take internal pointers so preserve lifetime
 	{
-		auto& immData = modelScaffold.ImmutableData();
+		auto& immData = modelScaffold->ImmutableData();
 		assert(geoId < immData._boundSkinnedControllerCount);
 		auto& skinnedController = immData._boundSkinnedControllers[geoId];
 		auto& skelVb = skinnedController._skeletonBinding;
 
 		auto skelVbData = std::make_unique<uint8_t[]>(skelVb._size);
 		{
-			auto largeBlocks = modelScaffold.OpenLargeBlocks();
+			auto largeBlocks = modelScaffold->OpenLargeBlocks();
 			auto base = largeBlocks->TellP();
 
 			largeBlocks->Seek(base + skelVb._offset);
@@ -472,8 +455,8 @@ namespace RenderCore { namespace Techniques
 		_influencesPerVertex = 0;
 		unsigned parrallelElementsCount = 0;
 		for (unsigned c=0; ; ++c) {
-			auto weightsElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-			auto jointIndicesElement = FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
+			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
+			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 			if (!weightsElement || !jointIndicesElement)
 				break;
 			assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
@@ -501,44 +484,47 @@ namespace RenderCore { namespace Techniques
 			_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 		}
 
+		unsigned jointMatrixBufferCount = 0;
 		_sections.reserve(skinnedController._preskinningSections.size());
 		for (const auto&sourceSection:skinnedController._preskinningSections) {
 			Section section;
 			section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 			section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
 			section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
+			section._rangeInJointMatrices = { jointMatrixBufferCount, jointMatrixBufferCount + (unsigned)sourceSection._jointMatrixCount };
 			_sections.push_back(section);
+			jointMatrixBufferCount += sourceSection._jointMatrixCount;
 		}
+		_jointMatrices.resize(jointMatrixBufferCount, Identity<Float3x4>());
 
-		_jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+		_jointInputInterface = modelScaffold->CommandStream().GetInputInterface();
 
 		auto& animIA = skinnedController._animatedVertexElements._ia;
 		auto& postAnimIA = skinnedController._vb._ia;
 
-		_shaderParams = {0};
+		_iaParams = {0};
 
 		ParameterBox selectors;
 		for (const auto&ele:animIA._elements) {
 			auto semanticHash = Hash64(ele._semanticName);
 			if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 				selectors.SetParameter("POSITION_FORMAT", (unsigned)ele._nativeFormat);
-				_shaderParams._positionsOffset = ele._alignedByteOffset;
+				_iaParams._positionsOffset = ele._alignedByteOffset;
 			} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 				selectors.SetParameter("NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-				_shaderParams._normalsOffset = ele._alignedByteOffset;
+				_iaParams._normalsOffset = ele._alignedByteOffset;
 			} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 				selectors.SetParameter("TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-				_shaderParams._tangentsOffset = ele._alignedByteOffset;
+				_iaParams._tangentsOffset = ele._alignedByteOffset;
 			} else
 				Throw(std::runtime_error(""));
 		}
-		_shaderParams._inputStride = _shaderParams._outputStride = animIA._vertexStride;
-		_shaderParams._vertexCount = vertexCount;
+		_iaParams._inputStride = _iaParams._outputStride = animIA._vertexStride;
 
 		selectors.SetParameter("INFLUENCE_COUNT", _influencesPerVertex);
 
 		UniformsStreamInterface usi;
-		usi.BindImmediateData(0, Hash64("Params"));
+		usi.BindImmediateData(0, Hash64("IAParams"));
 		usi.BindImmediateData(1, Hash64("JointTransforms"));
 		usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
 		usi.BindResourceView(1, Hash64("InputAttributes"));

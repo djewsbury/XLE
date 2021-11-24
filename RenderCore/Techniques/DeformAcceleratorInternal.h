@@ -265,18 +265,48 @@ namespace RenderCore { namespace Techniques
 				});
 		}
 
+		static const RenderCore::Assets::VertexElement* FindElement(
+			IteratorRange<const RenderCore::Assets::VertexElement*> ele,
+			StringSection<> semantic, unsigned semanticIndex = 0)
+		{
+			auto i = std::find_if(
+				ele.begin(), ele.end(),
+				[semantic, semanticIndex](const RenderCore::Assets::VertexElement& ele) {
+					return XlEqString(semantic, ele._semanticName) && ele._semanticIndex == semanticIndex;
+				});
+			if (i==ele.end())
+				return nullptr;
+			return i;
+		}
+
+		static IteratorRange<VertexElementIterator> AsVertexElementIteratorRange(
+			IteratorRange<void*> vbData,
+			const RenderCore::Assets::VertexElement& ele,
+			unsigned vertexStride)
+		{
+			unsigned vCount = vbData.size() / vertexStride;
+			auto beginPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset);		
+			auto endPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset + vertexStride*vCount);
+			VertexElementIterator begin {
+				MakeIteratorRange(beginPtr, endPtr),
+				vertexStride, ele._nativeFormat };
+			VertexElementIterator end {
+				MakeIteratorRange(endPtr, endPtr),
+				vertexStride, ele._nativeFormat };
+			return { begin, end };
+		}
+
 		static IteratorRange<VertexElementIterator> AsVertexElementIteratorRange(
 			IteratorRange<void*> vbData,
 			Format format,
 			unsigned byteOffset,
 			unsigned vertexStride)
 		{
-			VertexElementIterator begin {
-				MakeIteratorRange(PtrAdd(vbData.begin(), byteOffset), AsPointer(vbData.end())),
-				vertexStride, format };
-			VertexElementIterator end {
-				MakeIteratorRange(AsPointer(vbData.end()), AsPointer(vbData.end())),
-				vertexStride, format };
+			unsigned vCount = vbData.size() / vertexStride;
+			auto beginPtr = PtrAdd(vbData.begin(), byteOffset);
+			auto endPtr = PtrAdd(vbData.begin(), byteOffset + vertexStride*vCount);
+			VertexElementIterator begin { MakeIteratorRange(beginPtr, endPtr), vertexStride, format };
+			VertexElementIterator end { MakeIteratorRange(endPtr, endPtr), vertexStride, format };
 			return { begin, end };
 		}
 

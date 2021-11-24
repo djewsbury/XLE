@@ -11,9 +11,8 @@ ByteAddressBuffer StaticVertexAttachments;
 ByteAddressBuffer InputAttributes;
 RWByteAddressBuffer OutputAttributes;
 
-cbuffer Params
+cbuffer IAParams
 {
-	uint VertexCount;
 	uint InputStride;
 	uint OutputStride;
 
@@ -22,10 +21,18 @@ cbuffer Params
 	uint TangentsOffset;
 }
 
-cbuffer JointTransforms : register(b5)
+cbuffer JointTransforms
 {
 	row_major float3x4 JointTransforms[200];
 }
+
+[[vk::push_constant]] struct InvocationParamsStruct
+{
+	uint VertexCount;
+	uint FirstVertex;
+	uint SoftInfluenceCount;
+	uint FirstJointTransform;
+} InvocationParams;
 
 #define R32G32B32A32_FLOAT 2
 #define R32G32B32_FLOAT 6
@@ -90,8 +97,9 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 [numthreads(64, 1, 1)]
 	void main(uint vertexIdx : SV_DispatchThreadID)
 {
-	if (vertexIdx >= VertexCount)
+	if (vertexIdx >= InvocationParams.VertexCount)
 		return;
+	vertexIdx += InvocationParams.FirstVertex;
 
 	float3 inputPosition = LoadAsFloat3(InputAttributes, POSITION_FORMAT, vertexIdx * InputStride + PositionsOffset);
 
@@ -104,10 +112,11 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 		float3 outputTangent = 0.0.xxx;
 
 		// 
-		[unroll] for (uint c=0; c!=INFLUENCE_COUNT; ++c) {
+		for (uint c=0; c!=InvocationParams.SoftInfluenceCount; ++c) {
 			uint packedAttachments = StaticVertexAttachments.Load((vertexIdx*INFLUENCE_COUNT+c)*2);
 			
 			uint boneIndex = packedAttachments&0xff;
+			boneIndex += InvocationParams.FirstJointTransform;
 			packedAttachments >>= 8;
 			float weight = (packedAttachments&0xff) / 255.f;
 			packedAttachments >>= 8;
@@ -118,9 +127,10 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 			outputTangent += weight * mul(rotationPart, inputTangent.xyz);
 
 			++c;
-			if (c == INFLUENCE_COUNT) break;
+			if (c == InvocationParams.SoftInfluenceCount) break;
 
 			boneIndex = packedAttachments&0xff;
+			boneIndex += InvocationParams.FirstJointTransform;
 			packedAttachments >>= 8;
 			weight = (packedAttachments&0xff) / 255.f;
 			packedAttachments >>= 8;

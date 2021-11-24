@@ -56,8 +56,6 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Section> _sections;
 
-		Float4x4 _bindShapeMatrix;
-
 		struct Instance
 		{
 			IteratorRange<const Float4x4*> _skeletonMachineOutput;
@@ -97,7 +95,7 @@ namespace RenderCore { namespace Techniques
 		GPUSkinDeformer(
 			IDevice& device,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pipelinePool,
-			const RenderCore::Assets::ModelScaffold& modelScaffold,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			unsigned geoId);
 		~GPUSkinDeformer();
 
@@ -107,8 +105,6 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
-		std::vector<float>			_jointWeights;
-		std::vector<unsigned>		_jointIndices;
 		size_t						_influencesPerVertex;
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
@@ -116,12 +112,19 @@ namespace RenderCore { namespace Techniques
 		struct Section
 		{
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
+			std::pair<unsigned, unsigned> _rangeInJointMatrices;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
 		};
 		std::vector<Section> _sections;
 
-		Float4x4 _bindShapeMatrix;
+		struct IAParams
+		{
+			unsigned _inputStride, _outputStride;
+			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
+			unsigned _dummy[3];
+		};
+		IAParams _iaParams;
 
 		struct Instance
 		{
@@ -129,22 +132,10 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::SkeletonBinding* _binding;
 		};
 		std::vector<Instance> _instanceData;
-		std::vector<Float3x4> _skeletonMachineOutput;
-		RenderCore::Assets::SkeletonBinding _skeletonBinding;
+		std::vector<Float3x4> _jointMatrices;
 
 		::Assets::PtrToMarkerPtr<IComputeShaderOperator> _operator;
-
-		struct ShaderParams
-		{
-			unsigned _vertexCount;
-			unsigned _inputStride, _outputStride;
-			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
-		} _shaderParams;
-
-		void WriteJointTransforms(
-			const Section& section,
-			IteratorRange<Float3x4*>		destination,
-			IteratorRange<const Float4x4*>	skeletonMachineResult) const;
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 	};
 }}
 
