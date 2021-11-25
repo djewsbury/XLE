@@ -287,7 +287,7 @@ namespace UnitTests
 		return outputResource->ReadBackSynchronized(*threadContext);
 	}
 
-	static std::vector<Float3> DeformPositionsOnGPU(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
 		Techniques::SkinDeformer cpuSkinDeformer { *modelScaffold, 0 };
 
@@ -330,7 +330,7 @@ namespace UnitTests
 		return AsFloat3s(eleRange);
 	}
 
-	TEST_CASE( "DeformAccelerators", "[rendercore_techniques]" )
+	TEST_CASE( "SkinDeformCPUVsGPU", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -344,7 +344,7 @@ namespace UnitTests
 		auto modelScaffold = MakeTestAnimatedModel();
 
 		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, modelScaffold);
-		auto cpuPositions = DeformPositionsOnGPU(modelScaffold);
+		auto cpuPositions = DeformPositionsOnCPU(modelScaffold);
 
 		// Find the positions within the raw GPU output and convert to float3s
 		auto gpuPositions = GetFloat3sFromVertexBuffer(MakeIteratorRange(gpuRawBuffer), modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia, Hash64("POSITION"));
@@ -357,6 +357,136 @@ namespace UnitTests
 			// We're not infinitely precise because the CPU path will always work with 32 bit floats,
 			// but the GPU path can work with a wider variety of formats
 			REQUIRE(Equivalent(cpu, gpu, 1e-3f));
+		}
+	}
+
+	class TestDeformOperator : public Techniques::ICPUDeformOperator
+	{
+	public:
+		virtual void Execute(
+			unsigned instanceIdx,
+			IteratorRange<const VertexElementRange*> sourceElements,
+			IteratorRange<const VertexElementRange*> destinationElements) const
+		{
+			REQUIRE(instanceIdx == 0);
+			REQUIRE(sourceElements.size() == 2);
+			REQUIRE(destinationElements.size() == 3);
+		}
+		virtual void* QueryInterface(size_t) { return nullptr; }
+	};
+
+	TEST_CASE( "CPUDeformInstantiation", "[rendercore_techniques]" )
+	{
+		auto modelScaffold = MakeTestAnimatedModel();
+		auto vertexCount = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._size / modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride;
+
+		{
+			// Single stage deform that takes POSITION & NORMAL and generates 3 arbitrary elements
+			Techniques::DeformOperationInstantiation testInst0;
+			testInst0._generatedElements.push_back({ "GENERATED", 0, Format::R16G16B16A16_FLOAT });
+			testInst0._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
+			testInst0._generatedElements.push_back({ "GENERATED", 1, Format::R32_UINT });
+			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
+			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
+			testInst0._suppressElements.push_back(Hash64("BADSEMANTIC"));
+			testInst0._cpuOperator = std::make_shared<TestDeformOperator>();
+			testInst0._geoId = 0;
+			
+			std::vector<DeformOperationInstantiation> instantiations;
+			instantiations.push_back(testInst0);
+
+			unsigned preDeformStaticDataVBIterator = 0, deformTemporaryGPUVBIterator = 0;
+			unsigned deformTemporaryCPUVBIterator = 0, postDeformVBIterator = 0;
+			auto nascentDeform = Techniques::Internal::BuildNascentDeformForGeo(
+				instantiations, 0, vertexCount,
+				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator,
+				deformTemporaryCPUVBIterator, postDeformVBIterator);
+
+			unsigned generatedVertexStride = 8 + 4 + 4;
+			unsigned staticDataVertexStride = 12+4;
+			REQUIRE(postDeformVBIterator == generatedVertexStride*vertexCount);
+			REQUIRE(preDeformStaticDataVBIterator == staticDataVertexStride*vertexCount);
+			REQUIRE(deformTemporaryGPUVBIterator == 0);
+			REQUIRE(deformTemporaryCPUVBIterator == 0);
+
+			REQUIRE(nascentDeform._cpuOps.size() == 1);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements.size() == 2);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._format == Format::R32G32B32_FLOAT);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._format == Format::R8G8B8A8_UNORM);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements.size() == 3);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._format == Format::R16G16B16A16_FLOAT);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._format == Format::R8G8B8A8_UNORM);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[2]._format == Format::R32_UINT);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_PostDeform);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._vbIdx == Techniques::Internal::VB_PostDeform);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[2]._vbIdx == Techniques::Internal::VB_PostDeform);
+		}
+
+		{
+			// 3 deform stages with deformers that consume outputs from previous stages
+			Techniques::DeformOperationInstantiation testInst0;
+			testInst0._generatedElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
+			testInst0._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
+			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
+			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
+			testInst0._suppressElements.push_back(Hash64("TANGENT"));
+			testInst0._cpuOperator = std::make_shared<TestDeformOperator>();
+			testInst0._geoId = 0;
+
+			Techniques::DeformOperationInstantiation testInst1;
+			testInst1._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
+			testInst1._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
+			testInst1._upstreamSourceElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
+			testInst1._cpuOperator = std::make_shared<TestDeformOperator>();
+			testInst1._geoId = 0;
+
+			Techniques::DeformOperationInstantiation testInst2;
+			testInst2._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
+			testInst2._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
+			testInst2._suppressElements.push_back(Hash64("TANGENT"));
+			testInst2._cpuOperator = std::make_shared<TestDeformOperator>();
+			testInst2._geoId = 0;
+			
+			std::vector<DeformOperationInstantiation> instantiations;
+			instantiations.push_back(testInst0);
+			instantiations.push_back(testInst1);
+			instantiations.push_back(testInst2);
+
+			unsigned preDeformStaticDataVBIterator = 0, deformTemporaryGPUVBIterator = 0;
+			unsigned deformTemporaryCPUVBIterator = 0, postDeformVBIterator = 0;
+			auto nascentDeform = Techniques::Internal::BuildNascentDeformForGeo(
+				instantiations, 0, vertexCount,
+				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator,
+				deformTemporaryCPUVBIterator, postDeformVBIterator);
+
+			unsigned generatedVertexStride = 4+8;				// {"GENERATED2", 0}, {"GENERATED3", 0}
+			unsigned staticDataVertexStride = 12+4;
+			unsigned temporariesVertexStride = 8+8;				// {"TEMPORARY", 0}, {"TEMPORARY", 1}
+			REQUIRE(postDeformVBIterator == generatedVertexStride*vertexCount);
+			REQUIRE(preDeformStaticDataVBIterator == staticDataVertexStride*vertexCount);
+			REQUIRE(deformTemporaryGPUVBIterator == 0);
+			REQUIRE(deformTemporaryCPUVBIterator == temporariesVertexStride*vertexCount);
+
+			REQUIRE(nascentDeform._cpuOps.size() == 3);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements.size() == 2);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements.size() == 2);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._vbIdx == Techniques::Internal::VB_PostDeform);
+
+			REQUIRE(nascentDeform._cpuOps[1]._inputElements.size() == 2);
+			REQUIRE(nascentDeform._cpuOps[1]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(nascentDeform._cpuOps[1]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[1]._outputElements.size() == 1);
+			REQUIRE(nascentDeform._cpuOps[1]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+
+			REQUIRE(nascentDeform._cpuOps[2]._inputElements.size() == 1);
+			REQUIRE(nascentDeform._cpuOps[2]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[2]._outputElements.size() == 1);
+			REQUIRE(nascentDeform._cpuOps[2]._outputElements[0]._vbIdx == Techniques::Internal::VB_PostDeform);
 		}
 	}
 	
