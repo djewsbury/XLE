@@ -18,11 +18,12 @@
 
 namespace RenderCore { namespace Techniques 
 {
-    namespace Internal
+	namespace Internal
 	{
-        static constexpr unsigned VB_StaticData = 0;
-    	static constexpr unsigned VB_TemporaryDeform = 1;
-	    static constexpr unsigned VB_PostDeform = 2;
+		static constexpr unsigned VB_CPUStaticData = 0;
+		static constexpr unsigned VB_CPUTemporaryDeform = 1;
+		static constexpr unsigned VB_GPUTemporaryDeform = 2;
+		static constexpr unsigned VB_PostDeform = 3;
 
 		struct SourceDataTransform
 		{
@@ -34,111 +35,181 @@ namespace RenderCore { namespace Techniques
 			unsigned	_vertexCount;
 		};
 
-        struct DeformOp
-        {
-            std::shared_ptr<IDeformOperation> _deformOp;
-
-            struct Element { Format _format = Format(0); unsigned _offset = 0; unsigned _stride = 0; unsigned _vbIdx = ~0u; };
-            std::vector<Element> _inputElements;
-            std::vector<Element> _outputElements;
-        };
-
-		struct NascentDeformStream
+		struct NascentDeformForGeo
 		{
-			std::vector<DeformOp> _deformOps;
+			struct CPUOp
+			{
+				std::shared_ptr<ICPUDeformOperator> _deformOp;
+				struct Attribute { Format _format = Format(0); unsigned _offset = 0; unsigned _stride = 0; unsigned _vbIdx = ~0u; };
+				std::vector<Attribute> _inputElements;
+				std::vector<Attribute> _outputElements;
+			};
 
-            RendererGeoDeformInterface _rendererInterf;
-            std::vector<SourceDataTransform> _staticDataLoadRequests;
+			std::vector<CPUOp> _cpuOps;
+			std::vector<::Assets::PtrToMarkerPtr<IGPUDeformOperator>> _gpuOps;
 
-			unsigned _vbOffsets[3] = {0,0,0};
-			unsigned _vbSizes[3] = {0,0,0};
+			RendererGeoDeformInterface _rendererInterf;
+			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
+
+			unsigned _vbOffsets[4] = {0,0,0,0};
+			unsigned _vbSizes[4] = {0,0,0,0};
 		};
 
-		static NascentDeformStream BuildNascentDeformStream(
+		static std::pair<std::vector<NascentDeformForGeo::CPUOp::Attribute>, unsigned> ArrangeAttributes(
+			IteratorRange<const InputElementDesc*> attributes,
+			unsigned baseOffset)
+		{
+			std::vector<NascentDeformForGeo::CPUOp::Attribute> result;
+			/*result.reserve(attributes.size());
+			unsigned targetStride = 0, offsetIterator = 0;
+			for (unsigned c=0; c<attributes.size(); ++c)
+				targetStride += BitsPerPixel(attributes[c].first._format) / 8;
+			for (unsigned c=0; c<attributes.size(); ++c) {
+				const auto& workingE = attributes[c];
+				result.push_back({workingE.first._format, baseOffset + offsetIterator, targetStride, VB_CPUTemporaryDeform});
+				offsetIterator += BitsPerPixel(workingE.first._format) / 8;
+			}
+			return {std::move(result), targetStride};*/
+			auto normalized = NormalizeInputAssembly(attributes);
+			result.reserve(normalized.size());
+			auto stride = CalculateVertexStrideForSlot(normalized, 0);
+			for (const auto&e:normalized) {
+				assert(e._inputSlot == 0);
+				result.push_back({e._nativeFormat, baseOffset + e._alignedByteOffset, stride, VB_CPUTemporaryDeform});
+			}
+			return {std::move(result), stride};
+		}
+
+		static NascentDeformForGeo BuildNascentDeformForGeo(
 			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
 			unsigned geoId,
 			unsigned vertexCount,
 			unsigned& preDeformStaticDataVBIterator,
-			unsigned& deformTemporaryVBIterator,
+			unsigned& deformTemporaryGPUVBIterator,
+			unsigned& deformTemporaryCPUVBIterator,
 			unsigned& postDeformVBIterator)
 		{
 			// Calculate which elements are suppressed by the deform operations
-			// We can only support a single deform operation per geo
 			std::vector<const DeformOperationInstantiation*> deformAttachments;
 			for (const auto& def:globalDeformAttachments)
-				if (def._geoId == geoId) {
+				if (def._geoId == geoId)
 					deformAttachments.push_back(&def);
-				}
-
 			if (!deformAttachments.size()) return {};
 
 			std::vector<uint64_t> workingSuppressedElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingGeneratedElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingTemporarySpaceElements;
-			std::vector<std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>> workingSourceDataElements;
-			unsigned nextStreamId = 0;
+			std::vector<InputElementDesc> workingGeneratedElements;
 
-			struct WorkingDeformOp
+			std::vector<InputElementDesc> workingTemporarySpaceElements_cpu;
+			std::vector<InputElementDesc> workingTemporarySpaceElements_gpu;
+			std::vector<InputElementDesc> workingSourceDataElements_cpu;
+
+			struct WorkingCPUDeformOp
 			{
-				std::shared_ptr<IDeformOperation> _deformOp;
-				std::vector<unsigned> _inputStreamIds;
-				std::vector<unsigned> _outputStreamIds;
+				std::shared_ptr<ICPUDeformOperator> _deformOp;
+				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _inputStreamIds;
+				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _outputStreamIds;
 			};
-			std::vector<WorkingDeformOp> workingDeformOps;
+			std::vector<WorkingCPUDeformOp> workingCPUDeformOps;
+
+			struct WorkingGPUDeformOp
+			{
+				DeformOperationInstantiation::GPUDeformConstructorFN _constructor;
+			};
+			std::vector<WorkingGPUDeformOp> workingGPUDeformOps;
 
 			for (auto d=deformAttachments.begin(); d!=deformAttachments.end(); ++d) {
 				const auto&def = **d;
-				WorkingDeformOp workingDeformOp;
+				assert((def._cpuOperator != nullptr) ^ (def._gpuConstructor != nullptr));		// we need either CPU or GPU style operator, but not both
 
-				for (auto&e:def._upstreamSourceElements) {
-					// find a matching source element generated from another deform op
-					auto i = std::find_if(
-						workingGeneratedElements.begin(), workingGeneratedElements.end(),
-						[e](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& wge) {
-							return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
-						});
-					if (i != workingGeneratedElements.end()) {
-						assert(i->first._format == e._format);
-						workingDeformOp._inputStreamIds.push_back(i->second);
-						workingTemporarySpaceElements.push_back(*i);
-						workingGeneratedElements.erase(i);
-					} else {
-						// If it's not generated by some deform op, we look for it in the static data
-						auto streamId = nextStreamId++;
-						workingDeformOp._inputStreamIds.push_back(streamId);
-						workingSourceDataElements.push_back(std::make_pair(e, streamId));
+				if (def._cpuOperator) {
+					/////////////////// CPU type operator ///////////////////
+					WorkingCPUDeformOp workingDeformOp;
+
+					for (auto&e:def._upstreamSourceElements) {
+						// find a matching source element generated from another deform op
+						// (note that CPU operations can only take inputs from other CPU deforms)
+						auto i = std::find_if(
+							workingGeneratedElements.begin(), workingGeneratedElements.end(),
+							[e](const auto& wge) {
+								return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
+							});
+						if (i != workingGeneratedElements.end()) {
+							workingTemporarySpaceElements_cpu.push_back(*i);
+							workingGeneratedElements.erase(i);
+						} else {
+							// If it's not generated by some deform op, we look for it in the static data
+							workingSourceDataElements_cpu.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format});
+						}
 					}
+
+					// Before we add our own static data, we should remove any working elements that have been
+					// suppressed
+					auto i = std::remove_if(
+						workingGeneratedElements.begin(), workingGeneratedElements.end(),
+						[&def](const auto& wge) {
+							auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
+							return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
+								|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
+						});
+					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
+
+					for (const auto& e:def._generatedElements)
+						workingGeneratedElements.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format});
+
+					workingSuppressedElements.insert(
+						workingSuppressedElements.end(),
+						def._suppressElements.begin(), def._suppressElements.end());
+
+					workingDeformOp._deformOp = std::move(def._cpuOperator);
+					workingDeformOp._inputStreamIds = std::move(def._upstreamSourceElements);
+					workingDeformOp._outputStreamIds = std::move(def._generatedElements);
+					workingCPUDeformOps.push_back(workingDeformOp);
+				} else {
+					/////////////////// GPU type operator ///////////////////
+					WorkingGPUDeformOp workingDeformOp;
+
+					for (auto&e:def._upstreamSourceElements) {
+						// find a matching source element generated from another deform op
+						// (note that CPU operations can only take inputs from other CPU deforms)
+						auto i = std::find_if(
+							workingGeneratedElements.begin(), workingGeneratedElements.end(),
+							[e](const auto& wge) {
+								return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
+							});
+						if (i != workingGeneratedElements.end()) {
+							workingTemporarySpaceElements_gpu.push_back(*i);
+							workingGeneratedElements.erase(i);
+						} // else it will just come from the static data
+					}
+
+					// Before we add our own static data, we should remove any working elements that have been
+					// suppressed
+					auto i = std::remove_if(
+						workingGeneratedElements.begin(), workingGeneratedElements.end(),
+						[&def](const auto& wge) {
+							auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
+							return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
+								|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
+						});
+					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
+
+					for (const auto& e:def._generatedElements)
+						workingGeneratedElements.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format});
+
+					workingSuppressedElements.insert(
+						workingSuppressedElements.end(),
+						def._suppressElements.begin(), def._suppressElements.end());
+
+					workingDeformOp._constructor = std::move(def._gpuConstructor);
+					workingGPUDeformOps.push_back(workingDeformOp);
 				}
-
-				// Before we add our own static data, we should remove any working elements that have been
-				// suppressed
-				auto i = std::remove_if(
-					workingGeneratedElements.begin(), workingGeneratedElements.end(),
-					[&def](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& wge) {
-						auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
-						return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
-							|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
-					});
-				workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
-
-				for (auto e=def._generatedElements.begin(); e!=def._generatedElements.end(); ++e) {
-					auto streamId = nextStreamId++;
-					workingGeneratedElements.push_back(std::make_pair(*e, streamId));
-					workingDeformOp._outputStreamIds.push_back(streamId);
-				}
-
-				workingSuppressedElements.insert(
-					workingSuppressedElements.end(),
-					def._suppressElements.begin(), def._suppressElements.end());
-
-				workingDeformOp._deformOp = def._operation;
-				workingDeformOps.push_back(workingDeformOp);
 			}
 
-			NascentDeformStream result;
+			NascentDeformForGeo result;
 			result._rendererInterf._suppressedElements = workingSuppressedElements;
+			result._rendererInterf._suppressedElements.reserve(result._rendererInterf._suppressedElements.size() + workingGeneratedElements.size());
 			for (const auto&wge:workingGeneratedElements)
-				result._rendererInterf._suppressedElements.push_back(Hash64(wge.first._semantic) + wge.first._semanticIndex);		// (also suppress all elements generated by the final deform step, because they are effectively overriden)
+				result._rendererInterf._suppressedElements.push_back(Hash64(wge._semanticName) + wge._semanticIndex);		// (also suppress all elements generated by the final deform step, because they are effectively overriden)
 			std::sort(result._rendererInterf._suppressedElements.begin(), result._rendererInterf._suppressedElements.end());
 			result._rendererInterf._suppressedElements.erase(
 				std::unique(result._rendererInterf._suppressedElements.begin(), result._rendererInterf._suppressedElements.end()),
@@ -151,105 +222,92 @@ namespace RenderCore { namespace Techniques
 			//		2. a deform temporary buffer; which contains data written out from deform operations, and read in by others
 			//		3. a final output buffer; which contains resulting vertex data that is fed into the render operation
 			
-			std::vector<SourceDataTransform> sourceDataTransforms;
-			std::vector<DeformOp::Element> sourceDataStreams;
+			std::vector<NascentDeformForGeo::CPUOp::Attribute> sourceDataStreams;
 			{
-				sourceDataTransforms.reserve(workingSourceDataElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingSourceDataElements.size(); ++c)
-					targetStride += BitsPerPixel(workingSourceDataElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingSourceDataElements.size(); ++c) {
-					const auto& workingE = workingSourceDataElements[c];
-					sourceDataTransforms.push_back({
-						geoId, Hash64(workingE.first._semantic) + workingE.first._semanticIndex,
-						workingE.first._format, preDeformStaticDataVBIterator + offsetIterator, targetStride, vertexCount});
-					sourceDataStreams.push_back({workingE.first._format, preDeformStaticDataVBIterator + offsetIterator, targetStride, VB_StaticData});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
-				result._vbOffsets[VB_StaticData] = preDeformStaticDataVBIterator;
-				result._vbSizes[VB_StaticData] = targetStride * vertexCount;
+				unsigned targetStride;
+				std::tie(sourceDataStreams, targetStride) = ArrangeAttributes(workingSourceDataElements_cpu, preDeformStaticDataVBIterator);
+				result._vbOffsets[VB_CPUStaticData] = preDeformStaticDataVBIterator;
+				result._vbSizes[VB_CPUStaticData] = targetStride * vertexCount;
 				preDeformStaticDataVBIterator += targetStride * vertexCount;
+
+				result._cpuStaticDataLoadRequests.reserve(sourceDataStreams.size());
+				for (unsigned c=0; c<workingSourceDataElements_cpu.size(); ++c) {
+					const auto& workingE = workingSourceDataElements_cpu[c];
+					result._cpuStaticDataLoadRequests.push_back({
+						geoId, Hash64(workingE._semanticName) + workingE._semanticIndex,
+						sourceDataStreams[c]._format, sourceDataStreams[c]._offset, targetStride, vertexCount});
+				}
 			}
 
-			std::vector<DeformOp::Element> temporaryDataStreams;
+			std::vector<NascentDeformForGeo::CPUOp::Attribute> temporaryDataStreams_cpu;
 			{
-				temporaryDataStreams.reserve(workingTemporarySpaceElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingTemporarySpaceElements.size(); ++c)
-					targetStride += BitsPerPixel(workingTemporarySpaceElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingTemporarySpaceElements.size(); ++c) {
-					const auto& workingE = workingTemporarySpaceElements[c];
-					temporaryDataStreams.push_back({workingE.first._format, deformTemporaryVBIterator + offsetIterator, targetStride, VB_TemporaryDeform});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
-				result._vbOffsets[VB_TemporaryDeform] = deformTemporaryVBIterator;
-				result._vbSizes[VB_TemporaryDeform] = targetStride * vertexCount;
-				deformTemporaryVBIterator += targetStride * vertexCount;
+				unsigned targetStride;
+				std::tie(temporaryDataStreams_cpu, targetStride) = ArrangeAttributes(workingTemporarySpaceElements_cpu, deformTemporaryCPUVBIterator);
+				result._vbOffsets[VB_CPUTemporaryDeform] = deformTemporaryCPUVBIterator;
+				result._vbSizes[VB_CPUTemporaryDeform] = targetStride * vertexCount;
+				deformTemporaryCPUVBIterator += targetStride * vertexCount;
 			}
 
-			std::vector<DeformOp::Element> generatedDataStreams;
+			std::vector<NascentDeformForGeo::CPUOp::Attribute> temporaryDataStreams_gpu;
 			{
-				generatedDataStreams.reserve(workingGeneratedElements.size());
-				unsigned targetStride = 0, offsetIterator = 0;
-				for (unsigned c=0; c<workingGeneratedElements.size(); ++c)
-					targetStride += BitsPerPixel(workingGeneratedElements[c].first._format) / 8;
-				for (unsigned c=0; c<workingGeneratedElements.size(); ++c) {
-					const auto& workingE = workingGeneratedElements[c];
-					generatedDataStreams.push_back({workingE.first._format, postDeformVBIterator + offsetIterator, targetStride, VB_PostDeform});
-					offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-				}
+				unsigned targetStride;
+				std::tie(temporaryDataStreams_gpu, targetStride) = ArrangeAttributes(workingTemporarySpaceElements_gpu, deformTemporaryGPUVBIterator);
+				result._vbOffsets[VB_GPUTemporaryDeform] = deformTemporaryGPUVBIterator;
+				result._vbSizes[VB_GPUTemporaryDeform] = targetStride * vertexCount;
+				deformTemporaryGPUVBIterator += targetStride * vertexCount;
+			}
+
+			std::vector<NascentDeformForGeo::CPUOp::Attribute> generatedDataStreams;
+			{
+				unsigned targetStride;
+				std::tie(generatedDataStreams, targetStride) = ArrangeAttributes(workingGeneratedElements, postDeformVBIterator);
 				result._vbOffsets[VB_PostDeform] = postDeformVBIterator;
 				result._vbSizes[VB_PostDeform] = targetStride * vertexCount;
-				result._rendererInterf._vbOffset = postDeformVBIterator;
+				result._rendererInterf._vbOffsetForGeo = postDeformVBIterator;
 				postDeformVBIterator += targetStride * vertexCount;
 			}
 
 			// Collate the WorkingDeformOp into the SimpleModelRenderer::DeformOp format
-			result._deformOps.reserve(workingDeformOps.size());
-			for (const auto&wdo:workingDeformOps) {
-				DeformOp finalDeformOp;
+			result._cpuOps.reserve(workingCPUDeformOps.size());
+			for (const auto&wdo:workingCPUDeformOps) {
+				NascentDeformForGeo::CPUOp finalDeformOp;
 				// input streams
 				for (auto s:wdo._inputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-					if (i != workingGeneratedElements.end()) {
-						finalDeformOp._inputElements.push_back(generatedDataStreams[i-workingGeneratedElements.begin()]);
+					auto i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+					if (i != workingTemporarySpaceElements_cpu.end()) {
+						finalDeformOp._inputElements.push_back(temporaryDataStreams_cpu[i-workingTemporarySpaceElements_cpu.begin()]);
 					} else {
-						i = std::find_if(workingTemporarySpaceElements.begin(), workingTemporarySpaceElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-						if (i != workingTemporarySpaceElements.end()) {
-							finalDeformOp._inputElements.push_back(temporaryDataStreams[i-workingTemporarySpaceElements.begin()]);
+						i = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+						if (i != workingSourceDataElements_cpu.end()) {
+							finalDeformOp._inputElements.push_back(sourceDataStreams[i-workingSourceDataElements_cpu.begin()]);
 						} else {
-							i = std::find_if(workingSourceDataElements.begin(), workingSourceDataElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-							if (i != workingSourceDataElements.end()) {
-								finalDeformOp._inputElements.push_back(sourceDataStreams[i-workingSourceDataElements.begin()]);
-							} else {
-								finalDeformOp._inputElements.push_back({});
-							}
+							assert(0);
+							finalDeformOp._inputElements.push_back({});
 						}
 					}
 				}
 				// output streams
 				for (auto s:wdo._outputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
+					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const auto& p) { return p.second == s; });
 					if (i != workingGeneratedElements.end()) {
 						finalDeformOp._outputElements.push_back(generatedDataStreams[i-workingGeneratedElements.begin()]);
 					} else {
-						i = std::find_if(workingTemporarySpaceElements.begin(), workingTemporarySpaceElements.end(), [s](const std::pair<DeformOperationInstantiation::NameAndFormat, unsigned>& p) { return p.second == s; });
-						if (i != workingTemporarySpaceElements.end()) {
-							finalDeformOp._outputElements.push_back(temporaryDataStreams[i-workingTemporarySpaceElements.begin()]);
+						i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+						if (i != workingTemporarySpaceElements_cpu.end()) {
+							finalDeformOp._outputElements.push_back(temporaryDataStreams_cpu[i-workingTemporarySpaceElements_cpu.begin()]);
 						} else {
+							assert(0);
 							finalDeformOp._outputElements.push_back({});
 						}
 					}
 				}
 				finalDeformOp._deformOp = wdo._deformOp;
-				result._deformOps.emplace_back(std::move(finalDeformOp));
+				result._cpuOps.emplace_back(std::move(finalDeformOp));
 			}
 
 			result._rendererInterf._generatedElements.reserve(workingGeneratedElements.size());
 			for (const auto&wge:workingGeneratedElements)
 				result._rendererInterf._generatedElements.push_back(InputElementDesc{wge.first._semantic, wge.first._semanticIndex, wge.first._format});
-
-			result._staticDataLoadRequests = std::move(sourceDataTransforms);
 
 			return result;
 		}
@@ -327,7 +385,7 @@ namespace RenderCore { namespace Techniques
 			Assets::GeoProc::Copy(dstRange, srcRange, transform._vertexCount);
 		}
 
-		static std::vector<uint8_t> GenerateDeformStaticInput(
+		static std::vector<uint8_t> GenerateDeformStaticInputForCPUDeform(
 			const RenderCore::Assets::ModelScaffold& modelScaffold,
 			IteratorRange<const SourceDataTransform*> inputLoadRequests,
 			unsigned destinationBufferSize)
@@ -349,55 +407,73 @@ namespace RenderCore { namespace Techniques
 			auto base = largeBlocks->TellP();
 
 			auto& immData = modelScaffold.ImmutableData();
-			for (const auto&r:loadRequests) {
-				bool initializedElement = false;
-				if (r._geoId < immData._geoCount) {
-					auto& geo = immData._geos[r._geoId];
+			for (auto i=loadRequests.begin(); i!=loadRequests.end();) {
+
+				auto start = i;
+				while (i!=loadRequests.end() && i->_geoId == start->_geoId) ++i;
+				auto end = i;
+
+				if (start->_geoId < immData._geoCount) {
+					auto& geo = immData._geos[start->_geoId];
 					auto& vb = geo._vb;
-					auto sourceEle = FindElement(MakeIteratorRange(vb._ia._elements), r._sourceStream);
-					if (sourceEle != vb._ia._elements.end()) {
-						auto vbData = std::make_unique<uint8_t[]>(vb._size);
-						largeBlocks->Seek(base + vb._offset);
-						largeBlocks->Read(vbData.get(), vb._size);
-						ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), vb._size)), r, *sourceEle, vb._ia._vertexStride);
-						initializedElement = true;
+
+					auto vbData = std::make_unique<uint8_t[]>(vb._size);
+					largeBlocks->Seek(base + vb._offset);
+					largeBlocks->Read(vbData.get(), vb._size);
+
+					for (auto r=start; r!=end; ++r) {
+						auto sourceEle = FindElement(MakeIteratorRange(vb._ia._elements), r->_sourceStream);
+						if (sourceEle != vb._ia._elements.end()) {
+							ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), vb._size)), *r, *sourceEle, vb._ia._vertexStride);
+						} else
+							Throw(std::runtime_error("Could not initialize deform input element"));
 					}
+
 				} else {
-					auto& geo = immData._boundSkinnedControllers[r._geoId - immData._geoCount];
-					auto sourceEle = FindElement(MakeIteratorRange(geo._vb._ia._elements), r._sourceStream);
-					if (sourceEle != geo._vb._ia._elements.end()) {
-						auto vbData = std::make_unique<uint8_t[]>(geo._vb._size);
-						largeBlocks->Seek(base + geo._vb._offset);
-						largeBlocks->Read(vbData.get(), geo._vb._size);
-						ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._vb._size)), r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
-						initializedElement = true;
-					} else {
-						sourceEle = FindElement(MakeIteratorRange(geo._animatedVertexElements._ia._elements), r._sourceStream);
-						if (sourceEle != geo._animatedVertexElements._ia._elements.end()) {
-							auto vbData = std::make_unique<uint8_t[]>(geo._animatedVertexElements._size);
-							largeBlocks->Seek(base + geo._animatedVertexElements._offset);
-							largeBlocks->Read(vbData.get(), geo._animatedVertexElements._size);
-							ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._animatedVertexElements._size)), r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
-							initializedElement = true;
+					auto& geo = immData._boundSkinnedControllers[start->_geoId - immData._geoCount];
+
+					std::unique_ptr<uint8_t[]> baseVB;
+					std::unique_ptr<uint8_t[]> animVB;
+					std::unique_ptr<uint8_t[]> skelBindVB;
+
+					for (auto r=start; r!=end; ++r) {
+						auto sourceEle = FindElement(MakeIteratorRange(geo._vb._ia._elements), r->_sourceStream);
+
+						if (sourceEle != geo._vb._ia._elements.end()) {
+							if (!baseVB.get()) {
+								baseVB = std::make_unique<uint8_t[]>(geo._vb._size);
+								largeBlocks->Seek(base + geo._vb._offset);
+								largeBlocks->Read(baseVB.get(), geo._vb._size);
+							}
+							ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(baseVB.get(), PtrAdd(baseVB.get(), geo._vb._size)), *r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
 						} else {
-							sourceEle = FindElement(MakeIteratorRange(geo._skeletonBinding._ia._elements), r._sourceStream);
-							if (sourceEle != geo._skeletonBinding._ia._elements.end()) {
-								auto vbData = std::make_unique<uint8_t[]>(geo._skeletonBinding._size);
-								largeBlocks->Seek(base + geo._skeletonBinding._offset);
-								largeBlocks->Read(vbData.get(), geo._skeletonBinding._size);
-								ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(vbData.get(), PtrAdd(vbData.get(), geo._skeletonBinding._size)), r, *sourceEle, geo._skeletonBinding._ia._vertexStride);
-								initializedElement = true;
+							sourceEle = FindElement(MakeIteratorRange(geo._animatedVertexElements._ia._elements), r->_sourceStream);
+							if (sourceEle != geo._animatedVertexElements._ia._elements.end()) {
+								if (!animVB.get()) {
+									animVB = std::make_unique<uint8_t[]>(geo._animatedVertexElements._size);
+									largeBlocks->Seek(base + geo._animatedVertexElements._offset);
+									largeBlocks->Read(animVB.get(), geo._animatedVertexElements._size);
+								}
+								ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(animVB.get(), PtrAdd(animVB.get(), geo._animatedVertexElements._size)), *r, *sourceEle, geo._animatedVertexElements._ia._vertexStride);
+							} else {
+								sourceEle = FindElement(MakeIteratorRange(geo._skeletonBinding._ia._elements), r->_sourceStream);
+								if (sourceEle != geo._skeletonBinding._ia._elements.end()) {
+									if (!skelBindVB.get()) {
+										skelBindVB = std::make_unique<uint8_t[]>(geo._skeletonBinding._size);
+										largeBlocks->Seek(base + geo._skeletonBinding._offset);
+										largeBlocks->Read(skelBindVB.get(), geo._skeletonBinding._size);
+									}
+									ReadStaticData(MakeIteratorRange(result), MakeIteratorRange(skelBindVB.get(), PtrAdd(skelBindVB.get(), geo._skeletonBinding._size)), *r, *sourceEle, geo._skeletonBinding._ia._vertexStride);
+								} else
+									Throw(std::runtime_error("Could not initialize deform input element"));
 							}
 						}
 					}
 				}
-
-				if (!initializedElement)
-					Throw(std::runtime_error("Could not initialize deform input element"));
 			}
 
 			return result;
 		}
-    }
+	}
 }}
 

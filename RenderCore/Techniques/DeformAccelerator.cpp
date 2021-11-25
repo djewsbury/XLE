@@ -93,15 +93,15 @@ namespace RenderCore { namespace Techniques
 		unsigned postDeformVBIterator = 0;
 		std::vector<Internal::SourceDataTransform> deformStaticLoadDataRequests;
 
-		std::vector<Internal::NascentDeformStream> geoDeformStreams;
-		std::vector<Internal::NascentDeformStream> skinControllerDeformStreams;
+		std::vector<Internal::NascentDeformForGeo> geoDeformStreams;
+		std::vector<Internal::NascentDeformForGeo> skinControllerDeformStreams;
 		geoDeformStreams.reserve(modelScaffold->ImmutableData()._geoCount);
 
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
 
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			auto deform = Internal::BuildNascentDeformStream(
+			auto deform = Internal::BuildNascentDeformForGeo(
 				deformInstantiations, geo, vertexCount, 
 				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
@@ -118,7 +118,7 @@ namespace RenderCore { namespace Techniques
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			auto deform = Internal::BuildNascentDeformStream(
+			auto deform = Internal::BuildNascentDeformForGeo(
 				deformInstantiations, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
 				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
 
@@ -139,7 +139,7 @@ namespace RenderCore { namespace Techniques
 		newAccelerator->_outputVBSize = postDeformVBIterator;
 
 		if (preDeformStaticDataVBIterator) {
-			newAccelerator->_deformStaticDataInput = Internal::GenerateDeformStaticInput(
+			newAccelerator->_deformStaticDataInput = Internal::GenerateDeformStaticInputForCPUDeform(
 				*modelScaffold,
 				MakeIteratorRange(deformStaticLoadDataRequests),
 				preDeformStaticDataVBIterator);
@@ -201,22 +201,22 @@ namespace RenderCore { namespace Techniques
 		auto temporaryDeformRange = MakeIteratorRange(a._deformTemporaryBuffer);
 
 		for (const auto&d:a._deformOps) {
-			IDeformOperation::VertexElementRange inputElementRanges[16];
+			ICPUDeformOperator::VertexElementRange inputElementRanges[16];
 			assert(d._inputElements.size() <= dimof(inputElementRanges));
 			for (unsigned c=0; c<d._inputElements.size(); ++c) {
-				if (d._inputElements[c]._vbIdx == Internal::VB_StaticData) {
+				if (d._inputElements[c]._vbIdx == Internal::VB_CPUStaticData) {
 					inputElementRanges[c] = MakeVertexIteratorRangeConst(
 						MakeIteratorRange(PtrAdd(AsPointer(staticDataPartRange.begin()), d._inputElements[c]._offset), AsPointer(staticDataPartRange.end())),
 						d._inputElements[c]._stride, d._inputElements[c]._format);
 				} else {
-					assert(d._inputElements[c]._vbIdx == Internal::VB_TemporaryDeform);
+					assert(d._inputElements[c]._vbIdx == Internal::VB_CPUTemporaryDeform);
 					inputElementRanges[c] = MakeVertexIteratorRangeConst(
 						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._inputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
 						d._inputElements[c]._stride, d._inputElements[c]._format);
 				}
 			}
 
-			IDeformOperation::VertexElementRange outputElementRanges[16];
+			ICPUDeformOperator::VertexElementRange outputElementRanges[16];
 			assert(d._outputElements.size() <= dimof(outputElementRanges));
 			for (unsigned c=0; c<d._outputElements.size(); ++c) {
 				if (d._outputElements[c]._vbIdx == Internal::VB_PostDeform) {
@@ -224,7 +224,7 @@ namespace RenderCore { namespace Techniques
 						MakeIteratorRange(PtrAdd(outputPartRange.begin(), d._outputElements[c]._offset), outputPartRange.end()),
 						d._outputElements[c]._stride, d._outputElements[c]._format);
 				} else {
-					assert(d._outputElements[c]._vbIdx == Internal::VB_TemporaryDeform);
+					assert(d._outputElements[c]._vbIdx == Internal::VB_CPUTemporaryDeform);
 					outputElementRanges[c] = MakeVertexIteratorRangeConst(
 						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._outputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
 						d._outputElements[c]._stride, d._outputElements[c]._format);

@@ -220,8 +220,8 @@ namespace RenderCore { namespace Techniques
 				DeformOperationInstantiation {
 					std::make_shared<SkinDeformer>(*modelScaffold, c),
 					unsigned(immData._geoCount) + c,
-					{DeformOperationInstantiation::NameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}},
-					{DeformOperationInstantiation::NameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}},
+					{DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}},
+					{DeformOperationInstantiation::SemanticName{positionEleName, 0}},
 					{weightsEle, jointIndicesEle}
 				});
 		}
