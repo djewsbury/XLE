@@ -16,7 +16,7 @@ namespace RenderCore { class VertexElementIterator; class IDevice; class IResour
 
 namespace RenderCore { namespace Techniques
 {
-	class SkinDeformer : public IDeformOperation
+	class SkinDeformer : public ICPUDeformOperator
 	{
 	public:
 		virtual void Execute(
@@ -74,14 +74,15 @@ namespace RenderCore { namespace Techniques
 	class PipelineCollection;
 	class IComputeShaderOperator;
 
-	class GPUSkinDeformer : public IDeformOperation
+	class GPUSkinDeformer : public IGPUDeformOperator
 	{
 	public:
 		virtual void ExecuteGPU(
 			IThreadContext& threadContext,
 			unsigned instanceIdx,
-			const IResourceView& sourceElements,
-			const IResourceView& destinationElements) const override;
+			const IResourceView& srcVB,
+			const IResourceView& deformTemporariesVB,
+			const IResourceView& dstVB) const override;
 		virtual void* QueryInterface(size_t) override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(

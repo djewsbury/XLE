@@ -79,5 +79,6 @@ namespace RenderCore { namespace Techniques
 		return Services::GetDeformOperationFactory();
 	}
 
-	IDeformOperation::~IDeformOperation() {}
+	ICPUDeformOperator::~ICPUDeformOperator() {}
+	IGPUDeformOperator::~IGPUDeformOperator() {}
 }}

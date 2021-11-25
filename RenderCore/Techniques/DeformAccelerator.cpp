@@ -30,7 +30,7 @@ namespace RenderCore { namespace Techniques
 
 		IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const override;
 
-		std::vector<std::shared_ptr<IDeformOperation>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
+		std::vector<std::shared_ptr<ICPUDeformOperator>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
 		void OnFrameBarrier() override;
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		std::vector<Internal::DeformOp> _deformOps;
+		std::vector<Internal::NascentDeformForGeo::CPUOp> _cpuDeformOps;
 		std::vector<RendererGeoDeformInterface> _rendererGeoInterface;
 
 		std::vector<uint8_t> _deformStaticDataInput;
@@ -89,7 +89,8 @@ namespace RenderCore { namespace Techniques
 		// Build deform streams
 
 		unsigned preDeformStaticDataVBIterator = 0;
-		unsigned deformTemporaryVBIterator = 0;
+		unsigned deformTemporaryGPUVBIterator = 0;
+		unsigned deformTemporaryCPUVBIterator = 0;
 		unsigned postDeformVBIterator = 0;
 		std::vector<Internal::SourceDataTransform> deformStaticLoadDataRequests;
 
@@ -102,14 +103,14 @@ namespace RenderCore { namespace Techniques
 
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
 			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, geo, vertexCount, 
-				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
+				deformInstantiations, geo, vertexCount,
+				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
-			newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
+			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
 
 			deformStaticLoadDataRequests.insert(
 				deformStaticLoadDataRequests.end(),
-				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
+				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
 			geoDeformStreams.push_back(std::move(deform));
 		}
 
@@ -120,17 +121,17 @@ namespace RenderCore { namespace Techniques
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
 			auto deform = Internal::BuildNascentDeformForGeo(
 				deformInstantiations, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryVBIterator, postDeformVBIterator);
+				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
-			newAccelerator->_deformOps.insert(newAccelerator->_deformOps.end(), deform._deformOps.begin(), deform._deformOps.end());
+			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
 
 			deformStaticLoadDataRequests.insert(
 				deformStaticLoadDataRequests.end(),
-				deform._staticDataLoadRequests.begin(), deform._staticDataLoadRequests.end());
+				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
 			skinControllerDeformStreams.push_back(std::move(deform));
 		}
 
-		if (newAccelerator->_deformOps.empty())
+		if (newAccelerator->_cpuDeformOps.empty())
 			return nullptr;
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -145,8 +146,8 @@ namespace RenderCore { namespace Techniques
 				preDeformStaticDataVBIterator);
 		}
 
-		if (deformTemporaryVBIterator) {
-			newAccelerator->_deformTemporaryBuffer.resize(deformTemporaryVBIterator, 0);
+		if (deformTemporaryCPUVBIterator) {
+			newAccelerator->_deformTemporaryBuffer.resize(deformTemporaryCPUVBIterator, 0);
 		}
 
 		newAccelerator->_rendererGeoInterface.reserve(geoDeformStreams.size() + skinControllerDeformStreams.size());
@@ -166,13 +167,13 @@ namespace RenderCore { namespace Techniques
 		return accelerator._rendererGeoInterface;
 	}
 
-	std::vector<std::shared_ptr<IDeformOperation>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
+	std::vector<std::shared_ptr<ICPUDeformOperator>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		std::vector<std::shared_ptr<IDeformOperation>> result;
-		for (const auto&i:accelerator._deformOps)
+		std::vector<std::shared_ptr<ICPUDeformOperator>> result;
+		for (const auto&i:accelerator._cpuDeformOps)
 			if (i._deformOp->QueryInterface(typeId))
 				result.push_back(i._deformOp);
 		return result;
@@ -200,7 +201,7 @@ namespace RenderCore { namespace Techniques
 		auto staticDataPartRange = MakeIteratorRange(a._deformStaticDataInput);
 		auto temporaryDeformRange = MakeIteratorRange(a._deformTemporaryBuffer);
 
-		for (const auto&d:a._deformOps) {
+		for (const auto&d:a._cpuDeformOps) {
 			ICPUDeformOperator::VertexElementRange inputElementRanges[16];
 			assert(d._inputElements.size() <= dimof(inputElementRanges));
 			for (unsigned c=0; c<d._inputElements.size(); ++c) {

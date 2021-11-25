@@ -51,7 +51,7 @@ namespace UnitTests
 
 		NewRendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IteratorRange<const std::shared_ptr<IDeformOperation>*> skinDeformers)
+			IteratorRange<const std::shared_ptr<ICPUDeformOperator>*> skinDeformers)
 		{
 			_deformers.resize(skinDeformers.size());
 			for (auto&d:skinDeformers) {
@@ -68,7 +68,7 @@ namespace UnitTests
 	private:
 		struct Deformer
 		{
-			std::shared_ptr<IDeformOperation> _skinDeformer;
+			std::shared_ptr<ICPUDeformOperator> _skinDeformer;
 			RenderCore::Assets::SkeletonBinding _deformerBindings;
 		};
 		std::vector<Deformer> _deformers;
@@ -281,7 +281,7 @@ namespace UnitTests
 
 		auto threadContext = testHelper._device->GetImmediateContext();
 		testHelper.BeginFrameCapture();
-		deformer.ExecuteGPU(*threadContext, 0, *inputView, *outputView);
+		deformer.ExecuteGPU(*threadContext, 0, *inputView, *inputView, *outputView);
 		testHelper.EndFrameCapture();
 
 		return outputResource->ReadBackSynchronized(*threadContext);
@@ -301,13 +301,13 @@ namespace UnitTests
 				*Techniques::Internal::FindElement(animVb._ia._elements, Hash64("POSITION")), 
 				animVb._ia._vertexStride));
 		
-		std::vector<Techniques::IDeformOperation::VertexElementRange> sourceElements;
+		std::vector<Techniques::ICPUDeformOperator::VertexElementRange> sourceElements;
 		sourceElements.push_back(
 			Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(inputFloat3s), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
 
 		std::vector<uint8_t> outputBufferData;
 		outputBufferData.resize(sourceElements[0].size() * sizeof(Float3));
-		std::vector<Techniques::IDeformOperation::VertexElementRange> destinationElements;
+		std::vector<Techniques::ICPUDeformOperator::VertexElementRange> destinationElements;
 		destinationElements.push_back(
 			Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(outputBufferData), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
 

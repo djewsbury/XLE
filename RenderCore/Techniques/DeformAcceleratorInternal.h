@@ -55,30 +55,26 @@ namespace RenderCore { namespace Techniques
 			unsigned _vbSizes[4] = {0,0,0,0};
 		};
 
-		static std::pair<std::vector<NascentDeformForGeo::CPUOp::Attribute>, unsigned> ArrangeAttributes(
+		static NascentDeformForGeo::CPUOp::Attribute AsCPUOpAttribute(const InputElementDesc& e, unsigned baseOffset, unsigned stride)
+		{
+			return {e._nativeFormat, baseOffset + e._alignedByteOffset, stride, VB_CPUTemporaryDeform};
+		}
+
+		/*static std::pair<std::vector<NascentDeformForGeo::CPUOp::Attribute>, unsigned> ArrangeAttributes(
 			IteratorRange<const InputElementDesc*> attributes,
 			unsigned baseOffset)
 		{
+			if (!attributes.size()) return {{}, 0};
+
 			std::vector<NascentDeformForGeo::CPUOp::Attribute> result;
-			/*result.reserve(attributes.size());
-			unsigned targetStride = 0, offsetIterator = 0;
-			for (unsigned c=0; c<attributes.size(); ++c)
-				targetStride += BitsPerPixel(attributes[c].first._format) / 8;
-			for (unsigned c=0; c<attributes.size(); ++c) {
-				const auto& workingE = attributes[c];
-				result.push_back({workingE.first._format, baseOffset + offsetIterator, targetStride, VB_CPUTemporaryDeform});
-				offsetIterator += BitsPerPixel(workingE.first._format) / 8;
-			}
-			return {std::move(result), targetStride};*/
-			auto normalized = NormalizeInputAssembly(attributes);
-			result.reserve(normalized.size());
-			auto stride = CalculateVertexStrideForSlot(normalized, 0);
-			for (const auto&e:normalized) {
-				assert(e._inputSlot == 0);
-				result.push_back({e._nativeFormat, baseOffset + e._alignedByteOffset, stride, VB_CPUTemporaryDeform});
+			result.reserve(attributes.size());
+			auto stride = CalculateVertexStrideForSlot(attributes, attributes[0]._inputSlot);
+			for (const auto&e:attributes) {
+				assert(e._inputSlot == attributes[0]._inputSlot);	// expecting everything assigned to the same input slot
+				result.push_back();
 			}
 			return {std::move(result), stride};
-		}
+		}*/
 
 		static NascentDeformForGeo BuildNascentDeformForGeo(
 			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
@@ -131,7 +127,7 @@ namespace RenderCore { namespace Techniques
 						auto i = std::find_if(
 							workingGeneratedElements.begin(), workingGeneratedElements.end(),
 							[e](const auto& wge) {
-								return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
+								return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
 							});
 						if (i != workingGeneratedElements.end()) {
 							workingTemporarySpaceElements_cpu.push_back(*i);
@@ -147,9 +143,13 @@ namespace RenderCore { namespace Techniques
 					auto i = std::remove_if(
 						workingGeneratedElements.begin(), workingGeneratedElements.end(),
 						[&def](const auto& wge) {
-							auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
-							return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
-								|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
+							auto hash = Hash64(wge._semanticName) + wge._semanticIndex;
+							if (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
+								return true;
+							auto i = std::find_if(
+								def._generatedElements.begin(), def._generatedElements.end(), 
+								[&wge](const auto& e) { return e._semantic == wge._semanticName && e._semanticIndex == wge._semanticIndex; });
+							return i != def._generatedElements.end();
 						});
 					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
 
@@ -174,7 +174,7 @@ namespace RenderCore { namespace Techniques
 						auto i = std::find_if(
 							workingGeneratedElements.begin(), workingGeneratedElements.end(),
 							[e](const auto& wge) {
-								return wge.first._semantic == e._semantic && wge.first._semanticIndex == e._semanticIndex;
+								return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
 							});
 						if (i != workingGeneratedElements.end()) {
 							workingTemporarySpaceElements_gpu.push_back(*i);
@@ -187,9 +187,13 @@ namespace RenderCore { namespace Techniques
 					auto i = std::remove_if(
 						workingGeneratedElements.begin(), workingGeneratedElements.end(),
 						[&def](const auto& wge) {
-							auto hash = Hash64(wge.first._semantic) + wge.first._semanticIndex;
-							return (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
-								|| std::find(def._generatedElements.begin(), def._generatedElements.end(), wge.first) != def._generatedElements.end();
+							auto hash = Hash64(wge._semanticName) + wge._semanticIndex;
+							if (std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end())
+								return true;
+							auto i = std::find_if(
+								def._generatedElements.begin(), def._generatedElements.end(), 
+								[&wge](const auto& e) { return e._semantic == wge._semanticName && e._semanticIndex == wge._semanticIndex; });
+							return i != def._generatedElements.end();
 						});
 					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
 
@@ -215,6 +219,16 @@ namespace RenderCore { namespace Techniques
 				std::unique(result._rendererInterf._suppressedElements.begin(), result._rendererInterf._suppressedElements.end()),
 				result._rendererInterf._suppressedElements.end());
 
+			workingGeneratedElements = NormalizeInputAssembly(workingGeneratedElements);
+			workingTemporarySpaceElements_cpu = NormalizeInputAssembly(workingTemporarySpaceElements_cpu);
+			workingTemporarySpaceElements_gpu = NormalizeInputAssembly(workingTemporarySpaceElements_gpu);
+			workingSourceDataElements_cpu = NormalizeInputAssembly(workingSourceDataElements_cpu);
+
+			for (auto&e:workingTemporarySpaceElements_cpu) e._inputSlot = VB_CPUTemporaryDeform;
+			for (auto&e:workingTemporarySpaceElements_gpu) e._inputSlot = VB_GPUTemporaryDeform;
+			for (auto&e:workingGeneratedElements) e._inputSlot = VB_PostDeform;
+			for (auto&e:workingSourceDataElements_cpu) e._inputSlot = VB_CPUStaticData;
+
 			// Figure out how to arrange all of the input and output vertices in the 
 			// deform VBs.
 			// We've got 3 to use
@@ -222,49 +236,43 @@ namespace RenderCore { namespace Techniques
 			//		2. a deform temporary buffer; which contains data written out from deform operations, and read in by others
 			//		3. a final output buffer; which contains resulting vertex data that is fed into the render operation
 			
-			std::vector<NascentDeformForGeo::CPUOp::Attribute> sourceDataStreams;
+			unsigned vbStrides[4] = {0};
 			{
-				unsigned targetStride;
-				std::tie(sourceDataStreams, targetStride) = ArrangeAttributes(workingSourceDataElements_cpu, preDeformStaticDataVBIterator);
+				vbStrides[VB_CPUStaticData] = CalculateVertexStrideForSlot(workingSourceDataElements_cpu, VB_CPUStaticData);
 				result._vbOffsets[VB_CPUStaticData] = preDeformStaticDataVBIterator;
-				result._vbSizes[VB_CPUStaticData] = targetStride * vertexCount;
-				preDeformStaticDataVBIterator += targetStride * vertexCount;
+				result._vbSizes[VB_CPUStaticData] = vbStrides[VB_CPUStaticData] * vertexCount;
+				preDeformStaticDataVBIterator += vbStrides[VB_CPUStaticData] * vertexCount;
 
-				result._cpuStaticDataLoadRequests.reserve(sourceDataStreams.size());
+				result._cpuStaticDataLoadRequests.reserve(workingSourceDataElements_cpu.size());
 				for (unsigned c=0; c<workingSourceDataElements_cpu.size(); ++c) {
 					const auto& workingE = workingSourceDataElements_cpu[c];
 					result._cpuStaticDataLoadRequests.push_back({
 						geoId, Hash64(workingE._semanticName) + workingE._semanticIndex,
-						sourceDataStreams[c]._format, sourceDataStreams[c]._offset, targetStride, vertexCount});
+						workingE._nativeFormat, workingE._alignedByteOffset + result._vbOffsets[VB_CPUStaticData],
+						vbStrides[VB_CPUStaticData], vertexCount});
 				}
 			}
 
-			std::vector<NascentDeformForGeo::CPUOp::Attribute> temporaryDataStreams_cpu;
 			{
-				unsigned targetStride;
-				std::tie(temporaryDataStreams_cpu, targetStride) = ArrangeAttributes(workingTemporarySpaceElements_cpu, deformTemporaryCPUVBIterator);
+				vbStrides[VB_CPUTemporaryDeform] = CalculateVertexStrideForSlot(workingTemporarySpaceElements_cpu, VB_CPUTemporaryDeform);
 				result._vbOffsets[VB_CPUTemporaryDeform] = deformTemporaryCPUVBIterator;
-				result._vbSizes[VB_CPUTemporaryDeform] = targetStride * vertexCount;
-				deformTemporaryCPUVBIterator += targetStride * vertexCount;
+				result._vbSizes[VB_CPUTemporaryDeform] = vbStrides[VB_CPUTemporaryDeform] * vertexCount;
+				deformTemporaryCPUVBIterator += vbStrides[VB_CPUTemporaryDeform] * vertexCount;
 			}
 
-			std::vector<NascentDeformForGeo::CPUOp::Attribute> temporaryDataStreams_gpu;
 			{
-				unsigned targetStride;
-				std::tie(temporaryDataStreams_gpu, targetStride) = ArrangeAttributes(workingTemporarySpaceElements_gpu, deformTemporaryGPUVBIterator);
+				vbStrides[VB_GPUTemporaryDeform] = CalculateVertexStrideForSlot(workingTemporarySpaceElements_gpu, VB_GPUTemporaryDeform);
 				result._vbOffsets[VB_GPUTemporaryDeform] = deformTemporaryGPUVBIterator;
-				result._vbSizes[VB_GPUTemporaryDeform] = targetStride * vertexCount;
-				deformTemporaryGPUVBIterator += targetStride * vertexCount;
+				result._vbSizes[VB_GPUTemporaryDeform] = vbStrides[VB_GPUTemporaryDeform] * vertexCount;
+				deformTemporaryGPUVBIterator += vbStrides[VB_GPUTemporaryDeform] * vertexCount;
 			}
 
-			std::vector<NascentDeformForGeo::CPUOp::Attribute> generatedDataStreams;
 			{
-				unsigned targetStride;
-				std::tie(generatedDataStreams, targetStride) = ArrangeAttributes(workingGeneratedElements, postDeformVBIterator);
+				vbStrides[VB_PostDeform] = CalculateVertexStrideForSlot(workingGeneratedElements, VB_PostDeform);
 				result._vbOffsets[VB_PostDeform] = postDeformVBIterator;
-				result._vbSizes[VB_PostDeform] = targetStride * vertexCount;
-				result._rendererInterf._vbOffsetForGeo = postDeformVBIterator;
-				postDeformVBIterator += targetStride * vertexCount;
+				result._vbSizes[VB_PostDeform] = vbStrides[VB_PostDeform] * vertexCount;
+				result._rendererInterf._vbOffset = postDeformVBIterator;
+				postDeformVBIterator += vbStrides[VB_PostDeform] * vertexCount;
 			}
 
 			// Collate the WorkingDeformOp into the SimpleModelRenderer::DeformOp format
@@ -273,13 +281,13 @@ namespace RenderCore { namespace Techniques
 				NascentDeformForGeo::CPUOp finalDeformOp;
 				// input streams
 				for (auto s:wdo._inputStreamIds) {
-					auto i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+					auto i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
 					if (i != workingTemporarySpaceElements_cpu.end()) {
-						finalDeformOp._inputElements.push_back(temporaryDataStreams_cpu[i-workingTemporarySpaceElements_cpu.begin()]);
+						finalDeformOp._inputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUTemporaryDeform], vbStrides[VB_CPUTemporaryDeform]));
 					} else {
-						i = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+						i = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
 						if (i != workingSourceDataElements_cpu.end()) {
-							finalDeformOp._inputElements.push_back(sourceDataStreams[i-workingSourceDataElements_cpu.begin()]);
+							finalDeformOp._inputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUStaticData], vbStrides[VB_CPUStaticData]));
 						} else {
 							assert(0);
 							finalDeformOp._inputElements.push_back({});
@@ -288,13 +296,13 @@ namespace RenderCore { namespace Techniques
 				}
 				// output streams
 				for (auto s:wdo._outputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const auto& p) { return p.second == s; });
+					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
 					if (i != workingGeneratedElements.end()) {
-						finalDeformOp._outputElements.push_back(generatedDataStreams[i-workingGeneratedElements.begin()]);
+						finalDeformOp._outputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_PostDeform], vbStrides[VB_PostDeform]));
 					} else {
-						i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p.second == s; });
+						i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
 						if (i != workingTemporarySpaceElements_cpu.end()) {
-							finalDeformOp._outputElements.push_back(temporaryDataStreams_cpu[i-workingTemporarySpaceElements_cpu.begin()]);
+							finalDeformOp._outputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUTemporaryDeform], vbStrides[VB_CPUTemporaryDeform]));
 						} else {
 							assert(0);
 							finalDeformOp._outputElements.push_back({});
@@ -305,10 +313,7 @@ namespace RenderCore { namespace Techniques
 				result._cpuOps.emplace_back(std::move(finalDeformOp));
 			}
 
-			result._rendererInterf._generatedElements.reserve(workingGeneratedElements.size());
-			for (const auto&wge:workingGeneratedElements)
-				result._rendererInterf._generatedElements.push_back(InputElementDesc{wge.first._semantic, wge.first._semanticIndex, wge.first._format});
-
+			result._rendererInterf._generatedElements = std::move(workingGeneratedElements);
 			return result;
 		}
 

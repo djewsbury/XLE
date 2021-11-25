@@ -189,8 +189,8 @@ namespace RenderCore { namespace Techniques
 	{
 		if (typeId == typeid(SkinDeformer).hash_code())
 			return this;
-		else if (typeId == typeid(IDeformOperation).hash_code())
-			return (IDeformOperation*)this;
+		else if (typeId == typeid(ICPUDeformOperator).hash_code())
+			return (ICPUDeformOperator*)this;
 		return nullptr;
 	}
 
@@ -216,14 +216,13 @@ namespace RenderCore { namespace Techniques
 			//			StringSection<>(initializer.begin(), sep),
 			//			StringSection<>(sep+1, initializer.end()
 
-			result.emplace_back(
-				DeformOperationInstantiation {
-					std::make_shared<SkinDeformer>(*modelScaffold, c),
-					unsigned(immData._geoCount) + c,
-					{DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}},
-					{DeformOperationInstantiation::SemanticName{positionEleName, 0}},
-					{weightsEle, jointIndicesEle}
-				});
+			DeformOperationInstantiation deformOp;
+			deformOp._cpuOperator = std::make_shared<SkinDeformer>(*modelScaffold, c);
+			deformOp._geoId = unsigned(immData._geoCount) + c;
+			deformOp._generatedElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
+			deformOp._upstreamSourceElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
+			deformOp._suppressElements = {weightsEle, jointIndicesEle};
+			result.emplace_back(std::move(deformOp));
 		}
 
 		return result;
@@ -271,8 +270,9 @@ namespace RenderCore { namespace Techniques
 	void GPUSkinDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
 		unsigned instanceId,
-		const IResourceView& sourceElements,
-		const IResourceView& destinationElements) const
+		const IResourceView& srcVB,
+		const IResourceView& deformTemporariesVB,
+		const IResourceView& dstVB) const
 	{
 		_operator->StallWhilePending();
 		auto op = _operator->Actualize();
@@ -282,7 +282,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _vertexCount, _firstVertex, _softInfluenceCount, _firstJointTransform;
 		};
 
-		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &sourceElements, &destinationElements };
+		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB };
 		UniformsStream::ImmediateData immDatas[] {
 			MakeOpaqueIteratorRange(_iaParams),
 			MakeIteratorRange(_jointMatrices)
@@ -577,8 +577,8 @@ namespace RenderCore { namespace Techniques
 	{
 		if (typeId == typeid(GPUSkinDeformer).hash_code())
 			return this;
-		else if (typeId == typeid(IDeformOperation).hash_code())
-			return (IDeformOperation*)this;
+		else if (typeId == typeid(ICPUDeformOperator).hash_code())
+			return (ICPUDeformOperator*)this;
 		return nullptr;
 	}
 
@@ -617,16 +617,5 @@ namespace RenderCore { namespace Techniques
 #endif
 		return {};
 	}
-
-
-	void IDeformOperation::Execute(
-		unsigned instanceIdx,
-		IteratorRange<const VertexElementRange*> sourceElements,
-		IteratorRange<const VertexElementRange*> destinationElements) const {}
-	void IDeformOperation::ExecuteGPU(
-		IThreadContext& threadContext,
-		unsigned instanceIdx,
-		const IResourceView& sourceElements,
-		const IResourceView& destinationElements) const {}
 
 }}

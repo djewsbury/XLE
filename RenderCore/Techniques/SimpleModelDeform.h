@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 		virtual void Execute(
 			unsigned instanceIdx,
 			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const;
+			IteratorRange<const VertexElementRange*> destinationElements) const = 0;
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~ICPUDeformOperator();
 	};
@@ -37,7 +37,7 @@ namespace RenderCore { namespace Techniques
 			unsigned instanceIdx,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB) const;
+			const IResourceView& dstVB) const = 0;
 		virtual void* QueryInterface(size_t) = 0;
 		virtual ~IGPUDeformOperator();
 	};
@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<InputElementDesc> _generatedElements;
 		std::vector<uint64_t> _suppressedElements;
-		unsigned _vbOffsetForGeo = 0;
+		unsigned _vbOffset = 0;
 	};
 
 	struct DeformOperationInstantiation
