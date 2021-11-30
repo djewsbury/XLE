@@ -8,7 +8,7 @@
 
 namespace RenderCore { namespace Techniques
 {
-	auto DeformOperationFactory::CreateDeformOperations(
+	auto DeformOperationFactorySet::CreateDeformOperations(
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) -> InstantiationSet
 	{
@@ -35,26 +35,25 @@ namespace RenderCore { namespace Techniques
 			if (i==_instantiationFunctions.end() || i->first != hash)
 				continue;
 
-			auto instantiations = (i->second._instFunction)(MakeStringSection(afterColon, end), modelScaffold);
-			result.insert(result.end(), instantiations.begin(), instantiations.end());
+			i->second._factory->Configure(result, MakeStringSection(afterColon, end), modelScaffold);
 		}
 		return result;
 	}
 
-	auto DeformOperationFactory::RegisterDeformOperation(StringSection<> name, InitiationFunction&& fn) -> RegisteredDeformId
+	auto DeformOperationFactorySet::Register(StringSection<> name, std::shared_ptr<IDeformOperationFactory> factory) -> RegisteredDeformId
 	{
 		RegisteredDeformId result = _nextDeformId++;
 		auto hash = Hash64(name.begin(), name.end());
 		auto i = LowerBound(_instantiationFunctions, hash);
 		if (i!=_instantiationFunctions.end() && i->first == hash) {
-			i->second = {std::move(fn), result};
+			i->second = {std::move(factory), result};
 		} else {
-			_instantiationFunctions.insert(i, std::make_pair(hash, RegisteredDeformOp{std::move(fn), result}));
+			_instantiationFunctions.insert(i, std::make_pair(hash, RegisteredDeformOp{std::move(factory), result}));
 		}
 		return result;
 	}
 
-	void DeformOperationFactory::DeregisterDeformOperation(RegisteredDeformId deformId)
+	void DeformOperationFactorySet::Deregister(RegisteredDeformId deformId)
 	{
 		auto i = std::remove_if(
 			_instantiationFunctions.begin(),
@@ -65,20 +64,21 @@ namespace RenderCore { namespace Techniques
 		_instantiationFunctions.erase(i, _instantiationFunctions.end());
 	}
 
-	DeformOperationFactory::DeformOperationFactory()
+	DeformOperationFactorySet::DeformOperationFactorySet()
 	{
 		_nextDeformId = 1;
 	}
 
-	DeformOperationFactory::~DeformOperationFactory()
+	DeformOperationFactorySet::~DeformOperationFactorySet()
 	{
 	}
 
-	DeformOperationFactory& DeformOperationFactory::GetInstance()
+	DeformOperationFactorySet& DeformOperationFactorySet::GetInstance()
 	{
-		return Services::GetDeformOperationFactory();
+		return Services::GetDeformOperationFactorySet();
 	}
 
 	ICPUDeformOperator::~ICPUDeformOperator() {}
 	IGPUDeformOperator::~IGPUDeformOperator() {}
+	IDeformOperationFactory::~IDeformOperationFactory() {}
 }}

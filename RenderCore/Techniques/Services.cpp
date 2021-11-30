@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 	{
 		_pimpl = std::make_unique<Pimpl>();
 		_device = device;
-		_deformOpsFactory = std::make_shared<DeformOperationFactory>();
+		_deformOpsFactory = std::make_shared<DeformOperationFactorySet>();
 		_subFrameEvents = std::make_shared<SubFrameEvents>();
 	}
 

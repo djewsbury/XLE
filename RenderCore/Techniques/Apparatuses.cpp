@@ -179,7 +179,7 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->RegisterTextureLoader(std::regex{R"(.*\.[hH][dD][rR])"}, RenderCore::Assets::CreateHDRTextureLoader());
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
 
-		_techniqueServices->GetDeformOperationFactory().RegisterDeformOperation("skin", SkinDeformer::InstantiationFunction);
+		_techniqueServices->GetDeformOperationFactorySet().Register("skin", CreateCPUSkinDeformerFactory());
 		_deformAccelerators = CreateDeformAcceleratorPool(device);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();

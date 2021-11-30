@@ -11,6 +11,7 @@
 #include "../../Utility/StringUtils.h"
 #include <vector>
 #include <functional>
+#include <future>
 
 namespace RenderCore { namespace Assets { class ModelScaffold; }}
 namespace RenderCore { class IThreadContext; class IResourceView; }
@@ -58,8 +59,8 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<ICPUDeformOperator> _cpuOperator;
 
-		using IGPUDeformOperatorFuture = ::Assets::PtrToMarkerPtr<IGPUDeformOperator>;
-		using GPUDeformConstructorFN = std::function<IGPUDeformOperatorFuture(
+		using GPUDeformConstructorFN = std::function<void(
+			std::promise<std::shared_ptr<IGPUDeformOperator>>&& promise,
 			InputLayout srcVBLayout, 
 			InputLayout deformTemporariesVBLayout,
 			InputLayout dstVBLayout
@@ -74,34 +75,40 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	class DeformOperationFactory
+	class IDeformOperationFactory
+	{
+	public:
+		virtual void Configure(
+			std::vector<DeformOperationInstantiation>& InstantiationSet,
+			StringSection<> initializer,
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold) = 0;
+		virtual ~IDeformOperationFactory();
+	};
+
+	class DeformOperationFactorySet
 	{
 	public:
 		using InstantiationSet = std::vector<DeformOperationInstantiation>;
-
 		InstantiationSet CreateDeformOperations(
 			StringSection<> initializer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
 
 		using RegisteredDeformId = uint32_t;
-
-		using InitiationFunction = std::function<InstantiationSet(StringSection<>, const std::shared_ptr<RenderCore::Assets::ModelScaffold>&)>;
-		RegisteredDeformId RegisterDeformOperation(StringSection<> name, InitiationFunction&& fn);
-		void DeregisterDeformOperation(RegisteredDeformId);
+		RegisteredDeformId Register(StringSection<> name, std::shared_ptr<IDeformOperationFactory>);
+		void Deregister(RegisteredDeformId);
 		
-		static DeformOperationFactory& GetInstance();
+		static DeformOperationFactorySet& GetInstance();
 
-		DeformOperationFactory();
-		~DeformOperationFactory();
+		DeformOperationFactorySet();
+		~DeformOperationFactorySet();
 	private:
 		struct RegisteredDeformOp
 		{
-			InitiationFunction _instFunction;
+			std::shared_ptr<IDeformOperationFactory> _factory;
 			RegisteredDeformId _deformId;
 		};
 		std::vector<std::pair<uint64_t, RegisteredDeformOp>> _instantiationFunctions;
 		unsigned _nextDeformId;
 	};
-
 }}
 

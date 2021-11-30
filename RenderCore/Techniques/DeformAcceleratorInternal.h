@@ -10,6 +10,7 @@
 #include "../Types.h"
 #include <memory>
 #include <vector>
+#include <future>
 
 namespace RenderCore { namespace Techniques 
 {
@@ -41,7 +42,7 @@ namespace RenderCore { namespace Techniques
 			};
 
 			std::vector<CPUOp> _cpuOps;
-			std::vector<::Assets::PtrToMarkerPtr<IGPUDeformOperator>> _gpuOps;
+			std::vector<std::future<std::shared_ptr<IGPUDeformOperator>>> _gpuOps;
 
 			RendererGeoDeformInterface _rendererInterf;
 			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
@@ -52,6 +53,7 @@ namespace RenderCore { namespace Techniques
 
 		NascentDeformForGeo BuildNascentDeformForGeo(
 			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
+			InputLayout srcVBLayout,
 			unsigned geoId,
 			unsigned vertexCount,
 			unsigned& preDeformStaticDataVBIterator,

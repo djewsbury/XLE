@@ -88,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold)
 	{
-		auto& opFactory = Services::GetDeformOperationFactory();
+		auto& opFactory = Services::GetDeformOperationFactorySet();
 		auto deformInstantiations = opFactory.CreateDeformOperations(initializer, modelScaffold);
 		auto newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_enabledInstances.resize(8, 0);
@@ -114,8 +114,13 @@ namespace RenderCore { namespace Techniques
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
 
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
+			InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
+			BuildLowLevelInputAssembly(
+				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
+				MakeIteratorRange(rg._vb._ia._elements.data(), &rg._vb._ia._elements[rg._vb._ia._elements.size()]));
+
 			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, geo, vertexCount,
+				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), geo, vertexCount,
 				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
 			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
@@ -131,8 +136,14 @@ namespace RenderCore { namespace Techniques
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
 			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
+			InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
+			BuildLowLevelInputAssembly(
+				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
+				MakeIteratorRange(rg._vb._ia._elements.data(), &rg._vb._ia._elements[rg._vb._ia._elements.size()]));
+
 			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
+				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), 
+				geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
 				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
 			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
@@ -400,6 +411,7 @@ namespace RenderCore { namespace Techniques
 	{
 		NascentDeformForGeo BuildNascentDeformForGeo(
 			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
+			InputLayout srcVBLayout,
 			unsigned geoId,
 			unsigned vertexCount,
 			unsigned& preDeformStaticDataVBIterator,
@@ -506,7 +518,15 @@ namespace RenderCore { namespace Techniques
 						if (i != workingGeneratedElements.end()) {
 							workingTemporarySpaceElements_gpu.push_back(*i);
 							workingGeneratedElements.erase(i);
-						} // else it will just come from the static data
+						} else {
+							auto q = std::find_if(
+								srcVBLayout.begin(), srcVBLayout.end(),
+								[e](const auto& wge) {
+									return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
+								});
+							if (q==srcVBLayout.end())
+								Throw(std::runtime_error("Could not match input element (" + e._semantic + ") for GPU deform operation"));
+						}
 					}
 
 					// Before we add our own static data, we should remove any working elements that have been
@@ -638,6 +658,18 @@ namespace RenderCore { namespace Techniques
 				}
 				finalDeformOp._deformOp = wdo._deformOp;
 				result._cpuOps.emplace_back(std::move(finalDeformOp));
+			}
+
+			result._gpuOps.reserve(workingGPUDeformOps.size());
+			for (const auto&wdo:workingGPUDeformOps) {
+				std::promise<std::shared_ptr<IGPUDeformOperator>> promise;
+				auto future = promise.get_future();
+				wdo._constructor(
+					std::move(promise),
+					srcVBLayout,
+					workingTemporarySpaceElements_gpu,
+					workingGeneratedElements);
+				result._gpuOps.push_back(std::move(future));
 			}
 
 			result._rendererInterf._generatedElements = std::move(workingGeneratedElements);
