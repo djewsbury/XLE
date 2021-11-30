@@ -9,6 +9,7 @@
 #include "Services.h"
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
+#include "../Assets/ModelScaffold.h"
 #include "../IDevice.h"
 #include "../ResourceDesc.h"
 #include "../Types.h"
@@ -78,6 +79,68 @@ namespace RenderCore { namespace Techniques
 		}
 		assert(iterator == resourceSize);
 		return result;
+	}
+
+	BufferUploads::TransactionMarker LoadStaticResourceAsync(
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags)
+	{
+		class DataSource : public BufferUploads::IAsyncDataSource
+		{
+		public:
+			virtual std::future<ResourceDesc> GetDesc ()
+			{
+				std::promise<ResourceDesc> promise;
+				promise.set_value(_resourceDesc);
+				return promise.get_future();
+			}
+			virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources)
+			{
+				std::promise<void> promise;
+				assert(subResources.size() == 1);
+				assert(subResources[0]._id == RenderCore::SubResourceId{});
+				unsigned iterator = 0;
+
+				{
+					auto file = _modelScaffold->OpenLargeBlocks();
+					auto initialOffset = file->TellP();
+					std::sort(_localRequests.begin(), _localRequests.end(), [](auto lhs, auto rhs) { return lhs.first < rhs.first; });
+					for (auto i=_localRequests.begin(); i!=_localRequests.end();) {
+						auto start = i; ++i;
+						while (i != _localRequests.end() && i->first == ((i-1)->first + (i-1)->second)) ++i;		// combine adjacent loads
+						
+						auto endPoint = (i-1)->first + (i-1)->second;
+						file->Seek(start->first + initialOffset);
+						file->Read(PtrAdd(subResources[0]._destination.begin(), iterator), endPoint-start->first, 1);
+						iterator += endPoint-start->first;
+					}
+				}
+				
+				promise.set_value();
+				return promise.get_future();
+			}
+        	virtual ::Assets::DependencyValidation GetDependencyValidation() const
+			{
+				return _modelScaffold->GetDependencyValidation();
+			}
+
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
+			ResourceDesc _resourceDesc;
+			std::vector<std::pair<unsigned, unsigned>> _localRequests;
+		};
+
+		auto dataSource = std::make_shared<DataSource>();
+		dataSource->_modelScaffold = std::move(modelScaffold);
+		dataSource->_resourceDesc = CreateDesc(
+			bindFlags, 0, GPUAccess::Read,
+			LinearBufferDesc::Create(resourceSize),
+			"model-renderer");
+		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
+
+		return Services::GetBufferUploads().Transaction_Begin(dataSource, bindFlags);
 	}
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

@@ -8,13 +8,14 @@
 #include "../Types.h"
 #include "../ResourceDesc.h"
 #include "../Metal/Forward.h"		// for Metal::ShaderProgram
+#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 #include <utility>
 
 namespace RenderCore { class IResource; class IDevice; class CompiledShaderByteCode; class StreamOutputInitializers; class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
+namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
 namespace Assets { class IFileInterface; }
 
 namespace RenderCore { namespace Techniques {
@@ -27,6 +28,13 @@ namespace RenderCore { namespace Techniques {
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		::Assets::IFileInterface& file,
+		BindFlag::BitField bindFlags);
+
+	BufferUploads::TransactionMarker LoadStaticResourceAsync(
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
 		BindFlag::BitField bindFlags);
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

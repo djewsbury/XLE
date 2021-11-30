@@ -66,41 +66,55 @@ namespace BufferUploads { namespace PlatformInterface
     {
         assert(finalResource.IsWholeResource());
         assert(stagingResource.IsWholeResource());
-
-        assert(destinationDesc._type == ResourceDesc::Type::Texture);
-        auto dstLodLevelMax = std::min(stagingToFinalMapping._dstLodLevelMax, (unsigned)destinationDesc._textureDesc._mipCount-1);
-        auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, (unsigned)destinationDesc._textureDesc._arrayCount-1);
-        auto allLods = stagingToFinalMapping._dstLodLevelMin == 0 && dstLodLevelMax == ((unsigned)destinationDesc._textureDesc._mipCount-1);
-        auto allArrayLayers = stagingToFinalMapping._dstArrayLayerMin == 0 && dstArrayLayerMax == ((unsigned)destinationDesc._textureDesc._arrayCount-1);
-        if (destinationDesc._textureDesc._arrayCount == 0) {
-            dstArrayLayerMax = 0;
-            allArrayLayers = true;
-        }
-        auto entire2DPlane = stagingToFinalMapping._stagingXYOffset[0] == 0 && stagingToFinalMapping._stagingXYOffset[1] == 0;
-
-        // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
         auto& metalContext = *Metal::DeviceContext::Get(*_renderCoreContext);
-        Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
-        Metal::Internal::CaptureForBind(metalContext, *stagingResource.GetContainingResource(), BindFlag::TransferSrc);
-        auto blitEncoder = metalContext.BeginBlitEncoder();
 
-        if (allLods && allArrayLayers && entire2DPlane) {
-            blitEncoder.Copy(*finalResource.GetContainingResource().get(), *stagingResource.GetContainingResource().get());
-        } else {
-            auto& dstBox = stagingToFinalMapping._dstBox;
-            for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
-                for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
-                    blitEncoder.Copy(
-                        CopyPartial_Dest{
-                            *finalResource.GetContainingResource(), 
-                            SubResourceId{mip, a}, {(unsigned)dstBox._left, (unsigned)dstBox._top, 0}},
-                        CopyPartial_Src{
-                            *stagingResource.GetContainingResource(), 
-                            SubResourceId{mip-stagingToFinalMapping._stagingLODOffset, a-stagingToFinalMapping._stagingArrayOffset},
-                            {(unsigned)dstBox._left - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._top - stagingToFinalMapping._stagingXYOffset[1], 0u},
-                            {(unsigned)dstBox._right - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._bottom - stagingToFinalMapping._stagingXYOffset[1], 1u}});
+        if (destinationDesc._type == ResourceDesc::Type::Texture) {
+            auto dstLodLevelMax = std::min(stagingToFinalMapping._dstLodLevelMax, (unsigned)destinationDesc._textureDesc._mipCount-1);
+            auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, (unsigned)destinationDesc._textureDesc._arrayCount-1);
+            auto allLods = stagingToFinalMapping._dstLodLevelMin == 0 && dstLodLevelMax == ((unsigned)destinationDesc._textureDesc._mipCount-1);
+            auto allArrayLayers = stagingToFinalMapping._dstArrayLayerMin == 0 && dstArrayLayerMax == ((unsigned)destinationDesc._textureDesc._arrayCount-1);
+            if (destinationDesc._textureDesc._arrayCount == 0) {
+                dstArrayLayerMax = 0;
+                allArrayLayers = true;
+            }
+            auto entire2DPlane = stagingToFinalMapping._stagingXYOffset[0] == 0 && stagingToFinalMapping._stagingXYOffset[1] == 0;
+
+            // During the transfer, the images must be in either TransferSrcOptimal, TransferDstOptimal or General.
+            Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
+            Metal::Internal::CaptureForBind(metalContext, *stagingResource.GetContainingResource(), BindFlag::TransferSrc);
+            auto blitEncoder = metalContext.BeginBlitEncoder();
+
+            if (allLods && allArrayLayers && entire2DPlane) {
+                blitEncoder.Copy(*finalResource.GetContainingResource().get(), *stagingResource.GetContainingResource().get());
+            } else {
+                auto& dstBox = stagingToFinalMapping._dstBox;
+                for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
+                    for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
+                        blitEncoder.Copy(
+                            CopyPartial_Dest{
+                                *finalResource.GetContainingResource(), 
+                                SubResourceId{mip, a}, {(unsigned)dstBox._left, (unsigned)dstBox._top, 0}},
+                            CopyPartial_Src{
+                                *stagingResource.GetContainingResource(), 
+                                SubResourceId{mip-stagingToFinalMapping._stagingLODOffset, a-stagingToFinalMapping._stagingArrayOffset},
+                                {(unsigned)dstBox._left - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._top - stagingToFinalMapping._stagingXYOffset[1], 0u},
+                                {(unsigned)dstBox._right - stagingToFinalMapping._stagingXYOffset[0], (unsigned)dstBox._bottom - stagingToFinalMapping._stagingXYOffset[1], 1u}});
+                    }
                 }
             }
+        } else {
+            assert(destinationDesc._type == ResourceDesc::Type::LinearBuffer);
+            assert(destinationDesc._linearBufferDesc._sizeInBytes <= stagingResource.AsIndependentResource()->GetDesc()._linearBufferDesc._sizeInBytes);
+
+            Metal::Internal::CaptureForBind(metalContext, *finalResource.GetContainingResource(), BindFlag::TransferDst);
+            Metal::Internal::CaptureForBind(metalContext, *stagingResource.GetContainingResource(), BindFlag::TransferSrc);
+            auto blitEncoder = metalContext.BeginBlitEncoder();
+            blitEncoder.Copy(
+                CopyPartial_Dest{
+                    *finalResource.GetContainingResource().get()},
+                CopyPartial_Src{
+                    *stagingResource.GetContainingResource().get(),
+                    0, destinationDesc._linearBufferDesc._sizeInBytes});
         }
 
         auto finalContainingGuid = finalResource.GetContainingResource()->GetGUID();
@@ -242,40 +256,42 @@ namespace BufferUploads { namespace PlatformInterface
         const ResourceDesc& dstDesc,
         const PartialResource& part)
     {
-        assert(dstDesc._type == ResourceDesc::Type::Texture);
         ResourceDesc stagingDesc = AsStagingDesc(dstDesc);
         PlatformInterface::StagingToFinalMapping mapping;
-        mapping._dstBox = part._box;
-        if (IsFull2DPlane(dstDesc, mapping._dstBox)) {
-            // When writing to the full 2d plane, we can selectively update only some lod levels
-            if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax)) {
-                mapping._stagingLODOffset = part._lodLevelMin;
-                mapping._dstLodLevelMin = part._lodLevelMin;
-                mapping._dstLodLevelMax = std::min(part._lodLevelMax, (unsigned)dstDesc._textureDesc._mipCount-1);
-                stagingDesc = ApplyLODOffset(stagingDesc, mapping._stagingLODOffset);
+
+        if (dstDesc._type == ResourceDesc::Type::Texture) {
+            mapping._dstBox = part._box;
+            if (IsFull2DPlane(dstDesc, mapping._dstBox)) {
+                // When writing to the full 2d plane, we can selectively update only some lod levels
+                if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax)) {
+                    mapping._stagingLODOffset = part._lodLevelMin;
+                    mapping._dstLodLevelMin = part._lodLevelMin;
+                    mapping._dstLodLevelMax = std::min(part._lodLevelMax, (unsigned)dstDesc._textureDesc._mipCount-1);
+                    stagingDesc = ApplyLODOffset(stagingDesc, mapping._stagingLODOffset);
+                }
+            } else {
+                // We need this restriction because otherwise (assuming the mip chain goes to 1x1) we
+                // would have to recalculate all mips
+                if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax))
+                    Throw(std::runtime_error("When updating texture data for only part of the 2d plane, you must update all lod levels"));
+
+                // Shrink the size of the staging texture to just the parts we want
+                assert(mapping._dstBox._right > mapping._dstBox._left);
+                assert(mapping._dstBox._bottom > mapping._dstBox._top);
+                mapping._stagingXYOffset = { (unsigned)mapping._dstBox._left, (unsigned)mapping._dstBox._top };
+                stagingDesc._textureDesc._width = mapping._dstBox._right - mapping._dstBox._left;
+                stagingDesc._textureDesc._height = mapping._dstBox._bottom - mapping._dstBox._top;
             }
-        } else {
-            // We need this restriction because otherwise (assuming the mip chain goes to 1x1) we
-            // would have to recalculate all mips
-            if (!IsAllLodLevels(dstDesc, part._lodLevelMin, part._lodLevelMax))
-                Throw(std::runtime_error("When updating texture data for only part of the 2d plane, you must update all lod levels"));
 
-            // Shrink the size of the staging texture to just the parts we want
-            assert(mapping._dstBox._right > mapping._dstBox._left);
-            assert(mapping._dstBox._bottom > mapping._dstBox._top);
-            mapping._stagingXYOffset = { (unsigned)mapping._dstBox._left, (unsigned)mapping._dstBox._top };
-            stagingDesc._textureDesc._width = mapping._dstBox._right - mapping._dstBox._left;
-            stagingDesc._textureDesc._height = mapping._dstBox._bottom - mapping._dstBox._top;
-        }
-
-        if (!IsAllArrayLayers(dstDesc, part._arrayIndexMin, part._arrayIndexMax)) {
-            assert(part._arrayIndexMax > part._arrayIndexMin);
-            mapping._stagingArrayOffset = part._arrayIndexMin;
-            mapping._dstArrayLayerMin = part._arrayIndexMin;
-            mapping._dstArrayLayerMax = std::min(part._arrayIndexMax, (unsigned)dstDesc._textureDesc._arrayCount-1);
-            stagingDesc._textureDesc._arrayCount = mapping._dstArrayLayerMax + 1 - mapping._dstArrayLayerMin;
-            if (stagingDesc._textureDesc._arrayCount == 1)
-                stagingDesc._textureDesc._arrayCount = 0;
+            if (!IsAllArrayLayers(dstDesc, part._arrayIndexMin, part._arrayIndexMax)) {
+                assert(part._arrayIndexMax > part._arrayIndexMin);
+                mapping._stagingArrayOffset = part._arrayIndexMin;
+                mapping._dstArrayLayerMin = part._arrayIndexMin;
+                mapping._dstArrayLayerMax = std::min(part._arrayIndexMax, (unsigned)dstDesc._textureDesc._arrayCount-1);
+                stagingDesc._textureDesc._arrayCount = mapping._dstArrayLayerMax + 1 - mapping._dstArrayLayerMin;
+                if (stagingDesc._textureDesc._arrayCount == 1)
+                    stagingDesc._textureDesc._arrayCount = 0;
+            }
         }
 
         return std::make_pair(stagingDesc, mapping);

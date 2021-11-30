@@ -91,7 +91,6 @@ namespace BufferUploads
         
         TransactionMarker       Transaction_Begin(const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
-        TransactionMarker       Transaction_Begin(const ResourceLocator& locator, TransactionOptions::BitField flags=0);
         void                    Transaction_AddRef(TransactionID id);
         void                    Transaction_Cancel(TransactionID id);
         void                    Transaction_Validate(TransactionID id);
@@ -338,46 +337,6 @@ namespace BufferUploads
         }
 
         return result;
-    }
-
-    TransactionMarker   AssemblyLine::Transaction_Begin(const ResourceLocator& locator, TransactionOptions::BitField flags)
-    {
-        ResourceDesc desc = locator.GetContainingResource()->GetDesc();
-        if (desc._type == ResourceDesc::Type::Texture)
-            assert(desc._textureDesc._mipCount <= (IntegerLog2(std::max(desc._textureDesc._width, desc._textureDesc._height))+1));
-
-        if (desc._bindFlags & BindFlag::IndexBuffer)
-            desc._allocationRules |= AllocationRules::Pooled|AllocationRules::Batched;
-        assert(desc._type != ResourceDesc::Type::Unknown);
-        const BatchedResources::ResultFlags::BitField batchFlags = _resourceSource.IsBatchedResource(locator, desc); (void)batchFlags;
-        assert(batchFlags != BatchedResources::ResultFlags::IsCurrentlyDefragging);
-
-            //
-            //      Note -- "existingResource" should not be part of another transaction. Let's check to make sure
-            //          We should also check to make sure "desc" and "existingResource" match...
-            //
-            //          (in the case of batched resources, this can happen often)
-            //
-        #if 0 && defined(_DEBUG)      // DavidJ -- need to have multiple transactions for a single resource for terrain texture set!
-            {
-                const bool mightBeBatched = !!(initDataDesc._bindFlags & BindFlag::IndexBuffer);
-                if (!mightBeBatched) {
-                    std::deque<Transaction>::iterator endi=_transactions.end();
-                    for (std::deque<Transaction>::iterator i=_transactions.begin(); i!=endi; ++i) {
-                        if (i->_finalResource.get()==locator._resource) {
-                            assert(!(i->_referenceCount>>24));      // we can have 2 transactions for the same resource sometimes... but when this happens, there must be no client lock on the first resource. So long as we complete in order, we should get the right result (though perhaps the first upload become redundant)
-                        }
-                    }
-                }
-            }
-        #endif
-
-        TransactionID result = AllocateTransaction(flags);
-        Transaction* transaction = GetTransaction(result);
-        assert(transaction);
-        transaction->_desc = desc;
-        transaction->_finalResource = locator;
-        return { transaction->_promise.get_future(), result };
     }
 
     void AssemblyLine::ReleaseTransaction(Transaction* transaction, ThreadContext& context, bool abort)
@@ -1316,60 +1275,75 @@ namespace BufferUploads
 
             using namespace RenderCore;
 
-            auto actualArrayCount = ActualArrayLayerCount(desc._textureDesc);
-            auto dstLodLevelMax = std::min(stagingToFinalMapping._dstLodLevelMax, (unsigned)desc._textureDesc._mipCount-1);
-            auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, actualArrayCount-1);
-            auto mipCount = dstLodLevelMax - stagingToFinalMapping._dstLodLevelMin + 1;
-            auto arrayCount = dstArrayLayerMax - stagingToFinalMapping._dstArrayLayerMin + 1;
-            assert(mipCount >= 1);
-            assert(arrayCount >= 1);
-
-            IAsyncDataSource::SubResource uploadList[mipCount*arrayCount];
             std::vector<Metal::ResourceMap> maps;
-            assert(stagingConstruction._locator.IsWholeResource());
+            std::vector<IAsyncDataSource::SubResource> uploadList;
+            if (desc._type == ResourceDesc::Type::Texture) {
+                auto actualArrayCount = ActualArrayLayerCount(desc._textureDesc);
+                auto dstLodLevelMax = std::min(stagingToFinalMapping._dstLodLevelMax, (unsigned)desc._textureDesc._mipCount-1);
+                auto dstArrayLayerMax = std::min(stagingToFinalMapping._dstArrayLayerMax, actualArrayCount-1);
+                auto mipCount = dstLodLevelMax - stagingToFinalMapping._dstLodLevelMin + 1;
+                auto arrayCount = dstArrayLayerMax - stagingToFinalMapping._dstArrayLayerMin + 1;
+                assert(mipCount >= 1);
+                assert(arrayCount >= 1);
 
-            // In Vulkan we can't map the same resource mutliple times, even if we're
-            // looking at different subresources each time. So we must instead map
-            // once and get all subresources at the same time
-            const bool mapEntireResourceInOneOperation = true;
-            if (mapEntireResourceInOneOperation) {
+                uploadList.resize(mipCount*arrayCount);
+                assert(stagingConstruction._locator.IsWholeResource());
+
+                // In Vulkan we can't map the same resource mutliple times, even if we're
+                // looking at different subresources each time. So we must instead map
+                // once and get all subresources at the same time
+                const bool mapEntireResourceInOneOperation = true;
+                if (mapEntireResourceInOneOperation) {
+                    maps.resize(1);
+                    maps[0] = Metal::ResourceMap(
+                        *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext()),
+                        *stagingConstruction._locator.GetContainingResource(),
+                        Metal::ResourceMap::Mode::WriteDiscardPrevious);
+
+                    for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
+                        for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
+                            SubResourceId subRes { mip - stagingToFinalMapping._stagingLODOffset, a - stagingToFinalMapping._stagingArrayOffset };
+                            auto& upload = uploadList[subRes._arrayLayer*mipCount+subRes._mip];
+                            upload._id = subRes;
+                            upload._destination = maps[0].GetData(subRes);
+                            upload._pitches = maps[0].GetPitches(subRes);
+                        }
+                    }
+                } else {
+                    maps.resize(mipCount*arrayCount);
+                    for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
+                        for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
+                            SubResourceId subRes { mip - stagingToFinalMapping._stagingLODOffset, a - stagingToFinalMapping._stagingArrayOffset };
+                            auto idx = subRes._arrayLayer*mipCount+subRes._mip;
+                            
+                            maps[idx] = Metal::ResourceMap(
+                                *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext()),
+                                *stagingConstruction._locator.GetContainingResource(),
+                                Metal::ResourceMap::Mode::WriteDiscardPrevious,
+                                subRes);
+
+                            auto& upload = uploadList[idx];
+                            upload._id = subRes;
+                            upload._destination = maps[idx].GetData(subRes);
+                            upload._pitches = maps[idx].GetPitches(subRes);
+                        }
+                    }
+                }
+            } else {
                 maps.resize(1);
                 maps[0] = Metal::ResourceMap(
                     *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext()),
                     *stagingConstruction._locator.GetContainingResource(),
                     Metal::ResourceMap::Mode::WriteDiscardPrevious);
 
-                for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
-                    for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
-                        SubResourceId subRes { mip - stagingToFinalMapping._stagingLODOffset, a - stagingToFinalMapping._stagingArrayOffset };
-                        auto& upload = uploadList[subRes._arrayLayer*mipCount+subRes._mip];
-                        upload._id = subRes;
-                        upload._destination = maps[0].GetData(subRes);
-                        upload._pitches = maps[0].GetPitches(subRes);
-                    }
-                }
-            } else {
-                maps.resize(mipCount*arrayCount);
-                for (unsigned a=stagingToFinalMapping._dstArrayLayerMin; a<=dstArrayLayerMax; ++a) {
-                    for (unsigned mip=stagingToFinalMapping._dstLodLevelMin; mip<=dstLodLevelMax; ++mip) {
-                        SubResourceId subRes { mip - stagingToFinalMapping._stagingLODOffset, a - stagingToFinalMapping._stagingArrayOffset };
-                        auto idx = subRes._arrayLayer*mipCount+subRes._mip;
-                        
-                        maps[idx] = Metal::ResourceMap(
-                            *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext()),
-                            *stagingConstruction._locator.GetContainingResource(),
-                            Metal::ResourceMap::Mode::WriteDiscardPrevious,
-                            subRes);
-
-                        auto& upload = uploadList[idx];
-                        upload._id = subRes;
-                        upload._destination = maps[idx].GetData(subRes);
-                        upload._pitches = maps[idx].GetPitches(subRes);
-                    }
-                }
+                uploadList.resize(1);
+                auto& upload = uploadList[0];
+                upload._id = {};
+                upload._destination = maps[0].GetData(upload._id);
+                upload._pitches = maps[0].GetPitches(upload._id);
             }
 
-            auto future = prepareStagingStep._packet->PrepareData(MakeIteratorRange(uploadList, &uploadList[mipCount*arrayCount]));
+            auto future = prepareStagingStep._packet->PrepareData(uploadList);
 
             transaction->_desc = desc;
             transaction->_desc._bindFlags = prepareStagingStep._bindFlags;
@@ -1849,11 +1823,6 @@ namespace BufferUploads
     TransactionMarker           Manager::Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
     {
         return _assemblyLine->Transaction_Begin(data, bindFlags, flags);
-    }
-
-    TransactionMarker           Manager::Transaction_Begin(const ResourceLocator& locator, TransactionOptions::BitField flags)
-    {
-        return _assemblyLine->Transaction_Begin(locator, flags);
     }
 
     ResourceLocator         Manager::GetResource(TransactionID id)

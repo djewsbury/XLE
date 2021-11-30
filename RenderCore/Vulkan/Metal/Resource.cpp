@@ -1019,13 +1019,11 @@ namespace RenderCore { namespace Metal_Vulkan
             // buffer to buffer copy
             const auto& srcDesc = src._resource->GetDesc();
 		    const auto& dstDesc = dst._resource->GetDesc();
-            assert(srcDesc._type == Resource::Desc::Type::Texture);
-		    assert(dstDesc._type == Resource::Desc::Type::Texture);
             VkBufferCopy c;
             c.srcOffset = src._leftTopFront._values[0];
             c.dstOffset = dst._leftTopFront._values[0];
             auto end = std::min(src._rightBottomBack._values[0], std::min(srcDesc._linearBufferDesc._sizeInBytes, dstDesc._linearBufferDesc._sizeInBytes));
-            c.size = end - src._rightBottomBack._values[0];
+            c.size = end - src._leftTopFront._values[0];
             context.GetActiveCommandList().CopyBuffer(
                 srcResource->GetBuffer(),
                 dstResource->GetBuffer(),

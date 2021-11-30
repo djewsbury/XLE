@@ -587,31 +587,67 @@ namespace RenderCore { namespace Techniques
 				result._boundSkinnedControllers.push_back(std::move(drawableGeo));
 			}
 
-			if (staticVBIterator) {
-				auto inputFile = modelScaffold->OpenLargeBlocks();
-				auto staticDataVB = LoadStaticResource(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, *inputFile, BindFlag::VertexBuffer);
-				for (auto&geo:result._geos)
-					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-							stream._resource = staticDataVB;
-				for (auto&geo:result._boundSkinnedControllers)
-					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-							stream._resource = staticDataVB;
-			}
+			if (staticVBIterator && staticIBIterator) {
+				auto vbFuture = LoadStaticResourceAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
+				auto ibFuture = LoadStaticResourceAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
 
-			if (staticIBIterator) {
-				auto inputFile = modelScaffold->OpenLargeBlocks();
-				auto staticDataIB = LoadStaticResource(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, *inputFile, BindFlag::IndexBuffer);
-				for (auto&geo:result._geos)
-					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-						geo->_ib = staticDataIB;
-				for (auto&geo:result._boundSkinnedControllers)
-					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-						geo->_ib = staticDataIB;
-			}
+				::Assets::WhenAll(std::move(vbFuture._future), std::move(ibFuture._future)).ThenConstructToPromise(
+					std::move(promise),
+					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto vbLocator, auto ibLocator) mutable {
+						auto vb = vbLocator.AsIndependentResource();
+						auto ib = ibLocator.AsIndependentResource();
+						for (auto&geo:r._geos) {
+							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+									stream._resource = vb;
+							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+								geo->_ib = ib;
+						}
+						for (auto&geo:r._boundSkinnedControllers) {
+							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+									stream._resource = vb;
+							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+								geo->_ib = ib;
+						}
+						promise.set_value(std::move(r));
+					});
+			} else if (staticVBIterator) {
+				auto vbFuture = LoadStaticResourceAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
 
-			promise.set_value(std::move(result));
+				::Assets::WhenAll(std::move(vbFuture._future)).ThenConstructToPromise(
+					std::move(promise),
+					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto vbLocator) mutable {
+						auto vb = vbLocator.AsIndependentResource();
+						for (auto&geo:r._geos)
+							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+									stream._resource = vb;
+						for (auto&geo:r._boundSkinnedControllers)
+							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+									stream._resource = vb;
+						promise.set_value(std::move(r));
+					});
+
+			} else if (staticIBIterator) {
+				auto ibFuture = LoadStaticResourceAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+
+				::Assets::WhenAll(std::move(ibFuture._future)).ThenConstructToPromise(
+					std::move(promise),
+					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto ibLocator) mutable {
+						auto ib = ibLocator.AsIndependentResource();
+						for (auto&geo:r._geos)
+							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+								geo->_ib = ib;
+						for (auto&geo:r._boundSkinnedControllers)
+							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+								geo->_ib = ib;
+						promise.set_value(std::move(r));
+					});
+			} else {
+				promise.set_value(std::move(result));
+			}
 		}
 
 		DrawableGeoBuilder() = default;
