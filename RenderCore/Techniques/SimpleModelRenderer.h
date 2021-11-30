@@ -153,6 +153,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 
 		class GeoCallBuilder;
+		class DrawableGeoBuilder;
 	};
 
 	class RendererSkeletonInterface

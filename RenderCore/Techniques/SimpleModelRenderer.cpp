@@ -21,7 +21,6 @@
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
-// #include "../GeoProc/MeshDatabase.h"		// for Copy()
 #include "../Types.h"
 #include "../ResourceDesc.h"
 #include "../IDevice.h"
@@ -494,6 +493,132 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	class SimpleModelRenderer::DrawableGeoBuilder
+	{
+	public:
+		std::vector<std::shared_ptr<DrawableGeo>> _geos;
+		std::vector<std::shared_ptr<DrawableGeo>> _boundSkinnedControllers;
+
+		using InputLayout = std::vector<InputElementDesc>;
+		std::vector<InputLayout> _geosLayout;
+		std::vector<InputLayout> _boundSkinnedControllersLayout;
+
+		static void ConstructToPromise(
+			std::promise<DrawableGeoBuilder>&& promise,
+			IDevice& device,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator)
+		{
+			// Construct the DrawableGeo objects needed by the renderer
+
+			IteratorRange<const RendererGeoDeformInterface*> deformInterface;
+			if (deformAccelerator && deformAcceleratorPool) {
+				deformInterface = deformAcceleratorPool->GetRendererGeoInterface(*deformAccelerator);
+			}
+
+			std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
+			unsigned staticVBIterator = 0;
+			std::vector<std::pair<unsigned, unsigned>> staticIBLoadRequests;
+			unsigned staticIBIterator = 0;
+			auto simpleGeoCount = modelScaffold->ImmutableData()._geoCount;
+
+			DrawableGeoBuilder result;
+			result._geos.reserve(modelScaffold->ImmutableData()._geoCount);
+			result._geosLayout.reserve(modelScaffold->ImmutableData()._geoCount);
+			for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
+				const auto& rg = modelScaffold->ImmutableData()._geos[geo];
+
+				// Build the main non-deformed vertex stream
+				auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
+				drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
+				staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+				staticVBIterator += rg._vb._size;
+				drawableGeo->_vertexStreamCount = 1;
+
+				// Attach those vertex streams that come from the deform operation
+				if (geo < deformInterface.size() && !deformInterface[geo]._generatedElements.empty()) {
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._postDeformBufferOffset;
+					++drawableGeo->_vertexStreamCount;
+					drawableGeo->_deformAccelerator = deformAccelerator;
+					result._geosLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+				} else {
+					result._geosLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+				}
+				
+				drawableGeo->_ibOffset = staticIBIterator;
+				staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
+				staticIBIterator += rg._ib._size;
+				drawableGeo->_ibFormat = rg._ib._format;
+				result._geos.push_back(std::move(drawableGeo));
+			}
+
+			result._boundSkinnedControllers.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+			result._boundSkinnedControllersLayout.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+			for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
+				const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
+
+				// Build the main non-deformed vertex stream
+				auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
+				drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
+				staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+				staticVBIterator += rg._vb._size;
+				drawableGeo->_vertexStreamCount = 1;
+
+				// Attach those vertex streams that come from the deform operation
+				if ((geo+simpleGeoCount) < deformInterface.size() && !deformInterface[geo+simpleGeoCount]._generatedElements.empty()) {
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._postDeformBufferOffset;
+					++drawableGeo->_vertexStreamCount;
+					drawableGeo->_deformAccelerator = deformAccelerator;
+					result._boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+				} else {
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
+					staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
+					staticVBIterator += rg._animatedVertexElements._size;
+					result._boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+				}
+
+				drawableGeo->_ibOffset = staticIBIterator;
+				staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
+				staticIBIterator += rg._ib._size;
+				drawableGeo->_ibFormat = rg._ib._format;
+				result._boundSkinnedControllers.push_back(std::move(drawableGeo));
+			}
+
+			if (staticVBIterator) {
+				auto inputFile = modelScaffold->OpenLargeBlocks();
+				auto staticDataVB = LoadStaticResource(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, *inputFile, BindFlag::VertexBuffer);
+				for (auto&geo:result._geos)
+					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+							stream._resource = staticDataVB;
+				for (auto&geo:result._boundSkinnedControllers)
+					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+							stream._resource = staticDataVB;
+			}
+
+			if (staticIBIterator) {
+				auto inputFile = modelScaffold->OpenLargeBlocks();
+				auto staticDataIB = LoadStaticResource(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, *inputFile, BindFlag::IndexBuffer);
+				for (auto&geo:result._geos)
+					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+						geo->_ib = staticDataIB;
+				for (auto&geo:result._boundSkinnedControllers)
+					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+						geo->_ib = staticDataIB;
+			}
+
+			promise.set_value(std::move(result));
+		}
+
+		DrawableGeoBuilder() = default;
+		DrawableGeoBuilder(DrawableGeoBuilder&&) = default;
+		DrawableGeoBuilder& operator=(DrawableGeoBuilder&&) = default;
+	};
+
 	class SimpleModelRenderer::GeoCallBuilder
 	{
 	public:
@@ -517,7 +642,7 @@ namespace RenderCore { namespace Techniques
 				Techniques::IPipelineAcceleratorPool& acceleratorPool,
 				uint64_t materialGuid,
 				const RawGeoType& rawGeo,
-				const RendererGeoDeformInterface* deformStream)
+				const DrawableGeoBuilder::InputLayout& inputElements)
 		{
 			GeoCall resultGeoCall;
 			const auto* mat = _materialScaffold->GetMaterial(materialGuid);
@@ -556,8 +681,6 @@ namespace RenderCore { namespace Techniques
 				for (auto r=rawGeo._drawCalls.begin()+1; r!=rawGeo._drawCalls.end(); ++r)
 					assert(topology == r->_topology);
 			#endif
-
-			auto inputElements = Internal::BuildFinalIA(rawGeo, deformStream);
 
 			auto matSelectors = mat->_matParams;
 			// Also append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
@@ -616,12 +739,9 @@ namespace RenderCore { namespace Techniques
 	, _materialScaffoldName(materialScaffoldName)
 	{
 		using namespace RenderCore::Assets;
-
-		IteratorRange<const RendererGeoDeformInterface*> deformInterface;
-		if (deformAccelerator && deformAcceleratorPool) {
+		if (_deformAccelerator && _deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = deformAccelerator;
 			_deformAcceleratorPool = deformAcceleratorPool;
-			deformInterface = _deformAcceleratorPool->GetRendererGeoInterface(*_deformAccelerator);
 		}
 
         const auto& skeleton = modelScaffold->EmbeddedSkeleton();
@@ -633,96 +753,15 @@ namespace RenderCore { namespace Techniques
         _baseTransforms = std::make_unique<Float4x4[]>(_baseTransformCount);
         skeleton.GenerateOutputTransforms(MakeIteratorRange(_baseTransforms.get(), _baseTransforms.get() + _baseTransformCount), &skeleton.GetDefaultParameters());
 
-		_geos.reserve(modelScaffold->ImmutableData()._geoCount);
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
-		auto simpleGeoCount = modelScaffold->ImmutableData()._geoCount;
-
-		std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
-		unsigned staticVBIterator = 0;
-		std::vector<std::pair<unsigned, unsigned>> staticIBLoadRequests;
-		unsigned staticIBIterator = 0;
-		
-		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
-			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
-
-			// Build the main non-deformed vertex stream
-			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
-			drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
-			staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
-			staticVBIterator += rg._vb._size;
-			drawableGeo->_vertexStreamCount = 1;
-
-			// Attach those vertex streams that come from the deform operation
-			if (geo < deformInterface.size() && !deformInterface[geo]._generatedElements.empty()) {
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._postDeformBufferOffset;
-				++drawableGeo->_vertexStreamCount;
-				drawableGeo->_deformAccelerator = deformAccelerator;
-			}
-			
-			drawableGeo->_ibOffset = staticIBIterator;
-			staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
-			staticIBIterator += rg._ib._size;
-			drawableGeo->_ibFormat = rg._ib._format;
-			_geos.push_back(std::move(drawableGeo));
-		}
-
-		_boundSkinnedControllers.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
-		
-		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
-			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
-			// Build the main non-deformed vertex stream
-			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
-			drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
-			staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
-			staticVBIterator += rg._vb._size;
-			drawableGeo->_vertexStreamCount = 1;
-
-			// Attach those vertex streams that come from the deform operation
-			if ((geo+simpleGeoCount) < deformInterface.size() && !deformInterface[geo+simpleGeoCount]._generatedElements.empty()) {
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._postDeformBufferOffset;
-				++drawableGeo->_vertexStreamCount;
-				drawableGeo->_deformAccelerator = deformAccelerator;
-			} else {
-				// todo -- inefficient load here
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
-				staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
-				staticVBIterator += rg._animatedVertexElements._size;
-			}
-
-			drawableGeo->_ibOffset = staticIBIterator;
-			staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
-			staticIBIterator += rg._ib._size;
-			drawableGeo->_ibFormat = rg._ib._format;
-			_boundSkinnedControllers.push_back(std::move(drawableGeo));
-		}
-
-		if (staticVBIterator) {
-			auto inputFile = modelScaffold->OpenLargeBlocks();
-			auto staticDataVB = LoadStaticResource(*pipelineAcceleratorPool->GetDevice(), {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, *inputFile, BindFlag::VertexBuffer);
-			for (auto&geo:_geos)
-				for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-					if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-						stream._resource = staticDataVB;
-			for (auto&geo:_boundSkinnedControllers)
-				for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-					if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-						stream._resource = staticDataVB;
-		}
-
-		if (staticIBIterator) {
-			auto inputFile = modelScaffold->OpenLargeBlocks();
-			auto staticDataIB = LoadStaticResource(*pipelineAcceleratorPool->GetDevice(), {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, *inputFile, BindFlag::IndexBuffer);
-			for (auto&geo:_geos)
-				if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-					geo->_ib = staticDataIB;
-			for (auto&geo:_boundSkinnedControllers)
-				if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-					geo->_ib = staticDataIB;
-		}
+		std::promise<DrawableGeoBuilder> promise;
+		auto geosFuture = promise.get_future();
+		DrawableGeoBuilder::ConstructToPromise(std::move(promise), *pipelineAcceleratorPool->GetDevice(), modelScaffold, _deformAcceleratorPool, _deformAccelerator);
+		auto geos = geosFuture.get();
+		_geos = std::move(geos._geos);
+		_boundSkinnedControllers = std::move(geos._boundSkinnedControllers);
 
 		// Setup the materials
 		GeoCallBuilder geoCallBuilder { pipelineAcceleratorPool, _materialScaffold.get(), _materialScaffoldName };
@@ -731,41 +770,36 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c = 0; c < cmdStream.GetGeoCallCount(); ++c) {
             const auto& geoCall = cmdStream.GetGeoCall(c);
 			auto& rawGeo = modelScaffold->ImmutableData()._geos[geoCall._geoId];
-			auto* deform = (geoCall._geoId < deformInterface.size()) ? &deformInterface[geoCall._geoId] : nullptr;
 			// todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
 			assert(geoCall._materialCount);
             for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
-				_geoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, deform));
+				_geoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._geosLayout[geoCall._geoId]));
 			}
 		}
 
 		for (unsigned c = 0; c < cmdStream.GetSkinCallCount(); ++c) {
             const auto& geoCall = cmdStream.GetSkinCall(c);
 			auto& rawGeo = modelScaffold->ImmutableData()._boundSkinnedControllers[geoCall._geoId];
-			auto* deform = ((geoCall._geoId+simpleGeoCount) < deformInterface.size()) ? &deformInterface[geoCall._geoId+simpleGeoCount] : nullptr;
             // todo -- we should often get duplicate pipeline accelerators & descriptor set accelerators 
 			// here (since many draw calls will share the same materials, etc). We should avoid unnecessary
 			// duplication of objects and construction work
 			assert(geoCall._materialCount);
 			for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
-				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, deform));
+				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._boundSkinnedControllersLayout[geoCall._geoId]));
 			}
 		}
 
 		_drawableIAs = std::move(geoCallBuilder._ias);
 
 		_usi = std::make_shared<UniformsStreamInterface>();
-		// HACK --> use the fallback LocalTransform -->
 		_usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-		// <------------------------------------
 		_usi->BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
 
 		unsigned c=2;
-		for (const auto&u:uniformBufferDelegates) {
+		for (const auto&u:uniformBufferDelegates)
 			_usi->BindImmediateData(c++, u.first, u.second->GetLayout());
-		}
 
 		_usi = pipelineAcceleratorPool->CombineWithLike(std::move(_usi));
 
