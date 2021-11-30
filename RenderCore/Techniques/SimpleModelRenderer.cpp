@@ -21,7 +21,7 @@
 #include "../Assets/MaterialScaffold.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
-#include "../GeoProc/MeshDatabase.h"		// for Copy()
+// #include "../GeoProc/MeshDatabase.h"		// for Copy()
 #include "../Types.h"
 #include "../ResourceDesc.h"
 #include "../IDevice.h"
@@ -40,15 +40,6 @@
 
 namespace RenderCore { namespace Techniques 
 {
-	static IResourcePtr LoadVertexBuffer(
-		IDevice& device,
-        const RenderCore::Assets::ModelScaffold& scaffold,
-        const RenderCore::Assets::VertexData& vb);
-	static IResourcePtr LoadIndexBuffer(
-		IDevice& device,
-        const RenderCore::Assets::ModelScaffold& scaffold,
-        const RenderCore::Assets::IndexData& ib);
-
 	#if _DEBUG
 		static Float3x4    Combine_NoDebugOverhead(const Float3x4& firstTransform, const Float3x4& secondTransform)
 		{
@@ -440,14 +431,6 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static Techniques::DrawableGeo::VertexStream MakeVertexStream(
-		IDevice& device,
-		const RenderCore::Assets::ModelScaffold& modelScaffold,
-		const RenderCore::Assets::VertexData& vertices)
-	{
-		return Techniques::DrawableGeo::VertexStream { LoadVertexBuffer(device, modelScaffold, vertices ) };
-	}
-
 	const ::Assets::DependencyValidation& SimpleModelRenderer::GetDependencyValidation() const { return _depVal; }
 
 	namespace Internal
@@ -653,24 +636,33 @@ namespace RenderCore { namespace Techniques
 		_geos.reserve(modelScaffold->ImmutableData()._geoCount);
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		auto simpleGeoCount = modelScaffold->ImmutableData()._geoCount;
+
+		std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
+		unsigned staticVBIterator = 0;
+		std::vector<std::pair<unsigned, unsigned>> staticIBLoadRequests;
+		unsigned staticIBIterator = 0;
 		
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
 
 			// Build the main non-deformed vertex stream
 			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
-			drawableGeo->_vertexStreams[0] = MakeVertexStream(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._vb);
+			drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
+			staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+			staticVBIterator += rg._vb._size;
 			drawableGeo->_vertexStreamCount = 1;
 
 			// Attach those vertex streams that come from the deform operation
 			if (geo < deformInterface.size() && !deformInterface[geo]._generatedElements.empty()) {
 				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._vbOffset;
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._postDeformBufferOffset;
 				++drawableGeo->_vertexStreamCount;
 				drawableGeo->_deformAccelerator = deformAccelerator;
 			}
 			
-			drawableGeo->_ib = LoadIndexBuffer(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._ib);
+			drawableGeo->_ibOffset = staticIBIterator;
+			staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
+			staticIBIterator += rg._ib._size;
 			drawableGeo->_ibFormat = rg._ib._format;
 			_geos.push_back(std::move(drawableGeo));
 		}
@@ -683,21 +675,53 @@ namespace RenderCore { namespace Techniques
 
 			// Build the main non-deformed vertex stream
 			auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
-			drawableGeo->_vertexStreams[0] = MakeVertexStream(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._vb);
-			drawableGeo->_vertexStreams[1] = MakeVertexStream(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._animatedVertexElements);
-			drawableGeo->_vertexStreamCount = 2;
+			drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
+			staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+			staticVBIterator += rg._vb._size;
+			drawableGeo->_vertexStreamCount = 1;
 
 			// Attach those vertex streams that come from the deform operation
 			if ((geo+simpleGeoCount) < deformInterface.size() && !deformInterface[geo+simpleGeoCount]._generatedElements.empty()) {
 				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._vbOffset;
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._postDeformBufferOffset;
 				++drawableGeo->_vertexStreamCount;
 				drawableGeo->_deformAccelerator = deformAccelerator;
+			} else {
+				// todo -- inefficient load here
+				drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
+				staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
+				staticVBIterator += rg._animatedVertexElements._size;
 			}
 
-			drawableGeo->_ib = LoadIndexBuffer(*pipelineAcceleratorPool->GetDevice(), *modelScaffold, rg._ib);
+			drawableGeo->_ibOffset = staticIBIterator;
+			staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
+			staticIBIterator += rg._ib._size;
 			drawableGeo->_ibFormat = rg._ib._format;
 			_boundSkinnedControllers.push_back(std::move(drawableGeo));
+		}
+
+		if (staticVBIterator) {
+			auto inputFile = modelScaffold->OpenLargeBlocks();
+			auto staticDataVB = LoadStaticResource(*pipelineAcceleratorPool->GetDevice(), {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, *inputFile, BindFlag::VertexBuffer);
+			for (auto&geo:_geos)
+				for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+					if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+						stream._resource = staticDataVB;
+			for (auto&geo:_boundSkinnedControllers)
+				for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+					if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+						stream._resource = staticDataVB;
+		}
+
+		if (staticIBIterator) {
+			auto inputFile = modelScaffold->OpenLargeBlocks();
+			auto staticDataIB = LoadStaticResource(*pipelineAcceleratorPool->GetDevice(), {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, *inputFile, BindFlag::IndexBuffer);
+			for (auto&geo:_geos)
+				if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+					geo->_ib = staticDataIB;
+			for (auto&geo:_boundSkinnedControllers)
+				if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+					geo->_ib = staticDataIB;
 		}
 
 		// Setup the materials
@@ -859,38 +883,6 @@ namespace RenderCore { namespace Techniques
 	{
 		ConstructToPromise(std::move(promise), pipelineAcceleratorPool, nullptr, modelScaffoldName, modelScaffoldName);
 	}
-
-	static IResourcePtr LoadVertexBuffer(
-		IDevice& device,
-        const RenderCore::Assets::ModelScaffold& scaffold,
-        const RenderCore::Assets::VertexData& vb)
-    {
-        auto buffer = std::make_unique<uint8[]>(vb._size);
-		{
-            auto inputFile = scaffold.OpenLargeBlocks();
-            inputFile->Seek(vb._offset, OSServices::FileSeekAnchor::Current);
-            inputFile->Read(buffer.get(), vb._size, 1);
-        }
-		return CreateStaticVertexBuffer(
-			device,
-			MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size)));
-    }
-
-    static IResourcePtr LoadIndexBuffer(
-		IDevice& device,
-        const RenderCore::Assets::ModelScaffold& scaffold,
-        const RenderCore::Assets::IndexData& ib)
-    {
-        auto buffer = std::make_unique<uint8[]>(ib._size);
-        {
-            auto inputFile = scaffold.OpenLargeBlocks();
-            inputFile->Seek(ib._offset, OSServices::FileSeekAnchor::Current);
-            inputFile->Read(buffer.get(), ib._size, 1);
-        }
-		return CreateStaticIndexBuffer(
-			device,
-			MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), ib._size)));
-    }
 
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}
 

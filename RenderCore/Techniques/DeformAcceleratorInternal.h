@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <future>
+#include <optional>
 
 namespace RenderCore { namespace Techniques 
 {
@@ -46,6 +47,7 @@ namespace RenderCore { namespace Techniques
 
 			RendererGeoDeformInterface _rendererInterf;
 			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
+			std::optional<unsigned> _gpuStaticDataOffset;
 
 			unsigned _vbOffsets[4] = {0,0,0,0};
 			unsigned _vbSizes[4] = {0,0,0,0};

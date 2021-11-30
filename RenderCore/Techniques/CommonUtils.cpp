@@ -14,6 +14,7 @@
 #include "../Types.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/Shader.h"
+#include "../Metal/Resource.h"				// for Metal::ResourceMap
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
@@ -47,6 +48,36 @@ namespace RenderCore { namespace Techniques
 				assert(subres._arrayLayer == 0 && subres._mip == 0);
 				return SubResourceInitData{ data };
 			});
+	}
+
+	std::shared_ptr<IResource> LoadStaticResource(
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		::Assets::IFileInterface& file,
+		BindFlag::BitField bindFlags)
+	{
+		auto initialOffset = file.TellP();
+		// todo -- avoid the need for a host access buffer here
+		auto result = device.CreateResource(
+			CreateDesc(
+				bindFlags, CPUAccess::Write, GPUAccess::Read,
+				LinearBufferDesc::Create(resourceSize),
+				"model-renderer"));
+		Metal::ResourceMap map{device, *result, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+		unsigned iterator = 0;
+		std::sort(loadRequests.begin(), loadRequests.end(), [](auto lhs, auto rhs) { return lhs.first < rhs.first; });
+		for (auto i=loadRequests.begin(); i!=loadRequests.end();) {
+			auto start = i; ++i;
+			while (i != loadRequests.end() && i->first == ((i-1)->first + (i-1)->second)) ++i;		// combine adjacent loads
+			
+			auto endPoint = (i-1)->first + (i-1)->second;
+			file.Seek(start->first + initialOffset);
+			file.Read(PtrAdd(map.GetData().begin(), iterator), endPoint-start->first, 1);
+			iterator += endPoint-start->first;
+		}
+		assert(iterator == resourceSize);
+		return result;
 	}
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

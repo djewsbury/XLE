@@ -7,6 +7,7 @@
 #include "DeformAcceleratorInternal.h"
 #include "Services.h"
 #include "GPUTrackerHeap.h"
+#include "CommonUtils.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
@@ -71,6 +72,13 @@ namespace RenderCore { namespace Techniques
 		unsigned _maxEnabledInstance = 0;
 
 		std::vector<Internal::NascentDeformForGeo::CPUOp> _cpuDeformOps;
+
+		struct GPUOp
+		{
+			std::shared_ptr<IGPUDeformOperator> _operator;
+			std::shared_ptr<IResourceView> _staticDataView;
+		};
+		std::vector<GPUOp> _gpuDeformOps;
 		std::vector<RendererGeoDeformInterface> _rendererGeoInterface;
 
 		std::vector<uint8_t> _deformStaticDataInput;
@@ -100,11 +108,13 @@ namespace RenderCore { namespace Techniques
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
 
-		unsigned preDeformStaticDataVBIterator = 0;
+		unsigned cpuStaticDataIterator = 0;
+		unsigned gpuStaticDataIterator = 0;
 		unsigned deformTemporaryGPUVBIterator = 0;
 		unsigned deformTemporaryCPUVBIterator = 0;
 		unsigned postDeformVBIterator = 0;
-		std::vector<Internal::SourceDataTransform> deformStaticLoadDataRequests;
+		std::vector<Internal::SourceDataTransform> cpuStaticDataLoadRequests;
+		std::vector<std::pair<unsigned, unsigned>> gpuStaticDataLoadRequests;
 
 		std::vector<Internal::NascentDeformForGeo> geoDeformStreams;
 		std::vector<Internal::NascentDeformForGeo> skinControllerDeformStreams;
@@ -117,17 +127,22 @@ namespace RenderCore { namespace Techniques
 			InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
 			BuildLowLevelInputAssembly(
 				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
-				MakeIteratorRange(rg._vb._ia._elements.data(), &rg._vb._ia._elements[rg._vb._ia._elements.size()]));
+				rg._vb._ia._elements);
 
 			auto deform = Internal::BuildNascentDeformForGeo(
 				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), geo, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
+				cpuStaticDataIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
 			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
 
-			deformStaticLoadDataRequests.insert(
-				deformStaticLoadDataRequests.end(),
+			cpuStaticDataLoadRequests.insert(
+				cpuStaticDataLoadRequests.end(),
 				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
+			if (!deform._gpuOps.empty() && rg._vb._size) {
+				deform._gpuStaticDataOffset = gpuStaticDataIterator;
+				gpuStaticDataIterator += rg._vb._size;
+				gpuStaticDataLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+			}
 			geoDeformStreams.push_back(std::move(deform));
 		}
 
@@ -135,26 +150,119 @@ namespace RenderCore { namespace Techniques
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
-			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
+			unsigned vertexCount = rg._vb._ia._vertexStride ? (rg._vb._size / rg._vb._ia._vertexStride) : (rg._animatedVertexElements._size / rg._animatedVertexElements._ia._vertexStride);
+			InputElementDesc animatedElementsIA[rg._animatedVertexElements._ia._elements.size()];
 			BuildLowLevelInputAssembly(
-				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
-				MakeIteratorRange(rg._vb._ia._elements.data(), &rg._vb._ia._elements[rg._vb._ia._elements.size()]));
+				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._animatedVertexElements._ia._elements.size()]),
+				rg._animatedVertexElements._ia._elements);
 
 			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), 
+				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._animatedVertexElements._ia._elements.size()]), 
 				geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
+				cpuStaticDataIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
 
 			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
 
-			deformStaticLoadDataRequests.insert(
-				deformStaticLoadDataRequests.end(),
+			cpuStaticDataLoadRequests.insert(
+				cpuStaticDataLoadRequests.end(),
 				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
+			if (!deform._gpuOps.empty() && rg._animatedVertexElements._size) {
+				deform._gpuStaticDataOffset = gpuStaticDataIterator;
+				gpuStaticDataIterator += rg._animatedVertexElements._size;
+				gpuStaticDataLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
+			}
 			skinControllerDeformStreams.push_back(std::move(deform));
 		}
 
-		if (newAccelerator->_cpuDeformOps.empty())
+		////////////////////////////////////////////////////////////////////////////////////
+
+		{
+			std::shared_ptr<IResource> staticDataBuffer;
+			if (gpuStaticDataIterator) {
+				auto inputFile = modelScaffold->OpenLargeBlocks();
+				staticDataBuffer = LoadStaticResource(
+					*_device, {gpuStaticDataLoadRequests.begin(), gpuStaticDataLoadRequests.end()}, gpuStaticDataIterator,
+					*inputFile, BindFlag::UnorderedAccess);
+			}
+
+			unsigned bufferIterator = 0;
+			for (auto& deform:geoDeformStreams) {
+				if (deform._gpuStaticDataOffset) {
+					assert(staticDataBuffer);
+					for (auto& o:deform._gpuOps) {
+						o.wait();
+						newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, deform._gpuStaticDataOffset.value())});
+					}
+				} else {
+					for (auto& o:deform._gpuOps) {
+						o.wait();
+						newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
+					}
+				}
+			}
+			for (auto& deform:skinControllerDeformStreams) {
+				if (deform._gpuStaticDataOffset) {
+					assert(staticDataBuffer);
+					for (auto& o:deform._gpuOps) {
+						o.wait();
+						newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, deform._gpuStaticDataOffset.value())});
+					}
+				} else {
+					for (auto& o:deform._gpuOps) {
+						o.wait();
+						newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
+					}
+				}
+			}
+
+	#if 0
+				auto staticDataBuffer = _device->CreateResource(
+					CreateDesc(
+						BindFlag::UnorderedAccess, CPUAccess::Write, GPUAccess::Read,
+						LinearBufferDesc::Create(gpuStaticDataSize),
+						"deform-input-vb"));
+				Metal::ResourceMap map{*_device, *staticDataBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+				auto inputFile = modelScaffold->OpenLargeBlocks();
+				auto initialPoint = inputFile->TellP();
+				unsigned bufferIterator = 0;
+				for (auto& deform:geoDeformStreams) {
+					auto staticSize = deform._gpuStaticDataLoadRequest.second;
+					if (staticSize) {
+						inputFile->Seek(initialPoint+deform._gpuStaticDataLoadRequest.first);
+						inputFile->Read(PtrAdd(map.GetData().begin(), bufferIterator), staticSize, 1);
+						for (auto& o:deform._gpuOps) {
+							o.wait();
+							newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, staticSize)});
+						}
+						bufferIterator += staticSize;
+					} else {
+						for (auto& o:deform._gpuOps) {
+							o.wait();
+							newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
+						}
+					}
+				}
+				for (auto& deform:skinControllerDeformStreams) {
+					auto staticSize = deform._gpuStaticDataLoadRequest.second;
+					if (staticSize) {
+						inputFile->Seek(initialPoint+deform._gpuStaticDataLoadRequest.first);
+						inputFile->Read(PtrAdd(map.GetData().begin(), bufferIterator), staticSize, 1);
+						for (auto& o:deform._gpuOps) {
+							o.wait();
+							newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, staticSize)});
+						}
+						bufferIterator += staticSize;
+					} else {
+						for (auto& o:deform._gpuOps) {
+							o.wait();
+							newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
+						}
+					}
+				}
+	#endif
+		}
+
+		if (newAccelerator->_cpuDeformOps.empty() && newAccelerator->_gpuDeformOps.empty())
 			return nullptr;
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -162,11 +270,11 @@ namespace RenderCore { namespace Techniques
 		// Create the dynamic VB and assign it to all of the slots it needs to go to
 		newAccelerator->_outputVBSize = postDeformVBIterator;
 
-		if (preDeformStaticDataVBIterator) {
+		if (cpuStaticDataIterator) {
 			newAccelerator->_deformStaticDataInput = Internal::GenerateDeformStaticInputForCPUDeform(
 				*modelScaffold,
-				MakeIteratorRange(deformStaticLoadDataRequests),
-				preDeformStaticDataVBIterator);
+				MakeIteratorRange(cpuStaticDataLoadRequests),
+				cpuStaticDataIterator);
 		}
 
 		if (deformTemporaryCPUVBIterator) {
@@ -414,7 +522,7 @@ namespace RenderCore { namespace Techniques
 			InputLayout srcVBLayout,
 			unsigned geoId,
 			unsigned vertexCount,
-			unsigned& preDeformStaticDataVBIterator,
+			unsigned& cpuStaticDataIterator,
 			unsigned& deformTemporaryGPUVBIterator,
 			unsigned& deformTemporaryCPUVBIterator,
 			unsigned& postDeformVBIterator)
@@ -586,9 +694,9 @@ namespace RenderCore { namespace Techniques
 			unsigned vbStrides[4] = {0};
 			{
 				vbStrides[VB_CPUStaticData] = CalculateVertexStrideForSlot(workingSourceDataElements_cpu, VB_CPUStaticData);
-				result._vbOffsets[VB_CPUStaticData] = preDeformStaticDataVBIterator;
+				result._vbOffsets[VB_CPUStaticData] = cpuStaticDataIterator;
 				result._vbSizes[VB_CPUStaticData] = vbStrides[VB_CPUStaticData] * vertexCount;
-				preDeformStaticDataVBIterator += vbStrides[VB_CPUStaticData] * vertexCount;
+				cpuStaticDataIterator += vbStrides[VB_CPUStaticData] * vertexCount;
 
 				result._cpuStaticDataLoadRequests.reserve(workingSourceDataElements_cpu.size());
 				for (unsigned c=0; c<workingSourceDataElements_cpu.size(); ++c) {
@@ -618,7 +726,7 @@ namespace RenderCore { namespace Techniques
 				vbStrides[VB_PostDeform] = CalculateVertexStrideForSlot(workingGeneratedElements, VB_PostDeform);
 				result._vbOffsets[VB_PostDeform] = postDeformVBIterator;
 				result._vbSizes[VB_PostDeform] = vbStrides[VB_PostDeform] * vertexCount;
-				result._rendererInterf._vbOffset = postDeformVBIterator;
+				result._rendererInterf._postDeformBufferOffset = postDeformVBIterator;
 				postDeformVBIterator += vbStrides[VB_PostDeform] * vertexCount;
 			}
 

@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<InputElementDesc> _generatedElements;
 		std::vector<uint64_t> _suppressedElements;
-		unsigned _vbOffset = 0;
+		unsigned _postDeformBufferOffset = 0;
 	};
 
 	struct DeformOperationInstantiation

@@ -6,6 +6,7 @@
 
 #include "../StateDesc.h"
 #include "../Types.h"
+#include "../ResourceDesc.h"
 #include "../Metal/Forward.h"		// for Metal::ShaderProgram
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/IteratorUtils.h"
@@ -14,11 +15,19 @@
 
 namespace RenderCore { class IResource; class IDevice; class CompiledShaderByteCode; class StreamOutputInitializers; class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Assets { class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
+namespace Assets { class IFileInterface; }
 
 namespace RenderCore { namespace Techniques {
 
 	std::shared_ptr<IResource> CreateStaticVertexBuffer(IDevice& device, IteratorRange<const void*> data);
 	std::shared_ptr<IResource> CreateStaticIndexBuffer(IDevice& device, IteratorRange<const void*> data);
+
+	std::shared_ptr<IResource> LoadStaticResource(
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		::Assets::IFileInterface& file,
+		BindFlag::BitField bindFlags);
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,

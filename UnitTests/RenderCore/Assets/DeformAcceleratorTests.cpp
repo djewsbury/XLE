@@ -225,7 +225,7 @@ namespace UnitTests
 	}
 #endif
 
-	static IResourcePtr LoadVertexBuffer(
+	static IResourcePtr LoadStorageBuffer(
 		IDevice& device,
 		const RenderCore::Assets::ModelScaffold& scaffold,
 		const RenderCore::Assets::VertexData& vb)
@@ -236,9 +236,12 @@ namespace UnitTests
 			inputFile->Seek(vb._offset, OSServices::FileSeekAnchor::Current);
 			inputFile->Read(buffer.get(), vb._size, 1);
 		}
-		return RenderCore::Techniques::CreateStaticVertexBuffer(
-			device,
-			MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size)));
+		return device.CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess|BindFlag::TransferSrc, 0, GPUAccess::Read|GPUAccess::Write,
+				LinearBufferDesc::Create(unsigned(vb._size)),
+				"vb"),
+			SubResourceInitData{MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), vb._size))});
 	}
 
 	std::vector<uint8_t> LoadCPUVertexBuffer(
@@ -276,19 +279,19 @@ namespace UnitTests
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IGPUDeformOperator>> promise;
+		auto future = promise.get_future();
 		auto srcLayout = AsInputLayout(animVB._ia, 0), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
 		Techniques::GPUSkinDeformer::ConstructToPromise(
 			std::move(promise),
 			testHelper._device, pipelineCollection, modelScaffold, 0,
 			srcLayout, {}, dstLayout);
-		auto future = promise.get_future();
 		future.wait();
 		auto deformer = std::dynamic_pointer_cast<Techniques::GPUSkinDeformer>(future.get());
 		REQUIRE(deformer);
 
 		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
 		
-		auto inputResource = LoadVertexBuffer(*testHelper._device, *modelScaffold, animVB);
+		auto inputResource = LoadStorageBuffer(*testHelper._device, *modelScaffold, animVB);
 		auto outputResource = testHelper._device->CreateResource(inputResource->GetDesc());
 
 		deformer->FeedInSkeletonMachineResults(
@@ -377,6 +380,39 @@ namespace UnitTests
 			// but the GPU path can work with a wider variety of formats
 			REQUIRE(Equivalent(cpu, gpu, 1e-3f));
 		}
+
+		globalServices->PrepareForDestruction();
+	}
+
+	TEST_CASE( "DeformAccelerator", "[rendercore_techniques]" )
+	{
+		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+		auto testHelper = MakeTestHelper();
+		auto threadContext = testHelper->_device->GetImmediateContext();
+		TechniqueTestApparatus techniqueTestHelper{*testHelper};
+
+		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
+		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(testHelper->_device, pipelineCollection));
+		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", Techniques::CreateCPUSkinDeformerFactory());
+		
+		auto modelScaffold = MakeTestAnimatedModel();
+		
+		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
+		auto cpuAccelerator = pool->CreateDeformAccelerator("cpu_skin", modelScaffold);
+		REQUIRE(cpuAccelerator);
+		auto geoInterface1 = pool->GetRendererGeoInterface(*cpuAccelerator);
+		REQUIRE(!geoInterface1.empty());
+
+		auto gpuAccelerator = pool->CreateDeformAccelerator("gpu_skin", modelScaffold);
+		REQUIRE(gpuAccelerator);
+		auto geoInterface2 = pool->GetRendererGeoInterface(*gpuAccelerator);
+		REQUIRE(!geoInterface2.empty());
+		REQUIRE(geoInterface2[0]._generatedElements.size() == 3);
+		REQUIRE(geoInterface2[0]._generatedElements[0]._semanticName == "POSITION");
+		REQUIRE(geoInterface2[0]._generatedElements[1]._semanticName == "NORMAL");
+		REQUIRE(geoInterface2[0]._generatedElements[2]._semanticName == "TEXTANGENT");
 	}
 
 	class TestCPUDeformOperator : public Techniques::ICPUDeformOperator
