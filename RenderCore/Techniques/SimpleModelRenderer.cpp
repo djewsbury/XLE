@@ -506,9 +506,9 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToPromise(
 			std::promise<DrawableGeoBuilder>&& promise,
 			IDevice& device,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-			const std::shared_ptr<DeformAccelerator>& deformAccelerator)
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
+			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr)
 		{
 			// Construct the DrawableGeo objects needed by the renderer
 
@@ -588,8 +588,8 @@ namespace RenderCore { namespace Techniques
 			}
 
 			if (staticVBIterator && staticIBIterator) {
-				auto vbFuture = LoadStaticResourceAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
-				auto ibFuture = LoadStaticResourceAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+				auto vbFuture = LoadStaticResourceAsync({staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
+				auto ibFuture = LoadStaticResourceAsync({staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
 
 				::Assets::WhenAll(std::move(vbFuture._future), std::move(ibFuture._future)).ThenConstructToPromise(
 					std::move(promise),
@@ -613,7 +613,7 @@ namespace RenderCore { namespace Techniques
 						promise.set_value(std::move(r));
 					});
 			} else if (staticVBIterator) {
-				auto vbFuture = LoadStaticResourceAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
+				auto vbFuture = LoadStaticResourceAsync({staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
 
 				::Assets::WhenAll(std::move(vbFuture._future)).ThenConstructToPromise(
 					std::move(promise),
@@ -631,7 +631,7 @@ namespace RenderCore { namespace Techniques
 					});
 
 			} else if (staticIBIterator) {
-				auto ibFuture = LoadStaticResourceAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+				auto ibFuture = LoadStaticResourceAsync({staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
 
 				::Assets::WhenAll(std::move(ibFuture._future)).ThenConstructToPromise(
 					std::move(promise),
@@ -764,6 +764,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
+		DrawableGeoBuilder&& geos,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
@@ -792,10 +793,6 @@ namespace RenderCore { namespace Techniques
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 
-		std::promise<DrawableGeoBuilder> promise;
-		auto geosFuture = promise.get_future();
-		DrawableGeoBuilder::ConstructToPromise(std::move(promise), *pipelineAcceleratorPool->GetDevice(), modelScaffold, _deformAcceleratorPool, _deformAccelerator);
-		auto geos = geosFuture.get();
 		_geos = std::move(geos._geos);
 		_boundSkinnedControllers = std::move(geos._boundSkinnedControllers);
 
@@ -910,25 +907,43 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
 			std::move(promise),
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](
-				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) {
-				
-				if (deformAcceleratorPool && !deformOperationString.empty()) {
-					auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
-						MakeStringSection(deformOperationString),
-						scaffoldActual);
+				std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
+				auto scaffoldActual, auto materialActual) {
+				TRY {
+					if (deformAcceleratorPool && !deformOperationString.empty()) {
+						auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
+							MakeStringSection(deformOperationString),
+							scaffoldActual);
 
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						deformAcceleratorPool, deformAccelerator,
-						MakeIteratorRange(uniformBufferBindings),
-						modelScaffoldNameString, materialScaffoldNameString);
-				} else {
-					return std::make_shared<SimpleModelRenderer>(
-						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						nullptr, nullptr,
-						MakeIteratorRange(uniformBufferBindings),
-						modelScaffoldNameString, materialScaffoldNameString);
-				}
+						std::promise<DrawableGeoBuilder> geoBuilderPromise;
+						auto geoBuilderFuture = geoBuilderPromise.get_future();
+						DrawableGeoBuilder::ConstructToPromise(std::move(geoBuilderPromise), *pipelineAcceleratorPool->GetDevice(), scaffoldActual, deformAcceleratorPool, deformAccelerator);
+						::Assets::WhenAll(std::move(geoBuilderFuture)).ThenConstructToPromise(
+							std::move(promise),
+							[deformOperationString, pipelineAcceleratorPool, uniformBufferBindings, scaffoldActual, materialActual, deformAccelerator, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](auto geos) {
+								return std::make_shared<SimpleModelRenderer>(
+									pipelineAcceleratorPool, scaffoldActual, materialActual, std::move(geos),
+									deformAcceleratorPool, deformAccelerator,
+									MakeIteratorRange(uniformBufferBindings),
+									modelScaffoldNameString, materialScaffoldNameString);
+							});
+					} else {
+						std::promise<DrawableGeoBuilder> geoBuilderPromise;
+						auto geoBuilderFuture = geoBuilderPromise.get_future();
+						DrawableGeoBuilder::ConstructToPromise(std::move(geoBuilderPromise), *pipelineAcceleratorPool->GetDevice(), scaffoldActual);
+						::Assets::WhenAll(std::move(geoBuilderFuture)).ThenConstructToPromise(
+							std::move(promise),
+							[deformOperationString, pipelineAcceleratorPool, uniformBufferBindings, scaffoldActual, materialActual, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](auto geos) {
+							return std::make_shared<SimpleModelRenderer>(
+								pipelineAcceleratorPool, scaffoldActual, materialActual,
+								std::move(geos), nullptr, nullptr,
+								MakeIteratorRange(uniformBufferBindings),
+								modelScaffoldNameString, materialScaffoldNameString);
+							});
+					}
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 

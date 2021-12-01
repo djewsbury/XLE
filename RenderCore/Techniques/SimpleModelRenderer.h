@@ -82,8 +82,6 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
-			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
-			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
 			const std::string& modelScaffoldName = {},
 			const std::string& materialScaffoldName = {});
@@ -154,6 +152,16 @@ namespace RenderCore { namespace Techniques
 
 		class GeoCallBuilder;
 		class DrawableGeoBuilder;
+		SimpleModelRenderer(
+			const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+			const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
+			DrawableGeoBuilder&& geos,
+			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
+			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
+			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
+			const std::string& modelScaffoldName = {},
+			const std::string& materialScaffoldName = {});
 	};
 
 	class RendererSkeletonInterface
