@@ -18,6 +18,7 @@
 #include "../IDevice.h"
 #include "../BufferView.h"
 #include "../../Assets/IFileSystem.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include <vector>
@@ -81,6 +82,9 @@ namespace RenderCore { namespace Techniques
 		std::vector<GPUOp> _gpuDeformOps;
 		std::vector<RendererGeoDeformInterface> _rendererGeoInterface;
 
+		std::atomic<bool> _gpuDeformOpsReady;
+		std::future<void> _gpuDeformOpsFuture;
+
 		std::vector<uint8_t> _deformStaticDataInput;
 		std::vector<uint8_t> _deformTemporaryBuffer;
 
@@ -104,6 +108,7 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			newAccelerator->_containingPool = this;
 		#endif
+		newAccelerator->_gpuDeformOpsReady.store(false);
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
@@ -116,9 +121,9 @@ namespace RenderCore { namespace Techniques
 		std::vector<Internal::SourceDataTransform> cpuStaticDataLoadRequests;
 		std::vector<std::pair<unsigned, unsigned>> gpuStaticDataLoadRequests;
 
-		std::vector<Internal::NascentDeformForGeo> geoDeformStreams;
-		std::vector<Internal::NascentDeformForGeo> skinControllerDeformStreams;
-		geoDeformStreams.reserve(modelScaffold->ImmutableData()._geoCount);
+		std::vector<Internal::NascentDeformForGeo> deformStreams;
+		deformStreams.reserve(modelScaffold->ImmutableData()._geoCount + modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+		bool atLeastOneGPUOp = false;
 
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
@@ -139,14 +144,14 @@ namespace RenderCore { namespace Techniques
 				cpuStaticDataLoadRequests.end(),
 				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
 			if (!deform._gpuOps.empty() && rg._vb._size) {
-				deform._gpuStaticDataOffset = gpuStaticDataIterator;
+				deform._gpuStaticDataRange = {gpuStaticDataIterator, gpuStaticDataIterator + rg._vb._size};
 				gpuStaticDataIterator += rg._vb._size;
 				gpuStaticDataLoadRequests.push_back({rg._vb._offset, rg._vb._size});
+				atLeastOneGPUOp = true;
 			}
-			geoDeformStreams.push_back(std::move(deform));
+			deformStreams.emplace_back(std::move(deform));
 		}
 
-		skinControllerDeformStreams.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
 			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
@@ -167,103 +172,70 @@ namespace RenderCore { namespace Techniques
 				cpuStaticDataLoadRequests.end(),
 				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
 			if (!deform._gpuOps.empty() && rg._animatedVertexElements._size) {
-				deform._gpuStaticDataOffset = gpuStaticDataIterator;
+				deform._gpuStaticDataRange = {gpuStaticDataIterator, gpuStaticDataIterator + rg._animatedVertexElements._size};
 				gpuStaticDataIterator += rg._animatedVertexElements._size;
 				gpuStaticDataLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
+				atLeastOneGPUOp = true;
 			}
-			skinControllerDeformStreams.push_back(std::move(deform));
+			deformStreams.emplace_back(std::move(deform));
 		}
+
+		if (newAccelerator->_cpuDeformOps.empty() && !atLeastOneGPUOp)
+			return nullptr;
 
 		////////////////////////////////////////////////////////////////////////////////////
 
 		{
-			std::shared_ptr<IResource> staticDataBuffer;
+			struct Captures
+			{
+				std::vector<Internal::NascentDeformForGeo> _deformStreams;
+				BufferUploads::TransactionMarker _staticDataBufferMarker;
+			};
+			auto captures = std::make_shared<Captures>();
+			captures->_deformStreams = std::move(deformStreams);
+			
 			if (gpuStaticDataIterator) {
-				auto inputFile = modelScaffold->OpenLargeBlocks();
-				staticDataBuffer = LoadStaticResource(
-					*_device, {gpuStaticDataLoadRequests.begin(), gpuStaticDataLoadRequests.end()}, gpuStaticDataIterator,
-					*inputFile, BindFlag::UnorderedAccess);
+				captures->_staticDataBufferMarker = LoadStaticResourceFullyAsync(
+					{gpuStaticDataLoadRequests.begin(), gpuStaticDataLoadRequests.end()}, gpuStaticDataIterator,
+					modelScaffold, BindFlag::UnorderedAccess);
 			}
 
-			unsigned bufferIterator = 0;
-			for (auto& deform:geoDeformStreams) {
-				if (deform._gpuStaticDataOffset) {
-					assert(staticDataBuffer);
-					for (auto& o:deform._gpuOps) {
-						o.wait();
-						newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, deform._gpuStaticDataOffset.value())});
-					}
-				} else {
-					for (auto& o:deform._gpuOps) {
-						o.wait();
-						newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
-					}
-				}
-			}
-			for (auto& deform:skinControllerDeformStreams) {
-				if (deform._gpuStaticDataOffset) {
-					assert(staticDataBuffer);
-					for (auto& o:deform._gpuOps) {
-						o.wait();
-						newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, deform._gpuStaticDataOffset.value())});
-					}
-				} else {
-					for (auto& o:deform._gpuOps) {
-						o.wait();
-						newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
-					}
-				}
-			}
-
-	#if 0
-				auto staticDataBuffer = _device->CreateResource(
-					CreateDesc(
-						BindFlag::UnorderedAccess, CPUAccess::Write, GPUAccess::Read,
-						LinearBufferDesc::Create(gpuStaticDataSize),
-						"deform-input-vb"));
-				Metal::ResourceMap map{*_device, *staticDataBuffer, Metal::ResourceMap::Mode::WriteDiscardPrevious};
-				auto inputFile = modelScaffold->OpenLargeBlocks();
-				auto initialPoint = inputFile->TellP();
-				unsigned bufferIterator = 0;
-				for (auto& deform:geoDeformStreams) {
-					auto staticSize = deform._gpuStaticDataLoadRequest.second;
-					if (staticSize) {
-						inputFile->Seek(initialPoint+deform._gpuStaticDataLoadRequest.first);
-						inputFile->Read(PtrAdd(map.GetData().begin(), bufferIterator), staticSize, 1);
-						for (auto& o:deform._gpuOps) {
-							o.wait();
-							newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, staticSize)});
-						}
-						bufferIterator += staticSize;
-					} else {
-						for (auto& o:deform._gpuOps) {
-							o.wait();
-							newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
+			std::promise<void> promise;
+			newAccelerator->_gpuDeformOpsFuture = promise.get_future();		// exceptions will end up in this future
+			::Assets::PollToPromise(
+				std::move(promise),
+				[captures](auto timeout) {
+					// wait until all of the deform ops are ready
+					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+					for (auto& deform:captures->_deformStreams)
+						for (auto& o:deform._gpuOps)
+							if (o.wait_until(timeoutTime) == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
+					// also wait for the static buffer upload
+					if (captures->_staticDataBufferMarker)
+						if (captures->_staticDataBufferMarker._future.wait_until(timeoutTime) == std::future_status::timeout)
+							return ::Assets::PollStatus::Continue;
+					return ::Assets::PollStatus::Finish;
+				},
+				[captures, newAccelerator]() {
+					std::shared_ptr<IResource> staticDataBuffer;
+					if (captures->_staticDataBufferMarker)
+						staticDataBuffer = captures->_staticDataBufferMarker._future.get().AsIndependentResource();
+					for (auto& deform:captures->_deformStreams) {
+						if (deform._gpuStaticDataRange) {
+							assert(staticDataBuffer);
+							for (auto& o:deform._gpuOps) {
+								auto range = deform._gpuStaticDataRange.value();
+								newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, range.first, range.second-range.first)});
+							}
+						} else {
+							for (auto& o:deform._gpuOps)
+								newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
 						}
 					}
-				}
-				for (auto& deform:skinControllerDeformStreams) {
-					auto staticSize = deform._gpuStaticDataLoadRequest.second;
-					if (staticSize) {
-						inputFile->Seek(initialPoint+deform._gpuStaticDataLoadRequest.first);
-						inputFile->Read(PtrAdd(map.GetData().begin(), bufferIterator), staticSize, 1);
-						for (auto& o:deform._gpuOps) {
-							o.wait();
-							newAccelerator->_gpuDeformOps.push_back({o.get(), staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, bufferIterator, staticSize)});
-						}
-						bufferIterator += staticSize;
-					} else {
-						for (auto& o:deform._gpuOps) {
-							o.wait();
-							newAccelerator->_gpuDeformOps.push_back({o.get(), nullptr});
-						}
-					}
-				}
-	#endif
+					newAccelerator->_gpuDeformOpsReady = true;
+				});
 		}
-
-		if (newAccelerator->_cpuDeformOps.empty() && newAccelerator->_gpuDeformOps.empty())
-			return nullptr;
 
 		////////////////////////////////////////////////////////////////////////////////////
 
@@ -281,9 +253,8 @@ namespace RenderCore { namespace Techniques
 			newAccelerator->_deformTemporaryBuffer.resize(deformTemporaryCPUVBIterator, 0);
 		}
 
-		newAccelerator->_rendererGeoInterface.reserve(geoDeformStreams.size() + skinControllerDeformStreams.size());
-		for (const auto&s:geoDeformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
-		for (const auto&s:skinControllerDeformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
+		newAccelerator->_rendererGeoInterface.reserve(deformStreams.size());
+		for (const auto&s:deformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
 
 		_accelerators.push_back(newAccelerator);
 

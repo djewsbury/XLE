@@ -47,7 +47,7 @@ namespace RenderCore { namespace Techniques
 
 			RendererGeoDeformInterface _rendererInterf;
 			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
-			std::optional<unsigned> _gpuStaticDataOffset;
+			std::optional<std::pair<unsigned, unsigned>> _gpuStaticDataRange;
 
 			unsigned _vbOffsets[4] = {0,0,0,0};
 			unsigned _vbSizes[4] = {0,0,0,0};

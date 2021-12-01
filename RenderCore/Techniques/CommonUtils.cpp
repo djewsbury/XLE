@@ -81,14 +81,9 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	BufferUploads::TransactionMarker LoadStaticResourceAsync(
-		IDevice& device,
-		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
-		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-		BindFlag::BitField bindFlags)
+	namespace Internal
 	{
-		class DataSource : public BufferUploads::IAsyncDataSource
+		class ModelScaffoldDataSource : public BufferUploads::IAsyncDataSource
 		{
 		public:
 			virtual std::future<ResourceDesc> GetDesc ()
@@ -122,7 +117,7 @@ namespace RenderCore { namespace Techniques
 				promise.set_value();
 				return promise.get_future();
 			}
-        	virtual ::Assets::DependencyValidation GetDependencyValidation() const
+			virtual ::Assets::DependencyValidation GetDependencyValidation() const
 			{
 				return _modelScaffold->GetDependencyValidation();
 			}
@@ -131,16 +126,43 @@ namespace RenderCore { namespace Techniques
 			ResourceDesc _resourceDesc;
 			std::vector<std::pair<unsigned, unsigned>> _localRequests;
 		};
+	}
 
-		auto dataSource = std::make_shared<DataSource>();
+	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags)
+	{
+		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_modelScaffold = std::move(modelScaffold);
 		dataSource->_resourceDesc = CreateDesc(
-			bindFlags, 0, GPUAccess::Read,
+			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
 			"model-renderer");
 		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
 
 		return Services::GetBufferUploads().Transaction_Begin(dataSource, bindFlags);
+	}
+
+	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags)
+	{
+		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
+		dataSource->_modelScaffold = std::move(modelScaffold);
+		dataSource->_resourceDesc = CreateDesc(
+			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
+			LinearBufferDesc::Create(resourceSize),
+			"model-renderer");
+		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
+
+		auto resource = device.CreateResource(dataSource->_resourceDesc);
+		auto marker = Services::GetBufferUploads().Transaction_Begin(resource, dataSource, bindFlags);
+		return {std::move(resource), std::move(marker)};
 	}
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

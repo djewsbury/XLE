@@ -140,6 +140,7 @@ namespace BufferUploads
             /// to an existing resource.
         virtual TransactionMarker   Transaction_Begin    (const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags=0) = 0;
         virtual TransactionMarker   Transaction_Begin    (const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags = BindFlag::ShaderResource, TransactionOptions::BitField flags=0) = 0;
+        virtual TransactionMarker   Transaction_Begin    (ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags=0) = 0;
 
         virtual void            Transaction_Cancel      (TransactionID id) = 0;
 
@@ -250,6 +251,9 @@ namespace BufferUploads
         TransactionID _transactionID = TransactionID_Invalid;
 
         bool IsValid() const;
+        operator bool() const { return IsValid(); }
+        
+        TransactionMarker() = default;
     private:
         TransactionMarker(std::future<ResourceLocator>&&, TransactionID);
 

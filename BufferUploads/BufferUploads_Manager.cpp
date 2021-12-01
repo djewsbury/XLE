@@ -91,6 +91,7 @@ namespace BufferUploads
         
         TransactionMarker       Transaction_Begin(const ResourceDesc& desc, const std::shared_ptr<IDataPacket>& data, TransactionOptions::BitField flags);
         TransactionMarker       Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags);
+        TransactionMarker       Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags);
         void                    Transaction_AddRef(TransactionID id);
         void                    Transaction_Cancel(TransactionID id);
         void                    Transaction_Validate(TransactionID id);
@@ -333,6 +334,44 @@ namespace BufferUploads
                         Throw(std::runtime_error("Assembly line was destroyed before future completed"));
 
                     t->CompleteWaitForDescFuture(transactionID, std::move(completedFuture), data, bindFlags, PartialResource_All());
+                });
+        }
+
+        return result;
+    }
+
+    TransactionMarker AssemblyLine::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags)
+    {
+        TransactionID transactionID = AllocateTransaction(flags);
+        Transaction* transaction = GetTransaction(transactionID);
+        assert(transaction);
+        transaction->_finalResource = std::move(destinationResource);
+
+        TransactionMarker result { transaction->_promise.get_future(), transactionID };
+
+        // Let's optimize the case where the desc is available immediately, since certain
+        // usage patterns will allow for that
+        auto descFuture = data->GetDesc();
+        auto status = descFuture.wait_for(0s);
+        if (status == std::future_status::ready) {
+
+            ++transaction->_referenceCount;
+            CompleteWaitForDescFuture(transactionID, std::move(descFuture), data, 0, PartialResource_All());
+
+        } else {
+            ++transaction->_referenceCount;
+
+            auto weakThis = weak_from_this();
+            assert(!transaction->_waitingFuture.valid());
+            transaction->_waitingFuture = thousandeyes::futures::then(
+                ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+                std::move(descFuture),
+                [weakThis, transactionID, data](std::future<ResourceDesc> completedFuture) {
+                    auto t = weakThis.lock();
+                    if (!t)
+                        Throw(std::runtime_error("Assembly line was destroyed before future completed"));
+
+                    t->CompleteWaitForDescFuture(transactionID, std::move(completedFuture), data, 0, PartialResource_All());
                 });
         }
 
@@ -1823,6 +1862,11 @@ namespace BufferUploads
     TransactionMarker           Manager::Transaction_Begin(const std::shared_ptr<IAsyncDataSource>& data, BindFlag::BitField bindFlags, TransactionOptions::BitField flags)
     {
         return _assemblyLine->Transaction_Begin(data, bindFlags, flags);
+    }
+
+    TransactionMarker           Manager::Transaction_Begin(ResourceLocator destinationResource, const std::shared_ptr<IAsyncDataSource>& data, TransactionOptions::BitField flags)
+    {
+        return _assemblyLine->Transaction_Begin(std::move(destinationResource), data, flags);
     }
 
     ResourceLocator         Manager::GetResource(TransactionID id)

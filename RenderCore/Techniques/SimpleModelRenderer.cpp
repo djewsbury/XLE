@@ -503,8 +503,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<InputLayout> _geosLayout;
 		std::vector<InputLayout> _boundSkinnedControllersLayout;
 
-		static void ConstructToPromise(
-			std::promise<DrawableGeoBuilder>&& promise,
+		DrawableGeoBuilder(
 			IDevice& device,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
@@ -523,9 +522,8 @@ namespace RenderCore { namespace Techniques
 			unsigned staticIBIterator = 0;
 			auto simpleGeoCount = modelScaffold->ImmutableData()._geoCount;
 
-			DrawableGeoBuilder result;
-			result._geos.reserve(modelScaffold->ImmutableData()._geoCount);
-			result._geosLayout.reserve(modelScaffold->ImmutableData()._geoCount);
+			_geos.reserve(modelScaffold->ImmutableData()._geoCount);
+			_geosLayout.reserve(modelScaffold->ImmutableData()._geoCount);
 			for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
 				const auto& rg = modelScaffold->ImmutableData()._geos[geo];
 
@@ -542,20 +540,20 @@ namespace RenderCore { namespace Techniques
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._postDeformBufferOffset;
 					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					result._geosLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+					_geosLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
 				} else {
-					result._geosLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+					_geosLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
 				}
 				
 				drawableGeo->_ibOffset = staticIBIterator;
 				staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
 				staticIBIterator += rg._ib._size;
 				drawableGeo->_ibFormat = rg._ib._format;
-				result._geos.push_back(std::move(drawableGeo));
+				_geos.push_back(std::move(drawableGeo));
 			}
 
-			result._boundSkinnedControllers.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
-			result._boundSkinnedControllersLayout.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+			_boundSkinnedControllers.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
+			_boundSkinnedControllersLayout.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 			for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
 				const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
 
@@ -572,81 +570,41 @@ namespace RenderCore { namespace Techniques
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._postDeformBufferOffset;
 					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					result._boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
 				} else {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
 					staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
 					staticVBIterator += rg._animatedVertexElements._size;
-					result._boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
 				}
 
 				drawableGeo->_ibOffset = staticIBIterator;
 				staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
 				staticIBIterator += rg._ib._size;
 				drawableGeo->_ibFormat = rg._ib._format;
-				result._boundSkinnedControllers.push_back(std::move(drawableGeo));
+				_boundSkinnedControllers.push_back(std::move(drawableGeo));
 			}
 
-			if (staticVBIterator && staticIBIterator) {
-				auto vbFuture = LoadStaticResourceAsync({staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
-				auto ibFuture = LoadStaticResourceAsync({staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+			if (staticVBIterator) {
+				auto vb = LoadStaticResourcePartialAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
+				for (auto&geo:_geos)
+					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+							stream._resource = vb.first;
+				for (auto&geo:_boundSkinnedControllers)
+					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
+						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
+							stream._resource = vb.first;
+			}
 
-				::Assets::WhenAll(std::move(vbFuture._future), std::move(ibFuture._future)).ThenConstructToPromise(
-					std::move(promise),
-					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto vbLocator, auto ibLocator) mutable {
-						auto vb = vbLocator.AsIndependentResource();
-						auto ib = ibLocator.AsIndependentResource();
-						for (auto&geo:r._geos) {
-							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-									stream._resource = vb;
-							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-								geo->_ib = ib;
-						}
-						for (auto&geo:r._boundSkinnedControllers) {
-							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-									stream._resource = vb;
-							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-								geo->_ib = ib;
-						}
-						promise.set_value(std::move(r));
-					});
-			} else if (staticVBIterator) {
-				auto vbFuture = LoadStaticResourceAsync({staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
-
-				::Assets::WhenAll(std::move(vbFuture._future)).ThenConstructToPromise(
-					std::move(promise),
-					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto vbLocator) mutable {
-						auto vb = vbLocator.AsIndependentResource();
-						for (auto&geo:r._geos)
-							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-									stream._resource = vb;
-						for (auto&geo:r._boundSkinnedControllers)
-							for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
-								if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
-									stream._resource = vb;
-						promise.set_value(std::move(r));
-					});
-
-			} else if (staticIBIterator) {
-				auto ibFuture = LoadStaticResourceAsync({staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
-
-				::Assets::WhenAll(std::move(ibFuture._future)).ThenConstructToPromise(
-					std::move(promise),
-					[r=std::move(result)](std::promise<DrawableGeoBuilder>&& promise, auto ibLocator) mutable {
-						auto ib = ibLocator.AsIndependentResource();
-						for (auto&geo:r._geos)
-							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-								geo->_ib = ib;
-						for (auto&geo:r._boundSkinnedControllers)
-							if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
-								geo->_ib = ib;
-						promise.set_value(std::move(r));
-					});
-			} else {
-				promise.set_value(std::move(result));
+			if (staticIBIterator) {
+				auto ib = LoadStaticResourcePartialAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+				for (auto&geo:_geos)
+					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+						geo->_ib = ib.first;
+				for (auto&geo:_boundSkinnedControllers)
+					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
+						geo->_ib = ib.first;
 			}
 		}
 
@@ -764,7 +722,6 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
-		DrawableGeoBuilder&& geos,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
@@ -793,6 +750,7 @@ namespace RenderCore { namespace Techniques
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 
+		DrawableGeoBuilder geos{*pipelineAcceleratorPool->GetDevice(), modelScaffold, deformAcceleratorPool, deformAccelerator};
 		_geos = std::move(geos._geos);
 		_boundSkinnedControllers = std::move(geos._boundSkinnedControllers);
 
@@ -907,43 +865,24 @@ namespace RenderCore { namespace Techniques
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
 			std::move(promise),
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](
-				std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 				auto scaffoldActual, auto materialActual) {
-				TRY {
-					if (deformAcceleratorPool && !deformOperationString.empty()) {
-						auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
-							MakeStringSection(deformOperationString),
-							scaffoldActual);
+				if (deformAcceleratorPool && !deformOperationString.empty()) {
+					auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
+						MakeStringSection(deformOperationString),
+						scaffoldActual);
 
-						std::promise<DrawableGeoBuilder> geoBuilderPromise;
-						auto geoBuilderFuture = geoBuilderPromise.get_future();
-						DrawableGeoBuilder::ConstructToPromise(std::move(geoBuilderPromise), *pipelineAcceleratorPool->GetDevice(), scaffoldActual, deformAcceleratorPool, deformAccelerator);
-						::Assets::WhenAll(std::move(geoBuilderFuture)).ThenConstructToPromise(
-							std::move(promise),
-							[deformOperationString, pipelineAcceleratorPool, uniformBufferBindings, scaffoldActual, materialActual, deformAccelerator, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](auto geos) {
-								return std::make_shared<SimpleModelRenderer>(
-									pipelineAcceleratorPool, scaffoldActual, materialActual, std::move(geos),
-									deformAcceleratorPool, deformAccelerator,
-									MakeIteratorRange(uniformBufferBindings),
-									modelScaffoldNameString, materialScaffoldNameString);
-							});
-					} else {
-						std::promise<DrawableGeoBuilder> geoBuilderPromise;
-						auto geoBuilderFuture = geoBuilderPromise.get_future();
-						DrawableGeoBuilder::ConstructToPromise(std::move(geoBuilderPromise), *pipelineAcceleratorPool->GetDevice(), scaffoldActual);
-						::Assets::WhenAll(std::move(geoBuilderFuture)).ThenConstructToPromise(
-							std::move(promise),
-							[deformOperationString, pipelineAcceleratorPool, uniformBufferBindings, scaffoldActual, materialActual, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](auto geos) {
-							return std::make_shared<SimpleModelRenderer>(
-								pipelineAcceleratorPool, scaffoldActual, materialActual,
-								std::move(geos), nullptr, nullptr,
-								MakeIteratorRange(uniformBufferBindings),
-								modelScaffoldNameString, materialScaffoldNameString);
-							});
-					}
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual,
+						deformAcceleratorPool, deformAccelerator,
+						MakeIteratorRange(uniformBufferBindings),
+						modelScaffoldNameString, materialScaffoldNameString);
+				} else {
+					return std::make_shared<SimpleModelRenderer>(
+						pipelineAcceleratorPool, scaffoldActual, materialActual,
+						nullptr, nullptr,
+						MakeIteratorRange(uniformBufferBindings),
+						modelScaffoldNameString, materialScaffoldNameString);
+				}
 			});
 	}
 

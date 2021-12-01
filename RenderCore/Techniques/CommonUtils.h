@@ -30,7 +30,15 @@ namespace RenderCore { namespace Techniques {
 		::Assets::IFileInterface& file,
 		BindFlag::BitField bindFlags);
 
-	BufferUploads::TransactionMarker LoadStaticResourceAsync(
+	/// Both data load and resource construction is pushed to async thread
+	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
+		BindFlag::BitField bindFlags);
+
+	/// Both data load is pushed to async thread, however resource construction occurs synchronously
+	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
 		IDevice& device,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,

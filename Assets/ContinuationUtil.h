@@ -79,18 +79,25 @@ namespace Assets
 			std::shared_ptr<IAsyncMarker> _marker;
 		};
 
+		template<typename CheckFn> static auto CheckFnTakesTimeout(int) -> decltype(std::declval<std::invoke_result_t<CheckFn, std::chrono::microseconds>>(), std::true_type{});
+		template<typename...> static auto CheckFnTakesTimeout(...) -> std::false_type;
+
 		template<typename Promise, typename CheckFn, typename DispatchFn>
 			class PollingFunctionBridge : public thousandeyes::futures::TimedWaitable
 		{
 		public:
 			bool timedWait(const std::chrono::microseconds& timeout) override
 			{
-				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				_pollingCompleted |= (_checkFn() == PollStatus::Finish);
-				if (!_pollingCompleted) {
-					// thousandeyes::futures will busy-loop if we don't actually yield the thread at all
-					// So let's make sure we sleep at least for a bit here
-					std::this_thread::sleep_until(timeoutTime);
+				if constexpr (decltype(CheckFnTakesTimeout<CheckFn>(0))::value) {
+					_pollingCompleted |= (_checkFn(timeout) == PollStatus::Finish);
+				} else {
+					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+					_pollingCompleted |= (_checkFn() == PollStatus::Finish);
+					if (!_pollingCompleted) {
+						// thousandeyes::futures will busy-loop if we don't actually yield the thread at all
+						// So let's make sure we sleep at least for a bit here
+						std::this_thread::sleep_until(timeoutTime);
+					}
 				}
 				return _pollingCompleted;
 			}
