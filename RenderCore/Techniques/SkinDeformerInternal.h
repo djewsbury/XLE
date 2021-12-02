@@ -94,33 +94,16 @@ namespace RenderCore { namespace Techniques
 			unsigned instanceIdx,
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
+
+		void Bind(
+			const std::shared_ptr<PipelineCollection>& pipelineCollection,
+			const DeformerInputBinding& binding);
 		
-		~GPUSkinDeformer();
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<IGPUDeformOperator>>&& promise,
-			std::shared_ptr<IDevice> device,
-			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-			unsigned geoId,
-			DeformOperationInstantiation::GPUConstructorParameters constructorParams,
-			const std::string& modelScaffoldName);
-
-        struct IAParams
-		{
-			unsigned _inputStride, _outputStride;
-			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
-			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
-		};
-        GPUSkinDeformer(
+		GPUSkinDeformer(
 			IDevice& device,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-			std::shared_ptr<IComputeShaderOperator> op,
-			unsigned geoId,
-			const IAParams& iaParams,
-			unsigned influencesPerVertex,
 			const std::string& modelScaffoldName);
-
+		~GPUSkinDeformer();
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
@@ -128,16 +111,27 @@ namespace RenderCore { namespace Techniques
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 
+		struct IAParams
+		{
+			unsigned _inputStride, _outputStride;
+			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
+			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
+		};
+
 		struct Section
 		{
+			unsigned _geoId = ~0u;
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
+
+			unsigned _influencesPerVertex = 0;
+			Format _indicesFormat = Format(0), _weightsFormat = Format(0);
+			IAParams _iaParams;
+			std::shared_ptr<IComputeShaderOperator> _operator;
 		};
 		std::vector<Section> _sections;
-
-		IAParams _iaParams;
 
 		struct Instance
 		{
@@ -147,7 +141,6 @@ namespace RenderCore { namespace Techniques
 		std::vector<Instance> _instanceData;
 		std::vector<Float3x4> _jointMatrices;
 
-		std::shared_ptr<IComputeShaderOperator> _operator;
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 	};
 }}
