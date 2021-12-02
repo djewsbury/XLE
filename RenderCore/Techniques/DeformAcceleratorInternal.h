@@ -18,8 +18,8 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		static constexpr unsigned VB_CPUStaticData = 0;
-		static constexpr unsigned VB_CPUTemporaryDeform = 1;
-		static constexpr unsigned VB_GPUTemporaryDeform = 2;
+		static constexpr unsigned VB_CPUDeformTemporaries = 1;
+		static constexpr unsigned VB_GPUDeformTemporaries = 2;
 		static constexpr unsigned VB_PostDeform = 3;
 
 		struct SourceDataTransform
@@ -55,7 +55,7 @@ namespace RenderCore { namespace Techniques
 
 		NascentDeformForGeo BuildNascentDeformForGeo(
 			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
-			InputLayout srcVBLayout,
+			InputLayout srcVBLayout, unsigned srcVBStride,
 			unsigned geoId,
 			unsigned vertexCount,
 			unsigned& preDeformStaticDataVBIterator,

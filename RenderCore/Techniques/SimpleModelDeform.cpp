@@ -10,7 +10,8 @@ namespace RenderCore { namespace Techniques
 {
 	auto DeformOperationFactorySet::CreateDeformOperations(
 		StringSection<> initializer,
-		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) -> InstantiationSet
+		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+		const std::string& modelScaffoldName) -> InstantiationSet
 	{
 		InstantiationSet result;
 
@@ -35,7 +36,7 @@ namespace RenderCore { namespace Techniques
 			if (i==_instantiationFunctions.end() || i->first != hash)
 				continue;
 
-			i->second._factory->Configure(result, MakeStringSection(afterColon, end), modelScaffold);
+			i->second._factory->Configure(result, MakeStringSection(afterColon, end), modelScaffold, modelScaffoldName);
 		}
 		return result;
 	}

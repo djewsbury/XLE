@@ -16,7 +16,7 @@ namespace RenderCore { namespace LightingEngine
 	class SharedTechniqueDelegateBox;
 	class CompiledLightingTechnique;
 
-	enum class StepType { ParseScene, MultiViewParseScene, DrawSky, None, Abort };
+	enum class StepType { ParseScene, MultiViewParseScene, DrawSky, ReadyInstances, None, Abort };
 
 	class LightingTechniqueIterator;
 	class LightingTechniqueInstance

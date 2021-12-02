@@ -49,6 +49,15 @@ namespace Assets
 			return result;
 		}
 
+		DependencyValidation Make(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override
+		{
+			ScopedLock(_lock);
+			DependencyValidation result = MakeAlreadyLocked();
+			for (const auto& state:dependencyAssets)
+				RegisterAssetDependencyAlreadyLocked(result._marker, state);
+			return result;
+		}
+
 		DependencyValidation Make() override
 		{
 			ScopedLock(_lock);
@@ -159,11 +168,10 @@ namespace Assets
 			_fileLinks.insert(insertRange.second, std::make_pair(validationMarker, std::make_pair(fileMonitor._marker, mostRecentState)));
 		}
 
-		void RegisterAssetDependency(
+		void RegisterAssetDependencyAlreadyLocked(
 			DependencyValidationMarker dependentResource, 
-			DependencyValidationMarker dependency) override
+			DependencyValidationMarker dependency)
 		{
-			ScopedLock(_lock);
 			assert(dependentResource < _entries.size());
 			assert(dependency < _entries.size());
 			assert(_entries[dependentResource]._refCount > 0);
@@ -177,6 +185,14 @@ namespace Assets
 			// The dependency gets a ref count bump, but not the dependentResource
 			++_entries[dependency]._refCount;
 			_assetLinks.insert(insertRange.first, std::make_pair(dependentResource, dependency));
+		}
+
+		void RegisterAssetDependency(
+			DependencyValidationMarker dependentResource, 
+			DependencyValidationMarker dependency) override
+		{
+			ScopedLock(_lock);
+			RegisterAssetDependencyAlreadyLocked(dependentResource, dependency);
 		}
 
 		static bool InSortedRange(IteratorRange<const DependencyValidationMarker*> range, DependencyValidationMarker marker)

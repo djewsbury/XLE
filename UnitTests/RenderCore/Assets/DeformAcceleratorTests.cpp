@@ -284,7 +284,7 @@ namespace UnitTests
 		Techniques::GPUSkinDeformer::ConstructToPromise(
 			std::move(promise),
 			testHelper._device, pipelineCollection, modelScaffold, 0,
-			srcLayout, {}, dstLayout);
+			srcLayout, {}, dstLayout, "unit-test");
 		future.wait();
 		auto deformer = std::dynamic_pointer_cast<Techniques::GPUSkinDeformer>(future.get());
 		REQUIRE(deformer);
@@ -529,17 +529,17 @@ namespace UnitTests
 			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
 			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUStaticData);
 			REQUIRE(nascentDeform._cpuOps[0]._outputElements.size() == 2);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
 			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._vbIdx == Techniques::Internal::VB_PostDeform);
 
 			REQUIRE(nascentDeform._cpuOps[1]._inputElements.size() == 2);
 			REQUIRE(nascentDeform._cpuOps[1]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[1]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[1]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
 			REQUIRE(nascentDeform._cpuOps[1]._outputElements.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[1]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[1]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
 
 			REQUIRE(nascentDeform._cpuOps[2]._inputElements.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[2]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUTemporaryDeform);
+			REQUIRE(nascentDeform._cpuOps[2]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
 			REQUIRE(nascentDeform._cpuOps[2]._outputElements.size() == 1);
 			REQUIRE(nascentDeform._cpuOps[2]._outputElements[0]._vbIdx == Techniques::Internal::VB_PostDeform);
 		}
@@ -558,6 +558,7 @@ namespace UnitTests
 			REQUIRE(instanceIdx == 0);
 		}
 		virtual void* QueryInterface(size_t) { return nullptr; }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() { return {}; }
 	};
 
 	TEST_CASE( "GPUDeformInstantiation", "[rendercore_techniques]" )

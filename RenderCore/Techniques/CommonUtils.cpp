@@ -56,7 +56,8 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		::Assets::IFileInterface& file,
-		BindFlag::BitField bindFlags)
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
 	{
 		auto initialOffset = file.TellP();
 		// todo -- avoid the need for a host access buffer here
@@ -64,7 +65,7 @@ namespace RenderCore { namespace Techniques
 			CreateDesc(
 				bindFlags, CPUAccess::Write, GPUAccess::Read,
 				LinearBufferDesc::Create(resourceSize),
-				"model-renderer"));
+				resourceName));
 		Metal::ResourceMap map{device, *result, Metal::ResourceMap::Mode::WriteDiscardPrevious};
 		unsigned iterator = 0;
 		std::sort(loadRequests.begin(), loadRequests.end(), [](auto lhs, auto rhs) { return lhs.first < rhs.first; });
@@ -132,14 +133,15 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-		BindFlag::BitField bindFlags)
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_modelScaffold = std::move(modelScaffold);
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
-			"model-renderer");
+			resourceName);
 		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
 
 		return Services::GetBufferUploads().Transaction_Begin(dataSource, bindFlags);
@@ -150,14 +152,15 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
-		BindFlag::BitField bindFlags)
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
 	{
 		auto dataSource = std::make_shared<Internal::ModelScaffoldDataSource>();
 		dataSource->_modelScaffold = std::move(modelScaffold);
 		dataSource->_resourceDesc = CreateDesc(
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
-			"model-renderer");
+			resourceName);
 		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
 
 		auto resource = device.CreateResource(dataSource->_resourceDesc);

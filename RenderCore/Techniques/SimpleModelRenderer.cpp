@@ -506,6 +506,7 @@ namespace RenderCore { namespace Techniques
 		DrawableGeoBuilder(
 			IDevice& device,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			const std::string& modelScaffoldName,
 			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
 			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr)
 		{
@@ -586,7 +587,9 @@ namespace RenderCore { namespace Techniques
 			}
 
 			if (staticVBIterator) {
-				auto vb = LoadStaticResourcePartialAsync(device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer);
+				auto vb = LoadStaticResourcePartialAsync(
+					device, {staticVBLoadRequests.begin(), staticVBLoadRequests.end()}, staticVBIterator, modelScaffold, BindFlag::VertexBuffer, 
+					(StringMeld<64>() << "[vb]" << modelScaffoldName).AsStringSection());
 				for (auto&geo:_geos)
 					for (auto& stream:MakeIteratorRange(geo->_vertexStreams, &geo->_vertexStreams[geo->_vertexStreamCount]))
 						if (stream._type == DrawableGeo::StreamType::Resource && !stream._resource)
@@ -598,7 +601,9 @@ namespace RenderCore { namespace Techniques
 			}
 
 			if (staticIBIterator) {
-				auto ib = LoadStaticResourcePartialAsync(device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer);
+				auto ib = LoadStaticResourcePartialAsync(
+					device, {staticIBLoadRequests.begin(), staticIBLoadRequests.end()}, staticIBIterator, modelScaffold, BindFlag::IndexBuffer,
+					(StringMeld<64>() << "[ib]" << modelScaffoldName).AsStringSection());
 				for (auto&geo:_geos)
 					if (geo->_ibStreamType == DrawableGeo::StreamType::Resource && !geo->_ib)
 						geo->_ib = ib.first;
@@ -733,7 +738,7 @@ namespace RenderCore { namespace Techniques
 	, _materialScaffoldName(materialScaffoldName)
 	{
 		using namespace RenderCore::Assets;
-		if (_deformAccelerator && _deformAcceleratorPool) {  // need both or neither
+		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = deformAccelerator;
 			_deformAcceleratorPool = deformAcceleratorPool;
 		}
@@ -750,7 +755,7 @@ namespace RenderCore { namespace Techniques
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 
-		DrawableGeoBuilder geos{*pipelineAcceleratorPool->GetDevice(), modelScaffold, deformAcceleratorPool, deformAccelerator};
+		DrawableGeoBuilder geos{*pipelineAcceleratorPool->GetDevice(), modelScaffold, _modelScaffoldName, deformAcceleratorPool, deformAccelerator};
 		_geos = std::move(geos._geos);
 		_boundSkinnedControllers = std::move(geos._boundSkinnedControllers);
 
@@ -869,7 +874,7 @@ namespace RenderCore { namespace Techniques
 				if (deformAcceleratorPool && !deformOperationString.empty()) {
 					auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
 						MakeStringSection(deformOperationString),
-						scaffoldActual);
+						scaffoldActual, modelScaffoldNameString);
 
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual,
@@ -949,12 +954,14 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const SimpleModelRenderer::UniformBufferBinding*> uniformBufferDelegates)
 	{
 		// note -- skeletonInterfacePromise will never be fulfilled if renderPromise becomes invalid
+		auto modelScaffoldNameString = modelScaffoldFuture->Initializer();
+		auto materialScaffoldNameString = materialScaffoldFuture->Initializer();
 
 		std::vector<SimpleModelRenderer::UniformBufferBinding> uniformBufferBindings { uniformBufferDelegates.begin(), uniformBufferDelegates.end() };
 		::Assets::WhenAll(modelScaffoldFuture, materialScaffoldFuture).ThenConstructToPromise(
 			std::move(rendererPromise),
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, deformAcceleratorPool, uniformBufferBindings, 
-				skeletonInterfacePromise=std::move(skeletonInterfacePromise)](
+				skeletonInterfacePromise=std::move(skeletonInterfacePromise), modelScaffoldNameString, materialScaffoldNameString](
 				std::shared_ptr<RenderCore::Assets::ModelScaffold> scaffoldActual, 
 				std::shared_ptr<RenderCore::Assets::MaterialScaffold> materialActual) mutable {
 
@@ -963,7 +970,7 @@ namespace RenderCore { namespace Techniques
 
 				auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
 					MakeStringSection(deformOperationString),
-					scaffoldActual);
+					scaffoldActual, modelScaffoldNameString);
 
 				if (deformAccelerator) {
 					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
@@ -975,13 +982,15 @@ namespace RenderCore { namespace Techniques
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual, 
 						deformAcceleratorPool, deformAccelerator,
-						uniformBufferBindings);
+						uniformBufferBindings,
+						modelScaffoldNameString, materialScaffoldNameString);
 				} else {
 					skeletonInterfacePromise.set_value(nullptr);
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual, 
 						nullptr, nullptr,
-						uniformBufferBindings);
+						uniformBufferBindings,
+						modelScaffoldNameString, materialScaffoldNameString);
 				}
 			});
 	}

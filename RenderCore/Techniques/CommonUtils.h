@@ -28,14 +28,16 @@ namespace RenderCore { namespace Techniques {
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		::Assets::IFileInterface& file,
-		BindFlag::BitField bindFlags);
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
 
 	/// Both data load and resource construction is pushed to async thread
 	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
-		BindFlag::BitField bindFlags);
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
 
 	/// Both data load is pushed to async thread, however resource construction occurs synchronously
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
@@ -43,7 +45,8 @@ namespace RenderCore { namespace Techniques {
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
-		BindFlag::BitField bindFlags);
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,

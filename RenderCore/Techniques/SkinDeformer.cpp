@@ -5,6 +5,7 @@
 #include "SkinDeformer.h"
 #include "SkinDeformerInternal.h"
 #include "DeformAcceleratorInternal.h"		// (required for some utility functions)
+#include "CommonUtils.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
@@ -14,6 +15,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Continuation.h"
+#include "../../xleres/FileList.h"
 #include <assert.h>
 
 #include "PipelineOperators.h"
@@ -208,7 +210,8 @@ namespace RenderCore { namespace Techniques
 		void Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold) override
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			const std::string& modelScaffoldName) override
 		{
 			// auto sep = std::find(initializer.begin(), initializer.end(), ',');
 			// assert(sep != initializer.end());
@@ -276,8 +279,6 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	static const unsigned s_wavegroupWidth = 64;
-
 	void GPUSkinDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
 		unsigned instanceId,
@@ -301,15 +302,21 @@ namespace RenderCore { namespace Techniques
 
 		_operator->BeginDispatches(threadContext, us, {}, Hash64("InvocationParams"));
 
+		const unsigned wavegroupWidth = 64;
 		for (const auto&section:_sections) {
 			for (const auto&drawCall:section._preskinningDrawCalls) {
 				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
 				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first };
-				_operator->Dispatch((drawCall._indexCount+s_wavegroupWidth-1)/s_wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+				_operator->Dispatch((drawCall._indexCount+wavegroupWidth-1)/wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
 			}
 		}
 
 		_operator->EndDispatches();
+	}
+
+	::Assets::DependencyValidation GPUSkinDeformer::GetDependencyValidation()
+	{
+		return _operator->GetDependencyValidation();
 	}
 
 #if 0
@@ -448,33 +455,24 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IComputeShaderOperator> op,
 		unsigned geoId,
 		const IAParams& iaParams,
-		unsigned influencesPerVertex)
-	: _modelScaffold(modelScaffold)			// we take internal pointers so preserve lifetime
+		unsigned influencesPerVertex,
+		const std::string& modelScaffoldName)
+	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
 	, _operator(op)
 	, _influencesPerVertex(influencesPerVertex)
 	, _iaParams(iaParams)
 	{
-		auto& immData = modelScaffold->ImmutableData();
+		auto& immData = _modelScaffold->ImmutableData();
 		assert(geoId>=immData._geoCount);
 		assert((geoId-immData._geoCount) < immData._boundSkinnedControllerCount);
 		auto& skinnedController = immData._boundSkinnedControllers[geoId-immData._geoCount];
+
 		auto& skelVb = skinnedController._skeletonBinding;
-
-		auto skelVbData = std::make_unique<uint8_t[]>(skelVb._size);
-		{
-			auto largeBlocks = modelScaffold->OpenLargeBlocks();
-			auto base = largeBlocks->TellP();
-
-			largeBlocks->Seek(base + skelVb._offset);
-			largeBlocks->Read(skelVbData.get(), skelVb._size);
-		}
-
-		_staticVertexAttachments = device.CreateResource(
-			CreateDesc(
-				BindFlag::UnorderedAccess, 0, GPUAccess::Read,
-				LinearBufferDesc::Create(skelVb._size),
-				"SkinDeformer-binding"),
-			SubResourceInitData{MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size))});
+		std::pair<unsigned, unsigned> staticData { skelVb._offset, skelVb._size };
+		_staticVertexAttachments = LoadStaticResourcePartialAsync(
+			device, {&staticData, &staticData+1}, skelVb._size, _modelScaffold, 
+			BindFlag::UnorderedAccess,
+			(StringMeld<64>() << "[skin]" << modelScaffoldName).AsStringSection()).first;
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
 
 		unsigned jointMatrixBufferCount = 0;
@@ -490,7 +488,7 @@ namespace RenderCore { namespace Techniques
 		}
 		_jointMatrices.resize(jointMatrixBufferCount, Identity<Float3x4>());
 
-		_jointInputInterface = modelScaffold->CommandStream().GetInputInterface();
+		_jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
 	}
 
 	void GPUSkinDeformer::ConstructToPromise(
@@ -499,9 +497,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		unsigned geoId,
-		InputLayout srcVBLayout, 
-		InputLayout deformTemporariesVBLayout,
-		InputLayout dstVBLayout)
+		DeformOperationInstantiation::GPUConstructorParameters constructorParams,
+		const std::string& modelScaffoldName)
 	{
 		auto& immData = modelScaffold->ImmutableData();
 		assert(geoId>=immData._geoCount);
@@ -509,7 +506,6 @@ namespace RenderCore { namespace Techniques
 		auto& skinnedController = immData._boundSkinnedControllers[geoId-immData._geoCount];
 		auto& skelVb = skinnedController._skeletonBinding;
 
-		auto& animIA = skinnedController._animatedVertexElements._ia;
 		auto& postAnimIA = skinnedController._vb._ia;
 
 		unsigned influencesPerVertex = 0;
@@ -544,17 +540,25 @@ namespace RenderCore { namespace Techniques
 
 		if (weightsOffset == ~0u || indicesOffset == ~0u)
 			Throw(std::runtime_error("Could not create SkinDeformer because there is no position, weights and/or joint indices element in input geometry"));
-		if ((skelVBStride%4)!=0 || (weightsOffset%4)!=0 || (indicesOffset%4)!=0)
-			Throw(std::runtime_error("Could not create SkinDeformer because input skeleton binding data is not correctly aligned"));
-
-		unsigned vertexCount = skelVb._size / skelVb._ia._vertexStride;
-		assert(vertexCount > 0);
-		assert((influencesPerVertex%1) == 0);		// must be a multiple of 2
+		if (influencesPerVertex == 1) {
+			// no limitation on alignment
+		} else if (influencesPerVertex == 2) {
+			// must be aligned to multiple of 2 (technically we just want to prevent the 2 influences from ever straddling a dword boundary)
+			if ((skelVBStride%2)!=0 || (weightsOffset%2)!=0 || (indicesOffset%2)!=0)
+				Throw(std::runtime_error("Could not create SkinDeformer because input skeleton binding data is not correctly aligned"));
+		} else {
+			// 4 or more influences, must be aligned to multiple of 4
+			if ((skelVBStride%4)!=0 || (weightsOffset%4)!=0 || (indicesOffset%4)!=0)
+				Throw(std::runtime_error("Could not create SkinDeformer because input skeleton binding data is not correctly aligned"));
+		}
 
 		IAParams iaParams = {0};
+		iaParams._weightsOffset = weightsOffset;
+		iaParams._jointIndicesOffset = indicesOffset;
+		iaParams._staticVertexAttachmentsStride = skelVBStride;
 
 		ParameterBox selectors;
-		for (const auto&ele:animIA._elements) {
+		for (const auto&ele:constructorParams._srcVBLayout) {
 			auto semanticHash = Hash64(ele._semanticName);
 			if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 				selectors.SetParameter("POSITION_FORMAT", (unsigned)ele._nativeFormat);
@@ -565,14 +569,28 @@ namespace RenderCore { namespace Techniques
 			} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 				selectors.SetParameter("TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
 				iaParams._tangentsOffset = ele._alignedByteOffset;
-			} else
-				Throw(std::runtime_error(""));
+			}
 		}
-		iaParams._inputStride = iaParams._outputStride = animIA._vertexStride;
+		iaParams._inputStride = constructorParams._srcVBStride;
 
-		iaParams._weightsOffset = weightsOffset;
-		iaParams._jointIndicesOffset = indicesOffset;
-		iaParams._staticVertexAttachmentsStride = skelVBStride;
+		#if defined(_DEBUG)
+			// output layout must match the input layout; both for offsets and formats
+			// we could allow differences by expanding selector interface to the shader
+			for (const auto&ele:constructorParams._dstVBLayout) {
+				auto semanticHash = Hash64(ele._semanticName);
+				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
+					assert(selectors.GetParameter<unsigned>("POSITION_FORMAT").value() == (unsigned)ele._nativeFormat);
+					assert(iaParams._positionsOffset == ele._alignedByteOffset);
+				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
+					assert(selectors.GetParameter<unsigned>("NORMAL_FORMAT").value() == (unsigned)ele._nativeFormat);
+					assert(iaParams._normalsOffset == ele._alignedByteOffset);
+				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
+					assert(selectors.GetParameter<unsigned>("TEXTANGENT_FORMAT").value() == (unsigned)ele._nativeFormat);
+					assert(iaParams._tangentsOffset == ele._alignedByteOffset);
+				}
+			}
+		#endif
+		iaParams._outputStride = constructorParams._dstVBStride;
 
 		selectors.SetParameter("INFLUENCE_COUNT", influencesPerVertex);
 		selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(indicesFormat));
@@ -587,13 +605,13 @@ namespace RenderCore { namespace Techniques
 		usi.BindResourceView(1, Hash64("InputAttributes"));
 		usi.BindResourceView(2, Hash64("OutputAttributes"));
 		
-		auto operatorMarker = CreateComputeOperator(pipelinePool, "xleres/Deform/skin.compute.hlsl:main", selectors, usi);
+		auto operatorMarker = CreateComputeOperator(pipelinePool, SKIN_COMPUTE_HLSL ":main", selectors, usi);
 		::Assets::WhenAll(operatorMarker).ThenConstructToPromise(
 			std::move(promise),
-			[device, modelScaffold, geoId, iaParams, influencesPerVertex](auto op) {
+			[device, modelScaffold, geoId, iaParams, influencesPerVertex, modelScaffoldName](auto op) {
 				return std::make_shared<GPUSkinDeformer>(
 					*device, modelScaffold, op,
-					geoId, iaParams, influencesPerVertex);
+					geoId, iaParams, influencesPerVertex, modelScaffoldName);
 			});
 	}
 
@@ -618,7 +636,8 @@ namespace RenderCore { namespace Techniques
 		void Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold) override
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			const std::string& modelScaffoldName) override
 		{
 			const std::string positionEleName = "POSITION";
 			auto weightsEle = Hash64("WEIGHTS");
@@ -627,9 +646,9 @@ namespace RenderCore { namespace Techniques
 			for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
 
 				auto& animVB = immData._boundSkinnedControllers[c]._animatedVertexElements;
-				auto positionElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "POSITION", c);
-				auto tangentsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "TEXTANGENT", c);
-				auto normalsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "NORMAL", c);
+				auto positionElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "POSITION");
+				auto tangentsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "TEXTANGENT");
+				auto normalsElement = Internal::FindElement(MakeIteratorRange(animVB._ia._elements), "NORMAL");
 				if (!positionElement)
 					Throw(std::runtime_error("Missing animated position in GPU skinning input"));
 
@@ -645,8 +664,8 @@ namespace RenderCore { namespace Techniques
 				}
 				inst._suppressElements = {weightsEle, jointIndicesEle};
 				inst._geoId = unsigned(immData._geoCount) + c;
-				inst._gpuConstructor = [d=_device, pc=_pipelineCollection, modelScaffold, geoId=inst._geoId](auto&& promise, auto srcVBLayout, auto deformTemporariesVBLayout, auto dstVBLayout) {
-					GPUSkinDeformer::ConstructToPromise(std::move(promise), d, pc, modelScaffold, geoId, srcVBLayout, deformTemporariesVBLayout, dstVBLayout);
+				inst._gpuConstructor = [d=_device, pc=_pipelineCollection, modelScaffold, geoId=inst._geoId, modelScaffoldName](auto&& promise, auto params) {
+					GPUSkinDeformer::ConstructToPromise(std::move(promise), d, pc, modelScaffold, geoId, std::move(params), modelScaffoldName);
 				};
 				result.push_back(std::move(inst));
 			}

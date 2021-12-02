@@ -85,6 +85,7 @@ namespace RenderCore { namespace Techniques
 			const IResourceView& deformTemporariesVB,
 			const IResourceView& dstVB) const override;
 		virtual void* QueryInterface(size_t) override;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const override;
@@ -102,9 +103,8 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			unsigned geoId,
-			InputLayout srcVBLayout, 
-			InputLayout deformTemporariesVBLayout,
-			InputLayout dstVBLayout);
+			DeformOperationInstantiation::GPUConstructorParameters constructorParams,
+			const std::string& modelScaffoldName);
 
         struct IAParams
 		{
@@ -118,12 +118,13 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IComputeShaderOperator> op,
 			unsigned geoId,
 			const IAParams& iaParams,
-			unsigned influencesPerVertex);
+			unsigned influencesPerVertex,
+			const std::string& modelScaffoldName);
 
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
-		size_t						_influencesPerVertex;
+		size_t _influencesPerVertex;
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 

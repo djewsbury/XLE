@@ -8,6 +8,7 @@
 
 namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; }
 namespace RenderCore { namespace Assets { class ModelScaffold; }}
+namespace Assets { class DependencyValidation; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -20,7 +21,8 @@ namespace RenderCore { namespace Techniques
     public:
         virtual std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(
             StringSection<> initializer,
-            const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold) = 0;
+            const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+            const std::string& modelScaffoldName = {}) = 0;
 
         virtual IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const = 0;
 
@@ -30,6 +32,8 @@ namespace RenderCore { namespace Techniques
         virtual void OnFrameBarrier() = 0;
 
         virtual VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const = 0;
+
+        virtual ::Assets::DependencyValidation GetDependencyValidation(DeformAccelerator& accelerator) const = 0;
 
         unsigned GetGUID() const { return _guid; }
 

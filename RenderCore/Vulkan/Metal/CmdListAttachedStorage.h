@@ -63,6 +63,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		friend class CmdListAttachedStorage;
 	};
 
+	class BufferAndRange
+	{
+	public:
+		std::shared_ptr<IResource> _resource;
+		unsigned _offset = 0, _size = 0;
+
+		VertexBufferView AsVertexBufferView();
+		IndexBufferView AsIndexBufferView(Format indexFormat);
+	};
+
 	class IAsyncTracker;
 	class CmdListAttachedStorage;
 
@@ -88,6 +98,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
+		BufferAndRange AllocateRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
 		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();
 		void WriteBarrier(DeviceContext& context, unsigned pageId);

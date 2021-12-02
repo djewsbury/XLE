@@ -18,15 +18,17 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		using StepFnSig = void(LightingTechniqueIterator&);
 		void CreateStep_CallFunction(std::function<StepFnSig>&&);
-		void CreateStep_ParseScene(Techniques::BatchFilter);
+		void CreateStep_ParseScene(Techniques::BatchFilter, unsigned drawablePktIndex=0);
 		void CreateStep_ExecuteDrawables(
 			std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
-			std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
+			std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
+			unsigned drawablePktIndex=0);
+		void CreateStep_ReadyInstances();
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
-		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter);
-		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig);
+		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter, unsigned drawablePktIndex=0);
+		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, unsigned drawablePktIndex=0);
 
 		void ResolvePendingCreateFragmentSteps();
 		void CompleteConstruction();
@@ -56,12 +58,12 @@ namespace RenderCore { namespace LightingEngine
 
 		struct Step
 		{
-			enum class Type { ParseScene, DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ParseScene, PrepareOnly_ExecuteDrawables, None };
+			enum class Type { ParseScene, DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ParseScene, PrepareOnly_ExecuteDrawables, ReadyInstances, None };
 			Type _type = Type::None;
 			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
-			unsigned _fbDescIdx = ~0u;
+			unsigned _fbDescIdx = ~0u;		// also used for drawable pkt index
 			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
 
 			std::function<StepFnSig> _function;
@@ -89,7 +91,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		Techniques::RenderPassInstance _rpi;
-		Techniques::DrawablesPacket _drawablePkt;
+		std::vector<Techniques::DrawablesPacket> _drawablePkt;
 
 		IThreadContext* _threadContext = nullptr;
 		Techniques::ParsingContext* _parsingContext = nullptr;

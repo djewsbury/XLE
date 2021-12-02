@@ -83,3 +83,5 @@
 #define IBL_PREFILTER_HLSL "xleres/ToolsHelper/IBLPrefilter.hlsl"
 #define EQUIRECTANGULAR_TO_CUBE_HLSL "xleres/ToolsHelper/EquirectangularToCube.hlsl"
 #define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"
+
+#define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"

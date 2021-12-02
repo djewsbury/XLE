@@ -84,6 +84,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 	public:
 		BindFlag::BitField 	_type;
+		bool 			_cpuMappable = false;
 		std::shared_ptr<Resource> _resource;
 		CircularHeap	_heap;
 		unsigned		_pageId = ~0u;
@@ -96,7 +97,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		unsigned		_alignment;
 
-		TemporaryStoragePage(ObjectFactory& factory, size_t size, BindFlag::BitField type, unsigned pageId);
+		TemporaryStoragePage(ObjectFactory& factory, size_t size, BindFlag::BitField type, bool cpuMappable, unsigned pageId);
 		~TemporaryStoragePage();
 		TemporaryStoragePage(TemporaryStoragePage&&) = delete;
 		TemporaryStoragePage& operator=(TemporaryStoragePage&&) = delete;
@@ -117,12 +118,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		Pimpl(ObjectFactory& factory, std::shared_ptr<IAsyncTracker> gpuTracker);
 		~Pimpl();
 
-		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, size_t defaultPageSize);
+		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, bool cpuMapping, size_t defaultPageSize);
 		void ReleaseReservation(TemporaryStoragePage& page);
 		void FlushDestroys();
 	};
 
-	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
+	std::pair<TemporaryStoragePage*, unsigned> TemporaryStorageManager::Pimpl::ReserveNewPageForAllocation(size_t byteCount, BindFlag::BitField bindFlags, bool cpuMapping, size_t defaultPageSize)
 	{
 		assert(byteCount != 0);
 		assert(bindFlags != 0);
@@ -146,7 +147,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		auto pageSize = std::max(1u<<(IntegerLog2(byteCount+byteCount/2)+1), (unsigned)defaultPageSize);
-		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, _nextPageId++));
+		_pages.emplace_back(std::make_unique<TemporaryStoragePage>(*_factory, pageSize, bindFlags, cpuMapping, _nextPageId++));
 		_pageReservations.Allocate(_pages.size()-1);
 
 		auto& page = *_pages[_pages.size()-1];
@@ -222,18 +223,18 @@ namespace RenderCore { namespace Metal_Vulkan
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static ResourceDesc BuildBufferDesc(
-		BindFlag::BitField bindingFlags, size_t byteCount)
+		BindFlag::BitField bindingFlags, size_t byteCount, bool cpuMappable)
 	{
 		return CreateDesc(
 			bindingFlags,
-			CPUAccess::Write, GPUAccess::Read,
+			cpuMappable ? CPUAccess::Write : 0, GPUAccess::Read,
 			LinearBufferDesc::Create(unsigned(byteCount)),
 			"RollingTempBuf");
 	}
 
-	TemporaryStoragePage::TemporaryStoragePage(ObjectFactory& factory, size_t byteCount, BindFlag::BitField type, unsigned pageId)
-	: _resource(std::make_shared<Resource>(factory, BuildBufferDesc(type, byteCount)))
-	, _heap((unsigned)byteCount), _type(type), _pageId(pageId)
+	TemporaryStoragePage::TemporaryStoragePage(ObjectFactory& factory, size_t byteCount, BindFlag::BitField type, bool cpuMappable, unsigned pageId)
+	: _resource(std::make_shared<Resource>(factory, BuildBufferDesc(type, byteCount, cpuMappable)))
+	, _heap((unsigned)byteCount), _type(type), _cpuMappable(cpuMappable), _pageId(pageId)
 	{
 		_lastBarrier = 0u;
 		_lastBarrierContext = nullptr;
@@ -265,7 +266,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
-			if ((*page)->_type != bindFlags) continue;
+			if ((*page)->_type != bindFlags && (*page)->_cpuMappable) continue;
 
 			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, (*page)->_alignment); // (probably pow2, but we don't know for sure)
 			auto space = (*page)->_heap.AllocateBack(alignedByteCount);
@@ -287,11 +288,42 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!defaultPageSize)
 			defaultPageSize = GetDefaultPageSize(bindFlags);
 
-		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, defaultPageSize);
+		const bool cpuMappable = true;
+		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return TemporaryStorageResourceMap {
 			_manager->_factory->GetDevice().get(), 
 			newPageAndAllocation.first->_resource, newPageAndAllocation.second, byteCount, newPageAndAllocation.first->_pageId };
+	}
+
+	BufferAndRange CmdListAttachedStorage::AllocateRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
+	{
+		assert(byteCount != 0);
+		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
+			if ((*page)->_type != bindFlags && !(*page)->_cpuMappable) continue;
+
+			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, (*page)->_alignment); // (probably pow2, but we don't know for sure)
+			auto space = (*page)->_heap.AllocateBack(alignedByteCount);
+			if (space != ~0u) {
+				assert((space % (*page)->_alignment) == 0);
+				(*page)->_pendingNewFront = space + alignedByteCount;
+
+				// Check if we've crossed over the "last barrier" point (no special
+				// handling for wrap around case required)
+				if (space <= (*page)->_lastBarrier && space > (*page)->_lastBarrier)
+					(*page)->_lastBarrierContext = nullptr;	// reset tracking
+
+				return BufferAndRange { (*page)->_resource, space, (unsigned)byteCount };
+			}
+		}
+
+		if (!defaultPageSize)
+			defaultPageSize = GetDefaultPageSize(bindFlags);
+
+		const bool cpuMappable = false;
+		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
+		_reservedPages.push_back(newPageAndAllocation.first);
+		return BufferAndRange { newPageAndAllocation.first->_resource, newPageAndAllocation.second, (unsigned)byteCount };
 	}
 
 	void CmdListAttachedStorage::OnSubmitToQueue(unsigned trackerMarker)
@@ -299,7 +331,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!_manager) return;
 
 		// We can only access "_markedDestroys" from a specific thread
-		assert(std::this_thread::get_id() == _manager->_boundThreadId);
+		// assert(std::this_thread::get_id() == _manager->_boundThreadId);
 
 		// There's no actual thread protection for "_reservedPages" and "_pendingNewFront" here
 		// We're assuming that since this happens when the command list is being submitted, that there
@@ -422,6 +454,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _beginAndEndInResource(offset, offset+size)
 	{
 	}
+
+	VertexBufferView BufferAndRange::AsVertexBufferView() { return { _resource.get(), _offset}; }
+	IndexBufferView BufferAndRange::AsIndexBufferView(Format indexFormat) { return { _resource.get(), indexFormat, _offset}; }
 
 	static VkBufferMemoryBarrier CreateBufferMemoryBarrier(
 		VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size)

@@ -40,6 +40,7 @@ namespace RenderCore { namespace Techniques
 			const IResourceView& deformTemporariesVB,
 			const IResourceView& dstVB) const = 0;
 		virtual void* QueryInterface(size_t) = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() = 0;
 		virtual ~IGPUDeformOperator();
 	};
 
@@ -59,12 +60,17 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<ICPUDeformOperator> _cpuOperator;
 
-		using GPUDeformConstructorFN = std::function<void(
-			std::promise<std::shared_ptr<IGPUDeformOperator>>&& promise,
-			InputLayout srcVBLayout, 
-			InputLayout deformTemporariesVBLayout,
-			InputLayout dstVBLayout
-			)>;
+		struct GPUConstructorParameters
+		{
+			InputLayout _srcVBLayout;
+			InputLayout _deformTemporariesVBLayout;
+			InputLayout _dstVBLayout;
+			unsigned _srcVBStride;
+			unsigned _deformTemporariesStride;
+			unsigned _dstVBStride;
+		};
+
+		using GPUDeformConstructorFN = std::function<void(std::promise<std::shared_ptr<IGPUDeformOperator>>&&, GPUConstructorParameters)>;
 
 		GPUDeformConstructorFN _gpuConstructor;
 		unsigned _geoId = ~0u;
@@ -81,7 +87,8 @@ namespace RenderCore { namespace Techniques
 		virtual void Configure(
 			std::vector<DeformOperationInstantiation>& InstantiationSet,
 			StringSection<> initializer,
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold) = 0;
+			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+			const std::string& modelScaffoldName = {}) = 0;
 		virtual ~IDeformOperationFactory();
 	};
 
@@ -91,7 +98,8 @@ namespace RenderCore { namespace Techniques
 		using InstantiationSet = std::vector<DeformOperationInstantiation>;
 		InstantiationSet CreateDeformOperations(
 			StringSection<> initializer,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+			const std::string& modelScaffoldName);
 
 		using RegisteredDeformId = uint32_t;
 		RegisteredDeformId Register(StringSection<> name, std::shared_ptr<IDeformOperationFactory>);

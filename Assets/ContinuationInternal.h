@@ -16,7 +16,7 @@
 #include <future>
 #include <utility>
 
-#define CONTINUATION_DETAILED_LOGGING 1
+// #define CONTINUATION_DETAILED_LOGGING 1
 
 namespace Assets { namespace Internal
 {

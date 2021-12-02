@@ -56,17 +56,17 @@ namespace RenderCore { namespace Techniques
 	static ::Assets::DependencyValidation MakeConfigurationDepVal(const Internal::GraphicsPipelineDescWithFilteringRules& pipelineDescWithFiltering)
 	{
 		auto* pipelineDesc = pipelineDescWithFiltering._pipelineDesc.get();
-		auto configurationDepVal = ::Assets::GetDepValSys().Make();
+		std::vector<::Assets::DependencyValidationMarker> dependencies;
 		if (pipelineDesc->GetDependencyValidation())
-			configurationDepVal.RegisterDependency(pipelineDesc->GetDependencyValidation());
+			dependencies.push_back(pipelineDesc->GetDependencyValidation());
 		/*if (compiledPatchCollection && compiledPatchCollection->GetDependencyValidation())		should be included naturally
 			configurationDepVal.RegisterDependency(compiledPatchCollection->GetDependencyValidation());*/
 		for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
 			if (!pipelineDesc->_shaders[c].empty() && pipelineDescWithFiltering._automaticFiltering[c])
-				configurationDepVal.RegisterDependency(pipelineDescWithFiltering._automaticFiltering[c]->GetDependencyValidation());
+				dependencies.push_back(pipelineDescWithFiltering._automaticFiltering[c]->GetDependencyValidation());
 		if (pipelineDescWithFiltering._preconfiguration)
-			configurationDepVal.RegisterDependency(pipelineDescWithFiltering._preconfiguration->GetDependencyValidation());
-		return configurationDepVal;
+			dependencies.push_back(pipelineDescWithFiltering._preconfiguration->GetDependencyValidation());
+		return ::Assets::GetDepValSys().Make(dependencies);
 	}
 
 	static GraphicsPipelineAndLayout MergeDepVal(const GraphicsPipelineAndLayout& src, const ::Assets::DependencyValidation& cfgDepVal)

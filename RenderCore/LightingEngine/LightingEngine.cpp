@@ -28,19 +28,21 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	void CompiledLightingTechnique::CreateStep_ParseScene(Techniques::BatchFilter batch)
+	void CompiledLightingTechnique::CreateStep_ParseScene(Techniques::BatchFilter batch, unsigned drawablePktIndex)
 	{
 		assert(!_isConstructionCompleted);
 		ResolvePendingCreateFragmentSteps();
 		Step newStep;
 		newStep._type = Step::Type::ParseScene;
 		newStep._batch = batch;
+		newStep._fbDescIdx = drawablePktIndex;
 		_steps.emplace_back(std::move(newStep));
 	}
 
 	void CompiledLightingTechnique::CreateStep_ExecuteDrawables(
 		std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
-		std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate)
+		std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
+		unsigned drawablePktIndex)
 	{
 		assert(!_isConstructionCompleted);
 		ResolvePendingCreateFragmentSteps();
@@ -48,25 +50,28 @@ namespace RenderCore { namespace LightingEngine
 		newStep._type = Step::Type::ParseScene;
 		newStep._sequencerConfig = std::move(sequencerConfig);
 		newStep._shaderResourceDelegate = std::move(uniformDelegate);
+		newStep._fbDescIdx = drawablePktIndex;
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	void CompiledLightingTechnique::CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter batch)
+	void CompiledLightingTechnique::CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter batch, unsigned drawablePktIndex)
 	{
 		assert(!_isConstructionCompleted);
 		ResolvePendingCreateFragmentSteps();
 		Step newStep;
 		newStep._type = Step::Type::ParseScene;
 		newStep._batch = batch;
+		newStep._fbDescIdx = drawablePktIndex;
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	void CompiledLightingTechnique::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig)
+	void CompiledLightingTechnique::CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, unsigned drawablePktIndex)
 	{
 		assert(!_isConstructionCompleted);
 		Step newStep;
 		newStep._type = Step::Type::PrepareOnly_ExecuteDrawables;
 		newStep._sequencerConfig = std::move(sequencerConfig);
+		newStep._fbDescIdx = drawablePktIndex;
 		_steps.emplace_back(std::move(newStep));
 	}
 
@@ -78,6 +83,13 @@ namespace RenderCore { namespace LightingEngine
 		_pendingCreateFragmentSteps.emplace_back(std::make_pair(std::move(fragments), _nextFragmentInterfaceRegistration));
 		++_nextFragmentInterfaceRegistration;
 		return _nextFragmentInterfaceRegistration-1;
+	}
+
+	void CompiledLightingTechnique::CreateStep_ReadyInstances()
+	{
+		Step newStep;
+		newStep._type = Step::Type::ReadyInstances;
+		_steps.emplace_back(std::move(newStep));
 	}
 
 	static const std::string s_defaultSequencerCfgName = "lighting-technique";
@@ -99,12 +111,30 @@ namespace RenderCore { namespace LightingEngine
 		_stitchingContext->UpdateAttachments(merged);
 		_fbDescs.emplace_back(std::move(merged));
 
+		unsigned drawablePacketCounter = 0;
+		for (auto& fragments:_pendingCreateFragmentSteps) {
+			for (unsigned c=0; c<fragments.first.GetSubpassAddendums().size(); ++c) {
+				auto& sb = fragments.first.GetSubpassAddendums()[c];
+				using SubpassExtension = RenderStepFragmentInterface::SubpassExtension;
+				if (sb._type == SubpassExtension::Type::ExecuteDrawables) {
+					Step parseStep;
+					parseStep._type = Step::Type::ParseScene;
+					parseStep._batch = sb._batchFilter;
+					parseStep._fbDescIdx = drawablePacketCounter++;
+					_steps.emplace_back(std::move(parseStep));
+				}
+			}
+		}
+
+		_steps.push_back({Step::Type::ReadyInstances});
+
 		// Generate commands for walking through the render pass
 		Step beginStep;
 		beginStep._type = Step::Type::BeginRenderPassInstance;
 		beginStep._fbDescIdx = (unsigned)_fbDescs.size()-1;
 		_steps.emplace_back(std::move(beginStep));
 		
+		drawablePacketCounter = 0;
 		unsigned stepCounter = 0;
 		for (auto& fragments:_pendingCreateFragmentSteps) {
 			assert(_fragmentInterfaceMappings.size() == fragments.second);
@@ -120,10 +150,6 @@ namespace RenderCore { namespace LightingEngine
 					assert(sb._techniqueDelegate);
 
 					Step drawStep;
-					drawStep._type = Step::Type::ParseScene;
-					drawStep._batch = sb._batchFilter;
-					_steps.emplace_back(std::move(drawStep));
-
 					drawStep._type = Step::Type::ExecuteDrawables;
 					#if defined(_DEBUG)
 						auto name = _fbDescs[beginStep._fbDescIdx]._fbDesc.GetSubpasses()[c]._name;
@@ -131,6 +157,7 @@ namespace RenderCore { namespace LightingEngine
 					#else
 						auto name = s_defaultSequencerCfgName;
 					#endif
+					drawStep._fbDescIdx = drawablePacketCounter++;
 					drawStep._sequencerConfig = _pipelineAccelerators->CreateSequencerConfig(
 						name,
 						sb._techniqueDelegate, sb._sequencerSelectors, 
@@ -209,6 +236,7 @@ namespace RenderCore { namespace LightingEngine
 		CompiledLightingTechnique::Step newStep;
 		newStep._type = CompiledLightingTechnique::Step::Type::CallFunction;
 		newStep._function = std::move(fn);
+		newStep._fbDescIdx = 0;
 		size_t d0 = std::distance(_steps.begin(), _stepIterator);
 		_pushFollowingIterator = _steps.insert(_pushFollowingIterator, std::move(newStep)) + 1;
 		_stepIterator = _steps.begin() + d0;
@@ -219,6 +247,7 @@ namespace RenderCore { namespace LightingEngine
 		CompiledLightingTechnique::Step newStep;
 		newStep._type = CompiledLightingTechnique::Step::Type::ParseScene;
 		newStep._batch = batchFilter;
+		newStep._fbDescIdx = 0;
 		size_t d0 = std::distance(_steps.begin(), _stepIterator);
 		_pushFollowingIterator = _steps.insert(_pushFollowingIterator, std::move(newStep)) + 1;
 		_stepIterator = _steps.begin() + d0;
@@ -230,6 +259,7 @@ namespace RenderCore { namespace LightingEngine
 		newStep._type = CompiledLightingTechnique::Step::Type::ParseScene;
 		newStep._batch = batchFilter;
 		newStep._complexCullingVolume = std::move(complexCullingVolume);
+		newStep._fbDescIdx = 0;
 		size_t d0 = std::distance(_steps.begin(), _stepIterator);
 		_pushFollowingIterator = _steps.insert(_pushFollowingIterator, std::move(newStep)) + 1;
 		_stepIterator = _steps.begin() + d0;
@@ -241,6 +271,7 @@ namespace RenderCore { namespace LightingEngine
 		newStep._type = CompiledLightingTechnique::Step::Type::ExecuteDrawables;
 		newStep._sequencerConfig = std::move(seqConfig);
 		newStep._shaderResourceDelegate = std::move(uniformDelegate);
+		newStep._fbDescIdx = 0;
 		size_t d0 = std::distance(_steps.begin(), _stepIterator);
 		_pushFollowingIterator = _steps.insert(_pushFollowingIterator, std::move(newStep)) + 1;
 		_stepIterator = _steps.begin() + d0;
@@ -249,8 +280,7 @@ namespace RenderCore { namespace LightingEngine
 	LightingTechniqueIterator::LightingTechniqueIterator(
 		Techniques::ParsingContext& parsingContext,
 		const CompiledLightingTechnique& compiledTechnique)
-	: _drawablePkt(parsingContext.GetTechniqueContext()._drawablesPacketsPool->Allocate())
-	, _threadContext(&parsingContext.GetThreadContext())
+	: _threadContext(&parsingContext.GetThreadContext())
 	, _parsingContext(&parsingContext)
 	, _pipelineAcceleratorPool(compiledTechnique._pipelineAccelerators.get())
 	, _deformAcceleratorPool(nullptr)
@@ -280,7 +310,10 @@ namespace RenderCore { namespace LightingEngine
 			_iterator->_pushFollowingIterator = _iterator->_stepIterator;
 			switch (next->_type) {
 			case CompiledLightingTechnique::Step::Type::ParseScene:
-				return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt, next->_complexCullingVolume.get() };
+				assert(next->_fbDescIdx != ~0u);
+				while (next->_fbDescIdx >= _iterator->_drawablePkt.size())
+					_iterator->_drawablePkt.push_back(_iterator->_parsingContext->GetTechniqueContext()._drawablesPacketsPool->Allocate());
+				return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt[next->_fbDescIdx], next->_complexCullingVolume.get() };
 
 			case CompiledLightingTechnique::Step::Type::CallFunction:
 				TRY {
@@ -295,13 +328,14 @@ namespace RenderCore { namespace LightingEngine
 					if (next->_shaderResourceDelegate)
 						_iterator->_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(next->_shaderResourceDelegate);
 					TRY {
+						assert(next->_fbDescIdx < _iterator->_drawablePkt.size());
 						Techniques::Draw(
 							*_iterator->_parsingContext,
 							*_iterator->_pipelineAcceleratorPool,
 							_iterator->_deformAcceleratorPool,
 							*next->_sequencerConfig,
-							_iterator->_drawablePkt);
-						_iterator->_drawablePkt.Reset();
+							_iterator->_drawablePkt[next->_fbDescIdx]);
+						_iterator->_drawablePkt[next->_fbDescIdx].Reset();
 					} CATCH(...) {
 						if (next->_shaderResourceDelegate)
 							_iterator->_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*next->_shaderResourceDelegate);
@@ -336,6 +370,9 @@ namespace RenderCore { namespace LightingEngine
 				_iterator->_rpi.NextSubpass();
 				break;
 
+			case CompiledLightingTechnique::Step::Type::ReadyInstances:
+				return { StepType::ReadyInstances };
+
 			case CompiledLightingTechnique::Step::Type::PrepareOnly_ParseScene:
 			case CompiledLightingTechnique::Step::Type::PrepareOnly_ExecuteDrawables:
 				break;
@@ -365,7 +402,7 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueInstance::PrepareResourcesIterator
 	{
 	public:
-		Techniques::DrawablesPacket _drawablePkt;
+		std::vector<Techniques::DrawablesPacket> _drawablePkt;
 		std::vector<std::shared_ptr<::Assets::IAsyncMarker>> _requiredResources;
 
 		std::vector<CompiledLightingTechnique::Step> _steps;
@@ -383,7 +420,9 @@ namespace RenderCore { namespace LightingEngine
 			switch (next->_type) {
 			case CompiledLightingTechnique::Step::Type::PrepareOnly_ParseScene:
 			case CompiledLightingTechnique::Step::Type::ParseScene:
-				return { StepType::ParseScene, next->_batch, &_prepareResourcesIterator->_drawablePkt };
+				while (next->_fbDescIdx >= _iterator->_drawablePkt.size())
+					_iterator->_drawablePkt.push_back(_iterator->_parsingContext->GetTechniqueContext()._drawablesPacketsPool->Allocate());
+				return { StepType::ParseScene, next->_batch, &_prepareResourcesIterator->_drawablePkt[next->_fbDescIdx] };
 
 			case CompiledLightingTechnique::Step::Type::DrawSky:
 				return { StepType::DrawSky };
@@ -391,10 +430,11 @@ namespace RenderCore { namespace LightingEngine
 			case CompiledLightingTechnique::Step::Type::PrepareOnly_ExecuteDrawables:
 			case CompiledLightingTechnique::Step::Type::ExecuteDrawables:
 				{
-					auto preparation = Techniques::PrepareResources(*_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt);
+					assert(next->_fbDescIdx < _iterator->_drawablePkt.size());
+					auto preparation = Techniques::PrepareResources(*_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt[next->_fbDescIdx]);
 					if (preparation)
 						_prepareResourcesIterator->_requiredResources.push_back(std::move(preparation));
-					_prepareResourcesIterator->_drawablePkt.Reset();
+					_prepareResourcesIterator->_drawablePkt[next->_fbDescIdx].Reset();
 				}
 				break;
 
@@ -402,6 +442,9 @@ namespace RenderCore { namespace LightingEngine
 			case CompiledLightingTechnique::Step::Type::BeginRenderPassInstance:
 			case CompiledLightingTechnique::Step::Type::EndRenderPassInstance:
 			case CompiledLightingTechnique::Step::Type::NextRenderPassStep:
+				break;
+
+			case CompiledLightingTechnique::Step::Type::ReadyInstances:
 				break;
 
 			case CompiledLightingTechnique::Step::Type::None:
