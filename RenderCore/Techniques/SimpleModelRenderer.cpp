@@ -468,7 +468,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::RawGeometry& geo,
-			const RendererGeoDeformInterface* deformStream)
+			const DeformerToRendererBinding::GeoBinding* deformStream)
 		{
 			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
 			if (deformStream) {
@@ -480,7 +480,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::BoundSkinnedGeometry& geo,
-			const RendererGeoDeformInterface* deformStream)
+			const DeformerToRendererBinding::GeoBinding* deformStream)
 		{
 			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
 			auto t0 = MakeIA(MakeIteratorRange(geo._animatedVertexElements._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 1);
@@ -512,9 +512,9 @@ namespace RenderCore { namespace Techniques
 		{
 			// Construct the DrawableGeo objects needed by the renderer
 
-			IteratorRange<const RendererGeoDeformInterface*> deformInterface;
+			DeformerToRendererBinding deformerBinding;
 			if (deformAccelerator && deformAcceleratorPool) {
-				deformInterface = deformAcceleratorPool->GetRendererGeoInterface(*deformAccelerator);
+				deformerBinding = deformAcceleratorPool->GetDeformerToRendererBinding(*deformAccelerator);
 			}
 
 			std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
@@ -536,12 +536,12 @@ namespace RenderCore { namespace Techniques
 				drawableGeo->_vertexStreamCount = 1;
 
 				// Attach those vertex streams that come from the deform operation
-				if (geo < deformInterface.size() && !deformInterface[geo]._generatedElements.empty()) {
+				if (geo < deformerBinding._geoBindings.size() && !deformerBinding._geoBindings[geo]._generatedElements.empty()) {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo]._postDeformBufferOffset;
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding._geoBindings[geo]._postDeformBufferOffset;
 					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					_geosLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+					_geosLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo]));
 				} else {
 					_geosLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
 				}
@@ -566,12 +566,12 @@ namespace RenderCore { namespace Techniques
 				drawableGeo->_vertexStreamCount = 1;
 
 				// Attach those vertex streams that come from the deform operation
-				if ((geo+simpleGeoCount) < deformInterface.size() && !deformInterface[geo+simpleGeoCount]._generatedElements.empty()) {
+				if ((geo+simpleGeoCount) < deformerBinding._geoBindings.size() && !deformerBinding._geoBindings[geo+simpleGeoCount]._generatedElements.empty()) {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformInterface[geo+simpleGeoCount]._postDeformBufferOffset;
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding._geoBindings[geo+simpleGeoCount]._postDeformBufferOffset;
 					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformInterface[geo]));
+					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo]));
 				} else {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
 					staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});

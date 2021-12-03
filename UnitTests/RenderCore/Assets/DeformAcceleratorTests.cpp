@@ -402,12 +402,12 @@ namespace UnitTests
 		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
 		auto cpuAccelerator = pool->CreateDeformAccelerator("cpu_skin", modelScaffold);
 		REQUIRE(cpuAccelerator);
-		auto geoInterface1 = pool->GetRendererGeoInterface(*cpuAccelerator);
+		auto geoInterface1 = pool->GetDeformerToRendererBinding(*cpuAccelerator);
 		REQUIRE(!geoInterface1.empty());
 
 		auto gpuAccelerator = pool->CreateDeformAccelerator("gpu_skin", modelScaffold);
 		REQUIRE(gpuAccelerator);
-		auto geoInterface2 = pool->GetRendererGeoInterface(*gpuAccelerator);
+		auto geoInterface2 = pool->GetDeformerToRendererBinding(*gpuAccelerator);
 		REQUIRE(!geoInterface2.empty());
 		REQUIRE(geoInterface2[0]._generatedElements.size() == 3);
 		REQUIRE(geoInterface2[0]._generatedElements[0]._semanticName == "POSITION");

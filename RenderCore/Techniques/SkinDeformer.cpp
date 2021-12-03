@@ -572,7 +572,8 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(section._geoId) + ")"));
 
 			ParameterBox selectors;
-			for (const auto&ele:binding->_srcElements) {
+			for (const auto&ele:binding->_inputElements) {
+				assert(ele._inputSlot == Internal::VB_GPUStaticData);
 				auto semanticHash = Hash64(ele._semanticName);
 				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 					selectors.SetParameter("POSITION_FORMAT", (unsigned)ele._nativeFormat);
@@ -585,12 +586,13 @@ namespace RenderCore { namespace Techniques
 					section._iaParams._tangentsOffset = ele._alignedByteOffset;
 				}
 			}
-			section._iaParams._inputStride = binding->_srcStride;
+			section._iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
 
 			#if defined(_DEBUG)
 				// output layout must match the input layout; both for offsets and formats
 				// we could allow differences by expanding selector interface to the shader
-				for (const auto&ele:binding->_generatedElements) {
+				for (const auto&ele:binding->_outputElements) {
+					assert(ele._inputSlot == Internal::VB_PostDeform);
 					auto semanticHash = Hash64(ele._semanticName);
 					if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 						assert(selectors.GetParameter<unsigned>("POSITION_FORMAT").value() == (unsigned)ele._nativeFormat);
@@ -604,7 +606,7 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 			#endif
-			section._iaParams._outputStride = binding->_generatedStride;
+			section._iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
 
 			selectors.SetParameter("INFLUENCE_COUNT", section._influencesPerVertex);
 			selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(section._indicesFormat));

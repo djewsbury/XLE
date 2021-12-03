@@ -30,7 +30,6 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool; 
 	class PipelineAccelerator; 
 	class DescriptorSetAccelerator;
-	struct RendererGeoDeformInterface;
 	class ICPUDeformOperator;
 	class IUniformBufferDelegate;
 

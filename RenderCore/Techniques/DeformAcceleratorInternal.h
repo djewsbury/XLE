@@ -65,12 +65,31 @@ namespace RenderCore { namespace Techniques
 			unsigned& deformTemporaryGPUVBIterator,
 			unsigned& deformTemporaryCPUVBIterator,
 			unsigned& postDeformVBIterator);
-#endif
 
 		static NascentDeformForGeo::CPUOp::Attribute AsCPUOpAttribute(const InputElementDesc& e, unsigned baseOffset, unsigned stride, unsigned inputSlot)
 		{
 			return {e._nativeFormat, baseOffset + e._alignedByteOffset, stride, inputSlot};
 		}
+#endif
+
+		struct WorkingDeformer
+		{
+			IteratorRange<const DeformOperationInstantiation*> _instantiations;
+			DeformerInputBinding _inputBinding;
+		};
+
+		struct DeformBufferIterators
+		{
+			unsigned _bufferIterators[VB_Count] = {0,0,0,0,0};
+			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
+			std::vector<std::pair<unsigned, unsigned>> _gpuStaticDataLoadRequests;
+		};
+
+		DeformerToRendererBinding CreateDeformBindings(
+			IteratorRange<WorkingDeformer*> workingDeformers,
+			DeformBufferIterators& bufferIterators,
+			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+			const std::string& modelScaffoldName);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

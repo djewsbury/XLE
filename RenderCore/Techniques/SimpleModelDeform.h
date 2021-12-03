@@ -61,7 +61,8 @@ namespace RenderCore { namespace Techniques
 		struct GeoBinding
 		{
 			unsigned _geoId = ~0u;
-			std::vector<InputElementDesc> _boundElements;		// use _inputSlot to indicate which buffer each element is within
+			std::vector<InputElementDesc> _inputElements;		// use _inputSlot to indicate which buffer each element is within
+			std::vector<InputElementDesc> _outputElements;		// use _inputSlot to indicate which buffer each element is within
 			unsigned _bufferStrides[5];
 			unsigned _bufferOffsets[5];
 		};
@@ -100,8 +101,13 @@ namespace RenderCore { namespace Techniques
 	class DeformOperationFactorySet
 	{
 	public:
-		using InstantiationSet = std::vector<DeformOperationInstantiation>;
-		InstantiationSet CreateDeformOperations(
+		struct Deformer
+		{
+			std::vector<DeformOperationInstantiation> _instantiations;
+			std::shared_ptr<IDeformOperationFactory> _factory;
+			std::shared_ptr<IGPUDeformOperator> _operator;
+		};
+		std::vector<Deformer> CreateDeformOperations(
 			StringSection<> initializer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName);

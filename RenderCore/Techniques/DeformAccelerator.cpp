@@ -43,7 +43,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName) override;
 
-		IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const override;
+		const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const override;
 
 		std::vector<std::shared_ptr<ICPUDeformOperator>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
@@ -76,15 +76,15 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		std::vector<Internal::NascentDeformForGeo::CPUOp> _cpuDeformOps;
-
-		struct GPUOp
+		/*struct GPUOp
 		{
 			std::shared_ptr<IGPUDeformOperator> _operator;
 			std::shared_ptr<IResourceView> _staticDataView;
 		};
-		std::vector<GPUOp> _gpuDeformOps;
-		std::vector<RendererGeoDeformInterface> _rendererGeoInterface;
+		std::vector<GPUOp> _gpuDeformOps;*/
+		std::vector<std::shared_ptr<ICPUDeformOperator>> _cpuDeformOps;
+		std::vector<std::shared_ptr<IGPUDeformOperator>> _gpuDeformOps;
+		DeformerToRendererBinding _rendererGeoInterface;
 
 		std::atomic<bool> _gpuDeformOpsReady;
 		std::future<void> _gpuDeformOpsFuture;
@@ -108,7 +108,7 @@ namespace RenderCore { namespace Techniques
 		const std::string& modelScaffoldName)
 	{
 		auto& opFactory = Services::GetDeformOperationFactorySet();
-		auto deformInstantiations = opFactory.CreateDeformOperations(initializer, modelScaffold, modelScaffoldName);
+		auto deformers = opFactory.CreateDeformOperations(initializer, modelScaffold, modelScaffoldName);
 		auto newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_enabledInstances.resize(8, 0);
 		newAccelerator->_readiedInstances.resize(8, 0);
@@ -120,168 +120,56 @@ namespace RenderCore { namespace Techniques
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
 
-		unsigned cpuStaticDataIterator = 0;
-		unsigned gpuStaticDataIterator = 0;
-		unsigned deformTemporaryGPUVBIterator = 0;
-		unsigned deformTemporaryCPUVBIterator = 0;
-		unsigned postDeformVBIterator = 0;
-		std::vector<Internal::SourceDataTransform> cpuStaticDataLoadRequests;
-		std::vector<std::pair<unsigned, unsigned>> gpuStaticDataLoadRequests;
+		Internal::DeformBufferIterators bufferIterators;
+		std::vector<Internal::WorkingDeformer> workingDeformers;
+		workingDeformers.reserve(deformers.size());
 
-		std::vector<Internal::NascentDeformForGeo> deformStreams;
-		deformStreams.reserve(modelScaffold->ImmutableData()._geoCount + modelScaffold->ImmutableData()._boundSkinnedControllerCount);
-		bool atLeastOneGPUOp = false;
+		for (auto& d:deformers) {
+			Internal::WorkingDeformer workingDeformer;
+			workingDeformer._instantiations = MakeIteratorRange(d._instantiations);
+			workingDeformers.push_back(std::move(workingDeformer));
+		};
 
-		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
-			const auto& rg = modelScaffold->ImmutableData()._geos[geo];
-
-			unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-			InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
-			BuildLowLevelInputAssembly(
-				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
-				rg._vb._ia._elements);
-
-			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), rg._vb._ia._vertexStride,
-				geo, vertexCount,
-				cpuStaticDataIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
-
-			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
-
-			cpuStaticDataLoadRequests.insert(
-				cpuStaticDataLoadRequests.end(),
-				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
-			if (!deform._gpuOps.empty() && rg._vb._size) {
-				deform._gpuStaticDataRange = {gpuStaticDataIterator, gpuStaticDataIterator + rg._vb._size};
-				gpuStaticDataIterator += rg._vb._size;
-				gpuStaticDataLoadRequests.push_back({rg._vb._offset, rg._vb._size});
-				atLeastOneGPUOp = true;
-			}
-			deformStreams.emplace_back(std::move(deform));
-		}
-
-		for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
-			const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
-
-			unsigned vertexCount = rg._vb._ia._vertexStride ? (rg._vb._size / rg._vb._ia._vertexStride) : (rg._animatedVertexElements._size / rg._animatedVertexElements._ia._vertexStride);
-			InputElementDesc animatedElementsIA[rg._animatedVertexElements._ia._elements.size()];
-			BuildLowLevelInputAssembly(
-				MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._animatedVertexElements._ia._elements.size()]),
-				rg._animatedVertexElements._ia._elements);
-
-			auto deform = Internal::BuildNascentDeformForGeo(
-				deformInstantiations, MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._animatedVertexElements._ia._elements.size()]), 
-				geo + (unsigned)modelScaffold->ImmutableData()._geoCount, vertexCount,
-				cpuStaticDataIterator, deformTemporaryGPUVBIterator, deformTemporaryCPUVBIterator, postDeformVBIterator);
-
-			newAccelerator->_cpuDeformOps.insert(newAccelerator->_cpuDeformOps.end(), deform._cpuOps.begin(), deform._cpuOps.end());
-
-			cpuStaticDataLoadRequests.insert(
-				cpuStaticDataLoadRequests.end(),
-				deform._cpuStaticDataLoadRequests.begin(), deform._cpuStaticDataLoadRequests.end());
-			if (!deform._gpuOps.empty() && rg._animatedVertexElements._size) {
-				deform._gpuStaticDataRange = {gpuStaticDataIterator, gpuStaticDataIterator + rg._animatedVertexElements._size};
-				gpuStaticDataIterator += rg._animatedVertexElements._size;
-				gpuStaticDataLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
-				atLeastOneGPUOp = true;
-			}
-			deformStreams.emplace_back(std::move(deform));
-		}
-
-		if (newAccelerator->_cpuDeformOps.empty() && !atLeastOneGPUOp)
-			return nullptr;
+		newAccelerator->_rendererGeoInterface = Internal::CreateDeformBindings(
+			MakeIteratorRange(workingDeformers), bufferIterators,
+			modelScaffold, modelScaffoldName);
 
 		////////////////////////////////////////////////////////////////////////////////////
 
-		if (atLeastOneGPUOp) {
+		if (!bufferIterators._gpuStaticDataLoadRequests.empty()) {
 			struct Captures
 			{
-				std::vector<Internal::NascentDeformForGeo> _deformStreams;
 				BufferUploads::TransactionMarker _staticDataBufferMarker;
 			};
 			auto captures = std::make_shared<Captures>();
-			captures->_deformStreams = std::move(deformStreams);
-			
-			if (gpuStaticDataIterator) {
-				captures->_staticDataBufferMarker = LoadStaticResourceFullyAsync(
-					{gpuStaticDataLoadRequests.begin(), gpuStaticDataLoadRequests.end()}, gpuStaticDataIterator,
-					modelScaffold, BindFlag::UnorderedAccess,
-					(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection());
-			}
-
-			std::promise<void> promise;
-			newAccelerator->_gpuDeformOpsFuture = promise.get_future();		// exceptions will end up in this future
-			::Assets::PollToPromise(
-				std::move(promise),
-				[captures](auto timeout) {
-					// wait until all of the deform ops are ready
-					auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-					for (auto& deform:captures->_deformStreams)
-						for (auto& o:deform._gpuOps)
-							if (o.wait_until(timeoutTime) == std::future_status::timeout)
-								return ::Assets::PollStatus::Continue;
-					// also wait for the static buffer upload
-					if (captures->_staticDataBufferMarker)
-						if (captures->_staticDataBufferMarker._future.wait_until(timeoutTime) == std::future_status::timeout)
-							return ::Assets::PollStatus::Continue;
-					return ::Assets::PollStatus::Finish;
-				},
-				[captures, newAccelerator]() {
-					std::shared_ptr<IResource> staticDataBuffer;
-					std::vector<::Assets::DependencyValidationMarker> depVals;
-					if (captures->_staticDataBufferMarker)
-						staticDataBuffer = captures->_staticDataBufferMarker._future.get().AsIndependentResource();
-					for (auto& deform:captures->_deformStreams) {
-						if (deform._gpuStaticDataRange) {
-							assert(staticDataBuffer);
-							for (auto& o:deform._gpuOps) {
-								auto range = deform._gpuStaticDataRange.value();
-								auto op = o.get();
-								newAccelerator->_gpuDeformOps.push_back({op, staticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess, range.first, range.second-range.first)});
-								auto depVal = op->GetDependencyValidation();
-								depVals.push_back(std::move(depVal));
-							}
-						} else {
-							for (auto& o:deform._gpuOps) {
-								auto op = o.get();
-								newAccelerator->_gpuDeformOps.push_back({op, nullptr});
-								auto depVal = op->GetDependencyValidation();
-								depVals.push_back(std::move(depVal));
-							}
-						}
-					}
-					newAccelerator->_dependencyValidation = ::Assets::GetDepValSys().Make(depVals);
-					newAccelerator->_gpuDeformOpsReady = true;
-				});
-		} else {
-			newAccelerator->_gpuDeformOpsReady = true;
+			captures->_staticDataBufferMarker = LoadStaticResourceFullyAsync(
+				{bufferIterators._gpuStaticDataLoadRequests.begin(), bufferIterators._gpuStaticDataLoadRequests.end()}, 
+				bufferIterators._bufferIterators[Internal::VB_GPUStaticData],
+				modelScaffold, BindFlag::UnorderedAccess,
+				(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection());
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
 
 		// Create the dynamic VB and assign it to all of the slots it needs to go to
-		newAccelerator->_outputVBSize = postDeformVBIterator;
+		newAccelerator->_outputVBSize = bufferIterators._bufferIterators[Internal::VB_PostDeform];
 
-		if (cpuStaticDataIterator) {
+		if (!bufferIterators._cpuStaticDataLoadRequests.empty()) {
 			newAccelerator->_deformStaticDataInput = Internal::GenerateDeformStaticInputForCPUDeform(
 				*modelScaffold,
-				MakeIteratorRange(cpuStaticDataLoadRequests),
-				cpuStaticDataIterator);
+				MakeIteratorRange(bufferIterators._cpuStaticDataLoadRequests),
+				bufferIterators._bufferIterators[Internal::VB_CPUStaticData]);
 		}
 
-		if (deformTemporaryCPUVBIterator) {
-			newAccelerator->_deformTemporaryBuffer.resize(deformTemporaryCPUVBIterator, 0);
+		if (bufferIterators._bufferIterators[Internal::VB_CPUDeformTemporaries]) {
+			newAccelerator->_deformTemporaryBuffer.resize(bufferIterators._bufferIterators[Internal::VB_CPUDeformTemporaries], 0);
 		}
-
-		newAccelerator->_rendererGeoInterface.reserve(deformStreams.size());
-		for (const auto&s:deformStreams) newAccelerator->_rendererGeoInterface.push_back(s._rendererInterf);
 
 		_accelerators.push_back(newAccelerator);
-
 		return newAccelerator;
 	}
 
-	IteratorRange<const RendererGeoDeformInterface*> DeformAcceleratorPool::GetRendererGeoInterface(DeformAccelerator& accelerator) const
+	const DeformerToRendererBinding& DeformAcceleratorPool::GetDeformerToRendererBinding(DeformAccelerator& accelerator) const
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
@@ -296,8 +184,8 @@ namespace RenderCore { namespace Techniques
 		#endif
 		std::vector<std::shared_ptr<ICPUDeformOperator>> result;
 		for (const auto&i:accelerator._cpuDeformOps)
-			if (i._deformOp->QueryInterface(typeId))
-				result.push_back(i._deformOp);
+			if (i->QueryInterface(typeId))
+				result.push_back(i);
 		return result;
 	}
 
@@ -317,6 +205,7 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx, IteratorRange<void*> outputPartRange)
 	{
+#if 0
 		assert(instanceIdx!=~0u);
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
@@ -360,15 +249,16 @@ namespace RenderCore { namespace Techniques
 				MakeIteratorRange(inputElementRanges, &inputElementRanges[d._inputElements.size()]),
 				MakeIteratorRange(outputElementRanges, &outputElementRanges[d._outputElements.size()]));
 		}
+#endif
 	}
 
 	void DeformAcceleratorPool::ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB)
 	{
 		for (const auto&d:a._gpuDeformOps) {
-			d._operator->ExecuteGPU(
+			d->ExecuteGPU(
 				threadContext,
 				instanceIdx[0],		// todo -- all instances
-				*d._staticDataView,
+				*(IResourceView*)nullptr, // *d._staticDataView,
 				*(IResourceView*)nullptr,
 				dstVB);
 		}
@@ -578,29 +468,19 @@ namespace RenderCore { namespace Techniques
 
 	namespace Internal
 	{
-		struct WorkingDeformer
-		{
-			IteratorRange<const DeformOperationInstantiation*> _instantiations;
-			DeformerInputBinding _inputBinding;
-		};
-
-		struct DeformBufferIterators
-		{
-			unsigned _bufferIterators[VB_Count] = {0,0,0,0,0};
-			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
-		};
-
 		static void LinkDeformers(
 			/* in */ IteratorRange<const InputElementDesc*> animatedElementsInput,
 			/* in */ unsigned vertexCount,
+			/* in */ unsigned animatedElementsStride,
 			/* in */ IteratorRange<const DeformOperationInstantiation**> instantiations,
 			/* out */ IteratorRange<DeformerInputBinding::GeoBinding*> resultDeformerBindings,
 			/* out */ DeformerToRendererBinding::GeoBinding& resultRendererBinding,
-			/* in/out */ DeformBufferIterators& bufferIterators)
+			/* in/out */ DeformBufferIterators& bufferIterators,
+			/* out */ bool& gpuStaticDataLoadRequired)
 		{
 			// Given some input vertex format plus one or more deformer instantiations, calculate how we should
 			// link together these deformers, and what vertex format should eventually be expected by the renderer
-			// At this point, we're operating on a single "geo" object 
+			// At this point, we're operating on a single "geo" object
 			assert(resultRendererBinding._geoId != ~0u);
 			std::vector<uint64_t> workingSuppressedElements;
 			std::vector<InputElementDesc> workingGeneratedElements;
@@ -610,6 +490,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<InputElementDesc> workingSourceDataElements_cpu;
 			
 			for (auto d=instantiations.begin(); d!=instantiations.end(); ++d) {
+				if (!*d) continue;
 				const auto&def = **d;
 				unsigned dIdx = (unsigned)std::distance(instantiations.begin(), d);
 				
@@ -650,6 +531,7 @@ namespace RenderCore { namespace Techniques
 								});
 							if (q==animatedElementsInput.end())
 								Throw(std::runtime_error("Could not match input element (" + e._semantic + ") for GPU deform operation"));
+							gpuStaticDataLoadRequired = true;
 						}
 					}
 				}
@@ -668,7 +550,7 @@ namespace RenderCore { namespace Techniques
 					auto existing = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), 
 						[&e](const auto& c) { return c._semanticName == e._semantic && c._semanticIndex == e._semanticIndex; });
 					if (existing != workingGeneratedElements.end())
-						workingGeneratedElements.erase(existing);
+						workingGeneratedElements.erase(existing);	// this was generated, but eventually overwritten
 					workingGeneratedElements.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format, dIdx});
 				}
 
@@ -677,13 +559,29 @@ namespace RenderCore { namespace Techniques
 					def._suppressElements.begin(), def._suppressElements.end());
 			}
 
-			auto finalGeneratedElements = workingGeneratedElements;
+			// Sort the elements from largest to smallest, to promote ideal alignment 
+			std::sort(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), [](auto& lhs, auto& rhs) { return BitsPerPixel(lhs._nativeFormat) > BitsPerPixel(rhs._nativeFormat); });
+			std::sort(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [](auto& lhs, auto& rhs) { return BitsPerPixel(lhs._nativeFormat) > BitsPerPixel(rhs._nativeFormat); });
+			std::sort(workingTemporarySpaceElements_gpu.begin(), workingTemporarySpaceElements_gpu.end(), [](auto& lhs, auto& rhs) { return BitsPerPixel(lhs._nativeFormat) > BitsPerPixel(rhs._nativeFormat); });
+			std::sort(workingGeneratedElements.begin(), workingGeneratedElements.end(), [](auto& lhs, auto& rhs) { return BitsPerPixel(lhs._nativeFormat) > BitsPerPixel(rhs._nativeFormat); });
+
+			// put out the _inputSlot value from each input layout -- this is the index of the first deformer to write to this element
+			std::vector<unsigned> workingTemporarySpaceElements_cpu_firstSourceDeformer;
+			std::vector<unsigned> workingTemporarySpaceElements_gpu_firstSourceDeformer;
+			std::vector<unsigned> workingGeneratedElements_firstSourceDeformer;
+			workingTemporarySpaceElements_cpu_firstSourceDeformer.reserve(workingTemporarySpaceElements_cpu.size());
+			for (auto&e:workingTemporarySpaceElements_cpu) workingTemporarySpaceElements_cpu_firstSourceDeformer.push_back(e._inputSlot);
+			workingTemporarySpaceElements_gpu_firstSourceDeformer.reserve(workingTemporarySpaceElements_gpu.size());
+			for (auto&e:workingTemporarySpaceElements_gpu) workingTemporarySpaceElements_gpu_firstSourceDeformer.push_back(e._inputSlot);
+			workingGeneratedElements_firstSourceDeformer.reserve(workingGeneratedElements.size());
+			for (auto&e:workingGeneratedElements) workingGeneratedElements_firstSourceDeformer.push_back(e._inputSlot);
+
 			for (auto&e:workingTemporarySpaceElements_cpu) e._inputSlot = VB_CPUDeformTemporaries;
 			for (auto&e:workingTemporarySpaceElements_gpu) e._inputSlot = VB_GPUDeformTemporaries;
-			for (auto&e:finalGeneratedElements) e._inputSlot = VB_PostDeform;
+			for (auto&e:workingGeneratedElements) e._inputSlot = VB_PostDeform;
 			for (auto&e:workingSourceDataElements_cpu) e._inputSlot = VB_CPUStaticData;
 
-			finalGeneratedElements = NormalizeInputAssembly(finalGeneratedElements);
+			workingGeneratedElements = NormalizeInputAssembly(workingGeneratedElements);
 			workingTemporarySpaceElements_cpu = NormalizeInputAssembly(workingTemporarySpaceElements_cpu);
 			workingTemporarySpaceElements_gpu = NormalizeInputAssembly(workingTemporarySpaceElements_gpu);
 			workingSourceDataElements_cpu = NormalizeInputAssembly(workingSourceDataElements_cpu);
@@ -729,14 +627,14 @@ namespace RenderCore { namespace Techniques
 			}
 
 			{
-				vbStrides[VB_PostDeform] = CalculateVertexStrideForSlot(finalGeneratedElements, VB_PostDeform);
+				vbStrides[VB_PostDeform] = CalculateVertexStrideForSlot(workingGeneratedElements, VB_PostDeform);
 				vbOffsets[VB_PostDeform] = bufferIterators._bufferIterators[VB_PostDeform];
 				vbSizes[VB_PostDeform] = vbStrides[VB_PostDeform] * vertexCount;
 				bufferIterators._bufferIterators[VB_PostDeform] += vbStrides[VB_PostDeform] * vertexCount;
 			}
 
-			resultRendererBinding._generatedElements = std::move(finalGeneratedElements);
-			resultRendererBinding._postDeformBufferOffset = vbOffsets[VB_PostDeform];
+			vbStrides[VB_GPUStaticData] = animatedElementsStride;
+			vbOffsets[VB_GPUStaticData] = 0;
 
 			// Configure suppressed elements
 			resultRendererBinding._suppressedElements = workingSuppressedElements;
@@ -748,8 +646,10 @@ namespace RenderCore { namespace Techniques
 				std::unique(resultRendererBinding._suppressedElements.begin(), resultRendererBinding._suppressedElements.end()),
 				resultRendererBinding._suppressedElements.end());
 
-			// finally build the resultDeformerBindings
+			// build the resultDeformerBindings
 			for (auto d=instantiations.begin(); d!=instantiations.end(); ++d) {
+				if (!*d) continue;
+				const auto&def = **d;
 				unsigned dIdx = (unsigned)std::distance(instantiations.begin(), d);
 				auto& binding = resultDeformerBindings[dIdx];
 				binding._geoId = resultRendererBinding._geoId;
@@ -760,41 +660,89 @@ namespace RenderCore { namespace Techniques
 					binding._bufferOffsets[c] = vbOffsets[c];
 				}
 
-				binding._boundElements.reserve(animatedElementsInput.size() + workingTemporarySpaceElements_gpu.size() + workingGeneratedElements.size());
-				binding._boundElements.insert(binding._boundElements.end(), animatedElementsInput.begin(), animatedElementsInput.end());
-				binding._boundElements.insert(binding._boundElements.end(), workingTemporarySpaceElements_gpu.begin(), workingTemporarySpaceElements_gpu.end());
-				for (const auto& c:workingGeneratedElements)
-					if (c._inputSlot == dIdx) {
-						auto ele = c;
-						ele._inputSlot = VB_PostDeform;
-						binding._boundElements.push_back(ele);
+				const bool isCPUOperator = false;
+				std::vector<InputElementDesc>& workingTemporarySpaceElements = isCPUOperator ? workingTemporarySpaceElements_cpu : workingTemporarySpaceElements_gpu;
+				std::vector<unsigned>& workingTemporarySpaceElements_firstSourceDeformer = isCPUOperator ? workingTemporarySpaceElements_cpu_firstSourceDeformer : workingTemporarySpaceElements_gpu_firstSourceDeformer;
+
+				// input elements
+				binding._inputElements.reserve(def._upstreamSourceElements.size());
+				for (auto&e:def._upstreamSourceElements) {
+					// this element must come from either animatedElementsInput or workingTemporarySpaceElements
+					bool found = false;
+					for (unsigned c=0; c<workingTemporarySpaceElements.size(); ++c)
+						if (workingTemporarySpaceElements_firstSourceDeformer[c] < dIdx && workingTemporarySpaceElements[c]._semanticName == e._semantic && workingTemporarySpaceElements[c]._semanticIndex == e._semanticIndex) {
+							found = true;
+							binding._inputElements.push_back(workingTemporarySpaceElements[c]);
+							break;
+						}
+
+					if (!found) {
+						auto q = std::find_if(
+							animatedElementsInput.begin(), animatedElementsInput.end(),
+							[e](const auto& wge) { return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex; });
+						assert(q!=animatedElementsInput.end());
+						binding._inputElements.push_back(*q);
 					}
+				}
+
+				// output elements
+				binding._outputElements.reserve(def._generatedElements.size());
+				for (auto&e:def._upstreamSourceElements) {
+					// this element must come from either generatedElements or workingTemporarySpaceElements
+					bool found = false;
+					for (unsigned c=0; c<workingGeneratedElements.size(); ++c)
+						if (workingGeneratedElements_firstSourceDeformer[c] == dIdx && workingGeneratedElements[c]._semanticName == e._semantic && workingGeneratedElements[c]._semanticIndex == e._semanticIndex) {
+							found = true;
+							binding._outputElements.push_back(workingGeneratedElements[c]);
+							break;
+						}
+
+					if (!found) {
+						auto q = std::find_if(
+							workingTemporarySpaceElements.begin(), workingTemporarySpaceElements.end(),
+							[e](const auto& wge) { return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex; });
+						assert(q!=workingTemporarySpaceElements.end());
+						binding._outputElements.push_back(*q);
+					}
+				}
 			}
+
+			resultRendererBinding._generatedElements = std::move(workingGeneratedElements);
+			resultRendererBinding._postDeformBufferOffset = vbOffsets[VB_PostDeform];
 		}
 
 		DeformerToRendererBinding CreateDeformBindings(
-			std::vector<WorkingDeformer> workingDeformers,
+			IteratorRange<WorkingDeformer*> workingDeformers,
+			DeformBufferIterators& bufferIterators,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName)
 		{
-			DeformBufferIterators bufferIterators;
 			DeformerToRendererBinding rendererBindingResult;
 
 			struct GeoInput
 			{
-				std::vector<InputElementDesc> _animatedElements;
-				unsigned _animatedElementsStride;
-				unsigned _vertexCount;
+				const RenderCore::Assets::VertexData* _vbData = nullptr;
 			};
+			auto geoInputCount = modelScaffold->ImmutableData()._geoCount + modelScaffold->ImmutableData()._boundSkinnedControllerCount;
+			GeoInput geoInputs[geoInputCount];
+			
+			{
+				GeoInput* geoInput = geoInputs;
+				for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
+					const auto& rg = modelScaffold->ImmutableData()._geos[geo];
+					geoInput->_vbData = &rg._vb;
+					++geoInput;
+				}
 
-			for (unsigned geo=0; geo<modelScaffold->ImmutableData()._geoCount; ++geo) {
-				const auto& rg = modelScaffold->ImmutableData()._geos[geo];
+				for (unsigned geo=0; geo<modelScaffold->ImmutableData()._boundSkinnedControllerCount; ++geo) {
+					const auto& rg = modelScaffold->ImmutableData()._boundSkinnedControllers[geo];
+					geoInput->_vbData = &rg._vb;
+					++geoInput;
+				}
+			}
 
-				unsigned vertexCount = rg._vb._size / rg._vb._ia._vertexStride;
-				InputElementDesc animatedElementsIA[rg._vb._ia._elements.size()];
-				BuildLowLevelInputAssembly(
-					MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]),
-					rg._vb._ia._elements);
+			for (unsigned geoId=0; geoId<geoInputCount; ++geoId) {
+				const auto& geo = geoInputs[geoId];
 
 				const DeformOperationInstantiation* instantiations[workingDeformers.size()];
 				DeformerInputBinding::GeoBinding deformerInputBindings[workingDeformers.size()];
@@ -802,7 +750,7 @@ namespace RenderCore { namespace Techniques
 				for (unsigned d=0; d<workingDeformers.size(); ++d) {
 					instantiations[d] = nullptr;
 					for (const auto&i:workingDeformers[d]._instantiations)
-						if (i._geoId == geo) {
+						if (i._geoId == geoId) {
 							instantiations[d] = &i;
 							atLeastOneInstantiation = true;
 							break;
@@ -810,16 +758,39 @@ namespace RenderCore { namespace Techniques
 				}
 
 				if (!atLeastOneInstantiation) continue;
+
+				auto vertexCount = geo._vbData->_size / geo._vbData->_ia._vertexStride;
+				auto animatedElementsStride = geo._vbData->_ia._vertexStride;
+				InputElementDesc animatedElements[geo._vbData->_ia._elements.size()];
+				BuildLowLevelInputAssembly(
+					MakeIteratorRange(animatedElements, &animatedElements[geo._vbData->_ia._elements.size()]),
+					geo._vbData->_ia._elements);
 				
+				bool requiresGPUStaticDataLoad = false;
 				DeformerToRendererBinding::GeoBinding rendererBinding;
-				rendererBinding._geoId = geo;
+				rendererBinding._geoId = geoId;
 				LinkDeformers(
-					MakeIteratorRange(animatedElementsIA, &animatedElementsIA[rg._vb._ia._elements.size()]), vertexCount,
+					MakeIteratorRange(animatedElements, &animatedElements[geo._vbData->_ia._elements.size()]),
+					vertexCount, animatedElementsStride,
 					MakeIteratorRange(instantiations, &instantiations[workingDeformers.size()]),
 					MakeIteratorRange(deformerInputBindings, &deformerInputBindings[workingDeformers.size()]),
 					rendererBinding,
-					bufferIterators);
+					bufferIterators,
+					requiresGPUStaticDataLoad);
+
+				rendererBindingResult._geoBindings.push_back(std::move(rendererBinding));
+
+				for (unsigned d=0; d<workingDeformers.size(); ++d)
+					if (instantiations[d])
+						workingDeformers[d]._inputBinding._geoBindings.push_back(deformerInputBindings[d]);
+
+				if (requiresGPUStaticDataLoad) {
+					bufferIterators._gpuStaticDataLoadRequests.push_back(std::make_pair(geo._vbData->_offset, geo._vbData->_size));
+					bufferIterators._bufferIterators[VB_GPUStaticData] += geo._vbData->_size;
+				}
 			}
+
+			return rendererBindingResult;
 		}
 
 #if 0

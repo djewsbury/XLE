@@ -14,7 +14,7 @@ namespace RenderCore { namespace Techniques
 {
     class DeformAccelerator;
     class ICPUDeformOperator;
-    struct RendererGeoDeformInterface;
+    struct DeformerToRendererBinding;
 
     class IDeformAcceleratorPool
     {
@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
             const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
             const std::string& modelScaffoldName = {}) = 0;
 
-        virtual IteratorRange<const RendererGeoDeformInterface*> GetRendererGeoInterface(DeformAccelerator& accelerator) const = 0;
+        virtual const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const = 0;
 
         virtual std::vector<std::shared_ptr<ICPUDeformOperator>> GetOperations(DeformAccelerator& accelerator, size_t typeId) = 0;
         virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;

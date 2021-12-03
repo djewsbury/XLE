@@ -11,9 +11,9 @@ namespace RenderCore { namespace Techniques
 	auto DeformOperationFactorySet::CreateDeformOperations(
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-		const std::string& modelScaffoldName) -> InstantiationSet
+		const std::string& modelScaffoldName) -> std::vector<Deformer>
 	{
-		InstantiationSet result;
+		std::vector<Deformer> result;
 
 		auto* i = initializer.begin();
 		while (i != initializer.end()) {
@@ -36,7 +36,13 @@ namespace RenderCore { namespace Techniques
 			if (i==_instantiationFunctions.end() || i->first != hash)
 				continue;
 
-			i->second._factory->Configure(result, MakeStringSection(afterColon, end), modelScaffold, modelScaffoldName);
+			Deformer deformer;
+			deformer._factory = i->second._factory;
+			deformer._operator = i->second._factory->Configure(
+				deformer._instantiations, 
+				MakeStringSection(afterColon, end), modelScaffold, modelScaffoldName);
+			if (deformer._operator)
+				result.push_back(std::move(deformer));
 		}
 		return result;
 	}
