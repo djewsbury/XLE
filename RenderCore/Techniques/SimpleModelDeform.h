@@ -61,15 +61,9 @@ namespace RenderCore { namespace Techniques
 		struct GeoBinding
 		{
 			unsigned _geoId = ~0u;
-			IteratorRange<const InputElementDesc*> _srcElements;
-			IteratorRange<const InputElementDesc*> _temporaryElements;
-			IteratorRange<const InputElementDesc*> _generatedElements;
-			unsigned _srcStride = 0;
-			unsigned _temporariesStride = 0;
-			unsigned _generatedStride = 0;
-			unsigned _srcOffset = 0;
-			unsigned _temporariesOffset = 0;
-			unsigned _generatedOffset = 0;			
+			std::vector<InputElementDesc> _boundElements;		// use _inputSlot to indicate which buffer each element is within
+			unsigned _bufferStrides[5];
+			unsigned _bufferOffsets[5];
 		};
 		std::vector<GeoBinding> _geoBindings;
 	};

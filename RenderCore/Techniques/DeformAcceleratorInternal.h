@@ -18,9 +18,11 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		static constexpr unsigned VB_CPUStaticData = 0;
-		static constexpr unsigned VB_CPUDeformTemporaries = 1;
-		static constexpr unsigned VB_GPUDeformTemporaries = 2;
-		static constexpr unsigned VB_PostDeform = 3;
+		static constexpr unsigned VB_GPUStaticData = 1;
+		static constexpr unsigned VB_CPUDeformTemporaries = 2;
+		static constexpr unsigned VB_GPUDeformTemporaries = 3;
+		static constexpr unsigned VB_PostDeform = 4;
+		static constexpr unsigned VB_Count = 5;
 
 		struct SourceDataTransform
 		{
@@ -32,6 +34,7 @@ namespace RenderCore { namespace Techniques
 			unsigned	_vertexCount;
 		};
 
+#if 0
 		struct NascentDeformForGeo
 		{
 			struct CPUOp
@@ -62,6 +65,7 @@ namespace RenderCore { namespace Techniques
 			unsigned& deformTemporaryGPUVBIterator,
 			unsigned& deformTemporaryCPUVBIterator,
 			unsigned& postDeformVBIterator);
+#endif
 
 		static NascentDeformForGeo::CPUOp::Attribute AsCPUOpAttribute(const InputElementDesc& e, unsigned baseOffset, unsigned stride, unsigned inputSlot)
 		{
