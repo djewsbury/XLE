@@ -239,6 +239,11 @@ namespace RenderCore { namespace Techniques
 
 			return nullptr;
 		}
+
+		virtual void Bind(IGPUDeformOperator& op, const DeformerInputBinding& binding) override
+		{
+			assert(0);
+		}
 	};
 
 	std::shared_ptr<IDeformOperationFactory> CreateCPUSkinDeformerFactory()
@@ -679,6 +684,13 @@ namespace RenderCore { namespace Techniques
 				result.push_back(std::move(inst));
 			}
 			return std::make_shared<GPUSkinDeformer>(*_device, modelScaffold, modelScaffoldName);
+		}
+
+		virtual void Bind(
+			IGPUDeformOperator& op,
+			const DeformerInputBinding& binding) override
+		{
+			assert(0);
 		}
 
 		std::shared_ptr<IDevice> _device;

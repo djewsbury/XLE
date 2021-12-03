@@ -76,6 +76,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<SemanticNameAndFormat> _upstreamSourceElements;		///< these are elements that are requested from some upstream source (either a previous deform operation or the static data)
 		std::vector<uint64_t> _suppressElements;						///< hide these elements from downstream 
 		unsigned _geoId = ~0u;
+		bool _cpuDeformer = false;
 
 		friend bool operator==(const SemanticNameAndFormat& lhs, const SemanticNameAndFormat& rhs)
 		{
@@ -93,7 +94,7 @@ namespace RenderCore { namespace Techniques
 			const std::string& modelScaffoldName = {}) = 0;
 		virtual void Bind(
 			IGPUDeformOperator& op,
-			const DeformerInputBinding& binding);
+			const DeformerInputBinding& binding) = 0;
 		
 		virtual ~IDeformOperationFactory();
 	};

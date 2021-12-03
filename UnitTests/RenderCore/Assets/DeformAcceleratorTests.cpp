@@ -280,30 +280,35 @@ namespace UnitTests
 
 		std::promise<std::shared_ptr<Techniques::IGPUDeformOperator>> promise;
 		auto future = promise.get_future();
-		auto srcLayout = AsInputLayout(animVB._ia, 0), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
-		Techniques::GPUSkinDeformer::ConstructToPromise(
-			std::move(promise),
-			testHelper._device, pipelineCollection, modelScaffold, 0,
-			srcLayout, {}, dstLayout, "unit-test");
-		future.wait();
-		auto deformer = std::dynamic_pointer_cast<Techniques::GPUSkinDeformer>(future.get());
-		REQUIRE(deformer);
+		auto srcLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_GPUStaticData), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
+		Techniques::GPUSkinDeformer deformer(*testHelper._device, modelScaffold, "unit-test");
+		Techniques::DeformerInputBinding deformInputBinding;
+		deformInputBinding._geoBindings.push_back({
+			0, srcLayout, dstLayout
+		});
+		for (unsigned c=0; c<Techniques::Internal::VB_Count; ++c) {
+			deformInputBinding._geoBindings[0]._bufferStrides[c] = 0;
+			deformInputBinding._geoBindings[0]._bufferOffsets[c] = 0;
+		}
+		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
+		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
+		deformer.Bind(pipelineCollection, deformInputBinding);
 
 		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
 		
 		auto inputResource = LoadStorageBuffer(*testHelper._device, *modelScaffold, animVB);
 		auto outputResource = testHelper._device->CreateResource(inputResource->GetDesc());
 
-		deformer->FeedInSkeletonMachineResults(
+		deformer.FeedInSkeletonMachineResults(
 			0, BasePose(modelScaffold),
-			deformer->CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
+			deformer.CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
 
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
 
 		auto threadContext = testHelper._device->GetImmediateContext();
 		testHelper.BeginFrameCapture();
-		deformer->ExecuteGPU(*threadContext, 0, *inputView, *inputView, *outputView);
+		deformer.ExecuteGPU(*threadContext, 0, *inputView, *inputView, *outputView);
 		testHelper.EndFrameCapture();
 
 		return outputResource->ReadBackSynchronized(*threadContext);
@@ -402,17 +407,17 @@ namespace UnitTests
 		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
 		auto cpuAccelerator = pool->CreateDeformAccelerator("cpu_skin", modelScaffold);
 		REQUIRE(cpuAccelerator);
-		auto geoInterface1 = pool->GetDeformerToRendererBinding(*cpuAccelerator);
-		REQUIRE(!geoInterface1.empty());
+		auto rendererBinding = pool->GetDeformerToRendererBinding(*cpuAccelerator);
+		REQUIRE(!rendererBinding._geoBindings.empty());
 
 		auto gpuAccelerator = pool->CreateDeformAccelerator("gpu_skin", modelScaffold);
 		REQUIRE(gpuAccelerator);
-		auto geoInterface2 = pool->GetDeformerToRendererBinding(*gpuAccelerator);
-		REQUIRE(!geoInterface2.empty());
-		REQUIRE(geoInterface2[0]._generatedElements.size() == 3);
-		REQUIRE(geoInterface2[0]._generatedElements[0]._semanticName == "POSITION");
-		REQUIRE(geoInterface2[0]._generatedElements[1]._semanticName == "NORMAL");
-		REQUIRE(geoInterface2[0]._generatedElements[2]._semanticName == "TEXTANGENT");
+		auto rendererBinding2 = pool->GetDeformerToRendererBinding(*gpuAccelerator);
+		REQUIRE(!rendererBinding2._geoBindings.empty());
+		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements.size() == 3);
+		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[0]._semanticName == "POSITION");
+		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[1]._semanticName == "NORMAL");
+		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
 	}
 
 	class TestCPUDeformOperator : public Techniques::ICPUDeformOperator
@@ -444,39 +449,41 @@ namespace UnitTests
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
 			testInst0._suppressElements.push_back(Hash64("BADSEMANTIC"));
-			testInst0._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			testInst0._cpuDeformer = true;
 			testInst0._geoId = 0;
 			
 			std::vector<DeformOperationInstantiation> instantiations;
 			instantiations.push_back(testInst0);
 
-			unsigned preDeformStaticDataVBIterator = 0, deformTemporaryGPUVBIterator = 0;
-			unsigned deformTemporaryCPUVBIterator = 0, postDeformVBIterator = 0;
-			auto nascentDeform = Techniques::Internal::BuildNascentDeformForGeo(
-				instantiations, {}, 0, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator,
-				deformTemporaryCPUVBIterator, postDeformVBIterator);
+			Techniques::Internal::WorkingDeformer workingDeformer;
+			workingDeformer._instantiations = {&testInst0, &testInst0+1};
+
+			Techniques::Internal::DeformBufferIterators bufferIterators;
+			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
+				{&workingDeformer, &workingDeformer+1}, bufferIterators,
+				modelScaffold, "unit-test");
 
 			unsigned generatedVertexStride = 8 + 4 + 4;
 			unsigned staticDataVertexStride = 12+4;
-			REQUIRE(postDeformVBIterator == generatedVertexStride*vertexCount);
-			REQUIRE(preDeformStaticDataVBIterator == staticDataVertexStride*vertexCount);
-			REQUIRE(deformTemporaryGPUVBIterator == 0);
-			REQUIRE(deformTemporaryCPUVBIterator == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_PostDeform] == generatedVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUStaticData] == staticDataVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUStaticData] == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 
-			REQUIRE(nascentDeform._cpuOps.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements.size() == 2);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._format == Format::R32G32B32_FLOAT);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._format == Format::R8G8B8A8_UNORM);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements.size() == 3);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._format == Format::R16G16B16A16_FLOAT);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._format == Format::R8G8B8A8_UNORM);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[2]._format == Format::R32_UINT);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_PostDeform);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._vbIdx == Techniques::Internal::VB_PostDeform);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[2]._vbIdx == Techniques::Internal::VB_PostDeform);
+			REQUIRE(workingDeformer._inputBinding._geoBindings.size() == 1);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements.size() == 2);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[0]._nativeFormat == Format::R32G32B32_FLOAT);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements.size() == 3);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[0]._nativeFormat == Format::R16G16B16A16_FLOAT);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[1]._nativeFormat == Format::R8G8B8A8_UNORM);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[2]._nativeFormat == Format::R32_UINT);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
+			REQUIRE(workingDeformer._inputBinding._geoBindings[0]._outputElements[2]._inputSlot == Techniques::Internal::VB_PostDeform);
 		}
 
 		{
@@ -487,61 +494,65 @@ namespace UnitTests
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
 			testInst0._suppressElements.push_back(Hash64("TANGENT"));
-			testInst0._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			// testInst0._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			testInst0._cpuDeformer = true;
 			testInst0._geoId = 0;
 
 			Techniques::DeformOperationInstantiation testInst1;
 			testInst1._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
 			testInst1._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst1._upstreamSourceElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
-			testInst1._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			// testInst1._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			testInst1._cpuDeformer = true;
 			testInst1._geoId = 0;
 
 			Techniques::DeformOperationInstantiation testInst2;
 			testInst2._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
 			testInst2._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
 			testInst2._suppressElements.push_back(Hash64("TANGENT"));
-			testInst2._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			// testInst2._cpuOperator = std::make_shared<TestCPUDeformOperator>();
+			testInst2._cpuDeformer = true;
 			testInst2._geoId = 0;
 			
-			std::vector<DeformOperationInstantiation> instantiations;
-			instantiations.push_back(testInst0);
-			instantiations.push_back(testInst1);
-			instantiations.push_back(testInst2);
+			Techniques::Internal::WorkingDeformer deformers[3];
+			deformers[0]._instantiations = MakeIteratorRange(&testInst0, &testInst0+1);
+			deformers[1]._instantiations = MakeIteratorRange(&testInst1, &testInst1+1);
+			deformers[2]._instantiations = MakeIteratorRange(&testInst2, &testInst2+1);
 
-			unsigned preDeformStaticDataVBIterator = 0, deformTemporaryGPUVBIterator = 0;
-			unsigned deformTemporaryCPUVBIterator = 0, postDeformVBIterator = 0;
-			auto nascentDeform = Techniques::Internal::BuildNascentDeformForGeo(
-				instantiations, {}, 0, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator,
-				deformTemporaryCPUVBIterator, postDeformVBIterator);
+			Techniques::Internal::DeformBufferIterators bufferIterators;
+			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
+				MakeIteratorRange(deformers), bufferIterators,
+				modelScaffold, "unit-test");
 
 			unsigned generatedVertexStride = 4+8;				// {"GENERATED2", 0}, {"GENERATED3", 0}
 			unsigned staticDataVertexStride = 12+4;
 			unsigned temporariesVertexStride = 8+8;				// {"TEMPORARY", 0}, {"TEMPORARY", 1}
-			REQUIRE(postDeformVBIterator == generatedVertexStride*vertexCount);
-			REQUIRE(preDeformStaticDataVBIterator == staticDataVertexStride*vertexCount);
-			REQUIRE(deformTemporaryGPUVBIterator == 0);
-			REQUIRE(deformTemporaryCPUVBIterator == temporariesVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_PostDeform] == generatedVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUStaticData] == staticDataVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUStaticData] == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] ==temporariesVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 
-			REQUIRE(nascentDeform._cpuOps.size() == 3);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements.size() == 2);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[0]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements.size() == 2);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(nascentDeform._cpuOps[0]._outputElements[1]._vbIdx == Techniques::Internal::VB_PostDeform);
+			REQUIRE(deformers[0]._inputBinding._geoBindings.size() == 1);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements.size() == 2);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements.size() == 2);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(deformers[0]._inputBinding._geoBindings[0]._outputElements[1]._inputSlot == Techniques::Internal::VB_PostDeform);
 
-			REQUIRE(nascentDeform._cpuOps[1]._inputElements.size() == 2);
-			REQUIRE(nascentDeform._cpuOps[1]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUStaticData);
-			REQUIRE(nascentDeform._cpuOps[1]._inputElements[1]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(nascentDeform._cpuOps[1]._outputElements.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[1]._outputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(deformers[1]._inputBinding._geoBindings.size() == 1);
+			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements.size() == 2);
+			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUStaticData);
+			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._inputElements[1]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._outputElements.size() == 1);
+			REQUIRE(deformers[1]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
 
-			REQUIRE(nascentDeform._cpuOps[2]._inputElements.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[2]._inputElements[0]._vbIdx == Techniques::Internal::VB_CPUDeformTemporaries);
-			REQUIRE(nascentDeform._cpuOps[2]._outputElements.size() == 1);
-			REQUIRE(nascentDeform._cpuOps[2]._outputElements[0]._vbIdx == Techniques::Internal::VB_PostDeform);
+			REQUIRE(deformers[2]._inputBinding._geoBindings.size() == 1);
+			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._inputElements.size() == 1);
+			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._inputElements[0]._inputSlot == Techniques::Internal::VB_CPUDeformTemporaries);
+			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._outputElements.size() == 1);
+			REQUIRE(deformers[2]._inputBinding._geoBindings[0]._outputElements[0]._inputSlot == Techniques::Internal::VB_PostDeform);
 		}
 	}
 
@@ -569,33 +580,47 @@ namespace UnitTests
 		{
 			// Single stage deform, but using a GPU deformer
 			Techniques::DeformOperationInstantiation testInst0;
-			testInst0._generatedElements.push_back({ "GENERATED", 0, Format::R16G16B16A16_FLOAT });
 			testInst0._generatedElements.push_back({ "GENERATED2", 0, Format::R8G8B8A8_UNORM });
 			testInst0._generatedElements.push_back({ "GENERATED", 1, Format::R32_UINT });
+			testInst0._generatedElements.push_back({ "GENERATED", 0, Format::R16G16B16A16_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
-			testInst0._gpuConstructor = [](auto&& promise, auto srcVBLayout, auto deformTemporariesVBLayout, auto dstVBLayout) {
+			/*testInst0._gpuConstructor = [](auto&& promise, auto srcVBLayout, auto deformTemporariesVBLayout, auto dstVBLayout) {
 				REQUIRE(deformTemporariesVBLayout.size() == 0);
 				REQUIRE(dstVBLayout.size() == 3);
 				promise.set_value(std::make_shared<TestGPUDeformOperator>());
-			};
+			};*/
 			testInst0._geoId = 0;
 			
 			std::vector<DeformOperationInstantiation> instantiations;
 			instantiations.push_back(testInst0);
 
-			unsigned preDeformStaticDataVBIterator = 0, deformTemporaryGPUVBIterator = 0;
-			unsigned deformTemporaryCPUVBIterator = 0, postDeformVBIterator = 0;
-			auto nascentDeform = Techniques::Internal::BuildNascentDeformForGeo(
-				instantiations, GlobalInputLayouts::PNTT, 0, vertexCount,
-				preDeformStaticDataVBIterator, deformTemporaryGPUVBIterator,
-				deformTemporaryCPUVBIterator, postDeformVBIterator);
-			
+			Techniques::Internal::WorkingDeformer workingDeformer;
+			workingDeformer._instantiations = instantiations;
+
+			Techniques::Internal::DeformBufferIterators bufferIterators;
+			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
+				{&workingDeformer, &workingDeformer+1}, bufferIterators,
+				modelScaffold, "unit-test");
+
+			// The generated elements get reordered from largest to smallest element
+			REQUIRE(nascentDeform._geoBindings.size() == 1);
+			REQUIRE(nascentDeform._geoBindings[0]._generatedElements.size() == 3);
+			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[0]._semanticName == "GENERATED");
+			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[1]._semanticName == "GENERATED2");
+			REQUIRE(nascentDeform._geoBindings[0]._generatedElements[2]._semanticName == "GENERATED");
+
+			REQUIRE(nascentDeform._geoBindings[0]._suppressedElements.size() == 3);
+			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED")) != nascentDeform._geoBindings[0]._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED2")) != nascentDeform._geoBindings[0]._suppressedElements.end());
+			REQUIRE(std::find(nascentDeform._geoBindings[0]._suppressedElements.begin(), nascentDeform._geoBindings[0]._suppressedElements.end(), Hash64("GENERATED")+1) != nascentDeform._geoBindings[0]._suppressedElements.end());
+		
 			unsigned generatedVertexStride = 8+4+4;
-			REQUIRE(postDeformVBIterator == generatedVertexStride*vertexCount);
-			REQUIRE(preDeformStaticDataVBIterator == 0);
-			REQUIRE(deformTemporaryGPUVBIterator == 0);
-			REQUIRE(deformTemporaryCPUVBIterator == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_PostDeform] == generatedVertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUStaticData] == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUStaticData] == modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride*vertexCount);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_CPUDeformTemporaries] == 0);
+			REQUIRE(bufferIterators._bufferIterators[Techniques::Internal::VB_GPUDeformTemporaries] == 0);
 		}
 	}
 	
