@@ -76,26 +76,24 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		/*struct GPUOp
-		{
-			std::shared_ptr<IGPUDeformOperator> _operator;
-			std::shared_ptr<IResourceView> _staticDataView;
-		};
-		std::vector<GPUOp> _gpuDeformOps;*/
 		std::vector<std::shared_ptr<ICPUDeformOperator>> _cpuDeformOps;
 		std::vector<std::shared_ptr<IGPUDeformOperator>> _gpuDeformOps;
 		DeformerToRendererBinding _rendererGeoInterface;
 
-		std::atomic<bool> _gpuDeformOpsReady;
-		std::future<void> _gpuDeformOpsFuture;
+		// std::atomic<bool> _gpuDeformOpsReady;
+		// std::future<void> _gpuDeformOpsFuture;
 
 		std::vector<uint8_t> _deformStaticDataInput;
 		std::vector<uint8_t> _deformTemporaryBuffer;
 
+		std::shared_ptr<IResource> _gpuStaticDataBuffer, _gpuTemporariesBuffer;
+		std::shared_ptr<IResourceView> _gpuStaticDataBufferView, _gpuTemporariesBufferView;
+		BufferUploads::TransactionMarker _gpuStaticDataBufferMarker;
+
 		unsigned _outputVBSize = 0;
 		VertexBufferView _outputVBV;
 
-		::Assets::DependencyValidation _dependencyValidation;
+		// ::Assets::DependencyValidation _dependencyValidation;
 		
 		#if defined(_DEBUG)
 			DeformAcceleratorPool* _containingPool = nullptr;
@@ -115,7 +113,7 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			newAccelerator->_containingPool = this;
 		#endif
-		newAccelerator->_gpuDeformOpsReady.store(false);
+		// newAccelerator->_gpuDeformOpsReady.store(false);
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
@@ -134,19 +132,32 @@ namespace RenderCore { namespace Techniques
 			MakeIteratorRange(workingDeformers), bufferIterators,
 			modelScaffold, modelScaffoldName);
 
+		// Bind the operators to linking result
+		for (unsigned c=0; c<deformers.size(); ++c) {
+			auto op = std::move(deformers[c]._operator);
+			deformers[c]._factory->Bind(*op, workingDeformers[c]._inputBinding);
+			newAccelerator->_gpuDeformOps.push_back(std::move(op));
+		}
+
 		////////////////////////////////////////////////////////////////////////////////////
 
 		if (!bufferIterators._gpuStaticDataLoadRequests.empty()) {
-			struct Captures
-			{
-				BufferUploads::TransactionMarker _staticDataBufferMarker;
-			};
-			auto captures = std::make_shared<Captures>();
-			captures->_staticDataBufferMarker = LoadStaticResourceFullyAsync(
+			std::tie(newAccelerator->_gpuStaticDataBuffer, newAccelerator->_gpuStaticDataBufferMarker) = LoadStaticResourcePartialAsync(
+				*_device,
 				{bufferIterators._gpuStaticDataLoadRequests.begin(), bufferIterators._gpuStaticDataLoadRequests.end()}, 
 				bufferIterators._bufferIterators[Internal::VB_GPUStaticData],
 				modelScaffold, BindFlag::UnorderedAccess,
 				(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection());
+			newAccelerator->_gpuStaticDataBufferView = newAccelerator->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+		}
+
+		if (bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]) {
+			newAccelerator->_gpuTemporariesBuffer = _device->CreateResource(
+				RenderCore::CreateDesc(
+					BindFlag::UnorderedAccess, 0, GPUAccess::Read|GPUAccess::Write,
+					LinearBufferDesc::Create(bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]),
+					(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection()));
+			newAccelerator->_gpuTemporariesBufferView = newAccelerator->_gpuTemporariesBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -258,8 +269,8 @@ namespace RenderCore { namespace Techniques
 			d->ExecuteGPU(
 				threadContext,
 				instanceIdx[0],		// todo -- all instances
-				*(IResourceView*)nullptr, // *d._staticDataView,
-				*(IResourceView*)nullptr,
+				*a._gpuStaticDataBufferView,
+				*a._gpuTemporariesBufferView,
 				dstVB);
 		}
 	}
@@ -274,7 +285,7 @@ namespace RenderCore { namespace Techniques
 		unsigned maxInstanceCount = 0;
 		for (const auto&a:_accelerators) {
 			auto accelerator = a.lock();
-			if (!accelerator || !accelerator->_gpuDeformOpsReady) continue;
+			if (!accelerator /*|| !accelerator->_gpuDeformOpsReady*/) continue;
 
 			if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) continue;
 			auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
@@ -388,6 +399,23 @@ namespace RenderCore { namespace Techniques
 		}
 #endif
 
+		{
+			// we're expeting the output to be used as a vertex attribute; so we require a barrier here
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			barrier.pNext = nullptr;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+			vkCmdPipelineBarrier(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+				0,
+				1, &barrier,
+				0, nullptr,
+				0, nullptr);
+		}
+
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
 		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
 		_currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
@@ -437,8 +465,9 @@ namespace RenderCore { namespace Techniques
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		assert(accelerator._gpuDeformOpsReady);
-		return accelerator._dependencyValidation;
+		// assert(accelerator._gpuDeformOpsReady);
+		// return accelerator._dependencyValidation;
+		return {};
 	}
 
 	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
@@ -632,7 +661,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			vbStrides[VB_GPUStaticData] = animatedElementsStride;
-			vbOffsets[VB_GPUStaticData] = 0;
+			vbOffsets[VB_GPUStaticData] = bufferIterators._bufferIterators[VB_GPUStaticData];
 
 			// Configure suppressed elements
 			resultRendererBinding._suppressedElements = workingSuppressedElements;
@@ -685,7 +714,9 @@ namespace RenderCore { namespace Techniques
 								animatedElementsInput.begin(), animatedElementsInput.end(),
 								[e](const auto& wge) { return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex; });
 							assert(q!=animatedElementsInput.end());
-							binding._inputElements.push_back(*q);
+							auto ele = *q;
+							ele._inputSlot = VB_GPUStaticData;
+							binding._inputElements.push_back(ele);
 						}
 					}
 				}
@@ -770,7 +801,7 @@ namespace RenderCore { namespace Techniques
 				BuildLowLevelInputAssembly(
 					MakeIteratorRange(animatedElements, &animatedElements[geo._vbData->_ia._elements.size()]),
 					geo._vbData->_ia._elements);
-				
+			
 				bool requiresGPUStaticDataLoad = false;
 				DeformerToRendererBinding::GeoBinding rendererBinding;
 				rendererBinding._geoId = geoId;
@@ -787,7 +818,7 @@ namespace RenderCore { namespace Techniques
 
 				for (unsigned d=0; d<workingDeformers.size(); ++d)
 					if (instantiations[d])
-						workingDeformers[d]._inputBinding._geoBindings.push_back(deformerInputBindings[d]);
+						workingDeformers[d]._inputBinding._geoBindings.push_back(std::move(deformerInputBindings[d]));
 
 				if (requiresGPUStaticDataLoad) {
 					bufferIterators._gpuStaticDataLoadRequests.push_back(std::make_pair(geo._vbData->_offset, geo._vbData->_size));

@@ -468,11 +468,12 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::RawGeometry& geo,
-			const DeformerToRendererBinding::GeoBinding* deformStream)
+			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
+			unsigned deformInputSlot = ~0u)
 		{
 			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
 			if (deformStream) {
-				auto t = MakeIA(MakeIteratorRange(deformStream->_generatedElements), 1);
+				auto t = MakeIA(MakeIteratorRange(deformStream->_generatedElements), deformInputSlot);
 				result.insert(result.end(), t.begin(), t.end());
 			}
 			return result;
@@ -480,13 +481,14 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<RenderCore::InputElementDesc> BuildFinalIA(
 			const RenderCore::Assets::BoundSkinnedGeometry& geo,
-			const DeformerToRendererBinding::GeoBinding* deformStream)
+			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
+			unsigned deformInputSlot = ~0u)
 		{
 			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
 			auto t0 = MakeIA(MakeIteratorRange(geo._animatedVertexElements._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 1);
 			result.insert(result.end(), t0.begin(), t0.end());
 			if (deformStream) {
-				auto t1 = MakeIA(MakeIteratorRange(deformStream->_generatedElements), 2);
+				auto t1 = MakeIA(MakeIteratorRange(deformStream->_generatedElements), deformInputSlot);
 				result.insert(result.end(), t1.begin(), t1.end());
 			}
 			return result;
@@ -539,11 +541,11 @@ namespace RenderCore { namespace Techniques
 				if (geo < deformerBinding._geoBindings.size() && !deformerBinding._geoBindings[geo]._generatedElements.empty()) {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding._geoBindings[geo]._postDeformBufferOffset;
-					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					_geosLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo]));
+					_geosLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo], drawableGeo->_vertexStreamCount));
+					++drawableGeo->_vertexStreamCount;
 				} else {
-					_geosLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+					_geosLayout.push_back(Internal::BuildFinalIA(rg));
 				}
 				
 				drawableGeo->_ibOffset = staticIBIterator;
@@ -569,14 +571,14 @@ namespace RenderCore { namespace Techniques
 				if ((geo+simpleGeoCount) < deformerBinding._geoBindings.size() && !deformerBinding._geoBindings[geo+simpleGeoCount]._generatedElements.empty()) {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding._geoBindings[geo+simpleGeoCount]._postDeformBufferOffset;
-					++drawableGeo->_vertexStreamCount;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo]));
+					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, &deformerBinding._geoBindings[geo+simpleGeoCount], drawableGeo->_vertexStreamCount));
+					++drawableGeo->_vertexStreamCount;
 				} else {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
 					staticVBLoadRequests.push_back({rg._animatedVertexElements._offset, rg._animatedVertexElements._size});
 					staticVBIterator += rg._animatedVertexElements._size;
-					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg, nullptr));
+					_boundSkinnedControllersLayout.push_back(Internal::BuildFinalIA(rg));
 				}
 
 				drawableGeo->_ibOffset = staticIBIterator;

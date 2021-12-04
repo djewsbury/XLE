@@ -273,9 +273,10 @@ namespace UnitTests
 		return result;
 	}
 
-	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
-		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper._device);
+		Techniques::SkinDeformerPipelineCollection pipelineCollection;
+		pipelineCollection._pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper._device);
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IGPUDeformOperator>> promise;
@@ -306,7 +307,13 @@ namespace UnitTests
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
 
+		// hack -- stall to ensure vertex buffers are initialized
 		auto threadContext = testHelper._device->GetImmediateContext();
+		for (unsigned c=0; c<32; ++c) {
+			bufferUploads.Update(*threadContext);
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+		}
+		
 		testHelper.BeginFrameCapture();
 		deformer.ExecuteGPU(*threadContext, 0, *inputView, *inputView, *outputView);
 		testHelper.EndFrameCapture();
@@ -370,7 +377,7 @@ namespace UnitTests
 
 		auto modelScaffold = MakeTestAnimatedModel();
 
-		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, modelScaffold);
+		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, *techniqueTestHelper._bufferUploads, modelScaffold);
 		auto cpuPositions = DeformPositionsOnCPU(modelScaffold);
 
 		// Find the positions within the raw GPU output and convert to float3s

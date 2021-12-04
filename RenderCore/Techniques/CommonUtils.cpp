@@ -98,20 +98,19 @@ namespace RenderCore { namespace Techniques
 				std::promise<void> promise;
 				assert(subResources.size() == 1);
 				assert(subResources[0]._id == RenderCore::SubResourceId{});
-				unsigned iterator = 0;
 
 				{
 					auto file = _modelScaffold->OpenLargeBlocks();
 					auto initialOffset = file->TellP();
-					std::sort(_localRequests.begin(), _localRequests.end(), [](auto lhs, auto rhs) { return lhs.first < rhs.first; });
-					for (auto i=_localRequests.begin(); i!=_localRequests.end();) {
+					std::sort(_loadRequests.begin(), _loadRequests.end(), [](auto lhs, auto rhs) { return lhs._srcOffset < rhs._srcOffset; });
+					for (auto i=_loadRequests.begin(); i!=_loadRequests.end();) {
 						auto start = i; ++i;
-						while (i != _localRequests.end() && i->first == ((i-1)->first + (i-1)->second)) ++i;		// combine adjacent loads
+						while (i != _loadRequests.end() && i->_srcOffset == ((i-1)->_srcOffset + (i-1)->_size) && i->_dstOffset == ((i-1)->_dstOffset + (i-1)->_size)) ++i;		// combine adjacent loads
 						
-						auto endPoint = (i-1)->first + (i-1)->second;
-						file->Seek(start->first + initialOffset);
-						file->Read(PtrAdd(subResources[0]._destination.begin(), iterator), endPoint-start->first, 1);
-						iterator += endPoint-start->first;
+						auto finalSize = ((i-1)->_srcOffset + (i-1)->_size) - start->_srcOffset;
+						assert((start->_dstOffset + finalSize) <= subResources[0]._destination.size());
+						file->Seek(start->_srcOffset + initialOffset);
+						file->Read(PtrAdd(subResources[0]._destination.begin(), start->_dstOffset), finalSize);
 					}
 				}
 				
@@ -125,8 +124,21 @@ namespace RenderCore { namespace Techniques
 
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 			ResourceDesc _resourceDesc;
-			std::vector<std::pair<unsigned, unsigned>> _localRequests;
+			struct LoadRequests { unsigned _dstOffset, _srcOffset, _size; };
+			std::vector<LoadRequests> _loadRequests;
 		};
+
+		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(IteratorRange<std::pair<unsigned, unsigned>*> loadRequests)
+		{
+			std::vector<ModelScaffoldDataSource::LoadRequests> result;
+			result.reserve(loadRequests.size());
+			unsigned iterator = 0;
+			for (auto a:loadRequests) {
+				result.push_back({iterator, a.first, a.second});
+				iterator += a.second;
+			}
+			return result;
+		}
 	}
 
 	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
@@ -142,7 +154,7 @@ namespace RenderCore { namespace Techniques
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
-		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
+		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
 
 		return Services::GetBufferUploads().Transaction_Begin(dataSource, bindFlags);
 	}
@@ -161,7 +173,7 @@ namespace RenderCore { namespace Techniques
 			bindFlags | BindFlag::TransferDst, 0, GPUAccess::Read,
 			LinearBufferDesc::Create(resourceSize),
 			resourceName);
-		dataSource->_localRequests = {loadRequests.begin(), loadRequests.end()};
+		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
 
 		auto resource = device.CreateResource(dataSource->_resourceDesc);
 		auto marker = Services::GetBufferUploads().Transaction_Begin(resource, dataSource, bindFlags);

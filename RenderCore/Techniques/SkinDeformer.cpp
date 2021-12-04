@@ -303,10 +303,13 @@ namespace RenderCore { namespace Techniques
 		IComputeShaderOperator* currentOperator = nullptr;
 		unsigned currentGeoId = ~0u;
 
+		static const auto InvocationParamsHash = Hash64("InvocationParams");
+
 		const unsigned wavegroupWidth = 64;
 		for (const auto&section:_sections) {
 			if (section._geoId != currentGeoId) {
-				currentOperator->EndDispatches();
+				auto op = section._pipelineMarker->TryActualize();
+				if (!op) continue;
 
 				// note -- we could make some of the iaParams values push constants to avoid re-uploading _jointMatrices here
 				const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB };
@@ -317,9 +320,13 @@ namespace RenderCore { namespace Techniques
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(rvs);
 				us._immediateData = MakeIteratorRange(immDatas);
-
-				section._operator->BeginDispatches(threadContext, us, {}, Hash64("InvocationParams"));
-				currentOperator = section._operator.get();
+				
+				if (op->get() != currentOperator) {
+					if (currentOperator)
+						currentOperator->EndDispatches();
+					(*op)->BeginDispatches(threadContext, us, {}, InvocationParamsHash);
+					currentOperator = op->get();
+				}
 				currentGeoId = section._geoId;
 			}
 
@@ -487,7 +494,6 @@ namespace RenderCore { namespace Techniques
 			auto& skinnedController = immData._boundSkinnedControllers[c];
 
 			auto& skelVb = skinnedController._skeletonBinding;
-			auto& postAnimIA = skinnedController._vb._ia;
 
 			unsigned influencesPerVertex = 0;
 			unsigned skelVBStride = skelVb._ia._vertexStride;
@@ -536,14 +542,15 @@ namespace RenderCore { namespace Techniques
 			_sections.reserve(skinnedController._preskinningSections.size());
 			for (const auto&sourceSection:skinnedController._preskinningSections) {
 				Section section;
+				section._geoId = c+immData._geoCount;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
 				section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
 				section._rangeInJointMatrices = { jointMatrixBufferCount, jointMatrixBufferCount + (unsigned)sourceSection._jointMatrixCount };
 
 				section._iaParams = {0};
-				section._iaParams._weightsOffset = weightsOffset;
-				section._iaParams._jointIndicesOffset = indicesOffset;
+				section._iaParams._weightsOffset = weightsOffset + skelVBIterator;
+				section._iaParams._jointIndicesOffset = indicesOffset + skelVBIterator;
 				section._iaParams._staticVertexAttachmentsStride = skelVBStride;
 				section._indicesFormat = indicesFormat;
 				section._weightsFormat = weightsFormat;
@@ -552,11 +559,11 @@ namespace RenderCore { namespace Techniques
 				_sections.push_back(section);
 				jointMatrixBufferCount += sourceSection._jointMatrixCount;
 			}
-			_jointMatrices.resize(jointMatrixBufferCount, Identity<Float3x4>());
 
 			staticDataLoadRequests.push_back({ skelVb._offset, skelVb._size });
 			skelVBIterator += skelVb._size;
 		}
+		_jointMatrices.resize(jointMatrixBufferCount, Identity<Float3x4>());
 		
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
 			device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
@@ -567,57 +574,60 @@ namespace RenderCore { namespace Techniques
 		_jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
 	}
 
-	void GPUSkinDeformer::Bind(const std::shared_ptr<PipelineCollection>& pipelineCollection, const DeformerInputBinding& bindings)
+	void GPUSkinDeformer::Bind(SkinDeformerPipelineCollection& pipelineCollection, const DeformerInputBinding& bindings)
 	{
 		auto& immData = _modelScaffold->ImmutableData();
 
-		for (auto&section:_sections) {
-			auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [geoId=section._geoId](const auto& c) { return c._geoId == geoId; });
-			if (binding == bindings._geoBindings.end())
-				Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(section._geoId) + ")"));
+		for (auto s=_sections.begin(); s!=_sections.end(); ){
+			auto start = s;
+			++s;
+			while (s!=_sections.end() && s->_geoId == start->_geoId) ++s;
 
+			auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [geoId=start->_geoId](const auto& c) { return c._geoId == geoId; });
+			if (binding == bindings._geoBindings.end())
+				Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(start->_geoId) + ")"));
+
+			unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
+			unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;
 			ParameterBox selectors;
 			for (const auto&ele:binding->_inputElements) {
 				assert(ele._inputSlot == Internal::VB_GPUStaticData);
 				auto semanticHash = Hash64(ele._semanticName);
 				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
-					selectors.SetParameter("POSITION_FORMAT", (unsigned)ele._nativeFormat);
-					section._iaParams._positionsOffset = ele._alignedByteOffset;
+					selectors.SetParameter("IN_POSITION_FORMAT", (unsigned)ele._nativeFormat);
+					inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
 				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
-					selectors.SetParameter("NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-					section._iaParams._normalsOffset = ele._alignedByteOffset;
+					selectors.SetParameter("IN_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
+					inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
 				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
-					selectors.SetParameter("TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-					section._iaParams._tangentsOffset = ele._alignedByteOffset;
+					selectors.SetParameter("IN_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
+					inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+				} else {
+					assert(0);
 				}
 			}
-			section._iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
 
-			#if defined(_DEBUG)
-				// output layout must match the input layout; both for offsets and formats
-				// we could allow differences by expanding selector interface to the shader
-				for (const auto&ele:binding->_outputElements) {
-					assert(ele._inputSlot == Internal::VB_PostDeform);
-					auto semanticHash = Hash64(ele._semanticName);
-					if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
-						assert(selectors.GetParameter<unsigned>("POSITION_FORMAT").value() == (unsigned)ele._nativeFormat);
-						assert(section._iaParams._positionsOffset == ele._alignedByteOffset);
-					} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
-						assert(selectors.GetParameter<unsigned>("NORMAL_FORMAT").value() == (unsigned)ele._nativeFormat);
-						assert(section._iaParams._normalsOffset == ele._alignedByteOffset);
-					} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
-						assert(selectors.GetParameter<unsigned>("TEXTANGENT_FORMAT").value() == (unsigned)ele._nativeFormat);
-						assert(section._iaParams._tangentsOffset == ele._alignedByteOffset);
-					}
+			for (const auto&ele:binding->_outputElements) {
+				assert(ele._inputSlot == Internal::VB_PostDeform);
+				auto semanticHash = Hash64(ele._semanticName);
+				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
+					selectors.SetParameter("OUT_POSITION_FORMAT", (unsigned)ele._nativeFormat);
+					outPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
+					selectors.SetParameter("OUT_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
+					outNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
+					selectors.SetParameter("OUT_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
+					outTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+				} else {
+					assert(0);
 				}
-			#endif
-			section._iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
+			}
 
-			selectors.SetParameter("INFLUENCE_COUNT", section._influencesPerVertex);
-			selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(section._indicesFormat));
-			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(section._indicesFormat));
-			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(section._weightsFormat));
-			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(section._weightsFormat));
+			selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(start->_indicesFormat));
+			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
+			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
+			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
 
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Hash64("IAParams"));
@@ -626,9 +636,21 @@ namespace RenderCore { namespace Techniques
 			usi.BindResourceView(1, Hash64("InputAttributes"));
 			usi.BindResourceView(2, Hash64("OutputAttributes"));
 			
-			auto operatorMarker = CreateComputeOperator(pipelineCollection, SKIN_COMPUTE_HLSL ":main", selectors, usi);
-			operatorMarker->StallWhilePending();
-			section._operator = operatorMarker->Actualize();			
+			auto pipelineMarker = pipelineCollection.GetPipelineMarker(selectors, usi);
+
+			for (auto q=start; q!=s; ++q) {
+				q->_iaParams._inPositionsOffset = inPositionsOffset;
+				q->_iaParams._inNormalsOffset = inNormalsOffset;
+				q->_iaParams._inTangentsOffset = inTangentsOffset;
+				q->_iaParams._outPositionsOffset = outPositionsOffset;
+				q->_iaParams._outNormalsOffset = outNormalsOffset;
+				q->_iaParams._outTangentsOffset = outTangentsOffset;
+				q->_iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
+				q->_iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
+				assert(q->_indicesFormat == start->_indicesFormat);
+				assert(q->_weightsFormat == start->_weightsFormat);
+				q->_pipelineMarker = pipelineMarker;
+			}
 		}
 	}
 
@@ -646,6 +668,26 @@ namespace RenderCore { namespace Techniques
 	GPUSkinDeformer::~GPUSkinDeformer()
 	{
 	}
+
+	uint64_t SkinDeformerPipelineCollection::GetPipeline(const ParameterBox& selectors, const UniformsStreamInterface& usi)
+	{
+		// note -- no selector filtering done here
+		uint64_t hash = HashCombine(selectors.GetHash(), selectors.GetParameterNamesHash());
+		hash = HashCombine(usi.GetHash(), hash);
+
+		auto i = LowerBound(_pipelines, hash);
+		if (i==_pipelines.end() || i->first != hash) {
+			auto operatorMarker = CreateComputeOperator(_pipelineCollection, SKIN_COMPUTE_HLSL ":main", selectors, usi);
+			_pipelines.insert(i, std::make_pair(hash, operatorMarker));
+		}
+		return hash;
+	}
+	auto SkinDeformerPipelineCollection::GetPipelineMarker(const ParameterBox& selectors, const UniformsStreamInterface& usi) -> PipelineMarkerPtr
+	{
+		return CreateComputeOperator(_pipelineCollection, SKIN_COMPUTE_HLSL ":main", selectors, usi);
+	}
+	SkinDeformerPipelineCollection::SkinDeformerPipelineCollection() {}
+	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
 
 	class GPUSkinDeformerFactory : public IDeformOperationFactory
 	{
@@ -670,6 +712,7 @@ namespace RenderCore { namespace Techniques
 					Throw(std::runtime_error("Missing animated position in GPU skinning input"));
 
 				DeformOperationInstantiation inst;
+				inst._upstreamSourceElements.push_back({"POSITION", 0});
 				inst._generatedElements.push_back({positionEleName, 0, positionElement->_nativeFormat});
 				if (normalsElement) {
 					inst._upstreamSourceElements.push_back({"NORMAL", 0});
@@ -690,11 +733,12 @@ namespace RenderCore { namespace Techniques
 			IGPUDeformOperator& op,
 			const DeformerInputBinding& binding) override
 		{
-			assert(0);
+			auto* deformer = checked_cast<GPUSkinDeformer*>(&op);
+			deformer->Bind(_pipelineCollection, binding);
 		}
 
 		std::shared_ptr<IDevice> _device;
-		std::shared_ptr<PipelineCollection> _pipelineCollection;
+		SkinDeformerPipelineCollection _pipelineCollection;
 	};
 
 	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
@@ -703,7 +747,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto result = std::make_shared<GPUSkinDeformerFactory>();
 		result->_device = device;
-		result->_pipelineCollection = pipelineCollection;
+		result->_pipelineCollection._pipelineCollection = pipelineCollection;
 		return result;
 	}
 

@@ -13,7 +13,8 @@
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 
-namespace RenderCore { class IDevice; class IResource; }
+namespace RenderCore { class IDevice; class IResource; class UniformsStreamInterface; }
+namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -75,6 +76,19 @@ namespace RenderCore { namespace Techniques
     class PipelineCollection;
     class IComputeShaderOperator;
 
+	struct SkinDeformerPipelineCollection
+	{
+		using PipelineMarkerPtr = ::Assets::PtrToMarkerPtr<IComputeShaderOperator>;
+		uint64_t GetPipeline(const ParameterBox& selectors, const UniformsStreamInterface& usi);
+		PipelineMarkerPtr GetPipelineMarker(const ParameterBox& selectors, const UniformsStreamInterface& usi);
+		
+		std::vector<std::pair<uint64_t, PipelineMarkerPtr>> _pipelines;
+		std::shared_ptr<PipelineCollection> _pipelineCollection;
+
+		SkinDeformerPipelineCollection();
+		~SkinDeformerPipelineCollection();
+	};
+
 	class GPUSkinDeformer : public IGPUDeformOperator, public ISkinDeformer
 	{
 	public:
@@ -96,7 +110,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 
 		void Bind(
-			const std::shared_ptr<PipelineCollection>& pipelineCollection,
+			SkinDeformerPipelineCollection& pipelineCollection,
 			const DeformerInputBinding& binding);
 		
 		GPUSkinDeformer(
@@ -114,12 +128,14 @@ namespace RenderCore { namespace Techniques
 		struct IAParams
 		{
 			unsigned _inputStride, _outputStride;
-			unsigned _positionsOffset, _normalsOffset, _tangentsOffset;
+			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
+			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
 			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
 		};
 
 		struct Section
 		{
+			SkinDeformerPipelineCollection::PipelineMarkerPtr _pipelineMarker;
 			unsigned _geoId = ~0u;
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
@@ -129,7 +145,6 @@ namespace RenderCore { namespace Techniques
 			unsigned _influencesPerVertex = 0;
 			Format _indicesFormat = Format(0), _weightsFormat = Format(0);
 			IAParams _iaParams;
-			std::shared_ptr<IComputeShaderOperator> _operator;
 		};
 		std::vector<Section> _sections;
 

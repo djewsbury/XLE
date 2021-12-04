@@ -1,6 +1,10 @@
 
-#if !POSITION_FORMAT
-	#define POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
+#if !IN_POSITION_FORMAT
+	#define IN_POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
+#endif
+
+#if !OUT_POSITION_FORMAT
+	#define OUT_POSITION_FORMAT 6
 #endif
 
 #if JOINT_INDICES_TYPE != 2 || JOINT_INDICES_PRECISION != 8
@@ -20,9 +24,13 @@ cbuffer IAParams
 	uint InputStride;
 	uint OutputStride;
 
-	uint PositionsOffset;
-	uint NormalsOffset;
-	uint TangentsOffset;
+	uint InPositionsOffset;
+	uint InNormalsOffset;
+	uint InTangentsOffset;
+
+	uint OutPositionsOffset;
+	uint OutNormalsOffset;
+	uint OutTangentsOffset;
 
 	uint WeightsOffset;
 	uint JointIndicesOffsets;
@@ -125,15 +133,15 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 		return;
 	vertexIdx += InvocationParams.FirstVertex;
 
-	float3 inputPosition = LoadAsFloat3(InputAttributes, POSITION_FORMAT, vertexIdx * InputStride + PositionsOffset);
+	float3 inputPosition = LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * InputStride + InPositionsOffset);
 
-	#if NORMAL_FORMAT
-		float3 inputNormal = LoadAsFloat3(InputAttributes, NORMAL_FORMAT, vertexIdx * InputStride + NormalsOffset);
+	#if IN_NORMAL_FORMAT
+		float3 inputNormal = LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * InputStride + InNormalsOffset);
 	#else
 		float3 inputNormal = 0;
 	#endif
-	#if TEXTANGENT_FORMAT
-		float4 inputTangent = LoadAsFloat4(InputAttributes, TEXTANGENT_FORMAT, vertexIdx * InputStride + TangentsOffset);
+	#if IN_TEXTANGENT_FORMAT
+		float4 inputTangent = LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * InputStride + InTangentsOffset);
 	#else
 		float4 inputTangent = 0;
 	#endif
@@ -218,11 +226,11 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 		outputTangent = inputTangent.xyz;
 	}
 
-	StoreFloat3(outputPosition, OutputAttributes, POSITION_FORMAT, vertexIdx * OutputStride + PositionsOffset);
-	#if NORMAL_FORMAT
-		StoreFloat3(outputNormal, OutputAttributes, NORMAL_FORMAT, vertexIdx * OutputStride + NormalsOffset);
+	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, vertexIdx * OutputStride + OutPositionsOffset);
+	#if OUT_NORMAL_FORMAT
+		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, vertexIdx * OutputStride + OutNormalsOffset);
 	#endif
-	#if TEXTANGENT_FORMAT
-		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, TEXTANGENT_FORMAT, vertexIdx * OutputStride + TangentsOffset);
+	#if OUT_TEXTANGENT_FORMAT
+		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, vertexIdx * OutputStride + OutTangentsOffset);
 	#endif
 }
