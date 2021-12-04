@@ -699,7 +699,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		if (_capturedStates) {
 			if (_capturedStates->_currentPipeline != &pipeline) {
-				assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+				assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 				vkCmdBindPipeline(
 					_sharedState->_commandList.GetUnderlying().get(),
 					VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -708,7 +708,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				_capturedStates->_currentPipeline = &pipeline;
 			}
 		} else {
-			assert(&pipeline._shader.GetPipelineLayout() == _pipelineLayout.get());
+			assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
 			vkCmdBindPipeline(
 				_sharedState->_commandList.GetUnderlying().get(),
 				VK_PIPELINE_BIND_POINT_COMPUTE,

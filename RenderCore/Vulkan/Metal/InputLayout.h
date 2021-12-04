@@ -78,6 +78,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	class GraphicsPipeline;
 	class ComputePipeline;
 	class CompiledDescriptorSetLayout;
+	class CompiledPipelineLayout;
 
 	class BoundUniforms
 	{
@@ -125,7 +126,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			const UniformsStreamInterface& group2 = {},
 			const UniformsStreamInterface& group3 = {});
 		BoundUniforms(
-			ICompiledPipelineLayout& pipelineLayout,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			const UniformsStreamInterface& group0,
 			const UniformsStreamInterface& group1 = {},
 			const UniformsStreamInterface& group2 = {},
@@ -188,6 +189,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		GroupRules _group[4];
 		PipelineType _pipelineType;
+		std::shared_ptr<CompiledPipelineLayout> _pipelineLayout;
 
 		class SharedDescSetBuilder;
 		mutable std::vector<SharedDescSetBuilder> _sharedDescSetBuilders;

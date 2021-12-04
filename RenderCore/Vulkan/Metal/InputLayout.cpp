@@ -899,15 +899,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStreamInterface& group3)
 	{
 		_pipelineType = PipelineType::Graphics;
+		_pipelineLayout = shader.GetPipelineLayout();
 
 		const UniformsStreamInterface* groups[] = { &group0, &group1, &group2, &group3 };
 
 		// We need to map on the input descriptor set bindings to the slots understood
 		// by the shader's pipeline layout
-		auto* pipelineLayout = shader.GetPipelineLayout().get();
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
-		helper.InitializeForPipelineLayout(*pipelineLayout);
+		helper.InitializeForPipelineLayout(*_pipelineLayout);
 
 		for (unsigned stage=0; stage<ShaderProgram::s_maxShaderStages; ++stage) {
 			const auto& compiledCode = shader.GetCompiledCode((ShaderStage)stage);
@@ -923,7 +923,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
 				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
 					i._groupMask |= 1 << g;
 			}
@@ -949,16 +949,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStreamInterface& group3)
 	{
 		_pipelineType = PipelineType::Compute;
+		_pipelineLayout = pipeline._shader.GetPipelineLayout();
 
 		const UniformsStreamInterface* groups[] = { &group0, &group1, &group2, &group3 };
 
 		// We need to map on the input descriptor set bindings to the slots understood
 		// by the shader's pipeline layout
 		auto& shader = pipeline._shader;
-		auto* pipelineLayout = &shader.GetPipelineLayout();
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
-		helper.InitializeForPipelineLayout(*pipelineLayout);
+		helper.InitializeForPipelineLayout(*_pipelineLayout);
 		
 		const auto& compiledCode = shader.GetCompiledCode();
 		if (compiledCode.GetByteCode().size())
@@ -970,7 +970,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
 				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
 					i._groupMask |= 1 << g;
 			}
@@ -997,24 +997,24 @@ namespace RenderCore { namespace Metal_Vulkan
 	: BoundUniforms(pipeline._shader, group0, group1, group2, group3) {}
 
 	BoundUniforms::BoundUniforms(
-		ICompiledPipelineLayout& pipelineLayout,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		const UniformsStreamInterface& group0,
 		const UniformsStreamInterface& group1,
 		const UniformsStreamInterface& group2,
 		const UniformsStreamInterface& group3)
 	{
 		_pipelineType = PipelineType::Graphics;
-		auto pipelineLayoutInitializer = pipelineLayout.GetInitializer();
+		_pipelineLayout = checked_pointer_cast<CompiledPipelineLayout>(pipelineLayout);
+		
 		const UniformsStreamInterface* groups[] = { &group0, &group1, &group2, &group3 };
 
 		// We need to map on the input descriptor set bindings to the slots understood
 		// by the shader's pipeline layout
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
-		auto& metalPipelineLayout = *checked_cast<CompiledPipelineLayout*>(&pipelineLayout);
-		helper.InitializeForPipelineLayout(metalPipelineLayout);
+		helper.InitializeForPipelineLayout(*_pipelineLayout);
 		auto shaderStageMask = Internal::AsVkShaderStageFlags(ShaderStage::Vertex)|Internal::AsVkShaderStageFlags(ShaderStage::Pixel);
-		helper.BindPipelineLayout(pipelineLayoutInitializer, shaderStageMask);
+		helper.BindPipelineLayout(_pipelineLayout->GetInitializer(), shaderStageMask);
 		helper.FinalizeRules();
 
 		if (helper._sharedDescSetWriterCount) {
@@ -1022,7 +1022,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(helper._pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
+				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
 				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
 					i._groupMask |= 1 << g;
 			}
@@ -1198,6 +1198,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStream& stream,
 		unsigned groupIdx) const
 	{
+		assert(encoder.GetPipelineLayout().get() == _pipelineLayout.get());
 		assert(groupIdx < dimof(_group));
 		for (const auto& adaptiveSet:_group[groupIdx]._adaptiveSetRules) {
 

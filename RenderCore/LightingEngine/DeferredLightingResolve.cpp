@@ -319,7 +319,7 @@ namespace RenderCore { namespace LightingEngine
 				usi.BindResourceView(SR::GBuffer_Parameters, Utility::Hash64("GBuffer_Parameters"));
 				usi.BindResourceView(SR::DepthTexture, Utility::Hash64("DepthTexture"));
 				finalResult->_boundUniforms = Metal::BoundUniforms {
-					*finalResult->_pipelineLayout,
+					finalResult->_pipelineLayout,
 					usi, sharedUsi};
 
 				finalResult->_stencilingGeometry = LightStencilingGeometry(*device);

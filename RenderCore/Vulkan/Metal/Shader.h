@@ -114,7 +114,7 @@ namespace RenderCore { namespace Metal_Vulkan
     public:
 		const VulkanSharedPtr<VkShaderModule>&	GetModule() const { return _module; }
 		const CompiledShaderByteCode& GetCompiledCode() const { return _compiledCode; }
-		const CompiledPipelineLayout& GetPipelineLayout() const { return *_pipelineLayout; }
+		const std::shared_ptr<CompiledPipelineLayout>&	GetPipelineLayout() const { return _pipelineLayout; }
 
         ComputeShader(
 			ObjectFactory& factory,
