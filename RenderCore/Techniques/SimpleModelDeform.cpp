@@ -85,7 +85,7 @@ namespace RenderCore { namespace Techniques
 		return Services::GetDeformOperationFactorySet();
 	}
 
-	void IDeformOperator::ExecuteGPU(
+	void IDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
 		unsigned instanceIdx,
 		const IResourceView& srcVB,
@@ -95,7 +95,7 @@ namespace RenderCore { namespace Techniques
 		assert(0);
 	}
 
-	void IDeformOperator::ExecuteCPU(
+	void IDeformer::ExecuteCPU(
 		unsigned instanceIdx,
 		IteratorRange<const void*> srcVB,
 		IteratorRange<const void*> deformTemporariesVB,
@@ -104,6 +104,6 @@ namespace RenderCore { namespace Techniques
 		assert(0);
 	}
 
-	IDeformOperator::~IDeformOperator() {}
+	IDeformer::~IDeformer() {}
 	IDeformOperationFactory::~IDeformOperationFactory() {}
 }}

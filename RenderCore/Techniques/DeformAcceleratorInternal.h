@@ -88,6 +88,7 @@ namespace RenderCore { namespace Techniques
 		DeformerToRendererBinding CreateDeformBindings(
 			IteratorRange<WorkingDeformer*> workingDeformers,
 			DeformBufferIterators& bufferIterators,
+			bool isCPUDeformer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName);
 

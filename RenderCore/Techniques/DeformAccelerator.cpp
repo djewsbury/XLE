@@ -45,10 +45,10 @@ namespace RenderCore { namespace Techniques
 
 		const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const override;
 
-		std::vector<std::shared_ptr<IDeformOperator>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
+		std::vector<std::shared_ptr<IDeformer>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
-		void SetVertexInputBarrrier(IThreadContext&) const override;
+		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
 
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const override;
@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
 		mutable bool _pendingVertexInputBarrier = false;
 
-		void ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx, IteratorRange<void*> outputPartRange);
+		void ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange);
 		void ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB);
 	};
 
@@ -76,7 +76,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		std::vector<std::shared_ptr<IDeformOperator>> _deformOps;
+		std::vector<std::shared_ptr<IDeformer>> _deformOps;
 		DeformerToRendererBinding _rendererGeoInterface;
 
 		std::vector<uint8_t> _deformStaticDataInput;
@@ -116,14 +116,19 @@ namespace RenderCore { namespace Techniques
 		std::vector<Internal::WorkingDeformer> workingDeformers;
 		workingDeformers.reserve(deformers.size());
 
-		for (auto& d:deformers) {
-			Internal::WorkingDeformer workingDeformer;
-			workingDeformer._instantiations = MakeIteratorRange(d._instantiations);
-			workingDeformers.push_back(std::move(workingDeformer));
-		};
+		if (!deformers.empty()) {
+			newAccelerator->_isCPUDeformer = deformers[0]._factory->IsCPUDeformer();
+			for (auto& d:deformers) {
+				Internal::WorkingDeformer workingDeformer;
+				workingDeformer._instantiations = MakeIteratorRange(d._instantiations);
+				workingDeformers.push_back(std::move(workingDeformer));
+				if (d._factory->IsCPUDeformer() != newAccelerator->_isCPUDeformer)
+					Throw(std::runtime_error("Attempting to mix CPU and GPU deformers. This isn't supported; deformations must be all CPU or all GPU"));
+			};
+		}
 
 		newAccelerator->_rendererGeoInterface = Internal::CreateDeformBindings(
-			MakeIteratorRange(workingDeformers), bufferIterators,
+			MakeIteratorRange(workingDeformers), bufferIterators, newAccelerator->_isCPUDeformer,
 			modelScaffold, modelScaffoldName);
 
 		// Bind the operators to linking result
@@ -182,12 +187,12 @@ namespace RenderCore { namespace Techniques
 		return accelerator._rendererGeoInterface;
 	}
 
-	std::vector<std::shared_ptr<IDeformOperator>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
+	std::vector<std::shared_ptr<IDeformer>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		std::vector<std::shared_ptr<IDeformOperator>> result;
+		std::vector<std::shared_ptr<IDeformer>> result;
 		for (const auto&i:accelerator._deformOps)
 			if (i->QueryInterface(typeId))
 				result.push_back(i);
@@ -208,16 +213,12 @@ namespace RenderCore { namespace Techniques
 		accelerator._maxEnabledInstance = std::min(accelerator._maxEnabledInstance, instanceIdx);
 	}
 
-	void DeformAcceleratorPool::ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx, IteratorRange<void*> outputPartRange)
+	void DeformAcceleratorPool::ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange)
 	{
-		assert(instanceIdx!=~0u);
-		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-
 		auto staticDataPartRange = MakeIteratorRange(a._deformStaticDataInput);
 		auto temporaryDeformRange = MakeIteratorRange(a._deformTemporaryBuffer);
-
 		for (const auto&d:a._deformOps)
-			d->ExecuteCPU(instanceIdx, staticDataPartRange, temporaryDeformRange, outputPartRange);
+			d->ExecuteCPU(instanceIdx[0], staticDataPartRange, temporaryDeformRange, outputPartRange);
 	}
 
 	void DeformAcceleratorPool::ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB)
@@ -255,10 +256,8 @@ namespace RenderCore { namespace Techniques
 				instanceCount += popcount(accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f]);
 			
 			if (instanceCount) {
-				if (accelerator->_isCPUDeformer) {
-					totalCPUAllocationSize += accelerator->_outputVBSize * instanceCount;
-				} else
-					totalGPUAllocationSize += accelerator->_outputVBSize * instanceCount;
+				totalCPUAllocationSize += accelerator->_isCPUDeformer ? (accelerator->_outputVBSize * instanceCount) : 0;
+				totalGPUAllocationSize += accelerator->_isCPUDeformer ? 0 : (accelerator->_outputVBSize * instanceCount);
 				accelerators[activeAcceleratorCount++] = std::move(accelerator);
 				maxInstanceCount = std::max(maxInstanceCount, instanceCount);
 			} else {
@@ -282,14 +281,14 @@ namespace RenderCore { namespace Techniques
 			auto dst = map.GetData();
 			unsigned movingOffset = 0;
 
+			unsigned instanceList[maxInstanceCount];
+
 			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
 				auto accelerator = accelerators[c];
 				if (!accelerator) continue;
 
 				accelerator->_outputVBV = vbv;
 				accelerator->_outputVBV._offset += movingOffset;
-
-				auto instanceData = MakeIteratorRange(PtrAdd(dst.begin(), movingOffset), PtrAdd(dst.begin(), movingOffset+accelerator->_outputVBSize));
 
 				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
 					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
@@ -301,17 +300,14 @@ namespace RenderCore { namespace Techniques
 					while (active) {
 						auto bit = xl_ctz8(active);
 						active ^= 1ull<<uint64_t(bit);
-
-						assert(instanceData.end() <= dst.end());
-						auto instance = f*64+bit;
-						ExecuteCPUInstance(threadContext, *accelerator, instance, instanceData);
-						instanceData.first = PtrAdd(instanceData.first, accelerator->_outputVBSize);
-						instanceData.second = PtrAdd(instanceData.second, accelerator->_outputVBSize);
-						++instanceCount;
+						instanceList[instanceCount++] = f*64+bit;
 					}
 					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
 					accelerator->_enabledInstances[f] = 0;
 				}
+
+				auto instanceData = MakeIteratorRange(PtrAdd(dst.begin(), movingOffset), PtrAdd(dst.begin(), movingOffset+instanceCount*accelerator->_outputVBSize));
+				ExecuteCPUInstance(threadContext, *accelerator, MakeIteratorRange(instanceList, &instanceList[instanceCount]), instanceData);
 
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
@@ -319,7 +315,9 @@ namespace RenderCore { namespace Techniques
 			}
 
 			assert(movingOffset == totalCPUAllocationSize);
-		} else {
+		} 
+		
+		if (totalGPUAllocationSize) {
 			auto bufferAndRange = attachedStorage.AllocateRange(totalGPUAllocationSize, BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
 			auto vbv = bufferAndRange.AsVertexBufferView();
 			assert(vbv._resource);
@@ -345,9 +343,7 @@ namespace RenderCore { namespace Techniques
 					while (active) {
 						auto bit = xl_ctz8(active);
 						active ^= 1ull<<uint64_t(bit);
-
-						instanceList[instanceCount] = f*64+bit;
-						++instanceCount;
+						instanceList[instanceCount++] = f*64+bit;
 					}
 					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
 					accelerator->_enabledInstances[f] = 0;
@@ -359,7 +355,7 @@ namespace RenderCore { namespace Techniques
 					MakeIteratorRange(instanceList, &instanceList[instanceCount]),
 					*view);
 
-				atLeastOneGPUOperator = false;
+				atLeastOneGPUOperator = true;
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
 				movingOffset += instanceCount * accelerator->_outputVBSize;
@@ -373,7 +369,7 @@ namespace RenderCore { namespace Techniques
 		_currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
 	}
 
-	void DeformAcceleratorPool::SetVertexInputBarrrier(IThreadContext& threadContext) const
+	void DeformAcceleratorPool::SetVertexInputBarrier(IThreadContext& threadContext) const
 	{
 		if (_pendingVertexInputBarrier) {
 			// we're expeting the output to be used as a vertex attribute; so we require a barrier here
@@ -462,6 +458,7 @@ namespace RenderCore { namespace Techniques
 			/* in */ IteratorRange<const InputElementDesc*> animatedElementsInput,
 			/* in */ unsigned vertexCount,
 			/* in */ unsigned animatedElementsStride,
+			/* in */ bool isCPUDeformer,
 			/* in */ IteratorRange<const DeformOperationInstantiation**> instantiations,
 			/* out */ IteratorRange<DeformerInputBinding::GeoBinding*> resultDeformerBindings,
 			/* out */ DeformerToRendererBinding::GeoBinding& resultRendererBinding,
@@ -484,7 +481,7 @@ namespace RenderCore { namespace Techniques
 				const auto&def = **d;
 				unsigned dIdx = (unsigned)std::distance(instantiations.begin(), d);
 				
-				auto& workingTemporarySpaceElements = def._cpuDeformer ? workingTemporarySpaceElements_cpu : workingTemporarySpaceElements_gpu;
+				auto& workingTemporarySpaceElements = isCPUDeformer ? workingTemporarySpaceElements_cpu : workingTemporarySpaceElements_gpu;
 				
 				/////////////////// CPU type operator ///////////////////
 				for (auto&e:def._upstreamSourceElements) {
@@ -503,14 +500,16 @@ namespace RenderCore { namespace Techniques
 							workingTemporarySpaceElements.push_back(*i);
 						workingGeneratedElements.erase(i);
 					} else {
-						if (def._cpuDeformer) {
+						if (isCPUDeformer) {
 							// If it's not generated by some deform op, we look for it in the static data
 							auto existing = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), 
 								[&e](const auto& c) { return c._semanticName == e._semantic && c._semanticIndex == e._semanticIndex; });
 							if (existing != workingSourceDataElements_cpu.end()) {
 								assert(existing->_nativeFormat == e._format);		// avoid loading the same attribute twice with different formats
-							} else
+							} else {
+								assert(e._format != Format::Unknown);
 								workingSourceDataElements_cpu.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format});
+							}
 						} else {
 							auto q = std::find_if(
 								animatedElementsInput.begin(), animatedElementsInput.end(),
@@ -648,8 +647,8 @@ namespace RenderCore { namespace Techniques
 					binding._bufferOffsets[c] = vbOffsets[c];
 				}
 
-				auto& workingTemporarySpaceElements = def._cpuDeformer ? workingTemporarySpaceElements_cpu : workingTemporarySpaceElements_gpu;
-				auto& workingTemporarySpaceElements_firstSourceDeformer = def._cpuDeformer ? workingTemporarySpaceElements_cpu_firstSourceDeformer : workingTemporarySpaceElements_gpu_firstSourceDeformer;
+				auto& workingTemporarySpaceElements = isCPUDeformer ? workingTemporarySpaceElements_cpu : workingTemporarySpaceElements_gpu;
+				auto& workingTemporarySpaceElements_firstSourceDeformer = isCPUDeformer ? workingTemporarySpaceElements_cpu_firstSourceDeformer : workingTemporarySpaceElements_gpu_firstSourceDeformer;
 
 				// input elements
 				binding._inputElements.reserve(def._upstreamSourceElements.size());
@@ -664,7 +663,7 @@ namespace RenderCore { namespace Techniques
 						}
 
 					if (!found) {
-						if (def._cpuDeformer) {
+						if (isCPUDeformer) {
 							auto q = std::find_if(
 								workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(),
 								[e](const auto& wge) { return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex; });
@@ -711,6 +710,7 @@ namespace RenderCore { namespace Techniques
 		DeformerToRendererBinding CreateDeformBindings(
 			IteratorRange<WorkingDeformer*> workingDeformers,
 			DeformBufferIterators& bufferIterators,
+			bool isCPUDeformer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName)
 		{
@@ -768,7 +768,7 @@ namespace RenderCore { namespace Techniques
 				rendererBinding._geoId = geoId;
 				LinkDeformers(
 					MakeIteratorRange(animatedElements, &animatedElements[geo._vbData->_ia._elements.size()]),
-					vertexCount, animatedElementsStride,
+					vertexCount, animatedElementsStride, isCPUDeformer,
 					MakeIteratorRange(instantiations, &instantiations[workingDeformers.size()]),
 					MakeIteratorRange(deformerInputBindings, &deformerInputBindings[workingDeformers.size()]),
 					rendererBinding,
@@ -1131,6 +1131,8 @@ namespace RenderCore { namespace Techniques
 					std::unique_ptr<uint8_t[]> skelBindVB;
 
 					for (auto r=start; r!=end; ++r) {
+						assert(r->_targetFormat != Format::Unknown);
+						assert(r->_targetStride != 0);
 						auto sourceEle = FindElement(MakeIteratorRange(geo._vb._ia._elements), r->_sourceStream);
 
 						if (sourceEle != geo._vb._ia._elements.end()) {

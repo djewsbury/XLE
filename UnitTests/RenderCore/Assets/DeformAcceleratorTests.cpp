@@ -279,7 +279,7 @@ namespace UnitTests
 		pipelineCollection._pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper._device);
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
-		std::promise<std::shared_ptr<Techniques::IDeformOperator>> promise;
+		std::promise<std::shared_ptr<Techniques::IDeformer>> promise;
 		auto future = promise.get_future();
 		auto srcLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_GPUStaticData), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
 		Techniques::GPUSkinDeformer deformer(*testHelper._device, modelScaffold, "unit-test");
@@ -431,7 +431,7 @@ namespace UnitTests
 		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
 	}
 
-	class TestCPUDeformOperator : public Techniques::IDeformOperator
+	class TestCPUDeformOperator : public Techniques::IDeformer
 	{
 	public:
 		virtual void Execute(
@@ -460,7 +460,6 @@ namespace UnitTests
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
 			testInst0._suppressElements.push_back(Hash64("BADSEMANTIC"));
-			testInst0._cpuDeformer = true;
 			testInst0._geoId = 0;
 			
 			std::vector<DeformOperationInstantiation> instantiations;
@@ -471,7 +470,7 @@ namespace UnitTests
 
 			Techniques::Internal::DeformBufferIterators bufferIterators;
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				{&workingDeformer, &workingDeformer+1}, bufferIterators,
+				{&workingDeformer, &workingDeformer+1}, bufferIterators, true,
 				modelScaffold, "unit-test");
 
 			unsigned generatedVertexStride = 8 + 4 + 4;
@@ -505,24 +504,18 @@ namespace UnitTests
 			testInst0._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst0._upstreamSourceElements.push_back({ "NORMAL", 0, Format::R8G8B8A8_UNORM });
 			testInst0._suppressElements.push_back(Hash64("TANGENT"));
-			// testInst0._cpuOperator = std::make_shared<TestCPUDeformOperator>();
-			testInst0._cpuDeformer = true;
 			testInst0._geoId = 0;
 
 			Techniques::DeformOperationInstantiation testInst1;
 			testInst1._generatedElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
 			testInst1._upstreamSourceElements.push_back({ "POSITION", 0, Format::R32G32B32_FLOAT });
 			testInst1._upstreamSourceElements.push_back({ "TEMPORARY", 0, Format::R16G16B16A16_FLOAT });
-			// testInst1._cpuOperator = std::make_shared<TestCPUDeformOperator>();
-			testInst1._cpuDeformer = true;
 			testInst1._geoId = 0;
 
 			Techniques::DeformOperationInstantiation testInst2;
 			testInst2._generatedElements.push_back({ "GENERATED3", 0, Format::R16G16B16A16_FLOAT });
 			testInst2._upstreamSourceElements.push_back({ "TEMPORARY", 1, Format::R16G16B16A16_FLOAT });
 			testInst2._suppressElements.push_back(Hash64("TANGENT"));
-			// testInst2._cpuOperator = std::make_shared<TestCPUDeformOperator>();
-			testInst2._cpuDeformer = true;
 			testInst2._geoId = 0;
 			
 			Techniques::Internal::WorkingDeformer deformers[3];
@@ -532,7 +525,7 @@ namespace UnitTests
 
 			Techniques::Internal::DeformBufferIterators bufferIterators;
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				MakeIteratorRange(deformers), bufferIterators,
+				MakeIteratorRange(deformers), bufferIterators, true,
 				modelScaffold, "unit-test");
 
 			unsigned generatedVertexStride = 4+8;				// {"GENERATED2", 0}, {"GENERATED3", 0}
@@ -567,7 +560,7 @@ namespace UnitTests
 		}
 	}
 
-	class TestGPUDeformOperator : public Techniques::IDeformOperator
+	class TestGPUDeformOperator : public Techniques::IDeformer
 	{
 	public:
 		virtual void ExecuteGPU(
@@ -611,7 +604,7 @@ namespace UnitTests
 
 			Techniques::Internal::DeformBufferIterators bufferIterators;
 			auto nascentDeform = Techniques::Internal::CreateDeformBindings(
-				{&workingDeformer, &workingDeformer+1}, bufferIterators,
+				{&workingDeformer, &workingDeformer+1}, bufferIterators, false,
 				modelScaffold, "unit-test");
 
 			// The generated elements get reordered from largest to smallest element

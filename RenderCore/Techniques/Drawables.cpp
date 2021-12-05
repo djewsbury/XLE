@@ -105,7 +105,7 @@ namespace RenderCore { namespace Techniques
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
 		if (deformAccelerators)
-			deformAccelerators->SetVertexInputBarrrier(parserContext.GetThreadContext());
+			deformAccelerators->SetVertexInputBarrier(parserContext.GetThreadContext());
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
 		

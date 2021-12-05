@@ -929,7 +929,7 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IteratorRange<const std::shared_ptr<IDeformOperator>*> skinDeformers)
+		IteratorRange<const std::shared_ptr<IDeformer>*> skinDeformers)
 	{
 		_deformers.resize(skinDeformers.size());
 		for (auto&d:skinDeformers) {

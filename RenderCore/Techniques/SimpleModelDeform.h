@@ -18,7 +18,7 @@ namespace RenderCore { class IThreadContext; class IResourceView; }
 
 namespace RenderCore { namespace Techniques 
 {
-	class IDeformOperator
+	class IDeformer
 	{
 	public:
 		virtual void ExecuteGPU(
@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const void*> dstVB) const;
 
 		virtual void* QueryInterface(size_t) = 0;
-		virtual ~IDeformOperator();
+		virtual ~IDeformer();
 	};
 
 	struct DeformerToRendererBinding
@@ -71,7 +71,6 @@ namespace RenderCore { namespace Techniques
 		std::vector<SemanticNameAndFormat> _upstreamSourceElements;		///< these are elements that are requested from some upstream source (either a previous deform operation or the static data)
 		std::vector<uint64_t> _suppressElements;						///< hide these elements from downstream 
 		unsigned _geoId = ~0u;
-		bool _cpuDeformer = false;
 
 		friend bool operator==(const SemanticNameAndFormat& lhs, const SemanticNameAndFormat& rhs)
 		{
@@ -82,14 +81,15 @@ namespace RenderCore { namespace Techniques
 	class IDeformOperationFactory
 	{
 	public:
-		virtual std::shared_ptr<IDeformOperator> Configure(
+		virtual std::shared_ptr<IDeformer> Configure(
 			std::vector<DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName = {}) = 0;
 		virtual void Bind(
-			IDeformOperator& op,
+			IDeformer& op,
 			const DeformerInputBinding& binding) = 0;
+		virtual bool IsCPUDeformer() const = 0;
 		
 		virtual ~IDeformOperationFactory();
 	};
@@ -101,7 +101,7 @@ namespace RenderCore { namespace Techniques
 		{
 			std::vector<DeformOperationInstantiation> _instantiations;
 			std::shared_ptr<IDeformOperationFactory> _factory;
-			std::shared_ptr<IDeformOperator> _operator;
+			std::shared_ptr<IDeformer> _operator;
 		};
 		std::vector<Deformer> CreateDeformOperators(
 			StringSection<> initializer,

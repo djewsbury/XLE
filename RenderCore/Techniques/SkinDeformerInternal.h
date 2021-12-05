@@ -33,7 +33,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const void*> dstVB) const;
 	};
 
-	class CPUSkinDeformer : public IDeformOperator, public ISkinDeformer
+	class CPUSkinDeformer : public IDeformer, public ISkinDeformer
 	{
 	public:
 		virtual void ExecuteCPU(
@@ -62,20 +62,23 @@ namespace RenderCore { namespace Techniques
 			StringSection<> initializer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold);
 	private:
-		std::vector<float>		_jointWeights;
-		std::vector<unsigned>	_jointIndices;
-		size_t					_influencesPerVertex;
-
-		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
-
 		struct Section
 		{
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
-			unsigned _geoId = ~0u;
 		};
-		std::vector<Section> _sections;
+			
+		struct Geo
+		{
+			unsigned _geoId = ~0u;
+			
+			std::vector<Section> 	_sections;
+			std::vector<float>		_jointWeights;
+			std::vector<unsigned>	_jointIndices;
+			size_t					_influencesPerVertex;
+		};
+		std::vector<Geo> _geos;
 
 		struct Instance
 		{
@@ -84,6 +87,7 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Instance> _instanceData;
 		std::vector<Float4x4> _skeletonMachineOutput;
+		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 		RenderCore::Assets::SkeletonBinding _skeletonBinding;
 
 		void WriteJointTransforms(
@@ -108,7 +112,7 @@ namespace RenderCore { namespace Techniques
 		~SkinDeformerPipelineCollection();
 	};
 
-	class GPUSkinDeformer : public IDeformOperator, public ISkinDeformer
+	class GPUSkinDeformer : public IDeformer, public ISkinDeformer
 	{
 	public:
 		virtual void ExecuteGPU(
