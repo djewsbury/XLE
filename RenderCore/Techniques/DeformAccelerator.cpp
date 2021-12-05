@@ -45,14 +45,13 @@ namespace RenderCore { namespace Techniques
 
 		const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const override;
 
-		std::vector<std::shared_ptr<ICPUDeformOperator>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
+		std::vector<std::shared_ptr<IDeformOperator>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
+		void SetVertexInputBarrrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
 
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const override;
-
-		::Assets::DependencyValidation GetDependencyValidation(DeformAccelerator& accelerator) const override;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>);
 		~DeformAcceleratorPool();
@@ -63,6 +62,7 @@ namespace RenderCore { namespace Techniques
 		std::unique_ptr<RenderCore::Metal_Vulkan::TemporaryStorageManager> _temporaryStorageManager;
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
+		mutable bool _pendingVertexInputBarrier = false;
 
 		void ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx, IteratorRange<void*> outputPartRange);
 		void ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB);
@@ -76,12 +76,8 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		std::vector<std::shared_ptr<ICPUDeformOperator>> _cpuDeformOps;
-		std::vector<std::shared_ptr<IGPUDeformOperator>> _gpuDeformOps;
+		std::vector<std::shared_ptr<IDeformOperator>> _deformOps;
 		DeformerToRendererBinding _rendererGeoInterface;
-
-		// std::atomic<bool> _gpuDeformOpsReady;
-		// std::future<void> _gpuDeformOpsFuture;
 
 		std::vector<uint8_t> _deformStaticDataInput;
 		std::vector<uint8_t> _deformTemporaryBuffer;
@@ -91,10 +87,9 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::TransactionMarker _gpuStaticDataBufferMarker;
 
 		unsigned _outputVBSize = 0;
+		bool _isCPUDeformer = false;
 		VertexBufferView _outputVBV;
 
-		// ::Assets::DependencyValidation _dependencyValidation;
-		
 		#if defined(_DEBUG)
 			DeformAcceleratorPool* _containingPool = nullptr;
 		#endif
@@ -106,14 +101,13 @@ namespace RenderCore { namespace Techniques
 		const std::string& modelScaffoldName)
 	{
 		auto& opFactory = Services::GetDeformOperationFactorySet();
-		auto deformers = opFactory.CreateDeformOperations(initializer, modelScaffold, modelScaffoldName);
+		auto deformers = opFactory.CreateDeformOperators(initializer, modelScaffold, modelScaffoldName);
 		auto newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_enabledInstances.resize(8, 0);
 		newAccelerator->_readiedInstances.resize(8, 0);
 		#if defined(_DEBUG)
 			newAccelerator->_containingPool = this;
 		#endif
-		// newAccelerator->_gpuDeformOpsReady.store(false);
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
@@ -136,7 +130,7 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<deformers.size(); ++c) {
 			auto op = std::move(deformers[c]._operator);
 			deformers[c]._factory->Bind(*op, workingDeformers[c]._inputBinding);
-			newAccelerator->_gpuDeformOps.push_back(std::move(op));
+			newAccelerator->_deformOps.push_back(std::move(op));
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
@@ -188,13 +182,13 @@ namespace RenderCore { namespace Techniques
 		return accelerator._rendererGeoInterface;
 	}
 
-	std::vector<std::shared_ptr<ICPUDeformOperator>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
+	std::vector<std::shared_ptr<IDeformOperator>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		std::vector<std::shared_ptr<ICPUDeformOperator>> result;
-		for (const auto&i:accelerator._cpuDeformOps)
+		std::vector<std::shared_ptr<IDeformOperator>> result;
+		for (const auto&i:accelerator._deformOps)
 			if (i->QueryInterface(typeId))
 				result.push_back(i);
 		return result;
@@ -216,56 +210,19 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, unsigned instanceIdx, IteratorRange<void*> outputPartRange)
 	{
-#if 0
 		assert(instanceIdx!=~0u);
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
 		auto staticDataPartRange = MakeIteratorRange(a._deformStaticDataInput);
 		auto temporaryDeformRange = MakeIteratorRange(a._deformTemporaryBuffer);
 
-		for (const auto&d:a._cpuDeformOps) {
-			ICPUDeformOperator::VertexElementRange inputElementRanges[16];
-			assert(d._inputElements.size() <= dimof(inputElementRanges));
-			for (unsigned c=0; c<d._inputElements.size(); ++c) {
-				if (d._inputElements[c]._vbIdx == Internal::VB_CPUStaticData) {
-					inputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(staticDataPartRange.begin()), d._inputElements[c]._offset), AsPointer(staticDataPartRange.end())),
-						d._inputElements[c]._stride, d._inputElements[c]._format);
-				} else {
-					assert(d._inputElements[c]._vbIdx == Internal::VB_CPUDeformTemporaries);
-					inputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._inputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
-						d._inputElements[c]._stride, d._inputElements[c]._format);
-				}
-			}
-
-			ICPUDeformOperator::VertexElementRange outputElementRanges[16];
-			assert(d._outputElements.size() <= dimof(outputElementRanges));
-			for (unsigned c=0; c<d._outputElements.size(); ++c) {
-				if (d._outputElements[c]._vbIdx == Internal::VB_PostDeform) {
-					outputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(outputPartRange.begin(), d._outputElements[c]._offset), outputPartRange.end()),
-						d._outputElements[c]._stride, d._outputElements[c]._format);
-				} else {
-					assert(d._outputElements[c]._vbIdx == Internal::VB_CPUDeformTemporaries);
-					outputElementRanges[c] = MakeVertexIteratorRangeConst(
-						MakeIteratorRange(PtrAdd(AsPointer(temporaryDeformRange.begin()), d._outputElements[c]._offset), AsPointer(temporaryDeformRange.end())),
-						d._outputElements[c]._stride, d._outputElements[c]._format);
-				}
-			}
-
-			// Execute the actual deform op
-			d._deformOp->Execute(
-				instanceIdx,
-				MakeIteratorRange(inputElementRanges, &inputElementRanges[d._inputElements.size()]),
-				MakeIteratorRange(outputElementRanges, &outputElementRanges[d._outputElements.size()]));
-		}
-#endif
+		for (const auto&d:a._deformOps)
+			d->ExecuteCPU(instanceIdx, staticDataPartRange, temporaryDeformRange, outputPartRange);
 	}
 
 	void DeformAcceleratorPool::ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB)
 	{
-		for (const auto&d:a._gpuDeformOps) {
+		for (const auto&d:a._deformOps) {
 			d->ExecuteGPU(
 				threadContext,
 				instanceIdx[0],		// todo -- all instances
@@ -280,22 +237,29 @@ namespace RenderCore { namespace Techniques
 		auto attachedStorage = _temporaryStorageManager->BeginCmdListReservation();
 
 		std::shared_ptr<DeformAccelerator> accelerators[_accelerators.size()];
-		unsigned c=0;
-		unsigned totalAllocationSize = 0;
+		unsigned activeAcceleratorCount=0;
+		unsigned totalGPUAllocationSize = 0;
+		unsigned totalCPUAllocationSize = 0;
 		unsigned maxInstanceCount = 0;
-		for (const auto&a:_accelerators) {
-			auto accelerator = a.lock();
-			if (!accelerator /*|| !accelerator->_gpuDeformOpsReady*/) continue;
+		for (auto a=_accelerators.begin(); a!=_accelerators.end();) {
+			auto accelerator = a->lock();
+			if (!accelerator) {
+				a = _accelerators.erase(a);
+				continue;
+			}
 
-			if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) continue;
+			if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) { a++; continue; }
 			auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
 			auto instanceCount = 0u;
 			for (auto f=fMin; f<=fMax; ++f)
 				instanceCount += popcount(accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f]);
 			
 			if (instanceCount) {
-				totalAllocationSize += accelerator->_outputVBSize * instanceCount;
-				accelerators[c++] = std::move(accelerator);
+				if (accelerator->_isCPUDeformer) {
+					totalCPUAllocationSize += accelerator->_outputVBSize * instanceCount;
+				} else
+					totalGPUAllocationSize += accelerator->_outputVBSize * instanceCount;
+				accelerators[activeAcceleratorCount++] = std::move(accelerator);
 				maxInstanceCount = std::max(maxInstanceCount, instanceCount);
 			} else {
 				for (auto f=fMin; f<=fMax; ++f)
@@ -303,103 +267,115 @@ namespace RenderCore { namespace Techniques
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
 			}
+			++a;
 		}
 
-		if (!totalAllocationSize)
+		if (!activeAcceleratorCount)
 			return;
 
 		const auto defaultPageSize = 1024*1024;
 
-#if 0
-		auto map = attachedStorage.MapStorage(totalAllocationSize, BindFlag::VertexBuffer, defaultPageSize);
-		auto vbv = map.AsVertexBufferView();
-		assert(vbv._resource);
-		auto dst = map.GetData();
-		unsigned movingOffset = 0;
+		if (totalCPUAllocationSize) {
+			auto map = attachedStorage.MapStorage(totalCPUAllocationSize, BindFlag::VertexBuffer, defaultPageSize);
+			auto vbv = map.AsVertexBufferView();
+			assert(vbv._resource);
+			auto dst = map.GetData();
+			unsigned movingOffset = 0;
 
-		for (c=0; c<_accelerators.size(); ++c) {
-			auto accelerator = accelerators[c];
-			if (!accelerator) continue;
+			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
+				auto accelerator = accelerators[c];
+				if (!accelerator) continue;
 
-			accelerator->_outputVBV = vbv;
-			accelerator->_outputVBV._offset += movingOffset;
+				accelerator->_outputVBV = vbv;
+				accelerator->_outputVBV._offset += movingOffset;
 
-			auto instanceData = MakeIteratorRange(PtrAdd(dst.begin(), movingOffset), PtrAdd(dst.begin(), movingOffset+accelerator->_outputVBSize));
+				auto instanceData = MakeIteratorRange(PtrAdd(dst.begin(), movingOffset), PtrAdd(dst.begin(), movingOffset+accelerator->_outputVBSize));
 
-			if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
-				accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
+				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
+					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
 
-			unsigned instanceCount = 0;
-			auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
-			for (auto f=fMin; f<=fMax; ++f) {
-				auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
-				while (active) {
-					auto bit = xl_ctz8(active);
-					active ^= 1ull<<uint64_t(bit);
+				unsigned instanceCount = 0;
+				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
+				for (auto f=fMin; f<=fMax; ++f) {
+					auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
+					while (active) {
+						auto bit = xl_ctz8(active);
+						active ^= 1ull<<uint64_t(bit);
 
-					assert(instanceData.end() <= dst.end());
-					auto instance = f*64+bit;
-					ExecuteInstance(threadContext, *accelerator, instance, instanceData);
-					instanceData.first = PtrAdd(instanceData.first, accelerator->_outputVBSize);
-					instanceData.second = PtrAdd(instanceData.second, accelerator->_outputVBSize);
-					++instanceCount;
+						assert(instanceData.end() <= dst.end());
+						auto instance = f*64+bit;
+						ExecuteCPUInstance(threadContext, *accelerator, instance, instanceData);
+						instanceData.first = PtrAdd(instanceData.first, accelerator->_outputVBSize);
+						instanceData.second = PtrAdd(instanceData.second, accelerator->_outputVBSize);
+						++instanceCount;
+					}
+					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
+					accelerator->_enabledInstances[f] = 0;
 				}
-				accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
-				accelerator->_enabledInstances[f] = 0;
+
+				accelerator->_minEnabledInstance = ~0u;
+				accelerator->_maxEnabledInstance = 0u;
+				movingOffset += instanceCount * accelerator->_outputVBSize;
 			}
 
-			accelerator->_minEnabledInstance = ~0u;
-			accelerator->_maxEnabledInstance = 0u;
-			movingOffset += instanceCount * accelerator->_outputVBSize;
-		}
+			assert(movingOffset == totalCPUAllocationSize);
+		} else {
+			auto bufferAndRange = attachedStorage.AllocateRange(totalGPUAllocationSize, BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
+			auto vbv = bufferAndRange.AsVertexBufferView();
+			assert(vbv._resource);
+			unsigned movingOffset = 0;
 
-		assert(movingOffset == totalAllocationSize);
-#else
-		auto bufferAndRange = attachedStorage.AllocateRange(totalAllocationSize, BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
-		auto vbv = bufferAndRange.AsVertexBufferView();
-		assert(vbv._resource);
-		unsigned movingOffset = 0;
+			unsigned instanceList[maxInstanceCount];
+			bool atLeastOneGPUOperator = false;
 
-		unsigned instanceList[maxInstanceCount];
+			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
+				auto accelerator = accelerators[c];
+				if (!accelerator) continue;
 
-		for (c=0; c<_accelerators.size(); ++c) {
-			auto accelerator = accelerators[c];
-			if (!accelerator) continue;
+				accelerator->_outputVBV = vbv;
+				accelerator->_outputVBV._offset += movingOffset;
 
-			accelerator->_outputVBV = vbv;
-			accelerator->_outputVBV._offset += movingOffset;
+				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
+					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
 
-			if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
-				accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
+				unsigned instanceCount = 0;
+				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
+				for (auto f=fMin; f<=fMax; ++f) {
+					auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
+					while (active) {
+						auto bit = xl_ctz8(active);
+						active ^= 1ull<<uint64_t(bit);
 
-			unsigned instanceCount = 0;
-			auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
-			for (auto f=fMin; f<=fMax; ++f) {
-				auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
-				while (active) {
-					auto bit = xl_ctz8(active);
-					active ^= 1ull<<uint64_t(bit);
-
-					instanceList[instanceCount] = f*64+bit;
-					++instanceCount;
+						instanceList[instanceCount] = f*64+bit;
+						++instanceCount;
+					}
+					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
+					accelerator->_enabledInstances[f] = 0;
 				}
-				accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
-				accelerator->_enabledInstances[f] = 0;
+
+				auto view = bufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, accelerator->_outputVBV._offset, instanceCount*accelerator->_outputVBSize);
+				ExecuteGPUInstance(
+					threadContext, *accelerator,
+					MakeIteratorRange(instanceList, &instanceList[instanceCount]),
+					*view);
+
+				atLeastOneGPUOperator = false;
+				accelerator->_minEnabledInstance = ~0u;
+				accelerator->_maxEnabledInstance = 0u;
+				movingOffset += instanceCount * accelerator->_outputVBSize;
 			}
 
-			auto view = bufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, accelerator->_outputVBV._offset, instanceCount*accelerator->_outputVBSize);
-			ExecuteGPUInstance(
-				threadContext, *accelerator,
-				MakeIteratorRange(instanceList, &instanceList[instanceCount]),
-				*view);
-
-			accelerator->_minEnabledInstance = ~0u;
-			accelerator->_maxEnabledInstance = 0u;
-			movingOffset += instanceCount * accelerator->_outputVBSize;
+			_pendingVertexInputBarrier |= atLeastOneGPUOperator;
 		}
-#endif
 
-		{
+		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
+		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
+		_currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
+	}
+
+	void DeformAcceleratorPool::SetVertexInputBarrrier(IThreadContext& threadContext) const
+	{
+		if (_pendingVertexInputBarrier) {
 			// we're expeting the output to be used as a vertex attribute; so we require a barrier here
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
@@ -414,11 +390,8 @@ namespace RenderCore { namespace Techniques
 				1, &barrier,
 				0, nullptr,
 				0, nullptr);
+			_pendingVertexInputBarrier = false;
 		}
-
-		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
-		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
-		_currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
 	}
 
 	VertexBufferView DeformAcceleratorPool::GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const
@@ -460,16 +433,6 @@ namespace RenderCore { namespace Techniques
 		_temporaryStorageManager->FlushDestroys();
 	}
 
-	::Assets::DependencyValidation DeformAcceleratorPool::GetDependencyValidation(DeformAccelerator& accelerator) const
-	{
-		#if defined(_DEBUG)
-			assert(accelerator._containingPool == this);
-		#endif
-		// assert(accelerator._gpuDeformOpsReady);
-		// return accelerator._dependencyValidation;
-		return {};
-	}
-
 	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
 	: _device(std::move(device))
 	{
@@ -483,9 +446,7 @@ namespace RenderCore { namespace Techniques
 	DeformAcceleratorPool::~DeformAcceleratorPool() {}
 
 	static uint64_t s_nextDeformAcceleratorPool = 1;
-	IDeformAcceleratorPool::IDeformAcceleratorPool() 
-	: _guid(s_nextDeformAcceleratorPool++)
-	{}
+	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}
 	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
 
 	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device)
@@ -856,7 +817,7 @@ namespace RenderCore { namespace Techniques
 
 			struct WorkingCPUDeformOp
 			{
-				std::shared_ptr<ICPUDeformOperator> _deformOp;
+				std::shared_ptr<IDeformOperator> _deformOp;
 				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _inputStreamIds;
 				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _outputStreamIds;
 			};
@@ -1083,7 +1044,7 @@ namespace RenderCore { namespace Techniques
 
 			result._gpuOps.reserve(workingGPUDeformOps.size());
 			for (const auto&wdo:workingGPUDeformOps) {
-				std::promise<std::shared_ptr<IGPUDeformOperator>> promise;
+				std::promise<std::shared_ptr<IDeformOperator>> promise;
 				auto future = promise.get_future();
 				DeformOperationInstantiation::GPUConstructorParameters params;
 				params._srcVBLayout = srcVBLayout;

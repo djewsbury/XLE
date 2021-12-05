@@ -471,7 +471,8 @@ namespace RenderCore { namespace Techniques
 			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
 			unsigned deformInputSlot = ~0u)
 		{
-			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
+			auto suppressed = deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{};
+			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), suppressed, 0);
 			if (deformStream) {
 				auto t = MakeIA(MakeIteratorRange(deformStream->_generatedElements), deformInputSlot);
 				result.insert(result.end(), t.begin(), t.end());
@@ -484,9 +485,8 @@ namespace RenderCore { namespace Techniques
 			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
 			unsigned deformInputSlot = ~0u)
 		{
-			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 0);
-			auto t0 = MakeIA(MakeIteratorRange(geo._animatedVertexElements._ia._elements), deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{}, 1);
-			result.insert(result.end(), t0.begin(), t0.end());
+			auto suppressed = deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{};
+			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), suppressed, 0);
 			if (deformStream) {
 				auto t1 = MakeIA(MakeIteratorRange(deformStream->_generatedElements), deformInputSlot);
 				result.insert(result.end(), t1.begin(), t1.end());
@@ -924,20 +924,19 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float4x4*> skeletonMachineOutput)
 	{
 		for (const auto&d:_deformers)
-			((ISkinDeformer*)d._skinDeformer->QueryInterface(typeid(ISkinDeformer).hash_code()))->FeedInSkeletonMachineResults(
-				instanceIdx, skeletonMachineOutput, d._deformerBindings);
+			d._skinDeformer->FeedInSkeletonMachineResults(instanceIdx, skeletonMachineOutput, d._deformerBindings);
 	}
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IteratorRange<const std::shared_ptr<ICPUDeformOperator>*> skinDeformers)
+		IteratorRange<const std::shared_ptr<IDeformOperator>*> skinDeformers)
 	{
 		_deformers.resize(skinDeformers.size());
 		for (auto&d:skinDeformers) {
-			auto* deformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
-			if (!deformer)
+			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
+			if (!skinDeformer)
 				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
-			_deformers.push_back(Deformer{ d, deformer->CreateBinding(smOutputInterface) });
+			_deformers.push_back(Deformer{ skinDeformer, skinDeformer->CreateBinding(smOutputInterface), d });
 		}
 	}
 

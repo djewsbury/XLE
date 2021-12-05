@@ -8,7 +8,7 @@
 
 namespace RenderCore { namespace Techniques
 {
-	auto DeformOperationFactorySet::CreateDeformOperations(
+	auto DeformOperationFactorySet::CreateDeformOperators(
 		StringSection<> initializer,
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::string& modelScaffoldName) -> std::vector<Deformer>
@@ -85,7 +85,25 @@ namespace RenderCore { namespace Techniques
 		return Services::GetDeformOperationFactorySet();
 	}
 
-	ICPUDeformOperator::~ICPUDeformOperator() {}
-	IGPUDeformOperator::~IGPUDeformOperator() {}
+	void IDeformOperator::ExecuteGPU(
+		IThreadContext& threadContext,
+		unsigned instanceIdx,
+		const IResourceView& srcVB,
+		const IResourceView& deformTemporariesVB,
+		const IResourceView& dstVB) const
+	{
+		assert(0);
+	}
+
+	void IDeformOperator::ExecuteCPU(
+		unsigned instanceIdx,
+		IteratorRange<const void*> srcVB,
+		IteratorRange<const void*> deformTemporariesVB,
+		IteratorRange<const void*> dstVB) const
+	{
+		assert(0);
+	}
+
+	IDeformOperator::~IDeformOperator() {}
 	IDeformOperationFactory::~IDeformOperationFactory() {}
 }}

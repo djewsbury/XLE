@@ -230,6 +230,8 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = {};
 			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			_capturedStates = {};
+			newEncoder.BeginStateCapture(_capturedStates);
 
 			ApplyUniformsCompute(*parsingContext.GetUniformDelegateManager(), metalContext, newEncoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
@@ -248,6 +250,8 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			_activeEncoder = {};
 			auto newEncoder = metalContext.BeginComputeEncoder(_pipelineLayout);
+			_capturedStates = {};
+			newEncoder.BeginStateCapture(_capturedStates);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us, 1);
@@ -382,6 +386,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		RenderCore::Metal::ComputeEncoder _activeEncoder;
+		RenderCore::Metal::CapturedStates _capturedStates;
 		bool _betweenBeginEnd = false;
 	};
 

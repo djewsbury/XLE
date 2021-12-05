@@ -18,13 +18,29 @@ namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
 {
-	class SkinDeformer : public ICPUDeformOperator, public ISkinDeformer
+	class InputBindingHelper
 	{
 	public:
-		virtual void Execute(
-			unsigned instanceId,
-			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const override;
+		DeformerInputBinding _inputBinding;
+
+		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
+		const DeformerInputBinding::GeoBinding* CalculateRanges(
+			IteratorRange<VertexElementRange*> sourceElements,
+			IteratorRange<VertexElementRange*> destinationElements,
+			unsigned geoId,
+			IteratorRange<const void*> srcVB,
+			IteratorRange<const void*> deformTemporariesVB,
+			IteratorRange<const void*> dstVB) const;
+	};
+
+	class CPUSkinDeformer : public IDeformOperator, public ISkinDeformer
+	{
+	public:
+		virtual void ExecuteCPU(
+			unsigned instanceIdx,
+			IteratorRange<const void*> srcVB,
+			IteratorRange<const void*> deformTemporariesVB,
+			IteratorRange<const void*> dstVB) const override;
 		virtual void* QueryInterface(size_t) override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
@@ -35,10 +51,12 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 		
-		SkinDeformer(
+		CPUSkinDeformer(
 			const RenderCore::Assets::ModelScaffold& modelScaffold,
-			unsigned geoId);
-		~SkinDeformer();
+			const std::string& modelScaffoldName);
+		~CPUSkinDeformer();
+
+		InputBindingHelper _bindingHelper;
 
 		static std::vector<RenderCore::Techniques::DeformOperationInstantiation> InstantiationFunction(
 			StringSection<> initializer,
@@ -55,6 +73,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
+			unsigned _geoId = ~0u;
 		};
 		std::vector<Section> _sections;
 
@@ -89,7 +108,7 @@ namespace RenderCore { namespace Techniques
 		~SkinDeformerPipelineCollection();
 	};
 
-	class GPUSkinDeformer : public IGPUDeformOperator, public ISkinDeformer
+	class GPUSkinDeformer : public IDeformOperator, public ISkinDeformer
 	{
 	public:
 		virtual void ExecuteGPU(
@@ -99,7 +118,6 @@ namespace RenderCore { namespace Techniques
 			const IResourceView& deformTemporariesVB,
 			const IResourceView& dstVB) const override;
 		virtual void* QueryInterface(size_t) override;
-		virtual ::Assets::DependencyValidation GetDependencyValidation() override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const override;
@@ -112,6 +130,8 @@ namespace RenderCore { namespace Techniques
 		void Bind(
 			SkinDeformerPipelineCollection& pipelineCollection,
 			const DeformerInputBinding& binding);
+
+		void StallForPipeline();
 		
 		GPUSkinDeformer(
 			IDevice& device,
@@ -121,7 +141,6 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
-		size_t _influencesPerVertex;
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 

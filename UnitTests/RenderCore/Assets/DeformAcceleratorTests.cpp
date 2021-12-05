@@ -52,7 +52,7 @@ namespace UnitTests
 
 		NewRendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IteratorRange<const std::shared_ptr<ICPUDeformOperator>*> skinDeformers)
+			IteratorRange<const std::shared_ptr<IDeformOperator>*> skinDeformers)
 		{
 			_deformers.resize(skinDeformers.size());
 			for (auto&d:skinDeformers) {
@@ -69,7 +69,7 @@ namespace UnitTests
 	private:
 		struct Deformer
 		{
-			std::shared_ptr<ICPUDeformOperator> _skinDeformer;
+			std::shared_ptr<IDeformOperator> _skinDeformer;
 			RenderCore::Assets::SkeletonBinding _deformerBindings;
 		};
 		std::vector<Deformer> _deformers;
@@ -279,7 +279,7 @@ namespace UnitTests
 		pipelineCollection._pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper._device);
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
-		std::promise<std::shared_ptr<Techniques::IGPUDeformOperator>> promise;
+		std::promise<std::shared_ptr<Techniques::IDeformOperator>> promise;
 		auto future = promise.get_future();
 		auto srcLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_GPUStaticData), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
 		Techniques::GPUSkinDeformer deformer(*testHelper._device, modelScaffold, "unit-test");
@@ -313,6 +313,8 @@ namespace UnitTests
 			bufferUploads.Update(*threadContext);
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
+
+		deformer.StallForPipeline();
 		
 		testHelper.BeginFrameCapture();
 		deformer.ExecuteGPU(*threadContext, 0, *inputView, *inputView, *outputView);
@@ -323,7 +325,7 @@ namespace UnitTests
 
 	static std::vector<Float3> DeformPositionsOnCPU(std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
-		Techniques::SkinDeformer cpuSkinDeformer { *modelScaffold, 0 };
+		Techniques::CPUSkinDeformer cpuSkinDeformer { *modelScaffold, {} };
 
 		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
 		auto& animVb = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
@@ -334,23 +336,25 @@ namespace UnitTests
 				MakeIteratorRange(rawInputBuffer), 
 				*Techniques::Internal::FindElement(animVb._ia._elements, Hash64("POSITION")), 
 				animVb._ia._vertexStride));
-		
-		std::vector<Techniques::ICPUDeformOperator::VertexElementRange> sourceElements;
-		sourceElements.push_back(
-			Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(inputFloat3s), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
 
 		std::vector<uint8_t> outputBufferData;
-		outputBufferData.resize(sourceElements[0].size() * sizeof(Float3));
-		std::vector<Techniques::ICPUDeformOperator::VertexElementRange> destinationElements;
-		destinationElements.push_back(
-			Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(outputBufferData), Format::R32G32B32_FLOAT, 0, sizeof(Float3)));
+		outputBufferData.resize(inputFloat3s.size() * sizeof(Float3));
+
+		Techniques::DeformerInputBinding::GeoBinding geoBinding;
+		geoBinding._geoId = 0;
+		geoBinding._inputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_CPUStaticData, 0});
+		geoBinding._outputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_PostDeform, 0});
+		geoBinding._bufferStrides[Techniques::Internal::VB_CPUStaticData] = sizeof(Float3);
+		geoBinding._bufferStrides[Techniques::Internal::VB_PostDeform] = sizeof(Float3);
+		cpuSkinDeformer._bindingHelper._inputBinding._geoBindings.push_back(std::move(geoBinding));
 
 		cpuSkinDeformer.FeedInSkeletonMachineResults(
 			0, BasePose(modelScaffold),
 			cpuSkinDeformer.CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
-		cpuSkinDeformer.Execute(0, sourceElements, destinationElements);
+		cpuSkinDeformer.ExecuteCPU(0, MakeIteratorRange(inputFloat3s), {}, outputBufferData);
 
-		return AsFloat3s(destinationElements[0]);
+		auto destinationElements = Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(outputBufferData), Format::R32G32B32_FLOAT, 0, sizeof(Float3));
+		return AsFloat3s(destinationElements);
 	}
 
 	static std::vector<Float3> GetFloat3sFromVertexBuffer(
@@ -427,7 +431,7 @@ namespace UnitTests
 		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
 	}
 
-	class TestCPUDeformOperator : public Techniques::ICPUDeformOperator
+	class TestCPUDeformOperator : public Techniques::IDeformOperator
 	{
 	public:
 		virtual void Execute(
@@ -563,7 +567,7 @@ namespace UnitTests
 		}
 	}
 
-	class TestGPUDeformOperator : public Techniques::IGPUDeformOperator
+	class TestGPUDeformOperator : public Techniques::IDeformOperator
 	{
 	public:
 		virtual void ExecuteGPU(

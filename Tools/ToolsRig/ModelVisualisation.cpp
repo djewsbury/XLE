@@ -195,14 +195,15 @@ namespace ToolsRig
 					&skeletonMachine->GetDefaultParameters());
 			}
 
-			for (unsigned c=0; c<_actualized->_renderer->DeformOperationCount(); ++c) {
-				auto* skinDeformOp = dynamic_cast<RenderCore::Techniques::SkinDeformer*>(&_actualized->_renderer->DeformOperation(c));
-				if (!skinDeformOp) continue;
-				skinDeformOp->FeedInSkeletonMachineResults(
-					MakeIteratorRange(skeletonMachineOutput),
-					skeletonMachine->GetOutputInterface());
+			// todo -- do this binding at construction time
+			auto* deformAccelerator = _actualized->_renderer->GetDeformAccelerator().get();
+			auto operations = _actualized->_renderer->GetDeformAcceleratorPool()->GetOperations(*deformAccelerator, typeid(RenderCore::Techniques::ISkinDeformer).hash_code());
+			for (unsigned c=0; c<operations.size(); ++c) {
+				auto* skinDeformOp = dynamic_cast<RenderCore::Techniques::ISkinDeformer*>(operations[c].get());
+				assert(skinDeformOp);
+				auto binding = skinDeformOp->CreateBinding(skeletonMachine->GetOutputInterface());
+				skinDeformOp->FeedInSkeletonMachineResults(0, MakeIteratorRange(skeletonMachineOutput), binding);
 			}
-			_actualized->_renderer->GenerateDeformBuffer(threadContext);
 
 			RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
 			XlZeroMemory(pkts);

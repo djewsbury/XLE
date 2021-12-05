@@ -13,7 +13,7 @@ namespace Assets { class DependencyValidation; }
 namespace RenderCore { namespace Techniques
 {
     class DeformAccelerator;
-    class ICPUDeformOperator;
+    class IDeformOperator;
     struct DeformerToRendererBinding;
 
     class IDeformAcceleratorPool
@@ -26,14 +26,13 @@ namespace RenderCore { namespace Techniques
 
         virtual const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const = 0;
 
-        virtual std::vector<std::shared_ptr<ICPUDeformOperator>> GetOperations(DeformAccelerator& accelerator, size_t typeId) = 0;
+        virtual std::vector<std::shared_ptr<IDeformOperator>> GetOperations(DeformAccelerator& accelerator, size_t typeId) = 0;
         virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
         virtual void ReadyInstances(IThreadContext&) = 0;
+        virtual void SetVertexInputBarrrier(IThreadContext&) const = 0;
         virtual void OnFrameBarrier() = 0;
 
         virtual VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const = 0;
-
-        virtual ::Assets::DependencyValidation GetDependencyValidation(DeformAccelerator& accelerator) const = 0;
 
         unsigned GetGUID() const { return _guid; }
 

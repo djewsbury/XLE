@@ -18,19 +18,7 @@ namespace RenderCore { class IThreadContext; class IResourceView; }
 
 namespace RenderCore { namespace Techniques 
 {
-	class ICPUDeformOperator
-	{
-	public:
-		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
-		virtual void Execute(
-			unsigned instanceIdx,
-			IteratorRange<const VertexElementRange*> sourceElements,
-			IteratorRange<const VertexElementRange*> destinationElements) const = 0;
-		virtual void* QueryInterface(size_t) = 0;
-		virtual ~ICPUDeformOperator();
-	};
-
-	class IGPUDeformOperator
+	class IDeformOperator
 	{
 	public:
 		virtual void ExecuteGPU(
@@ -38,10 +26,17 @@ namespace RenderCore { namespace Techniques
 			unsigned instanceIdx,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB) const = 0;
+			const IResourceView& dstVB) const;
+
+		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
+		virtual void ExecuteCPU(
+			unsigned instanceIdx,
+			IteratorRange<const void*> srcVB,
+			IteratorRange<const void*> deformTemporariesVB,
+			IteratorRange<const void*> dstVB) const;
+
 		virtual void* QueryInterface(size_t) = 0;
-		virtual ::Assets::DependencyValidation GetDependencyValidation() = 0;
-		virtual ~IGPUDeformOperator();
+		virtual ~IDeformOperator();
 	};
 
 	struct DeformerToRendererBinding
@@ -87,13 +82,13 @@ namespace RenderCore { namespace Techniques
 	class IDeformOperationFactory
 	{
 	public:
-		virtual std::shared_ptr<IGPUDeformOperator> Configure(
+		virtual std::shared_ptr<IDeformOperator> Configure(
 			std::vector<DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName = {}) = 0;
 		virtual void Bind(
-			IGPUDeformOperator& op,
+			IDeformOperator& op,
 			const DeformerInputBinding& binding) = 0;
 		
 		virtual ~IDeformOperationFactory();
@@ -106,9 +101,9 @@ namespace RenderCore { namespace Techniques
 		{
 			std::vector<DeformOperationInstantiation> _instantiations;
 			std::shared_ptr<IDeformOperationFactory> _factory;
-			std::shared_ptr<IGPUDeformOperator> _operator;
+			std::shared_ptr<IDeformOperator> _operator;
 		};
-		std::vector<Deformer> CreateDeformOperations(
+		std::vector<Deformer> CreateDeformOperators(
 			StringSection<> initializer,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 			const std::string& modelScaffoldName);

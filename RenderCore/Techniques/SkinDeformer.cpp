@@ -29,7 +29,51 @@ namespace RenderCore { namespace Techniques
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void SkinDeformer::WriteJointTransforms(
+	const DeformerInputBinding::GeoBinding* InputBindingHelper::CalculateRanges(
+		IteratorRange<VertexElementRange*> sourceElements,
+		IteratorRange<VertexElementRange*> destinationElements,
+		unsigned geoId,
+		IteratorRange<const void*> srcVB,
+		IteratorRange<const void*> deformTemporariesVB,
+		IteratorRange<const void*> dstVB) const
+	{
+		auto binding = std::find_if(_inputBinding._geoBindings.begin(), _inputBinding._geoBindings.end(), [geoId](const auto& c) { return c._geoId == geoId; });
+		assert(binding != _inputBinding._geoBindings.end());
+		if (binding == _inputBinding._geoBindings.end())
+			return nullptr;
+		assert(binding->_inputElements.size() <= sourceElements.size());
+		assert(binding->_outputElements.size() <= destinationElements.size());
+
+		for (unsigned c=0; c<binding->_inputElements.size(); ++c) {
+			if (binding->_inputElements[c]._inputSlot == Internal::VB_CPUStaticData) {
+				sourceElements[c] = MakeVertexIteratorRangeConst(
+					MakeIteratorRange(PtrAdd(srcVB.begin(), binding->_inputElements[c]._alignedByteOffset), srcVB.end()),
+					binding->_bufferStrides[Internal::VB_CPUStaticData], binding->_inputElements[c]._nativeFormat);
+			} else {
+				assert(binding->_inputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+				sourceElements[c] = MakeVertexIteratorRangeConst(
+					MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_inputElements[c]._alignedByteOffset), deformTemporariesVB.end()),
+					binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_inputElements[c]._nativeFormat);
+			}
+		}
+
+		for (unsigned c=0; c<binding->_outputElements.size(); ++c) {
+			if (binding->_outputElements[c]._inputSlot == Internal::VB_PostDeform) {
+				destinationElements[c] = MakeVertexIteratorRangeConst(
+					MakeIteratorRange(PtrAdd(dstVB.begin(), binding->_outputElements[c]._alignedByteOffset), dstVB.end()),
+					binding->_bufferStrides[Internal::VB_PostDeform], binding->_outputElements[c]._nativeFormat);
+			} else {
+				assert(binding->_outputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+				destinationElements[c] = MakeVertexIteratorRangeConst(
+					MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_outputElements[c]._alignedByteOffset), deformTemporariesVB.end()),
+					binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_outputElements[c]._nativeFormat);
+			}
+		}
+
+		return AsPointer(binding);
+	}
+
+	void CPUSkinDeformer::WriteJointTransforms(
 		const Section& section,
 		IteratorRange<Float3x4*>		destination,
 		IteratorRange<const Float4x4*>	skeletonMachineResult) const
@@ -53,13 +97,13 @@ namespace RenderCore { namespace Techniques
 			destination[c] = Identity<Float3x4>();
     }
 
-	RenderCore::Assets::SkeletonBinding SkinDeformer::CreateBinding(
+	RenderCore::Assets::SkeletonBinding CPUSkinDeformer::CreateBinding(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
 	{
 		return RenderCore::Assets::SkeletonBinding{skeletonMachineOutputInterface, _jointInputInterface};
 	}
 
-	void SkinDeformer::FeedInSkeletonMachineResults(
+	void CPUSkinDeformer::FeedInSkeletonMachineResults(
 		unsigned instanceIdx,
 		IteratorRange<const Float4x4*> skeletonMachineOutput,
 		const RenderCore::Assets::SkeletonBinding& binding)
@@ -69,20 +113,35 @@ namespace RenderCore { namespace Techniques
 		_skeletonBinding = binding;
 	}
 
-	void SkinDeformer::Execute(
-		unsigned instanceId,
-		IteratorRange<const VertexElementRange*> sourceElements,
-		IteratorRange<const VertexElementRange*> destinationElements) const
+	void CPUSkinDeformer::ExecuteCPU(
+		unsigned instanceIdx,
+		IteratorRange<const void*> srcVB,
+		IteratorRange<const void*> deformTemporariesVB,
+		IteratorRange<const void*> dstVB) const
 	{
-		assert(destinationElements.size() == 1);
+		assert(instanceIdx == 0);
 
-		auto& inputPosElement = sourceElements[0];
-		auto& outputPosElement = destinationElements[0];
-		assert(inputPosElement.begin().Format() == Format::R32G32B32_FLOAT);
-		assert(outputPosElement.begin().Format() == Format::R32G32B32_FLOAT);
-		assert(outputPosElement.size() <= inputPosElement.size());
+		IDeformOperator::VertexElementRange sourceElements[16];
+		IDeformOperator::VertexElementRange destinationElements[16];
+		unsigned currentGeoId = ~0u;
+		const DeformerInputBinding::GeoBinding* binding = nullptr;
 
 		for (const auto&section:_sections) {
+
+			if (section._geoId != currentGeoId) {
+				binding = _bindingHelper.CalculateRanges(
+					MakeIteratorRange(sourceElements, &sourceElements[dimof(sourceElements)]),
+					MakeIteratorRange(destinationElements, &destinationElements[dimof(destinationElements)]),
+					section._geoId, srcVB, deformTemporariesVB, dstVB);
+				currentGeoId = section._geoId;
+			}
+
+			auto& inputPosElement = sourceElements[0];
+			auto& outputPosElement = destinationElements[0];
+			assert(inputPosElement.begin().Format() == Format::R32G32B32_FLOAT);
+			assert(outputPosElement.begin().Format() == Format::R32G32B32_FLOAT);
+			assert(outputPosElement.size() <= inputPosElement.size());
+
 			std::vector<Float3x4> jointTransform(section._jointMatrices.size());
 			WriteJointTransforms(
 				section,
@@ -121,100 +180,101 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	SkinDeformer::SkinDeformer(
+	CPUSkinDeformer::CPUSkinDeformer(
 		const RenderCore::Assets::ModelScaffold& modelScaffold,
-		unsigned geoId)
+		const std::string& modelScaffoldName)
 	{
 		auto& immData = modelScaffold.ImmutableData();
-		assert(geoId < immData._boundSkinnedControllerCount);
-		auto& skinnedController = immData._boundSkinnedControllers[geoId];
-		auto& skelVb = skinnedController._skeletonBinding;
+		for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
+			auto& skinnedController = immData._boundSkinnedControllers[c];
+		
+			auto& skelVb = skinnedController._skeletonBinding;
 
-		auto skelVbData = std::make_unique<uint8_t[]>(skelVb._size);
-		{
-			auto largeBlocks = modelScaffold.OpenLargeBlocks();
-			auto base = largeBlocks->TellP();
+			auto skelVbData = std::make_unique<uint8_t[]>(skelVb._size);
+			{
+				auto largeBlocks = modelScaffold.OpenLargeBlocks();
+				auto base = largeBlocks->TellP();
 
-			largeBlocks->Seek(base + skelVb._offset);
-			largeBlocks->Read(skelVbData.get(), skelVb._size);
-		}
+				largeBlocks->Seek(base + skelVb._offset);
+				largeBlocks->Read(skelVbData.get(), skelVb._size);
+			}
 
-		_influencesPerVertex = 0;
-		unsigned elements = 0;
-		for (unsigned c=0; ; ++c) {
-			auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
-			auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
-			if (!weightsElement || !jointIndicesElement)
-				break;
-			assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
-			_influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_nativeFormat));
-			++elements;
-		}
-
-		if (!elements)
-			Throw(std::runtime_error("Could not create SkinDeformer because there is no position, weights and/or joint indices element in input geometry"));
-
-		{
-			auto vertexCount = skelVb._size / skelVb._ia._vertexStride;
-			_jointWeights.resize(vertexCount * _influencesPerVertex);
-			_jointIndices.resize(vertexCount * _influencesPerVertex);
-
-			unsigned componentIterator=0;
-			for (unsigned c=0; c<elements; ++c) {
+			_influencesPerVertex = 0;
+			unsigned elements = 0;
+			for (unsigned c=0; ; ++c) {
 				auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
 				auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
-				assert(weightsElement && jointIndicesElement);
-
-				auto subWeights = AsFloat4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride));
-				auto subJoints = AsUInt4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride));
-				auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
-
-				for (unsigned q=0; q<vertexCount; ++q) {
-					std::memcpy(&_jointWeights[q*_influencesPerVertex+componentIterator], &subWeights[q][0], subComponentCount * sizeof(float));
-					std::memcpy(&_jointIndices[q*_influencesPerVertex+componentIterator], &subJoints[q][0], subComponentCount * sizeof(float));
-				}
-				componentIterator += subComponentCount;
+				if (!weightsElement || !jointIndicesElement)
+					break;
+				assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
+				_influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_nativeFormat));
+				++elements;
 			}
-		}
 
-		_sections.reserve(skinnedController._preskinningSections.size());
-		for (const auto&sourceSection:skinnedController._preskinningSections) {
-			Section section;
-			section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
-			section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
-			section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
-			_sections.push_back(section);
-		}
+			if (!elements)
+				Throw(std::runtime_error("Could not create SkinDeformer because there is no position, weights and/or joint indices element in input geometry"));
 
-		_jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+			{
+				auto vertexCount = skelVb._size / skelVb._ia._vertexStride;
+				_jointWeights.resize(vertexCount * _influencesPerVertex);
+				_jointIndices.resize(vertexCount * _influencesPerVertex);
+
+				unsigned componentIterator=0;
+				for (unsigned c=0; c<elements; ++c) {
+					auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
+					auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
+					assert(weightsElement && jointIndicesElement);
+
+					auto subWeights = AsFloat4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride));
+					auto subJoints = AsUInt4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride));
+					auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
+
+					for (unsigned q=0; q<vertexCount; ++q) {
+						std::memcpy(&_jointWeights[q*_influencesPerVertex+componentIterator], &subWeights[q][0], subComponentCount * sizeof(float));
+						std::memcpy(&_jointIndices[q*_influencesPerVertex+componentIterator], &subJoints[q][0], subComponentCount * sizeof(float));
+					}
+					componentIterator += subComponentCount;
+				}
+			}
+
+			_sections.reserve(skinnedController._preskinningSections.size());
+			for (const auto&sourceSection:skinnedController._preskinningSections) {
+				Section section;
+				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
+				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
+				section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
+				section._geoId = immData._geoCount + c;
+				_sections.push_back(section);
+			}
+
+			_jointInputInterface = modelScaffold.CommandStream().GetInputInterface();
+		}
 	}
 
-	void* SkinDeformer::QueryInterface(size_t typeId)
+	void* CPUSkinDeformer::QueryInterface(size_t typeId)
 	{
-		if (typeId == typeid(SkinDeformer).hash_code())
+		if (typeId == typeid(CPUSkinDeformer).hash_code())
 			return this;
 		else if (typeId == typeid(ISkinDeformer).hash_code())
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(ICPUDeformOperator).hash_code())
-			return (ICPUDeformOperator*)this;
+		else if (typeId == typeid(IDeformOperator).hash_code())
+			return (IDeformOperator*)this;
 		return nullptr;
 	}
 
-	SkinDeformer::~SkinDeformer()
+	CPUSkinDeformer::~CPUSkinDeformer()
 	{
 	}
 
 	class CPUSkinDeformerFactory : public IDeformOperationFactory
 	{
 	public:
-		std::shared_ptr<IGPUDeformOperator> Configure(
+		std::shared_ptr<IDeformOperator> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName) override
 		{
-			assert(0);
-
 			// auto sep = std::find(initializer.begin(), initializer.end(), ',');
 			// assert(sep != initializer.end());
 
@@ -234,15 +294,17 @@ namespace RenderCore { namespace Techniques
 				deformOp._generatedElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
 				deformOp._upstreamSourceElements = {DeformOperationInstantiation::SemanticNameAndFormat{positionEleName, 0, Format::R32G32B32_FLOAT}};
 				deformOp._suppressElements = {weightsEle, jointIndicesEle};
+				deformOp._cpuDeformer = true;
 				result.emplace_back(std::move(deformOp));
 			}
 
-			return nullptr;
+			return std::make_shared<CPUSkinDeformer>(*modelScaffold, modelScaffoldName);
 		}
 
-		virtual void Bind(IGPUDeformOperator& op, const DeformerInputBinding& binding) override
+		virtual void Bind(IDeformOperator& op, const DeformerInputBinding& binding) override
 		{
-			assert(0);
+			auto* deformer = checked_cast<CPUSkinDeformer*>(&op);
+			deformer->_bindingHelper._inputBinding = binding;
 		}
 	};
 
@@ -320,13 +382,14 @@ namespace RenderCore { namespace Techniques
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(rvs);
 				us._immediateData = MakeIteratorRange(immDatas);
+
+				// We have to call EndDispatches / BeginDispatches every geo change, because this is required
+				// to push though updates to the uniform buffers in "us"
 				
-				if (op->get() != currentOperator) {
-					if (currentOperator)
-						currentOperator->EndDispatches();
-					(*op)->BeginDispatches(threadContext, us, {}, InvocationParamsHash);
-					currentOperator = op->get();
-				}
+				if (currentOperator)
+					currentOperator->EndDispatches();
+				(*op)->BeginDispatches(threadContext, us, {}, InvocationParamsHash);
+				currentOperator = op->get();
 				currentGeoId = section._geoId;
 			}
 
@@ -339,12 +402,6 @@ namespace RenderCore { namespace Techniques
 
 		if (currentOperator)
 			currentOperator->EndDispatches();
-	}
-
-	::Assets::DependencyValidation GPUSkinDeformer::GetDependencyValidation()
-	{
-		assert(0);
-		return {};
 	}
 
 #if 0
@@ -654,14 +711,20 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	void GPUSkinDeformer::StallForPipeline()
+	{
+		for (auto& section:_sections)
+			section._pipelineMarker->StallWhilePending();
+	}
+
 	void* GPUSkinDeformer::QueryInterface(size_t typeId)
 	{
 		if (typeId == typeid(GPUSkinDeformer).hash_code())
 			return this;
 		else if (typeId == typeid(ISkinDeformer).hash_code())
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(IGPUDeformOperator).hash_code())
-			return (IGPUDeformOperator*)this;
+		else if (typeId == typeid(IDeformOperator).hash_code())
+			return (IDeformOperator*)this;
 		return nullptr;
 	}
 
@@ -692,7 +755,7 @@ namespace RenderCore { namespace Techniques
 	class GPUSkinDeformerFactory : public IDeformOperationFactory
 	{
 	public:
-		std::shared_ptr<IGPUDeformOperator> Configure(
+		std::shared_ptr<IDeformOperator> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
@@ -730,7 +793,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		virtual void Bind(
-			IGPUDeformOperator& op,
+			IDeformOperator& op,
 			const DeformerInputBinding& binding) override
 		{
 			auto* deformer = checked_cast<GPUSkinDeformer*>(&op);

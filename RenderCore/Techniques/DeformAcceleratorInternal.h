@@ -39,14 +39,14 @@ namespace RenderCore { namespace Techniques
 		{
 			struct CPUOp
 			{
-				std::shared_ptr<ICPUDeformOperator> _deformOp;
+				std::shared_ptr<IDeformOperator> _deformOp;
 				struct Attribute { Format _format = Format(0); unsigned _offset = 0; unsigned _stride = 0; unsigned _vbIdx = ~0u; };
 				std::vector<Attribute> _inputElements;
 				std::vector<Attribute> _outputElements;
 			};
 
 			std::vector<CPUOp> _cpuOps;
-			std::vector<std::future<std::shared_ptr<IGPUDeformOperator>>> _gpuOps;
+			std::vector<std::future<std::shared_ptr<IDeformOperator>>> _gpuOps;
 
 			RendererGeoDeformInterface _rendererInterf;
 			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;

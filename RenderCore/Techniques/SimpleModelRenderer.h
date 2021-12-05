@@ -30,7 +30,8 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool; 
 	class PipelineAccelerator; 
 	class DescriptorSetAccelerator;
-	class ICPUDeformOperator;
+	class IDeformOperator;
+	class ISkinDeformer;
 	class IUniformBufferDelegate;
 
 	class ICustomDrawDelegate
@@ -164,7 +165,7 @@ namespace RenderCore { namespace Techniques
 
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IteratorRange<const std::shared_ptr<ICPUDeformOperator>*> skinDeformers);
+			IteratorRange<const std::shared_ptr<IDeformOperator>*> skinDeformers);
 		~RendererSkeletonInterface();
 
 		static void ConstructToPromise(
@@ -181,8 +182,9 @@ namespace RenderCore { namespace Techniques
 	private:
 		struct Deformer
 		{
-			std::shared_ptr<ICPUDeformOperator> _skinDeformer;
+			ISkinDeformer* _skinDeformer;
 			RenderCore::Assets::SkeletonBinding _deformerBindings;
+			std::shared_ptr<IDeformOperator> _skinDeformerRef;
 		};
 		std::vector<Deformer> _deformers;
 	};
