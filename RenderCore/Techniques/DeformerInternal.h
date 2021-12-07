@@ -24,6 +24,21 @@ namespace RenderCore { namespace Techniques
 		static constexpr unsigned VB_PostDeform = 4;
 		static constexpr unsigned VB_Count = 5;
 
+		class DeformerInputBindingHelper
+		{
+		public:
+			DeformerInputBinding _inputBinding;
+
+			using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
+			const DeformerInputBinding::GeoBinding* CalculateRanges(
+				IteratorRange<VertexElementRange*> sourceElements,
+				IteratorRange<VertexElementRange*> destinationElements,
+				unsigned geoId,
+				IteratorRange<const void*> srcVB,
+				IteratorRange<const void*> deformTemporariesVB,
+				IteratorRange<const void*> dstVB) const;
+		};
+
 		struct SourceDataTransform
 		{
 			unsigned	_geoId;
@@ -33,44 +48,6 @@ namespace RenderCore { namespace Techniques
 			unsigned	_targetStride;
 			unsigned	_vertexCount;
 		};
-
-#if 0
-		struct NascentDeformForGeo
-		{
-			struct CPUOp
-			{
-				std::shared_ptr<IDeformOperator> _deformOp;
-				struct Attribute { Format _format = Format(0); unsigned _offset = 0; unsigned _stride = 0; unsigned _vbIdx = ~0u; };
-				std::vector<Attribute> _inputElements;
-				std::vector<Attribute> _outputElements;
-			};
-
-			std::vector<CPUOp> _cpuOps;
-			std::vector<std::future<std::shared_ptr<IDeformOperator>>> _gpuOps;
-
-			RendererGeoDeformInterface _rendererInterf;
-			std::vector<SourceDataTransform> _cpuStaticDataLoadRequests;
-			std::optional<std::pair<unsigned, unsigned>> _gpuStaticDataRange;
-
-			unsigned _vbOffsets[4] = {0,0,0,0};
-			unsigned _vbSizes[4] = {0,0,0,0};
-		};
-
-		NascentDeformForGeo BuildNascentDeformForGeo(
-			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
-			InputLayout srcVBLayout, unsigned srcVBStride,
-			unsigned geoId,
-			unsigned vertexCount,
-			unsigned& preDeformStaticDataVBIterator,
-			unsigned& deformTemporaryGPUVBIterator,
-			unsigned& deformTemporaryCPUVBIterator,
-			unsigned& postDeformVBIterator);
-
-		static NascentDeformForGeo::CPUOp::Attribute AsCPUOpAttribute(const InputElementDesc& e, unsigned baseOffset, unsigned stride, unsigned inputSlot)
-		{
-			return {e._nativeFormat, baseOffset + e._alignedByteOffset, stride, inputSlot};
-		}
-#endif
 
 		struct WorkingDeformer
 		{

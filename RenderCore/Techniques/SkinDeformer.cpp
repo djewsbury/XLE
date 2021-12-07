@@ -4,7 +4,7 @@
 
 #include "SkinDeformer.h"
 #include "SkinDeformerInternal.h"
-#include "DeformAcceleratorInternal.h"		// (required for some utility functions)
+#include "DeformerInternal.h"		// (required for some utility functions)
 #include "CommonUtils.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
@@ -28,50 +28,6 @@ namespace RenderCore { namespace Techniques
 {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	const DeformerInputBinding::GeoBinding* InputBindingHelper::CalculateRanges(
-		IteratorRange<VertexElementRange*> sourceElements,
-		IteratorRange<VertexElementRange*> destinationElements,
-		unsigned geoId,
-		IteratorRange<const void*> srcVB,
-		IteratorRange<const void*> deformTemporariesVB,
-		IteratorRange<const void*> dstVB) const
-	{
-		auto binding = std::find_if(_inputBinding._geoBindings.begin(), _inputBinding._geoBindings.end(), [geoId](const auto& c) { return c._geoId == geoId; });
-		assert(binding != _inputBinding._geoBindings.end());
-		if (binding == _inputBinding._geoBindings.end())
-			return nullptr;
-		assert(binding->_inputElements.size() <= sourceElements.size());
-		assert(binding->_outputElements.size() <= destinationElements.size());
-
-		for (unsigned c=0; c<binding->_inputElements.size(); ++c) {
-			if (binding->_inputElements[c]._inputSlot == Internal::VB_CPUStaticData) {
-				sourceElements[c] = MakeVertexIteratorRangeConst(
-					MakeIteratorRange(PtrAdd(srcVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUStaticData]), srcVB.end()),
-					binding->_bufferStrides[Internal::VB_CPUStaticData], binding->_inputElements[c]._nativeFormat);
-			} else {
-				assert(binding->_inputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
-				sourceElements[c] = MakeVertexIteratorRangeConst(
-					MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
-					binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_inputElements[c]._nativeFormat);
-			}
-		}
-
-		for (unsigned c=0; c<binding->_outputElements.size(); ++c) {
-			if (binding->_outputElements[c]._inputSlot == Internal::VB_PostDeform) {
-				destinationElements[c] = MakeVertexIteratorRangeConst(
-					MakeIteratorRange(PtrAdd(dstVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform]), dstVB.end()),
-					binding->_bufferStrides[Internal::VB_PostDeform], binding->_outputElements[c]._nativeFormat);
-			} else {
-				assert(binding->_outputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
-				destinationElements[c] = MakeVertexIteratorRangeConst(
-					MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
-					binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_outputElements[c]._nativeFormat);
-			}
-		}
-
-		return AsPointer(binding);
-	}
 
 	void CPUSkinDeformer::WriteJointTransforms(
 		const Section& section,
@@ -820,4 +776,51 @@ namespace RenderCore { namespace Techniques
 	}
 
 	ISkinDeformer::~ISkinDeformer() {}
+
+	namespace Internal
+	{
+		const DeformerInputBinding::GeoBinding* DeformerInputBindingHelper::CalculateRanges(
+			IteratorRange<VertexElementRange*> sourceElements,
+			IteratorRange<VertexElementRange*> destinationElements,
+			unsigned geoId,
+			IteratorRange<const void*> srcVB,
+			IteratorRange<const void*> deformTemporariesVB,
+			IteratorRange<const void*> dstVB) const
+		{
+			auto binding = std::find_if(_inputBinding._geoBindings.begin(), _inputBinding._geoBindings.end(), [geoId](const auto& c) { return c._geoId == geoId; });
+			assert(binding != _inputBinding._geoBindings.end());
+			if (binding == _inputBinding._geoBindings.end())
+				return nullptr;
+			assert(binding->_inputElements.size() <= sourceElements.size());
+			assert(binding->_outputElements.size() <= destinationElements.size());
+
+			for (unsigned c=0; c<binding->_inputElements.size(); ++c) {
+				if (binding->_inputElements[c]._inputSlot == Internal::VB_CPUStaticData) {
+					sourceElements[c] = MakeVertexIteratorRangeConst(
+						MakeIteratorRange(PtrAdd(srcVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUStaticData]), srcVB.end()),
+						binding->_bufferStrides[Internal::VB_CPUStaticData], binding->_inputElements[c]._nativeFormat);
+				} else {
+					assert(binding->_inputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+					sourceElements[c] = MakeVertexIteratorRangeConst(
+						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_inputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
+						binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_inputElements[c]._nativeFormat);
+				}
+			}
+
+			for (unsigned c=0; c<binding->_outputElements.size(); ++c) {
+				if (binding->_outputElements[c]._inputSlot == Internal::VB_PostDeform) {
+					destinationElements[c] = MakeVertexIteratorRangeConst(
+						MakeIteratorRange(PtrAdd(dstVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform]), dstVB.end()),
+						binding->_bufferStrides[Internal::VB_PostDeform], binding->_outputElements[c]._nativeFormat);
+				} else {
+					assert(binding->_outputElements[c]._inputSlot == Internal::VB_CPUDeformTemporaries);
+					destinationElements[c] = MakeVertexIteratorRangeConst(
+						MakeIteratorRange(PtrAdd(deformTemporariesVB.begin(), binding->_outputElements[c]._alignedByteOffset + binding->_bufferOffsets[Internal::VB_CPUDeformTemporaries]), deformTemporariesVB.end()),
+						binding->_bufferStrides[Internal::VB_CPUDeformTemporaries], binding->_outputElements[c]._nativeFormat);
+				}
+			}
+
+			return AsPointer(binding);
+		}
+	}
 }}

@@ -4,7 +4,7 @@
 
 #include "DeformAccelerator.h"
 #include "SimpleModelDeform.h"
-#include "DeformAcceleratorInternal.h"
+#include "DeformerInternal.h"
 #include "Services.h"
 #include "GPUTrackerHeap.h"
 #include "CommonUtils.h"

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "SkinDeformer.h"
+#include "DeformerInternal.h"
 #include "SimpleModelDeform.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/SkeletonScaffoldInternal.h"
@@ -18,21 +19,6 @@ namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
 {
-	class InputBindingHelper
-	{
-	public:
-		DeformerInputBinding _inputBinding;
-
-		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
-		const DeformerInputBinding::GeoBinding* CalculateRanges(
-			IteratorRange<VertexElementRange*> sourceElements,
-			IteratorRange<VertexElementRange*> destinationElements,
-			unsigned geoId,
-			IteratorRange<const void*> srcVB,
-			IteratorRange<const void*> deformTemporariesVB,
-			IteratorRange<const void*> dstVB) const;
-	};
-
 	class CPUSkinDeformer : public IDeformer, public ISkinDeformer
 	{
 	public:
@@ -56,7 +42,7 @@ namespace RenderCore { namespace Techniques
 			const std::string& modelScaffoldName);
 		~CPUSkinDeformer();
 
-		InputBindingHelper _bindingHelper;
+		Internal::DeformerInputBindingHelper _bindingHelper;
 
 		static std::vector<RenderCore::Techniques::DeformOperationInstantiation> InstantiationFunction(
 			StringSection<> initializer,

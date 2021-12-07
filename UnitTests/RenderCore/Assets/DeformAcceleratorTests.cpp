@@ -8,7 +8,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
-#include "../../../RenderCore/Techniques/DeformAcceleratorInternal.h"
+#include "../../../RenderCore/Techniques/DeformerInternal.h"
 #include "../../../RenderCore/Techniques/SimpleModelDeform.h"
 #include "../../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../../RenderCore/Techniques/SkinDeformerInternal.h"
