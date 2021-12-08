@@ -166,6 +166,10 @@ namespace RenderCore { namespace Techniques
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
 			IteratorRange<const std::shared_ptr<IDeformer>*> skinDeformers);
+		RendererSkeletonInterface(
+			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+			IDeformAcceleratorPool& deformAcceleratorPool,
+			DeformAccelerator& deformAccelerator);
 		~RendererSkeletonInterface();
 
 		static void ConstructToPromise(

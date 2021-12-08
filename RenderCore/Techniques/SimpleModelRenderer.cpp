@@ -931,8 +931,23 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
 		IteratorRange<const std::shared_ptr<IDeformer>*> skinDeformers)
 	{
-		_deformers.resize(skinDeformers.size());
+		_deformers.reserve(skinDeformers.size());
 		for (auto&d:skinDeformers) {
+			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
+			if (!skinDeformer)
+				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
+			_deformers.push_back(Deformer{ skinDeformer, skinDeformer->CreateBinding(smOutputInterface), d });
+		}
+	}
+
+	RendererSkeletonInterface::RendererSkeletonInterface(
+		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+		IDeformAcceleratorPool& deformAcceleratorPool,
+		DeformAccelerator& deformAccelerator)
+	{
+		auto srcDeformers = deformAcceleratorPool.GetOperations(deformAccelerator, typeid(ISkinDeformer).hash_code());
+		_deformers.reserve(srcDeformers.size());
+		for (auto&d:srcDeformers) {
 			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
 			if (!skinDeformer)
 				Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
@@ -976,7 +991,7 @@ namespace RenderCore { namespace Techniques
 				if (deformAccelerator) {
 					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
 						scaffoldActual->EmbeddedSkeleton().GetOutputInterface(),
-						deformAcceleratorPool->GetOperations(*deformAccelerator, typeid(Techniques::ISkinDeformer).hash_code()));
+						*deformAcceleratorPool, *deformAccelerator);
 					
 					skeletonInterfacePromise.set_value(skeletonInterface);
 

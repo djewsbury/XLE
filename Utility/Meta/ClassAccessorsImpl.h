@@ -217,9 +217,18 @@ namespace Utility
             p._naturalType = ImpliedTyping::TypeOf<std::decay_t<MemberType>>();
             p._getter = [ptrToMember](const void* object, IteratorRange<void*> destination, ImpliedTyping::TypeDesc requestedType) {
                 const auto& member = ((const ObjectType*)object)->*ptrToMember;
-                return ImpliedTyping::Cast(
-                    destination, requestedType,
-                    MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>());
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    return ImpliedTyping::Cast(
+                        destination, requestedType,
+                        MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>());
+                } else {
+                    if (requestedType._typeHint == ImpliedTyping::TypeHint::String && (requestedType._type == ImpliedTyping::TypeCat::UInt8 || requestedType._type == ImpliedTyping::TypeCat::Int8)) {
+                        XlCopyString((char*)destination.begin(), destination.size(), MakeStringSection(member));
+                        return true;
+                    } else {
+                        return ImpliedTyping::ConvertFullMatch(MakeStringSection(member), destination, requestedType);
+                    }
+                }
             };
             p._setter = [ptrToMember](void* object, IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) {
                 auto& member = ((ObjectType*)object)->*ptrToMember;
@@ -238,9 +247,11 @@ namespace Utility
                     // member is a string
                     if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
                         member = MakeStringSection((const char*)src.begin(), (const char*)src.end()).AsString();
+                        return true;
                     } else {
                         assert(srcType._typeHint != ImpliedTyping::TypeHint::String);       // no support for wide char type strings here
                         member = ImpliedTyping::AsString(src, srcType);
+                        return true;
                     }
                 }
             };

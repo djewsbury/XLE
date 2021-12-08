@@ -318,6 +318,11 @@ namespace RenderCore { namespace Techniques
 		} 
 		
 		if (totalGPUAllocationSize) {
+			#if defined(_DEBUG)
+				auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+				metalContext.BeginLabel("Deformers");
+			#endif
+
 			auto bufferAndRange = attachedStorage.AllocateRange(totalGPUAllocationSize, BindFlag::VertexBuffer|BindFlag::UnorderedAccess, defaultPageSize);
 			auto vbv = bufferAndRange.AsVertexBufferView();
 			assert(vbv._resource);
@@ -362,6 +367,10 @@ namespace RenderCore { namespace Techniques
 			}
 
 			_pendingVertexInputBarrier |= atLeastOneGPUOperator;
+
+			#if defined(_DEBUG)
+				metalContext.EndLabel();
+			#endif
 		}
 
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
@@ -439,7 +448,10 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	DeformAcceleratorPool::~DeformAcceleratorPool() {}
+	DeformAcceleratorPool::~DeformAcceleratorPool() 
+	{
+		_currentFrameAttachedStorage.clear();
+	}
 
 	static uint64_t s_nextDeformAcceleratorPool = 1;
 	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}

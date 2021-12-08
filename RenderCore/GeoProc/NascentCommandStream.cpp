@@ -281,7 +281,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(serializer, _curves);
     }
 
-	static std::ostream& SerializationOperators(
+	static std::ostream& SerializationOperator(
 		std::ostream& stream, 
 		const NascentAnimationSet::StringOrHash& animSet)
 	{

@@ -156,6 +156,11 @@ namespace Utility
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const utf32* const*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
         constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const ucs4* const*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
 
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf8>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf16>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt16, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<utf32>*)    { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+        constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(const std::basic_string<ucs4>*)     { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt32, (uint16_t)~uint16_t(0), Utility::ImpliedTyping::TypeHint::String}; }
+
         template<typename Type> 
             decltype(InternalTypeOf(std::declval<Type const*>())) TypeOf() { return InternalTypeOf((Type const*)nullptr); }
 
