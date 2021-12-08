@@ -16,8 +16,12 @@
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 { 
+	NascentAnimationSet::StringOrHash::StringOrHash(const std::string& str) : _stringForm(str), _hashForm(Hash64(str)) {}
+	NascentAnimationSet::StringOrHash::StringOrHash(uint64_t h) : _hashForm(h) {}
+	bool operator==(const NascentAnimationSet::StringOrHash& lhs, const NascentAnimationSet::StringOrHash& rhs) { return lhs._hashForm == rhs._hashForm; }
+
     void    NascentAnimationSet::AddConstantDriver( 
-                                    const std::string&  parameterName, 
+                                    StringOrHash  		parameterName, 
                                     const void*         constantValue, 
 									size_t				valueSize,
 									Format				format,
@@ -46,7 +50,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     }
 
     void    NascentAnimationSet::AddAnimationDriver( 
-        const std::string& parameterName, 
+        StringOrHash parameterName, 
         unsigned curveId, 
         AnimSamplerType samplerType, unsigned samplerOffset)
     {
@@ -71,7 +75,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i2);
 	}
 
-    bool    NascentAnimationSet::HasAnimationDriver(const std::string&  parameterName) const
+    bool    NascentAnimationSet::HasAnimationDriver(StringOrHash parameterName) const
     {
         auto i2 = std::find(_parameterInterfaceDefinition.cbegin(), 
                             _parameterInterfaceDefinition.cend(), parameterName);
@@ -111,7 +115,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 minTime = std::min(minTime, curveStart);
                 maxTime = std::max(maxTime, curveEnd);
 
-                const std::string& pname = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
+                auto pname = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
                 _curves.emplace_back(Assets::RawAnimationCurve(*animCurve));
                 AddAnimationDriver(
                     pname, unsigned(_curves.size()-1), 
@@ -120,7 +124,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         }
 
         for (auto i=copyFrom._constantDrivers.cbegin(); i!=copyFrom._constantDrivers.end(); ++i) {
-            const std::string& pname = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
+            auto pname = copyFrom._parameterInterfaceDefinition[i->_parameterIndex];
             AddConstantDriver(
 				pname, PtrAdd(AsPointer(copyFrom._constantData.begin()), i->_dataOffset), 
 				BitsPerPixel(i->_format)/8, i->_format,
@@ -255,7 +259,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		finalAnimationSet._outputInterface.reserve(_parameterInterfaceDefinition.size());
 		for (const auto&p:_parameterInterfaceDefinition)
-			finalAnimationSet._outputInterface.push_back(Hash64(p));
+			finalAnimationSet._outputInterface.push_back(p._hashForm);
 
 		finalAnimationSet._constantData.insert(finalAnimationSet._constantData.begin(), _constantData.begin(), _constantData.end());
 
@@ -276,6 +280,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		SerializationOperator(serializer, _curves);
     }
+
+	static std::ostream& SerializationOperators(
+		std::ostream& stream, 
+		const NascentAnimationSet::StringOrHash& animSet)
+	{
+		if (animSet._stringForm) stream << animSet._stringForm.value();
+		else stream << animSet._hashForm;
+		return stream;
+	}
 
 	std::ostream& SerializationOperator(
 		std::ostream& stream, 

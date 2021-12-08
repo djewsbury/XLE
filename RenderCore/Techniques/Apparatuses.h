@@ -122,6 +122,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<::Assets::CompilerRegistration> _modelCompilers;
 		::Assets::CompilerRegistration _materialCompilerRegistration;
 		::Assets::CompilerRegistration _textureCompilerRegistration;
+		::Assets::CompilerRegistration _mergedAnimSetCompilerRegistration;
 
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 

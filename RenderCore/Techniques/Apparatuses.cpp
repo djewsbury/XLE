@@ -23,6 +23,7 @@
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
+#include "../Assets/MergedAnimationSetCompiler.h"
 #include "../IDevice.h"
 #include "../MinimalShaderSource.h"
 #include "../ShaderService.h"
@@ -185,6 +186,7 @@ namespace RenderCore { namespace Techniques
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
+		_mergedAnimSetCompilerRegistration = RenderCore::Assets::RegisterMergedAnimationSetCompiler(compilers);
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
 
 		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);

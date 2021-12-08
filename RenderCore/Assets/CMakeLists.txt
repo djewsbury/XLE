@@ -15,6 +15,7 @@ set(Src
     PipelineConfigurationUtils.cpp
     TextureCompiler.cpp
     TextureLoaders.cpp
+    MergedAnimationSetCompiler.cpp
     ../GeoProc/GeometryAlgorithm.cpp
     ../GeoProc/GeoProcUtil.cpp
     ../GeoProc/MeshDatabase.cpp
