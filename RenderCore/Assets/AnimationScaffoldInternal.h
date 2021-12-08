@@ -87,6 +87,7 @@ namespace RenderCore { namespace Assets
 		IteratorRange<const AnimationDriver*> GetAnimationDrivers() const { return MakeIteratorRange(_animationDrivers); }
 		IteratorRange<const ConstantDriver*> GetConstantDrivers() const { return MakeIteratorRange(_constantDrivers); }
 		IteratorRange<const AnimationAndName*> GetAnimations() const { return MakeIteratorRange(_animations); }
+        IteratorRange<const void*> GetConstantData() const { return MakeIteratorRange(_constantData); }
 
         OutputInterface	GetOutputInterface() const { return MakeIteratorRange(_outputInterface); }
 

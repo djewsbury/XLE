@@ -17,9 +17,11 @@ namespace RenderCore { namespace Assets
 	struct CurveKeyDataDesc
 	{
 		struct Flags { enum BitValue { Quantized = 1<<0, HasInTangent = 1<<1, HasOutTangent = 1<<2 }; using BitField = unsigned; };
-		Flags::BitField	_flags;
-		unsigned		_elementStride;
-		Format			_elementFormat;
+		Flags::BitField	_flags = 0;
+		unsigned		_elementStride = 0;
+		Format			_elementFormat = Format(0);
+        float           _frameDuration = 0.f;
+        unsigned        _blockCount = 1;
 	};
 
 	struct CurveDequantizationBlock
@@ -42,7 +44,7 @@ namespace RenderCore { namespace Assets
         template<typename OutType>
             OutType        Calculate(float inputTime) const never_throws;
 
-		RawAnimationCurve(  SerializableVector<float>&&	timeMarkers, 
+		RawAnimationCurve(  SerializableVector<uint16_t>&& timeMarkers, 
                             SerializableVector<uint8_t>&& keyData,
 							const CurveKeyDataDesc&	keyDataDesc,
                             CurveInterpolationType	interpolationType);
@@ -53,10 +55,10 @@ namespace RenderCore { namespace Assets
 		~RawAnimationCurve();
 
     protected:
-        SerializableVector<float>	_timeMarkers;
-        SerializableVector<uint8_t>	_keyData;
-        CurveKeyDataDesc			_keyDataDesc;
-		CurveInterpolationType		_interpolationType;
+        SerializableVector<uint16_t>    _timeMarkers;
+        SerializableVector<uint8_t>	    _keyData;
+        CurveKeyDataDesc			    _keyDataDesc;
+		CurveInterpolationType		    _interpolationType;
     };
 
     template<typename Serializer>
@@ -67,6 +69,8 @@ namespace RenderCore { namespace Assets
         SerializationOperator(outputSerializer, _keyDataDesc._flags);
 		SerializationOperator(outputSerializer, _keyDataDesc._elementStride);
         SerializationOperator(outputSerializer, unsigned(_keyDataDesc._elementFormat));
+        SerializationOperator(outputSerializer, _keyDataDesc._frameDuration);
+        SerializationOperator(outputSerializer, _keyDataDesc._blockCount);        
 		SerializationOperator(outputSerializer, unsigned(_interpolationType));
     }
 
