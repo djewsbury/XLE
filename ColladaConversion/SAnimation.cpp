@@ -436,20 +436,26 @@ namespace ColladaConversion
                 //          array. If they are not the same, it means the key frames for
                 //          different fields are in different places. That would cause a lot
                 //          of problems.
-            SerializableVector<float> inputTimeBlock;
-			inputTimeBlock.resize(keyCount);
+            SerializableVector<float> inputTimeBlockAsFloats;
+			inputTimeBlockAsFloats.resize(keyCount);
             LoadSource(
-                inputTimeBlock.data(),
+                inputTimeBlockAsFloats.data(),
                 1, keyCount, 1, 
                 firstChannel._inputSource, 
                 firstChannel._inputSource->FindAccessorForTechnique()->GetStride()-1);
+
+            const float frameDuration = 1.f/120.f;
+            SerializableVector<uint16_t> inputTimeBlock;
+            inputTimeBlock.reserve(inputTimeBlockAsFloats.size());
+            for (auto t:inputTimeBlockAsFloats)
+                inputTimeBlock.push_back(t*frameDuration);
 
                 // todo -- we need to find the correct animation curve type
             auto interpolationType = RenderCore::Assets::CurveInterpolationType::Linear;
             if (firstChannel._interpolationSource)
                 interpolationType = AsInterpolationType(*firstChannel._interpolationSource);
 
-			RenderCore::Assets::CurveKeyDataDesc keyDataDesc { 0, elementBytes, positionFormat };
+			RenderCore::Assets::CurveKeyDataDesc keyDataDesc { 0, elementBytes, positionFormat, frameDuration };
 			if (inTangentFormat != Format::Unknown) {
 				assert(inTangentFormat == positionFormat);
 				keyDataDesc._flags |= RenderCore::Assets::CurveKeyDataDesc::Flags::HasInTangent;
