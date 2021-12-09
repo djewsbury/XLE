@@ -9,6 +9,7 @@
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
+#include "../Metal/DeviceContext.h"
 #include "../BufferView.h"
 #include "../IDevice.h"
 #include "../ResourceDesc.h"
@@ -70,11 +71,14 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void CPUSkinDeformer::ExecuteCPU(
-		unsigned instanceIdx,
+		IteratorRange<const unsigned*> instanceIndices,
+		unsigned outputInstanceStride,
 		IteratorRange<const void*> srcVB,
 		IteratorRange<const void*> deformTemporariesVB,
 		IteratorRange<const void*> dstVB) const
 	{
+		assert(instanceIndices.size() == 1);
+		auto instanceIdx = instanceIndices[0];
 		assert(instanceIdx == 0);
 
 		IDeformer::VertexElementRange sourceElements[16];
@@ -282,9 +286,14 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float4x4*> skeletonMachineOutput,
 		const RenderCore::Assets::SkeletonBinding& binding)
 	{
+		if (_jointMatrices.size() < (instanceIdx+1)*_jointMatricesInstanceStride)
+			_jointMatrices.resize((instanceIdx+1)*_jointMatricesInstanceStride, Identity<Float3x4>());
+
 		for (unsigned sectionIdx=0; sectionIdx<_sections.size(); ++sectionIdx) {
 			auto& section = _sections[sectionIdx];
-			auto destination = MakeIteratorRange(_jointMatrices.begin()+section._rangeInJointMatrices.first, _jointMatrices.begin()+section._rangeInJointMatrices.second);
+			auto destination = MakeIteratorRange(
+				_jointMatrices.begin()+instanceIdx*_jointMatricesInstanceStride+section._rangeInJointMatrices.first, 
+				_jointMatrices.begin()+instanceIdx*_jointMatricesInstanceStride+section._rangeInJointMatrices.second);
 
 			unsigned c=0;
 			if (binding.GetModelJointCount()) {
@@ -308,21 +317,40 @@ namespace RenderCore { namespace Techniques
 
 	void GPUSkinDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
-		unsigned instanceId,
+		IteratorRange<const unsigned*> instanceIndices,
+		unsigned outputInstanceStride,
 		const IResourceView& srcVB,
 		const IResourceView& deformTemporariesVB,
 		const IResourceView& dstVB) const
 	{
+		assert(!instanceIndices.empty());
 		struct InvocationParams
 		{
 			unsigned _vertexCount, _firstVertex, _softInfluenceCount, _firstJointTransform;
+			unsigned _instanceCount, _outputInstanceStride;
 		};
 
 		IComputeShaderOperator* currentOperator = nullptr;
 		unsigned currentGeoId = ~0u;
 
+		std::shared_ptr<RenderCore::IResourceView> jointMatricesBuffer;
+		{
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			auto jointMatricesMapping = metalContext.MapTemporaryStorage(instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride, BindFlag::UnorderedAccess);
+			for (unsigned c=0; c<instanceIndices.size(); ++c) {
+				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
+					Throw(std::runtime_error("Instance data was not provided before ExecuteGPU in skinning deformer"));
+				std::memcpy(
+					PtrAdd(jointMatricesMapping.GetData().begin(), c*sizeof(Float3x4)*_jointMatricesInstanceStride), 
+					PtrAdd(_jointMatrices.data(), instanceIndices[c]*sizeof(Float3x4)*_jointMatricesInstanceStride),
+					sizeof(Float3x4)*_jointMatricesInstanceStride);
+			}
+			jointMatricesBuffer = jointMatricesMapping.AsResourceView();
+		}
+
 		static const auto InvocationParamsHash = Hash64("InvocationParams");
 
+		const unsigned instanceCount = (unsigned)instanceIndices.size();
 		const unsigned wavegroupWidth = 64;
 		for (const auto&section:_sections) {
 			if (section._geoId != currentGeoId) {
@@ -330,10 +358,9 @@ namespace RenderCore { namespace Techniques
 				if (!op) continue;
 
 				// note -- we could make some of the iaParams values push constants to avoid re-uploading _jointMatrices here
-				const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB };
+				const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, jointMatricesBuffer.get() };
 				UniformsStream::ImmediateData immDatas[] {
-					MakeOpaqueIteratorRange(section._iaParams),
-					MakeIteratorRange(_jointMatrices)
+					MakeOpaqueIteratorRange(section._iaParams)
 				};
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(rvs);
@@ -351,8 +378,8 @@ namespace RenderCore { namespace Techniques
 
 			for (const auto&drawCall:section._preskinningDrawCalls) {
 				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
-				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first };
-				currentOperator->Dispatch((drawCall._indexCount+wavegroupWidth-1)/wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first, instanceCount, outputInstanceStride };
+				currentOperator->Dispatch((drawCall._indexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
 			}
 		}
 
@@ -576,8 +603,9 @@ namespace RenderCore { namespace Techniques
 			staticDataLoadRequests.push_back({ skelVb._offset, skelVb._size });
 			skelVBIterator += skelVb._size;
 		}
-		_jointMatrices.resize(jointMatrixBufferCount, Identity<Float3x4>());
-		
+		_jointMatricesInstanceStride = jointMatrixBufferCount;
+		_jointMatrices.resize(1*_jointMatricesInstanceStride, Identity<Float3x4>());
+
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
 			device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
 			BindFlag::UnorderedAccess,
@@ -644,10 +672,10 @@ namespace RenderCore { namespace Techniques
 
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Hash64("IAParams"));
-			usi.BindImmediateData(1, Hash64("JointTransforms"));
 			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
 			usi.BindResourceView(1, Hash64("InputAttributes"));
 			usi.BindResourceView(2, Hash64("OutputAttributes"));
+			usi.BindResourceView(3, Hash64("JointTransforms"));
 			
 			auto pipelineMarker = pipelineCollection.GetPipelineMarker(selectors, usi);
 
@@ -660,6 +688,7 @@ namespace RenderCore { namespace Techniques
 				q->_iaParams._outTangentsOffset = outTangentsOffset;
 				q->_iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
 				q->_iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
+				q->_iaParams._jointMatricesInstanceStride = _jointMatricesInstanceStride;
 				assert(q->_indicesFormat == start->_indicesFormat);
 				assert(q->_weightsFormat == start->_weightsFormat);
 				q->_pipelineMarker = pipelineMarker;

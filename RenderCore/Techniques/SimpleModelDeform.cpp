@@ -87,7 +87,8 @@ namespace RenderCore { namespace Techniques
 
 	void IDeformer::ExecuteGPU(
 		IThreadContext& threadContext,
-		unsigned instanceIdx,
+		IteratorRange<const unsigned*> instanceIndices,
+		unsigned outputInstanceStride,
 		const IResourceView& srcVB,
 		const IResourceView& deformTemporariesVB,
 		const IResourceView& dstVB) const
@@ -96,7 +97,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	void IDeformer::ExecuteCPU(
-		unsigned instanceIdx,
+		IteratorRange<const unsigned*> instanceIndices,
+		unsigned outputInstanceStride,
 		IteratorRange<const void*> srcVB,
 		IteratorRange<const void*> deformTemporariesVB,
 		IteratorRange<const void*> dstVB) const

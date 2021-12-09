@@ -75,6 +75,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint64_t> _readiedInstances;
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
+		std::vector<unsigned> _instanceToReadiedBufferOffset;
 
 		std::vector<std::shared_ptr<IDeformer>> _deformOps;
 		DeformerToRendererBinding _rendererGeoInterface;
@@ -218,7 +219,7 @@ namespace RenderCore { namespace Techniques
 		auto staticDataPartRange = MakeIteratorRange(a._deformStaticDataInput);
 		auto temporaryDeformRange = MakeIteratorRange(a._deformTemporaryBuffer);
 		for (const auto&d:a._deformOps)
-			d->ExecuteCPU(instanceIdx[0], staticDataPartRange, temporaryDeformRange, outputPartRange);
+			d->ExecuteCPU(instanceIdx,  a._outputVBSize, staticDataPartRange, temporaryDeformRange, outputPartRange);
 	}
 
 	void DeformAcceleratorPool::ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB)
@@ -226,7 +227,7 @@ namespace RenderCore { namespace Techniques
 		for (const auto&d:a._deformOps) {
 			d->ExecuteGPU(
 				threadContext,
-				instanceIdx[0],		// todo -- all instances
+				instanceIdx, a._outputVBSize,
 				*a._gpuStaticDataBufferView,
 				*a._gpuTemporariesBufferView,
 				dstVB);
@@ -293,7 +294,7 @@ namespace RenderCore { namespace Techniques
 				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
 					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
 
-				unsigned instanceCount = 0;
+				unsigned instanceCount=0, maxInstanceIdx=0;
 				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
 				for (auto f=fMin; f<=fMax; ++f) {
 					auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
@@ -301,6 +302,7 @@ namespace RenderCore { namespace Techniques
 						auto bit = xl_ctz8(active);
 						active ^= 1ull<<uint64_t(bit);
 						instanceList[instanceCount++] = f*64+bit;
+						maxInstanceIdx = std::max(maxInstanceIdx, f*64+bit);
 					}
 					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
 					accelerator->_enabledInstances[f] = 0;
@@ -311,7 +313,13 @@ namespace RenderCore { namespace Techniques
 
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
-				movingOffset += instanceCount * accelerator->_outputVBSize;
+				
+				if (accelerator->_instanceToReadiedBufferOffset.size() <= maxInstanceIdx+1)
+					accelerator->_instanceToReadiedBufferOffset.resize(maxInstanceIdx+1, ~0u);
+				for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
+					accelerator->_instanceToReadiedBufferOffset[i] = movingOffset;
+					movingOffset += accelerator->_outputVBSize;
+				}
 			}
 
 			assert(movingOffset == totalCPUAllocationSize);
@@ -341,7 +349,7 @@ namespace RenderCore { namespace Techniques
 				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
 					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
 
-				unsigned instanceCount = 0;
+				unsigned instanceCount=0, maxInstanceIdx=0;
 				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
 				for (auto f=fMin; f<=fMax; ++f) {
 					auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
@@ -349,6 +357,7 @@ namespace RenderCore { namespace Techniques
 						auto bit = xl_ctz8(active);
 						active ^= 1ull<<uint64_t(bit);
 						instanceList[instanceCount++] = f*64+bit;
+						maxInstanceIdx = std::max(maxInstanceIdx, f*64+bit);
 					}
 					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
 					accelerator->_enabledInstances[f] = 0;
@@ -363,7 +372,13 @@ namespace RenderCore { namespace Techniques
 				atLeastOneGPUOperator = true;
 				accelerator->_minEnabledInstance = ~0u;
 				accelerator->_maxEnabledInstance = 0u;
-				movingOffset += instanceCount * accelerator->_outputVBSize;
+
+				if (accelerator->_instanceToReadiedBufferOffset.size() <= maxInstanceIdx+1)
+					accelerator->_instanceToReadiedBufferOffset.resize(maxInstanceIdx+1, ~0u);
+				for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
+					accelerator->_instanceToReadiedBufferOffset[i] = movingOffset;
+					movingOffset += accelerator->_outputVBSize;
+				}
 			}
 
 			_pendingVertexInputBarrier |= atLeastOneGPUOperator;
@@ -408,10 +423,11 @@ namespace RenderCore { namespace Techniques
 			// be enabled via EnableInstance() before usage (probably at the time it's initialized with current state data)
 			assert(f < accelerator._readiedInstances.size());
 			assert(accelerator._readiedInstances[f] & (1ull << uint64_t(instanceIdx & (64-1))));	
+			assert(instanceIdx < accelerator._instanceToReadiedBufferOffset.size());
 		#endif
 		assert(accelerator._outputVBV._resource);
 		VertexBufferView result = accelerator._outputVBV;
-		result._offset += accelerator._outputVBSize * instanceIdx;
+		result._offset += accelerator._instanceToReadiedBufferOffset[instanceIdx];
 		return result;
 	}
 

@@ -23,14 +23,16 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual void ExecuteGPU(
 			IThreadContext& threadContext,
-			unsigned instanceIdx,
+			IteratorRange<const unsigned*> instanceIndices,
+			unsigned outputInstanceStride,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
 			const IResourceView& dstVB) const;
 
 		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
 		virtual void ExecuteCPU(
-			unsigned instanceIdx,
+			IteratorRange<const unsigned*> instanceIndices,
+			unsigned outputInstanceStride,
 			IteratorRange<const void*> srcVB,
 			IteratorRange<const void*> deformTemporariesVB,
 			IteratorRange<const void*> dstVB) const;

@@ -23,7 +23,8 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual void ExecuteCPU(
-			unsigned instanceIdx,
+			IteratorRange<const unsigned*> instanceIndices,
+			unsigned outputInstanceStride,
 			IteratorRange<const void*> srcVB,
 			IteratorRange<const void*> deformTemporariesVB,
 			IteratorRange<const void*> dstVB) const override;
@@ -103,7 +104,8 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual void ExecuteGPU(
 			IThreadContext& threadContext,
-			unsigned instanceIdx,
+			IteratorRange<const unsigned*> instanceIndices,
+			unsigned outputInstanceStride,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
 			const IResourceView& dstVB) const override;
@@ -140,6 +142,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
 			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
 			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
+			unsigned _jointMatricesInstanceStride;
 		};
 
 		struct Section
@@ -157,13 +160,8 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Section> _sections;
 
-		struct Instance
-		{
-			IteratorRange<const Float4x4*> _skeletonMachineOutput;
-			const RenderCore::Assets::SkeletonBinding* _binding;
-		};
-		std::vector<Instance> _instanceData;
 		std::vector<Float3x4> _jointMatrices;
+		unsigned _jointMatricesInstanceStride = 0;
 
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
 	};

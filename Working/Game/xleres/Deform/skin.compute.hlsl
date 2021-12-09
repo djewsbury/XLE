@@ -35,12 +35,11 @@ cbuffer IAParams
 	uint WeightsOffset;
 	uint JointIndicesOffsets;
 	uint StaticVertexAttachmentsStride;
+
+	uint JointMatricesInstanceStride;
 }
 
-cbuffer JointTransforms
-{
-	row_major float3x4 JointTransforms[200];
-}
+StructuredBuffer<row_major float3x4> JointTransforms;
 
 [[vk::push_constant]] struct InvocationParamsStruct
 {
@@ -48,6 +47,8 @@ cbuffer JointTransforms
 	uint FirstVertex;
 	uint SoftInfluenceCount;
 	uint FirstJointTransform;
+	uint InstanceCount;
+	uint OutputInstanceStride;
 } InvocationParams;
 
 #define R32G32B32A32_FLOAT 2
@@ -129,9 +130,14 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 [numthreads(64, 1, 1)]
 	void main(uint vertexIdx : SV_DispatchThreadID)
 {
-	if (vertexIdx >= InvocationParams.VertexCount)
+	uint instanceIdx = vertexIdx / InvocationParams.VertexCount;
+	if (instanceIdx >= InvocationParams.InstanceCount)
 		return;
+	vertexIdx -= instanceIdx*InvocationParams.VertexCount;
 	vertexIdx += InvocationParams.FirstVertex;
+
+	uint firstJointTransform = InvocationParams.FirstJointTransform;
+	firstJointTransform += instanceIdx * JointMatricesInstanceStride;
 
 	float3 inputPosition = LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * InputStride + InPositionsOffset);
 
@@ -158,7 +164,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 
 			{
 				uint boneIndex = packedIndices&0xff;
-				boneIndex += InvocationParams.FirstJointTransform;
+				boneIndex += firstJointTransform;
 				packedIndices >>= 8;
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
@@ -174,7 +180,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 
 			{
 				uint boneIndex = packedIndices&0xff;
-				boneIndex += InvocationParams.FirstJointTransform;
+				boneIndex += firstJointTransform;
 				packedIndices >>= 8;
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
@@ -190,7 +196,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 
 			{
 				uint boneIndex = packedIndices&0xff;
-				boneIndex += InvocationParams.FirstJointTransform;
+				boneIndex += firstJointTransform;
 				packedIndices >>= 8;
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
@@ -206,7 +212,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 
 			{
 				uint boneIndex = packedIndices&0xff;
-				boneIndex += InvocationParams.FirstJointTransform;
+				boneIndex += firstJointTransform;
 				packedIndices >>= 8;
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
@@ -226,11 +232,12 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 		outputTangent = inputTangent.xyz;
 	}
 
-	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, vertexIdx * OutputStride + OutPositionsOffset);
+	uint outputLoc = vertexIdx * OutputStride + instanceIdx * InvocationParams.OutputInstanceStride;
+	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + OutPositionsOffset);
 	#if OUT_NORMAL_FORMAT
-		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, vertexIdx * OutputStride + OutNormalsOffset);
+		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + OutNormalsOffset);
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
-		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, vertexIdx * OutputStride + OutTangentsOffset);
+		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, outputLoc + OutTangentsOffset);
 	#endif
 }
