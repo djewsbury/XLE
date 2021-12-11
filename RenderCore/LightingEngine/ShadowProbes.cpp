@@ -199,6 +199,11 @@ namespace RenderCore { namespace LightingEngine
 				return { LightingEngine::StepType::None };
 			}
 		}
+
+		virtual BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() override
+		{
+			return _staticPrepareHelper->_parsingContext->_requiredBufferUploadsCommandList;
+		}
 	};
 
 	std::shared_ptr<IProbeRenderingInstance> ShadowProbes::PrepareDynamicProbes(

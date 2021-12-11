@@ -12,12 +12,14 @@
 
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 namespace RenderCore { class IResourceView; class IThreadContext; }
+namespace BufferUploads { using CommandListID = uint32_t; }
 namespace RenderCore { namespace LightingEngine
 {
 	class IProbeRenderingInstance
 	{
 	public:
 		virtual LightingTechniqueInstance::Step GetNextStep() = 0;
+		virtual BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() = 0;
 		virtual ~IProbeRenderingInstance() = default;
 	};
 
