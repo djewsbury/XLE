@@ -9,6 +9,7 @@
 #include "Continuation.h"
 #include "IAsyncMarker.h"
 #include "../ConsoleRig/GlobalServices.h"
+#include "../Utility/FunctionUtils.h"
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/TimedWaitable.h"
 #include "thousandeyes/futures/Executor.h"
@@ -112,19 +113,26 @@ namespace Assets
 
 				assert(_pollingCompleted);
 				if constexpr (!std::is_void_v<FutureResult<decltype(_promise.get_future())>>) {
-					TRY {
-						_promise.set_value(_dispatchFn());
-					} CATCH(...) {
-						_promise.set_exception(std::current_exception());
-					} CATCH_END
+					if constexpr (FunctionTraits<DispatchFn>::arity == 0) {
+						TRY {
+							_promise.set_value(_dispatchFn());
+						} CATCH(...) {
+							_promise.set_exception(std::current_exception());
+						} CATCH_END
+					} else {
+						_dispatchFn(std::move(_promise));
+					}
 				} else {
-					TRY {
-						_dispatchFn();
-						_promise.set_value();
-					} CATCH(...) {
-						_promise.set_exception(std::current_exception());
-					} CATCH_END
-
+					if constexpr (FunctionTraits<DispatchFn>::arity == 0) {
+						TRY {
+							_dispatchFn();
+							_promise.set_value();
+						} CATCH(...) {
+							_promise.set_exception(std::current_exception());
+						} CATCH_END
+					} else {
+						_dispatchFn(std::move(_promise));
+					}
 				}
 			}
 
