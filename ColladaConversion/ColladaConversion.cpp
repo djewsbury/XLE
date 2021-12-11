@@ -43,7 +43,7 @@ using namespace RenderCore::Assets::GeoProc;
 
 namespace ColladaConversion
 {
-	static const char* s_cfgName = "rawos/colladaimport.cfg";
+	static const char* s_cfgName = "rawos/colladaimport.dat";
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

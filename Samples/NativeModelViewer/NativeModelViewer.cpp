@@ -35,7 +35,7 @@ namespace Sample
 			lightingEngineApparatus);
 
 		ToolsRig::ModelVisSettings visSettings {};
-		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.txt"));
+		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.dat"));
 
 		auto scene = ToolsRig::MakeScene(pipelineAccelerators, globals._primaryResourcesApparatus->_deformAccelerators, visSettings);
 		modelLayer->Set(scene);

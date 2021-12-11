@@ -102,7 +102,7 @@ namespace RenderCore { namespace ColladaConversion
     class Writer : public COLLADAFW::IWriter
     {
     public:
-	    Writer() : _importConfig("colladaimport.cfg")  
+	    Writer() : _importConfig("colladaimport.dat")  
         {}
 
 	    virtual ~Writer(){}

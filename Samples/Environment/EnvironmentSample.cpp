@@ -133,7 +133,7 @@ namespace Sample
         std::shared_ptr<PlatformRig::IInputListener> overlaySystemInputListener)
     {
         auto mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
-        mainInputHandler->AddListener(RenderOverlays::MakeHotKeysHandler("xleres/hotkey.txt"));
+        mainInputHandler->AddListener(RenderOverlays::MakeHotKeysHandler("xleres/hotkey.dat"));
         if (overlaySystemInputListener) {
             mainInputHandler->AddListener(std::move(overlaySystemInputListener));
         }

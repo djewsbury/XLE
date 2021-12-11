@@ -90,7 +90,7 @@ namespace Sample
 
             Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
             sampleOverlay->OnStartup(sampleGlobals);
-            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.txt"));
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
             sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
             auto sampleListener = sampleOverlay->GetInputListener();
             if (sampleListener)

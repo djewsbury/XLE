@@ -1,0 +1,73 @@
+~~!Format=2; Tab=4
+
+LightScene=~
+    Light=~
+		Name=Ambient
+		Operator=AmbientDefault
+		SkyTexture=C:/code/XLEExt/Working/shaderlab/comfy_cafe_4k.hdr
+		SkyTextureType=Equirectangular
+
+	Light=~
+		Name=Sun
+		Operator=Sun
+		Brightness={10,10,10}
+		Position={2.69884f, 0.696449f, 2.16482f}
+
+	SunSourceShadow=~
+		Name=SunShadows
+		Light=Sun
+		MaxDistanceFromCamera=1000
+		FocusDistance=4
+		BlurAngleDegrees=3
+		TextureSize=1024
+		HighPrecisionDepths=0
+		MinBlurSearch=1.5
+		MaxBlurSearch=16
+		FilterModel=PoissonDisc
+		EnableContactHardening=true
+
+	Light=~
+		Operator=Sphere
+		Brightness={100, 300, 300}
+		CutoffBrightness=1
+		Position={3, -3, 5}
+		Radius={0.05, 0.05, 0.05}
+
+LightOperators=~
+	LightSource=~
+		Name=Sphere
+		Shape=Sphere
+	LightSource=~
+		Name=Sun
+		Shape=Directional
+		DominantLight=1
+    Ambient=~
+		Name=AmbientDefault
+
+environment=~
+	Name=environment
+	ToneMapSettings=~
+		BloomDesaturationFactor=0.5f; BloomRampingFactor=0f; SceneKey=0.16f
+		BloomBlurStdDev=2.2f; Flags=3i; BloomBrightness=1f; LuminanceMax=20f; WhitePoint=3f
+		BloomThreshold=5f; LuminanceMin=0f; BloomScale=-1i
+	AmbientSettings=~
+		SpecularIBL=Game/xleres/DefaultResources/sky/samplesky2_specular.dds
+		RangeFogThicknessScale=1f; AtmosBlurStart=1000f; AmbientLight=-12336707i
+		AmbientBrightness=1f; SkyReflectionBlurriness=1f; AtmosBlurStdDev=1.3f
+		SkyTexture=C:/code/XLEExt/Working/shaderlab/comfy_cafe_4k.hdr; Flags=0i
+		RangeFogInscatterScale=1f
+		DiffuseIBL=Game/xleres/DefaultResources/sky/samplesky2_diffuse.dds; SkyReflectionScale=1f
+		SkyBrightness=1f; RangeFogInscatter=0i; AtmosBlurEnd=1500f; RangeFogThickness=0i
+		SkyTextureType=2i
+	DirectionalLight=~
+		DiffuseBrightness=10
+		Shape=0
+		Transform={1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 2.69884f, 0.696449f, 2.16482f, 1f}
+		Flags=1i
+		Name=Sun
+	ShadowFrustumSettings=~; SingleSidedDepthBiasClamp=0f; BlurAngleDegrees=0.25f; TextureSize=2048i
+		MaxFrustumCount=4i; Flags=1i; DoubleSidedSlopeScaledBias=1f; DoubleSidedDepthBiasClamp=0f
+		WorldSpaceResolveBias=0f; Name=shadows; SingleSidedRasterDepthBias=300i
+		SingleSidedSlopeScaledBias=1f; MinBlurSearch=0.5f; Light=Sun; FrustumSizeFactor=3.8f
+		DoubleSidedRasterDepthBias=300i; FocusDistance=5f; MaxBlurSearch=25f
+		MaxDistanceFromCamera=1000f

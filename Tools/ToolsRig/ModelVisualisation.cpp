@@ -357,7 +357,7 @@ namespace ToolsRig
 		// _materialName = "data/meshes/actors/dragon/character assets/alduin.nif";
 		// _animationFileName = "data/meshes/actors/dragon/animations/special_alduindeathagony.hkx";
 
-        // _envSettingsFile = "defaultenv.txt:environment";
+        // _envSettingsFile = "defaultenv.dat:environment";
     }
 
 #if 0

@@ -15,7 +15,7 @@ namespace Samples
 	TESTDLL_API void	Startup()
 	{
 		s_depVal = std::make_shared<Assets::DependencyValidation>();
-		Assets::RegisterFileDependency(s_depVal, "colladaimport.cfg");
+		Assets::RegisterFileDependency(s_depVal, "colladaimport.dat");
 	}
 
 	TESTDLL_API void	Shutdown()
