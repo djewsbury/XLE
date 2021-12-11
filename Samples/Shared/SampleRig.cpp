@@ -113,14 +113,19 @@ namespace Sample
             RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
             techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
-                //  Finally, we execute the frame loop
-            while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
-                    // ------- Render ----------------------------------------
-                auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus, *sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get());
-                    // ------- Update ----------------------------------------
-                sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
-                sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
-            }
+            TRY {
+                    //  Finally, we execute the frame loop
+                while (PlatformRig::OverlappedWindow::DoMsgPump() != PlatformRig::OverlappedWindow::PumpResult::Terminate) {
+                        // ------- Render ----------------------------------------
+                    auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus, *sampleGlobals._frameRenderingApparatus, sampleGlobals._drawingApparatus.get());
+                        // ------- Update ----------------------------------------
+                    sampleOverlay->OnUpdate(frameResult._elapsedTime * Tweakable("TimeScale", 1.0f));
+                    sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
+                }
+            } CATCH(const std::exception& e) {
+                Log(Error) << "Shutting down due to exception in frame rig. Exception details follow:" << std::endl;
+                Log(Error) << e.what();
+            } CATCH_END
 
             RenderCore::Techniques::SetThreadContext(nullptr);
             sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)

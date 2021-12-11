@@ -211,7 +211,7 @@ namespace RenderCore { namespace Techniques
 			accelerator._enabledInstances.resize(field+1, 0);
 		accelerator._enabledInstances[field] |= 1ull << (instanceIdx & (64-1));
 		accelerator._minEnabledInstance = std::min(accelerator._minEnabledInstance, instanceIdx);
-		accelerator._maxEnabledInstance = std::min(accelerator._maxEnabledInstance, instanceIdx);
+		accelerator._maxEnabledInstance = std::max(accelerator._maxEnabledInstance, instanceIdx);
 	}
 
 	void DeformAcceleratorPool::ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange)
@@ -273,7 +273,7 @@ namespace RenderCore { namespace Techniques
 		if (!activeAcceleratorCount)
 			return;
 
-		const auto defaultPageSize = 1024*1024;
+		const auto defaultPageSize = 8*1024*1024;
 
 		if (totalCPUAllocationSize) {
 			auto map = attachedStorage.MapStorage(totalCPUAllocationSize, BindFlag::VertexBuffer, defaultPageSize);

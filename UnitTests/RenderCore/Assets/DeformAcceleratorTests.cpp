@@ -318,7 +318,7 @@ namespace UnitTests
 		
 		testHelper.BeginFrameCapture();
 		unsigned instances[] = {0};
-		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), *inputView, *inputView, *outputView);
+		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), outputResource->GetDesc()._linearBufferDesc._sizeInBytes, *inputView, *inputView, *outputView);
 		testHelper.EndFrameCapture();
 
 		return outputResource->ReadBackSynchronized(*threadContext);
@@ -353,7 +353,7 @@ namespace UnitTests
 			0, BasePose(modelScaffold),
 			cpuSkinDeformer.CreateBinding(modelScaffold->EmbeddedSkeleton().GetOutputInterface()));
 		unsigned instances[] = {0};
-		cpuSkinDeformer.ExecuteCPU(MakeIteratorRange(instances), MakeIteratorRange(inputFloat3s), {}, outputBufferData);
+		cpuSkinDeformer.ExecuteCPU(MakeIteratorRange(instances), outputBufferData.size(), MakeIteratorRange(inputFloat3s), {}, outputBufferData);
 
 		auto destinationElements = Techniques::Internal::AsVertexElementIteratorRange(MakeIteratorRange(outputBufferData), Format::R32G32B32_FLOAT, 0, sizeof(Float3));
 		return AsFloat3s(destinationElements);

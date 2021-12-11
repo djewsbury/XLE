@@ -105,30 +105,34 @@ namespace Assets
 		assert(_pimpl->_boundThreadId == Threading::CurrentThreadId());
 		std::unique_lock<decltype(_pimpl->_lock)> lock(_pimpl->_lock);
 		_pimpl->_inIterationOperation = true;
-		
-		lock = {};
-		for (auto&fn:_pimpl->_frameBarrierFunctions)
-			fn.second();
-		lock = std::unique_lock<decltype(_pimpl->_lock)>(_pimpl->_lock);
 
-		// If we queued up any new sets to add to the main list, handle them now
-		for (auto&set:_pimpl->_setsPendingIteration)
-			_pimpl->_sets.insert(LowerBound(_pimpl->_sets, set.first), std::move(set));
-		_pimpl->_setsPendingIteration.clear();
+		TRY {
+			lock = {};
+			for (auto&fn:_pimpl->_frameBarrierFunctions)
+				fn.second();
+			lock = std::unique_lock<decltype(_pimpl->_lock)>(_pimpl->_lock);
 
-		_pimpl->_frameBarrierFunctions.insert(_pimpl->_frameBarrierFunctions.end(), _pimpl->_pendingFrameBarrierFunctions.begin(), _pimpl->_pendingFrameBarrierFunctions.end());
-		_pimpl->_pendingFrameBarrierFunctions.clear();
+			// If we queued up any new sets to add to the main list, handle them now
+			for (auto&set:_pimpl->_setsPendingIteration)
+				_pimpl->_sets.insert(LowerBound(_pimpl->_sets, set.first), std::move(set));
+			_pimpl->_setsPendingIteration.clear();
 
-		// we have to be a little bit careful here, because destroying _frameBarrierFunctions can result
-		// in calling an arbitrary destructor which could end up modifying _pendingRemoveFrameBarrierFunctions during this loop
-		for (size_t c=0; c<_pimpl->_pendingRemoveFrameBarrierFunctions.size(); ++c) {
-			auto r = _pimpl->_pendingRemoveFrameBarrierFunctions[c];
-			auto i = LowerBound(_pimpl->_frameBarrierFunctions, r);
-			if (i!=_pimpl->_frameBarrierFunctions.end() && i->first == r)
-				_pimpl->_frameBarrierFunctions.erase(i);
-		}
-		_pimpl->_pendingRemoveFrameBarrierFunctions.clear();
+			_pimpl->_frameBarrierFunctions.insert(_pimpl->_frameBarrierFunctions.end(), _pimpl->_pendingFrameBarrierFunctions.begin(), _pimpl->_pendingFrameBarrierFunctions.end());
+			_pimpl->_pendingFrameBarrierFunctions.clear();
 
+			// we have to be a little bit careful here, because destroying _frameBarrierFunctions can result
+			// in calling an arbitrary destructor which could end up modifying _pendingRemoveFrameBarrierFunctions during this loop
+			for (size_t c=0; c<_pimpl->_pendingRemoveFrameBarrierFunctions.size(); ++c) {
+				auto r = _pimpl->_pendingRemoveFrameBarrierFunctions[c];
+				auto i = LowerBound(_pimpl->_frameBarrierFunctions, r);
+				if (i!=_pimpl->_frameBarrierFunctions.end() && i->first == r)
+					_pimpl->_frameBarrierFunctions.erase(i);
+			}
+			_pimpl->_pendingRemoveFrameBarrierFunctions.clear();
+		} CATCH (...) {
+			_pimpl->_inIterationOperation = false;
+			throw;
+		} CATCH_END
 		_pimpl->_inIterationOperation = false;
 	}
 

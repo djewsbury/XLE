@@ -205,6 +205,18 @@ namespace Utility
 	}
 
 	template<typename Formatter>
+		std::vector<typename Formatter::InteriorSection> RequireListOfStrings(Formatter& formatter)
+	{
+		std::vector<typename Formatter::InteriorSection> result;
+		RequireBeginElement(formatter);
+		typename Formatter::InteriorSection next;
+		while (formatter.TryStringValue(next))
+			result.push_back(next);
+		RequireEndElement(formatter);
+		return result;
+	}
+
+	template<typename Formatter>
 		typename Formatter::InteriorSection RequireCharacterData(Formatter& formatter)
 	{
 		typename Formatter::InteriorSection value;
