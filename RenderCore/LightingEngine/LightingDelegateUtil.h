@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "LightingEngineInternal.h"
 #include "Assets/Marker.h"
 #include <memory>
 
@@ -18,7 +19,6 @@ namespace RenderCore { namespace Techniques
 namespace RenderCore { namespace LightingEngine
 {
     class IPreparedShadowResult;
-    class LightingTechniqueIterator;
 }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -26,6 +26,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
     class ILightBase;
     std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		LightingTechniqueIterator& iterator,
+        LightingTechniqueSequence& sequence,
 		ILightBase& proj,
         ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
 		Techniques::FrameBufferPool& shadowGenFrameBufferPool,

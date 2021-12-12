@@ -45,12 +45,13 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ForwardPlusLightScene> _lightScene;
 		std::shared_ptr<SkyOperator> _skyOperator;
 
-		void DoShadowPrepare(LightingTechniqueIterator& iterator);
+		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoToneMap(LightingTechniqueIterator& iterator);
 	};
 
-	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator)
+	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
 	{
+		sequence.Reset();
 		if (_lightScene->_shadowPreparationOperators->_operators.empty()) return;
 
 		_lightScene->_preparedShadows.reserve(_lightScene->_dynamicShadowProjections.size());
@@ -59,7 +60,7 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_preparedShadows.push_back(std::make_pair(
 				_lightScene->_dynamicShadowProjections[c]._lightId,
 				Internal::SetupShadowPrepare(
-					iterator, 
+					iterator, sequence, 
 					*_lightScene->_dynamicShadowProjections[c]._desc, 
 					*_lightScene, _lightScene->_dynamicShadowProjections[c]._lightId,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool)));
@@ -73,7 +74,7 @@ namespace RenderCore { namespace LightingEngine
 			assert(_lightScene->_dominantLightSet._lights.size() == 1);
 			_lightScene->_preparedDominantShadow =
 				Internal::SetupShadowPrepare(
-					iterator, 
+					iterator, sequence, 
 					*_lightScene->_dominantShadowProjection._desc, 
 					*_lightScene, _lightScene->_dominantLightSet._lights[0]._id,
 					*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool);
@@ -352,7 +353,7 @@ namespace RenderCore { namespace LightingEngine
 						lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
 
 					// Reset captures
-					lightingTechnique->CreateStep_CallFunction(
+					lightingTechnique->CreateSequence().CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
 							auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
 							PreregisterAttachments(stitchingContext);
@@ -364,42 +365,43 @@ namespace RenderCore { namespace LightingEngine
 						});
 
 					// Prepare shadows
-					lightingTechnique->CreateStep_CallFunction(
-						[captures](LightingTechniqueIterator& iterator) {
-							captures->DoShadowPrepare(iterator);
+					lightingTechnique->CreateDynamicSequence(
+						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
+							captures->DoShadowPrepare(iterator, sequence);
 						});
 
+					auto& mainSequence = lightingTechnique->CreateSequence();
 					// Pre depth
 					if (lightScene->HasScreenSpaceReflectionsOperator()) {
-						lightingTechnique->CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
+						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));
 					} else {
-						lightingTechnique->CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
+						mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(techDelBox->_depthMotionDelegate));
 					}
 
-					lightingTechnique->CreateStep_CallFunction(
+					mainSequence.CreateStep_CallFunction(
 						[](LightingTechniqueIterator& iterator) {
 							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 						});
 
 					// Build hierarchical depths
-					lightingTechnique->CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(lightScene->GetHierarchicalDepthsOperator().CreateFragment(stitchingContext._workingProps));
 
 					// Light tiling & configure lighting descriptors
-					lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
-					lightingTechnique->CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
+					mainSequence.CreateStep_RunFragments(lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 
 					// Calculate SSRs
 					if (lightScene->HasScreenSpaceReflectionsOperator())
-						lightingTechnique->CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
+						mainSequence.CreateStep_RunFragments(lightScene->GetScreenSpaceReflectionsOperator().CreateFragment(stitchingContext._workingProps));
 
-					lightingTechnique->CreateStep_CallFunction(
+					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
 							captures->_lightScene->ConfigureParsingContext(*iterator._parsingContext);
 						});
 
 					// Draw main scene
-					auto mainSceneFragmentRegistration = lightingTechnique->CreateStep_RunFragments(
+					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 						CreateForwardSceneFragment(captures, techDelBox->_forwardIllumDelegate_DisableDepthWrite, *balancedNoiseTexture, captures->_lightScene->HasScreenSpaceReflectionsOperator()));
 
 					// Post processing
@@ -407,9 +409,9 @@ namespace RenderCore { namespace LightingEngine
 						[captures](LightingTechniqueIterator& iterator) {
 							captures->DoToneMap(iterator);
 						});
-					lightingTechnique->CreateStep_RunFragments(std::move(toneMapFragment));
+					mainSequence.CreateStep_RunFragments(std::move(toneMapFragment));
 
-					lightingTechnique->CreateStep_CallFunction(
+					mainSequence.CreateStep_CallFunction(
 						[captures](LightingTechniqueIterator& iterator) {
 							iterator._parsingContext->_extraSequencerDescriptorSet = {0ull, nullptr};
 							captures->_lightScene->_preparedShadows.clear();
@@ -419,7 +421,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->CompleteConstruction();
 
 					// Any final operators that depend on the resolved frame buffer:
-					auto resolvedFB = lightingTechnique->GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
+					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(mainSceneFragmentRegistration);
 					auto skyOpFuture = CreateSkyOperator(pipelinePool, Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second}, SkyOperatorDesc { SkyTextureType::Equirectangular });
 					::Assets::WhenAll(skyOpFuture).ThenConstructToPromise(
 						std::move(thatPromise),

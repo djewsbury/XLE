@@ -13,48 +13,39 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueIterator;
     class RenderStepFragmentInterface;
 
-	class CompiledLightingTechnique
+	class LightingTechniqueSequence
 	{
 	public:
 		using StepFnSig = void(LightingTechniqueIterator&);
+		using ParseId = unsigned;
 		void CreateStep_CallFunction(std::function<StepFnSig>&&);
-		void CreateStep_ParseScene(Techniques::BatchFilter, unsigned drawablePktIndex=0);
+		ParseId CreateStep_ParseScene(Techniques::BatchFilter);
+		ParseId CreateStep_ParseScene(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 		void CreateStep_ExecuteDrawables(
 			std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
 			std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
-			unsigned drawablePktIndex=0);
+			ParseId parseId=0);
 		void CreateStep_ReadyInstances();
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
-		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter, unsigned drawablePktIndex=0);
-		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, unsigned drawablePktIndex=0);
+		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter, ParseId parseId=0);
+		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId=0);
 
 		void ResolvePendingCreateFragmentSteps();
-		void CompleteConstruction();
+		void Reset();
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
-		ILightScene& GetLightScene();
-
-		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		::Assets::DependencyValidation _depVal;
-
-		CompiledLightingTechnique(
-			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext,
-			const std::shared_ptr<ILightScene>& lightScene);
-		~CompiledLightingTechnique();
-
-		mutable unsigned _frameIdx = 0;
+		LightingTechniqueSequence(
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			Techniques::FragmentStitchingContext& stitchingContext);
+		~LightingTechniqueSequence();
 
 	private:
 		// PendingCreateFragmentStep is used internally to merge subsequent CreateStep_ calls
 		// into single render passes
 		std::vector<std::pair<RenderStepFragmentInterface, FragmentInterfaceRegistration>> _pendingCreateFragmentSteps;
-		bool _isConstructionCompleted = false;
 
 		struct Step
 		{
@@ -80,8 +71,49 @@ namespace RenderCore { namespace LightingEngine
 		FragmentInterfaceRegistration _nextFragmentInterfaceRegistration = 0;
 
 		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		ParseId _nextParseId = 0;
+		bool _frozen = false;
 
+		friend class LightingTechniqueIterator;
+		friend class LightingTechniqueInstance;
+		friend class CompiledLightingTechnique;
+	};
+
+	class CompiledLightingTechnique
+	{
+	public:
+		LightingTechniqueSequence& CreateSequence();
+		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
+		void CreateDynamicSequence(DynamicSequenceFn&& fn);
+		void CompleteConstruction();
+
+		ILightScene& GetLightScene();
+
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		::Assets::DependencyValidation _depVal;
+
+		CompiledLightingTechnique(
+			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+			Techniques::FragmentStitchingContext& stitchingContext,
+			const std::shared_ptr<ILightScene>& lightScene);
+		~CompiledLightingTechnique();
+
+		mutable unsigned _frameIdx = 0;
+
+	private:
+		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;
 		std::shared_ptr<ILightScene> _lightScene;
+		bool _isConstructionCompleted = false;
+
+		struct Sequence
+		{
+			std::shared_ptr<LightingTechniqueSequence>_sequence;
+			DynamicSequenceFn _dynamicFn;
+		};
+		std::vector<Sequence> _sequences;
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
@@ -99,18 +131,25 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::IDeformAcceleratorPool* _deformAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
 
-		void PushFollowingStep(std::function<CompiledLightingTechnique::StepFnSig>&& fn);
-        void PushFollowingStep(Techniques::BatchFilter batchFilter);
-		void PushFollowingStep(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
-		void PushFollowingStep(std::shared_ptr<Techniques::SequencerConfig> seqConfig, std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
+		void ExecuteDrawables(
+			LightingTechniqueSequence::ParseId parseId, 
+			Techniques::SequencerConfig& sequencerCfg,
+			const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate = nullptr);
+
+		const LightingTechniqueSequence::Step* Advance();
+
 		LightingTechniqueIterator(
 			Techniques::ParsingContext& parsingContext,
 			const CompiledLightingTechnique& compiledTechnique);
 
 	private:
-		std::vector<CompiledLightingTechnique::Step> _steps;
-		std::vector<CompiledLightingTechnique::Step>::iterator _stepIterator;
-		std::vector<CompiledLightingTechnique::Step>::iterator _pushFollowingIterator;
+		std::vector<LightingTechniqueSequence::Step>::const_iterator _stepIterator;
+		std::vector<LightingTechniqueSequence::Step>::const_iterator _stepEnd;
+
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceIterator;
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceEnd;
+
+		bool _pendingDynamicSequenceGen = true;
 
 		friend class LightingTechniqueInstance;
 	};

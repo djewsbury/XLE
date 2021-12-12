@@ -17,12 +17,11 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
+	static LightingTechniqueSequence::ParseId SetupShadowParse(
 		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence,
 		Internal::ILightBase& proj,
-		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool)
+		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId)
 	{
 		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester;
@@ -38,32 +37,36 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 
 		// todo - cull out any offscreen projections
+		if (volumeTester) {
+			return sequence.CreateStep_ParseScene(Techniques::BatchFilter::General, std::move(volumeTester));
+		} else
+			return sequence.CreateStep_ParseScene(Techniques::BatchFilter::General);
+	}
 
+	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
+		LightingTechniqueIterator& iterator,
+		LightingTechniqueSequence& sequence,
+		Internal::ILightBase& proj,
+		ILightScene& lightScene, ILightScene::LightSourceId associatedLightId,
+		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
+		Techniques::AttachmentPool& shadowGenAttachmentPool)
+	{
+		auto parseId = SetupShadowParse(iterator, sequence, proj, lightScene, associatedLightId);
+
+		auto& standardProj = *checked_cast<Internal::StandardShadowProjection*>(&proj);
 		auto& preparer = *standardProj._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
-		iterator.PushFollowingStep(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool](LightingTechniqueIterator& iterator) {
-				iterator._rpi = preparer.Begin(
+		sequence.CreateStep_CallFunction(
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, parseId, res](LightingTechniqueIterator& iterator) {
+				auto rpi = preparer.Begin(
 					*iterator._threadContext,
 					*iterator._parsingContext,
 					proj,
 					shadowGenFrameBufferPool,
 					shadowGenAttachmentPool);
-			});
-		if (volumeTester) {
-			iterator.PushFollowingStep(Techniques::BatchFilter::General, std::move(volumeTester));
-		} else
-			iterator.PushFollowingStep(Techniques::BatchFilter::General);
-		auto cfg = preparer.GetSequencerConfig();
-		iterator.PushFollowingStep(std::move(cfg.first), std::move(cfg.second));
-		iterator.PushFollowingStep(
-			[res, &preparer](LightingTechniqueIterator& iterator) {
-				iterator._rpi.End();
-				preparer.End(
-					*iterator._threadContext,
-					*iterator._parsingContext,
-					iterator._rpi,
-					*res);
+				iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
+				rpi.End();
+				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, *res);
 			});
 		return res;
 	}
