@@ -606,6 +606,7 @@ namespace RenderCore { namespace Techniques
 		_jointMatricesInstanceStride = jointMatrixBufferCount;
 		_jointMatrices.resize(1*_jointMatricesInstanceStride, Identity<Float3x4>());
 
+		assert(!staticDataLoadRequests.empty());
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
 			device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
 			BindFlag::UnorderedAccess,
@@ -753,6 +754,9 @@ namespace RenderCore { namespace Techniques
 			auto weightsEle = Hash64("WEIGHTS");
 			auto jointIndicesEle = Hash64("JOINTINDICES");
 			auto& immData = modelScaffold->ImmutableData();
+			if (!immData._boundSkinnedControllerCount)
+				return nullptr;
+				
 			for (unsigned c=0; c<immData._boundSkinnedControllerCount; ++c) {
 
 				auto& animVB = immData._boundSkinnedControllers[c]._animatedVertexElements;

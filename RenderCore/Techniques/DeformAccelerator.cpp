@@ -103,6 +103,9 @@ namespace RenderCore { namespace Techniques
 	{
 		auto& opFactory = Services::GetDeformOperationFactorySet();
 		auto deformers = opFactory.CreateDeformOperators(initializer, modelScaffold, modelScaffoldName);
+		if (deformers.empty())
+			return nullptr;
+
 		auto newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_enabledInstances.resize(8, 0);
 		newAccelerator->_readiedInstances.resize(8, 0);
@@ -117,16 +120,14 @@ namespace RenderCore { namespace Techniques
 		std::vector<Internal::WorkingDeformer> workingDeformers;
 		workingDeformers.reserve(deformers.size());
 
-		if (!deformers.empty()) {
-			newAccelerator->_isCPUDeformer = deformers[0]._factory->IsCPUDeformer();
-			for (auto& d:deformers) {
-				Internal::WorkingDeformer workingDeformer;
-				workingDeformer._instantiations = MakeIteratorRange(d._instantiations);
-				workingDeformers.push_back(std::move(workingDeformer));
-				if (d._factory->IsCPUDeformer() != newAccelerator->_isCPUDeformer)
-					Throw(std::runtime_error("Attempting to mix CPU and GPU deformers. This isn't supported; deformations must be all CPU or all GPU"));
-			};
-		}
+		newAccelerator->_isCPUDeformer = deformers[0]._factory->IsCPUDeformer();
+		for (auto& d:deformers) {
+			Internal::WorkingDeformer workingDeformer;
+			workingDeformer._instantiations = MakeIteratorRange(d._instantiations);
+			workingDeformers.push_back(std::move(workingDeformer));
+			if (d._factory->IsCPUDeformer() != newAccelerator->_isCPUDeformer)
+				Throw(std::runtime_error("Attempting to mix CPU and GPU deformers. This isn't supported; deformations must be all CPU or all GPU"));
+		};
 
 		newAccelerator->_rendererGeoInterface = Internal::CreateDeformBindings(
 			MakeIteratorRange(workingDeformers), bufferIterators, newAccelerator->_isCPUDeformer,

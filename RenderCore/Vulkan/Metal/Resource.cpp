@@ -432,6 +432,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		VkMemoryRequirements mem_reqs = {}; 
 		if (desc._type == Desc::Type::LinearBuffer) {
+			assert(desc._linearBufferDesc._sizeInBytes);	// zero sized buffer is can cause Vulkan to crash (and is silly, anyway)
 			VkBufferCreateInfo buf_info = {};
 			buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			buf_info.pNext = nullptr;
