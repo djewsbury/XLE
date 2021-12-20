@@ -321,6 +321,12 @@ namespace ToolsRig
 			return;
 		}
 
+		// If there's a previous construction operation still running, we have to stall for it to complete
+		// Since we can share the env settings, we don't want to have to PreparedScene constructions in flight
+		// at the same time
+		if (_preparedSceneFuture)
+			_preparedSceneFuture->StallWhilePending();
+
 		//
 		// envSettings -> compiledLightingTechnique -> preparedShaders -> PreparedScene
 		//                SceneEngine::IScene ----------------^
