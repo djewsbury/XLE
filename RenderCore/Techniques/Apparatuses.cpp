@@ -182,6 +182,7 @@ namespace RenderCore { namespace Techniques
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(device);
 		_techniqueServices->GetDeformOperationFactorySet().Register("skin", CreateGPUSkinDeformerFactory(device, pipelineCollection));
+		_techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", CreateCPUSkinDeformerFactory());
 		_deformAccelerators = CreateDeformAcceleratorPool(device);
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();

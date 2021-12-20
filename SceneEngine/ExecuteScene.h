@@ -11,7 +11,6 @@
 namespace RenderCore { namespace Techniques 
 {
     class IPipelineAcceleratorPool;
-	class IDeformAcceleratorPool;
 	class ParsingContext;
 	class SequencerConfig;
 }}
@@ -29,7 +28,6 @@ namespace SceneEngine
 	void ExecuteSceneRaw(
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-		const RenderCore::Techniques::IDeformAcceleratorPool* deformAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
 		const SceneView& view, RenderCore::Techniques::BatchFilter batchFilter,
 		IScene& scene);

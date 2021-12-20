@@ -108,7 +108,8 @@ namespace RenderCore { namespace Techniques
 			unsigned outputInstanceStride,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB) const override;
+			const IResourceView& dstVB,
+			Metrics& metrics) const override;
 		virtual void* QueryInterface(size_t) override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
@@ -133,6 +134,7 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
+		unsigned _staticVertexAttachmentsSize = 0;
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 

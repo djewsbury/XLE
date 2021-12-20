@@ -21,13 +21,23 @@ namespace RenderCore { namespace Techniques
 	class IDeformer
 	{
 	public:
+		struct Metrics
+		{
+			unsigned _dispatchCount = 0;
+			unsigned _vertexCount = 0;
+			unsigned _descriptorSetWrites = 0;
+			unsigned _constantDataSize = 0;
+			unsigned _inputStaticDataSize = 0;
+		};
+
 		virtual void ExecuteGPU(
 			IThreadContext& threadContext,
 			IteratorRange<const unsigned*> instanceIndices,
 			unsigned outputInstanceStride,
 			const IResourceView& srcVB,
 			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB) const;
+			const IResourceView& dstVB,
+			Metrics& metrics) const;
 
 		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
 		virtual void ExecuteCPU(

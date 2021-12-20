@@ -14,7 +14,6 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions = {});

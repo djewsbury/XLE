@@ -93,7 +93,6 @@ namespace RenderCore { namespace Techniques
 			RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
 			ParsingContext& parserContext,
 			const IPipelineAcceleratorPool& pipelineAccelerators,
-			const IDeformAcceleratorPool* deformAccelerators,
 			const SequencerConfig& sequencerConfig,
 			const DrawablesPacket& drawablePkt,
 			const TemporaryStorageLocator& temporaryVB, 
@@ -103,9 +102,6 @@ namespace RenderCore { namespace Techniques
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.InvalidateUniforms();
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
-
-		if (deformAccelerators)
-			deformAccelerators->SetVertexInputBarrier(parserContext.GetThreadContext());
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
 		
@@ -183,8 +179,7 @@ namespace RenderCore { namespace Techniques
 						} else if (stream._type == DrawableGeo::StreamType::Deform) {
 							assert(drawable._geo->_deformAccelerator);
 							// todo -- we can make GetOutputVBV() accessible without the pool and avoid the need for a pool passed to this function
-							assert(deformAccelerators);
-							auto deformVbv = deformAccelerators->GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
+							auto deformVbv = Techniques::Internal::GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
 							vbv[c]._resource = deformVbv._resource;
 							vbv[c]._offset = stream._vbOffset + deformVbv._offset;
 						} else {
@@ -240,7 +235,6 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Metal::GraphicsEncoder_Optimized& encoder,
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
@@ -264,16 +258,15 @@ namespace RenderCore { namespace Techniques
 		PreStalledResources preStalledResources;
 		if (drawOptions._stallForResources) {
 			preStalledResources.Setup(pipelineAccelerators, sequencerConfig, drawablePkt);
-			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+			Draw<true>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
 		} else {
-			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
+			Draw<false>(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, temporaryVB, temporaryIB, preStalledResources);
 		}
 	}
 
 	void Draw(
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions)
@@ -290,7 +283,7 @@ namespace RenderCore { namespace Techniques
 			auto viewport = parserContext.GetViewport();
 			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
-			Draw(metalContext, encoder, parserContext, pipelineAccelerators, deformAccelerators, sequencerConfig, drawablePkt, drawOptions);
+			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, drawOptions);
 		} CATCH (...) {
 			pipelineAccelerators.UnlockForReading();
 			throw;

@@ -346,7 +346,7 @@ namespace ToolsRig
 					ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
 					auto operators = envSettings->GetOperators();
 					::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique> compiledLightingTechniqueFuture;
-					const bool forwardLighting = false;
+					const bool forwardLighting = true;
 					if (forwardLighting) {
 						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
 							lightingApparatus,
@@ -589,7 +589,6 @@ namespace ToolsRig
 		std::shared_ptr<VisCameraSettings> _cameraSettings;
 		std::shared_ptr<VisAnimationState> _animState;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 
@@ -702,7 +701,7 @@ namespace ToolsRig
 
 			if (_pimpl->_settings._drawWireframe) {
 				SceneEngine::ExecuteSceneRaw(
-					parserContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators.get(),
+					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_visWireframeCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);
@@ -710,7 +709,7 @@ namespace ToolsRig
 
 			if (_pimpl->_settings._drawNormals) {
 				SceneEngine::ExecuteSceneRaw(
-					parserContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators.get(),
+					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_visNormalsCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);
@@ -726,7 +725,7 @@ namespace ToolsRig
 					oldDelegate = visContent->SetCustomDrawDelegate(_pimpl->_stencilPrimeDelegate);
 				// Prime the stencil buffer with draw call indices
 				SceneEngine::ExecuteSceneRaw(
-					parserContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators.get(),
+					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_primeStencilCfg,
 					sceneView, RenderCore::Techniques::BatchFilter::General,
 					**scene);

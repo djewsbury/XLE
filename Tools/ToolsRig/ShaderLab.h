@@ -8,7 +8,7 @@
 #include <vector>
 #include <functional>
 
-namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; }}
+namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; }}
 namespace RenderCore { namespace Techniques { class PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace Formatters { class IDynamicFormatter; }
@@ -48,7 +48,7 @@ namespace ToolsRig
 
 		struct OperationConstructorContext
 		{
-			using SetupFunctionList = std::vector<std::function<void(RenderCore::LightingEngine::CompiledLightingTechnique&)>>;
+			using SetupFunctionList = std::vector<std::function<void(RenderCore::LightingEngine::LightingTechniqueSequence&)>>;
 			SetupFunctionList _setupFunctions;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;

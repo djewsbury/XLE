@@ -50,8 +50,7 @@ namespace RenderCore { namespace Techniques
 		void ReadyInstances(IThreadContext&) override;
 		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
-
-		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const override;
+		ReadyInstancesMetrics GetMetrics() const override;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>);
 		~DeformAcceleratorPool();
@@ -63,6 +62,12 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
 		mutable bool _pendingVertexInputBarrier = false;
+
+		Threading::Mutex _acceleratorsLock;
+		std::thread::id _boundThread;
+
+		ReadyInstancesMetrics _readyInstancesMetrics;
+		ReadyInstancesMetrics _lastFrameReadyInstancesMetrics;
 
 		void ExecuteCPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange);
 		void ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB);
@@ -177,6 +182,7 @@ namespace RenderCore { namespace Techniques
 			newAccelerator->_deformTemporaryBuffer.resize(bufferIterators._bufferIterators[Internal::VB_CPUDeformTemporaries], 0);
 		}
 
+		ScopedLock(_acceleratorsLock);
 		_accelerators.push_back(newAccelerator);
 		return newAccelerator;
 	}
@@ -226,17 +232,25 @@ namespace RenderCore { namespace Techniques
 	void DeformAcceleratorPool::ExecuteGPUInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IResourceView& dstVB)
 	{
 		for (const auto&d:a._deformOps) {
+			IDeformer::Metrics deformerMetrics;
 			d->ExecuteGPU(
 				threadContext,
 				instanceIdx, a._outputVBSize,
 				*a._gpuStaticDataBufferView,
 				*a._gpuTemporariesBufferView,
-				dstVB);
+				dstVB, deformerMetrics);
+			_readyInstancesMetrics._dispatchCount += deformerMetrics._dispatchCount;
+			_readyInstancesMetrics._vertexCount += deformerMetrics._vertexCount;
+			_readyInstancesMetrics._descriptorSetWrites += deformerMetrics._descriptorSetWrites;
+			_readyInstancesMetrics._constantDataSize += deformerMetrics._constantDataSize;
+			_readyInstancesMetrics._inputStaticDataSize += deformerMetrics._inputStaticDataSize;
 		}
+		_readyInstancesMetrics._deformersReadied += a._deformOps.size();
 	}
 
 	void DeformAcceleratorPool::ReadyInstances(IThreadContext& threadContext)
 	{
+		assert(_boundThread == std::this_thread::get_id());
 		auto attachedStorage = _temporaryStorageManager->BeginCmdListReservation();
 
 		std::shared_ptr<DeformAccelerator> accelerators[_accelerators.size()];
@@ -244,31 +258,34 @@ namespace RenderCore { namespace Techniques
 		unsigned totalGPUAllocationSize = 0;
 		unsigned totalCPUAllocationSize = 0;
 		unsigned maxInstanceCount = 0;
-		for (auto a=_accelerators.begin(); a!=_accelerators.end();) {
-			auto accelerator = a->lock();
-			if (!accelerator) {
-				a = _accelerators.erase(a);
-				continue;
-			}
+		{
+			ScopedLock(_acceleratorsLock);
+			for (auto a=_accelerators.begin(); a!=_accelerators.end();) {
+				auto accelerator = a->lock();
+				if (!accelerator) {
+					a = _accelerators.erase(a);
+					continue;
+				}
 
-			if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) { a++; continue; }
-			auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
-			auto instanceCount = 0u;
-			for (auto f=fMin; f<=fMax; ++f)
-				instanceCount += popcount(accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f]);
-			
-			if (instanceCount) {
-				totalCPUAllocationSize += accelerator->_isCPUDeformer ? (accelerator->_outputVBSize * instanceCount) : 0;
-				totalGPUAllocationSize += accelerator->_isCPUDeformer ? 0 : (accelerator->_outputVBSize * instanceCount);
-				accelerators[activeAcceleratorCount++] = std::move(accelerator);
-				maxInstanceCount = std::max(maxInstanceCount, instanceCount);
-			} else {
+				if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) { a++; continue; }
+				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
+				auto instanceCount = 0u;
 				for (auto f=fMin; f<=fMax; ++f)
-					accelerator->_enabledInstances[f] = 0;
-				accelerator->_minEnabledInstance = ~0u;
-				accelerator->_maxEnabledInstance = 0u;
+					instanceCount += popcount(accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f]);
+				
+				if (instanceCount) {
+					totalCPUAllocationSize += accelerator->_isCPUDeformer ? (accelerator->_outputVBSize * instanceCount) : 0;
+					totalGPUAllocationSize += accelerator->_isCPUDeformer ? 0 : (accelerator->_outputVBSize * instanceCount);
+					accelerators[activeAcceleratorCount++] = std::move(accelerator);
+					maxInstanceCount = std::max(maxInstanceCount, instanceCount);
+				} else {
+					for (auto f=fMin; f<=fMax; ++f)
+						accelerator->_enabledInstances[f] = 0;
+					accelerator->_minEnabledInstance = ~0u;
+					accelerator->_maxEnabledInstance = 0u;
+				}
+				++a;
 			}
-			++a;
 		}
 
 		if (!activeAcceleratorCount)
@@ -290,7 +307,6 @@ namespace RenderCore { namespace Techniques
 				if (!accelerator) continue;
 
 				accelerator->_outputVBV = vbv;
-				accelerator->_outputVBV._offset += movingOffset;
 
 				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
 					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
@@ -321,6 +337,9 @@ namespace RenderCore { namespace Techniques
 					accelerator->_instanceToReadiedBufferOffset[i] = movingOffset;
 					movingOffset += accelerator->_outputVBSize;
 				}
+
+				++_readyInstancesMetrics._acceleratorsReadied;
+				_readyInstancesMetrics._instancesReadied += instanceCount;
 			}
 
 			assert(movingOffset == totalCPUAllocationSize);
@@ -345,7 +364,6 @@ namespace RenderCore { namespace Techniques
 				if (!accelerator) continue;
 
 				accelerator->_outputVBV = vbv;
-				accelerator->_outputVBV._offset += movingOffset;
 
 				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
 					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
@@ -364,7 +382,7 @@ namespace RenderCore { namespace Techniques
 					accelerator->_enabledInstances[f] = 0;
 				}
 
-				auto view = bufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, accelerator->_outputVBV._offset, instanceCount*accelerator->_outputVBSize);
+				auto view = bufferAndRange._resource->CreateBufferView(BindFlag::UnorderedAccess, accelerator->_outputVBV._offset+movingOffset, instanceCount*accelerator->_outputVBSize);
 				ExecuteGPUInstance(
 					threadContext, *accelerator,
 					MakeIteratorRange(instanceList, &instanceList[instanceCount]),
@@ -380,6 +398,9 @@ namespace RenderCore { namespace Techniques
 					accelerator->_instanceToReadiedBufferOffset[i] = movingOffset;
 					movingOffset += accelerator->_outputVBSize;
 				}
+
+				++_readyInstancesMetrics._acceleratorsReadied;
+				_readyInstancesMetrics._instancesReadied += instanceCount;
 			}
 
 			_pendingVertexInputBarrier |= atLeastOneGPUOperator;
@@ -387,7 +408,12 @@ namespace RenderCore { namespace Techniques
 			#if defined(_DEBUG)
 				metalContext.EndLabel();
 			#endif
+
+			assert(movingOffset == totalGPUAllocationSize);
 		}
+
+		_readyInstancesMetrics._cpuDeformAllocation += totalCPUAllocationSize;
+		_readyInstancesMetrics._gpuDeformAllocation += totalGPUAllocationSize;
 
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
 		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
@@ -415,25 +441,29 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	VertexBufferView DeformAcceleratorPool::GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const
+	namespace Internal
 	{
-		#if defined(_DEBUG)
-			assert(accelerator._containingPool == this);
-			auto f = instanceIdx / 64;
-			// If you hit either of the following, it means the instance wasn't enabled. Each instance that will be used should
-			// be enabled via EnableInstance() before usage (probably at the time it's initialized with current state data)
-			assert(f < accelerator._readiedInstances.size());
-			assert(accelerator._readiedInstances[f] & (1ull << uint64_t(instanceIdx & (64-1))));	
-			assert(instanceIdx < accelerator._instanceToReadiedBufferOffset.size());
-		#endif
-		assert(accelerator._outputVBV._resource);
-		VertexBufferView result = accelerator._outputVBV;
-		result._offset += accelerator._instanceToReadiedBufferOffset[instanceIdx];
-		return result;
+		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx)
+		{
+			#if defined(_DEBUG)
+				auto f = instanceIdx / 64;
+				// If you hit either of the following, it means the instance wasn't enabled. Each instance that will be used should
+				// be enabled via EnableInstance() before usage (probably at the time it's initialized with current state data)
+				assert(f < accelerator._readiedInstances.size());
+				assert(accelerator._readiedInstances[f] & (1ull << uint64_t(instanceIdx & (64-1))));	
+				assert(instanceIdx < accelerator._instanceToReadiedBufferOffset.size());
+			#endif
+			assert(accelerator._outputVBV._resource);
+			VertexBufferView result = accelerator._outputVBV;
+			result._offset += accelerator._instanceToReadiedBufferOffset[instanceIdx];
+			return result;
+		}
 	}
 
 	inline void DeformAcceleratorPool::OnFrameBarrier()
 	{
+		assert(_boundThread == std::this_thread::get_id());
+		ScopedLock(_acceleratorsLock);
 		auto i = _accelerators.begin();
 		for (; i!=_accelerators.end();) {
 			auto accelerator = i->lock();
@@ -453,6 +483,14 @@ namespace RenderCore { namespace Techniques
 		_currentFrameAttachedStorage.clear();
 
 		_temporaryStorageManager->FlushDestroys();
+
+		_lastFrameReadyInstancesMetrics = _readyInstancesMetrics;
+		_readyInstancesMetrics = {};
+	}
+
+	auto DeformAcceleratorPool::GetMetrics() const -> ReadyInstancesMetrics
+	{
+		return _lastFrameReadyInstancesMetrics;
 	}
 
 	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device)
@@ -463,6 +501,7 @@ namespace RenderCore { namespace Techniques
 			_asyncTracker = deviceVulkan->GetAsyncTracker();
 			_temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(Metal::GetObjectFactory(), _asyncTracker);
 		}
+		_boundThread = std::this_thread::get_id();
 	}
 
 	DeformAcceleratorPool::~DeformAcceleratorPool() 
@@ -818,278 +857,6 @@ namespace RenderCore { namespace Techniques
 
 			return rendererBindingResult;
 		}
-
-#if 0
-		NascentDeformForGeo BuildNascentDeformForGeo(
-			IteratorRange<const DeformOperationInstantiation*> globalDeformAttachments,
-			InputLayout srcVBLayout, unsigned srcVBStride,
-			unsigned geoId,
-			unsigned vertexCount,
-			unsigned& cpuStaticDataIterator,
-			unsigned& deformTemporaryGPUVBIterator,
-			unsigned& deformTemporaryCPUVBIterator,
-			unsigned& postDeformVBIterator)
-		{
-			// Calculate which elements are suppressed by the deform operations
-			std::vector<const DeformOperationInstantiation*> deformAttachments;
-			for (const auto& def:globalDeformAttachments)
-				if (def._geoId == geoId)
-					deformAttachments.push_back(&def);
-			if (!deformAttachments.size()) return {};
-
-			std::vector<uint64_t> workingSuppressedElements;
-			std::vector<InputElementDesc> workingGeneratedElements;
-
-			std::vector<InputElementDesc> workingTemporarySpaceElements_cpu;
-			std::vector<InputElementDesc> workingTemporarySpaceElements_gpu;
-			std::vector<InputElementDesc> workingSourceDataElements_cpu;
-
-			struct WorkingCPUDeformOp
-			{
-				std::shared_ptr<IDeformOperator> _deformOp;
-				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _inputStreamIds;
-				std::vector<DeformOperationInstantiation::SemanticNameAndFormat> _outputStreamIds;
-			};
-			std::vector<WorkingCPUDeformOp> workingCPUDeformOps;
-
-			struct WorkingGPUDeformOp
-			{
-				DeformOperationInstantiation::GPUDeformConstructorFN _constructor;
-			};
-			std::vector<WorkingGPUDeformOp> workingGPUDeformOps;
-
-			for (auto d=deformAttachments.begin(); d!=deformAttachments.end(); ++d) {
-				const auto&def = **d;
-				assert((def._cpuOperator != nullptr) ^ (def._gpuConstructor != nullptr));		// we need either CPU or GPU style operator, but not both
-
-				if (def._cpuOperator) {
-					/////////////////// CPU type operator ///////////////////
-					WorkingCPUDeformOp workingDeformOp;
-
-					for (auto&e:def._upstreamSourceElements) {
-						// find a matching source element generated from another deform op
-						// (note that CPU operations can only take inputs from other CPU deforms)
-						auto i = std::find_if(
-							workingGeneratedElements.begin(), workingGeneratedElements.end(),
-							[e](const auto& wge) {
-								return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
-							});
-						if (i != workingGeneratedElements.end()) {
-							workingTemporarySpaceElements_cpu.push_back(*i);
-							workingGeneratedElements.erase(i);
-						} else {
-							// If it's not generated by some deform op, we look for it in the static data
-							auto existing = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), 
-								[&e](const auto& c) { return c._semanticName == e._semantic && c._semanticIndex == e._semanticIndex; });
-							if (existing != workingSourceDataElements_cpu.end()) {
-								assert(existing->_nativeFormat == e._format);		// avoid loading the same attribute twice with different formats
-							} else
-								workingSourceDataElements_cpu.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format, VB_CPUStaticData});
-						}
-					}
-
-					// Before we add our own static data, we should remove any working elements that have been
-					// suppressed
-					auto i = std::remove_if(
-						workingGeneratedElements.begin(), workingGeneratedElements.end(),
-						[&def](const auto& wge) {
-							auto hash = Hash64(wge._semanticName) + wge._semanticIndex;
-							return std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end();
-						});
-					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
-
-					for (const auto& e:def._generatedElements) {
-						auto existing = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), 
-							[&e](const auto& c) { return c._semanticName == e._semantic && c._semanticIndex == e._semanticIndex; });
-						if (existing != workingGeneratedElements.end())
-							workingGeneratedElements.erase(existing);
-						workingGeneratedElements.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format, VB_PostDeform});
-					}
-
-					workingSuppressedElements.insert(
-						workingSuppressedElements.end(),
-						def._suppressElements.begin(), def._suppressElements.end());
-
-					workingDeformOp._deformOp = std::move(def._cpuOperator);
-					workingDeformOp._inputStreamIds = std::move(def._upstreamSourceElements);
-					workingDeformOp._outputStreamIds = std::move(def._generatedElements);
-					workingCPUDeformOps.push_back(workingDeformOp);
-				} else {
-					/////////////////// GPU type operator ///////////////////
-					WorkingGPUDeformOp workingDeformOp;
-
-					for (auto&e:def._upstreamSourceElements) {
-						// find a matching source element generated from another deform op
-						// (note that CPU operations can only take inputs from other CPU deforms)
-						auto i = std::find_if(
-							workingGeneratedElements.begin(), workingGeneratedElements.end(),
-							[e](const auto& wge) {
-								return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
-							});
-						if (i != workingGeneratedElements.end()) {
-							workingTemporarySpaceElements_gpu.push_back(*i);
-							workingGeneratedElements.erase(i);
-						} else {
-							auto q = std::find_if(
-								srcVBLayout.begin(), srcVBLayout.end(),
-								[e](const auto& wge) {
-									return wge._semanticName == e._semantic && wge._semanticIndex == e._semanticIndex;
-								});
-							if (q==srcVBLayout.end())
-								Throw(std::runtime_error("Could not match input element (" + e._semantic + ") for GPU deform operation"));
-						}
-					}
-
-					// Before we add our own static data, we should remove any working elements that have been
-					// suppressed
-					auto i = std::remove_if(
-						workingGeneratedElements.begin(), workingGeneratedElements.end(),
-						[&def](const auto& wge) {
-							auto hash = Hash64(wge._semanticName) + wge._semanticIndex;
-							return std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end();
-						});
-					workingGeneratedElements.erase(i, workingGeneratedElements.end());		// these get removed and don't go into temporary space. They are just never used
-
-					for (const auto& e:def._generatedElements) {
-						auto existing = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), 
-							[&e](const auto& c) { return c._semanticName == e._semantic && c._semanticIndex == e._semanticIndex; });
-						if (existing != workingGeneratedElements.end())
-							workingGeneratedElements.erase(existing);
-						workingGeneratedElements.push_back(InputElementDesc{e._semantic, e._semanticIndex, e._format, VB_PostDeform});
-					}
-
-					workingSuppressedElements.insert(
-						workingSuppressedElements.end(),
-						def._suppressElements.begin(), def._suppressElements.end());
-
-					workingDeformOp._constructor = std::move(def._gpuConstructor);
-					workingGPUDeformOps.push_back(workingDeformOp);
-				}
-			}
-
-			NascentDeformForGeo result;
-			result._rendererInterf._suppressedElements = workingSuppressedElements;
-			result._rendererInterf._suppressedElements.reserve(result._rendererInterf._suppressedElements.size() + workingGeneratedElements.size());
-			for (const auto&wge:workingGeneratedElements)
-				result._rendererInterf._suppressedElements.push_back(Hash64(wge._semanticName) + wge._semanticIndex);		// (also suppress all elements generated by the final deform step, because they are effectively overriden)
-			std::sort(result._rendererInterf._suppressedElements.begin(), result._rendererInterf._suppressedElements.end());
-			result._rendererInterf._suppressedElements.erase(
-				std::unique(result._rendererInterf._suppressedElements.begin(), result._rendererInterf._suppressedElements.end()),
-				result._rendererInterf._suppressedElements.end());
-
-			workingGeneratedElements = NormalizeInputAssembly(workingGeneratedElements);
-			workingTemporarySpaceElements_cpu = NormalizeInputAssembly(workingTemporarySpaceElements_cpu);
-			workingTemporarySpaceElements_gpu = NormalizeInputAssembly(workingTemporarySpaceElements_gpu);
-			workingSourceDataElements_cpu = NormalizeInputAssembly(workingSourceDataElements_cpu);
-
-			for (auto&e:workingTemporarySpaceElements_cpu) e._inputSlot = VB_CPUDeformTemporaries;
-			for (auto&e:workingTemporarySpaceElements_gpu) e._inputSlot = VB_GPUDeformTemporaries;
-			for (auto&e:workingGeneratedElements) e._inputSlot = VB_PostDeform;
-			for (auto&e:workingSourceDataElements_cpu) e._inputSlot = VB_CPUStaticData;
-
-			// Figure out how to arrange all of the input and output vertices in the 
-			// deform VBs.
-			// We've got 3 to use
-			//		1. an input static data buffer; which contains values read directly from the source data (perhaps processed for format)
-			//		2. a deform temporary buffer; which contains data written out from deform operations, and read in by others
-			//		3. a final output buffer; which contains resulting vertex data that is fed into the render operation
-			
-			unsigned vbStrides[VB_Count] = {0};
-			{
-				vbStrides[VB_CPUStaticData] = CalculateVertexStrideForSlot(workingSourceDataElements_cpu, VB_CPUStaticData);
-				result._vbOffsets[VB_CPUStaticData] = cpuStaticDataIterator;
-				result._vbSizes[VB_CPUStaticData] = vbStrides[VB_CPUStaticData] * vertexCount;
-				cpuStaticDataIterator += vbStrides[VB_CPUStaticData] * vertexCount;
-
-				result._cpuStaticDataLoadRequests.reserve(workingSourceDataElements_cpu.size());
-				for (unsigned c=0; c<workingSourceDataElements_cpu.size(); ++c) {
-					const auto& workingE = workingSourceDataElements_cpu[c];
-					result._cpuStaticDataLoadRequests.push_back({
-						geoId, Hash64(workingE._semanticName) + workingE._semanticIndex,
-						workingE._nativeFormat, workingE._alignedByteOffset + result._vbOffsets[VB_CPUStaticData],
-						vbStrides[VB_CPUStaticData], vertexCount});
-				}
-			}
-
-			{
-				vbStrides[VB_CPUDeformTemporaries] = CalculateVertexStrideForSlot(workingTemporarySpaceElements_cpu, VB_CPUDeformTemporaries);
-				result._vbOffsets[VB_CPUDeformTemporaries] = deformTemporaryCPUVBIterator;
-				result._vbSizes[VB_CPUDeformTemporaries] = vbStrides[VB_CPUDeformTemporaries] * vertexCount;
-				deformTemporaryCPUVBIterator += vbStrides[VB_CPUDeformTemporaries] * vertexCount;
-			}
-
-			{
-				vbStrides[VB_GPUDeformTemporaries] = CalculateVertexStrideForSlot(workingTemporarySpaceElements_gpu, VB_GPUDeformTemporaries);
-				result._vbOffsets[VB_GPUDeformTemporaries] = deformTemporaryGPUVBIterator;
-				result._vbSizes[VB_GPUDeformTemporaries] = vbStrides[VB_GPUDeformTemporaries] * vertexCount;
-				deformTemporaryGPUVBIterator += vbStrides[VB_GPUDeformTemporaries] * vertexCount;
-			}
-
-			{
-				vbStrides[VB_PostDeform] = CalculateVertexStrideForSlot(workingGeneratedElements, VB_PostDeform);
-				result._vbOffsets[VB_PostDeform] = postDeformVBIterator;
-				result._vbSizes[VB_PostDeform] = vbStrides[VB_PostDeform] * vertexCount;
-				result._rendererInterf._postDeformBufferOffset = postDeformVBIterator;
-				postDeformVBIterator += vbStrides[VB_PostDeform] * vertexCount;
-			}
-
-			// Collate the WorkingDeformOp into the SimpleModelRenderer::DeformOp format
-			result._cpuOps.reserve(workingCPUDeformOps.size());
-			for (const auto&wdo:workingCPUDeformOps) {
-				NascentDeformForGeo::CPUOp finalDeformOp;
-				// input streams
-				for (auto s:wdo._inputStreamIds) {
-					auto i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
-					if (i != workingTemporarySpaceElements_cpu.end()) {
-						finalDeformOp._inputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUDeformTemporaries], vbStrides[VB_CPUDeformTemporaries], VB_CPUDeformTemporaries));
-					} else {
-						i = std::find_if(workingSourceDataElements_cpu.begin(), workingSourceDataElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
-						if (i != workingSourceDataElements_cpu.end()) {
-							finalDeformOp._inputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUStaticData], vbStrides[VB_CPUStaticData], VB_CPUStaticData));
-						} else {
-							assert(0);
-							finalDeformOp._inputElements.push_back({});
-						}
-					}
-				}
-				// output streams
-				for (auto s:wdo._outputStreamIds) {
-					auto i = std::find_if(workingGeneratedElements.begin(), workingGeneratedElements.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
-					if (i != workingGeneratedElements.end()) {
-						finalDeformOp._outputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_PostDeform], vbStrides[VB_PostDeform], VB_PostDeform));
-					} else {
-						i = std::find_if(workingTemporarySpaceElements_cpu.begin(), workingTemporarySpaceElements_cpu.end(), [s](const auto& p) { return p._semanticName == s._semantic && p._semanticIndex == s._semanticIndex; });
-						if (i != workingTemporarySpaceElements_cpu.end()) {
-							finalDeformOp._outputElements.push_back(AsCPUOpAttribute(*i, result._vbOffsets[VB_CPUDeformTemporaries], vbStrides[VB_CPUDeformTemporaries], VB_CPUDeformTemporaries));
-						} else {
-							assert(0);
-							finalDeformOp._outputElements.push_back({});
-						}
-					}
-				}
-				finalDeformOp._deformOp = wdo._deformOp;
-				result._cpuOps.emplace_back(std::move(finalDeformOp));
-			}
-
-			result._gpuOps.reserve(workingGPUDeformOps.size());
-			for (const auto&wdo:workingGPUDeformOps) {
-				std::promise<std::shared_ptr<IDeformOperator>> promise;
-				auto future = promise.get_future();
-				DeformOperationInstantiation::GPUConstructorParameters params;
-				params._srcVBLayout = srcVBLayout;
-				params._deformTemporariesVBLayout = workingTemporarySpaceElements_gpu;
-				params._dstVBLayout = workingGeneratedElements;
-				params._srcVBStride = srcVBStride;
-				params._deformTemporariesStride = vbStrides[VB_GPUDeformTemporaries];
-				params._dstVBStride = vbStrides[VB_PostDeform];
-				wdo._constructor(std::move(promise), std::move(params));
-				result._gpuOps.push_back(std::move(future));
-			}
-
-			result._rendererInterf._generatedElements = std::move(workingGeneratedElements);
-			return result;
-		}
-#endif
 
 		static void ReadStaticData(
 			IteratorRange<void*> destinationVB,

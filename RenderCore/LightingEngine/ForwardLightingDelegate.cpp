@@ -21,6 +21,7 @@
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DrawableDelegates.h"
+#include "../Techniques/DeformAccelerator.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -370,6 +371,11 @@ namespace RenderCore { namespace LightingEngine
 						});
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
+					mainSequence.CreateStep_CallFunction(
+						[](LightingTechniqueIterator& iterator) {
+							if (iterator._deformAcceleratorPool)
+								iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
+						});
 					// Pre depth
 					if (lightScene->HasScreenSpaceReflectionsOperator()) {
 						mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(techDelBox->_depthMotionNormalRoughnessDelegate));

@@ -84,7 +84,6 @@ namespace SceneEngine
 
 		std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 		Techniques::IPipelineAcceleratorPool* _pipelineAccelerators = nullptr;
-		Techniques::IDeformAcceleratorPool* _deformAccelerators = nullptr;
     };
 
     class ModelIntersectionResources
@@ -356,7 +355,7 @@ namespace SceneEngine
 		_pimpl->_pipelineAccelerators->LockForReading();
 		TRY {
 			RenderCore::Techniques::Draw(
-				metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators, 
+				metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators,
 				*_pimpl->_sequencerConfig, drawablePkt);
 		} CATCH(...) {
 			_pimpl->_pipelineAccelerators->UnlockForReading();

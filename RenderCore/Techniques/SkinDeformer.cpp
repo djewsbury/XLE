@@ -321,7 +321,8 @@ namespace RenderCore { namespace Techniques
 		unsigned outputInstanceStride,
 		const IResourceView& srcVB,
 		const IResourceView& deformTemporariesVB,
-		const IResourceView& dstVB) const
+		const IResourceView& dstVB,
+		Metrics& metrics) const
 	{
 		assert(!instanceIndices.empty());
 		struct InvocationParams
@@ -374,14 +375,21 @@ namespace RenderCore { namespace Techniques
 				(*op)->BeginDispatches(threadContext, us, {}, InvocationParamsHash);
 				currentOperator = op->get();
 				currentGeoId = section._geoId;
+				++metrics._descriptorSetWrites;
 			}
 
 			for (const auto&drawCall:section._preskinningDrawCalls) {
 				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
 				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first, instanceCount, outputInstanceStride };
-				currentOperator->Dispatch((drawCall._indexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+				auto groupCount = (drawCall._indexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
+				currentOperator->Dispatch(groupCount, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+				metrics._vertexCount += groupCount*wavegroupWidth;
 			}
+			metrics._dispatchCount += (unsigned)section._preskinningDrawCalls.size();
 		}
+
+		metrics._constantDataSize += instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
+		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
 
 		if (currentOperator)
 			currentOperator->EndDispatches();
@@ -612,6 +620,7 @@ namespace RenderCore { namespace Techniques
 			BindFlag::UnorderedAccess,
 			(StringMeld<64>() << "[skin]" << modelScaffoldName).AsStringSection()).first;
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
+		_staticVertexAttachmentsSize = skelVBIterator;
 
 		_jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
 	}

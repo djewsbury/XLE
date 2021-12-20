@@ -317,7 +317,7 @@ namespace RenderCore { namespace Techniques
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			Draw(
 				parserContext,
-				*_pipelineAcceleratorPool, nullptr,
+				*_pipelineAcceleratorPool,
 				sequencerConfig,
 				_workingPkt);
 

@@ -32,9 +32,10 @@ namespace RenderCore { namespace Techniques
         virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
         virtual void OnFrameBarrier() = 0;
 
-        virtual VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx) const = 0;
-
         unsigned GetGUID() const { return _guid; }
+
+        struct ReadyInstancesMetrics;
+        virtual ReadyInstancesMetrics GetMetrics() const = 0;
 
         IDeformAcceleratorPool();
         virtual ~IDeformAcceleratorPool();
@@ -43,5 +44,24 @@ namespace RenderCore { namespace Techniques
     };
 
     std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device);
+
+    struct IDeformAcceleratorPool::ReadyInstancesMetrics
+    {
+        unsigned _acceleratorsReadied = 0;
+        unsigned _deformersReadied = 0;
+        unsigned _instancesReadied = 0;
+        unsigned _cpuDeformAllocation = 0;
+        unsigned _gpuDeformAllocation = 0;
+        unsigned _dispatchCount = 0;
+        unsigned _vertexCount = 0;
+        unsigned _descriptorSetWrites = 0;
+        unsigned _constantDataSize = 0;
+        unsigned _inputStaticDataSize = 0;
+    };
+
+    namespace Internal
+    {
+        VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx);
+    }
 
 }}

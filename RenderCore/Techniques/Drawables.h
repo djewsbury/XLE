@@ -161,7 +161,6 @@ namespace RenderCore { namespace Techniques
 	};
 
 	class IPipelineAcceleratorPool;
-	class IDeformAcceleratorPool;
 	class SequencerConfig;
 
 	struct DrawOptions { bool _stallForResources = false; };
@@ -169,20 +168,9 @@ namespace RenderCore { namespace Techniques
 	void Draw(
         ParsingContext& parserContext,
 		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const IDeformAcceleratorPool* deformAccelerators,
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt,
 		const DrawOptions& drawOptions = {});
-
-	inline void Draw(
-        ParsingContext& parserContext,
-		const IPipelineAcceleratorPool& pipelineAccelerators,
-		const SequencerConfig& sequencerConfig,
-		const DrawablesPacket& drawablePkt,
-		const DrawOptions& drawOptions = {})
-	{
-		Draw(parserContext, pipelineAccelerators, nullptr, sequencerConfig, drawablePkt, drawOptions);
-	}
 
 	std::shared_ptr<::Assets::IAsyncMarker> PrepareResources(
 		const IPipelineAcceleratorPool& pipelineAccelerators,

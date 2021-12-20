@@ -107,13 +107,6 @@ namespace RenderCore { namespace LightingEngine
 		return _nextFragmentInterfaceRegistration++;
 	}
 
-	void LightingTechniqueSequence::CreateStep_ReadyInstances()
-	{
-		ExecuteStep newStep;
-		newStep._type = ExecuteStep::Type::ReadyInstances;
-		_steps.emplace_back(std::move(newStep));
-	}
-
 	static const std::string s_defaultSequencerCfgName = "lighting-technique";
 
 	void LightingTechniqueSequence::ResolvePendingCreateFragmentSteps()
@@ -345,7 +338,7 @@ namespace RenderCore { namespace LightingEngine
 		if (uniformDelegate)
 			_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDelegate);
 		TRY {
-			Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, _deformAcceleratorPool, sequencerCfg, _drawablePkt[pktIdx]);
+			Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, sequencerCfg, _drawablePkt[pktIdx]);
 		} CATCH(...) {
 			if (uniformDelegate)
 				_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
@@ -426,6 +419,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			_iterator->ResetIteration(LightingTechniqueIterator::Phase::Execute);
+			return { StepType::ReadyInstances };
 		}
 
 		const LightingTechniqueSequence::ExecuteStep* next;
@@ -466,9 +460,6 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::NextRenderPassStep:
 				_iterator->_rpi.NextSubpass();
 				break;
-
-			case LightingTechniqueSequence::ExecuteStep::Type::ReadyInstances:
-				return { StepType::ReadyInstances };
 
 			case LightingTechniqueSequence::ExecuteStep::Type::PrepareOnly_ExecuteDrawables:
 				break;
@@ -561,9 +552,6 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::BeginRenderPassInstance:
 			case LightingTechniqueSequence::ExecuteStep::Type::EndRenderPassInstance:
 			case LightingTechniqueSequence::ExecuteStep::Type::NextRenderPassStep:
-				break;
-
-			case LightingTechniqueSequence::ExecuteStep::Type::ReadyInstances:
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::None:

@@ -165,7 +165,7 @@ namespace RenderCore { namespace LightingEngine
 						drawOptions._stallForResources = true;
 						TRY {
 							Techniques::Draw(
-								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators, _pimpl->_deformAccelerators.get(),
+								*_staticPrepareHelper->_parsingContext, *_pimpl->_pipelineAccelerators,
 								*_pimpl->_probePrepareCfg, _drawablePkt, drawOptions);
 						} CATCH (...) {
 						} CATCH_END

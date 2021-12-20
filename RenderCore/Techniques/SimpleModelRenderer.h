@@ -28,8 +28,9 @@ namespace RenderCore { namespace Techniques
 	class DrawablesPacket; 
 	class ParsingContext; 
 	class IPipelineAcceleratorPool; 
-	class PipelineAccelerator; 
+	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
+	class IDeformAcceleratorPool;
 	class IDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;

@@ -246,7 +246,7 @@ namespace UnitTests
 				}
 				Techniques::Draw(
 					parsingContext, 
-					*pipelineAcceleratorPool, nullptr,
+					*pipelineAcceleratorPool,
 					*cfgId,
 					pkt);
 			}
@@ -313,11 +313,7 @@ namespace UnitTests
 					}
 
 					for (const auto&pkt:pkts)
-						Techniques::Draw(
-							parsingContext, 
-							*pipelineAcceleratorPool, nullptr,
-							*cfgId,
-							pkt);
+						Techniques::Draw(parsingContext, *pipelineAcceleratorPool, *cfgId, pkt);
 
 					if (parsingContext._requiredBufferUploadsCommandList)
 						techniqueTestApparatus._bufferUploads->StallUntilCompletion(*threadContext, parsingContext._requiredBufferUploadsCommandList);

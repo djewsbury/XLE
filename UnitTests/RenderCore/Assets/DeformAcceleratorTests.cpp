@@ -318,7 +318,8 @@ namespace UnitTests
 		
 		testHelper.BeginFrameCapture();
 		unsigned instances[] = {0};
-		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), outputResource->GetDesc()._linearBufferDesc._sizeInBytes, *inputView, *inputView, *outputView);
+		IDeformer::Metrics metrics;
+		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), outputResource->GetDesc()._linearBufferDesc._sizeInBytes, *inputView, *inputView, *outputView, metrics);
 		testHelper.EndFrameCapture();
 
 		return outputResource->ReadBackSynchronized(*threadContext);

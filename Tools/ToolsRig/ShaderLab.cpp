@@ -110,12 +110,13 @@ namespace ToolsRig
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>(
 						l->_drawingApparatus->_pipelineAccelerators,
 						constructorContext._stitchingContext, nullptr);
-					technique->CreateSequence().CreateStep_CallFunction(
+					auto& sequence = technique->CreateSequence();
+					sequence.CreateStep_CallFunction(
 						[](RenderCore::LightingEngine::LightingTechniqueIterator& iterator) {
 							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
 							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 						});
-					for (auto& fn:constructorContext._setupFunctions) fn(*technique);
+					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
 					technique->CompleteConstruction();
 
 					auto result = std::make_shared<CompiledTechnique>();

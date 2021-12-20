@@ -91,7 +91,8 @@ namespace RenderCore { namespace Techniques
 		unsigned outputInstanceStride,
 		const IResourceView& srcVB,
 		const IResourceView& deformTemporariesVB,
-		const IResourceView& dstVB) const
+		const IResourceView& dstVB,
+		Metrics& metrics) const
 	{
 		assert(0);
 	}
