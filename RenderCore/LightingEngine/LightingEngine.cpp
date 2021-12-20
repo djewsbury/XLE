@@ -31,6 +31,11 @@ namespace RenderCore { namespace LightingEngine
 	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFilter batch) -> ParseId
 	{
 		assert(!_frozen);
+		for (auto& s:_parseSteps)
+			if (s._batch == batch && !s._complexCullingVolume) {
+				s._prepareOnly = false;
+				return s._parseId;
+			}
 		ParseStep newStep;
 		newStep._batch = batch;
 		newStep._parseId = _nextParseId++;
@@ -41,6 +46,11 @@ namespace RenderCore { namespace LightingEngine
 	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFilter batch, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
 	{
 		assert(!_frozen);
+		for (auto& s:_parseSteps)
+			if (s._batch == batch && s._complexCullingVolume == complexCullingVolume) {
+				s._prepareOnly = false;
+				return s._parseId;
+			}
 		ParseStep newStep;
 		newStep._batch = batch;
 		newStep._parseId = _nextParseId++;
@@ -52,6 +62,9 @@ namespace RenderCore { namespace LightingEngine
 	auto LightingTechniqueSequence::CreatePrepareOnlyParseScene(Techniques::BatchFilter batch) -> ParseId
 	{
 		assert(!_frozen);
+		for (auto& s:_parseSteps)
+			if (s._batch == batch && !s._complexCullingVolume)
+				return s._parseId;
 		ParseStep newStep;
 		newStep._batch = batch;
 		newStep._parseId = _nextParseId++;
