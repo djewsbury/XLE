@@ -345,17 +345,22 @@ namespace ToolsRig
 					RenderCore::LightingEngine::AmbientLightOperatorDesc ambientLightOperatorDesc;
 					ambientLightOperatorDesc._ssrOperator = RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc{};
 					auto operators = envSettings->GetOperators();
-					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
-						lightingApparatus,
-						operators._lightResolveOperators,
-						operators._shadowResolveOperators,
-						ambientLightOperatorDesc,
-						targets, fbProps);
-					/*auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
-						lightingApparatus,
-						operators._lightResolveOperators,
-						operators._shadowResolveOperators,
-						targets, fbProps);*/
+					::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::CompiledLightingTechnique> compiledLightingTechniqueFuture;
+					const bool forwardLighting = false;
+					if (forwardLighting) {
+						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateForwardLightingTechnique(
+							lightingApparatus,
+							operators._lightResolveOperators,
+							operators._shadowResolveOperators,
+							ambientLightOperatorDesc,
+							targets, fbProps);
+					} else {
+						compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+							lightingApparatus,
+							operators._lightResolveOperators,
+							operators._shadowResolveOperators,
+							targets, fbProps);
+					}
 
 					::Assets::WhenAll(sceneFuture, compiledLightingTechniqueFuture).ThenConstructToPromise(
 						std::move(thatPromise),

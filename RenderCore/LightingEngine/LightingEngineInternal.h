@@ -7,6 +7,7 @@
 #include "LightingEngine.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
+#include "../Techniques/TechniqueUtils.h"
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -112,6 +113,8 @@ namespace RenderCore { namespace LightingEngine
 		~CompiledLightingTechnique();
 
 		mutable unsigned _frameIdx = 0;
+		mutable Techniques::ProjectionDesc _prevProjDesc;
+		mutable bool _hasPrevProjDesc = false;
 
 	private:
 		Techniques::FragmentStitchingContext* _stitchingContext = nullptr;

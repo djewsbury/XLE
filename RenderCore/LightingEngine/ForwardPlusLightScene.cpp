@@ -358,16 +358,6 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	void ForwardPlusLightScene::SetupProjection(Techniques::ParsingContext& parsingContext)
-	{
-		if (_hasPrevProjection) {
-			parsingContext.GetPrevProjectionDesc() = _prevProjDesc;
-			parsingContext.GetEnablePrevProjectionDesc() = true;
-		}
-		_prevProjDesc = parsingContext.GetProjectionDesc();
-		_hasPrevProjection = true;
-	}
-
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:

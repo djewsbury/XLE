@@ -32,7 +32,6 @@ namespace RenderCore { namespace LightingEngine
 
 		void FinalizeConfiguration();
 		virtual void SetEquirectangularSource(StringSection<> input) override;
-		void SetupProjection(Techniques::ParsingContext& parsingContext);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 
 		std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
@@ -112,8 +111,6 @@ namespace RenderCore { namespace LightingEngine
 		};
 		SceneLightUniforms _uniforms[2];
 		unsigned _pingPongCounter = 0;
-		bool _hasPrevProjection = false;
-		Techniques::ProjectionDesc _prevProjDesc;
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			std::shared_ptr<DynamicShadowPreparationOperators> shadowPreparationOperators,

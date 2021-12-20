@@ -344,7 +344,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void LightingTechniqueIterator::ResetIteration(Phase newPhase)
 	{
-		_stepper = *_compiledTechnique;
+		_stepper = LightingTechniqueStepper{*_compiledTechnique};
 		_currentPhase = newPhase;
 	}
 
@@ -382,6 +382,13 @@ namespace RenderCore { namespace LightingEngine
 			return GetNextPrepareResourcesStep();
 
 		if (_iterator->_currentPhase == LightingTechniqueIterator::Phase::SequenceSetup) {
+			if (_iterator->_compiledTechnique->_hasPrevProjDesc) {
+				_iterator->_parsingContext->GetPrevProjectionDesc() = _iterator->_compiledTechnique->_prevProjDesc;
+				_iterator->_parsingContext->GetEnablePrevProjectionDesc() = true;
+			}
+			_iterator->_compiledTechnique->_prevProjDesc = _iterator->_parsingContext->GetProjectionDesc();
+			_iterator->_compiledTechnique->_hasPrevProjDesc = true;
+
 			if (_iterator->_compiledTechnique->_preSequenceSetup)
 				_iterator->_compiledTechnique->_preSequenceSetup(*_iterator);
 			for (auto& sequence:_iterator->_compiledTechnique->_sequences) {
@@ -494,7 +501,7 @@ namespace RenderCore { namespace LightingEngine
 		Phase _currentPhase = Phase::SequenceSetup;
 		void ResetIteration(Phase newPhase)
 		{
-			_stepper = *_compiledTechnique;
+			_stepper = LightingTechniqueStepper{*_compiledTechnique};
 			_currentPhase = newPhase;
 		}
 	};

@@ -361,7 +361,6 @@ namespace RenderCore { namespace LightingEngine
 							captures->_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
 							if (captures->_lightScene->HasScreenSpaceReflectionsOperator())
 								captures->_lightScene->GetScreenSpaceReflectionsOperator().PreregisterAttachments(stitchingContext);
-							captures->_lightScene->SetupProjection(*iterator._parsingContext);
 						});
 
 					// Prepare shadows
