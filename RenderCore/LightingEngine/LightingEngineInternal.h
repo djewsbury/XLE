@@ -18,9 +18,11 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		using StepFnSig = void(LightingTechniqueIterator&);
 		using ParseId = unsigned;
+
+		ParseId CreateParseScene(Techniques::BatchFilter);
+		ParseId CreateParseScene(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
+
 		void CreateStep_CallFunction(std::function<StepFnSig>&&);
-		ParseId CreateStep_ParseScene(Techniques::BatchFilter);
-		ParseId CreateStep_ParseScene(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 		void CreateStep_ExecuteDrawables(
 			std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
 			std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
@@ -29,11 +31,12 @@ namespace RenderCore { namespace LightingEngine
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
-		void CreatePrepareOnlyStep_ParseScene(Techniques::BatchFilter, ParseId parseId=0);
+		ParseId CreatePrepareOnlyParseScene(Techniques::BatchFilter);
 		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId=0);
 
 		void ResolvePendingCreateFragmentSteps();
 		void Reset();
+		unsigned DrawablePktsToReserve() const { return _nextParseId; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
@@ -47,19 +50,24 @@ namespace RenderCore { namespace LightingEngine
 		// into single render passes
 		std::vector<std::pair<RenderStepFragmentInterface, FragmentInterfaceRegistration>> _pendingCreateFragmentSteps;
 
-		struct Step
+		struct ExecuteStep
 		{
-			enum class Type { ParseScene, DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ParseScene, PrepareOnly_ExecuteDrawables, ReadyInstances, None };
+			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, ReadyInstances, None };
 			Type _type = Type::None;
-			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			unsigned _fbDescIdx = ~0u;		// also used for drawable pkt index
-			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
-
 			std::function<StepFnSig> _function;
 		};
-		std::vector<Step> _steps;
+		std::vector<ExecuteStep> _steps;
+		struct ParseStep
+		{
+			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
+			ParseId _parseId;
+			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
+			bool _prepareOnly = false;
+		};
+		std::vector<ParseStep> _parseSteps;
 		std::vector<Techniques::FragmentStitchingContext::StitchResult> _fbDescs;
 		
 		struct FragmentInterfaceMapping
@@ -78,6 +86,7 @@ namespace RenderCore { namespace LightingEngine
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
 		friend class CompiledLightingTechnique;
+		friend class LightingTechniqueStepper;
 	};
 
 	class CompiledLightingTechnique
@@ -87,6 +96,7 @@ namespace RenderCore { namespace LightingEngine
 		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
 		void CreateDynamicSequence(DynamicSequenceFn&& fn);
 		void CompleteConstruction();
+		void PreSequenceSetup(std::function<void(LightingTechniqueIterator&)>&&);
 
 		ILightScene& GetLightScene();
 
@@ -114,45 +124,61 @@ namespace RenderCore { namespace LightingEngine
 			DynamicSequenceFn _dynamicFn;
 		};
 		std::vector<Sequence> _sequences;
+		std::function<void(LightingTechniqueIterator&)> _preSequenceSetup;
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;
+		friend class LightingTechniqueStepper;
+	};
+
+	class LightingTechniqueStepper
+	{
+	public:
+		std::vector<LightingTechniqueSequence::ExecuteStep>::const_iterator _stepIterator;
+		std::vector<LightingTechniqueSequence::ExecuteStep>::const_iterator _stepEnd;
+
+		std::vector<LightingTechniqueSequence::ParseStep>::const_iterator _parseStepIterator;
+		std::vector<LightingTechniqueSequence::ParseStep>::const_iterator _parseStepEnd;
+
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceIterator;
+		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceEnd;
+
+		const LightingTechniqueSequence::ExecuteStep* AdvanceExecuteStep();
+		const LightingTechniqueSequence::ParseStep* AdvanceParseStep();
+		unsigned _drawablePktIdxOffset = 0;
+
+		LightingTechniqueStepper(const CompiledLightingTechnique& technique);
+		LightingTechniqueStepper() = default;
 	};
 
     class LightingTechniqueIterator
 	{
 	public:
-		Techniques::RenderPassInstance _rpi;
-		std::vector<Techniques::DrawablesPacket> _drawablePkt;
-
 		IThreadContext* _threadContext = nullptr;
 		Techniques::ParsingContext* _parsingContext = nullptr;
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
 		Techniques::IDeformAcceleratorPool* _deformAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
+		Techniques::RenderPassInstance _rpi;
 
 		void ExecuteDrawables(
 			LightingTechniqueSequence::ParseId parseId, 
 			Techniques::SequencerConfig& sequencerCfg,
 			const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate = nullptr);
-
-		const LightingTechniqueSequence::Step* Advance();
+		const Techniques::DrawablesPacket& GetDrawablesPacket(LightingTechniqueSequence::ParseId parseId);
 
 		LightingTechniqueIterator(
 			Techniques::ParsingContext& parsingContext,
 			const CompiledLightingTechnique& compiledTechnique);
 
 	private:
-		std::vector<LightingTechniqueSequence::Step>::const_iterator _stepIterator;
-		std::vector<LightingTechniqueSequence::Step>::const_iterator _stepEnd;
-
-		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceIterator;
-		std::vector<CompiledLightingTechnique::Sequence>::const_iterator _sequenceEnd;
-
-		bool _pendingDynamicSequenceGen = true;
+		std::vector<Techniques::DrawablesPacket> _drawablePkt;
+		LightingTechniqueStepper _stepper;
+		enum class Phase { SequenceSetup, SceneParse, Execute };
+		Phase _currentPhase = Phase::SequenceSetup;
+		void ResetIteration(Phase newPhase);
 
 		friend class LightingTechniqueInstance;
 	};
-
 }}
 

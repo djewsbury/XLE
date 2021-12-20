@@ -353,7 +353,7 @@ namespace RenderCore { namespace LightingEngine
 						lightingTechnique->_depVal.RegisterDependency(lightScene->GetScreenSpaceReflectionsOperator().GetDependencyValidation());
 
 					// Reset captures
-					lightingTechnique->CreateSequence().CreateStep_CallFunction(
+					lightingTechnique->PreSequenceSetup(
 						[captures](LightingTechniqueIterator& iterator) {
 							auto& stitchingContext = iterator._parsingContext->GetFragmentStitchingContext();
 							PreregisterAttachments(stitchingContext);

@@ -38,9 +38,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		// todo - cull out any offscreen projections
 		if (volumeTester) {
-			return sequence.CreateStep_ParseScene(Techniques::BatchFilter::General, std::move(volumeTester));
+			return sequence.CreateParseScene(Techniques::BatchFilter::General, std::move(volumeTester));
 		} else
-			return sequence.CreateStep_ParseScene(Techniques::BatchFilter::General);
+			return sequence.CreateParseScene(Techniques::BatchFilter::General);
 	}
 
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
