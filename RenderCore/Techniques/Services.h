@@ -52,10 +52,10 @@ namespace RenderCore { namespace Techniques
 
 	protected:
 		std::shared_ptr<RenderCore::IDevice> _device;
-		std::shared_ptr<DeformOperationFactorySet> _deformOpsFactory;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<SubFrameEvents> _subFrameEvents;
+		std::shared_ptr<DeformOperationFactorySet> _deformOpsFactory;
 
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

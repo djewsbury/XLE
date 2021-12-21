@@ -344,7 +344,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	inline void GraphicsEncoder_Optimized::BindPipeline(const GraphicsPipeline& pipeline)
 	{
 		assert(pipeline.get());
-		assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
+		// todo -- test compatibility of the bound pipeline layout with the shader pipeline layout
 		assert(_sharedState->_commandList.GetUnderlying());
 		if (_capturedStates) {
 			if (_capturedStates->_currentPipeline != &pipeline) {
@@ -699,7 +699,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		if (_capturedStates) {
 			if (_capturedStates->_currentPipeline != &pipeline) {
-				assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
+				// todo -- test compatibility of the bound pipeline layout with the shader pipeline layout
 				vkCmdBindPipeline(
 					_sharedState->_commandList.GetUnderlying().get(),
 					VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -708,7 +708,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				_capturedStates->_currentPipeline = &pipeline;
 			}
 		} else {
-			assert(pipeline._shader.GetPipelineLayout().get() == _pipelineLayout.get());
+			// todo -- test compatibility of the bound pipeline layout with the shader pipeline layout
 			vkCmdBindPipeline(
 				_sharedState->_commandList.GetUnderlying().get(),
 				VK_PIPELINE_BIND_POINT_COMPUTE,

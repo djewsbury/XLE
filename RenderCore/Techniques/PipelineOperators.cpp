@@ -372,7 +372,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = pool->CreateComputePipeline({futurePipelineLayout, Hash64(pipelineLayoutAssetName)}, computeShader, MakeIteratorRange(selectorList));
+			auto pipelineFuture = pool->CreateComputePipeline({futurePipelineLayout->ShareFuture(), Hash64(pipelineLayoutAssetName)}, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi=usi](auto pipelineAndLayout) {

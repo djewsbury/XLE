@@ -6,16 +6,22 @@
 #include "SkinDeformerInternal.h"
 #include "DeformerInternal.h"		// (required for some utility functions)
 #include "CommonUtils.h"
+#include "Services.h"
+#include "SubFrameEvents.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
+#include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
+#include "../Metal/InputLayout.h"
+#include "../Metal/TextureView.h"
 #include "../BufferView.h"
 #include "../IDevice.h"
 #include "../ResourceDesc.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 #include <assert.h>
 
@@ -328,71 +334,79 @@ namespace RenderCore { namespace Techniques
 		struct InvocationParams
 		{
 			unsigned _vertexCount, _firstVertex, _softInfluenceCount, _firstJointTransform;
-			unsigned _instanceCount, _outputInstanceStride;
+			unsigned _instanceCount, _outputInstanceStride, _iaParamsIdx, _dummy;
 		};
 
-		IComputeShaderOperator* currentOperator = nullptr;
-		unsigned currentGeoId = ~0u;
+		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
-		std::shared_ptr<RenderCore::IResourceView> jointMatricesBuffer;
+		std::shared_ptr<RenderCore::IResourceView> jointMatricesBuffer, iaParamsBuffer;
+		auto jmTemporaryDataSize = instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
+		auto iaTemporaryDataSize = _iaParams.size()*sizeof(IAParams);
 		{
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			auto jointMatricesMapping = metalContext.MapTemporaryStorage(instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride, BindFlag::UnorderedAccess);
+			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::UnorderedAccess);
+
 			for (unsigned c=0; c<instanceIndices.size(); ++c) {
 				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
 					Throw(std::runtime_error("Instance data was not provided before ExecuteGPU in skinning deformer"));
 				std::memcpy(
-					PtrAdd(jointMatricesMapping.GetData().begin(), c*sizeof(Float3x4)*_jointMatricesInstanceStride), 
+					PtrAdd(temporaryMapping.GetData().begin(), c*sizeof(Float3x4)*_jointMatricesInstanceStride), 
 					PtrAdd(_jointMatrices.data(), instanceIndices[c]*sizeof(Float3x4)*_jointMatricesInstanceStride),
 					sizeof(Float3x4)*_jointMatricesInstanceStride);
 			}
-			jointMatricesBuffer = jointMatricesMapping.AsResourceView();
+			auto beginAndEndInResource = temporaryMapping.GetBeginAndEndInResource();
+			jointMatricesBuffer = std::make_shared<Metal::ResourceView>(
+				Metal::GetObjectFactory(),
+				temporaryMapping.GetResource(),
+				(unsigned)beginAndEndInResource.first, (unsigned)jmTemporaryDataSize);
+
+			std::memcpy(PtrAdd(temporaryMapping.GetData().begin(), jmTemporaryDataSize), _iaParams.data(), iaTemporaryDataSize);
+			iaParamsBuffer = std::make_shared<Metal::ResourceView>(
+				Metal::GetObjectFactory(),
+				temporaryMapping.GetResource(),
+				(unsigned)beginAndEndInResource.first + jmTemporaryDataSize, (unsigned)iaTemporaryDataSize);
 		}
 
-		static const auto InvocationParamsHash = Hash64("InvocationParams");
+		auto preparedLayout = _pipelineCollection->_preparedPipelineLayout.TryActualize();
+		if (!preparedLayout) return;
+
+		auto encoder = metalContext.BeginComputeEncoder(preparedLayout->_pipelineLayout);
+		Metal::CapturedStates capturedStates;
+		encoder.BeginStateCapture(capturedStates);
+
+		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, jointMatricesBuffer.get(), iaParamsBuffer.get() };
+		UniformsStream us;
+		us._resourceViews = MakeIteratorRange(rvs);
+		preparedLayout->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+		++metrics._descriptorSetWrites;
+
+		const Techniques::ComputePipelineAndLayout* currentPipelineLayout = nullptr;
+		unsigned currentPipelineMarker = ~0u;
 
 		const unsigned instanceCount = (unsigned)instanceIndices.size();
 		const unsigned wavegroupWidth = 64;
 		for (const auto&section:_sections) {
-			if (section._geoId != currentGeoId) {
-				auto op = section._pipelineMarker->TryActualize();
-				if (!op) continue;
-
-				// note -- we could make some of the iaParams values push constants to avoid re-uploading _jointMatrices here
-				const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, jointMatricesBuffer.get() };
-				UniformsStream::ImmediateData immDatas[] {
-					MakeOpaqueIteratorRange(section._iaParams)
-				};
-				UniformsStream us;
-				us._resourceViews = MakeIteratorRange(rvs);
-				us._immediateData = MakeIteratorRange(immDatas);
-
-				// We have to call EndDispatches / BeginDispatches every geo change, because this is required
-				// to push though updates to the uniform buffers in "us"
-				
-				if (currentOperator)
-					currentOperator->EndDispatches();
-				(*op)->BeginDispatches(threadContext, us, {}, InvocationParamsHash);
-				currentOperator = op->get();
-				currentGeoId = section._geoId;
-				++metrics._descriptorSetWrites;
+			if (section._pipelineMarker != currentPipelineMarker) {
+				currentPipelineLayout = _pipelineCollection->_pipelines[section._pipelineMarker]->TryActualize();
+				currentPipelineMarker = section._pipelineMarker;
 			}
-
+			if (!currentPipelineLayout) continue;
+				
 			for (const auto&drawCall:section._preskinningDrawCalls) {
 				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
-				InvocationParams invocationParams { drawCall._indexCount, drawCall._firstVertex, drawCall._subMaterialIndex, section._rangeInJointMatrices.first, instanceCount, outputInstanceStride };
+				InvocationParams invocationParams { 
+					drawCall._indexCount,  drawCall._firstVertex, drawCall._subMaterialIndex, 
+					section._rangeInJointMatrices.first, instanceCount, outputInstanceStride,
+					section._iaParamsIdx };
 				auto groupCount = (drawCall._indexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
-				currentOperator->Dispatch(groupCount, 1, 1, MakeOpaqueIteratorRange(invocationParams));
+				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
+				encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
 				metrics._vertexCount += groupCount*wavegroupWidth;
 			}
 			metrics._dispatchCount += (unsigned)section._preskinningDrawCalls.size();
 		}
 
-		metrics._constantDataSize += instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
+		metrics._constantDataSize += jmTemporaryDataSize + iaTemporaryDataSize;
 		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
-
-		if (currentOperator)
-			currentOperator->EndDispatches();
 	}
 
 #if 0
@@ -526,10 +540,11 @@ namespace RenderCore { namespace Techniques
 #endif
 
 	GPUSkinDeformer::GPUSkinDeformer(
-		IDevice& device,
+		std::shared_ptr<SkinDeformerPipelineCollection> pipelineCollection,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		const std::string& modelScaffoldName)
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
+	, _pipelineCollection(std::move(pipelineCollection))
 	{
 		auto& immData = _modelScaffold->ImmutableData();
 
@@ -596,17 +611,20 @@ namespace RenderCore { namespace Techniques
 				section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
 				section._rangeInJointMatrices = { jointMatrixBufferCount, jointMatrixBufferCount + (unsigned)sourceSection._jointMatrixCount };
 
-				section._iaParams = {0};
-				section._iaParams._weightsOffset = weightsOffset + skelVBIterator;
-				section._iaParams._jointIndicesOffset = indicesOffset + skelVBIterator;
-				section._iaParams._staticVertexAttachmentsStride = skelVBStride;
 				section._indicesFormat = indicesFormat;
 				section._weightsFormat = weightsFormat;
 				section._influencesPerVertex = influencesPerVertex;
+				section._iaParamsIdx = (unsigned)_iaParams.size();
 
 				_sections.push_back(section);
 				jointMatrixBufferCount += sourceSection._jointMatrixCount;
 			}
+
+			IAParams iaParams = {0};
+			iaParams._weightsOffset = weightsOffset + skelVBIterator;
+			iaParams._jointIndicesOffset = indicesOffset + skelVBIterator;
+			iaParams._staticVertexAttachmentsStride = skelVBStride;
+			_iaParams.push_back(iaParams);
 
 			staticDataLoadRequests.push_back({ skelVb._offset, skelVb._size });
 			skelVBIterator += skelVb._size;
@@ -616,7 +634,7 @@ namespace RenderCore { namespace Techniques
 
 		assert(!staticDataLoadRequests.empty());
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
-			device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
+			*_pipelineCollection->_device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
 			BindFlag::UnorderedAccess,
 			(StringMeld<64>() << "[skin]" << modelScaffoldName).AsStringSection()).first;
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
@@ -625,7 +643,7 @@ namespace RenderCore { namespace Techniques
 		_jointInputInterface = _modelScaffold->CommandStream().GetInputInterface();
 	}
 
-	void GPUSkinDeformer::Bind(SkinDeformerPipelineCollection& pipelineCollection, const DeformerInputBinding& bindings)
+	void GPUSkinDeformer::Bind(const DeformerInputBinding& bindings)
 	{
 		auto& immData = _modelScaffold->ImmutableData();
 
@@ -679,37 +697,35 @@ namespace RenderCore { namespace Techniques
 			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
 			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
 			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
+			selectors.SetParameter("INFLUENCE_COUNT", (unsigned)start->_influencesPerVertex);
 
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Hash64("IAParams"));
-			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
-			usi.BindResourceView(1, Hash64("InputAttributes"));
-			usi.BindResourceView(2, Hash64("OutputAttributes"));
-			usi.BindResourceView(3, Hash64("JointTransforms"));
-			
-			auto pipelineMarker = pipelineCollection.GetPipelineMarker(selectors, usi);
+			auto pipelineMarker = _pipelineCollection->GetPipeline(std::move(selectors));
 
 			for (auto q=start; q!=s; ++q) {
-				q->_iaParams._inPositionsOffset = inPositionsOffset;
-				q->_iaParams._inNormalsOffset = inNormalsOffset;
-				q->_iaParams._inTangentsOffset = inTangentsOffset;
-				q->_iaParams._outPositionsOffset = outPositionsOffset;
-				q->_iaParams._outNormalsOffset = outNormalsOffset;
-				q->_iaParams._outTangentsOffset = outTangentsOffset;
-				q->_iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
-				q->_iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
-				q->_iaParams._jointMatricesInstanceStride = _jointMatricesInstanceStride;
 				assert(q->_indicesFormat == start->_indicesFormat);
 				assert(q->_weightsFormat == start->_weightsFormat);
+				assert(q->_iaParamsIdx == start->_iaParamsIdx);
 				q->_pipelineMarker = pipelineMarker;
 			}
-		}
-	}
 
-	void GPUSkinDeformer::StallForPipeline()
-	{
-		for (auto& section:_sections)
-			section._pipelineMarker->StallWhilePending();
+			auto& iaParams = _iaParams[start->_iaParamsIdx];
+			iaParams._inPositionsOffset = inPositionsOffset;
+			iaParams._inNormalsOffset = inNormalsOffset;
+			iaParams._inTangentsOffset = inTangentsOffset;
+			iaParams._outPositionsOffset = outPositionsOffset;
+			iaParams._outNormalsOffset = outNormalsOffset;
+			iaParams._outTangentsOffset = outTangentsOffset;
+			iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
+			iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
+			iaParams._jointMatricesInstanceStride = _jointMatricesInstanceStride;
+		}
+
+		// sort by pipeline
+		std::stable_sort(
+			_sections.begin(), _sections.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return lhs._pipelineMarker < rhs._pipelineMarker;
+			});
 	}
 
 	void* GPUSkinDeformer::QueryInterface(size_t typeId)
@@ -727,25 +743,88 @@ namespace RenderCore { namespace Techniques
 	{
 	}
 
-	uint64_t SkinDeformerPipelineCollection::GetPipeline(const ParameterBox& selectors, const UniformsStreamInterface& usi)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	auto SkinDeformerPipelineCollection::GetPipeline(ParameterBox&& selectors) -> PipelineMarkerIdx
 	{
+		ScopedLock(_mutex);
 		// note -- no selector filtering done here
 		uint64_t hash = HashCombine(selectors.GetHash(), selectors.GetParameterNamesHash());
-		hash = HashCombine(usi.GetHash(), hash);
 
-		auto i = LowerBound(_pipelines, hash);
-		if (i==_pipelines.end() || i->first != hash) {
-			auto operatorMarker = CreateComputeOperator(_pipelineCollection, SKIN_COMPUTE_HLSL ":main", selectors, usi);
-			_pipelines.insert(i, std::make_pair(hash, operatorMarker));
-		}
-		return hash;
+		auto i = std::find(_pipelineHashes.begin(), _pipelineHashes.end(), hash);
+		if (i!=_pipelineHashes.end())
+			return std::distance(_pipelineHashes.begin(), i);
+
+		const ParameterBox* sel[] { &selectors };
+		auto operatorMarker = _pipelineCollection->CreateComputePipeline(
+			{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
+			SKIN_COMPUTE_HLSL ":main", MakeIteratorRange(sel));
+		_pipelines.push_back(operatorMarker);
+		_pipelineHashes.push_back(hash);
+		_pipelineSelectors.emplace_back(std::move(selectors));
+		return (PipelineMarkerIdx)(_pipelines.size()-1);
 	}
-	auto SkinDeformerPipelineCollection::GetPipelineMarker(const ParameterBox& selectors, const UniformsStreamInterface& usi) -> PipelineMarkerPtr
+
+	void SkinDeformerPipelineCollection::StallForPipeline()
 	{
-		return CreateComputeOperator(_pipelineCollection, SKIN_COMPUTE_HLSL ":main", selectors, usi);
+		ScopedLock(_mutex);
+		_preparedPipelineLayout.StallWhilePending();
+		for (auto& p:_pipelines)
+			p->StallWhilePending();
 	}
-	SkinDeformerPipelineCollection::SkinDeformerPipelineCollection() {}
+
+	void SkinDeformerPipelineCollection::OnFrameBarrier()
+	{
+		ScopedLock(_mutex);
+		if (::Assets::IsInvalidated(*_predefinedPipelineLayout))
+			RebuildPipelineLayout();
+		for (unsigned c=0; c<_pipelines.size(); ++c)
+			if (::Assets::IsInvalidated(*_pipelines[c])) {
+				const ParameterBox* sel[] { &_pipelineSelectors[c] };
+				auto operatorMarker = _pipelineCollection->CreateComputePipeline(
+					{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
+					SKIN_COMPUTE_HLSL ":main", MakeIteratorRange(sel));
+				_pipelines[c] = std::move(operatorMarker);
+			}
+	}
+
+	void SkinDeformerPipelineCollection::RebuildPipelineLayout()
+	{
+		std::string pipelineLayoutName = SKIN_PIPELINE ":Main";
+		_predefinedPipelineLayout = ::Assets::MakeAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>(pipelineLayoutName);
+		_predefinedPipelineLayoutNameHash = Hash64(pipelineLayoutName);
+		_preparedPipelineLayout = ::Assets::Marker<PreparedPipelineLayout>{};
+		::Assets::WhenAll(_predefinedPipelineLayout).ThenConstructToPromise(
+			_preparedPipelineLayout.AdoptPromise(),
+			[device=_device](auto predefinedPipelineLayoutActual) {
+				UniformsStreamInterface usi;
+				usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
+				usi.BindResourceView(1, Hash64("InputAttributes"));
+				usi.BindResourceView(2, Hash64("OutputAttributes"));
+				usi.BindResourceView(3, Hash64("JointTransforms"));
+				usi.BindResourceView(4, Hash64("IAParams"));
+
+				UniformsStreamInterface pushConstantsUSI;
+				pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+
+				PreparedPipelineLayout result;
+				result._pipelineLayout = device->CreatePipelineLayout(predefinedPipelineLayoutActual->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage()));
+				result._boundUniforms = Metal::BoundUniforms{ result._pipelineLayout, usi, pushConstantsUSI };
+				return result;
+			});
+	}
+
+	SkinDeformerPipelineCollection::SkinDeformerPipelineCollection(
+		std::shared_ptr<IDevice> device,
+		std::shared_ptr<PipelineCollection> pipelineCollection)
+	: _device(std::move(device))
+	, _pipelineCollection(std::move(pipelineCollection))
+	{
+		RebuildPipelineLayout();
+	}
 	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static const std::string s_positionEleName = "POSITION";
 	static const std::string s_tangentEleName = "TEXTANGENT";
@@ -790,7 +869,7 @@ namespace RenderCore { namespace Techniques
 				inst._geoId = unsigned(immData._geoCount) + c;
 				result.push_back(std::move(inst));
 			}
-			return std::make_shared<GPUSkinDeformer>(*_device, modelScaffold, modelScaffoldName);
+			return std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, modelScaffoldName);
 		}
 
 		virtual void Bind(
@@ -798,23 +877,40 @@ namespace RenderCore { namespace Techniques
 			const DeformerInputBinding& binding) override
 		{
 			auto* deformer = checked_cast<GPUSkinDeformer*>(&op);
-			deformer->Bind(_pipelineCollection, binding);
+			deformer->Bind(binding);
 		}
 
 		virtual bool IsCPUDeformer() const override { return false; }
 
-		std::shared_ptr<IDevice> _device;
-		SkinDeformerPipelineCollection _pipelineCollection;
+		GPUSkinDeformerFactory(
+			std::shared_ptr<IDevice> device,
+			std::shared_ptr<PipelineCollection> pipelineCollection)
+		{
+			_pipelineCollection = std::make_shared<SkinDeformerPipelineCollection>(device, pipelineCollection);
+			_signalDelegate = Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
+				[this]() {
+					this->_pipelineCollection->OnFrameBarrier();
+				});
+		}
+
+		~GPUSkinDeformerFactory()
+		{
+			if (Techniques::Services::HasInstance())
+				Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_signalDelegate);
+		}
+
+		GPUSkinDeformerFactory(const GPUSkinDeformerFactory&) = delete;
+		GPUSkinDeformerFactory& operator=(const GPUSkinDeformerFactory&) = delete;
+
+		std::shared_ptr<SkinDeformerPipelineCollection> _pipelineCollection;
+		SignalDelegateId _signalDelegate;
 	};
 
 	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
 		std::shared_ptr<IDevice> device,
 		std::shared_ptr<PipelineCollection> pipelineCollection)
 	{
-		auto result = std::make_shared<GPUSkinDeformerFactory>();
-		result->_device = device;
-		result->_pipelineCollection._pipelineCollection = pipelineCollection;
-		return result;
+		return std::make_shared<GPUSkinDeformerFactory>(std::move(device), std::move(pipelineCollection));
 	}
 
 	ISkinDeformer::~ISkinDeformer() {}

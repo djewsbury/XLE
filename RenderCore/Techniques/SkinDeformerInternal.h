@@ -10,11 +10,14 @@
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/SkeletonScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
+#include "../Metal/InputLayout.h"
 #include "../Format.h"
+#include "../../Assets/Marker.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 
-namespace RenderCore { class IDevice; class IResource; class UniformsStreamInterface; }
+namespace RenderCore { class IDevice; class IResource; class UniformsStreamInterface; class ICompiledPipelineLayout; }
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; }}
 namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
@@ -84,19 +87,39 @@ namespace RenderCore { namespace Techniques
 	};
 
     class PipelineCollection;
-    class IComputeShaderOperator;
+    struct ComputePipelineAndLayout;
 
 	struct SkinDeformerPipelineCollection
 	{
-		using PipelineMarkerPtr = ::Assets::PtrToMarkerPtr<IComputeShaderOperator>;
-		uint64_t GetPipeline(const ParameterBox& selectors, const UniformsStreamInterface& usi);
-		PipelineMarkerPtr GetPipelineMarker(const ParameterBox& selectors, const UniformsStreamInterface& usi);
-		
-		std::vector<std::pair<uint64_t, PipelineMarkerPtr>> _pipelines;
-		std::shared_ptr<PipelineCollection> _pipelineCollection;
+		using PipelineMarkerPtr = std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>;
+		using PipelineMarkerIdx = unsigned;
 
-		SkinDeformerPipelineCollection();
+		PipelineMarkerIdx GetPipeline(ParameterBox&& selectors);
+		void StallForPipeline();
+		void OnFrameBarrier();
+		
+		struct PreparedPipelineLayout
+		{
+			std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
+			Metal::BoundUniforms _boundUniforms;
+		};
+		::Assets::Marker<PreparedPipelineLayout> _preparedPipelineLayout;
+		std::shared_ptr<IDevice> _device;
+		std::vector<PipelineMarkerPtr> _pipelines;
+
+		SkinDeformerPipelineCollection(
+			std::shared_ptr<IDevice> device,
+			std::shared_ptr<PipelineCollection> pipelineCollection);
 		~SkinDeformerPipelineCollection();
+	private:
+		std::vector<uint64_t> _pipelineHashes;
+		std::vector<ParameterBox> _pipelineSelectors;
+		std::shared_ptr<PipelineCollection> _pipelineCollection;
+		::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
+		uint64_t _predefinedPipelineLayoutNameHash;
+		Threading::Mutex _mutex;
+
+		void RebuildPipelineLayout();
 	};
 
 	class GPUSkinDeformer : public IDeformer, public ISkinDeformer
@@ -120,14 +143,10 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> skeletonMachineOutput,
 			const RenderCore::Assets::SkeletonBinding& binding) override;
 
-		void Bind(
-			SkinDeformerPipelineCollection& pipelineCollection,
-			const DeformerInputBinding& binding);
-
-		void StallForPipeline();
-		
+		void Bind(const DeformerInputBinding& binding);
+	
 		GPUSkinDeformer(
-			IDevice& device,
+			std::shared_ptr<SkinDeformerPipelineCollection> pipelineCollection,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName);
 		~GPUSkinDeformer();
@@ -146,10 +165,11 @@ namespace RenderCore { namespace Techniques
 			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
 			unsigned _jointMatricesInstanceStride;
 		};
+		std::vector<IAParams> _iaParams;
 
 		struct Section
 		{
-			SkinDeformerPipelineCollection::PipelineMarkerPtr _pipelineMarker;
+			SkinDeformerPipelineCollection::PipelineMarkerIdx _pipelineMarker;
 			unsigned _geoId = ~0u;
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
@@ -157,8 +177,8 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const uint16_t*> _jointMatrices;
 
 			unsigned _influencesPerVertex = 0;
+			unsigned _iaParamsIdx = 0;
 			Format _indicesFormat = Format(0), _weightsFormat = Format(0);
-			IAParams _iaParams;
 		};
 		std::vector<Section> _sections;
 
@@ -166,5 +186,6 @@ namespace RenderCore { namespace Techniques
 		unsigned _jointMatricesInstanceStride = 0;
 
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
+		std::shared_ptr<SkinDeformerPipelineCollection> _pipelineCollection;
 	};
 }}

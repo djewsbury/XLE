@@ -15,11 +15,11 @@
 	#error Unsupported skinning weights type
 #endif
 
-ByteAddressBuffer StaticVertexAttachments;
-ByteAddressBuffer InputAttributes;
-RWByteAddressBuffer OutputAttributes;
+ByteAddressBuffer StaticVertexAttachments : register(t0);
+ByteAddressBuffer InputAttributes : register(t1);
+RWByteAddressBuffer OutputAttributes : register(u2);
 
-cbuffer IAParams
+struct IAParamsStruct
 {
 	uint InputStride;
 	uint OutputStride;
@@ -37,9 +37,10 @@ cbuffer IAParams
 	uint StaticVertexAttachmentsStride;
 
 	uint JointMatricesInstanceStride;
-}
+};
 
-StructuredBuffer<row_major float3x4> JointTransforms;
+StructuredBuffer<IAParamsStruct> IAParams : register(t3);
+StructuredBuffer<row_major float3x4> JointTransforms : register(t4);
 
 [[vk::push_constant]] struct InvocationParamsStruct
 {
@@ -49,7 +50,13 @@ StructuredBuffer<row_major float3x4> JointTransforms;
 	uint FirstJointTransform;
 	uint InstanceCount;
 	uint OutputInstanceStride;
+	uint IAParamsIdx;
 } InvocationParams;
+
+IAParamsStruct GetIAParams()
+{
+	return IAParams[InvocationParams.IAParamsIdx];
+}
 
 #define R32G32B32A32_FLOAT 2
 #define R32G32B32_FLOAT 6
@@ -117,13 +124,13 @@ uint LoadWeightPack(uint vertexIdx, uint influenceCount)
 	// 1 influence/vertex: any alignment ok
 	// 2 influences/vertex: must be aligned to multiple of 2
 	// 4 or more influences/vertex: must be aligned to multiple of 4
-	uint offset = WeightsOffset+vertexIdx*StaticVertexAttachmentsStride+influenceCount;
+	uint offset = GetIAParams().WeightsOffset+vertexIdx*GetIAParams().StaticVertexAttachmentsStride+influenceCount;
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
 uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 {
-	uint offset = JointIndicesOffsets+vertexIdx*StaticVertexAttachmentsStride+influenceCount;
+	uint offset = GetIAParams().JointIndicesOffsets+vertexIdx*GetIAParams().StaticVertexAttachmentsStride+influenceCount;
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
@@ -137,17 +144,18 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 	vertexIdx += InvocationParams.FirstVertex;
 
 	uint firstJointTransform = InvocationParams.FirstJointTransform;
-	firstJointTransform += instanceIdx * JointMatricesInstanceStride;
+	IAParamsStruct iaParams = GetIAParams();
+	firstJointTransform += instanceIdx * iaParams.JointMatricesInstanceStride;
 
-	float3 inputPosition = LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * InputStride + InPositionsOffset);
+	float3 inputPosition = LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
 
 	#if IN_NORMAL_FORMAT
-		float3 inputNormal = LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * InputStride + InNormalsOffset);
+		float3 inputNormal = LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
 	#else
 		float3 inputNormal = 0;
 	#endif
 	#if IN_TEXTANGENT_FORMAT
-		float4 inputTangent = LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * InputStride + InTangentsOffset);
+		float4 inputTangent = LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InTangentsOffset);
 	#else
 		float4 inputTangent = 0;
 	#endif
@@ -156,7 +164,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 	float3 outputNormal = 0.0.xxx;
 	float3 outputTangent = 0.0.xxx;
 
-	if (InvocationParams.SoftInfluenceCount != 0) {
+	#if INFLUENCE_COUNT > 0
 		uint c=0;
 		for (;;) {
 			uint packedWeights = LoadWeightPack(vertexIdx, c);
@@ -178,66 +186,70 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 				if (c == InvocationParams.SoftInfluenceCount) break;
 			}
 
-			{
-				uint boneIndex = packedIndices&0xff;
-				boneIndex += firstJointTransform;
-				packedIndices >>= 8;
-				float weight = (packedWeights&0xff) / 255.f;
-				packedWeights >>= 8;
+			#if INFLUENCE_COUNT > 1
+				{
+					uint boneIndex = packedIndices&0xff;
+					boneIndex += firstJointTransform;
+					packedIndices >>= 8;
+					float weight = (packedWeights&0xff) / 255.f;
+					packedWeights >>= 8;
 
-				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
-				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-				outputNormal += weight * mul(rotationPart, inputNormal);
-				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+					outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+					float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
+					outputNormal += weight * mul(rotationPart, inputNormal);
+					outputTangent += weight * mul(rotationPart, inputTangent.xyz);
 
-				++c;
-				if (c == InvocationParams.SoftInfluenceCount) break;
-			}
+					++c;
+					if (c == InvocationParams.SoftInfluenceCount) break;
+				}
 
-			{
-				uint boneIndex = packedIndices&0xff;
-				boneIndex += firstJointTransform;
-				packedIndices >>= 8;
-				float weight = (packedWeights&0xff) / 255.f;
-				packedWeights >>= 8;
+				#if INFLUENCE_COUNT > 2
+					{
+						uint boneIndex = packedIndices&0xff;
+						boneIndex += firstJointTransform;
+						packedIndices >>= 8;
+						float weight = (packedWeights&0xff) / 255.f;
+						packedWeights >>= 8;
 
-				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
-				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-				outputNormal += weight * mul(rotationPart, inputNormal);
-				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
+						outputNormal += weight * mul(rotationPart, inputNormal);
+						outputTangent += weight * mul(rotationPart, inputTangent.xyz);
 
-				++c;
-				if (c == InvocationParams.SoftInfluenceCount) break;
-			}
+						++c;
+						if (c == InvocationParams.SoftInfluenceCount) break;
+					}
 
-			{
-				uint boneIndex = packedIndices&0xff;
-				boneIndex += firstJointTransform;
-				packedIndices >>= 8;
-				float weight = (packedWeights&0xff) / 255.f;
-				packedWeights >>= 8;
+					{
+						uint boneIndex = packedIndices&0xff;
+						boneIndex += firstJointTransform;
+						packedIndices >>= 8;
+						float weight = (packedWeights&0xff) / 255.f;
+						packedWeights >>= 8;
 
-				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
-				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-				outputNormal += weight * mul(rotationPart, inputNormal);
-				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
+						outputNormal += weight * mul(rotationPart, inputNormal);
+						outputTangent += weight * mul(rotationPart, inputTangent.xyz);
 
-				++c;
-				if (c == InvocationParams.SoftInfluenceCount) break;
-			}			
+						++c;
+						if (c == InvocationParams.SoftInfluenceCount) break;
+					}
+				#endif
+			#endif
 		}
-	} else {
+	#else
 		outputPosition = inputPosition;
 		outputNormal = inputNormal;
 		outputTangent = inputTangent.xyz;
-	}
+	#endif
 
-	uint outputLoc = vertexIdx * OutputStride + instanceIdx * InvocationParams.OutputInstanceStride;
-	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + OutPositionsOffset);
+	uint outputLoc = vertexIdx * iaParams.OutputStride + instanceIdx * InvocationParams.OutputInstanceStride;
+	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + iaParams.OutPositionsOffset);
 	#if OUT_NORMAL_FORMAT
-		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + OutNormalsOffset);
+		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + iaParams.OutNormalsOffset);
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
-		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, outputLoc + OutTangentsOffset);
+		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, outputLoc + iaParams.OutTangentsOffset);
 	#endif
 }

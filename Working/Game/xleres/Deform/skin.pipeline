@@ -1,0 +1,26 @@
+
+DescriptorSet MainDS
+{
+    StorageBuffer StaticVertexAttachments;
+    StorageBuffer InputAttributes;
+    StorageBuffer OutputAttributes;
+
+    StorageBuffer IAParams;
+    StorageBuffer JointTransforms;
+};
+
+PipelineLayout Main
+{
+	ComputeDescriptorSet MainDS;				// 0
+
+    CSPushConstants InvocationParams
+	{
+        uint VertexCount;
+        uint FirstVertex;
+        uint SoftInfluenceCount;
+        uint FirstJointTransform;
+        uint InstanceCount;
+        uint OutputInstanceStride;
+        uint IAParamsIdx;
+    };
+};

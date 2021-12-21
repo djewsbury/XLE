@@ -13,6 +13,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Utility/Threading/Mutex.h"
 #include <vector>
+#include <future>
 
 namespace RenderCore { namespace Techniques
 {
@@ -39,12 +40,12 @@ namespace RenderCore { namespace Techniques
 	struct PipelineLayoutOptions
 	{
 		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
-		::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
+		std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>> _predefinedPipelineLayout;
 		uint64_t _hashCode = 0;
 
 		PipelineLayoutOptions() = default;
 		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
-		PipelineLayoutOptions(::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
+		PipelineLayoutOptions(std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>, uint64_t);
 	};
 
 	struct GraphicsPipelineAndLayout
@@ -79,7 +80,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
-			const PipelineLayoutOptions& pipelineLayout,
+			PipelineLayoutOptions&& pipelineLayout,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			IteratorRange<const ParameterBox**> selectors,
 			const VertexInputStates& inputStates,
@@ -87,7 +88,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
 
 		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
-			const PipelineLayoutOptions& pipelineLayout,
+			PipelineLayoutOptions&& pipelineLayout,
 			const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture,
 			IteratorRange<const ParameterBox**> selectors,
 			const VertexInputStates& inputStates,
@@ -95,7 +96,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
 
 		std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> CreateComputePipeline(
-			const PipelineLayoutOptions& pipelineLayout,
+			PipelineLayoutOptions&& pipelineLayout,
 			StringSection<> shader,
 			IteratorRange<const ParameterBox**> selectors);
 
@@ -117,7 +118,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Internal::SharedPools> _sharedPools;
 
 		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipelineInternal(
-			const PipelineLayoutOptions& pipelineLayout,
+			PipelineLayoutOptions&& pipelineLayout,
 			const ::Assets::PtrToMarkerPtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
 			IteratorRange<const ParameterBox**> selectors,
 			const VertexInputStates& inputStates,

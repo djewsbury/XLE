@@ -85,3 +85,4 @@
 #define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"
 
 #define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"
+#define SKIN_PIPELINE "xleres/Deform/skin.pipeline"
