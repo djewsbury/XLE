@@ -154,6 +154,7 @@ namespace RenderCore { namespace Assets
 			uint16_t*							_jointMatrices;
 			size_t								_jointMatrixCount;
 			Float4x4							_bindShapeMatrix;			// (the bind shape matrix is already combined into the _bindShapeByInverseBindMatrices fields. This is included mostly just for debugging)
+            Float4x4                            _postSkinningBindMatrix;
 		};
 		SerializableVector<Section>			_preskinningSections;
 

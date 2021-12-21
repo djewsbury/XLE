@@ -57,6 +57,8 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
+			Float4x4 _bindShapeMatrix;
+			Float4x4 _postSkinningBindMatrix;
 		};
 			
 		struct Geo
@@ -175,6 +177,7 @@ namespace RenderCore { namespace Techniques
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
 			IteratorRange<const Float4x4*> _bindShapeByInverseBindMatrices;
 			IteratorRange<const uint16_t*> _jointMatrices;
+			Float4x4 _bindShapeMatrix, _postSkinningBindMatrix;
 
 			unsigned _influencesPerVertex = 0;
 			unsigned _iaParamsIdx = 0;

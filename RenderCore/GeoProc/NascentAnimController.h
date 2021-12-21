@@ -45,6 +45,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::vector<DrawCallDesc>   _preskinningDrawCalls;
 			std::vector<uint16_t>		_jointMatrices;
 			Float4x4					_bindShapeMatrix;
+            Float4x4					_postSkinningBindMatrix;
 		};
 		std::vector<Section>		_preskinningSections;
         GeoInputAssembly            _preskinningIA;
@@ -70,13 +71,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		IteratorRange<const std::string*>	GetJointNames() const { return MakeIteratorRange(_jointNames); }
 		IteratorRange<const Float4x4*>		GetInverseBindMatrices() const { return MakeIteratorRange(_inverseBindMatrices); }
 		const Float4x4&						GetBindShapeMatrix() const { return _bindShapeMatrix; }
+        const Float4x4&						GetPostSkinningBindMatrix() const { return _postSkinningBindMatrix; }
 
         UnboundSkinController(
-            std::vector<Float4x4>&& inverseBindMatrices, const Float4x4& bindShapeMatrix,
+            std::vector<Float4x4>&& inverseBindMatrices, const Float4x4& bindShapeMatrix, const Float4x4& postSkinningBindMatrix,
             std::vector<std::string>&& jointNames);
 
 	private:
 		Float4x4					_bindShapeMatrix;
+        Float4x4                    _postSkinningBindMatrix;
 
         std::vector<std::string>	_jointNames;
         std::vector<Float4x4>		_inverseBindMatrices;

@@ -940,6 +940,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			section._preskinningDrawCalls = std::move(preskinningDrawCalls);
 			section._bindShapeMatrix = controllers[controllerIdx]._controller->GetBindShapeMatrix();
+            section._postSkinningBindMatrix = controllers[controllerIdx]._controller->GetPostSkinningBindMatrix();
 			result._preskinningSections.emplace_back(std::move(section));
 		}
 
@@ -966,6 +967,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		outputSerializer.SerializeSubBlock(MakeIteratorRange(section._jointMatrices));
         outputSerializer.SerializeValue(section._jointMatrices.size());
 		SerializationOperator(outputSerializer, section._bindShapeMatrix);
+        SerializationOperator(outputSerializer, section._postSkinningBindMatrix);
 	}
 
     void NascentBoundSkinnedGeometry::SerializeWithResourceBlock(
@@ -1071,10 +1073,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	}
 
     UnboundSkinController::UnboundSkinController(   
-        std::vector<Float4x4>&& inverseBindMatrices, const Float4x4& bindShapeMatrix,
+        std::vector<Float4x4>&& inverseBindMatrices,
+        const Float4x4& bindShapeMatrix, const Float4x4& postSkinningBindMatrix,
         std::vector<std::string>&& jointNames)
     :       _inverseBindMatrices(std::move(inverseBindMatrices))
     ,       _bindShapeMatrix(bindShapeMatrix)
+    ,       _postSkinningBindMatrix(postSkinningBindMatrix)
     ,       _jointNames(jointNames)
     {
     }

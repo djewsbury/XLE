@@ -46,14 +46,14 @@ namespace RenderCore { namespace Techniques
 			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
 				auto transMachineOutput = _skeletonBinding.ModelJointToMachineOutput(section._jointMatrices[c]);
 				if (transMachineOutput != ~unsigned(0x0)) {
-					destination[c] = Truncate(skeletonMachineResult[transMachineOutput] * section._bindShapeByInverseBindMatrices[c]);
+					destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineResult[transMachineOutput]), section._postSkinningBindMatrix));
 				} else {
-					destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+					destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
 				}
 			}
 		} else {
 			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
-				destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+				destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
 		}
 
 		for (; c<destination.size(); ++c)
@@ -206,6 +206,8 @@ namespace RenderCore { namespace Techniques
 				Section section;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
+				section._bindShapeMatrix = sourceSection._bindShapeMatrix;
+				section._postSkinningBindMatrix = sourceSection._postSkinningBindMatrix;
 				section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
 				constructedGeo._sections.push_back(section);
 			}
@@ -306,14 +308,14 @@ namespace RenderCore { namespace Techniques
 				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
 					auto transMachineOutput = binding.ModelJointToMachineOutput(section._jointMatrices[c]);
 					if (transMachineOutput != ~unsigned(0x0)) {
-						destination[c] = Truncate(skeletonMachineOutput[transMachineOutput] * section._bindShapeByInverseBindMatrices[c]);
+						destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineOutput[transMachineOutput]), section._postSkinningBindMatrix));
 					} else {
-						destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+						destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
 					}
 				}
 			} else {
 				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
-					destination[c] = Truncate(section._bindShapeByInverseBindMatrices[c]);
+					destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
 			}
 
 			for (; c<destination.size(); ++c)
@@ -608,6 +610,8 @@ namespace RenderCore { namespace Techniques
 				section._geoId = c+immData._geoCount;
 				section._preskinningDrawCalls = MakeIteratorRange(sourceSection._preskinningDrawCalls);
 				section._bindShapeByInverseBindMatrices = MakeIteratorRange(sourceSection._bindShapeByInverseBindMatrices);
+				section._bindShapeMatrix = sourceSection._bindShapeMatrix;
+				section._postSkinningBindMatrix = sourceSection._postSkinningBindMatrix;
 				section._jointMatrices = { sourceSection._jointMatrices, sourceSection._jointMatrices + sourceSection._jointMatrixCount };
 				section._rangeInJointMatrices = { jointMatrixBufferCount, jointMatrixBufferCount + (unsigned)sourceSection._jointMatrixCount };
 

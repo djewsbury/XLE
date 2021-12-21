@@ -1096,7 +1096,7 @@ namespace ColladaConversion
                     const ImportConfiguration& cfg)
         -> RenderCore::Assets::GeoProc::UnboundSkinController
     {
-        auto bindShapeMatrix = Identity<Float4x4>();
+        auto bindShapeMatrix = Identity<Float4x4>(), postSkinningBindMatrix = Identity<Float4x4>();
         ParseXMLList(&bindShapeMatrix(0,0), 16, controller.GetBindShapeMatrix());
 
         size_t vertexCount = controller.GetVerticesWithWeightsCount();
@@ -1111,7 +1111,7 @@ namespace ColladaConversion
 		auto jointNames = GetJointNames(controller, resolveContext, {});
 		assert(inverseBindMatrices.size() == jointNames.size());
         UnboundSkinController result(
-            std::move(inverseBindMatrices), bindShapeMatrix, 
+            std::move(inverseBindMatrices), bindShapeMatrix, postSkinningBindMatrix,
             std::move(jointNames));
 		result.ReserveInfluences((unsigned)vertexCount, 4);
 

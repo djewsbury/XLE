@@ -154,7 +154,7 @@ namespace UnitTests
 			"bone-0", "bone-1", "bone-2", "bone-3",
 			"bone-4", "bone-5", "bone-6", "bone-7"
 		};
-		auto skinController = std::make_shared<GeoProc::UnboundSkinController>(std::move(inverseBindMatrices), Identity<Float4x4>(), std::move(jointNames));
+		auto skinController = std::make_shared<GeoProc::UnboundSkinController>(std::move(inverseBindMatrices), Identity<Float4x4>(), Identity<Float4x4>(), std::move(jointNames));
 		for (unsigned vertex=0; vertex<8; ++vertex) {
 			float weights[8];
 			unsigned indices[] { 0, 1, 2, 3, 4, 5, 6, 7 };
