@@ -254,7 +254,12 @@ namespace UnitTests
 		RenderCore::UniformsStreamInterface& usi,
 		RenderCore::UniformsStream& us)
 	{
-		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, rpi, usi);
+		RenderCore::Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(RenderCore::Techniques::CommonResourceBox::s_dsDisable);
+		RenderCore::AttachmentBlendDesc blendStates[] { RenderCore::Techniques::CommonResourceBox::s_abStraightAlpha };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		auto op = RenderCore::Techniques::CreateFullViewportOperator(pipelinePool, RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth, pixelShader, {}, pipelineLayout, outputStates, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(parsingContext, us);
 	}
@@ -359,8 +364,6 @@ namespace UnitTests
 		cameras[2]._nearClip = 0.f;
 		cameras[2]._farClip = 100.f;
 
-		testHelper->BeginFrameCapture();
-	
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("write gbuffer")
 		{
@@ -371,6 +374,7 @@ namespace UnitTests
 
 			for (unsigned c=0; c<dimof(cameras); ++c) {
 				INFO("Camera: " + std::to_string(c));
+				testHelper->BeginFrameCapture();
 				const auto& camera = cameras[c];
 				auto parsingContext = InitializeParsingContext(*testApparatus._techniqueContext, camera, *threadContext);
 
@@ -500,6 +504,7 @@ namespace UnitTests
 							pkt);
 					}
 				}
+				testHelper->EndFrameCapture();
 
 				SaveImage(*threadContext, *diffuseResource, "gbuffer-diffuse");
 				SaveImage(*threadContext, *normalResource, "gbuffer-normals");
@@ -527,7 +532,5 @@ namespace UnitTests
 				}
 			}
 		}
-
-		testHelper->EndFrameCapture();
 	}
 }

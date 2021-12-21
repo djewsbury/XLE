@@ -269,11 +269,16 @@ namespace ToolsRig
 					};
 					us._immediateData = MakeIteratorRange(immData);
 
+					Techniques::PixelOutputStates outputStates;
+					outputStates.Bind(rpi);
+					outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+					AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
+					outputStates.Bind(MakeIteratorRange(blendStates));
 					auto op = Techniques::CreateFullViewportOperator(
 						drawingApparatus._graphicsPipelinePool,
 						Techniques::FullViewportOperatorSubType::DisableDepth,
 						VISUALIZE_ATTACHMENT_PIXEL_HLSL ":main", _shaderSelectors, 
-						GENERAL_OPERATOR_PIPELINE ":GraphicsMain", rpi,
+						GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates,
 						usi);
 					op->Actualize()->Draw(parsingContext, us);
 				} CATCH (::Assets::Exceptions::InvalidAsset& e) {

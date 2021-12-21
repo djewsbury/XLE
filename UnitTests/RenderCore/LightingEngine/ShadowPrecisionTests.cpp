@@ -389,8 +389,13 @@ namespace UnitTests
 		IResourceView* srvs[] = { cascadeIndexTextureSRV.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
+		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = CreateFullViewportOperator(
-			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, rpi, usi);
+			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, pipelineLayout, outputStates, usi);
 		op->StallWhilePending();
 		op->Actualize()->Draw(parsingContext, us);
 	}

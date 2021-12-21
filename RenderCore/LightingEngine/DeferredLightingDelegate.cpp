@@ -501,7 +501,12 @@ namespace RenderCore { namespace LightingEngine
 		selectors.SetParameter("LIGHT_RESOLVE_SHADER", 1);
 		selectors.SetParameter("GBUFFER_SHADER_RESOURCE", 1);
 
-		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, rpi, usi);
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha, Techniques::CommonResourceBox::s_abStraightAlpha };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, lightingOperatorLayout, outputStates, usi);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(parsingContext, us, MakeIteratorRange(shadowDescSets));

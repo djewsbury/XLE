@@ -81,13 +81,18 @@ namespace RenderCore { namespace LightingEngine
 
 		ParameterBox params;
 		params.SetParameter("SKY_PROJECTION", 5);
+		Techniques::PixelOutputStates po;
+		po.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
+		po.Bind(Techniques::CommonResourceBox::s_dsReadOnly);
+		AttachmentBlendDesc blendDescs[] {Techniques::CommonResourceBox::s_abOpaque};
+		po.Bind(MakeIteratorRange(blendDescs));
 		auto futureShader = CreateFullViewportOperator(
 			pipelinePool,
 			Techniques::FullViewportOperatorSubType::MaxDepth,
 			SKY_PIXEL_HLSL ":main",
 			params,
 			GENERAL_OPERATOR_PIPELINE ":GraphicsWithMaterial",
-			fbTarget, usi);
+			po, usi);
 		::Assets::WhenAll(futureShader).ThenConstructToPromise(
 			std::move(promise),
 			[desc, device=pipelinePool->GetDevice()](auto shader) {

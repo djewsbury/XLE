@@ -251,12 +251,17 @@ namespace UnitTests
 		if (0) {
 			UniformsStreamInterface usi;
 			UniformsStream us;
+			Techniques::PixelOutputStates outputStates;
+			outputStates.Bind(rpi);
+			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
+			outputStates.Bind(MakeIteratorRange(blendStates));
 			auto op = Techniques::CreateFullViewportOperator(
 				testApparatus._pipelinePool,
 				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, testApparatus._metalTestHelper->_pipelineLayout,
-				rpi, usi);
+				outputStates, usi);
 
 			REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
 			op->Actualize()->Draw(parsingContext, us);
@@ -280,12 +285,17 @@ namespace UnitTests
 		ISampler* samplers[] = { commonResourceBox._unnormalizedBilinearClampSampler.get() };
 		us._samplers = MakeIteratorRange(samplers);
 
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
+		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = Techniques::CreateFullViewportOperator(
 			testApparatus._pipelinePool,
 			Techniques::FullViewportOperatorSubType::DisableDepth,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, testApparatus._metalTestHelper->_pipelineLayout,
-			rpi, usi);
+			outputStates, usi);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
 		op->Actualize()->Draw(parsingContext, us);

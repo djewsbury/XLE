@@ -56,13 +56,30 @@ namespace RenderCore { namespace Techniques
 
 	enum class FullViewportOperatorSubType { DisableDepth, MaxDepth };
 
+	struct PixelOutputStates
+	{
+		const FrameBufferDesc* _fbDesc;
+		unsigned _subpassIdx = ~0u;
+		DepthStencilDesc _depthStencilState;
+		RasterizationDesc _rasterizationState;
+		IteratorRange<const AttachmentBlendDesc*> _attachmentBlendStates;
+
+		uint64_t GetHash() const;
+
+		void Bind(const FrameBufferDesc& fbDesc, unsigned subpassIdx);
+		void Bind(const RenderPassInstance&);
+		void Bind(const DepthStencilDesc& depthStencilState);
+		void Bind(const RasterizationDesc& rasterizationState);
+		void Bind(IteratorRange<const AttachmentBlendDesc*> blendStates);
+	};
+
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const FrameBufferTarget& fbTarget,
+		const PixelOutputStates& fbTarget,
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
@@ -71,7 +88,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,
-		const FrameBufferTarget& fbTarget,
+		const PixelOutputStates& fbTarget,
 		const UniformsStreamInterface& usi);
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(

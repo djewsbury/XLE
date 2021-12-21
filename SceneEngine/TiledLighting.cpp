@@ -158,12 +158,17 @@ namespace SceneEngine
         // AttachmentBlendDesc blends[] { Techniques::CommonResourceBox::s_abStraightAlpha };
         // encoder.Bind(MakeIteratorRange(blends));
 
+        Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
+		outputStates.Bind(MakeIteratorRange(blendStates));
         auto& debuggingShader = *Techniques::CreateFullViewportOperator(
             pipelinePool,
             Techniques::FullViewportOperatorSubType::DisableDepth,
             "xleres/Deferred/debugging.pixel.hlsl:DepthsDebuggingTexture", {},
             "xleres/Deferred/tiled.pipeline:ComputeMain",
-            rpi,
+            outputStates,
             usi)->Actualize();
         debuggingShader.Draw(parsingContext, us);
     }

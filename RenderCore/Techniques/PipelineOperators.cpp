@@ -113,8 +113,7 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
-			unsigned subType,
-			StringSection<> pixelShader,
+			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 			const std::shared_ptr<Assets::PredefinedPipelineLayout>& predefinedPipelineLayout,
@@ -122,20 +121,6 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferTarget& fbTarget,
 			const UniformsStreamInterface& usi)
 		{
-			auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = pixelShader.AsString();
-			if (subType == (unsigned)FullViewportOperatorSubType::DisableDepth) {
-				pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
-				pipelineDesc->_depthStencil = CommonResourceBox::s_dsDisable;
-				pipelineDesc->_blend.push_back(CommonResourceBox::s_abStraightAlpha);
-				pipelineDesc->_blend.push_back(CommonResourceBox::s_abStraightAlpha);
-			} else {
-				assert(subType == (unsigned)FullViewportOperatorSubType::MaxDepth);
-				pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector_deep";
-				pipelineDesc->_depthStencil = CommonResourceBox::s_dsReadOnly;
-				pipelineDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
-			}
-
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
@@ -158,17 +143,37 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	static std::shared_ptr<GraphicsPipelineDesc> CreatePipelineDesc(StringSection<> pixelShader, FullViewportOperatorSubType subType, const PixelOutputStates& po)
+	{
+		auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = pixelShader.AsString();
+		if (subType == FullViewportOperatorSubType::DisableDepth) {
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+		} else {
+			assert(subType == FullViewportOperatorSubType::MaxDepth);
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector_deep";
+		}
+
+		pipelineDesc->_depthStencil = po._depthStencilState;
+		pipelineDesc->_rasterization = po._rasterizationState;
+		pipelineDesc->_blend = {po._attachmentBlendStates.begin(), po._attachmentBlendStates.end()};
+		while (pipelineDesc->_blend.size() < po._fbDesc->GetSubpasses()[po._subpassIdx].GetOutputs().size())
+			pipelineDesc->_blend.push_back(AttachmentBlendDesc{});		// fill in remaining with defaults
+		return pipelineDesc;
+	}
+
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const FrameBufferTarget& fbTarget,
+		const PixelOutputStates& po,
 		const UniformsStreamInterface& usi)
 	{
 		assert(!pixelShader.IsEmpty());
-		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, (unsigned)subType, pixelShader, selectors, pipelineLayout, std::shared_ptr<Assets::PredefinedPipelineLayout>{}, ::Assets::DependencyValidation{}, fbTarget, usi);
+		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
+		auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, std::shared_ptr<Assets::PredefinedPipelineLayout>{}, ::Assets::DependencyValidation{}, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -178,25 +183,26 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAssetName,
-		const FrameBufferTarget& fbTarget,
+		const PixelOutputStates& po,
 		const UniformsStreamInterface& usi)
 	{
+		assert(!pixelShader.IsEmpty());
+		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
 		auto pipelineLayoutAsset = ::Assets::MakeAssetPtr<CompiledPipelineLayoutAsset>(pool->GetDevice(), pipelineLayoutAssetName);
 		auto fastLayout = pipelineLayoutAsset->TryActualize();
 		if (fastLayout) {
-			assert(!pixelShader.IsEmpty());
-			auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, (unsigned)subType, pixelShader, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetPredefinedPipelineLayout(), (*fastLayout)->GetDependencyValidation(), fbTarget, usi);
+			auto op = ::Assets::MakeAssetPtr<FullViewportOperator>(pool, pipelineDesc, selectors, (*fastLayout)->GetPipelineLayout(), (*fastLayout)->GetPredefinedPipelineLayout(), (*fastLayout)->GetDependencyValidation(), FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
 			return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 		} else {
 			auto result = std::make_shared<::Assets::MarkerPtr<FullViewportOperator>>();
 			::Assets::WhenAll(pipelineLayoutAsset).ThenConstructToPromise(
 				result->AdoptPromise(),
-				[pool=pool, subType, pixelShader=pixelShader.AsString(), selectors=selectors,
-				fbDesc=*fbTarget._fbDesc, subPassIdx=fbTarget._subpassIdx,
+				[pool=pool, subType, pipelineDesc, selectors=selectors,
+				fbDesc=*po._fbDesc, subPassIdx=po._subpassIdx,
 				usi=usi](std::promise<std::shared_ptr<FullViewportOperator>>&& resultPromise,
 					std::shared_ptr<CompiledPipelineLayoutAsset> pipelineLayout) {
 					FullViewportOperator::ConstructToPromise(
-						std::move(resultPromise), pool, (unsigned)subType, pixelShader, selectors, 
+						std::move(resultPromise), pool, pipelineDesc, selectors, 
 						pipelineLayout->GetPipelineLayout(), pipelineLayout->GetPredefinedPipelineLayout(), pipelineLayout->GetDependencyValidation(),
 						{&fbDesc, subPassIdx}, usi);
 				});
@@ -424,6 +430,49 @@ namespace RenderCore { namespace Techniques
 	{
 		auto op = ::Assets::MakeAssetPtr<ComputeOperator>(pool, computeShader, selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
+	}
+
+	uint64_t PixelOutputStates::GetHash() const 
+	{
+		assert(_subpassIdx < _fbDesc->GetSubpasses().size());
+		auto result = RenderCore::Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(*_fbDesc, _subpassIdx); 
+		result = HashCombine(_depthStencilState.HashDepthAspect(), result);
+		result = HashCombine(_depthStencilState.HashStencilAspect(), result);
+		result = HashCombine(_rasterizationState.Hash(), result);
+		auto relevantBlendStateCount = _fbDesc->GetSubpasses()[_subpassIdx].GetOutputs().size();
+		unsigned c=0;
+		for (; c<std::min(relevantBlendStateCount, _attachmentBlendStates.size()); ++c)
+			result = HashCombine(_attachmentBlendStates[c].Hash(), result);
+		for (; c<relevantBlendStateCount; ++c)
+			result = HashCombine(AttachmentBlendDesc{}.Hash(), result);		// fill remainder with defaults
+		return result;
+	}
+
+	void PixelOutputStates::Bind(const FrameBufferDesc& fbDesc, unsigned subpassIdx) 
+	{ 
+		_fbDesc = &fbDesc; 
+		_subpassIdx = subpassIdx; 
+		assert(_subpassIdx < _fbDesc->GetSubpasses().size());
+	}
+
+	void PixelOutputStates::Bind(const RenderPassInstance& rpi)
+	{
+		Bind(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+	}
+
+	void PixelOutputStates::Bind(const DepthStencilDesc& depthStencilState)
+	{
+		_depthStencilState = depthStencilState;
+	}
+
+	void PixelOutputStates::Bind(const RasterizationDesc& rasterizationState)
+	{
+		_rasterizationState = rasterizationState;
+	}
+
+	void PixelOutputStates::Bind(IteratorRange<const AttachmentBlendDesc*> blendStates)
+	{
+		_attachmentBlendStates = blendStates;
 	}
 
 	IShaderOperator::~IShaderOperator() {}

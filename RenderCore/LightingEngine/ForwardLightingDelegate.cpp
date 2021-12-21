@@ -89,7 +89,7 @@ namespace RenderCore { namespace LightingEngine
 		const ::Assets::DependencyValidation& GetDependencyValidation() { return _operator->GetDependencyValidation(); }
 		ToneMapStandin(
 			const std::shared_ptr<Techniques::PipelineCollection>& pool,
-			const Techniques::FrameBufferTarget& fbTarget)
+			const Techniques::PixelOutputStates& fbTarget)
 		{
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, Utility::Hash64("SubpassInputAttachment"));
@@ -104,9 +104,14 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardLightingCaptures::DoToneMap(LightingTechniqueIterator& iterator)
 	{
 		// Very simple stand-in for tonemap -- just use a copy shader to write the HDR values directly to the LDR texture
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(iterator._rpi);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto& standin = ConsoleRig::FindCachedBox<ToneMapStandin>(
 			iterator._parsingContext->GetTechniqueContext()._graphicsPipelinePool,
-			Techniques::FrameBufferTarget{iterator._rpi});
+			outputStates);
 		auto* pipeline = standin._operator->TryActualize();
 		if (pipeline) {
 			UniformsStream us;
