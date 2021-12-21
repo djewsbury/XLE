@@ -275,14 +275,13 @@ namespace UnitTests
 
 	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
-		Techniques::SkinDeformerPipelineCollection pipelineCollection;
-		pipelineCollection._pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper._device);
+		auto pipelineCollection = std::make_shared<Techniques::SkinDeformerPipelineCollection>(testHelper._device, std::make_shared<Techniques::PipelineCollection>(testHelper._device));
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IDeformer>> promise;
 		auto future = promise.get_future();
 		auto srcLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_GPUStaticData), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
-		Techniques::GPUSkinDeformer deformer(*testHelper._device, modelScaffold, "unit-test");
+		Techniques::GPUSkinDeformer deformer(pipelineCollection, modelScaffold, "unit-test");
 		Techniques::DeformerInputBinding deformInputBinding;
 		deformInputBinding._geoBindings.push_back({
 			0, srcLayout, dstLayout
@@ -293,7 +292,7 @@ namespace UnitTests
 		}
 		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
 		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
-		deformer.Bind(pipelineCollection, deformInputBinding);
+		deformer.Bind(deformInputBinding);
 
 		REQUIRE(modelScaffold->ImmutableData()._boundSkinnedControllerCount == 1);
 		
@@ -314,7 +313,7 @@ namespace UnitTests
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
 
-		deformer.StallForPipeline();
+		pipelineCollection->StallForPipeline();
 		
 		testHelper.BeginFrameCapture();
 		unsigned instances[] = {0};

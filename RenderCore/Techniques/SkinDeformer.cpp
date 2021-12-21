@@ -343,7 +343,7 @@ namespace RenderCore { namespace Techniques
 		auto jmTemporaryDataSize = instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
 		auto iaTemporaryDataSize = _iaParams.size()*sizeof(IAParams);
 		{
-			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::UnorderedAccess);
+			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::ConstantBuffer);
 
 			for (unsigned c=0; c<instanceIndices.size(); ++c) {
 				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
