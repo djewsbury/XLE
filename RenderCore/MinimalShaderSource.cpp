@@ -27,6 +27,51 @@ namespace RenderCore
 		std::shared_ptr<ISourceCodePreprocessor> _preprocessor;
 	};
 
+	static std::string AppendSystemDefines(StringSection<> definesTable, const ILowLevelCompiler::ResId& resId)
+	{
+		const char* shaderModelDefine = nullptr;
+		switch (resId._shaderModel[0]) {
+		case 'V':
+		case 'v':
+			shaderModelDefine = "VS=1";
+			break;
+		case 'P':
+		case 'p':
+			shaderModelDefine = "PS=1";
+			break;
+		case 'G':
+		case 'g':
+			shaderModelDefine = "GS=1";
+			break;
+		case 'D':
+		case 'd':
+			shaderModelDefine = "DS=1";
+			break;
+		case 'H':
+		case 'h':
+			shaderModelDefine = "HS=1";
+			break;
+		case 'C':
+		case 'c':
+			shaderModelDefine = "CS=1";
+			break;
+		default:
+			break;
+		}
+		if (shaderModelDefine) {
+			if (!definesTable.IsEmpty()) {
+				std::string result;
+				result.reserve(definesTable.size() + 1 + std::strlen(shaderModelDefine));
+				result.insert(result.end(), definesTable.begin(), definesTable.end());
+				result.push_back(';');
+				result.insert(result.end(), shaderModelDefine, XlStringEnd(shaderModelDefine));
+				return result;
+			} else
+				return shaderModelDefine;
+		}
+		return definesTable.AsString();
+	}
+
 	auto MinimalShaderSource::Compile(
 		StringSection<> shaderInMemory,
 		const ILowLevelCompiler::ResId& resId,
@@ -36,9 +81,10 @@ namespace RenderCore
 		bool success = false;
 		TRY
 		{
+			auto processedDefinesTable = AppendSystemDefines(definesTable, resId);
 			if (_pimpl->_preprocessor) {
 				auto preprocessedOutput = _pimpl->_preprocessor->RunPreprocessor(
-					shaderInMemory, definesTable,
+					shaderInMemory, processedDefinesTable,
 					::Assets::DefaultDirectorySearchRules(resId._filename));
 				if (preprocessedOutput._processedSource.empty())
 					Throw(std::runtime_error("Preprocessed output is empty"));
@@ -48,14 +94,14 @@ namespace RenderCore
 				success = _pimpl->_compiler->DoLowLevelCompile(
 					result._payload, result._errors, result._deps,
 					preprocessedOutput._processedSource.data(), preprocessedOutput._processedSource.size(), resId,
-					definesTable,
+					processedDefinesTable,
 					MakeIteratorRange(preprocessedOutput._lineMarkers));
 
 			} else {
 				success = _pimpl->_compiler->DoLowLevelCompile(
 					result._payload, result._errors, result._deps,
 					shaderInMemory.begin(), shaderInMemory.size(), resId, 
-					definesTable);
+					processedDefinesTable);
 			}
 		}
 			// embue any exceptions with the dependency validation
