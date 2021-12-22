@@ -106,17 +106,15 @@ namespace RenderCore { namespace Techniques
 			Metal::BoundUniforms _boundUniforms;
 		};
 		::Assets::Marker<PreparedPipelineLayout> _preparedPipelineLayout;
-		std::shared_ptr<IDevice> _device;
 		std::vector<PipelineMarkerPtr> _pipelines;
+		std::shared_ptr<PipelineCollection> _pipelineCollection;
 
 		SkinDeformerPipelineCollection(
-			std::shared_ptr<IDevice> device,
 			std::shared_ptr<PipelineCollection> pipelineCollection);
 		~SkinDeformerPipelineCollection();
 	private:
 		std::vector<uint64_t> _pipelineHashes;
 		std::vector<ParameterBox> _pipelineSelectors;
-		std::shared_ptr<PipelineCollection> _pipelineCollection;
 		::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 		uint64_t _predefinedPipelineLayoutNameHash;
 		Threading::Mutex _mutex;
@@ -161,8 +159,9 @@ namespace RenderCore { namespace Techniques
 
 		struct IAParams
 		{
-			unsigned _inputStride, _outputStride;
+			unsigned _inputStride, _outputStride, _deformTemporariesStride;
 			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
+			unsigned _bufferFlags;
 			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
 			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
 			unsigned _jointMatricesInstanceStride;

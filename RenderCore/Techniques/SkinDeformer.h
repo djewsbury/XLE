@@ -17,7 +17,6 @@ namespace RenderCore { namespace Techniques
 
 	class PipelineCollection;
 	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
-		std::shared_ptr<IDevice> device,
 		std::shared_ptr<PipelineCollection> pipelineCollection);
 
 	class ISkinDeformer

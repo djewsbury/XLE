@@ -1,12 +1,13 @@
 
 DescriptorSet MainDS
 {
-    UniformBuffer StaticVertexAttachments;
-    UniformBuffer InputAttributes;
+    StorageBuffer StaticVertexAttachments;
+    StorageBuffer InputAttributes;
     StorageBuffer OutputAttributes;
+    StorageBuffer DeformTemporaryAttributes;
 
-    UniformBuffer IAParams;
-    UniformBuffer JointTransforms;
+    StorageBuffer IAParams;
+    StorageBuffer JointTransforms;
 };
 
 PipelineLayout Main

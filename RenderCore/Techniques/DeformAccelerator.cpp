@@ -8,6 +8,7 @@
 #include "Services.h"
 #include "GPUTrackerHeap.h"
 #include "CommonUtils.h"
+#include "CommonResources.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
@@ -155,6 +156,8 @@ namespace RenderCore { namespace Techniques
 				modelScaffold, BindFlag::UnorderedAccess,
 				(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection());
 			newAccelerator->_gpuStaticDataBufferView = newAccelerator->_gpuStaticDataBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+		} else {
+			newAccelerator->_gpuStaticDataBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
 		}
 
 		if (bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]) {
@@ -164,6 +167,8 @@ namespace RenderCore { namespace Techniques
 					LinearBufferDesc::Create(bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]),
 					(StringMeld<64>() << "[deform]" << modelScaffoldName).AsStringSection()));
 			newAccelerator->_gpuTemporariesBufferView = newAccelerator->_gpuTemporariesBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+		} else {
+			newAccelerator->_gpuTemporariesBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////

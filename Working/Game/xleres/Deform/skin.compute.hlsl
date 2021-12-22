@@ -1,4 +1,6 @@
 
+#include "deform-util.hlsl"
+
 #if !IN_POSITION_FORMAT
 	#define IN_POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
 #endif
@@ -18,15 +20,19 @@
 ByteAddressBuffer StaticVertexAttachments : register(t0);
 ByteAddressBuffer InputAttributes : register(t1);
 RWByteAddressBuffer OutputAttributes : register(u2);
+RWByteAddressBuffer DeformTemporaryAttributes : register(u3);
 
 struct IAParamsStruct
 {
 	uint InputStride;
 	uint OutputStride;
+	uint DeformTemporariesStride;
 
 	uint InPositionsOffset;
 	uint InNormalsOffset;
 	uint InTangentsOffset;
+
+	uint BufferFlags;
 
 	uint OutPositionsOffset;
 	uint OutNormalsOffset;
@@ -39,8 +45,8 @@ struct IAParamsStruct
 	uint JointMatricesInstanceStride;
 };
 
-StructuredBuffer<IAParamsStruct> IAParams : register(t3);
-StructuredBuffer<row_major float3x4> JointTransforms : register(t4);
+StructuredBuffer<IAParamsStruct> IAParams : register(t4);
+StructuredBuffer<row_major float3x4> JointTransforms : register(t5);
 
 [[vk::push_constant]] struct InvocationParamsStruct
 {
@@ -56,66 +62,6 @@ StructuredBuffer<row_major float3x4> JointTransforms : register(t4);
 IAParamsStruct GetIAParams()
 {
 	return IAParams[InvocationParams.IAParamsIdx];
-}
-
-#define R32G32B32A32_FLOAT 2
-#define R32G32B32_FLOAT 6
-#define R16G16B16A16_FLOAT 10
-
-float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
-{
-	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
-		uint B = buffer.Load(byteOffset+4);
-		uint C = buffer.Load(byteOffset+16);
-		return asfloat(buffer.Load3(byteOffset));
-	} else if (format == R16G16B16A16_FLOAT) {
-		uint2 A = buffer.Load2(byteOffset);
-		return f16tof32(uint3(A.x&0xffff, A.x>>16, A.y&0xffff));
-	} else {
-		return 0;	// trouble
-	}
-}
-
-float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
-{
-	if (format == R32G32B32_FLOAT) {
-		return float4(asfloat(buffer.Load3(byteOffset)), 1);
-	} else if (format == R32G32B32A32_FLOAT) {
-		return asfloat(buffer.Load4(byteOffset));
-	} else if (format == R16G16B16A16_FLOAT) {
-		uint2 A = buffer.Load2(byteOffset);
-		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
-	} else {
-		return 0;	// trouble
-	}
-}
-
-void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byteOffset)
-{
-	if (format == R32G32B32_FLOAT) {
-		buffer.Store3(byteOffset, asuint(value));
-	} else if (format == R32G32B32A32_FLOAT) {
-		buffer.Store4(byteOffset, asuint(float4(value, 1)));
-	} else if (format == R16G16B16A16_FLOAT) {
-		uint3 A = f32tof16(value);
-		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), A.z&0xffff));
-	} else {
-		// trouble
-	}
-}
-
-void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byteOffset)
-{
-	if (format == R32G32B32_FLOAT) {
-		buffer.Store3(byteOffset, asuint(value.xyz));
-	} else if (format == R32G32B32A32_FLOAT) {
-		buffer.Store4(byteOffset, asuint(value));
-	} else if (format == R16G16B16A16_FLOAT) {
-		uint4 A = f32tof16(value);
-		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), (A.z&0xffff)|(A.w<<16)));
-	} else {
-		// trouble
-	}
 }
 
 uint LoadWeightPack(uint vertexIdx, uint influenceCount)
@@ -147,15 +93,24 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 	IAParamsStruct iaParams = GetIAParams();
 	firstJointTransform += instanceIdx * iaParams.JointMatricesInstanceStride;
 
-	float3 inputPosition = LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
+	float3 inputPosition = 
+		(iaParams.BufferFlags & 0x1)
+		? LoadAsFloat3(DeformTemporaryAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InPositionsOffset)
+		: LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
 
 	#if IN_NORMAL_FORMAT
-		float3 inputNormal = LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
+		float3 inputNormal = 
+			(iaParams.BufferFlags & 0x2)
+			? LoadAsFloat3(DeformTemporaryAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InNormalsOffset)
+			: LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
 	#else
 		float3 inputNormal = 0;
 	#endif
 	#if IN_TEXTANGENT_FORMAT
-		float4 inputTangent = LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InTangentsOffset);
+		float4 inputTangent = 
+			(iaParams.BufferFlags & 0x4)
+			? LoadAsFloat4(DeformTemporaryAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InTangentsOffset)
+			: LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InTangentsOffset);
 	#else
 		float4 inputTangent = 0;
 	#endif

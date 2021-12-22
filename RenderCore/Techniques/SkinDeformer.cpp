@@ -345,7 +345,7 @@ namespace RenderCore { namespace Techniques
 		auto jmTemporaryDataSize = instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
 		auto iaTemporaryDataSize = _iaParams.size()*sizeof(IAParams);
 		{
-			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::ConstantBuffer);
+			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::UnorderedAccess);
 
 			for (unsigned c=0; c<instanceIndices.size(); ++c) {
 				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
@@ -375,7 +375,7 @@ namespace RenderCore { namespace Techniques
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 
-		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, jointMatricesBuffer.get(), iaParamsBuffer.get() };
+		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, &deformTemporariesVB, jointMatricesBuffer.get(), iaParamsBuffer.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(rvs);
 		preparedLayout->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
@@ -638,7 +638,7 @@ namespace RenderCore { namespace Techniques
 
 		assert(!staticDataLoadRequests.empty());
 		_staticVertexAttachments = LoadStaticResourcePartialAsync(
-			*_pipelineCollection->_device, MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
+			*_pipelineCollection->_pipelineCollection->GetDevice(), MakeIteratorRange(staticDataLoadRequests), skelVBIterator, _modelScaffold,
 			BindFlag::UnorderedAccess,
 			(StringMeld<64>() << "[skin]" << modelScaffoldName).AsStringSection()).first;
 		_staticVertexAttachmentsView = _staticVertexAttachments->CreateBufferView(BindFlag::UnorderedAccess);
@@ -662,19 +662,26 @@ namespace RenderCore { namespace Techniques
 
 			unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
 			unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;
+			unsigned bufferFlags = 0;
 			ParameterBox selectors;
 			for (const auto&ele:binding->_inputElements) {
-				assert(ele._inputSlot == Internal::VB_GPUStaticData);
+				assert(ele._inputSlot == Internal::VB_GPUStaticData || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
 				auto semanticHash = Hash64(ele._semanticName);
 				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_POSITION_FORMAT", (unsigned)ele._nativeFormat);
 					inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x1;
 				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
 					inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x2;
 				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
 					inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x4;
 				} else {
 					assert(0);
 				}
@@ -721,7 +728,9 @@ namespace RenderCore { namespace Techniques
 			iaParams._outTangentsOffset = outTangentsOffset;
 			iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
 			iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
+			iaParams._deformTemporariesStride = binding->_bufferStrides[Internal::VB_GPUDeformTemporaries];
 			iaParams._jointMatricesInstanceStride = _jointMatricesInstanceStride;
+			iaParams._bufferFlags = bufferFlags;
 		}
 
 		// sort by pipeline
@@ -800,13 +809,14 @@ namespace RenderCore { namespace Techniques
 		_preparedPipelineLayout = ::Assets::Marker<PreparedPipelineLayout>{};
 		::Assets::WhenAll(_predefinedPipelineLayout).ThenConstructToPromise(
 			_preparedPipelineLayout.AdoptPromise(),
-			[device=_device](auto predefinedPipelineLayoutActual) {
+			[device=_pipelineCollection->GetDevice()](auto predefinedPipelineLayoutActual) {
 				UniformsStreamInterface usi;
 				usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
 				usi.BindResourceView(1, Hash64("InputAttributes"));
 				usi.BindResourceView(2, Hash64("OutputAttributes"));
-				usi.BindResourceView(3, Hash64("JointTransforms"));
-				usi.BindResourceView(4, Hash64("IAParams"));
+				usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
+				usi.BindResourceView(4, Hash64("JointTransforms"));
+				usi.BindResourceView(5, Hash64("IAParams"));
 
 				UniformsStreamInterface pushConstantsUSI;
 				pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
@@ -819,10 +829,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	SkinDeformerPipelineCollection::SkinDeformerPipelineCollection(
-		std::shared_ptr<IDevice> device,
 		std::shared_ptr<PipelineCollection> pipelineCollection)
-	: _device(std::move(device))
-	, _pipelineCollection(std::move(pipelineCollection))
+	: _pipelineCollection(std::move(pipelineCollection))
 	{
 		RebuildPipelineLayout();
 	}
@@ -887,10 +895,9 @@ namespace RenderCore { namespace Techniques
 		virtual bool IsCPUDeformer() const override { return false; }
 
 		GPUSkinDeformerFactory(
-			std::shared_ptr<IDevice> device,
 			std::shared_ptr<PipelineCollection> pipelineCollection)
 		{
-			_pipelineCollection = std::make_shared<SkinDeformerPipelineCollection>(device, pipelineCollection);
+			_pipelineCollection = std::make_shared<SkinDeformerPipelineCollection>(pipelineCollection);
 			_signalDelegate = Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
 				[this]() {
 					this->_pipelineCollection->OnFrameBarrier();
@@ -911,10 +918,9 @@ namespace RenderCore { namespace Techniques
 	};
 
 	std::shared_ptr<IDeformOperationFactory> CreateGPUSkinDeformerFactory(
-		std::shared_ptr<IDevice> device,
 		std::shared_ptr<PipelineCollection> pipelineCollection)
 	{
-		return std::make_shared<GPUSkinDeformerFactory>(std::move(device), std::move(pipelineCollection));
+		return std::make_shared<GPUSkinDeformerFactory>(std::move(pipelineCollection));
 	}
 
 	ISkinDeformer::~ISkinDeformer() {}

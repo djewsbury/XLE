@@ -275,7 +275,7 @@ namespace UnitTests
 
 	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
-		auto pipelineCollection = std::make_shared<Techniques::SkinDeformerPipelineCollection>(testHelper._device, std::make_shared<Techniques::PipelineCollection>(testHelper._device));
+		auto pipelineCollection = std::make_shared<Techniques::SkinDeformerPipelineCollection>(std::make_shared<Techniques::PipelineCollection>(testHelper._device));
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IDeformer>> promise;
@@ -412,7 +412,7 @@ namespace UnitTests
 		TechniqueTestApparatus techniqueTestHelper{*testHelper};
 
 		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
-		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(testHelper->_device, pipelineCollection));
+		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("gpu_skin", Techniques::CreateGPUSkinDeformerFactory(pipelineCollection));
 		techniqueTestHelper._techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", Techniques::CreateCPUSkinDeformerFactory());
 		
 		auto modelScaffold = MakeTestAnimatedModel();
