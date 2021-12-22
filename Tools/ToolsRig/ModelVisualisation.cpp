@@ -31,6 +31,7 @@ namespace ToolsRig
     using RenderCore::Assets::SkeletonMachine;
 	using RenderCore::Techniques::SimpleModelRenderer;
 	using RenderCore::Techniques::ICustomDrawDelegate;
+	using RenderCore::Techniques::RendererSkeletonInterface;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,12 +51,23 @@ namespace ToolsRig
 		uint64_t _activeMaterial;
 	};
 
+	static std::shared_ptr<RendererSkeletonInterface> BuildSkeletonInterface(
+		SimpleModelRenderer& renderer,
+		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface)
+	{
+		auto* deformAccelerator = renderer.GetDeformAccelerator().get();
+		if (deformAccelerator)
+			return std::make_shared<RendererSkeletonInterface>(smOutputInterface, *renderer.GetDeformAcceleratorPool(), *deformAccelerator);
+		return nullptr;
+	}
+
 	struct ModelSceneRendererState
 	{
 		std::shared_ptr<SimpleModelRenderer>		_renderer;
 		std::shared_ptr<ModelScaffold>				_modelScaffoldForEmbeddedSkeleton;
 		std::shared_ptr<SkeletonScaffold>			_skeletonScaffold;
 		std::shared_ptr<AnimationSetScaffold>		_animationScaffold;
+		std::shared_ptr<RendererSkeletonInterface>	_skeletonInterface;
 		RenderCore::Assets::AnimationSetBinding		_animSetBinding;
 		::Assets::DependencyValidation				_depVal;
 
@@ -110,6 +122,8 @@ namespace ToolsRig
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
 							skeleton->GetTransformationMachine().GetInputInterface());
 
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, skeleton->GetTransformationMachine().GetOutputInterface());
+
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());
 						depVal.RegisterDependency(animationSet->GetDependencyValidation());
@@ -118,7 +132,7 @@ namespace ToolsRig
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
 								renderer,
-								nullptr, skeleton, animationSet,
+								nullptr, skeleton, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
 					});
@@ -133,6 +147,8 @@ namespace ToolsRig
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
 							renderer->GetModelScaffold()->EmbeddedSkeleton().GetInputInterface());
 
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, renderer->GetModelScaffold()->EmbeddedSkeleton().GetOutputInterface());
+
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());
 						depVal.RegisterDependency(animationSet->GetDependencyValidation());
@@ -140,7 +156,7 @@ namespace ToolsRig
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
 								renderer,
-								renderer->GetModelScaffold(), nullptr, animationSet,
+								renderer->GetModelScaffold(), nullptr, animationSet, skeletonInterface,
 								std::move(animBinding), depVal,
 							});
 					});
@@ -151,7 +167,7 @@ namespace ToolsRig
 						return std::make_shared<ModelSceneRendererState>(
 							ModelSceneRendererState {
 								renderer,
-								renderer->GetModelScaffold(), nullptr, nullptr,
+								renderer->GetModelScaffold(), nullptr, nullptr, nullptr,
 								{}, renderer->GetDependencyValidation(),
 							});
 					});
@@ -195,23 +211,15 @@ namespace ToolsRig
 					&skeletonMachine->GetDefaultParameters());
 			}
 
-			// todo -- do this binding at construction time
-			auto* deformAccelerator = _actualized->_renderer->GetDeformAccelerator().get();
-			if (deformAccelerator) {
-				auto operations = _actualized->_renderer->GetDeformAcceleratorPool()->GetOperations(*deformAccelerator, typeid(RenderCore::Techniques::ISkinDeformer).hash_code());
-				for (unsigned c=0; c<operations.size(); ++c) {
-					auto* skinDeformOp = dynamic_cast<RenderCore::Techniques::ISkinDeformer*>(operations[c].get());
-					assert(skinDeformOp);
-					auto binding = skinDeformOp->CreateBinding(skeletonMachine->GetOutputInterface());
-					skinDeformOp->FeedInSkeletonMachineResults(0, MakeIteratorRange(skeletonMachineOutput), binding);
-				}
-			}
+			const auto instanceIdx = 0u;
+			if (_actualized->_skeletonInterface)
+				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput));
 
 			RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
 			XlZeroMemory(pkts);
 			pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
-			const auto instanceIdx = ~0u;
-			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), Identity<Float4x4>(), instanceIdx, _preDrawDelegate);
+			auto localToWorld = Identity<Float4x4>();
+			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), localToWorld, instanceIdx, _preDrawDelegate);
 		}
 
 		void ExecuteScene(
@@ -317,6 +325,8 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<ModelSceneRendererState>		_actualized;
 		std::shared_ptr<VisAnimationState>				_animationState;
+
+		std::vector<std::shared_ptr<RenderCore::Techniques::ISkinDeformer>> _skinDeformers;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,6 +20,7 @@ namespace RenderCore { namespace Techniques
 	class CameraDesc;
 	class ITechniqueDelegate;
 	class IPipelineAcceleratorPool;
+    class IDeformAcceleratorPool;
     class ImmediateDrawingApparatus;
     class ICustomDrawDelegate;
     class DrawingApparatus;
@@ -153,7 +154,8 @@ namespace ToolsRig
 
     std::shared_ptr<ISimpleSceneLayer> CreateSimpleSceneLayer(
         const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-        const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus);
+        const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
+        const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
 
 	class VisualisationOverlay : public PlatformRig::IOverlaySystem
     {

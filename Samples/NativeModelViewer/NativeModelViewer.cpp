@@ -32,7 +32,8 @@ namespace Sample
 
 		auto modelLayer = ToolsRig::CreateSimpleSceneLayer(
 			globals._immediateDrawingApparatus,
-			lightingEngineApparatus);
+			lightingEngineApparatus,
+			globals._primaryResourcesApparatus->_deformAccelerators);
 
 		ToolsRig::ModelVisSettings visSettings {};
 		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.dat"));

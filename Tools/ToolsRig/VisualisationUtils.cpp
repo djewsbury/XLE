@@ -26,6 +26,7 @@
 #include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
@@ -142,7 +143,8 @@ namespace ToolsRig
 
         SimpleSceneLayer(
             const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-            const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus);
+            const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
+			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
         ~SimpleSceneLayer();
     protected:
 		std::shared_ptr<VisCameraSettings> _camera;
@@ -184,6 +186,7 @@ namespace ToolsRig
 		RenderCore::FrameBufferProperties _lightingTechniqueFBProps;
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
@@ -246,6 +249,8 @@ namespace ToolsRig
 						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
 							assert(next._pkt);
 							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
+						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
+							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 						}
 					}
 				} CATCH(...) {
@@ -485,10 +490,12 @@ namespace ToolsRig
 	
     SimpleSceneLayer::SimpleSceneLayer(
 		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus)
+		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
+		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
     {
 		_camera = std::make_shared<VisCameraSettings>();
 		_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
+		_deformAccelerators = deformAccelerators;
 		_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
 		_fontRenderingManager = immediateDrawingApparatus->_fontRenderingManager;
 		_lightingApparatus = lightingEngineApparatus;
@@ -498,9 +505,10 @@ namespace ToolsRig
 
 	std::shared_ptr<ISimpleSceneLayer> CreateSimpleSceneLayer(
         const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-        const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus)
+        const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
+		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
 	{
-		return std::make_shared<SimpleSceneLayer>(immediateDrawingApparatus, lightingEngineApparatus);
+		return std::make_shared<SimpleSceneLayer>(immediateDrawingApparatus, lightingEngineApparatus, deformAccelerators);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -653,8 +661,16 @@ namespace ToolsRig
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         using namespace RenderCore;
-		if (!parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
-			return;
+		{
+			if (!parserContext.GetTechniqueContext()._attachmentPool->GetBoundResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
+				return;
+
+			auto q = std::find_if(
+				parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().begin(), parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end(),
+				[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::MultisampleDepth; });
+			if (q == parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end())
+				return;
+		}
 
 		if (!_pimpl->_scene || !_pimpl->_cameraSettings) return;
 		auto scene = _pimpl->_scene->TryActualize();
