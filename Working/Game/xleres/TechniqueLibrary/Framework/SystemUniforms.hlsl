@@ -27,7 +27,7 @@ float4x4 	SysUniform_GetCameraBasis() { return CameraBasis; }
 bool 		SysUniform_IsOrthogonalProjection() { return FarClip < 0; }
 float4x4 	SysUniform_GetPrevWorldToClip() { return PrevWorldToClip; }
 
-#if defined(VULKAN) && !defined(LOCAL_TRANSFORM_PUSH_CONSTANTS)
+#if defined(VULKAN) && !defined(LOCAL_TRANSFORM_PUSH_CONSTANTS) && defined(VS)
 	#define LOCAL_TRANSFORM_PUSH_CONSTANTS 1
 #endif
 

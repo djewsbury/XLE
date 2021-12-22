@@ -581,30 +581,6 @@ namespace SceneEngine
         return result;
     }
 
-    LightDesc MakeLightDesc(const Utility::ParameterBox& props)
-    {
-        static const auto colorHash = ParameterBox::MakeParameterNameHash("Color");
-        static const auto brightnessHash = ParameterBox::MakeParameterNameHash("Brightness");
-        static const auto diffuseModel = ParameterBox::MakeParameterNameHash("DiffuseModel");
-        static const auto diffuseWideningMin = ParameterBox::MakeParameterNameHash("DiffuseWideningMin");
-        static const auto diffuseWideningMax = ParameterBox::MakeParameterNameHash("DiffuseWideningMax");
-        static const auto cutoffBrightness = ParameterBox::MakeParameterNameHash("CutoffBrightness");
-        static const auto shape = ParameterBox::MakeParameterNameHash("Shape");
-
-        LightDesc result;
-        result._brightness = props.GetParameter(brightnessHash, 1.f) * AsFloat3Color(props.GetParameter(colorHash, ~0x0u));
-
-        result._diffuseWideningMin = props.GetParameter(diffuseWideningMin, result._diffuseWideningMin);
-        result._diffuseWideningMax = props.GetParameter(diffuseWideningMax, result._diffuseWideningMax);
-        result._cutoffBrightness = props.GetParameter(cutoffBrightness, result._cutoffBrightness);
-
-        result._shape = (RenderCore::LightingEngine::LightSourceShape)props.GetParameter(shape, unsigned(result._shape));
-
-        result._diffuseModel = (RenderCore::LightingEngine::DiffuseModel)props.GetParameter(diffuseModel, 1);
-        // auto shadowModel = props.GetParameter(shadowResolveModel, 0);
-        return result;
-    }
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
