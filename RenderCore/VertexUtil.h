@@ -288,10 +288,13 @@ namespace RenderCore
         dst[3] = (srcComponentCount > 3) ? AsFloat32(src[3]) : 1.f;
     }
 
+	// Note the slight oddity with snorm numbers whereby there are 2 representations for -1 (the smallest integer input and the second
+	// smallest). This is so 0 falls on directly on an integer. 
+	// See (for example) https://docs.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-data-conversion
 	inline float UNorm16AsFloat32(uint16_t value)	{ return value / float(0xffff); }
-	inline float SNorm16AsFloat32(int16_t value)	{ return value / float(0x7fff); }
-	inline float UNorm8AsFloat32(uint8_t value)	{ return value / float(0xff); }
-	inline float SNorm8AsFloat32(int8_t value)	{ return value / float(0x7f); }
+	inline float SNorm16AsFloat32(int16_t value)	{ return std::max(value, int16_t(-0x7fff)) / float(0x7fff); }
+	inline float UNorm8AsFloat32(uint8_t value)		{ return value / float(0xff); }
+	inline float SNorm8AsFloat32(int8_t value)		{ return std::max(value, int8_t(-0x7f)) / float(0x7f); }
 
 	inline void GetVertDataUNorm16(
 		float* dst,
