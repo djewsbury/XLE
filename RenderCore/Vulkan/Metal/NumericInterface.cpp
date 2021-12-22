@@ -307,7 +307,7 @@ namespace RenderCore { namespace Metal_Vulkan
     {
 		const auto& pipelineLayout = *checked_cast<const CompiledPipelineLayout*>(&ipipelineLayout);
         _pimpl = std::make_unique<Pimpl>(pipelineLayout);
-        _pimpl->_globalPools = Internal::VulkanGlobalsTemp::GetInstance()._globalPools;
+        _pimpl->_globalPools = &GetGlobalPools();
 		_pimpl->_descriptorPool = &_pimpl->_globalPools->_mainDescriptorPool;
 		_pimpl->_legacyRegisterBindings = bindings;		// we store this only so we can return it from the GetLegacyRegisterBindings() query
 		_pimpl->_cmdListAttachedStorage = &cmdListAttachedStorage;

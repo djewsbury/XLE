@@ -146,9 +146,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::shared_ptr<CompiledDescriptorSetLayoutCache> CreateCompiledDescriptorSetLayoutCache()
 		{
-			return std::make_shared<CompiledDescriptorSetLayoutCache>(
-				GetObjectFactory(), 
-				*VulkanGlobalsTemp::GetInstance()._globalPools);
+			return std::make_shared<CompiledDescriptorSetLayoutCache>(GetObjectFactory(), GetGlobalPools());
 		}
 
 		class DescSetLimits

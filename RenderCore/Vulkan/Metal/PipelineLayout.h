@@ -192,7 +192,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		class VulkanGlobalsTemp
 		{
 		public:
-			GlobalPools* _globalPools;
 			LegacyRegisterBindingDesc _legacyRegisterBindings;
 			static VulkanGlobalsTemp& GetInstance();
 		};

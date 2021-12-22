@@ -145,4 +145,6 @@ namespace RenderCore { namespace Metal_Vulkan
         GlobalPools(const GlobalPools&) = delete;
         GlobalPools& operator=(const GlobalPools&) = delete;
     };
+
+    GlobalPools& GetGlobalPools();
 }}

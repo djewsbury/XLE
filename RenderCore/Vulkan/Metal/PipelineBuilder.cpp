@@ -226,7 +226,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(_currentSubpassIndex != ~0u && _currentRenderPass);
 		return CreatePipeline(
-			factory, Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_mainPipelineCache.get(),
+			factory, GetGlobalPools()._mainPipelineCache.get(),
 			_currentRenderPass.get(), _currentSubpassIndex, _currentTextureSamples);
 	}
 
@@ -234,7 +234,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		const auto& samples = fbDesc.GetProperties()._samples;
 		_renderPassConfigurationHash = CalculateFrameBufferRelevance(fbDesc, subPass);
-		_currentRenderPass = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc);
+		_currentRenderPass = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
 		_currentTextureSamples = fbDesc.GetProperties()._samples;
 		_currentSubpassIndex = subPass;
 	}
@@ -329,7 +329,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	std::shared_ptr<ComputePipeline> ComputePipelineBuilder::CreatePipeline(ObjectFactory& factory)
 	{
-		return CreatePipeline(factory, Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_mainPipelineCache.get());
+		return CreatePipeline(factory, GetGlobalPools()._mainPipelineCache.get());
 	}
 
 	ComputePipelineBuilder::ComputePipelineBuilder()

@@ -1135,9 +1135,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _globalPools(&globalPools)
 	{
 		_sharedState = std::make_shared<VulkanEncoderSharedState>(*_factory, *_globalPools);
-
-		auto& globals = Internal::VulkanGlobalsTemp::GetInstance();
-		globals._globalPools = &globalPools;
 	}
 
 	DeviceContext::~DeviceContext()

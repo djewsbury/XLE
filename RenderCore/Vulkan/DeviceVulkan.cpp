@@ -30,6 +30,23 @@
     #define ENABLE_DEBUG_EXTENSIONS
 #endif
 
+namespace RenderCore { namespace Metal_Vulkan
+{
+	class GlobalsContainer
+	{
+	public:
+		ObjectFactory _objectFactory;
+		GlobalPools _pools;
+	};
+
+	ConsoleRig::WeakAttachablePtr<GlobalsContainer> s_globalsContainer;
+
+	ObjectFactory& GetObjectFactory(IDevice& device) { return s_globalsContainer.lock()->_objectFactory; }
+	ObjectFactory& GetObjectFactory(DeviceContext&) { return s_globalsContainer.lock()->_objectFactory; }
+	ObjectFactory& GetObjectFactory() { return s_globalsContainer.lock()->_objectFactory; }
+	GlobalPools& GetGlobalPools() { return s_globalsContainer.lock()->_pools; }
+}}
+
 namespace RenderCore { namespace ImplVulkan
 {
     using VulkanAPIFailure = Metal_Vulkan::VulkanAPIFailure;
@@ -485,9 +502,7 @@ namespace RenderCore { namespace ImplVulkan
     Device::~Device()
     {
 		_foregroundPrimaryContext.reset();
-		Metal_Vulkan::Internal::VulkanGlobalsTemp::GetInstance()._globalPools = nullptr;
-
-        Metal_Vulkan::SetDefaultObjectFactory(nullptr);
+        _globalsContainer = nullptr;
 		/*
 			While exiting post a vulkan failure (eg, device lost), we will can end up in an infinite loop if we stall here
 		if (_underlying.get())
@@ -574,30 +589,32 @@ namespace RenderCore { namespace ImplVulkan
 			#endif
 			_underlying = CreateUnderlyingDevice(_physDev);
 			auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
-			_objectFactory = Metal_Vulkan::ObjectFactory(_physDev._dev, _underlying, extensionFunctions);
+			_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
+			_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_physDev._dev, _underlying, extensionFunctions};
+			auto& objFactory = _globalsContainer->_objectFactory;
+			auto& pools = _globalsContainer->_pools;
 
 			// Set up the object factory with a default destroyer that tracks the current
 			// GPU frame progress
-			_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(_objectFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily));
-			auto destroyer = _objectFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
-			_objectFactory.SetDefaultDestroyer(destroyer);
-            Metal_Vulkan::SetDefaultObjectFactory(&_objectFactory);
+			_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._renderingQueueFamily));
+			auto destroyer = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
+			objFactory.SetDefaultDestroyer(destroyer);
 
-            _pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(_objectFactory, _graphicsQueue->GetTracker());
-			_pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(_objectFactory, _graphicsQueue->GetTracker());
-			_pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(_objectFactory);
-            _pools._mainPipelineCache = _objectFactory.CreatePipelineCache();
-            _pools._dummyResources = Metal_Vulkan::DummyResources(_objectFactory);
-			_pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(_objectFactory, _graphicsQueue->GetTracker());
+            pools._mainDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+			pools._longTermDescriptorPool = Metal_Vulkan::DescriptorPool(objFactory, _graphicsQueue->GetTracker());
+			pools._renderPassPool = Metal_Vulkan::VulkanRenderPassPool(objFactory);
+            pools._mainPipelineCache = objFactory.CreatePipelineCache();
+            pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
+			pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
 
             _foregroundPrimaryContext = std::make_shared<ThreadContext>(
 				shared_from_this(), 
 				_graphicsQueue,
-                Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
+                Metal_Vulkan::CommandPool(objFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
 			_foregroundPrimaryContext->AttachDestroyer(destroyer);
 
 			// We need to ensure that the "dummy" resources get their layout change to complete initialization
-			_pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
+			pools._dummyResources.CompleteInitialization(*_foregroundPrimaryContext->GetMetalContext());
 		}
     }
 
@@ -728,7 +745,7 @@ namespace RenderCore { namespace ImplVulkan
             Throw(::Exceptions::BasicLabel("Presentation surface is not compatible with selected physical device. This may occur if the wrong physical device is selected, and it cannot render to the output window."));
         
         auto finalChain = std::make_unique<PresentationChain>(
-            _objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, 
+            _globalsContainer->_objectFactory, std::move(surface), VectorPattern<unsigned, 2>{desc._width, desc._height}, 
 			_physDev._renderingQueueFamily, platformValue);
         return std::move(finalChain);
     }
@@ -751,14 +768,14 @@ namespace RenderCore { namespace ImplVulkan
 		return std::make_unique<ThreadContext>(
             shared_from_this(), 
             _graphicsQueue,
-            Metal_Vulkan::CommandPool(_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
+            Metal_Vulkan::CommandPool(_globalsContainer->_objectFactory, _physDev._renderingQueueFamily, false, _graphicsQueue->GetTracker()));
     }
 
 	IResourcePtr Device::CreateResource(
 		const ResourceDesc& desc,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)
 	{
-		return Metal_Vulkan::Internal::CreateResource(_objectFactory, desc, initData);
+		return Metal_Vulkan::Internal::CreateResource(_globalsContainer->_objectFactory, desc, initData);
 	}
 
 	FormatCapability    Device::QueryFormatCapability(Format format, BindFlag::BitField bindingType)
@@ -792,6 +809,9 @@ namespace RenderCore { namespace ImplVulkan
 		vkDeviceWaitIdle(_underlying.get());
 	}
 
+	Metal_Vulkan::GlobalPools& Device::GetGlobalPools() { return _globalsContainer->_pools; }
+	Metal_Vulkan::ObjectFactory& Device::GetObjectFactory() { return _globalsContainer->_objectFactory; }
+
     static const char* s_underlyingApi = "Vulkan";
         
     DeviceDesc Device::GetDesc()
@@ -813,14 +833,14 @@ namespace RenderCore { namespace ImplVulkan
 		using DescriptorSetBinding = Metal_Vulkan::CompiledPipelineLayout::DescriptorSetBinding;
 		using PushConstantsBinding = Metal_Vulkan::CompiledPipelineLayout::PushConstantsBinding;
 
-		if (!_pools._descriptorSetLayoutCache)
-			_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
+		if (!_globalsContainer->_pools._descriptorSetLayoutCache)
+			_globalsContainer->_pools._descriptorSetLayoutCache = Metal_Vulkan::Internal::CreateCompiledDescriptorSetLayoutCache();
 
 		DescriptorSetBinding descSetBindings[desc.GetDescriptorSets().size()];
 		for (unsigned c=0; c<desc.GetDescriptorSets().size(); ++c) {
 			auto& srcBinding = desc.GetDescriptorSets()[c];
 			descSetBindings[c]._name = srcBinding._name;
-			auto compiled = _pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(
+			auto compiled = _globalsContainer->_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(
 				srcBinding._signature,
 				srcBinding._name,
 				srcBinding._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT );
@@ -841,7 +861,7 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		return std::make_shared<Metal_Vulkan::CompiledPipelineLayout>(
-			_objectFactory,
+			_globalsContainer->_objectFactory,
 			MakeIteratorRange(descSetBindings, &descSetBindings[desc.GetDescriptorSets().size()]),
 			MakeIteratorRange(pushConstantBinding, &pushConstantBinding[desc.GetPushConstants().size()]),
 			desc);
@@ -850,9 +870,9 @@ namespace RenderCore { namespace ImplVulkan
 	std::shared_ptr<IDescriptorSet> Device::CreateDescriptorSet(const DescriptorSetInitializer& desc)
 	{
 		VkShaderStageFlags shaderStages = desc._pipelineType == PipelineType::Graphics ? VK_SHADER_STAGE_ALL_GRAPHICS : VK_SHADER_STAGE_COMPUTE_BIT;
-		auto descSetLayout = _pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(*desc._signature, {}, shaderStages); // don't have the name available here
+		auto descSetLayout = _globalsContainer->_pools._descriptorSetLayoutCache->CompileDescriptorSetLayout(*desc._signature, {}, shaderStages); // don't have the name available here
 		return std::make_shared<Metal_Vulkan::CompiledDescriptorSet>(
-			_objectFactory, _pools,
+			_globalsContainer->_objectFactory, _globalsContainer->_pools,
 			descSetLayout->_layout,
 			shaderStages,
 			desc._slotBindings,
@@ -861,7 +881,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	std::shared_ptr<ISampler> Device::CreateSampler(const SamplerDesc& desc)
 	{
-		return std::make_shared<Metal_Vulkan::SamplerState>(_objectFactory, desc);
+		return std::make_shared<Metal_Vulkan::SamplerState>(_globalsContainer->_objectFactory, desc);
 	}
 
     //////////////////////////////////////////////////////////////////////////////////////////////////

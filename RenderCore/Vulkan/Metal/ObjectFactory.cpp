@@ -478,28 +478,6 @@ namespace RenderCore { namespace Metal_Vulkan
 	ObjectFactory::~ObjectFactory() 
     {}
 
-    static ObjectFactory* s_defaultObjectFactory = nullptr;
-
-    void SetDefaultObjectFactory(ObjectFactory* factory)
-    {
-        s_defaultObjectFactory = factory;
-    }
-
-	ObjectFactory& GetObjectFactory(IDevice& device)
-	{
-		return *s_defaultObjectFactory;
-	}
-
-	ObjectFactory& GetObjectFactory(DeviceContext&)
-	{
-		return *s_defaultObjectFactory;
-	}
-
-	ObjectFactory& GetObjectFactory()
-	{
-		return *s_defaultObjectFactory;
-	}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     IDestructionQueue::~IDestructionQueue() {}

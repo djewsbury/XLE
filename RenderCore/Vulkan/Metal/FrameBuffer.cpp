@@ -635,7 +635,7 @@ namespace RenderCore { namespace Metal_Vulkan
         const FrameBufferDesc& fbDesc,
         const INamedAttachments& namedResources)
     {
-		_layout = Internal::VulkanGlobalsTemp::GetInstance()._globalPools->_renderPassPool.CreateVulkanRenderPass(fbDesc);
+		_layout = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
 
         // We must create the frame buffer, including all views required.
         // We need to order the list of views in VkFramebufferCreateInfo in the

@@ -178,7 +178,5 @@ namespace RenderCore { namespace Metal_Vulkan
 	ObjectFactory& GetObjectFactory(IResource&);
 	ObjectFactory& GetObjectFactory();
 
-    void SetDefaultObjectFactory(ObjectFactory*);
-
     extern const VkAllocationCallbacks* g_allocationCallbacks;
 }}

@@ -13,6 +13,7 @@
 #include "Metal/IncludeVulkan.h"
 #include "Metal/FrameBuffer.h"
 #include "Metal/TextureView.h"
+#include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/IntrusivePtr.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
@@ -25,6 +26,7 @@ namespace RenderCore { namespace Metal_Vulkan
     class EventBasedTracker;
     class FenceBasedTracker;
     class SubmissionQueue;
+    class GlobalsContainer;
 }}
 
 namespace RenderCore { namespace ImplVulkan
@@ -175,8 +177,8 @@ namespace RenderCore { namespace ImplVulkan
         std::shared_ptr<IThreadContext>         GetImmediateContext() override;
         std::unique_ptr<IThreadContext>         CreateDeferredContext() override;
 
-        Metal_Vulkan::GlobalPools&              GetGlobalPools() override { return _pools; }
-		Metal_Vulkan::ObjectFactory&			GetObjectFactory() { return _objectFactory; }
+        Metal_Vulkan::GlobalPools&              GetGlobalPools() override;
+		Metal_Vulkan::ObjectFactory&			GetObjectFactory();
         VkDevice	                            GetUnderlyingDevice() override { return _underlying.get(); }
         std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetAsyncTracker() override;
 
@@ -204,8 +206,7 @@ namespace RenderCore { namespace ImplVulkan
 		VulkanSharedPtr<VkInstance>         _instance;
 		VulkanSharedPtr<VkDevice>		    _underlying;
         SelectedPhysicalDevice              _physDev;
-		Metal_Vulkan::ObjectFactory		    _objectFactory;
-        Metal_Vulkan::GlobalPools           _pools;
+		ConsoleRig::AttachablePtr<Metal_Vulkan::GlobalsContainer> _globalsContainer;
         std::shared_ptr<Metal_Vulkan::SubmissionQueue>	_graphicsQueue;
 
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
