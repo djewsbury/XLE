@@ -90,6 +90,7 @@ namespace RenderCore { namespace Techniques
 
     class PipelineCollection;
     struct ComputePipelineAndLayout;
+	class CompiledShaderPatchCollection;
 
 	struct SkinDeformerPipelineCollection
 	{
@@ -117,6 +118,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<ParameterBox> _pipelineSelectors;
 		::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 		uint64_t _predefinedPipelineLayoutNameHash;
+		std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
 		Threading::Mutex _mutex;
 
 		void RebuildPipelineLayout();
@@ -161,16 +163,21 @@ namespace RenderCore { namespace Techniques
 		{
 			unsigned _inputStride, _outputStride, _deformTemporariesStride;
 			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
-			unsigned _bufferFlags;
 			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
-			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
-			unsigned _jointMatricesInstanceStride;
+			unsigned _bufferFlags;
+			unsigned _mappingBufferByteOffset;
 		};
 		std::vector<IAParams> _iaParams;
 
+		struct SkinIAParams
+		{
+			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
+			unsigned _jointMatricesInstanceStride;
+		};
+		std::vector<SkinIAParams> _skinIAParams;
+
 		struct Section
 		{
-			SkinDeformerPipelineCollection::PipelineMarkerIdx _pipelineMarker;
 			unsigned _geoId = ~0u;
 			IteratorRange<const RenderCore::Assets::DrawCallDesc*> _preskinningDrawCalls;
 			std::pair<unsigned, unsigned> _rangeInJointMatrices;
@@ -178,11 +185,23 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const uint16_t*> _jointMatrices;
 			Float4x4 _bindShapeMatrix, _postSkinningBindMatrix;
 
-			unsigned _influencesPerVertex = 0;
-			unsigned _iaParamsIdx = 0;
+			unsigned _sectionInfluencesPerVertex = 0;
 			Format _indicesFormat = Format(0), _weightsFormat = Format(0);
+			unsigned _skinIAParamsIdx = ~0u;
 		};
 		std::vector<Section> _sections;
+
+		struct Dispatch
+		{
+			unsigned _iaParamsIdx = ~0u;
+			unsigned _skinIAParamsIdx = ~0u;
+			unsigned _vertexCount = 0;
+			unsigned _firstVertex = 0;
+			unsigned _softInfluenceCount = 0;
+			unsigned _firstJointTransform = 0;
+			SkinDeformerPipelineCollection::PipelineMarkerIdx _pipelineMarker;
+		};
+		std::vector<Dispatch> _dispatches;
 
 		std::vector<Float3x4> _jointMatrices;
 		unsigned _jointMatricesInstanceStride = 0;

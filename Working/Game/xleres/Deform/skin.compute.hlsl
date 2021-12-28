@@ -1,13 +1,5 @@
 
-#include "deform-util.hlsl"
-
-#if !IN_POSITION_FORMAT
-	#define IN_POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
-#endif
-
-#if !OUT_POSITION_FORMAT
-	#define OUT_POSITION_FORMAT 6
-#endif
+#include "deform-helper.compute.hlsl"
 
 #if JOINT_INDICES_TYPE != 2 || JOINT_INDICES_PRECISION != 8
 	#error Unsupported skinning joint indicies type
@@ -17,103 +9,48 @@
 	#error Unsupported skinning weights type
 #endif
 
-ByteAddressBuffer StaticVertexAttachments : register(t0);
-ByteAddressBuffer InputAttributes : register(t1);
-RWByteAddressBuffer OutputAttributes : register(u2);
-RWByteAddressBuffer DeformTemporaryAttributes : register(u3);
+ByteAddressBuffer StaticVertexAttachments;
 
-struct IAParamsStruct
+struct SkinIAParamsStruct		// per geo parameters
 {
-	uint InputStride;
-	uint OutputStride;
-	uint DeformTemporariesStride;
-
-	uint InPositionsOffset;
-	uint InNormalsOffset;
-	uint InTangentsOffset;
-
-	uint BufferFlags;
-
-	uint OutPositionsOffset;
-	uint OutNormalsOffset;
-	uint OutTangentsOffset;
-
 	uint WeightsOffset;
 	uint JointIndicesOffsets;
 	uint StaticVertexAttachmentsStride;
-
 	uint JointMatricesInstanceStride;
 };
+StructuredBuffer<SkinIAParamsStruct> SkinIAParams;
+#define row_major_float3x4 row_major float3x4
+StructuredBuffer<row_major_float3x4> JointTransforms;
 
-StructuredBuffer<IAParamsStruct> IAParams : register(t4);
-StructuredBuffer<row_major float3x4> JointTransforms : register(t5);
-
-[[vk::push_constant]] struct InvocationParamsStruct
+[[vk::push_constant]] struct SkinInvocationParamsStruct
 {
-	uint VertexCount;
-	uint FirstVertex;
 	uint SoftInfluenceCount;
-	uint FirstJointTransform;
-	uint InstanceCount;
-	uint OutputInstanceStride;
-	uint IAParamsIdx;
-} InvocationParams;
+	uint FirstJointTransform;		// per section, not per geo
+	uint SkinParamsIdx;
+} SkinInvocationParams;
 
-IAParamsStruct GetIAParams()
-{
-	return IAParams[InvocationParams.IAParamsIdx];
-}
-
-uint LoadWeightPack(uint vertexIdx, uint influenceCount)
+uint LoadWeightPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaParams)
 {
 	// Alignment rules (also applies to LoadIndexPack)
 	// 1 influence/vertex: any alignment ok
 	// 2 influences/vertex: must be aligned to multiple of 2
 	// 4 or more influences/vertex: must be aligned to multiple of 4
-	uint offset = GetIAParams().WeightsOffset+vertexIdx*GetIAParams().StaticVertexAttachmentsStride+influenceCount;
+	uint offset = iaParams.WeightsOffset+vertexIdx*iaParams.StaticVertexAttachmentsStride+influenceCount;
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
-uint LoadIndexPack(uint vertexIdx, uint influenceCount)
+uint LoadIndexPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaParams)
 {
-	uint offset = GetIAParams().JointIndicesOffsets+vertexIdx*GetIAParams().StaticVertexAttachmentsStride+influenceCount;
+	uint offset = iaParams.JointIndicesOffsets+vertexIdx*iaParams.StaticVertexAttachmentsStride+influenceCount;
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
 [numthreads(64, 1, 1)]
-	void main(uint vertexIdx : SV_DispatchThreadID)
+	DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 {
-	uint instanceIdx = vertexIdx / InvocationParams.VertexCount;
-	if (instanceIdx >= InvocationParams.InstanceCount)
-		return;
-	vertexIdx -= instanceIdx*InvocationParams.VertexCount;
-	vertexIdx += InvocationParams.FirstVertex;
-
-	uint firstJointTransform = InvocationParams.FirstJointTransform;
-	IAParamsStruct iaParams = GetIAParams();
-	firstJointTransform += instanceIdx * iaParams.JointMatricesInstanceStride;
-
-	float3 inputPosition = 
-		(iaParams.BufferFlags & 0x1)
-		? LoadAsFloat3(DeformTemporaryAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InPositionsOffset)
-		: LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
-
-	#if IN_NORMAL_FORMAT
-		float3 inputNormal = 
-			(iaParams.BufferFlags & 0x2)
-			? LoadAsFloat3(DeformTemporaryAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InNormalsOffset)
-			: LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
-	#else
-		float3 inputNormal = 0;
-	#endif
-	#if IN_TEXTANGENT_FORMAT
-		float4 inputTangent = 
-			(iaParams.BufferFlags & 0x4)
-			? LoadAsFloat4(DeformTemporaryAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InTangentsOffset)
-			: LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InTangentsOffset);
-	#else
-		float4 inputTangent = 0;
-	#endif
+	SkinIAParamsStruct skinIAParams = SkinIAParams[SkinInvocationParams.SkinParamsIdx];
+	uint firstJointTransform = SkinInvocationParams.FirstJointTransform;
+	firstJointTransform += instanceIdx * skinIAParams.JointMatricesInstanceStride;
 
 	float3 outputPosition = 0.0.xxx;
 	float3 outputNormal = 0.0.xxx;
@@ -122,8 +59,8 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 	#if INFLUENCE_COUNT > 0
 		uint c=0;
 		for (;;) {
-			uint packedWeights = LoadWeightPack(vertexIdx, c);
-			uint packedIndices = LoadIndexPack(vertexIdx, c);
+			uint packedWeights = LoadWeightPack(vertexIdx, c, skinIAParams);
+			uint packedIndices = LoadIndexPack(vertexIdx, c, skinIAParams);
 
 			{
 				uint boneIndex = packedIndices&0xff;
@@ -132,13 +69,13 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 				float weight = (packedWeights&0xff) / 255.f;
 				packedWeights >>= 8;
 
-				outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+				outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
 				float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-				outputNormal += weight * mul(rotationPart, inputNormal);
-				outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+				outputNormal += weight * mul(rotationPart, input.normal);
+				outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 				++c;
-				if (c == InvocationParams.SoftInfluenceCount) break;
+				if (c == SkinInvocationParams.SoftInfluenceCount) break;
 			}
 
 			#if INFLUENCE_COUNT > 1
@@ -149,13 +86,13 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 					float weight = (packedWeights&0xff) / 255.f;
 					packedWeights >>= 8;
 
-					outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+					outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
 					float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-					outputNormal += weight * mul(rotationPart, inputNormal);
-					outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+					outputNormal += weight * mul(rotationPart, input.normal);
+					outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 					++c;
-					if (c == InvocationParams.SoftInfluenceCount) break;
+					if (c == SkinInvocationParams.SoftInfluenceCount) break;
 				}
 
 				#if INFLUENCE_COUNT > 2
@@ -166,13 +103,13 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 						float weight = (packedWeights&0xff) / 255.f;
 						packedWeights >>= 8;
 
-						outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
 						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-						outputNormal += weight * mul(rotationPart, inputNormal);
-						outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+						outputNormal += weight * mul(rotationPart, input.normal);
+						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
-						if (c == InvocationParams.SoftInfluenceCount) break;
+						if (c == SkinInvocationParams.SoftInfluenceCount) break;
 					}
 
 					{
@@ -182,29 +119,33 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount)
 						float weight = (packedWeights&0xff) / 255.f;
 						packedWeights >>= 8;
 
-						outputPosition += weight * mul(JointTransforms[boneIndex], float4(inputPosition, 1)).xyz;
+						outputPosition += weight * mul(JointTransforms[boneIndex], float4(input.position, 1)).xyz;
 						float3x3 rotationPart = float3x3(JointTransforms[boneIndex][0].xyz, JointTransforms[boneIndex][1].xyz, JointTransforms[boneIndex][2].xyz);
-						outputNormal += weight * mul(rotationPart, inputNormal);
-						outputTangent += weight * mul(rotationPart, inputTangent.xyz);
+						outputNormal += weight * mul(rotationPart, input.normal);
+						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
-						if (c == InvocationParams.SoftInfluenceCount) break;
+						if (c == SkinInvocationParams.SoftInfluenceCount) break;
 					}
 				#endif
 			#endif
 		}
 	#else
-		outputPosition = inputPosition;
-		outputNormal = inputNormal;
-		outputTangent = inputTangent.xyz;
+		outputPosition = input.position;
+		outputNormal = input.normal;
+		outputTangent = input.tangent.xyz;
 	#endif
 
-	uint outputLoc = vertexIdx * iaParams.OutputStride + instanceIdx * InvocationParams.OutputInstanceStride;
-	StoreFloat3(outputPosition, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + iaParams.OutPositionsOffset);
+	DeformVertex output;
+	output.position = outputPosition;
 	#if OUT_NORMAL_FORMAT
-		StoreFloat3(outputNormal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + iaParams.OutNormalsOffset);
+		output.normal = outputNormal;
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
-		StoreFloat4(float4(outputTangent, inputTangent.w), OutputAttributes, OUT_TEXTANGENT_FORMAT, outputLoc + iaParams.OutTangentsOffset);
+		// assume handiness of the tangent frame hasn't changed as a result of skinning
+		// Handiness could change if the combination transform of all of the joints has an odd number of
+		// negative scales. But that's a little too expensive to calculate, and an unlikely scenario
+		output.tangent = float4(outputTangent, input.tangent.w);
 	#endif
+	return output;
 }

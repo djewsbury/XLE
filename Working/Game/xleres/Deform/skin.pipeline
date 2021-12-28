@@ -1,27 +1,28 @@
 
 DescriptorSet MainDS
 {
-    StorageBuffer StaticVertexAttachments;
-    StorageBuffer InputAttributes;
-    StorageBuffer OutputAttributes;
-    StorageBuffer DeformTemporaryAttributes;
+	StorageBuffer StaticVertexAttachments;
+	StorageBuffer InputAttributes;
+	StorageBuffer OutputAttributes;
+	StorageBuffer DeformTemporaryAttributes;
 
-    StorageBuffer IAParams;
-    StorageBuffer JointTransforms;
+	StorageBuffer IAParams;
+	StorageBuffer JointTransforms;
 };
 
 PipelineLayout Main
 {
 	ComputeDescriptorSet MainDS;				// 0
 
-    CSPushConstants InvocationParams
+	CSPushConstants InvocationParams
 	{
-        uint VertexCount;
-        uint FirstVertex;
-        uint SoftInfluenceCount;
-        uint FirstJointTransform;
-        uint InstanceCount;
-        uint OutputInstanceStride;
-        uint IAParamsIdx;
-    };
+		uint VertexCount;
+		uint FirstVertex;
+		uint InstanceCount;
+		uint OutputInstanceStride;
+		uint DeformTemporariesInstanceStride;
+		uint ParamsIdx;
+		uint SoftInfluenceCount;
+		uint FirstJointTransform;
+	};
 };

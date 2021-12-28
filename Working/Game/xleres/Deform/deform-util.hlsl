@@ -7,8 +7,6 @@
 float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
-		uint B = buffer.Load(byteOffset+4);
-		uint C = buffer.Load(byteOffset+16);
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);
@@ -35,8 +33,6 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 {
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
-		uint B = buffer.Load(byteOffset+4);
-		uint C = buffer.Load(byteOffset+16);
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
 		uint2 A = buffer.Load2(byteOffset);

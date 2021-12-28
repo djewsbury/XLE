@@ -335,8 +335,13 @@ namespace RenderCore { namespace Techniques
 		assert(!instanceIndices.empty());
 		struct InvocationParams
 		{
-			unsigned _vertexCount, _firstVertex, _softInfluenceCount, _firstJointTransform;
-			unsigned _instanceCount, _outputInstanceStride, _iaParamsIdx, _dummy;
+			// InvocationParams
+			unsigned _vertexCount, _firstVertex;
+			unsigned _instanceCount, _outputInstanceStride, _iaParamsIdx;
+
+			// SkinInvocationParams
+			unsigned _softInfluenceCount, _firstJointTransform;
+			unsigned _skinIAParamsIdx;
 		};
 
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -386,27 +391,25 @@ namespace RenderCore { namespace Techniques
 
 		const unsigned instanceCount = (unsigned)instanceIndices.size();
 		const unsigned wavegroupWidth = 64;
-		for (const auto&section:_sections) {
-			if (section._pipelineMarker != currentPipelineMarker) {
-				currentPipelineLayout = _pipelineCollection->_pipelines[section._pipelineMarker]->TryActualize();
-				currentPipelineMarker = section._pipelineMarker;
+		for (const auto&dispatch:_dispatches) {
+			if (dispatch._pipelineMarker != currentPipelineMarker) {
+				currentPipelineLayout = _pipelineCollection->_pipelines[dispatch._pipelineMarker]->TryActualize();
+				currentPipelineMarker = dispatch._pipelineMarker;
 			}
 			if (!currentPipelineLayout) continue;
 				
-			for (const auto&drawCall:section._preskinningDrawCalls) {
-				assert(drawCall._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
-				InvocationParams invocationParams { 
-					drawCall._indexCount,  drawCall._firstVertex, drawCall._subMaterialIndex, 
-					section._rangeInJointMatrices.first, instanceCount, outputInstanceStride,
-					section._iaParamsIdx };
-				auto groupCount = (drawCall._indexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
-				encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
-				encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
-				metrics._vertexCount += groupCount*wavegroupWidth;
-			}
-			metrics._dispatchCount += (unsigned)section._preskinningDrawCalls.size();
+			InvocationParams invocationParams { 
+				dispatch._vertexCount,  dispatch._firstVertex,
+				instanceCount, outputInstanceStride, dispatch._iaParamsIdx,
+				dispatch._softInfluenceCount, dispatch._firstJointTransform,
+				dispatch._skinIAParamsIdx };
+			auto groupCount = (dispatch._vertexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
+			encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
+			encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
+			metrics._vertexCount += groupCount*wavegroupWidth;
 		}
 
+		metrics._dispatchCount += (unsigned)_dispatches.size();
 		metrics._constantDataSize += jmTemporaryDataSize + iaTemporaryDataSize;
 		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
 	}
@@ -617,18 +620,18 @@ namespace RenderCore { namespace Techniques
 
 				section._indicesFormat = indicesFormat;
 				section._weightsFormat = weightsFormat;
-				section._influencesPerVertex = influencesPerVertex;
-				section._iaParamsIdx = (unsigned)_iaParams.size();
+				section._sectionInfluencesPerVertex = influencesPerVertex;
+				section._skinIAParamsIdx = (unsigned)_skinIAParams.size();
 
 				_sections.push_back(section);
 				jointMatrixBufferCount += sourceSection._jointMatrixCount;
 			}
 
-			IAParams iaParams = {0};
+			SkinIAParams iaParams = {0};
 			iaParams._weightsOffset = weightsOffset + skelVBIterator;
 			iaParams._jointIndicesOffset = indicesOffset + skelVBIterator;
 			iaParams._staticVertexAttachmentsStride = skelVBStride;
-			_iaParams.push_back(iaParams);
+			_skinIAParams.push_back(iaParams);
 
 			staticDataLoadRequests.push_back({ skelVb._offset, skelVb._size });
 			skelVBIterator += skelVb._size;
@@ -708,18 +711,28 @@ namespace RenderCore { namespace Techniques
 			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
 			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
 			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
-			selectors.SetParameter("INFLUENCE_COUNT", (unsigned)start->_influencesPerVertex);
+			selectors.SetParameter("INFLUENCE_COUNT", (unsigned)start->_sectionInfluencesPerVertex);
 
 			auto pipelineMarker = _pipelineCollection->GetPipeline(std::move(selectors));
 
 			for (auto q=start; q!=s; ++q) {
 				assert(q->_indicesFormat == start->_indicesFormat);
 				assert(q->_weightsFormat == start->_weightsFormat);
-				assert(q->_iaParamsIdx == start->_iaParamsIdx);
-				q->_pipelineMarker = pipelineMarker;
+				for (const auto& draw:q->_preskinningDrawCalls) {
+					assert(draw._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
+					Dispatch dispatch;
+					dispatch._iaParamsIdx = (unsigned)_iaParams.size();
+					dispatch._skinIAParamsIdx = q->_skinIAParamsIdx;
+					dispatch._vertexCount = draw._indexCount;
+					dispatch._firstVertex = draw._firstVertex;
+					dispatch._softInfluenceCount = draw._subMaterialIndex;
+					dispatch._pipelineMarker = pipelineMarker;
+					dispatch._firstJointTransform = q->_rangeInJointMatrices.first;
+					_dispatches.push_back(dispatch);
+				}
 			}
 
-			auto& iaParams = _iaParams[start->_iaParamsIdx];
+			IAParams iaParams;
 			iaParams._inPositionsOffset = inPositionsOffset;
 			iaParams._inNormalsOffset = inNormalsOffset;
 			iaParams._inTangentsOffset = inTangentsOffset;
@@ -729,13 +742,13 @@ namespace RenderCore { namespace Techniques
 			iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
 			iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
 			iaParams._deformTemporariesStride = binding->_bufferStrides[Internal::VB_GPUDeformTemporaries];
-			iaParams._jointMatricesInstanceStride = _jointMatricesInstanceStride;
 			iaParams._bufferFlags = bufferFlags;
+			_iaParams.push_back(iaParams);
 		}
 
 		// sort by pipeline
 		std::stable_sort(
-			_sections.begin(), _sections.end(),
+			_dispatches.begin(), _dispatches.end(),
 			[](const auto& lhs, const auto& rhs) {
 				return lhs._pipelineMarker < rhs._pipelineMarker;
 			});
@@ -769,9 +782,11 @@ namespace RenderCore { namespace Techniques
 			return std::distance(_pipelineHashes.begin(), i);
 
 		const ParameterBox* sel[] { &selectors };
+		uint64_t patchExpansions[] { Hash64("PerformDeform") };
 		auto operatorMarker = _pipelineCollection->CreateComputePipeline(
 			{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
-			SKIN_COMPUTE_HLSL ":main", MakeIteratorRange(sel));
+			"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
+			_patchCollection, MakeIteratorRange(patchExpansions));
 		_pipelines.push_back(operatorMarker);
 		_pipelineHashes.push_back(hash);
 		_pipelineSelectors.emplace_back(std::move(selectors));
@@ -794,9 +809,11 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<_pipelines.size(); ++c)
 			if (::Assets::IsInvalidated(*_pipelines[c])) {
 				const ParameterBox* sel[] { &_pipelineSelectors[c] };
+				uint64_t patchExpansions[] { Hash64("PerformDeform") };
 				auto operatorMarker = _pipelineCollection->CreateComputePipeline(
 					{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
-					SKIN_COMPUTE_HLSL ":main", MakeIteratorRange(sel));
+					"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
+					_patchCollection, MakeIteratorRange(patchExpansions));
 				_pipelines[c] = std::move(operatorMarker);
 			}
 	}
@@ -833,6 +850,17 @@ namespace RenderCore { namespace Techniques
 	: _pipelineCollection(std::move(pipelineCollection))
 	{
 		RebuildPipelineLayout();
+
+		ShaderSourceParser::InstantiationRequest instRequests[] {
+			{ SKIN_COMPUTE_HLSL }
+		};
+		ShaderSourceParser::GenerateFunctionOptions generateOptions;
+		generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
+		auto inst = ShaderSourceParser::InstantiateShader(
+			MakeIteratorRange(instRequests), 
+			generateOptions);
+
+		_patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
 	}
 	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
 
