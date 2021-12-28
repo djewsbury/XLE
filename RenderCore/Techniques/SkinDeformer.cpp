@@ -337,20 +337,19 @@ namespace RenderCore { namespace Techniques
 		{
 			// InvocationParams
 			unsigned _vertexCount, _firstVertex;
-			unsigned _instanceCount, _outputInstanceStride, _iaParamsIdx;
+			unsigned _instanceCount, _outputInstanceStride, _deformTemporariesInstanceStride, _iaParamsIdx;
 
 			// SkinInvocationParams
-			unsigned _softInfluenceCount, _firstJointTransform;
-			unsigned _skinIAParamsIdx;
+			// unsigned _softInfluenceCount, _firstJointTransform;
+			// unsigned _skinIAParamsIdx;
 		};
 
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
-		std::shared_ptr<RenderCore::IResourceView> jointMatricesBuffer, iaParamsBuffer;
+		std::shared_ptr<RenderCore::IResourceView> jointMatricesBuffer;
 		auto jmTemporaryDataSize = instanceIndices.size()*sizeof(Float3x4)*_jointMatricesInstanceStride;
-		auto iaTemporaryDataSize = _iaParams.size()*sizeof(IAParams);
 		{
-			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize+iaTemporaryDataSize, BindFlag::UnorderedAccess);
+			auto temporaryMapping = metalContext.MapTemporaryStorage(jmTemporaryDataSize, BindFlag::UnorderedAccess);
 
 			for (unsigned c=0; c<instanceIndices.size(); ++c) {
 				if ((instanceIndices[c]+1)*_jointMatricesInstanceStride > _jointMatrices.size())
@@ -361,16 +360,7 @@ namespace RenderCore { namespace Techniques
 					sizeof(Float3x4)*_jointMatricesInstanceStride);
 			}
 			auto beginAndEndInResource = temporaryMapping.GetBeginAndEndInResource();
-			jointMatricesBuffer = std::make_shared<Metal::ResourceView>(
-				Metal::GetObjectFactory(),
-				temporaryMapping.GetResource(),
-				(unsigned)beginAndEndInResource.first, (unsigned)jmTemporaryDataSize);
-
-			std::memcpy(PtrAdd(temporaryMapping.GetData().begin(), jmTemporaryDataSize), _iaParams.data(), iaTemporaryDataSize);
-			iaParamsBuffer = std::make_shared<Metal::ResourceView>(
-				Metal::GetObjectFactory(),
-				temporaryMapping.GetResource(),
-				(unsigned)beginAndEndInResource.first + jmTemporaryDataSize, (unsigned)iaTemporaryDataSize);
+			jointMatricesBuffer = temporaryMapping.AsResourceView();
 		}
 
 		auto preparedLayout = _pipelineCollection->_preparedPipelineLayout.TryActualize();
@@ -380,7 +370,7 @@ namespace RenderCore { namespace Techniques
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 
-		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, &deformTemporariesVB, jointMatricesBuffer.get(), iaParamsBuffer.get() };
+		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, &deformTemporariesVB, jointMatricesBuffer.get(), _iaParamsView.get(), _skinIAParamsView.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(rvs);
 		preparedLayout->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
@@ -400,9 +390,9 @@ namespace RenderCore { namespace Techniques
 				
 			InvocationParams invocationParams { 
 				dispatch._vertexCount,  dispatch._firstVertex,
-				instanceCount, outputInstanceStride, dispatch._iaParamsIdx,
+				instanceCount, outputInstanceStride, outputInstanceStride, dispatch._iaParamsIdx/*,
 				dispatch._softInfluenceCount, dispatch._firstJointTransform,
-				dispatch._skinIAParamsIdx };
+				dispatch._skinIAParamsIdx*/ };
 			auto groupCount = (dispatch._vertexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
 			encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
 			encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
@@ -410,7 +400,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		metrics._dispatchCount += (unsigned)_dispatches.size();
-		metrics._constantDataSize += jmTemporaryDataSize + iaTemporaryDataSize;
+		metrics._constantDataSize += jmTemporaryDataSize;
 		metrics._inputStaticDataSize += _staticVertexAttachmentsSize;
 	}
 
@@ -672,17 +662,17 @@ namespace RenderCore { namespace Techniques
 				auto semanticHash = Hash64(ele._semanticName);
 				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-					inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
 					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 						bufferFlags |= 0x1;
 				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-					inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
 					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 						bufferFlags |= 0x2;
 				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 					selectors.SetParameter("IN_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-					inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_GPUStaticData];
+					inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
 					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
 						bufferFlags |= 0x4;
 				} else {
@@ -691,17 +681,23 @@ namespace RenderCore { namespace Techniques
 			}
 
 			for (const auto&ele:binding->_outputElements) {
-				assert(ele._inputSlot == Internal::VB_PostDeform);
+				assert(ele._inputSlot == Internal::VB_PostDeform || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
 				auto semanticHash = Hash64(ele._semanticName);
 				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
 					selectors.SetParameter("OUT_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-					outPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+					outPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x1<<16;
 				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
 					selectors.SetParameter("OUT_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-					outNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+					outNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x2<<16;
 				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
 					selectors.SetParameter("OUT_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-					outTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[Internal::VB_PostDeform];
+					outTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
+					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
+						bufferFlags |= 0x4<<16;
 				} else {
 					assert(0);
 				}
@@ -743,6 +739,7 @@ namespace RenderCore { namespace Techniques
 			iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
 			iaParams._deformTemporariesStride = binding->_bufferStrides[Internal::VB_GPUDeformTemporaries];
 			iaParams._bufferFlags = bufferFlags;
+			iaParams._dummy = ~0u;
 			_iaParams.push_back(iaParams);
 		}
 
@@ -752,6 +749,20 @@ namespace RenderCore { namespace Techniques
 			[](const auto& lhs, const auto& rhs) {
 				return lhs._pipelineMarker < rhs._pipelineMarker;
 			});
+
+		auto iaParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess,
+				0, GPUAccess::Read, LinearBufferDesc::Create(_iaParams.size() * sizeof(IAParams)), "skin-ia-data"),
+			SubResourceInitData{MakeIteratorRange(_iaParams)});
+		_iaParamsView = iaParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+
+		auto skinIAParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
+			CreateDesc(
+				BindFlag::UnorderedAccess,
+				0, GPUAccess::Read, LinearBufferDesc::Create(_skinIAParams.size() * sizeof(SkinIAParams)), "skin-ia-data"),
+			SubResourceInitData{MakeIteratorRange(_skinIAParams)});
+		_skinIAParamsView = skinIAParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 	}
 
 	void* GPUSkinDeformer::QueryInterface(size_t typeId)
@@ -834,6 +845,7 @@ namespace RenderCore { namespace Techniques
 				usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
 				usi.BindResourceView(4, Hash64("JointTransforms"));
 				usi.BindResourceView(5, Hash64("IAParams"));
+				usi.BindResourceView(6, Hash64("SkinIAParams"));
 
 				UniformsStreamInterface pushConstantsUSI;
 				pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));

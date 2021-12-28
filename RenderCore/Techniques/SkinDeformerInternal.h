@@ -155,6 +155,8 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::shared_ptr<IResource>	_staticVertexAttachments;
 		std::shared_ptr<IResourceView> _staticVertexAttachmentsView;
+		std::shared_ptr<IResourceView> _iaParamsView;
+		std::shared_ptr<IResourceView> _skinIAParamsView;
 		unsigned _staticVertexAttachmentsSize = 0;
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
@@ -166,6 +168,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
 			unsigned _bufferFlags;
 			unsigned _mappingBufferByteOffset;
+			unsigned _dummy;
 		};
 		std::vector<IAParams> _iaParams;
 

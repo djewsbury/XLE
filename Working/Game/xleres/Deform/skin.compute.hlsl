@@ -9,7 +9,7 @@
 	#error Unsupported skinning weights type
 #endif
 
-ByteAddressBuffer StaticVertexAttachments;
+ByteAddressBuffer StaticVertexAttachments : register(t5);
 
 struct SkinIAParamsStruct		// per geo parameters
 {
@@ -18,16 +18,16 @@ struct SkinIAParamsStruct		// per geo parameters
 	uint StaticVertexAttachmentsStride;
 	uint JointMatricesInstanceStride;
 };
-StructuredBuffer<SkinIAParamsStruct> SkinIAParams;
+StructuredBuffer<SkinIAParamsStruct> SkinIAParams : register(t6);
 #define row_major_float3x4 row_major float3x4
-StructuredBuffer<row_major_float3x4> JointTransforms;
+StructuredBuffer<row_major_float3x4> JointTransforms : register(t7);
 
-[[vk::push_constant]] struct SkinInvocationParamsStruct
+/*[[vk::push_constant]]*/ struct SkinInvocationParamsStruct
 {
 	uint SoftInfluenceCount;
 	uint FirstJointTransform;		// per section, not per geo
 	uint SkinParamsIdx;
-} SkinInvocationParams;
+};
 
 uint LoadWeightPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaParams)
 {
@@ -45,9 +45,12 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaPar
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
-[numthreads(64, 1, 1)]
-	DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
+DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 {
+	return input;
+
+	SkinInvocationParamsStruct SkinInvocationParams;
+
 	SkinIAParamsStruct skinIAParams = SkinIAParams[SkinInvocationParams.SkinParamsIdx];
 	uint firstJointTransform = SkinInvocationParams.FirstJointTransform;
 	firstJointTransform += instanceIdx * skinIAParams.JointMatricesInstanceStride;

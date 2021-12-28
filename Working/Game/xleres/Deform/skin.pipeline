@@ -1,13 +1,15 @@
 
 DescriptorSet MainDS
 {
-	StorageBuffer StaticVertexAttachments;
-	StorageBuffer InputAttributes;
-	StorageBuffer OutputAttributes;
-	StorageBuffer DeformTemporaryAttributes;
+	StorageBuffer InputAttributes;				// 0
+	StorageBuffer OutputAttributes;				// 1
+	StorageBuffer DeformTemporaryAttributes;	// 2
+	StorageBuffer IAParams;						// 3
+	StorageBuffer VertexMapping;				// 4
 
-	StorageBuffer IAParams;
-	StorageBuffer JointTransforms;
+	StorageBuffer StaticVertexAttachments;		// 5
+	StorageBuffer SkinIAParams;					// 6
+	StorageBuffer JointTransforms;				// 7
 };
 
 PipelineLayout Main
@@ -22,7 +24,5 @@ PipelineLayout Main
 		uint OutputInstanceStride;
 		uint DeformTemporariesInstanceStride;
 		uint ParamsIdx;
-		uint SoftInfluenceCount;
-		uint FirstJointTransform;
 	};
 };
