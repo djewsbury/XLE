@@ -24,5 +24,8 @@ PipelineLayout Main
 		uint OutputInstanceStride;
 		uint DeformTemporariesInstanceStride;
 		uint ParamsIdx;
+		uint SoftInfluenceCount;
+		uint FirstJointTransform;
+		uint SkinParamsIdx;
 	};
 };

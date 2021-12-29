@@ -18,16 +18,10 @@ struct SkinIAParamsStruct		// per geo parameters
 	uint StaticVertexAttachmentsStride;
 	uint JointMatricesInstanceStride;
 };
+
 StructuredBuffer<SkinIAParamsStruct> SkinIAParams : register(t6);
 #define row_major_float3x4 row_major float3x4
 StructuredBuffer<row_major_float3x4> JointTransforms : register(t7);
-
-/*[[vk::push_constant]]*/ struct SkinInvocationParamsStruct
-{
-	uint SoftInfluenceCount;
-	uint FirstJointTransform;		// per section, not per geo
-	uint SkinParamsIdx;
-};
 
 uint LoadWeightPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaParams)
 {
@@ -45,14 +39,26 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaPar
 	return StaticVertexAttachments.Load(offset&(~3)) >> ((offset&3)*8);
 }
 
+struct SkinInvocationStruct
+{
+	uint SoftInfluenceCount;
+	uint FirstJointTransform;		// per section, not per geo
+	uint SkinParamsIdx;
+};
+
+[[vk::push_constant]] struct PushConstantsStruct
+{
+	DeformInvocationStruct DeformInvocationParams;
+	SkinInvocationStruct SkinInvocationParams;
+} PushConstants;
+DeformInvocationStruct GetDeformInvocationParams() { return PushConstants.DeformInvocationParams; }
+SkinInvocationStruct GetSkinInvocationParams() { return PushConstants.SkinInvocationParams; }
+
 DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 {
-	return input;
-
-	SkinInvocationParamsStruct SkinInvocationParams;
-
-	SkinIAParamsStruct skinIAParams = SkinIAParams[SkinInvocationParams.SkinParamsIdx];
-	uint firstJointTransform = SkinInvocationParams.FirstJointTransform;
+	SkinInvocationStruct skinInvocationParams = GetSkinInvocationParams();
+	SkinIAParamsStruct skinIAParams = SkinIAParams[skinInvocationParams.SkinParamsIdx];
+	uint firstJointTransform = skinInvocationParams.FirstJointTransform;
 	firstJointTransform += instanceIdx * skinIAParams.JointMatricesInstanceStride;
 
 	float3 outputPosition = 0.0.xxx;
@@ -78,7 +84,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 				outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 				++c;
-				if (c == SkinInvocationParams.SoftInfluenceCount) break;
+				if (c == skinInvocationParams.SoftInfluenceCount) break;
 			}
 
 			#if INFLUENCE_COUNT > 1
@@ -95,7 +101,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 					outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 					++c;
-					if (c == SkinInvocationParams.SoftInfluenceCount) break;
+					if (c == skinInvocationParams.SoftInfluenceCount) break;
 				}
 
 				#if INFLUENCE_COUNT > 2
@@ -112,7 +118,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
-						if (c == SkinInvocationParams.SoftInfluenceCount) break;
+						if (c == skinInvocationParams.SoftInfluenceCount) break;
 					}
 
 					{
@@ -128,7 +134,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 						outputTangent += weight * mul(rotationPart, input.tangent.xyz);
 
 						++c;
-						if (c == SkinInvocationParams.SoftInfluenceCount) break;
+						if (c == skinInvocationParams.SoftInfluenceCount) break;
 					}
 				#endif
 			#endif

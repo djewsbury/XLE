@@ -340,8 +340,8 @@ namespace RenderCore { namespace Techniques
 			unsigned _instanceCount, _outputInstanceStride, _deformTemporariesInstanceStride, _iaParamsIdx;
 
 			// SkinInvocationParams
-			// unsigned _softInfluenceCount, _firstJointTransform;
-			// unsigned _skinIAParamsIdx;
+			unsigned _softInfluenceCount, _firstJointTransform;
+			unsigned _skinIAParamsIdx;
 		};
 
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -390,9 +390,9 @@ namespace RenderCore { namespace Techniques
 				
 			InvocationParams invocationParams { 
 				dispatch._vertexCount,  dispatch._firstVertex,
-				instanceCount, outputInstanceStride, outputInstanceStride, dispatch._iaParamsIdx/*,
+				instanceCount, outputInstanceStride, outputInstanceStride, dispatch._iaParamsIdx,
 				dispatch._softInfluenceCount, dispatch._firstJointTransform,
-				dispatch._skinIAParamsIdx*/ };
+				dispatch._skinIAParamsIdx };
 			auto groupCount = (dispatch._vertexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
 			encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
 			encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
@@ -793,7 +793,7 @@ namespace RenderCore { namespace Techniques
 			return std::distance(_pipelineHashes.begin(), i);
 
 		const ParameterBox* sel[] { &selectors };
-		uint64_t patchExpansions[] { Hash64("PerformDeform") };
+		uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
 		auto operatorMarker = _pipelineCollection->CreateComputePipeline(
 			{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
 			"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
@@ -820,7 +820,7 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<_pipelines.size(); ++c)
 			if (::Assets::IsInvalidated(*_pipelines[c])) {
 				const ParameterBox* sel[] { &_pipelineSelectors[c] };
-				uint64_t patchExpansions[] { Hash64("PerformDeform") };
+				uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
 				auto operatorMarker = _pipelineCollection->CreateComputePipeline(
 					{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
 					"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
@@ -868,10 +868,7 @@ namespace RenderCore { namespace Techniques
 		};
 		ShaderSourceParser::GenerateFunctionOptions generateOptions;
 		generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
-		auto inst = ShaderSourceParser::InstantiateShader(
-			MakeIteratorRange(instRequests), 
-			generateOptions);
-
+		auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), generateOptions);
 		_patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
 	}
 	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
