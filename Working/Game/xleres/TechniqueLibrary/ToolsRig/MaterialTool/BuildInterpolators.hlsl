@@ -10,6 +10,7 @@
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/MainGeometry.hlsl"
 #include "../../Framework/Surface.hlsl"
+#include "../../Framework/WorkingVertex.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"		// for SystemInputs
 #include "../../LightingEngine/LightDesc.hlsl"		// for LightScreenDest
 #include "../../SceneEngine/Lighting/resolvefog.hlsl"
@@ -47,12 +48,12 @@ float3 BuildInterpolator_WORLDVIEWVECTOR(VSIN input)
 
 float4 BuildInterpolator_LOCALTANGENT(VSIN input)
 {
-	return VSIN_GetLocalTangent(input);
+	return VSIN_GetEncodedTangent(input);
 }
 
 float3 BuildInterpolator_LOCALBITANGENT(VSIN input)
 {
-	return VSIN_GetLocalBitangent(input);
+	return VSIN_GetEncodedBitangent(input);
 }
 
 VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
@@ -60,7 +61,7 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 	VSOUT output;
 	float3 localPosition = VSIN_GetLocalPosition(input);
 	float3 worldPosition = BuildInterpolator_WORLDPOSITION(input);
-	float3 worldNormal = LocalToWorldUnitVector(VSIN_GetLocalNormal(input));
+	float3 worldNormal = LocalToWorldUnitVector(DeriveLocalNormal(input));
 
 	#if VSOUT_HAS_COLOR_LINEAR
 		output.color = BuildInterpolator_COLOR0(input);
@@ -71,7 +72,7 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 	#endif
 
 	#if GEO_HAS_TEXTANGENT
-		TangentFrame worldSpaceTangentFrame = VSIN_GetWorldTangentFrame(input);
+		TangentFrame worldSpaceTangentFrame = DeriveWorldTangentFrame(input);
 
 		#if VSOUT_HAS_TANGENT_FRAME
 			output.tangent = worldSpaceTangentFrame.tangent;
@@ -84,7 +85,7 @@ VSOUT BuildInterpolator_VSOutput(VSIN input) : NE_WritesVSOutput
 	#endif
 
 	float3 worldViewVector = BuildInterpolator_WORLDVIEWVECTOR(input);
-	float3 localNormal = VSIN_GetLocalNormal(input);
+	float3 localNormal = DeriveLocalNormal(input);
 
 	#if (MAT_DOUBLE_SIDED_LIGHTING==1)
 		if (dot(worldNormal, worldViewVector) < 0.f) {

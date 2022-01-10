@@ -38,12 +38,12 @@ namespace UnitTests
 		std::make_pair("simple.hlsl", ::Assets::AsBlob(R"--(
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
 			VSOUT vs_main(VSIN input)
 			{
-				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				WorkingVertex deformedVertex = WorkingVertex_DefaultInitialize(input);
 				return BuildVSOUT(deformedVertex, input);
 			}
 
@@ -56,12 +56,12 @@ namespace UnitTests
 		std::make_pair("amplifying_geo_shader.hlsl", ::Assets::AsBlob(R"--(
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
 			VSOUT vs_main(VSIN input)
 			{
-				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				WorkingVertex deformedVertex = WorkingVertex_DefaultInitialize(input);
 				VSOUT result = BuildVSOUT(deformedVertex, input);
 				result.renderTargetIndex = 0;		// embued properly in the geometry shader
 				return result;
@@ -108,7 +108,7 @@ namespace UnitTests
 			#undef VSOUT_HAS_TEXBITANGENT
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
 			cbuffer MultiViewProperties BIND_SEQ_B1
@@ -119,7 +119,7 @@ namespace UnitTests
 
 			VSOUT vs_main(VSIN input, uint instanceId : SV_InstanceID)
 			{
-				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				WorkingVertex deformedVertex = WorkingVertex_DefaultInitialize(input);
 
 				float3 worldPosition;
 				TangentFrame worldSpaceTangentFrame;
@@ -158,7 +158,7 @@ namespace UnitTests
 				#endif
 
 				#if VSOUT_HAS_NORMAL
-					output.normal = mul(GetLocalToWorldUniformScale(), VSIN_GetLocalNormal(input));
+					output.normal = mul(GetLocalToWorldUniformScale(), DeriveLocalNormal(input));
 				#endif
 
 				#if VSOUT_HAS_WORLD_POSITION
@@ -187,7 +187,7 @@ namespace UnitTests
 			#undef VSOUT_HAS_TEXBITANGENT
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-			#include "xleres/TechniqueLibrary/Framework/DeformVertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
 			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
 
 			cbuffer MultiViewProperties BIND_SEQ_B1
@@ -198,14 +198,14 @@ namespace UnitTests
 
 			VSOUT vs_main(VSIN input, in uint viewId : SV_ViewID)
 			{
-				DeformedVertex deformedVertex = DeformedVertex_Initialize(input);
+				WorkingVertex deformedVertex = WorkingVertex_DefaultInitialize(input);
 
 				float3 worldPosition;
 				TangentFrame worldSpaceTangentFrame;
 
 				if (deformedVertex.coordinateSpace == 0) {
 					worldPosition = mul(SysUniform_GetLocalToWorld(), float4(deformedVertex.position,1)).xyz;
-					worldSpaceTangentFrame = TransformLocalToWorld(deformedVertex.tangentFrame, VSIN_TangentVectorToReconstruct());
+					worldSpaceTangentFrame = TransformLocalToWorld(deformedVertex.tangentFrame, DefaultTangentVectorToReconstruct());
 				} else {
 					worldPosition = deformedVertex.position;
 					worldSpaceTangentFrame = deformedVertex.tangentFrame;

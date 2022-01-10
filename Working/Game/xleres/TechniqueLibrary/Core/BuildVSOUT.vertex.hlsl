@@ -5,7 +5,7 @@
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Framework/VSOUT.hlsl"
 #include "../Framework/VSIN.hlsl"
-#include "../Framework/DeformVertex.hlsl"
+#include "../Framework/WorkingVertex.hlsl"
 #include "../SceneEngine/Lighting/resolvefog.hlsl"
 #include "../Utility/Colour.hlsl"
 
@@ -29,18 +29,18 @@
 #endif
 
 VSOUT BuildVSOUT(
-	DeformedVertex deformedVertex,
+	WorkingVertex workingVertex,
 	VSIN input)
 {
 	float3 worldPosition;
 	TangentFrame worldSpaceTangentFrame;
 
-	if (deformedVertex.coordinateSpace == 0) {
-		worldPosition = mul(SysUniform_GetLocalToWorld(), float4(deformedVertex.position,1)).xyz;
-	 	worldSpaceTangentFrame = TransformLocalToWorld(deformedVertex.tangentFrame, VSIN_TangentVectorToReconstruct());
+	if (workingVertex.coordinateSpace == 0) {
+		worldPosition = mul(SysUniform_GetLocalToWorld(), float4(workingVertex.position,1)).xyz;
+	 	worldSpaceTangentFrame = TransformLocalToWorld(workingVertex.tangentFrame, workingVertex.tangentVectorToReconstruct);
 	} else {
-		worldPosition = deformedVertex.position;
-		worldSpaceTangentFrame = deformedVertex.tangentFrame;
+		worldPosition = workingVertex.position;
+		worldSpaceTangentFrame = workingVertex.tangentFrame;
 	}
 
 	VSOUT output;
@@ -65,27 +65,46 @@ VSOUT BuildVSOUT(
 		#endif
 	#endif
 
-	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
-	// assuming 8 bit color inputs	
+	
 	#if VSOUT_HAS_COLOR_LINEAR
-		output.color.rgb = SRGBToLinear(VSIN_GetColor0(input).rgb);
-		#if VSOUT_HAS_VERTEX_ALPHA
-			output.color.a = VSIN_GetColor0(input).a;
-		#endif
+		if (workingVertex.colorCount >= 1) {
+			output.color.rgb = workingVertex.color0.rgb;
+			#if VSOUT_HAS_VERTEX_ALPHA
+				output.color.a = workingVertex.color0.a;
+			#endif
+		} else {
+			output.color = float4(1,1,1,1);
+		}
 	#elif VSOUT_HAS_VERTEX_ALPHA
-		output.alpha = VSIN_GetColor0(input).a;
+		if (workingVertex.colorCount >= 1) {
+			output.alpha = workingVertex.color0.a;
+		} else {
+			output.alpha = 1;
+		}
 	#endif
 
 	#if VSOUT_HAS_COLOR_LINEAR1
-		output.color1 = VSIN_GetColor1(input);
+		if (workingVertex.colorCount >= 2) {
+			output.color1 = workingVertex.color1;
+		} else {
+			output.color1 = float4(1,1,1,1);
+		}
 	#endif
 
 	#if VSOUT_HAS_TEXCOORD
-		output.texCoord = VSIN_GetTexCoord0(input);
+		if (workingVertex.texCoordCount >= 1) {
+			output.texCoord = workingVertex.texCoord0;
+		} else {
+			output.texCoord = float2(0,0);
+		}
 	#endif
 
 	#if VSOUT_HAS_TEXCOORD1
-		output.texCoord1 = VSIN_GetTexCoord1(input);
+		if (workingVertex.texCoordCount >= 2) {
+			output.texCoord1 = workingVertex.texCoord1;
+		} else {
+			output.texCoord1 = float2(0,0);
+		}
 	#endif
 
 	#if VSOUT_HAS_TANGENT_FRAME
@@ -102,25 +121,27 @@ VSOUT BuildVSOUT(
 	#endif
 
 	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
-		if (deformedVertex.coordinateSpace == 0) {
-			output.localTangent = deformedVertex.tangentFrame.tangent;
-			output.localBitangent = deformedVertex.tangentFrame.bitangent;
+		if (workingVertex.coordinateSpace == 0) {
+			output.localTangent = workingVertex.tangentFrame.tangent;
+			output.localBitangent = workingVertex.tangentFrame.bitangent;
 		} else {
-			output.localTangent = VSIN_GetLocalTangent(input);
-			output.localBitangent = VSIN_GetLocalBitangent(input);
+			// not ideal, but we have to guess by going back to VSIN
+			output.localTangent = VSIN_GetEncodedTangent(input);
+			output.localBitangent = VSIN_GetEncodedBitangent(input);
 		}
 	#endif
 
 	#if VSOUT_HAS_LOCAL_NORMAL
-		if (deformedVertex.coordinateSpace == 0) {
-			output.localNormal = deformedVertex.tangentFrame.normal;
+		if (workingVertex.coordinateSpace == 0) {
+			output.localNormal = workingVertex.tangentFrame.normal;
 		} else {
-			output.localNormal = VSIN_GetLocalNormal(input);
+			// not ideal, but we have to guess by going back to VSIN
+			output.localNormal = VSIN_GetEncodedNormal(input);
 		}
 	#endif
 
 	#if VSOUT_HAS_LOCAL_VIEW_VECTOR
-		output.localViewVector = SysUniform_GetLocalSpaceView().xyz - deformedVertex.localPosition.xyz;
+		output.localViewVector = SysUniform_GetLocalSpaceView().xyz - workingVertex.localPosition.xyz;
 	#endif
 
 	#if VSOUT_HAS_WORLD_VIEW_VECTOR

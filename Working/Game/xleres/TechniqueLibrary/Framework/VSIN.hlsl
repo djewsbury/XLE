@@ -5,8 +5,6 @@
 #if !defined(VSIN_H)
 #define VSIN_H
 
-#include "../Math/SurfaceAlgorithm.hlsl"
-
 #if !defined(GEO_HAS_POSITION) && !defined(GEO_HAS_PIXELPOSITION) && !GEO_HAS_VERTEX_ID		// "vertex generator" shaders will set GEO_HAS_VERTEX_ID, but have no positions 
 	#define GEO_HAS_POSITION 1
 #endif
@@ -106,114 +104,31 @@ float3 VSIN_GetLocalPosition(VSIN input)
 	#endif
 }
 
-float4 VSIN_GetLocalTangent(VSIN input);
-float4 VSIN_GetLocalBitangent(VSIN input);
-
-float3 VSIN_GetLocalNormal(VSIN input)
+float3 VSIN_GetEncodedNormal(VSIN input)
 {
 	#if GEO_HAS_NORMAL
 		return input.normal;
-	#elif GEO_HAS_TEXTANGENT && GEO_HAS_TEXBITANGENT
-			//  if the tangent and bitangent are unit-length and perpendicular, then we
-			//  shouldn't have to normalize here. Since the inputs are coming from the
-			//  vertex buffer, let's assume it's ok
-		float4 localTangent = VSIN_GetLocalTangent(input);
-		float3 localBitangent = VSIN_GetLocalBitangent(input);
-		return NormalFromTangents(localTangent.xyz, localBitangent.xyz, GetLocalTangentFrameHandiness(localTangent));
 	#else
 		return float3(0,0,1);
 	#endif
 }
 
-float4 VSIN_GetLocalTangent(VSIN input)
+float4 VSIN_GetEncodedTangent(VSIN input)
 {
 	#if GEO_HAS_TEXTANGENT
 		return input.tangent.xyzw;
-	#elif GEO_HAS_NORMAL && GEO_HAS_TEXBITANGENT
-		float4 bitangent = VSIN_GetLocalBitangent(input);
-		float3 normal = VSIN_GetLocalNormal(input);
-		return float4(TangentFromNormalBitangent(normal, bitangent.xyz, GetLocalTangentFrameHandiness(bitangent)), 0);
 	#else
 		return float4(1,0,0,0);
 	#endif
 }
 
-float4 VSIN_GetLocalBitangent(VSIN input)
+float4 VSIN_GetEncodedBitangent(VSIN input)
 {
 	#if GEO_HAS_TEXBITANGENT
 		return input.bitangent.xyzw;
-	#elif GEO_HAS_NORMAL && GEO_HAS_TEXTANGENT
-		float4 tangent = VSIN_GetLocalTangent(input);
-		float3 normal = VSIN_GetLocalNormal(input);
-		return float4(BitangentFromNormalTangent(normal, tangent.xyz, GetLocalTangentFrameHandiness(tangent)), 0);
 	#else
 		return float4(0,1,0,0);
 	#endif
-}
-
-TangentFrame VSIN_GetLocalTangentFrame(VSIN input)
-{
-	#if GEO_HAS_NORMAL && GEO_HAS_TEXTANGENT
-		float4 tangent = VSIN_GetLocalTangent(input);
-		float3 normal = VSIN_GetLocalNormal(input);
-		float3 bitangent = BitangentFromNormalTangent(normal, tangent.xyz, GetLocalTangentFrameHandiness(tangent));
-		return BuildTangentFrame(tangent.xyz, bitangent, normal, GetLocalTangentFrameHandiness(tangent));
-	#elif GEO_HAS_TEXTANGENT && GEO_HAS_TEXBITANGENT
-		float4 tangent = VSIN_GetLocalTangent(input);
-		float3 bitangent = VSIN_GetLocalBitangent(input);
-		float3 normal = NormalFromTangents(tangent.xyz, bitangent, GetLocalTangentFrameHandiness(tangent));
-		return BuildTangentFrame(tangent.xyz, bitangent, normal, GetLocalTangentFrameHandiness(tangent));
-	#elif GEO_HAS_NORMAL && GEO_HAS_TEXBITANGENT
-		float4 bitangent = VSIN_GetLocalBitangent(input);
-		float3 normal = VSIN_GetLocalNormal(input);
-		float3 tangent = TangentFromNormalBitangent(normal, bitangent.xyz, GetLocalTangentFrameHandiness(bitangent));
-		return BuildTangentFrame(tangent, bitangent.xyz, normal, GetLocalTangentFrameHandiness(bitangent));
-	#elif GEO_HAS_NORMAL
-		return BuildTangentFrame(float3(1,0,0), float3(0,1,0), VSIN_GetLocalNormal(input), 1);
-	#else
-		return BuildTangentFrame(float3(1,0,0), float3(0,1,0), float3(0,0,1), 1);
-	#endif
-}
-
-uint VSIN_TangentVectorToReconstruct()
-{
-	// select the prefered vector to reconstruct in TransformLocalToWorld() -- ie reconstructing to avoid another transform 
-	// based on what was provided in the input assembly
-	// pass vectorToReconstruct == 0 to reconstruct tangent
-	// pass vectorToReconstruct == 1 to reconstruct bitangent
-	// pass vectorToReconstruct == 2 to reconstruct normal
-	#if GEO_HAS_NORMAL && GEO_HAS_TEXTANGENT
-		return 1;
-	#elif GEO_HAS_NORMAL && GEO_HAS_TEXBITANGENT
-		return 0;
-	#elif GEO_HAS_TEXTANGENT && GEO_HAS_TEXBITANGENT
-		return 2;		// implicitly no normal in this case
-	#else
-		// awkward case; probably not a full tangent frame
-		return 0;
-	#endif
-}
-
-TangentFrame VSIN_GetWorldTangentFrame(VSIN input)
-{
-	return TransformLocalToWorld(VSIN_GetLocalTangentFrame(input), VSIN_TangentVectorToReconstruct());
-}
-
-CompressedTangentFrame VSIN_GetCompressedTangentFrame(VSIN input)
-{
-	CompressedTangentFrame result;
-	#if GEO_HAS_TEXTANGENT
-		float4 localTangent = VSIN_GetLocalTangent(input);
-		float3 localBitangent = VSIN_GetLocalBitangent(input).xyz;
-		result.basisVector0 = localTangent.xyz;
-		result.basisVector1 = localBitangent;
-		result.handiness = localTangent.w;
-	#else
-		result.basisVector0 = 0.0.xxx;
-		result.basisVector1 = 0.0.xxx;
-		result.handiness = 0.0;
-	#endif
-	return result;
 }
 
 #endif

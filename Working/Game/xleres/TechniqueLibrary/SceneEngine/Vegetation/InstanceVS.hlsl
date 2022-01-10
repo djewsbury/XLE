@@ -6,6 +6,7 @@
 
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/VSIN.hlsl"
+#include "../../Framework/WorkingVertex.hlsl"
 
 #if SPAWNED_INSTANCE==1
     struct InstanceDef
@@ -31,7 +32,7 @@
         localPosition = mul(SysUniform_GetLocalToWorld(), float4(localPosition,1)).xyz;
 
         objectCentreWorld = InstanceOffsets[input.instanceId].posAndShadowing.xyz;
-        float3 localNormal = VSIN_GetLocalNormal(input);
+        float3 localNormal = DeriveLocalNormal(input);
 
         #if GEO_INSTANCE_ALIGN_UP==1
             float3x3 rotMat = InstanceOffsets[input.instanceId].rotationMatrix;

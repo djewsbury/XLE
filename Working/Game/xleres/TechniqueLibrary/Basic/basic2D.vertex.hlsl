@@ -10,6 +10,7 @@
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Framework/VSIN.hlsl"
 #include "../Framework/VSOUT.hlsl"
+#include "../Framework/WorkingVertex.hlsl"
 #include "../Utility/Colour.hlsl"
 
 #define NDC_POSITIVE 1
@@ -121,21 +122,21 @@ VSOUT frameworkEntry(VSIN vsin)
 	#endif
 	
 	#if VSOUT_HAS_TANGENT_FRAME
-		output.tangent = VSIN_GetLocalTangent(vsin);
-		output.bitangent = VSIN_GetLocalBitangent(vsin);
+		output.tangent = VSIN_GetEncodedTangent(vsin);
+		output.bitangent = VSIN_GetEncodedBitangent(vsin);
 	#endif
 
 	#if VSOUT_HAS_NORMAL
-		output.normal = VSIN_GetLocalNormal(vsin);
+		output.normal = DeriveLocalNormal(vsin);
 	#endif
 
 	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
-		output.localTangent = VSIN_GetLocalTangent(vsin);
-		output.localBitangent = VSIN_GetLocalBitangent(vsin);
+		output.localTangent = VSIN_GetEncodedTangent(vsin);
+		output.localBitangent = VSIN_GetEncodedBitangent(vsin);
 	#endif
 
 	#if VSOUT_HAS_LOCAL_NORMAL
-		output.localNormal = VSIN_GetLocalNormal(vsin);
+		output.localNormal = DeriveGetLocalNormal(vsin);
 	#endif
 
 	return output;

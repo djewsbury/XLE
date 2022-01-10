@@ -1,4 +1,4 @@
 #include "../TechniqueLibrary/Framework/VSIN.hlsl"
-#include "../TechniqueLibrary/Framework/DeformVertex.hlsl"
+#include "../TechniqueLibrary/Framework/WorkingVertex.hlsl"
 
-DeformedVertex DeformVertex(DeformedVertex preDeform, VSIN input);
+WorkingVertex VertexPatch(VSIN input);

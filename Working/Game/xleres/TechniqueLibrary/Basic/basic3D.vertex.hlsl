@@ -10,6 +10,7 @@
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Framework/MainGeometry.hlsl"
 #include "../Framework/Surface.hlsl"
+#include "../Framework/WorkingVertex.hlsl"
 
 struct PSInput_Basic
 {
@@ -47,21 +48,21 @@ VSOUT frameworkEntry(VSIN vsin)
 	#endif
 	
 	#if VSOUT_HAS_TANGENT_FRAME
-		output.tangent = VSIN_GetLocalTangent(vsin);
-		output.bitangent = VSIN_GetLocalBitangent(vsin);
+		output.tangent = VSIN_GetEncodedTangent(vsin);
+		output.bitangent = VSIN_GetEncodedBitangent(vsin);
 	#endif
 
 	#if VSOUT_HAS_NORMAL
-		output.normal = VSIN_GetLocalNormal(vsin);
+		output.normal = DeriveLocalNormal(vsin);
 	#endif
 
 	#if VSOUT_HAS_LOCAL_TANGENT_FRAME
-		output.localTangent = VSIN_GetLocalTangent(vsin);
-		output.localBitangent = VSIN_GetLocalBitangent(vsin);
+		output.localTangent = VSIN_GetEncodedTangent(vsin);
+		output.localBitangent = VSIN_GetEncodedBitangent(vsin);
 	#endif
 
 	#if VSOUT_HAS_LOCAL_NORMAL
-		output.localNormal = VSIN_GetLocalNormal(vsin);
+		output.localNormal = DeriveLocalNormal(vsin);
 	#endif
 
 	return output;

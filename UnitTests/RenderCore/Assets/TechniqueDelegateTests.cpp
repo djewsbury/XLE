@@ -217,6 +217,7 @@ namespace UnitTests
 				#include "xleres/TechniqueLibrary/Framework/SystemUniforms.hlsl"
 				#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 				#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
+				#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
 				#include "spherical_prefix.hlsl"
 
 				VSOUT frameworkEntry(VSIN input)
@@ -227,7 +228,7 @@ namespace UnitTests
 						output.texCoord = CartesianToSpherical_YUp(input.position).xy;
 					#endif
 					#if VSOUT_HAS_TANGENT_FRAME || VSOUT_HAS_NORMAL
-						TangentFrame tf = VSIN_GetWorldTangentFrame(input);
+						TangentFrame tf = DeriveWorldTangentFrame(input);
 						#if VSOUT_HAS_NORMAL
 							output.normal = tf.normal;
 						#endif
@@ -244,13 +245,13 @@ namespace UnitTests
 					VSOUT output;
 
 					float2 sphericalCoord = CartesianToSpherical_YUp(input.position).xy;
-					float3 deformedPosition = DeformPosition(input.position, VSIN_GetLocalNormal(input), 5.0 * (sphericalCoord.x + sphericalCoord.y));
+					float3 deformedPosition = DeformPosition(input.position, DeriveLocalNormal(input), 5.0 * (sphericalCoord.x + sphericalCoord.y));
 					output.position = mul(SysUniform_GetWorldToClip(), float4(deformedPosition,1));
 					#if VSOUT_HAS_TEXCOORD
 						output.texCoord = sphericalCoord;
 					#endif
 					#if VSOUT_HAS_TANGENT_FRAME || VSOUT_HAS_NORMAL
-						TangentFrame tf = VSIN_GetWorldTangentFrame(input);
+						TangentFrame tf = DeriveWorldTangentFrame(input);
 						#if VSOUT_HAS_NORMAL
 							output.normal = tf.normal;
 						#endif

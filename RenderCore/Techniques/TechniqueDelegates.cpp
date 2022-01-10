@@ -130,11 +130,11 @@ namespace RenderCore { namespace Techniques
 
 	static const auto s_perPixel = Hash64("PerPixel");
 	static const auto s_earlyRejectionTest = Hash64("EarlyRejectionTest");
-	static const auto s_deformVertex = Hash64("DeformVertex");
+	static const auto s_vertexPatch = Hash64("VertexPatch");
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelAndEarlyRejection[] = { {s_perPixel, ShaderStage::Pixel}, {s_earlyRejectionTest, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixel[] = { {s_perPixel, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_earlyRejection[] = { {s_earlyRejectionTest, ShaderStage::Pixel} };
-	static std::pair<uint64_t, ShaderStage> s_patchExp_deformVertex[] = { { s_deformVertex, ShaderStage::Vertex } };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_deformVertex[] = { { s_vertexPatch, ShaderStage::Vertex } };
 
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection::Interface& shaderPatches)
 	{
@@ -209,7 +209,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
 
 			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -335,7 +335,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = _depthStencil;
 
 			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -471,7 +471,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -627,7 +627,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -762,7 +762,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 
 			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -895,7 +895,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
 
 			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),
@@ -1007,7 +1007,7 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_soBufferStrides = _soStrides;
 
 			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_deformVertex);
+			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			::Assets::WhenAll(_techniqueFileHelper).ThenConstructToPromise(
 				result->AdoptPromise(),

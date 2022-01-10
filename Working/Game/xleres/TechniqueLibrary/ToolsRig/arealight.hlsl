@@ -8,7 +8,7 @@
 
 #include "../Framework/SystemUniforms.hlsl"
 #include "../Framework/VSIN.hlsl"
-#include "../Framework/DeformVertex.hlsl"
+#include "../Framework/WorkingVertex.hlsl"
 #include "../Math/MathConstants.hlsl"
 
 struct GeneratedVertex
@@ -155,15 +155,17 @@ GeneratedVertex GenVertex(uint vIndex, uint shape)
 	#error Expecting GEO_HAS_VERTEX_ID to be set
 #endif
 
-DeformedVertex DeformVertex(DeformedVertex preDeform, VSIN vInput)
+WorkingVertex VertexPatch(VSIN vInput)
 {
+    WorkingVertex dv = WorkingVertex_DefaultInitialize(input);
+
 	GeneratedVertex genVertex = GenVertex(vInput.vertexId, SHAPE);
-	DeformedVertex dv;
 	dv.position = genVertex.worldPosition;
 	dv.tangentFrame.basisVector0 = 0.0.xxx;
 	dv.tangentFrame.basisVector1 = 0.0.xxx;
 	dv.tangentFrame.handiness = 0;
-	dv.coordinateSpace = 1;
+    dv.tangentFrameType = WORKINGVERTEX_TANGENTFRAME_NONE;
+	dv.coordinateSpace = WORKINGVERTEX_COORDINATESPACE_WORLD;
 	return dv;
 }
 

@@ -1,20 +1,20 @@
 sphere=~
 	Patches=~
 		main=~
-			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::DeformVertex
+			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
 	ShaderParams=~
 		SHAPE=1
 
 tube=~
 	Patches=~
 		main=~
-			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::DeformVertex
+			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
 	ShaderParams=~
 		SHAPE=2
 
 rectangle=~
 	Patches=~
 		main=~
-			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::DeformVertex
+			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
 	ShaderParams=~
 		SHAPE=3

@@ -10,6 +10,7 @@
 #include "../../Framework/SystemUniforms.hlsl"
 #include "../../Framework/MainGeometry.hlsl"
 #include "../../Framework/Surface.hlsl"
+#include "../../Framework/WorkingVertex.hlsl"
 #include "../../Math/ProjectionMath.hlsl"
 
 #define OPTIMISED_TRI 1
@@ -40,7 +41,7 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
     #else
         float3 worldPosition = mul(SysUniform_GetLocalToWorld(), float4(localPosition,1)).xyz;
         float3 objectCentreWorld = float3(SysUniform_GetLocalToWorld()[0][3], SysUniform_GetLocalToWorld()[1][3], SysUniform_GetLocalToWorld()[2][3]);
-        float3 worldNormal = LocalToWorldUnitVector(VSIN_GetLocalNormal(input));
+        float3 worldNormal = LocalToWorldUnitVector(DeriveLocalNormal(input));
     #endif
 
     #if VSOUT_HAS_TEXCOORD
@@ -49,7 +50,7 @@ void vs_writetris(VSIN input, out RTS_VSOutput output)
 
     #if GEO_HAS_NORMAL || GEO_HAS_TEXTANGENT
         #if (GEO_HAS_NORMAL==0) && GEO_HAS_TEXTANGENT
-            worldNormal =  VSIN_GetWorldTangentFrame(input).normal;
+            worldNormal =  DeriveWorldTangentFrame(input).normal;
         #endif
 
         worldPosition = PerformWindBending(worldPosition, worldNormal, objectCentreWorld, float3(1,0,0), VSIN_GetColor0(input));

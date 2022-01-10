@@ -45,9 +45,9 @@
 static const char s_exampleCompoundMaterialFile[] = R"**(
 	// CompoundDocument:1
 
-	DeformedVertex DeformVertex(VSIN input)
+	WorkingVertex DeformVertex(VSIN input)
 	{
-		DeformedVertex dv;
+		WorkingVertex dv;
 		dv.position = float3(1, 0, 1);
 		dv.tangentFrame.basisVector0 = 0.0.xxx;
 		dv.tangentFrame.basisVector1 = 0.0.xxx;
