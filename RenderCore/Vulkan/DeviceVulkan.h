@@ -210,6 +210,7 @@ namespace RenderCore { namespace ImplVulkan
         std::shared_ptr<Metal_Vulkan::SubmissionQueue>	_graphicsQueue;
 
 		std::shared_ptr<ThreadContext>	_foregroundPrimaryContext;
+        std::thread::id _initializationThread;
 
         void DoSecondStageInit(VkSurfaceKHR surface = nullptr);
     };

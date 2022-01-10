@@ -493,6 +493,7 @@ namespace RenderCore { namespace ImplVulkan
 			//
 		_instance = CreateVulkanInstance();
         _physDev = { nullptr, ~0u };
+		_initializationThread = std::this_thread::get_id();
 
 			// We can't create the underlying device immediately... Because we need a pointer to
 			// the "platformValue" (window handle) in order to check for physical device capabilities.
@@ -583,6 +584,9 @@ namespace RenderCore { namespace ImplVulkan
     void Device::DoSecondStageInit(VkSurfaceKHR surface)
     {
         if (!_underlying) {
+			if (std::this_thread::get_id() != _initializationThread)
+				Throw(std::runtime_error("Attempting second stage device initialization on incorrect thread"));
+
 			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface);
 			#if defined(OSSERVICES_ENABLE_LOG)
 				LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
@@ -607,6 +611,7 @@ namespace RenderCore { namespace ImplVulkan
             pools._dummyResources = Metal_Vulkan::DummyResources(objFactory);
 			pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
 
+			assert(!_foregroundPrimaryContext);
             _foregroundPrimaryContext = std::make_shared<ThreadContext>(
 				shared_from_this(), 
 				_graphicsQueue,
