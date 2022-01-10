@@ -1031,8 +1031,6 @@ namespace RenderCore { namespace Techniques
 
 					PrepareShadersFromTechniqueEntry(nascentDesc, mergedTechEntry);
 					nascentDesc->_manualSelectorFiltering._setValues.SetParameter("INTERSECTION_TEST", testType);
-					if (hasEarlyRejectionTest)
-						nascentDesc->_manualSelectorFiltering._setValues.SetParameter("PATCH_EARLY_REJECTION", 1);
 					return nascentDesc;
 				});			
 			return result;
