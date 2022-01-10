@@ -86,3 +86,4 @@
 
 #define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"
 #define SKIN_PIPELINE "xleres/Deform/skin.pipeline"
+#define DEFORM_ENTRY_HLSL "xleres/Deform/deform-entry.compute.hlsl"

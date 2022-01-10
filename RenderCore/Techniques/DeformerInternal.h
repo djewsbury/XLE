@@ -5,13 +5,29 @@
 #pragma once
 
 #include "SimpleModelDeform.h"
+#include "CommonBindings.h"
+#include "PipelineCollection.h"
+#include "../Metal/InputLayout.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Format.h"
 #include "../Types.h"
+#include "../UniformsStream.h"
+#include "../../ShaderParser/ShaderInstantiation.h"
+#include "../../Assets/Marker.h"
+#include "../../Utility/ParameterBox.h"
+#include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <vector>
 #include <future>
 #include <optional>
+
+namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class UniformsStreamInterface; }
+namespace RenderCore { namespace Techniques 
+{
+	class ComputePipelineAndLayout;
+	class CompiledShaderPatchCollection;
+	class PipelineCollection;
+}}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -124,6 +140,70 @@ namespace RenderCore { namespace Techniques
 			VertexElementIterator end { MakeIteratorRange(endPtr, endPtr), vertexStride, format };
 			return { begin, end };
 		}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		struct GPUDeformerIAParams
+		{
+			unsigned _inputStride, _outputStride, _deformTemporariesStride;
+			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
+			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
+			unsigned _mappingBufferByteOffset;
+			unsigned _dummy[2];
+		};
+
+		class GPUDeformEntryHelper
+		{
+		public:
+			ParameterBox _selectors;
+			GPUDeformerIAParams _iaParams;
+
+			GPUDeformEntryHelper(const DeformerInputBinding& bindings, unsigned geoId);
+		};
+
+		class DeformerPipelineCollection
+		{
+		public:
+			using PipelineMarkerPtr = std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>;
+			using PipelineMarkerIdx = unsigned;
+
+			PipelineMarkerIdx GetPipeline(ParameterBox&& selectors);
+			void StallForPipeline();
+			void OnFrameBarrier();
+			
+			struct PreparedSharedResources
+			{
+				std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
+				Metal::BoundUniforms _boundUniforms;
+				std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
+				::Assets::DependencyValidation _depVal;
+				const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
+			};
+			::Assets::Marker<PreparedSharedResources> _preparedSharedResources;
+			std::vector<PipelineMarkerPtr> _pipelines;
+			std::shared_ptr<PipelineCollection> _pipelineCollection;
+
+			DeformerPipelineCollection(
+				std::shared_ptr<PipelineCollection> pipelineCollection,
+				StringSection<> predefinedPipeline,
+				UniformsStreamInterface&& usi0,
+				UniformsStreamInterface&& usi1,
+				ShaderSourceParser::InstantiationRequest&& instRequest,
+				IteratorRange<const uint64_t*> patchExpansions);
+			~DeformerPipelineCollection();
+		private:
+			std::vector<uint64_t> _pipelineHashes;
+			std::vector<ParameterBox> _pipelineSelectors;
+			UniformsStreamInterface _usi0;
+			UniformsStreamInterface _usi1;
+			ShaderSourceParser::InstantiationRequest _instRequest;
+			std::vector<uint64_t> _patchExpansions;
+			std::string _predefinedPipelineInitializer;
+			bool _pendingCreateSharedResources = true;
+			Threading::Mutex _mutex;
+
+			void RebuildSharedResources();
+		};
 	}
 }}
 

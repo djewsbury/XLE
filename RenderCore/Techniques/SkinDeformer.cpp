@@ -535,7 +535,7 @@ namespace RenderCore { namespace Techniques
 #endif
 
 	GPUSkinDeformer::GPUSkinDeformer(
-		std::shared_ptr<SkinDeformerPipelineCollection> pipelineCollection,
+		std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		const std::string& modelScaffoldName)
 	: _modelScaffold(std::move(modelScaffold))			// we take internal pointers so preserve lifetime
@@ -649,68 +649,14 @@ namespace RenderCore { namespace Techniques
 			++s;
 			while (s!=_sections.end() && s->_geoId == start->_geoId) ++s;
 
-			auto binding = std::find_if(bindings._geoBindings.begin(), bindings._geoBindings.end(), [geoId=start->_geoId](const auto& c) { return c._geoId == geoId; });
-			if (binding == bindings._geoBindings.end())
-				Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(start->_geoId) + ")"));
-
-			unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
-			unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;
-			unsigned bufferFlags = 0;
-			ParameterBox selectors;
-			for (const auto&ele:binding->_inputElements) {
-				assert(ele._inputSlot == Internal::VB_GPUStaticData || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
-				auto semanticHash = Hash64(ele._semanticName);
-				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
-					selectors.SetParameter("IN_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-					inPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x1;
-				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
-					selectors.SetParameter("IN_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-					inNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x2;
-				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
-					selectors.SetParameter("IN_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-					inTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x4;
-				} else {
-					assert(0);
-				}
-			}
-
-			for (const auto&ele:binding->_outputElements) {
-				assert(ele._inputSlot == Internal::VB_PostDeform || ele._inputSlot == Internal::VB_GPUDeformTemporaries);
-				auto semanticHash = Hash64(ele._semanticName);
-				if (semanticHash == CommonSemantics::POSITION && ele._semanticIndex == 0) {
-					selectors.SetParameter("OUT_POSITION_FORMAT", (unsigned)ele._nativeFormat);
-					outPositionsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x1<<16;
-				} else if (semanticHash == CommonSemantics::NORMAL && ele._semanticIndex == 0) {
-					selectors.SetParameter("OUT_NORMAL_FORMAT", (unsigned)ele._nativeFormat);
-					outNormalsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x2<<16;
-				} else if (semanticHash == CommonSemantics::TEXTANGENT && ele._semanticIndex == 0) {
-					selectors.SetParameter("OUT_TEXTANGENT_FORMAT", (unsigned)ele._nativeFormat);
-					outTangentsOffset = ele._alignedByteOffset + binding->_bufferOffsets[ele._inputSlot];
-					if (ele._inputSlot == Internal::VB_GPUDeformTemporaries)
-						bufferFlags |= 0x4<<16;
-				} else {
-					assert(0);
-				}
-			}
-
+			Internal::GPUDeformEntryHelper helper{bindings, start->_geoId};
+			auto selectors = helper._selectors;
 			selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(start->_indicesFormat));
 			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
 			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
 			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
 			selectors.SetParameter("INFLUENCE_COUNT", (unsigned)start->_sectionInfluencesPerVertex);
-
 			auto pipelineMarker = _pipelineCollection->GetPipeline(std::move(selectors));
-
 			for (auto q=start; q!=s; ++q) {
 				assert(q->_indicesFormat == start->_indicesFormat);
 				assert(q->_weightsFormat == start->_weightsFormat);
@@ -727,20 +673,8 @@ namespace RenderCore { namespace Techniques
 					_dispatches.push_back(dispatch);
 				}
 			}
-
-			IAParams iaParams;
-			iaParams._inPositionsOffset = inPositionsOffset;
-			iaParams._inNormalsOffset = inNormalsOffset;
-			iaParams._inTangentsOffset = inTangentsOffset;
-			iaParams._outPositionsOffset = outPositionsOffset;
-			iaParams._outNormalsOffset = outNormalsOffset;
-			iaParams._outTangentsOffset = outTangentsOffset;
-			iaParams._inputStride = binding->_bufferStrides[Internal::VB_GPUStaticData];
-			iaParams._outputStride = binding->_bufferStrides[Internal::VB_PostDeform];
-			iaParams._deformTemporariesStride = binding->_bufferStrides[Internal::VB_GPUDeformTemporaries];
-			iaParams._bufferFlags = bufferFlags;
-			iaParams._dummy = ~0u;
-			_iaParams.push_back(iaParams);
+			
+			_iaParams.push_back(helper._iaParams);
 		}
 
 		// sort by pipeline
@@ -753,7 +687,7 @@ namespace RenderCore { namespace Techniques
 		auto iaParamsBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
 			CreateDesc(
 				BindFlag::UnorderedAccess,
-				0, GPUAccess::Read, LinearBufferDesc::Create(_iaParams.size() * sizeof(IAParams)), "skin-ia-data"),
+				0, GPUAccess::Read, LinearBufferDesc::Create(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams)), "skin-ia-data"),
 			SubResourceInitData{MakeIteratorRange(_iaParams)});
 		_iaParamsView = iaParamsBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 
@@ -779,116 +713,6 @@ namespace RenderCore { namespace Techniques
 	GPUSkinDeformer::~GPUSkinDeformer()
 	{
 	}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	auto SkinDeformerPipelineCollection::GetPipeline(ParameterBox&& selectors) -> PipelineMarkerIdx
-	{
-		ScopedLock(_mutex);
-		// note -- no selector filtering done here
-		uint64_t hash = HashCombine(selectors.GetHash(), selectors.GetParameterNamesHash());
-
-		auto i = std::find(_pipelineHashes.begin(), _pipelineHashes.end(), hash);
-		if (i!=_pipelineHashes.end())
-			return std::distance(_pipelineHashes.begin(), i);
-
-		auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-		::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
-			operatorMarker->AdoptPromise(),
-			[pipelineCollection=_pipelineCollection, selectors](auto&& promise, const auto& preparedResources) {
-				const ParameterBox* sel[] { &selectors };
-				uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
-				pipelineCollection->CreateComputePipeline(
-					std::move(promise),
-					preparedResources._pipelineLayout, 
-					"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
-					preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
-			});
-		_pipelines.push_back(operatorMarker);
-		_pipelineHashes.push_back(hash);
-		_pipelineSelectors.emplace_back(std::move(selectors));
-		return (PipelineMarkerIdx)(_pipelines.size()-1);
-	}
-
-	void SkinDeformerPipelineCollection::StallForPipeline()
-	{
-		ScopedLock(_mutex);
-		_preparedSharedResources.StallWhilePending();
-		for (auto& p:_pipelines)
-			p->StallWhilePending();
-	}
-
-	void SkinDeformerPipelineCollection::OnFrameBarrier()
-	{
-		ScopedLock(_mutex);
-		bool rebuildAllPipelines = false;
-		if (::Assets::IsInvalidated(_preparedSharedResources)) {
-			RebuildSharedResources();
-			rebuildAllPipelines = true;
-		}
-
-		for (unsigned c=0; c<_pipelines.size(); ++c)
-			if (rebuildAllPipelines || ::Assets::IsInvalidated(*_pipelines[c])) {
-				auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-				::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
-					operatorMarker->AdoptPromise(),
-					[pipelineCollection=_pipelineCollection, selectors=_pipelineSelectors[c]](auto&& promise, const auto& preparedResources) {
-						const ParameterBox* sel[] { &selectors };
-						uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
-						pipelineCollection->CreateComputePipeline(
-							std::move(promise),
-							preparedResources._pipelineLayout, 
-							"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
-							preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
-					});
-				_pipelines[c] = std::move(operatorMarker);
-			}
-	}
-
-	void SkinDeformerPipelineCollection::RebuildSharedResources()
-	{
-		_preparedSharedResources = ::Assets::Marker<PreparedSharedResources>{};
-		auto predefinedPipelineLayout = ::Assets::MakeAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>(SKIN_PIPELINE ":Main");
-		::Assets::WhenAll(predefinedPipelineLayout).ThenConstructToPromise(
-			_preparedSharedResources.AdoptPromise(),
-			[device=_pipelineCollection->GetDevice()](auto predefinedPipelineLayoutActual) {
-				UniformsStreamInterface usi;
-				usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
-				usi.BindResourceView(1, Hash64("InputAttributes"));
-				usi.BindResourceView(2, Hash64("OutputAttributes"));
-				usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
-				usi.BindResourceView(4, Hash64("JointTransforms"));
-				usi.BindResourceView(5, Hash64("IAParams"));
-				usi.BindResourceView(6, Hash64("SkinIAParams"));
-
-				UniformsStreamInterface pushConstantsUSI;
-				pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
-
-				PreparedSharedResources result;
-				result._pipelineLayout = device->CreatePipelineLayout(predefinedPipelineLayoutActual->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage()));
-				result._boundUniforms = Metal::BoundUniforms{ result._pipelineLayout, usi, pushConstantsUSI };
-
-				ShaderSourceParser::InstantiationRequest instRequests[] {
-					{ SKIN_COMPUTE_HLSL }
-				};
-				ShaderSourceParser::GenerateFunctionOptions generateOptions;
-				generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
-				auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), generateOptions);
-				result._patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
-
-				::Assets::DependencyValidationMarker depVals[] { predefinedPipelineLayoutActual->GetDependencyValidation(), result._patchCollection->GetDependencyValidation() };
-				result._depVal = ::Assets::GetDepValSys().Make(depVals);
-				return result;
-			});
-	}
-
-	SkinDeformerPipelineCollection::SkinDeformerPipelineCollection(
-		std::shared_ptr<PipelineCollection> pipelineCollection)
-	: _pipelineCollection(std::move(pipelineCollection))
-	{
-		RebuildSharedResources();
-	}
-	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -951,7 +775,26 @@ namespace RenderCore { namespace Techniques
 		GPUSkinDeformerFactory(
 			std::shared_ptr<PipelineCollection> pipelineCollection)
 		{
-			_pipelineCollection = std::make_shared<SkinDeformerPipelineCollection>(pipelineCollection);
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
+			usi.BindResourceView(1, Hash64("InputAttributes"));
+			usi.BindResourceView(2, Hash64("OutputAttributes"));
+			usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
+			usi.BindResourceView(4, Hash64("JointTransforms"));
+			usi.BindResourceView(5, Hash64("IAParams"));
+			usi.BindResourceView(6, Hash64("SkinIAParams"));
+
+			UniformsStreamInterface pushConstantsUSI;
+			pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+
+			ShaderSourceParser::InstantiationRequest instRequest { SKIN_COMPUTE_HLSL };
+			uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+
+			_pipelineCollection = std::make_shared<Internal::DeformerPipelineCollection>(
+				pipelineCollection,
+				SKIN_PIPELINE ":Main",
+				std::move(usi), std::move(pushConstantsUSI),
+				std::move(instRequest), MakeIteratorRange(patchExpansions));
 			_signalDelegate = Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind(
 				[this]() {
 					this->_pipelineCollection->OnFrameBarrier();
@@ -967,7 +810,7 @@ namespace RenderCore { namespace Techniques
 		GPUSkinDeformerFactory(const GPUSkinDeformerFactory&) = delete;
 		GPUSkinDeformerFactory& operator=(const GPUSkinDeformerFactory&) = delete;
 
-		std::shared_ptr<SkinDeformerPipelineCollection> _pipelineCollection;
+		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
 		SignalDelegateId _signalDelegate;
 	};
 

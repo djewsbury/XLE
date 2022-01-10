@@ -199,8 +199,11 @@ namespace RenderCore { namespace Techniques
 			});
 
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[]() {
+			[weakDeformAccelerators=std::weak_ptr<IDeformAcceleratorPool>{_deformAccelerators}]() {
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
+
+				auto da=weakDeformAccelerators.lock();
+				if (da) da->OnFrameBarrier();
 			});
 
 		assert(_assetServices != nullptr);

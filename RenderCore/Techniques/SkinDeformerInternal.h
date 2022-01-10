@@ -91,38 +91,7 @@ namespace RenderCore { namespace Techniques
     class PipelineCollection;
     struct ComputePipelineAndLayout;
 	class CompiledShaderPatchCollection;
-
-	struct SkinDeformerPipelineCollection
-	{
-		using PipelineMarkerPtr = std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>>;
-		using PipelineMarkerIdx = unsigned;
-
-		PipelineMarkerIdx GetPipeline(ParameterBox&& selectors);
-		void StallForPipeline();
-		void OnFrameBarrier();
-		
-		struct PreparedSharedResources
-		{
-			std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
-			Metal::BoundUniforms _boundUniforms;
-			std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
-			::Assets::DependencyValidation _depVal;
-			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
-		};
-		::Assets::Marker<PreparedSharedResources> _preparedSharedResources;
-		std::vector<PipelineMarkerPtr> _pipelines;
-		std::shared_ptr<PipelineCollection> _pipelineCollection;
-
-		SkinDeformerPipelineCollection(
-			std::shared_ptr<PipelineCollection> pipelineCollection);
-		~SkinDeformerPipelineCollection();
-	private:
-		std::vector<uint64_t> _pipelineHashes;
-		std::vector<ParameterBox> _pipelineSelectors;
-		Threading::Mutex _mutex;
-
-		void RebuildSharedResources();
-	};
+	namespace Internal { struct GPUDeformerIAParams; class DeformerPipelineCollection; }
 
 	class GPUSkinDeformer : public IDeformer, public ISkinDeformer
 	{
@@ -148,7 +117,7 @@ namespace RenderCore { namespace Techniques
 		void Bind(const DeformerInputBinding& binding);
 	
 		GPUSkinDeformer(
-			std::shared_ptr<SkinDeformerPipelineCollection> pipelineCollection,
+			std::shared_ptr<Internal::DeformerPipelineCollection> pipelineCollection,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName);
 		~GPUSkinDeformer();
@@ -161,16 +130,7 @@ namespace RenderCore { namespace Techniques
 
 		RenderCore::Assets::ModelCommandStream::InputInterface _jointInputInterface;
 
-		struct IAParams
-		{
-			unsigned _inputStride, _outputStride, _deformTemporariesStride;
-			unsigned _inPositionsOffset, _inNormalsOffset, _inTangentsOffset;
-			unsigned _outPositionsOffset, _outNormalsOffset, _outTangentsOffset;
-			unsigned _bufferFlags;
-			unsigned _mappingBufferByteOffset;
-			unsigned _dummy;
-		};
-		std::vector<IAParams> _iaParams;
+		std::vector<Internal::GPUDeformerIAParams> _iaParams;
 
 		struct SkinIAParams
 		{
@@ -202,7 +162,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _firstVertex = 0;
 			unsigned _softInfluenceCount = 0;
 			unsigned _firstJointTransform = 0;
-			SkinDeformerPipelineCollection::PipelineMarkerIdx _pipelineMarker;
+			unsigned _pipelineMarker;
 		};
 		std::vector<Dispatch> _dispatches;
 
@@ -210,6 +170,6 @@ namespace RenderCore { namespace Techniques
 		unsigned _jointMatricesInstanceStride = 0;
 
 		std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
-		std::shared_ptr<SkinDeformerPipelineCollection> _pipelineCollection;
+		std::shared_ptr<Internal::DeformerPipelineCollection> _pipelineCollection;
 	};
 }}

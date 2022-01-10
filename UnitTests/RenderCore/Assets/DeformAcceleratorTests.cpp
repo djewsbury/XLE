@@ -27,6 +27,7 @@
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/IArtifact.h"
 #include "../../../ConsoleRig/Console.h"
+#include "../../../xleres/FileList.h"
 
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -275,7 +276,30 @@ namespace UnitTests
 
 	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
-		auto pipelineCollection = std::make_shared<Techniques::SkinDeformerPipelineCollection>(std::make_shared<Techniques::PipelineCollection>(testHelper._device));
+		std::shared_ptr<Techniques::Internal::DeformerPipelineCollection> pipelineCollection;
+		{
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
+			usi.BindResourceView(1, Hash64("InputAttributes"));
+			usi.BindResourceView(2, Hash64("OutputAttributes"));
+			usi.BindResourceView(3, Hash64("DeformTemporaryAttributes"));
+			usi.BindResourceView(4, Hash64("JointTransforms"));
+			usi.BindResourceView(5, Hash64("IAParams"));
+			usi.BindResourceView(6, Hash64("SkinIAParams"));
+
+			UniformsStreamInterface pushConstantsUSI;
+			pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
+
+			ShaderSourceParser::InstantiationRequest instRequests { SKIN_COMPUTE_HLSL };
+			uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+
+			pipelineCollection = std::make_shared<Techniques::Internal::DeformerPipelineCollection>(
+				std::make_shared<Techniques::PipelineCollection>(testHelper._device),
+				SKIN_PIPELINE ":Main",
+				std::move(usi), std::move(pushConstantsUSI),
+				std::move(instRequests), MakeIteratorRange(patchExpansions));
+		}
+
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
 		std::promise<std::shared_ptr<Techniques::IDeformer>> promise;

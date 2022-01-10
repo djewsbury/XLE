@@ -10,6 +10,10 @@
 	#define OUT_POSITION_FORMAT 6
 #endif
 
+#if !defined(BUFFER_FLAGS)
+	#define BUFFER_FLAGS 0
+#endif
+
 ByteAddressBuffer InputAttributes : register(t0);
 RWByteAddressBuffer OutputAttributes : register(u1);
 RWByteAddressBuffer DeformTemporaryAttributes : register(u2);
@@ -29,10 +33,8 @@ struct IAParamsStruct
 	uint OutNormalsOffset;
 	uint OutTangentsOffset;
 
-	uint BufferFlags;
-
 	uint MappingBufferByteOffset;
-	uint Dummy;
+	uint Dummy[2];
 };
 
 StructuredBuffer<IAParamsStruct> IAParams : register(t3);
@@ -69,13 +71,13 @@ LoadVertexResult LoadVertex(uint dispatchIdx, DeformInvocationStruct invocationP
 
 	LoadVertexResult result;
 	result.vertex.position = 
-		(iaParams.BufferFlags & 0x1)
+		(BUFFER_FLAGS & 0x1)
 		? LoadAsFloat3(DeformTemporaryAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InPositionsOffset)
 		: LoadAsFloat3(InputAttributes, IN_POSITION_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InPositionsOffset);
 
 	#if IN_NORMAL_FORMAT
 		result.vertex.normal = 
-			(iaParams.BufferFlags & 0x2)
+			(BUFFER_FLAGS & 0x2)
 			? LoadAsFloat3(DeformTemporaryAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InNormalsOffset)
 			: LoadAsFloat3(InputAttributes, IN_NORMAL_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InNormalsOffset);
 	#else
@@ -83,7 +85,7 @@ LoadVertexResult LoadVertex(uint dispatchIdx, DeformInvocationStruct invocationP
 	#endif
 	#if IN_TEXTANGENT_FORMAT
 		result.vertex.tangent = 
-			(iaParams.BufferFlags & 0x4)
+			(BUFFER_FLAGS & 0x4)
 			? LoadAsFloat4(DeformTemporaryAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.DeformTemporariesStride + iaParams.InTangentsOffset)
 			: LoadAsFloat4(InputAttributes, IN_TEXTANGENT_FORMAT, vertexIdx * iaParams.InputStride + iaParams.InTangentsOffset);
 	#else
@@ -103,21 +105,24 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	uint outputLoc = vertexIdx * iaParams.OutputStride + instanceIdx * invocationParams.OutputInstanceStride;
 	uint temporariesOutputLoc = vertexIdx * iaParams.DeformTemporariesStride + instanceIdx * invocationParams.DeformTemporariesInstanceStride;
 
-	if (iaParams.BufferFlags & (0x1<<16)) {
+	#if BUFFER_FLAGS & (0x1<<16)
 		StoreFloat3(vertex.position, DeformTemporaryAttributes, OUT_POSITION_FORMAT, temporariesOutputLoc + iaParams.OutPositionsOffset);
-	} else
+	#else
 		StoreFloat3(vertex.position, OutputAttributes, OUT_POSITION_FORMAT, outputLoc + iaParams.OutPositionsOffset);
+	#endif
 	#if OUT_NORMAL_FORMAT
-		if (iaParams.BufferFlags & (0x2<<16)) {
+		#if BUFFER_FLAGS & (0x2<<16)
 			StoreFloat3(vertex.normal, DeformTemporaryAttributes, OUT_NORMAL_FORMAT, temporariesOutputLoc + iaParams.OutNormalsOffset);
-		} else
+		#else
 			StoreFloat3(vertex.normal, OutputAttributes, OUT_NORMAL_FORMAT, outputLoc + iaParams.OutNormalsOffset);
+		#endif
 	#endif
 	#if OUT_TEXTANGENT_FORMAT
-		if (iaParams.BufferFlags & (0x4<<16)) {
+		#if BUFFER_FLAGS & (0x4<<16)
 			StoreFloat4(vertex.tangent, DeformTemporaryAttributes, OUT_TEXTANGENT_FORMAT, temporariesOutputLoc + iaParams.OutTangentsOffset);
-		} else
+		#else
 			StoreFloat4(vertex.tangent, OutputAttributes, OUT_TEXTANGENT_FORMAT, outputLoc + iaParams.OutTangentsOffset);
+		#endif
 	#endif
 }
 
