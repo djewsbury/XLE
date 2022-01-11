@@ -45,6 +45,7 @@
 	#endif
 #else
 	#undef VSOUT_HAS_VERTEX_ALPHA
+	#undef GEO_HAS_COLOR
 #endif
 
 #if (SPAWNED_INSTANCE==1)
@@ -52,6 +53,5 @@
 #endif
 
 #undef GEO_HAS_TEXCOORD1
-#undef GEO_HAS_COLOR
 #undef GEO_HAS_COLOR1
 #undef GEO_HAS_PER_VERTEX_AO

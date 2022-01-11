@@ -11,7 +11,7 @@ VSOUT frameworkEntry(VSIN input)
 	return BuildVSOUT(deformedVertex, input);
 }
 
-VSOUT frameworkEntryWithDeformVertex(VSIN input)
+VSOUT frameworkEntryWithVertexPatch(VSIN input)
 {
 	WorkingVertex deformedVertex = VertexPatch(input);
 	return BuildVSOUT(deformedVertex, input);

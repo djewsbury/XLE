@@ -24,7 +24,7 @@ VS_NoPatches=~
 
 VS_DeformVertex=~
 	Inherit=~; Silhouette
-	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithDeformVertex
+	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithVertexPatch
 
 VSDepthOnly_NoPatches=~
 	Inherit=~; SilhouetteDepthOnly
@@ -32,7 +32,7 @@ VSDepthOnly_NoPatches=~
 
 VSDepthOnly_DeformVertex=~
 	Inherit=~; SilhouetteDepthOnly
-	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithDeformVertex
+	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithVertexPatch
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -51,7 +51,7 @@ VSShadowGen_GSAmplify_NoPatches=~
 
 VSShadowGen_GSAmplify_DeformVertex=~
 	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
-	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:frameworkEntryWithDeformVertex
+	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:frameworkEntryWithVertexPatch
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

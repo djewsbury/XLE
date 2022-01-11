@@ -120,7 +120,7 @@ static const char* s_basicTechniqueFile = R"--(
 		VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 
 	VS_DeformVertex=~
-		VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithDeformVertex
+		VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithVertexPatch
 
 )--";
 

@@ -108,7 +108,7 @@ VSShadowOutput nopatches(VSIN input)
 	return BuildVSShadowOutput(deformedVertex, input);
 }
 
-VSShadowOutput frameworkEntryWithDeformVertex(VSIN input)
+VSShadowOutput frameworkEntryWithVertexPatch(VSIN input)
 {
 	WorkingVertex deformedVertex = VertexPatch(input);
 	return BuildVSShadowOutput(deformedVertex, input);
