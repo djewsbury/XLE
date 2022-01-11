@@ -54,7 +54,7 @@ namespace ShaderSourceParser
 
 	bool SelectorFilteringRules::IsRelevant(
 		StringSection<> symbol, StringSection<> value,
-		IteratorRange<const ParameterBox**> environment) const
+		IteratorRange<const ParameterBox*const*> environment) const
 	{
 		bool passesRelevanceCheck = false;
 

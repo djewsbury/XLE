@@ -175,7 +175,7 @@ registerAssignment
 	;
 	
 structure
-	:	'struct' ident '{' fields+=structure_field* '}' ';' 
+	:	'struct' ident '{' fields+=structure_field* '}' variablename_list? ';' 
 		-> ^(STRUCT ident $fields*)
 	;
 
@@ -552,6 +552,10 @@ LINE_COMMENT
 //	#define)
 PRE_PROCESSOR_LINE
 	:	'#' (options {greedy=false;}: . )* ~('\\'|'\r') '\r'? '\n' { $channel=HIDDEN; }
+	;
+
+COMPILER_ATTRIBUTE
+	:	'[[' ( options {greedy=false;} : . )* ']]' { $channel=HIDDEN; }
 	;
 
 // EOF

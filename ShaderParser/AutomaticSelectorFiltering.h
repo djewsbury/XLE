@@ -29,7 +29,7 @@ namespace ShaderSourceParser
 
 		bool IsRelevant(
 			StringSection<> symbol, StringSection<> value = {},
-			IteratorRange<const ParameterBox**> environment = {}) const;
+			IteratorRange<const ParameterBox*const*> environment = {}) const;
 
 		void MergeIn(const SelectorFilteringRules& source);
 
