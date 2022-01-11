@@ -733,7 +733,14 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 		}
 
-		void BindPipelineLayout(const PipelineLayoutInitializer& pipelineLayout, unsigned shaderStageMask)
+		static unsigned ShaderStageMaskForPipelineType(PipelineType pipelineType)
+		{
+			if (pipelineType == PipelineType::Graphics)
+				return Internal::AsVkShaderStageFlags(ShaderStage::Vertex)|Internal::AsVkShaderStageFlags(ShaderStage::Pixel);	// note; no Geometry, etc...
+			return Internal::AsVkShaderStageFlags(ShaderStage::Compute);
+		}
+
+		void BindPipelineLayout(const PipelineLayoutInitializer& pipelineLayout)
 		{
 			assert(_looseUniforms.size() <= 4);
 
@@ -755,7 +762,7 @@ namespace RenderCore { namespace Metal_Vulkan
 							AddLooseUniformBinding(
 								bindingType,
 								descSetIdx, slotIdx,
-								groupIdx, inputSlot, shaderStageMask,
+								groupIdx, inputSlot, ShaderStageMaskForPipelineType(descSet._pipelineType),
 								"pipeline-layout-binding");
 						}
 					}
@@ -768,7 +775,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					if (existing == _group[groupIdx]._fixedDescriptorSetRules.end()) {
 						_group[groupIdx]._fixedDescriptorSetRules.push_back(
 							FixedDescriptorSetBindingRules {
-								inputSlot, descSetIdx, shaderStageMask
+								inputSlot, descSetIdx, ShaderStageMaskForPipelineType(pipelineLayout.GetDescriptorSets()[descSetIdx]._pipelineType)
 							});
 					}
 				}
@@ -788,7 +795,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					Throw(std::runtime_error("Attempting to bind a non-immediate-data input to a push constants shader input (while binding variable name:" + pushConstants._name + ")"));		// Must bind immediate data to push constants (not a fixed constant buffer)
 
 				auto size = CeilToMultiplePow2(pushConstants._cbSize, 4);
-				_group[groupIdx]._pushConstantsRules.push_back({shaderStageMask, pushConstantsIterator, size, inputSlot});
+				_group[groupIdx]._pushConstantsRules.push_back({Internal::AsVkShaderStageFlags(pushConstants._shaderStage), pushConstantsIterator, size, inputSlot});
 				pushConstantsIterator += size;
 			}
 		}
@@ -1013,8 +1020,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		ConstructionHelper helper;
 		helper._looseUniforms = MakeIteratorRange(groups);
 		helper.InitializeForPipelineLayout(*_pipelineLayout);
-		auto shaderStageMask = Internal::AsVkShaderStageFlags(ShaderStage::Vertex)|Internal::AsVkShaderStageFlags(ShaderStage::Pixel);
-		helper.BindPipelineLayout(_pipelineLayout->GetInitializer(), shaderStageMask);
+		helper.BindPipelineLayout(_pipelineLayout->GetInitializer());
 		helper.FinalizeRules();
 
 		if (helper._sharedDescSetWriterCount) {
@@ -1198,7 +1204,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStream& stream,
 		unsigned groupIdx) const
 	{
-		assert(encoder.GetPipelineLayout().get() == _pipelineLayout.get());
+		// assert(encoder.GetPipelineLayout().get() == _pipelineLayout.get()); todo -- pipeline layout compatibility validation
 		assert(groupIdx < dimof(_group));
 		for (const auto& adaptiveSet:_group[groupIdx]._adaptiveSetRules) {
 
@@ -1304,7 +1310,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		for (const auto&pushConstants:_group[groupIdx]._pushConstantsRules) {
 			auto cb = stream._immediateData[pushConstants._inputCBSlot];
-			assert(cb.size() == pushConstants._size);
+			// assert(cb.size() == pushConstants._size);		 this isn't accurate currently because we don't query the correct push constants size from the SPIRV reflection
 			encoder.PushConstants(pushConstants._shaderStageBind, pushConstants._offset, cb);
 		}
 	}
