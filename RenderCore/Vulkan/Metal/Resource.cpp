@@ -722,6 +722,27 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto& ctx = *DeviceContext::Get(context);
 			{
 				CompleteInitialization(ctx, {(IResource*)&destaging});
+
+				// We need a barrier here to ensure all shader operations have completed before
+				// we start the transfer. This is required for buffers, but is sort of implied by
+				// the layout change for images, anyway
+				// The barrier is a bit overly broad; but this path will result in a full stall 
+				// for the GPU, anyway.
+				{
+					VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+					barrier.pNext = nullptr;
+					barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+					barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+					vkCmdPipelineBarrier(
+						ctx.GetActiveCommandList().GetUnderlying().get(),
+						VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+						VK_PIPELINE_STAGE_TRANSFER_BIT,
+						0,
+						1, &barrier,
+						0, nullptr,
+						0, nullptr);
+				}
+
 				Internal::CaptureForBind capture(ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc);
 				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateLayout, capture.GetLayout());
 			}
