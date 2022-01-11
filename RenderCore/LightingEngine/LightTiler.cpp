@@ -321,7 +321,9 @@ namespace RenderCore { namespace LightingEngine
 					vInput._topology = Topology::TriangleList;
 					FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
 					Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};
-					auto futurePipeline = pipelinePool->CreateGraphicsPipeline(
+					auto futurePipeline = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+					pipelinePool->CreateGraphicsPipeline(
+						futurePipeline->AdoptPromise(),
 						pipelineLayout->GetPipelineLayout(),
 						pipelineDesc,
 						{},

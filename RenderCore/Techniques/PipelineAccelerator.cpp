@@ -144,7 +144,9 @@ namespace RenderCore { namespace Techniques
 
 				auto pipelineDescFuture = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), containingPipelineAccelerator->_stateSet);
 				VertexInputStates vis { containingPipelineAccelerator->_inputAssembly, containingPipelineAccelerator->_miniInputAssembly, containingPipelineAccelerator->_topology };
-				auto metalPipelineFuture = pipelineCollection->CreateGraphicsPipeline(
+				auto metalPipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+				pipelineCollection->CreateGraphicsPipeline(
+					metalPipelineFuture->AdoptPromise(),
 					pipelineLayoutAsset->GetPipelineLayout(), pipelineDescFuture,
 					MakeIteratorRange(paramBoxes), 
 					vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);

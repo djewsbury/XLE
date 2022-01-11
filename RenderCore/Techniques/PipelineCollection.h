@@ -40,12 +40,12 @@ namespace RenderCore { namespace Techniques
 	struct PipelineLayoutOptions
 	{
 		std::shared_ptr<ICompiledPipelineLayout> _prebuiltPipelineLayout;
-		std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>> _predefinedPipelineLayout;
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 		uint64_t _hashCode = 0;
 
 		PipelineLayoutOptions() = default;
 		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
-		PipelineLayoutOptions(std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>, uint64_t);
+		PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t);
 	};
 
 	struct GraphicsPipelineAndLayout
@@ -79,26 +79,31 @@ namespace RenderCore { namespace Techniques
     class PipelineCollection
 	{
 	public:
-		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
+		void CreateGraphicsPipeline(
+			std::promise<GraphicsPipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
-			IteratorRange<const ParameterBox**> selectors,
+			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
 
-		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipeline(
+		void CreateGraphicsPipeline(
+			std::promise<GraphicsPipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
 			const ::Assets::PtrToMarkerPtr<GraphicsPipelineDesc>& pipelineDescFuture,
-			IteratorRange<const ParameterBox**> selectors,
+			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
 
-		std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> CreateComputePipeline(
+		void CreateComputePipeline(
+			std::promise<ComputePipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
 			StringSection<> shader,
-			IteratorRange<const ParameterBox**> selectors);
+			IteratorRange<const ParameterBox*const*> selectors,
+			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr,
+			IteratorRange<const uint64_t*> patchExpansions = {});
 
 		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
 		uint64_t GetGUID() const { return _guid; }
@@ -117,10 +122,11 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid = ~0ull;
 		std::shared_ptr<Internal::SharedPools> _sharedPools;
 
-		std::shared_ptr<::Assets::Marker<GraphicsPipelineAndLayout>> CreateGraphicsPipelineInternal(
+		void CreateGraphicsPipelineInternal(
+			std::promise<GraphicsPipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
 			const ::Assets::PtrToMarkerPtr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFilteringFuture,
-			IteratorRange<const ParameterBox**> selectors,
+			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget,
 			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection);

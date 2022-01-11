@@ -141,9 +141,12 @@ namespace RenderCore { namespace LightingEngine
 		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
 
 		const ParameterBox* selectorList[] { &selectors };
-		return pipelineCollection.CreateGraphicsPipeline(
+		auto marker = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+		pipelineCollection.CreateGraphicsPipeline(
+			marker->AdoptPromise(),
 			pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList),
 			inputStates, fbTarget);
+		return marker;
 	}
 
 	::Assets::PtrToMarkerPtr<IDescriptorSet> BuildFixedLightResolveDescriptorSet(

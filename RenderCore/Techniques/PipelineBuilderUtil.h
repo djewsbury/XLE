@@ -460,7 +460,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
 		std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>> byteCodeFuture[3],
-		const std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>& pipelineLayout,
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>&& pipelineLayout,
 		const GraphicsPipelineRetainedConstructionParams& params)
 	{
 		assert(0);
@@ -510,12 +510,12 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		const std::shared_ptr<IDevice>& device,
 		const std::shared_ptr<SamplerPool>& samplerPool,
 		const std::shared_ptr<::Assets::Marker<CompiledShaderByteCode>>& csCode,
-		std::shared_future<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>&& pipelineLayout)
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>&& pipelineLayout)
 	{
 		// Variation for MakePipelineLayoutInitializerWithAutoMatching
-		::Assets::WhenAll(csCode, std::move(pipelineLayout)).ThenConstructToPromise(
+		::Assets::WhenAll(csCode).ThenConstructToPromise(
 			std::move(promise),
-			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool](const auto& csCodeActual, auto predefinedPipelineLayout) {
+			[weakDevice=std::weak_ptr<IDevice>{device}, samplers=samplerPool, predefinedPipelineLayout=std::move(pipelineLayout)](const auto& csCodeActual) {
 				auto d = weakDevice.lock();
 				if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
@@ -678,7 +678,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			#endif
 
 			auto result = std::make_shared<::Assets::Marker<GraphicsPipelineAndLayout>>("pipeline-accelerator");
-			if (pipelineLayout._predefinedPipelineLayout.valid()) {
+			if (pipelineLayout._predefinedPipelineLayout) {
 				MakeGraphicsPipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFutures, std::move(pipelineLayout._predefinedPipelineLayout), std::move(constructionParams));
 			} else {
 				MakeGraphicsPipelineFuture0(result->AdoptPromise(), _device, byteCodeFutures, std::move(pipelineLayout), std::move(constructionParams));
@@ -742,10 +742,19 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		std::shared_ptr<::Assets::Marker<ComputePipelineAndLayout>> CreateComputePipelineAlreadyLocked(
 			StringSection<> shader,
 			PipelineLayoutOptions&& pipelineLayout,
+			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
+			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
 		{
 			auto hash = Hash64(shader, filteredSelectors._hashValue);
 			hash = HashCombine(pipelineLayout._hashCode, hash);
+			if (compiledPatchCollection && !patchExpansions.empty()) {
+				hash = HashCombine(hash, compiledPatchCollection->GetGUID());
+				for (auto& p:patchExpansions) {
+					assert(p.second == ShaderStage::Compute);
+					hash = HashCombine(p.first, hash);
+				}
+			}
 
 			auto completedi = LowerBound(_completedComputePipelines, hash);
 			if (completedi != _completedComputePipelines.end() && completedi->first == hash) {
@@ -765,9 +774,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					return i->second;
 
 			// Make the futures and setup caching
-			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, nullptr, {});
+			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, compiledPatchCollection, patchExpansions);
 			auto result = std::make_shared<::Assets::Marker<ComputePipelineAndLayout>>("compute-pipeline");
-			if (pipelineLayout._predefinedPipelineLayout.valid()) {
+			if (pipelineLayout._predefinedPipelineLayout) {
 				MakeComputePipelineFuture1(result->AdoptPromise(), _device, _samplerPool, byteCodeFuture, std::move(pipelineLayout._predefinedPipelineLayout));
 			} else {
 				MakeComputePipelineFuture0(result->AdoptPromise(), _device, byteCodeFuture, std::move(pipelineLayout));
@@ -836,7 +845,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
 			ShaderStage shaderStage,
-			IteratorRange<const ParameterBox**> selectors,
+			IteratorRange<const ParameterBox*const*> selectors,
 			const ShaderSourceParser::SelectorFilteringRules& automaticFiltering,
 			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
 			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,

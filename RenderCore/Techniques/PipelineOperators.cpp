@@ -23,6 +23,7 @@
 namespace Assets 
 {
 	uint64_t Hash64(const DependencyValidation& depVal, uint64_t seed) { return seed; }
+	static std::ostream& StreamWithHashFallback(std::ostream& str, const DependencyValidation& value, bool) { return str; }
 }
 
 namespace RenderCore { namespace Techniques
@@ -123,7 +124,8 @@ namespace RenderCore { namespace Techniques
 		{
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
 			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = pool->CreateGraphicsPipeline(pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
+			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
+			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=pipelineLayout, usi=usi, pipelineLayoutDepVal, predefinedPipelineLayout](auto pipelineAndLayout) {
@@ -333,7 +335,8 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& usi)
 		{
 			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = pool->CreateComputePipeline(pipelineLayout, computeShader, MakeIteratorRange(selectorList));
+			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), pipelineLayout, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
@@ -355,7 +358,8 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& usi)
 		{
 			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = pool->CreateComputePipeline({}, computeShader, MakeIteratorRange(selectorList));
+			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), {}, computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi=usi](auto pipelineAndLayout) {
@@ -377,18 +381,25 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& usi)
 		{
 			auto futurePipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
-			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = pool->CreateComputePipeline({futurePipelineLayout->ShareFuture(), Hash64(pipelineLayoutAssetName)}, computeShader, MakeIteratorRange(selectorList));
-			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+			::Assets::WhenAll(futurePipelineLayout).ThenConstructToPromise(
 				std::move(promise),
-				[usi=usi](auto pipelineAndLayout) {
-					auto op = std::make_shared<ComputeOperator>();
-					op->_usi = std::move(usi);
-					op->_depVal = pipelineAndLayout.GetDependencyValidation();
-					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
-					op->_pipeline = std::move(pipelineAndLayout._pipeline);
-					return op;
+				[pool, selectors, plan=Hash64(pipelineLayoutAssetName), computeShader=computeShader.AsString(), usi](auto&& promise, auto pipelineLayout) mutable {
+					const ParameterBox* selectorList[] { &selectors };
+					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
+					pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), {pipelineLayout, plan}, computeShader, MakeIteratorRange(selectorList));
+
+					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
+						std::move(promise),
+						[usi=std::move(usi)](auto pipelineAndLayout) mutable {
+							auto op = std::make_shared<ComputeOperator>();
+							op->_usi = std::move(usi);
+							op->_depVal = pipelineAndLayout.GetDependencyValidation();
+							op->_pipelineLayout = std::move(pipelineAndLayout._layout);
+							op->_pipeline = std::move(pipelineAndLayout._pipeline);
+							return op;
+						});
 				});
+			
 		}
 
 		RenderCore::Metal::ComputeEncoder _activeEncoder;
