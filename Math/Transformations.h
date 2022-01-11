@@ -121,6 +121,14 @@ namespace XLEMath
         float _yRotation = 0.f;
         Float3 _translation = Float3(0.f, 0.f, 0.f);
     };
+
+    class UniformScaleZRotTranslation
+    {
+    public:
+        float _scale = 1.0f;
+        float _zRotation = 0.f;
+        Float3 _translation = Float3(0.f, 0.f, 0.f);
+    };
         
         //
         //      "Combine" and "Combine_IntoLHS/Combine_IntoRHS" patterns.
@@ -264,6 +272,7 @@ namespace XLEMath
     Float4x4    AsFloat4x4(const ArbitraryRotation& input);
     Float4x4    AsFloat4x4(const ArbitraryScale& input);
     Float4x4    AsFloat4x4(const UniformScaleYRotTranslation& input);
+    Float4x4    AsFloat4x4(const UniformScaleZRotTranslation& input);
     Float4x4    AsFloat4x4(const ScaleRotationTranslationQ& input);
     Float4x4    AsFloat4x4(const ScaleRotationTranslationM& input);
 
