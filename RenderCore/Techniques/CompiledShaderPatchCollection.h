@@ -96,7 +96,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 		std::vector<::Assets::DependentFileState> _dependencies;
 
-		std::string InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const;
+		std::pair<std::string, std::string> InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const;
 
 		uint64_t GetGUID() const { return _guid; }
 
@@ -113,6 +113,7 @@ namespace RenderCore { namespace Techniques
 		Interface _interface;
 		RenderCore::Assets::ShaderPatchCollection _src;
 		std::string _savedInstantiation;
+		std::string _savedInstantiationPrefix;
 		DescriptorSetLayoutAndBinding _materialDescSetLayout;
 
 		void BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst);

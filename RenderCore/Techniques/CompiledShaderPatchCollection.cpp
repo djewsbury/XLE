@@ -75,6 +75,32 @@ namespace RenderCore { namespace Techniques
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 	}
 
+	static std::string Merge(const std::set<std::string>& preprocessorPrefix)
+	{
+		size_t size=0;
+		for (const auto&q:preprocessorPrefix) size += q.size() + 1;
+		std::string result;
+		result.reserve(size);
+		for (const auto&q:preprocessorPrefix) {
+			result.insert(result.end(), q.begin(), q.end());
+			result.push_back('\n');
+		}
+		return result;
+	}
+
+	static std::string Merge(const std::vector<std::string>& v)
+	{
+		size_t size=0;
+		for (const auto&q:v) size += q.size() + 1;
+		std::string result;
+		result.reserve(size);
+		for (const auto&q:v) {
+			result.insert(result.end(), q.begin(), q.end());
+			result.push_back('\n');
+		}
+		return result;
+	}
+
 	void CompiledShaderPatchCollection::BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst)
 	{
 			// Note -- we can build the patches interface here, because we assume that this will not
@@ -126,13 +152,8 @@ namespace RenderCore { namespace Techniques
 		_interface._filteringRules.push_back(filteringRules);
 		if (filteringRules.GetDependencyValidation())
 			_depVal.RegisterDependency(filteringRules.GetDependencyValidation());
-
-		size_t size = 0;
-		for (const auto&i:inst._sourceFragments)
-			size += i.size();
-		_savedInstantiation.reserve(size);
-		for (const auto&i:inst._sourceFragments)
-			_savedInstantiation.insert(_savedInstantiation.end(), i.begin(), i.end());
+		_savedInstantiation = Merge(inst._sourceFragments);
+		_savedInstantiationPrefix = Merge(inst._instantiationPrefix);
 	}
 
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection() 
@@ -147,23 +168,13 @@ namespace RenderCore { namespace Techniques
 		return _filteringRules[filteringRulesId];
 	}
 
-	static std::string Merge(const std::vector<std::string>& v)
-	{
-		size_t size=0;
-		for (const auto&q:v) size += q.size();
-		std::string result;
-		result.reserve(size);
-		for (const auto&q:v) result.insert(result.end(), q.begin(), q.end());
-		return result;
-	}
-
-	std::string CompiledShaderPatchCollection::InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const
+	std::pair<std::string, std::string> CompiledShaderPatchCollection::InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const
 	{
 		if (_src.GetPatches().empty()) {
 			// If we'ved used  the constructor that takes a ShaderSourceParser::InstantiatedShader,
 			// we can't re-instantiate here. So our only choice is to just return the saved
 			// instantiation here. However, this means the selectors won't take effect, somewhat awkwardly
-			return _savedInstantiation;
+			return {_savedInstantiationPrefix, _savedInstantiation};
 		}
 
 		// find the particular patches that were requested and instantiate them
@@ -194,7 +205,7 @@ namespace RenderCore { namespace Techniques
 		generateOptions._pipelineLayoutMaterialDescriptorSet = _materialDescSetLayout.GetLayout().get();
 		generateOptions._materialDescriptorSetIndex = _materialDescSetLayout.GetSlotIndex();
 		auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequests), generateOptions);
-		return Merge(inst._sourceFragments);
+		return {Merge(inst._instantiationPrefix), Merge(inst._sourceFragments)};
 	}
 
 	DescriptorSetLayoutAndBinding::DescriptorSetLayoutAndBinding(
@@ -251,8 +262,9 @@ namespace RenderCore { namespace Techniques
 	static const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64<'Inst', 'shdr'>::Value;
 	const uint64 CompiledShaderByteCode_InstantiateShaderGraph::CompileProcessType = CompileProcess_InstantiateShaderGraph;
 
-	auto AssembleShader(
+	static auto AssembleShader(
 		const CompiledShaderPatchCollection& patchCollection,
+		StringSection<> mainSourceFile,
 		IteratorRange<const uint64_t*> patchExpansions,
 		StringSection<> definesTable) -> SourceCodeWithRemapping
 
@@ -289,7 +301,21 @@ namespace RenderCore { namespace Techniques
 
             p = (defineEnd == definesTable.end()) ? defineEnd : (defineEnd+1);
         }
-		output << patchCollection.InstantiateShader(paramBoxSelectors, patchExpansions);
+		auto instantiated = patchCollection.InstantiateShader(paramBoxSelectors, patchExpansions);
+
+		// For simplicity, we'll just pre-append the entry point file using an #include directive
+		// This will ensure we go through the normal mechanisms to find and load this file.
+		// Note that this relies on the underlying shader compiler supporting #includes, however
+		//   -- in cases  (like GLSL) that don't have #include support, we would need another
+		//	changed preprocessor to handle the include expansions.
+		//
+		// Preappending might be better here, because when writing the entry point function itself,
+		// it can be confusing if there is other code injected before the start of the file. Since
+		// the entry points should have signatures for the patch functions anyway, it should work
+		// fine
+		output << instantiated.first;
+		output << "#include \"" << mainSourceFile << "\"" << std::endl;
+		output << instantiated.second;
 
 		for (auto fn:patchExpansions) {
 			auto i = std::find_if(
@@ -349,24 +375,7 @@ namespace RenderCore { namespace Techniques
 		if (patchCollection.GetInterface().GetPatches().empty())
 			return internalShaderSource.CompileFromFile(resId, definesTable);
 
-		auto assembledShader = AssembleShader(patchCollection, redirectedPatchFunctions, definesTable);
-
-		// For simplicity, we'll just pre-append the entry point file using an #include directive
-		// This will ensure we go through the normal mechanisms to find and load this file.
-		// Note that this relies on the underlying shader compiler supporting #includes, however
-		//   -- in cases  (like GLSL) that don't have #include support, we would need another
-		//	changed preprocessor to handle the include expansions.
-		//
-		// Preappending might be better here, because when writing the entry point function itself,
-		// it can be confusing if there is other code injected before the start of the file. Since
-		// the entry points should have signatures for the patch functions anyway, it should work
-		// fine
-		{
-			std::stringstream str ;
-			str << "#include \"" << resId._filename << "\"" << std::endl;
-			assembledShader._processedSource = str.str() + assembledShader._processedSource;
-		}
-
+		auto assembledShader = AssembleShader(patchCollection, resId._filename, redirectedPatchFunctions, definesTable);
 		auto result = internalShaderSource.CompileFromMemory(
 			MakeStringSection(assembledShader._processedSource),
 			resId._entryPoint, resId._shaderModel,

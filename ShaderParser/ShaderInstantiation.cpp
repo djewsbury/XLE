@@ -72,6 +72,7 @@ namespace ShaderSourceParser
 			std::set<std::pair<std::string, uint64_t>> _previousInstantiation;
 			std::set<std::string> _rawShaderFileIncludes;
 			std::vector<ShaderEntryPoint> _entryPointsFromRawShaders;
+			std::set<std::string> _instantiationPrefixFromRawShaders;
 			
 			std::set<::Assets::DependencyValidation> _depVals;		// dependencies created in the QueueUp() method
 			std::set<::Assets::DependentFileState> _fileStates;
@@ -147,6 +148,7 @@ namespace ShaderSourceParser
 									entryPoint._implementsSignature = entryPoint._signature;
 								}
 								_entryPointsFromRawShaders.emplace_back(std::move(entryPoint));
+								_instantiationPrefixFromRawShaders.insert("#define HAS_INSTANTIATION_" + (sig._signature.GetImplements().empty() ? sig._name : sig._signature.GetImplements()) + " 1");
 							}
 						}
 					}
@@ -206,6 +208,8 @@ namespace ShaderSourceParser
 						}
 					}
 					result._entryPoints.emplace_back(std::move(entryPoint));
+					if (!scaffoldSignature.GetImplements().empty())
+						result._instantiationPrefix.insert("#define HAS_INSTANTIATION_" + scaffoldSignature.GetImplements() + " 1");
 				}
 			}
 			else
@@ -288,6 +292,8 @@ namespace ShaderSourceParser
 			result._entryPoints.end(),
 			pendingInst._entryPointsFromRawShaders.begin(),
 			pendingInst._entryPointsFromRawShaders.end());
+		for (const auto& t:pendingInst._instantiationPrefixFromRawShaders)
+			result._instantiationPrefix.insert(t);
 
 		result._rawShaderFileIncludes = std::move(pendingInst._rawShaderFileIncludes);
 		result._depVals.insert(pendingInst._depVals.begin(), pendingInst._depVals.end());

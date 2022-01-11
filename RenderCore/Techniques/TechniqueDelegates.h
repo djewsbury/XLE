@@ -113,10 +113,5 @@ namespace RenderCore { namespace Techniques
 	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection };
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection& patchCollection);
 
-	auto AssembleShader(
-		const CompiledShaderPatchCollection& patchCollection,
-		IteratorRange<const uint64_t*> redirectedPatchFunctions,
-		StringSection<> definesTable) -> SourceCodeWithRemapping;
-
 }}
 

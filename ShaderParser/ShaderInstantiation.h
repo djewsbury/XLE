@@ -92,6 +92,10 @@ namespace ShaderSourceParser
 		/// part of  the initial request
 		std::set<std::string> _rawShaderFileIncludes;
 
+		/// Preprocessor prefix useful with HAS_INSTANTIATION_XXX defines useful for the
+		/// shader to know what instantiations are present 
+		std::set<std::string> _instantiationPrefix;
+
 		/// List of dependency validations, which can be used for change tracking.
 		std::set<::Assets::DependencyValidation> _depVals;
 		std::set<::Assets::DependentFileState> _depFileStates;
