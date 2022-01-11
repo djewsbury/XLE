@@ -35,6 +35,7 @@ namespace ConsoleRig
     {
     public:
         lua_State* L;
+        Threading::Mutex _mutex;
         // operator lua_State*() { return L; }
         lua_State* GetUnderlying() { return L; }
 
@@ -112,15 +113,15 @@ namespace ConsoleRig
     {
         Print("{Color:af3f7f}Executing string -- {Color:7F7F7F}" + str + "\n");
 
-        lua_State* L = GetLuaState();
-        luaL_loadstring(L, str.c_str());
+        auto L = LockLuaState();
+        luaL_loadstring(L.GetLuaState(), str.c_str());
         int errorCode = _pimpl->_lua->PCall(0, 0);
         if (errorCode != LUA_OK) {
-            const char* msg = lua_tostring(L, -1);
+            const char* msg = lua_tostring(L.GetLuaState(), -1);
             if (msg) {
                 Print(msg);
             }
-            lua_pop(L, 1);
+            lua_pop(L.GetLuaState(), 1);
         }
     }
 
@@ -171,7 +172,8 @@ namespace ConsoleRig
 
     std::vector<std::string>    Console::AutoComplete(const std::string& input)
     {
-        lua_State* L = GetLuaState();
+        auto lockedLua = LockLuaState();
+        auto* L = lockedLua.GetLuaState();
 
             //
             //      Separate the input string into parts with "." or ":"
@@ -314,9 +316,12 @@ namespace ConsoleRig
         return unsigned(_pimpl->_lines.size());
     }
 
-    lua_State*  Console::GetLuaState()
+    LockedLuaState  Console::LockLuaState()
     {
-        return _pimpl->_lua->GetUnderlying();
+        LockedLuaState result;
+        result._lock = std::unique_lock<Threading::Mutex>{_pimpl->_lua->_mutex};
+        result._luaState = _pimpl->_lua->GetUnderlying();
+        return result;
     }
 
     ConsoleVariableStorage&  Console::GetCVars()
@@ -649,7 +654,8 @@ namespace ConsoleRig
             //
             //          Register the variable as a global value in LUA
             //
-        lua_State* L = Console::GetInstance().GetLuaState();        // (use the global lua state for console variables)
+        auto lockedLua = Console::GetInstance().LockLuaState();        // (use the global lua state for console variables)
+        auto* L = lockedLua.GetLuaState();
 
         using namespace luabridge;
 
@@ -711,7 +717,8 @@ namespace ConsoleRig
         void ConsoleVariable<Type>::Deregister()
     {
         if (!_name.empty() && Console::HasInstance()) {
-            lua_State* L = Console::GetInstance().GetLuaState();
+            auto lockedLua = Console::GetInstance().LockLuaState();
+            auto* L = lockedLua.GetLuaState();
 
             lua_getglobal(L, "_G");
             luabridge::rawgetfield(L, -1, _cvarNamespace.empty()?"cv":_cvarNamespace.c_str());

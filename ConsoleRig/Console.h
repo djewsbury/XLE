@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Utility/UTFUtils.h"
+#include "../Utility/Threading/Mutex.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -17,6 +18,13 @@ namespace ConsoleRig
 {
     class LuaState;
     class ConsoleVariableStorage;
+
+    struct LockedLuaState
+    {
+        std::unique_lock<Threading::Mutex> _lock;
+        lua_State* _luaState;
+        lua_State* GetLuaState() const { return _luaState; }
+    };
     
     class Console
     {
@@ -36,7 +44,7 @@ namespace ConsoleRig
         static bool         HasInstance() { return s_instance != nullptr; }
         static void         SetInstance(Console* newInstance);
 
-        lua_State*          GetLuaState();
+        LockedLuaState      LockLuaState();
         ConsoleVariableStorage& GetCVars();
 
         Console();
@@ -51,8 +59,6 @@ namespace ConsoleRig
         std::unique_ptr<Pimpl> _pimpl;
         static Console* s_instance;
     };
-
-    // template <typename Type> class ConsoleVariable;
 
     template <typename Type> class ConsoleVariable
     {
