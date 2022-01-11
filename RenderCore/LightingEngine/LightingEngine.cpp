@@ -28,49 +28,56 @@ namespace RenderCore { namespace LightingEngine
 		_steps.emplace_back(std::move(newStep));
 	}
 
-	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFilter batch) -> ParseId
+	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches) -> ParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
-			if (s._batch == batch && !s._complexCullingVolume) {
+			if (!s._complexCullingVolume) {
 				s._prepareOnly = false;
-				return s._parseId;
+				s._batches |= batches;
+				return s._parseId | (batches << 16u);
 			}
 		ParseStep newStep;
-		newStep._batch = batch;
+		newStep._batches = batches;
 		newStep._parseId = _nextParseId++;
 		_parseSteps.emplace_back(std::move(newStep));
-		return newStep._parseId;
+		assert((newStep._parseId & 0xffff) == newStep._parseId);
+		return newStep._parseId | (batches << 16u);
 	}
 
-	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFilter batch, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
+	auto LightingTechniqueSequence::CreateParseScene(Techniques::BatchFlags::BitField batches, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume) -> ParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
-			if (s._batch == batch && s._complexCullingVolume == complexCullingVolume) {
+			if (s._complexCullingVolume == complexCullingVolume) {
 				s._prepareOnly = false;
-				return s._parseId;
+				s._batches |= batches;
+				return s._parseId | (batches << 16u);
 			}
 		ParseStep newStep;
-		newStep._batch = batch;
+		newStep._batches = batches;
 		newStep._parseId = _nextParseId++;
 		newStep._complexCullingVolume = std::move(complexCullingVolume);
 		_parseSteps.emplace_back(std::move(newStep));
-		return newStep._parseId;
+		assert((newStep._parseId & 0xffff) == newStep._parseId);
+		return newStep._parseId | (batches << 16u);
 	}
 
-	auto LightingTechniqueSequence::CreatePrepareOnlyParseScene(Techniques::BatchFilter batch) -> ParseId
+	auto LightingTechniqueSequence::CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField batches) -> ParseId
 	{
 		assert(!_frozen);
 		for (auto& s:_parseSteps)
-			if (s._batch == batch && !s._complexCullingVolume)
-				return s._parseId;
+			if (!s._complexCullingVolume) {
+				s._batches |= batches;
+				return s._parseId | (batches << 16u);
+			}
 		ParseStep newStep;
-		newStep._batch = batch;
+		newStep._batches = batches;
 		newStep._parseId = _nextParseId++;
 		newStep._prepareOnly = true;
 		_parseSteps.emplace_back(std::move(newStep));
-		return newStep._parseId;
+		assert((newStep._parseId & 0xffff) == newStep._parseId);
+		return newStep._parseId | (batches << 16u);
 	}
 
 	void LightingTechniqueSequence::CreateStep_ExecuteDrawables(
@@ -219,6 +226,8 @@ namespace RenderCore { namespace LightingEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const unsigned s_drawablePktsPerParse = (unsigned)Techniques::Batch::Max;
+
 	void CompiledLightingTechnique::CompleteConstruction()
 	{
 		assert(!_isConstructionCompleted);
@@ -284,7 +293,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_sequenceIterator == _sequenceEnd) return nullptr;
 		while (_stepIterator == _stepEnd) {
-			_drawablePktIdxOffset += _sequenceIterator->_sequence->DrawablePktsToReserve();
+			_drawablePktIdxOffset += s_drawablePktsPerParse*_sequenceIterator->_sequence->DrawablePktsToReserve();
 			++_sequenceIterator;
 			_stepIterator = _stepEnd = {};
 			if (_sequenceIterator ==_sequenceEnd) return nullptr;
@@ -300,7 +309,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_sequenceIterator == _sequenceEnd) return nullptr;
 		while (_parseStepIterator == _parseStepEnd) {
-			_drawablePktIdxOffset += _sequenceIterator->_sequence->DrawablePktsToReserve();
+			_drawablePktIdxOffset += s_drawablePktsPerParse*_sequenceIterator->_sequence->DrawablePktsToReserve();
 			++_sequenceIterator;
 			_parseStepIterator = _parseStepEnd = {};
 			if (_sequenceIterator ==_sequenceEnd) return nullptr;
@@ -329,21 +338,24 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void LightingTechniqueIterator::ExecuteDrawables(
-		LightingTechniqueSequence::ParseId parseId, 
+		LightingTechniqueSequence::ParseId parseId,
 		Techniques::SequencerConfig& sequencerCfg,
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate)
 	{
-		auto pktIdx = _stepper._drawablePktIdxOffset+parseId;
-		assert(pktIdx < _drawablePkt.size());
+		Techniques::DrawablesPacket* pkts[(unsigned)Techniques::Batch::Max];
+		GetPkts(MakeIteratorRange(pkts), parseId);
 		if (uniformDelegate)
 			_parsingContext->GetUniformDelegateManager()->AddShaderResourceDelegate(uniformDelegate);
-		TRY {
-			Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, sequencerCfg, _drawablePkt[pktIdx]);
-		} CATCH(...) {
-			if (uniformDelegate)
-				_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
-			throw;
-		} CATCH_END
+		for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
+			if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
+			TRY {
+				Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, sequencerCfg, *pkts[c]);
+			} CATCH(...) {
+				if (uniformDelegate)
+					_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
+				throw;
+			} CATCH_END
+		}
 		if (uniformDelegate)
 			_parsingContext->GetUniformDelegateManager()->RemoveShaderResourceDelegate(*uniformDelegate);
 	}
@@ -354,11 +366,43 @@ namespace RenderCore { namespace LightingEngine
 		_currentPhase = newPhase;
 	}
 
-	const Techniques::DrawablesPacket& LightingTechniqueIterator::GetDrawablesPacket(LightingTechniqueSequence::ParseId parseId)
+	void LightingTechniqueIterator::GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId)
 	{
-		auto pktIdx = _stepper._drawablePktIdxOffset+parseId;
+		auto realParseId = parseId & 0xffff;
+		auto batchFlags = parseId >> 16;
+		auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 		assert(pktIdx < _drawablePkt.size());
-		return _drawablePkt[pktIdx];
+		assert(result.size() == s_drawablePktsPerParse);
+		for (unsigned c=0; c<s_drawablePktsPerParse; ++c) {
+			if (batchFlags & (1u<<c)) {
+				assert(_drawablePktsReserved[pktIdx+c]);
+				result[c] = _drawablePkt.data()+pktIdx+c;
+			} else {
+				result[c] = nullptr;
+			}
+		}
+	}
+
+	void LightingTechniqueIterator::GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId, Techniques::BatchFlags::BitField batches)
+	{
+		auto realParseId = parseId & 0xffff;
+		auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+		if ((pktIdx+s_drawablePktsPerParse) > _drawablePkt.size()) {
+			_drawablePkt.resize(pktIdx+s_drawablePktsPerParse);
+			_drawablePktsReserved.resize(pktIdx+s_drawablePktsPerParse, false);
+		}
+
+		assert(result.size() <= s_drawablePktsPerParse);
+		for (unsigned c=0; c<result.size(); ++c) {
+			if (batches & (1u<<c)) {
+				if (!_drawablePktsReserved[pktIdx+c]) {
+					_drawablePkt[pktIdx+c] = _parsingContext->GetTechniqueContext()._drawablesPacketsPool->Allocate();
+					_drawablePktsReserved[pktIdx+c] = true;
+				}
+				result[c] = _drawablePkt.data()+pktIdx+c;
+				assert(result[c]);
+			}
+		}
 	}
 
 	LightingTechniqueIterator::LightingTechniqueIterator(
@@ -410,11 +454,10 @@ namespace RenderCore { namespace LightingEngine
 			const LightingTechniqueSequence::ParseStep* next;
 			while ((next=_iterator->_stepper.AdvanceParseStep())) {
 				if (!next->_prepareOnly) {
-					assert(next->_parseId != ~0u);
-					auto pktId = _iterator->_stepper._drawablePktIdxOffset+next->_parseId;
-					while (pktId >= _iterator->_drawablePkt.size())
-						_iterator->_drawablePkt.push_back(_iterator->_parsingContext->GetTechniqueContext()._drawablesPacketsPool->Allocate());
-					return { StepType::ParseScene, next->_batch, &_iterator->_drawablePkt[pktId], next->_complexCullingVolume.get() };
+					std::vector<Techniques::DrawablesPacket*> pkts;
+					pkts.resize((unsigned)Techniques::Batch::Max);
+					_iterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
+					return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
 				}
 			}
 
@@ -498,7 +541,6 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
 		const CompiledLightingTechnique* _compiledTechnique = nullptr;
-		Techniques::DrawablesPacketPool _drawablesPacketPool;
 
 		LightingTechniqueStepper _stepper;
 		enum class Phase { SequenceSetup, SceneParse, Execute };
@@ -507,6 +549,22 @@ namespace RenderCore { namespace LightingEngine
 		{
 			_stepper = LightingTechniqueStepper{*_compiledTechnique};
 			_currentPhase = newPhase;
+		}
+
+		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parseId, Techniques::BatchFlags::BitField batches)
+		{
+			auto realParseId = parseId & 0xffff;
+			auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+			if ((pktIdx+s_drawablePktsPerParse) > _drawablePkt.size())
+				_drawablePkt.resize(pktIdx+s_drawablePktsPerParse);
+
+			assert(result.size() <= s_drawablePktsPerParse);
+			for (unsigned c=0; c<result.size(); ++c) {
+				if (batches & (1u<<c)) {
+					result[c] = _drawablePkt.data()+pktIdx+c;
+					assert(result[c]);
+				}
+			}
 		}
 	};
 
@@ -522,10 +580,10 @@ namespace RenderCore { namespace LightingEngine
 			const LightingTechniqueSequence::ParseStep* next;
 			while ((next=_prepareResourcesIterator->_stepper.AdvanceParseStep())) {
 				assert(next->_parseId != ~0u);
-				auto pktId = _prepareResourcesIterator->_stepper._drawablePktIdxOffset+next->_parseId;
-				while (pktId >= _prepareResourcesIterator->_drawablePkt.size())
-					_prepareResourcesIterator->_drawablePkt.push_back(_prepareResourcesIterator->_drawablesPacketPool.Allocate());
-				return { StepType::ParseScene, next->_batch, &_prepareResourcesIterator->_drawablePkt[pktId], next->_complexCullingVolume.get() };
+				std::vector<Techniques::DrawablesPacket*> pkts;
+				pkts.resize((unsigned)Techniques::Batch::Max);
+				_prepareResourcesIterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
+				return { StepType::ParseScene, std::move(pkts), next->_complexCullingVolume.get() };
 			}
 
 			_prepareResourcesIterator->ResetIteration(PrepareResourcesIterator::Phase::Execute);
@@ -540,7 +598,7 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::PrepareOnly_ExecuteDrawables:
 			case LightingTechniqueSequence::ExecuteStep::Type::ExecuteDrawables:
 				{
-					auto pktIdx = _prepareResourcesIterator->_stepper._drawablePktIdxOffset+next->_fbDescIdx;
+					auto pktIdx = _prepareResourcesIterator->_stepper._drawablePktIdxOffset+(next->_fbDescIdx&0xffff);
 					assert(pktIdx < _prepareResourcesIterator->_drawablePkt.size());
 					auto preparation = Techniques::PrepareResources(*_prepareResourcesIterator->_pipelineAcceleratorPool, *next->_sequencerConfig, _prepareResourcesIterator->_drawablePkt[pktIdx]);
 					if (preparation)

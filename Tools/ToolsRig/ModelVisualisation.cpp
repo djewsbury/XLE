@@ -215,11 +215,8 @@ namespace ToolsRig
 			if (_actualized->_skeletonInterface)
 				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput));
 
-			RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
-			XlZeroMemory(pkts);
-			pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
 			auto localToWorld = Identity<Float4x4>();
-			_actualized->_renderer->BuildDrawables(MakeIteratorRange(pkts), localToWorld, instanceIdx, _preDrawDelegate);
+			_actualized->_renderer->BuildDrawables(executeContext._destinationPkts, localToWorld, instanceIdx, _preDrawDelegate);
 		}
 
 		void ExecuteScene(

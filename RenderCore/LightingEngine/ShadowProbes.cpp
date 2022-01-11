@@ -12,6 +12,7 @@
 #include "../Techniques/Services.h"
 #include "../Techniques/SystemUniformsDelegate.h"
 #include "../Techniques/DrawableDelegates.h"
+#include "../Techniques/Drawables.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
@@ -191,7 +192,8 @@ namespace RenderCore { namespace LightingEngine
 				result._type = LightingEngine::StepType::MultiViewParseScene;
 				result._multiViewDesc = CreateProjectionDescs(
 					MakeIteratorRange(_pimpl->_probes.begin()+_probeIterator, _pimpl->_probes.begin()+_probeIterator+nextBatchCount));
-				result._pkt = &_drawablePkt;
+				result._pkts.resize((unsigned)Techniques::Batch::Max);
+				result._pkts[(unsigned)Techniques::Batch::Opaque] = &_drawablePkt;
 				_pendingViews.reserve(result._multiViewDesc.size());
 				for (const auto&v:result._multiViewDesc) _pendingViews.push_back(v._worldToProjection);
 				return result;

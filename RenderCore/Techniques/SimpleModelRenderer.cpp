@@ -149,9 +149,7 @@ namespace RenderCore { namespace Techniques
 				drawables[c] = nullptr;
 				continue;
 			}
-			if (!pkts[c])
-				Throw(::Exceptions::BasicLabel("Drawables packet not provided for batch filter %i", c));
-			drawables[c] = pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawablesCount[c]);
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable>(_drawablesCount[c]) : nullptr;
 		}
 
 		auto* drawableFn = (viewMask==1) ? (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStatic : (Techniques::ExecuteDrawableFn*)&DrawFn_SimpleModelStaticMultiView; 
@@ -173,6 +171,7 @@ namespace RenderCore { namespace Techniques
                 const auto& drawCall = rawGeo._drawCalls[d];
 				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _geos[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
@@ -210,6 +209,7 @@ namespace RenderCore { namespace Techniques
                     // index buffer and vertex buffer and topology
                     // then we just execute the draw command
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
@@ -277,9 +277,7 @@ namespace RenderCore { namespace Techniques
 				drawables[c] = nullptr;
 				continue;
 			}
-			if (!pkts[c])
-				Throw(::Exceptions::BasicLabel("Drawables packet not provided for batch filter %i", c));
-			drawables[c] = pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(_drawablesCount[c]);
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<SimpleModelDrawable_Delegate>(_drawablesCount[c]) : nullptr;
 		}
 
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
@@ -299,6 +297,7 @@ namespace RenderCore { namespace Techniques
                 const auto& drawCall = rawGeo._drawCalls[d];
 				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _geos[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
@@ -338,6 +337,7 @@ namespace RenderCore { namespace Techniques
                     // index buffer and vertex buffer and topology
                     // then we just execute the draw command
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
 				drawable._pipeline = compiledGeoCall._pipelineAccelerator;
@@ -370,9 +370,7 @@ namespace RenderCore { namespace Techniques
 				drawables[c] = nullptr;
 				continue;
 			}
-			if (!pkts[c])
-				Throw(::Exceptions::BasicLabel("Drawables packet not provided for batch filter %i", c));
-			drawables[c] = pkts[c]->_drawables.Allocate<GeometryProcable>(_drawablesCount[c]);
+			drawables[c] = pkts[c] ? pkts[c]->_drawables.Allocate<GeometryProcable>(_drawablesCount[c]) : nullptr;
 		}
 
 		const auto& cmdStream = _modelScaffold->CommandStream();
@@ -390,6 +388,7 @@ namespace RenderCore { namespace Techniques
                 const auto& drawCall = rawGeo._drawCalls[d];
 				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _geos[geoCall._geoId];
 				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
@@ -415,6 +414,7 @@ namespace RenderCore { namespace Techniques
                 const auto& drawCall = rawGeo._drawCalls[d];
 				const auto& compiledGeoCall = geoCallIterator[drawCall._subMaterialIndex];
 
+				if (!drawables[compiledGeoCall._batchFilter]) continue;
 				auto& drawable = *drawables[compiledGeoCall._batchFilter]++;
 				drawable._geo = _boundSkinnedControllers[geoCall._geoId];
 				drawable._inputAssembly = _drawableIAs[compiledGeoCall._iaIdx];
@@ -697,18 +697,21 @@ namespace RenderCore { namespace Techniques
 					topology,
 					mat->_stateSet);
 
-			resultGeoCall._batchFilter = (unsigned)BatchFilter::General;
-			if (mat->_stateSet._forwardBlendOp == BlendOp::NoBlending) {
-                resultGeoCall._batchFilter = (unsigned)BatchFilter::General;
-            } else {
+			resultGeoCall._batchFilter = (unsigned)Batch::Opaque;
+			if (mat->_stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::ForwardBlend && mat->_stateSet._forwardBlendOp != BlendOp::NoBlending) {
                 if (mat->_stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::BlendType) {
-                    switch (RenderCore::Assets::RenderStateSet::BlendType(mat->_stateSet._blendType)) {
-                    case RenderCore::Assets::RenderStateSet::BlendType::DeferredDecal: resultGeoCall._batchFilter = (unsigned)BatchFilter::General; break;
-                    case RenderCore::Assets::RenderStateSet::BlendType::Ordered: resultGeoCall._batchFilter = (unsigned)BatchFilter::SortedBlending; break;
-                    default: resultGeoCall._batchFilter = (unsigned)BatchFilter::PostOpaque; break;
+                    switch (mat->_stateSet._blendType) {
+                    case RenderCore::Assets::RenderStateSet::BlendType::Basic: 
+					case RenderCore::Assets::RenderStateSet::BlendType::Ordered:
+						resultGeoCall._batchFilter = (unsigned)Batch::Blending;
+						break;
+                    case RenderCore::Assets::RenderStateSet::BlendType::DeferredDecal:
+					default:
+						resultGeoCall._batchFilter = (unsigned)Batch::Opaque; 
+						break;
                     }
                 } else {
-                    resultGeoCall._batchFilter = (unsigned)BatchFilter::General;
+                    resultGeoCall._batchFilter = (unsigned)Batch::Blending;
                 }
             }
 
@@ -803,7 +806,7 @@ namespace RenderCore { namespace Techniques
 
 		// Check to make sure we've got a skeleton binding for each referenced geo call to world referenced
 		// Also count up the number of drawables that are going to be requires
-		static_assert(dimof(_drawablesCount) == (size_t)BatchFilter::Max);
+		static_assert(dimof(_drawablesCount) == (size_t)Batch::Max);
 		XlZeroMemory(_drawablesCount);
 		auto geoCallIterator = _geoCalls.begin();
 		for (unsigned g=0; g<cmdStream.GetGeoCallCount(); g++) {

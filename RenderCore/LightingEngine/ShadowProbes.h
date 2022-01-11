@@ -6,11 +6,12 @@
 
 #include "LightingEngine.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../Format.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class IPipelineAcceleratorPool; }}
 namespace RenderCore { class IResourceView; class IThreadContext; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 namespace RenderCore { namespace LightingEngine

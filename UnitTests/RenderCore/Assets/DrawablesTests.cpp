@@ -280,8 +280,8 @@ namespace UnitTests
 			renderer->StallWhilePending();
 			REQUIRE(renderer->GetAssetState() == ::Assets::AssetState::Ready);
 
-			Techniques::DrawablesPacket pkts[(unsigned)Techniques::BatchFilter::Max];
-			Techniques::DrawablesPacket* drawablePktsPtrs[] = { &pkts[0], &pkts[1], &pkts[2], &pkts[3] };
+			Techniques::DrawablesPacket pkts[(unsigned)Techniques::Batch::Max];
+			Techniques::DrawablesPacket* drawablePktsPtrs[] = { &pkts[0], &pkts[1] };
 			static_assert(dimof(pkts) == dimof(drawablePktsPtrs));
 			renderer->Actualize()->BuildDrawables(MakeIteratorRange(drawablePktsPtrs));
 				

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "../Techniques/RenderPass.h"
-#include "../Techniques/Drawables.h"		// for BatchFilter
+#include "../Techniques/Drawables.h"		// for BatchFlags
 #include "../../Utility/ParameterBox.h"
 
 namespace RenderCore { namespace Techniques 
@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate = nullptr,
-			Techniques::BatchFilter batchFilter = Techniques::BatchFilter::Max,
+			Techniques::BatchFlags::BitField batchFilter = Techniques::BatchFlags::Opaque,
 			ParameterBox&& sequencerSelectors = {},
 			std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegates = {});
 		void AddSubpass(
@@ -51,7 +51,7 @@ namespace RenderCore { namespace LightingEngine
 			Type _type;
 			std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> _techniqueDelegate;
 			ParameterBox _sequencerSelectors;
-			Techniques::BatchFilter _batchFilter;
+			Techniques::BatchFlags::BitField _batchFilter;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			std::function<void(LightingTechniqueIterator&)> _lightingIteratorFunction;
 		};

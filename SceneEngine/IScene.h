@@ -9,7 +9,7 @@
 #include "../RenderCore/LightingEngine/StandardLightScene.h"
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; enum class BatchFilter; } }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; class LightSourceOperatorDesc; class ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
@@ -32,12 +32,11 @@ namespace SceneEngine
     {
     public:
         SceneView _view;
-        RenderCore::Techniques::BatchFilter _batchFilter = RenderCore::Techniques::BatchFilter(0);
-        RenderCore::Techniques::DrawablesPacket* _destinationPkt = nullptr;
+        IteratorRange<RenderCore::Techniques::DrawablesPacket**> _destinationPkts;
         mutable char _quickMetrics[4096];
 
-        ExecuteSceneContext(const SceneView& view, RenderCore::Techniques::BatchFilter batchFilter, RenderCore::Techniques::DrawablesPacket* destinationPkt)
-        :  _view(view), _batchFilter(batchFilter), _destinationPkt(destinationPkt)
+        ExecuteSceneContext(const SceneView& view, IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts)
+        :  _view(view), _destinationPkts(destinationPkts)
         { _quickMetrics[0] = '\0'; }
         ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };

@@ -144,7 +144,7 @@ namespace RenderCore { namespace LightingEngine
 
 				ParameterBox box;
 				box.SetParameter("GBUFFER_TYPE", (unsigned)gbufferType);
-				createGBuffer->AddSubpass(std::move(subpass), defIllumDel, Techniques::BatchFilter::General, std::move(box), std::move(srDelegate));
+				createGBuffer->AddSubpass(std::move(subpass), defIllumDel, Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
 				return createGBuffer;
 			});
 		return result;
@@ -405,7 +405,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// prepare-only steps
 					for (const auto&shadowPreparer:captures->_shadowPreparationOperators->_operators) {
-						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFilter::General);
+						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFlags::Opaque);
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
 

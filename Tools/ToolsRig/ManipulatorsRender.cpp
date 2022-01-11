@@ -61,10 +61,12 @@ namespace ToolsRig
 		using namespace RenderCore;
 		using namespace SceneEngine;
 		SceneEngine::ExecuteSceneContext sceneExeContext;
-        Techniques::DrawablesPacket pkt;
-        sceneExeContext._destinationPkt = &pkt;
+        Techniques::DrawablesPacket pkts[(unsigned)Techniques::Batch::Max];
+        Techniques::DrawablesPacket* pktPtrs[(unsigned)Techniques::Batch::Max];
+        for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+            pktPtrs[c] = &pkts[c];
+        sceneExeContext._destinationPkts = MakeIteratorRange(pktPtrs);
         sceneExeContext._view = {SceneView::Type::Normal, parserContext.GetProjectionDesc()};
-        sceneExeContext._batchFilter = Techniques::BatchFilter::General;
 		if (materialGuid == ~0ull) {
 			renderer.BuildDrawables(
 				sceneExeContext,
@@ -74,11 +76,10 @@ namespace ToolsRig
 			renderer.BuildDrawables(sceneExeContext, cellSet, filterBegin, filterEnd, del);
 		}
 
-		Techniques::Draw(
-			parserContext,
-            pipelineAccelerators,
-			sequencerConfig, 
-			pkt);
+        for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
+            if (pkts[c]._drawables.empty()) continue;
+            Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkts[c]);
+        }
     }
 
 	class TechniqueBox

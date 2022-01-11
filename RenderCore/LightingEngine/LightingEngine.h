@@ -4,10 +4,11 @@
 
 #pragma once
 
-#include "../Techniques/Drawables.h"		// for Techniques::BatchFilter
+#include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; }}
+namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 
 namespace RenderCore { namespace LightingEngine
@@ -25,8 +26,7 @@ namespace RenderCore { namespace LightingEngine
 		struct Step
 		{
 			StepType _type = StepType::Abort;
-			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
-			Techniques::DrawablesPacket* _pkt = nullptr;
+			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
 			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
 			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
 

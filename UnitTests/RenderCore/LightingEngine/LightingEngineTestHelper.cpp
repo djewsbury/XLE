@@ -90,8 +90,8 @@ namespace UnitTests
 			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
 			if (next._type == LightingEngine::StepType::DrawSky) continue;
 			assert(next._type == LightingEngine::StepType::ParseScene);
-			assert(next._pkt);
-			drawableWriter.WriteDrawables(*next._pkt);
+			assert(!next._pkts.empty() && next._pkts[0]);
+			drawableWriter.WriteDrawables(*next._pkts[0]);
 		}
 	}
 

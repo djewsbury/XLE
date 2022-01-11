@@ -392,7 +392,7 @@ namespace SceneEngine
             BuildDrawablesMetrics* metrics = nullptr);
 
         void BuildDrawables(
-            RenderCore::Techniques::DrawablesPacket& destinationPkt,
+            IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
             const Placements& placements,
             IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
             const Float3x4& cellToWorld,
@@ -900,9 +900,6 @@ namespace SceneEngine
             // ideal for this architecture. Mostly the cell is intended to work as a 
             // immutable atomic object. However, we really need filtering for some things.
 
-		RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
-        pkts[unsigned(executeContext._batchFilter)] = executeContext._destinationPkt;
-
         if (_imposters && _imposters->IsEnabled()) { //////////////////////////////////////////////////////////////////
             if (doFilter) {
                 for (auto o:objects) {
@@ -910,13 +907,13 @@ namespace SceneEngine
                     while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
                     if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
                     helper.Render<true>(
-                        MakeIteratorRange(pkts), *_cache,
+                        executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
                 }
             } else {
                 for (auto o:objects)
                     helper.Render<true>(
-                        MakeIteratorRange(pkts), *_cache,
+                        executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);
             }
         } else { //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -926,13 +923,13 @@ namespace SceneEngine
                     while (filterIterator != filterEnd && *filterIterator < obj._guid) { ++filterIterator; }
                     if (filterIterator == filterEnd || *filterIterator != obj._guid) { continue; }
                     helper.Render<false>(
-                        MakeIteratorRange(pkts), *_cache,
+                        executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, obj, cellToWorld, cameraPositionCell);
                 }
             } else {
                 for (auto o:objects)
                     helper.Render<false>(
-                        MakeIteratorRange(pkts), *_cache,
+                        executeContext._destinationPkts, *_cache,
                         filenamesBuffer, supplementsBuffer, objRef[o], cellToWorld, cameraPositionCell);
             }
         } /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -941,7 +938,7 @@ namespace SceneEngine
     }
 
     void PlacementsRenderer::Pimpl::BuildDrawables(
-        RenderCore::Techniques::DrawablesPacket& destinationPkt,
+        IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
         const Placements& placements,
         IteratorRange<const std::pair<unsigned, uint32_t>*> objects,
         const Float3x4& cellToWorld,
@@ -954,12 +951,9 @@ namespace SceneEngine
         const auto* objRef = placements.GetObjectReferences();
         auto cameraPositionCell = Zero<Float3>();
 
-        RenderCore::Techniques::DrawablesPacket* pkts[unsigned(RenderCore::Techniques::BatchFilter::Max)];
-        pkts[unsigned(RenderCore::Techniques::BatchFilter::General)] = &destinationPkt;
-
         for (auto o:objects)
             helper.Render<false>(
-                MakeIteratorRange(pkts), *_cache,
+                pkts, *_cache,
                 filenamesBuffer, supplementsBuffer, objRef[o.first], cellToWorld, cameraPositionCell,
                 o.second);
 
@@ -1134,7 +1128,7 @@ namespace SceneEngine
 
             auto* plc = _pimpl->CullCell(visibleObjects, worldToCullingFrustums, partialMask, *i);
             if (plc)
-                _pimpl->BuildDrawables(*executeContext._destinationPkt, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                _pimpl->BuildDrawables(executeContext._destinationPkts, *plc, MakeIteratorRange(visibleObjects), i->_cellToWorld);
         }
     }
 

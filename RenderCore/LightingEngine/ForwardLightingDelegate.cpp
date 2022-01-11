@@ -221,7 +221,7 @@ namespace RenderCore { namespace LightingEngine
 		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
-		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFilter::General);
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFlags::Opaque);
 		return result;
 	}
 
@@ -237,7 +237,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto srDelegateFuture = Internal::CreateBuildGBufferResourceDelegate();
 		srDelegateFuture.StallWhilePending();
-		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFilter::General, {}, srDelegateFuture.Actualize());
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFlags::Opaque, {}, srDelegateFuture.Actualize());
 		return result;
 	}
 
@@ -290,7 +290,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFilter::General, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate(balancedNoiseTexture));
+		result.AddSubpass(std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box), captures->_lightScene->CreateMainSceneResourceDelegate(balancedNoiseTexture));
 		return result;
 	}
 

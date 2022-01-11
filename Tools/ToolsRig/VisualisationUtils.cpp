@@ -247,8 +247,8 @@ namespace ToolsRig
 						auto next = lightingIterator.GetNextStep();
 						if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
 						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
-							assert(next._pkt);
-							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, next._batch, next._pkt});
+							assert(!next._pkts.empty());
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), SceneEngine::ExecuteSceneContext{SceneEngine::SceneView{}, MakeIteratorRange(next._pkts)});
 						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
 							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 						}
@@ -719,7 +719,7 @@ namespace ToolsRig
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_visWireframeCfg,
-					sceneView, RenderCore::Techniques::BatchFilter::General,
+					sceneView, RenderCore::Techniques::Batch::Opaque,
 					**scene);
 			}
 
@@ -727,7 +727,7 @@ namespace ToolsRig
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_visNormalsCfg,
-					sceneView, RenderCore::Techniques::BatchFilter::General,
+					sceneView, RenderCore::Techniques::Batch::Opaque,
 					**scene);
 			}
 
@@ -743,7 +743,7 @@ namespace ToolsRig
 				SceneEngine::ExecuteSceneRaw(
 					parserContext, *_pimpl->_pipelineAccelerators,
 					*_pimpl->_primeStencilCfg,
-					sceneView, RenderCore::Techniques::BatchFilter::General,
+					sceneView, RenderCore::Techniques::Batch::Opaque,
 					**scene);
 				if (visContent)
 					visContent->SetCustomDrawDelegate(oldDelegate);
@@ -931,7 +931,9 @@ namespace ToolsRig
 		Techniques::ParsingContext parserContext { techniqueContext, threadContext };
 
 		RenderCore::Techniques::DrawablesPacket pkt;
-        scene.ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{{SceneEngine::SceneView::Type::Other}, RenderCore::Techniques::BatchFilter::General, &pkt});
+		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
+		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
+        scene.ExecuteScene(threadContext, SceneEngine::ExecuteSceneContext{{SceneEngine::SceneView::Type::Other}, MakeIteratorRange(pkts)});
 		
 		SceneEngine::ModelIntersectionStateContext stateContext {
             SceneEngine::ModelIntersectionStateContext::RayTest,

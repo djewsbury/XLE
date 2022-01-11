@@ -7,9 +7,9 @@
 #include "LightingEngine.h"
 #include "../../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; } }
-namespace RenderCore { class IDevice; class FrameBufferProperties; }
-namespace RenderCore { namespace Assets { class PredefinedPipelineLayoutFile; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
+namespace RenderCore { class IDevice; class FrameBufferProperties; class ICompiledPipelineLayout; }
+namespace RenderCore { namespace Assets { class PredefinedPipelineLayoutFile; class PredefinedDescriptorSetLayout; }}
 
 namespace RenderCore { namespace LightingEngine
 {

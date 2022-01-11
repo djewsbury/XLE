@@ -177,14 +177,20 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		const DrawablesPacket& drawablePkt);
 
-	enum class BatchFilter
+	enum class Batch
     {
-        General,                // general rendering batch
-        PostOpaque,				// forward rendering mode after the deferred render step (where alpha blending can be used)
-        SortedBlending,         // blending step with pixel-accurate depth sorting
-		PreDepth,               // objects that should get a pre-depth pass
-		Max
+        Opaque, Blending, Max
     };
+	
+	namespace BatchFlags
+	{
+		enum Flags
+		{
+			Opaque = 1u<<unsigned(Batch::Opaque),
+			Blending = 1u<<unsigned(Batch::Blending)
+		};
+		using BitField = unsigned;
+	}
 
 	class DrawableMaterial
 	{

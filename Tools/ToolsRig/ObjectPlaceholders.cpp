@@ -144,7 +144,7 @@ namespace ToolsRig
 		}
 #endif
 
-		auto* drawables = pkts[(unsigned)RenderCore::Techniques::BatchFilter::General]->_drawables.Allocate<SimpleModelDrawable>(_drawCalls.size());
+		auto* drawables = pkts[(unsigned)RenderCore::Techniques::Batch::Opaque]->_drawables.Allocate<SimpleModelDrawable>(_drawCalls.size());
 		for (const auto& drawCall:_drawCalls) {
 			auto& drawable = *drawables++;
 			drawable._pipeline = _pipelineAccelerator;
@@ -402,7 +402,7 @@ namespace ToolsRig
         const auto& chld = obj._children;
         if (!chld.size()) return;
 
-		auto& pkt = *pkts[(unsigned)RenderCore::Techniques::BatchFilter::General];
+		auto& pkt = *pkts[(unsigned)RenderCore::Techniques::Batch::Opaque];
 
         auto vbData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::VB, chld.size() * sizeof(Float3));
         for (size_t c=0; c<chld.size(); ++c) {
@@ -447,15 +447,14 @@ namespace ToolsRig
 
 	void ObjectPlaceholders::BuildDrawables(const SceneEngine::ExecuteSceneContext& executeContext)
 	{
-		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::BatchFilter::Max];
-		pkts[(unsigned)executeContext._batchFilter] = executeContext._destinationPkt;
+		auto pkts = executeContext._destinationPkts;
 		if (Tweakable("DrawMarkers", true)) {
 			auto* visBox = ::Assets::MakeAsset<VisGeoBox>(_pipelineAcceleratorPool)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeId);
 				for (const auto&o:objects) {
 					if (!o->_properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(*o)) continue;
-					DrawSphereStandIn(_pipelineAcceleratorPool, MakeIteratorRange(pkts), GetTransform(*o));
+					DrawSphereStandIn(_pipelineAcceleratorPool, pkts, GetTransform(*o));
 				}
 			}
 
@@ -469,7 +468,7 @@ namespace ToolsRig
 					auto translation = ExtractTranslation(trans);
 					trans = MakeObjectToWorld(-Normalize(translation), Float3(0.f, 0.f, 1.f), translation);
 
-					DrawPointerStandIn(_pipelineAcceleratorPool, MakeIteratorRange(pkts), trans);
+					DrawPointerStandIn(_pipelineAcceleratorPool, pkts, trans);
 				}
 			}
 
@@ -483,7 +482,7 @@ namespace ToolsRig
 							auto shape = o->_properties.GetParameter(Parameters::Shape, 0u);
 							unsigned vertexCount = 12 * 12 * 6;	// (must agree with the shader!)
 
-							auto& drawable = *pkts[(unsigned)RenderCore::Techniques::BatchFilter::General]->_drawables.Allocate<SimpleModelDrawable>(1);
+							auto& drawable = *pkts[(unsigned)RenderCore::Techniques::Batch::Opaque]->_drawables.Allocate<SimpleModelDrawable>(1);
 							switch (shape) { 
 							case 2: drawable._pipeline = visBox->_genTube; break;
 							case 3: drawable._pipeline = visBox->_genRectangle; vertexCount = 6*6; break;

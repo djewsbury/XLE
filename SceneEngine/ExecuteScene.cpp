@@ -8,6 +8,7 @@
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
+#include "../RenderCore/Techniques/Drawables.h"
 #include "../Assets/Marker.h"
 
 namespace SceneEngine
@@ -16,11 +17,13 @@ namespace SceneEngine
 		RenderCore::Techniques::ParsingContext& parserContext,
 		const RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		RenderCore::Techniques::SequencerConfig& sequencerConfig,
-		const SceneView& view, RenderCore::Techniques::BatchFilter batchFilter,
+		const SceneView& view, RenderCore::Techniques::Batch batch,
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
-        scene.ExecuteScene(parserContext.GetThreadContext(), ExecuteSceneContext{view, batchFilter, &pkt});
+		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max];
+		pkts[(unsigned)batch] = &pkt;
+        scene.ExecuteScene(parserContext.GetThreadContext(), ExecuteSceneContext{view, MakeIteratorRange(pkts)});
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
     }
 
@@ -47,10 +50,10 @@ namespace SceneEngine
 			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
 			if (next._type == LightingEngine::StepType::DrawSky) continue;
 			assert(next._type == LightingEngine::StepType::ParseScene);
-			assert(next._pkt);
+			assert(!next._pkts.empty());
 
 			SceneView view { SceneView::Type::PrepareResources };
-			scene.ExecuteScene(threadContext, ExecuteSceneContext{view, Techniques::BatchFilter::General, next._pkt});
+			scene.ExecuteScene(threadContext, ExecuteSceneContext{view, MakeIteratorRange(next._pkts)});
 		}
 
 		return prepareLightingIterator.GetResourcePreparationMarker();

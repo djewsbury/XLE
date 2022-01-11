@@ -108,7 +108,8 @@ namespace ToolsRig
             RenderCore::IThreadContext& threadContext,
 			const SceneEngine::ExecuteSceneContext& executeContext) const override
         {
-			if (executeContext._batchFilter != RenderCore::Techniques::BatchFilter::General) return;
+			auto* pkt = executeContext._destinationPkts[(unsigned)RenderCore::Techniques::Batch::Opaque];
+			if (!pkt) return;
 
 			auto usi = std::make_shared<UniformsStreamInterface>();
 			usi->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
@@ -128,10 +129,10 @@ namespace ToolsRig
                     { Float3( 1.f,  1.f, 0.f),  Float3(0.f, 0.f, 1.f), Float2(1.f, 0.f), Float4(1.f, 0.f, 0.f, 1.f) }
                 };
 
-				auto space = executeContext._destinationPkt->AllocateStorage(Techniques::DrawablesPacket::Storage::VB, sizeof(vertices));
+				auto space = pkt->AllocateStorage(Techniques::DrawablesPacket::Storage::VB, sizeof(vertices));
 				std::memcpy(space._data.begin(), vertices, sizeof(vertices));
 
-				auto& drawable = *executeContext._destinationPkt->_drawables.Allocate<MaterialSceneParserDrawable>();
+				auto& drawable = *pkt->_drawables.Allocate<MaterialSceneParserDrawable>();
 				if (pipeline->_descriptorSet) {
 					auto* t = pipeline->_descriptorSet->TryActualize();
 					drawable._descriptorSet = t ? *t : nullptr;
@@ -157,7 +158,7 @@ namespace ToolsRig
                     count = _visGeo._cubeVCount;
                 } else return;
 
-				auto& drawable = *executeContext._destinationPkt->_drawables.Allocate<MaterialSceneParserDrawable>();
+				auto& drawable = *pkt->_drawables.Allocate<MaterialSceneParserDrawable>();
 				if (pipeline->_descriptorSet) {
 					auto* t = pipeline->_descriptorSet->TryActualize();
 					drawable._descriptorSet = t ? *t : nullptr;
@@ -382,7 +383,7 @@ namespace ToolsRig
 	public:
 		::Assets::PtrToMarkerPtr<RenderCore::Metal::ShaderProgram> ResolveVariation(
 			const RenderCore::Techniques::CompiledShaderPatchCollection& shaderPatches,
-			IteratorRange<const ParameterBox**> selectors)
+			IteratorRange<const ParameterBox*const*> selectors)
 		{
 			using namespace RenderCore::Techniques;
 
@@ -404,7 +405,7 @@ namespace ToolsRig
 
 		ResolvedTechnique Resolve(
 			const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& shaderPatches,
-			IteratorRange<const ParameterBox**> selectors,
+			IteratorRange<const ParameterBox*const*> selectors,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			using namespace RenderCore::Techniques;

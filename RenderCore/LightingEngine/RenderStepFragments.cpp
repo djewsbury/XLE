@@ -20,7 +20,7 @@ namespace RenderCore { namespace LightingEngine
 	void RenderStepFragmentInterface::AddSubpass(
 		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 		std::shared_ptr<Techniques::ITechniqueDelegate> techniqueDelegate,
-		Techniques::BatchFilter batchFilter,
+		Techniques::BatchFlags::BitField batchFilter,
 		ParameterBox&& sequencerSelectors,
 		std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegate)
 	{

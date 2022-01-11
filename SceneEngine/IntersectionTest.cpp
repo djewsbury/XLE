@@ -136,15 +136,17 @@ namespace SceneEngine
 		{
 			using namespace RenderCore;
 			using namespace SceneEngine;
-            RenderCore::Techniques::DrawablesPacket pkt;
+            Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
+            Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
+            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
 			ExecuteSceneContext sceneExeContext;
             sceneExeContext._view = {SceneView::Type::Other, parsingContext.GetProjectionDesc()};
-            sceneExeContext._destinationPkt = &pkt;
-            sceneExeContext._batchFilter = RenderCore::Techniques::BatchFilter::General;
+            sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
 			placementsRenderer.BuildDrawables(
 				sceneExeContext,
 				cellSet, &object, &object+1);
-            intersectionContext.ExecuteDrawables(parsingContext, pkt, cameraForLOD);
+            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+                intersectionContext.ExecuteDrawables(parsingContext, pkt[c], cameraForLOD);
 		}
 
         return stateContext.GetResults();

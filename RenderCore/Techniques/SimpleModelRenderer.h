@@ -138,7 +138,7 @@ namespace RenderCore { namespace Techniques
 
 		std::vector<GeoCall> _geoCalls;
 		std::vector<GeoCall> _boundSkinnedControllerGeoCalls;
-		unsigned _drawablesCount[4];
+		unsigned _drawablesCount[2];
 
 		RenderCore::Assets::SkeletonBinding _skeletonBinding;
 

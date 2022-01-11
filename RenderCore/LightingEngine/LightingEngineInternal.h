@@ -20,8 +20,8 @@ namespace RenderCore { namespace LightingEngine
 		using StepFnSig = void(LightingTechniqueIterator&);
 		using ParseId = unsigned;
 
-		ParseId CreateParseScene(Techniques::BatchFilter);
-		ParseId CreateParseScene(Techniques::BatchFilter batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
+		ParseId CreateParseScene(Techniques::BatchFlags::BitField);
+		ParseId CreateParseScene(Techniques::BatchFlags::BitField batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
 
 		void CreateStep_CallFunction(std::function<StepFnSig>&&);
 		void CreateStep_ExecuteDrawables(
@@ -31,7 +31,7 @@ namespace RenderCore { namespace LightingEngine
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
-		ParseId CreatePrepareOnlyParseScene(Techniques::BatchFilter);
+		ParseId CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField);
 		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, ParseId parseId=0);
 
 		void ResolvePendingCreateFragmentSteps();
@@ -62,7 +62,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<ExecuteStep> _steps;
 		struct ParseStep
 		{
-			Techniques::BatchFilter _batch = Techniques::BatchFilter::Max;
+			Techniques::BatchFlags::BitField _batches = 0u;
 			ParseId _parseId;
 			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
 			bool _prepareOnly = false;
@@ -164,10 +164,10 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance _rpi;
 
 		void ExecuteDrawables(
-			LightingTechniqueSequence::ParseId parseId, 
+			LightingTechniqueSequence::ParseId parseId,
 			Techniques::SequencerConfig& sequencerCfg,
 			const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate = nullptr);
-		const Techniques::DrawablesPacket& GetDrawablesPacket(LightingTechniqueSequence::ParseId parseId);
+		void GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parse);
 
 		LightingTechniqueIterator(
 			Techniques::ParsingContext& parsingContext,
@@ -175,10 +175,13 @@ namespace RenderCore { namespace LightingEngine
 
 	private:
 		std::vector<Techniques::DrawablesPacket> _drawablePkt;
+		std::vector<bool> _drawablePktsReserved;
 		LightingTechniqueStepper _stepper;
 		enum class Phase { SequenceSetup, SceneParse, Execute };
 		Phase _currentPhase = Phase::SequenceSetup;
 		void ResetIteration(Phase newPhase);
+
+		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, LightingTechniqueSequence::ParseId parse, Techniques::BatchFlags::BitField batches);
 
 		friend class LightingTechniqueInstance;
 	};
