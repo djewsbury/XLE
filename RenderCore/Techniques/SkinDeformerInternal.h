@@ -101,12 +101,15 @@ namespace RenderCore { namespace Techniques
 		void StallForPipeline();
 		void OnFrameBarrier();
 		
-		struct PreparedPipelineLayout
+		struct PreparedSharedResources
 		{
 			std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 			Metal::BoundUniforms _boundUniforms;
+			std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
+			::Assets::DependencyValidation _depVal;
+			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
 		};
-		::Assets::Marker<PreparedPipelineLayout> _preparedPipelineLayout;
+		::Assets::Marker<PreparedSharedResources> _preparedSharedResources;
 		std::vector<PipelineMarkerPtr> _pipelines;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 
@@ -116,12 +119,9 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::vector<uint64_t> _pipelineHashes;
 		std::vector<ParameterBox> _pipelineSelectors;
-		::Assets::PtrToMarkerPtr<RenderCore::Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
-		uint64_t _predefinedPipelineLayoutNameHash;
-		std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
 		Threading::Mutex _mutex;
 
-		void RebuildPipelineLayout();
+		void RebuildSharedResources();
 	};
 
 	class GPUSkinDeformer : public IDeformer, public ISkinDeformer
@@ -175,7 +175,7 @@ namespace RenderCore { namespace Techniques
 		struct SkinIAParams
 		{
 			unsigned _weightsOffset, _jointIndicesOffset, _staticVertexAttachmentsStride;
-			unsigned _jointMatricesInstanceStride;
+			unsigned _dummy;
 		};
 		std::vector<SkinIAParams> _skinIAParams;
 

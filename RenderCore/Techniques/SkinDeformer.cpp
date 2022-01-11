@@ -40,7 +40,7 @@ namespace RenderCore { namespace Techniques
 		const Section& section,
 		IteratorRange<Float3x4*>		destination,
 		IteratorRange<const Float4x4*>	skeletonMachineResult) const
-    {
+	{
 		unsigned c=0;
 		if (_skeletonBinding.GetModelJointCount()) {
 			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Techniques
 
 		for (; c<destination.size(); ++c)
 			destination[c] = Identity<Float3x4>();
-    }
+	}
 
 	RenderCore::Assets::SkeletonBinding CPUSkinDeformer::CreateBinding(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
@@ -341,7 +341,7 @@ namespace RenderCore { namespace Techniques
 
 			// SkinInvocationParams
 			unsigned _softInfluenceCount, _firstJointTransform;
-			unsigned _skinIAParamsIdx;
+			unsigned _skinIAParamsIdx, _jointMatricesInstanceStride;
 		};
 
 		auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -363,17 +363,17 @@ namespace RenderCore { namespace Techniques
 			jointMatricesBuffer = temporaryMapping.AsResourceView();
 		}
 
-		auto preparedLayout = _pipelineCollection->_preparedPipelineLayout.TryActualize();
-		if (!preparedLayout) return;
+		auto sharedRes = _pipelineCollection->_preparedSharedResources.TryActualize();
+		if (!sharedRes) return;
 
-		auto encoder = metalContext.BeginComputeEncoder(preparedLayout->_pipelineLayout);
+		auto encoder = metalContext.BeginComputeEncoder(sharedRes->_pipelineLayout);
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 
 		const IResourceView* rvs[] { _staticVertexAttachmentsView.get(), &srcVB, &dstVB, &deformTemporariesVB, jointMatricesBuffer.get(), _iaParamsView.get(), _skinIAParamsView.get() };
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(rvs);
-		preparedLayout->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+		sharedRes->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
 		++metrics._descriptorSetWrites;
 
 		const Techniques::ComputePipelineAndLayout* currentPipelineLayout = nullptr;
@@ -392,7 +392,7 @@ namespace RenderCore { namespace Techniques
 				dispatch._vertexCount,  dispatch._firstVertex,
 				instanceCount, outputInstanceStride, outputInstanceStride, dispatch._iaParamsIdx,
 				dispatch._softInfluenceCount, dispatch._firstJointTransform,
-				dispatch._skinIAParamsIdx };
+				dispatch._skinIAParamsIdx, _jointMatricesInstanceStride };
 			auto groupCount = (dispatch._vertexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
 			encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
 			encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
@@ -792,12 +792,18 @@ namespace RenderCore { namespace Techniques
 		if (i!=_pipelineHashes.end())
 			return std::distance(_pipelineHashes.begin(), i);
 
-		const ParameterBox* sel[] { &selectors };
-		uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
-		auto operatorMarker = _pipelineCollection->CreateComputePipeline(
-			{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
-			"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
-			_patchCollection, MakeIteratorRange(patchExpansions));
+		auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
+		::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
+			operatorMarker->AdoptPromise(),
+			[pipelineCollection=_pipelineCollection, selectors](auto&& promise, const auto& preparedResources) {
+				const ParameterBox* sel[] { &selectors };
+				uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+				pipelineCollection->CreateComputePipeline(
+					std::move(promise),
+					preparedResources._pipelineLayout, 
+					"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
+					preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
+			});
 		_pipelines.push_back(operatorMarker);
 		_pipelineHashes.push_back(hash);
 		_pipelineSelectors.emplace_back(std::move(selectors));
@@ -807,7 +813,7 @@ namespace RenderCore { namespace Techniques
 	void SkinDeformerPipelineCollection::StallForPipeline()
 	{
 		ScopedLock(_mutex);
-		_preparedPipelineLayout.StallWhilePending();
+		_preparedSharedResources.StallWhilePending();
 		for (auto& p:_pipelines)
 			p->StallWhilePending();
 	}
@@ -815,28 +821,36 @@ namespace RenderCore { namespace Techniques
 	void SkinDeformerPipelineCollection::OnFrameBarrier()
 	{
 		ScopedLock(_mutex);
-		if (::Assets::IsInvalidated(*_predefinedPipelineLayout))
-			RebuildPipelineLayout();
+		bool rebuildAllPipelines = false;
+		if (::Assets::IsInvalidated(_preparedSharedResources)) {
+			RebuildSharedResources();
+			rebuildAllPipelines = true;
+		}
+
 		for (unsigned c=0; c<_pipelines.size(); ++c)
-			if (::Assets::IsInvalidated(*_pipelines[c])) {
-				const ParameterBox* sel[] { &_pipelineSelectors[c] };
-				uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
-				auto operatorMarker = _pipelineCollection->CreateComputePipeline(
-					{_predefinedPipelineLayout->ShareFuture(), _predefinedPipelineLayoutNameHash}, 
-					"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
-					_patchCollection, MakeIteratorRange(patchExpansions));
+			if (rebuildAllPipelines || ::Assets::IsInvalidated(*_pipelines[c])) {
+				auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
+				::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
+					operatorMarker->AdoptPromise(),
+					[pipelineCollection=_pipelineCollection, selectors=_pipelineSelectors[c]](auto&& promise, const auto& preparedResources) {
+						const ParameterBox* sel[] { &selectors };
+						uint64_t patchExpansions[] { Hash64("PerformDeform"), Hash64("GetDeformInvocationParams") };
+						pipelineCollection->CreateComputePipeline(
+							std::move(promise),
+							preparedResources._pipelineLayout, 
+							"xleres/Deform/deform-entry.compute.hlsl:frameworkEntry", MakeIteratorRange(sel),
+							preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
+					});
 				_pipelines[c] = std::move(operatorMarker);
 			}
 	}
 
-	void SkinDeformerPipelineCollection::RebuildPipelineLayout()
+	void SkinDeformerPipelineCollection::RebuildSharedResources()
 	{
-		std::string pipelineLayoutName = SKIN_PIPELINE ":Main";
-		_predefinedPipelineLayout = ::Assets::MakeAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>(pipelineLayoutName);
-		_predefinedPipelineLayoutNameHash = Hash64(pipelineLayoutName);
-		_preparedPipelineLayout = ::Assets::Marker<PreparedPipelineLayout>{};
-		::Assets::WhenAll(_predefinedPipelineLayout).ThenConstructToPromise(
-			_preparedPipelineLayout.AdoptPromise(),
+		_preparedSharedResources = ::Assets::Marker<PreparedSharedResources>{};
+		auto predefinedPipelineLayout = ::Assets::MakeAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>>(SKIN_PIPELINE ":Main");
+		::Assets::WhenAll(predefinedPipelineLayout).ThenConstructToPromise(
+			_preparedSharedResources.AdoptPromise(),
 			[device=_pipelineCollection->GetDevice()](auto predefinedPipelineLayoutActual) {
 				UniformsStreamInterface usi;
 				usi.BindResourceView(0, Hash64("StaticVertexAttachments"));
@@ -850,9 +864,20 @@ namespace RenderCore { namespace Techniques
 				UniformsStreamInterface pushConstantsUSI;
 				pushConstantsUSI.BindImmediateData(0, Hash64("InvocationParams"));
 
-				PreparedPipelineLayout result;
+				PreparedSharedResources result;
 				result._pipelineLayout = device->CreatePipelineLayout(predefinedPipelineLayoutActual->MakePipelineLayoutInitializer(Techniques::GetDefaultShaderLanguage()));
 				result._boundUniforms = Metal::BoundUniforms{ result._pipelineLayout, usi, pushConstantsUSI };
+
+				ShaderSourceParser::InstantiationRequest instRequests[] {
+					{ SKIN_COMPUTE_HLSL }
+				};
+				ShaderSourceParser::GenerateFunctionOptions generateOptions;
+				generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
+				auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), generateOptions);
+				result._patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
+
+				::Assets::DependencyValidationMarker depVals[] { predefinedPipelineLayoutActual->GetDependencyValidation(), result._patchCollection->GetDependencyValidation() };
+				result._depVal = ::Assets::GetDepValSys().Make(depVals);
 				return result;
 			});
 	}
@@ -861,15 +886,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<PipelineCollection> pipelineCollection)
 	: _pipelineCollection(std::move(pipelineCollection))
 	{
-		RebuildPipelineLayout();
-
-		ShaderSourceParser::InstantiationRequest instRequests[] {
-			{ SKIN_COMPUTE_HLSL }
-		};
-		ShaderSourceParser::GenerateFunctionOptions generateOptions;
-		generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
-		auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), generateOptions);
-		_patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
+		RebuildSharedResources();
 	}
 	SkinDeformerPipelineCollection::~SkinDeformerPipelineCollection() {}
 
