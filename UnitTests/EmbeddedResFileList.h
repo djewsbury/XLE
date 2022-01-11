@@ -216,6 +216,9 @@ X(Deferred/tiled.compute.hlsl, __LINE__)
 X(Forward/ForwardPlusLighting.hlsl, __LINE__)
 
 X(Deform/skin.compute.hlsl, __LINE__)
+X(Deform/skin.pipeline, __LINE__)
+X(Deform/deform-entry.compute.hlsl, __LINE__)
+X(Deform/deform-helper.compute.hlsl, __LINE__)
 
 X(Objects/Example/ConvToPBR.tech, __LINE__)
 X(Objects/Example/ProcWood/WoodGnarlGrainStain.graph, __LINE__)

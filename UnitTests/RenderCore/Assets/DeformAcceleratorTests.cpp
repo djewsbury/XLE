@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/CommonUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
+#include "../../../RenderCore/Metal/DeviceContext.h"		// required for memory barrier
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/GeoProc/NascentModel.h"
 #include "../../../RenderCore/GeoProc/NascentAnimController.h"
@@ -37,45 +38,6 @@ namespace UnitTests
 {
 	using namespace RenderCore;
 	using namespace RenderCore::Techniques;
-
-#if 0
-	class NewRendererSkeletonInterface
-	{
-	public:
-		void FeedInSkeletonMachineResults(
-			unsigned instanceIdx,
-			IteratorRange<const Float4x4*> skeletonMachineOutput)
-		{
-			for (const auto&d:_deformers)
-				((SkinDeformer*)d._skinDeformer->QueryInterface(typeid(SkinDeformer).hash_code()))->FeedInSkeletonMachineResults(
-					instanceIdx, skeletonMachineOutput, d._deformerBindings);
-		}
-
-		NewRendererSkeletonInterface(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IteratorRange<const std::shared_ptr<IDeformOperator>*> skinDeformers)
-		{
-			_deformers.resize(skinDeformers.size());
-			for (auto&d:skinDeformers) {
-				SkinDeformer* deformer = (SkinDeformer*)d->QueryInterface(typeid(SkinDeformer).hash_code());
-				if (!deformer)
-					Throw(std::runtime_error("Incorrect deformer type passed to RendererSkeletonInterface. Expecting SkinDeformer"));
-				_deformers.push_back(Deformer{ d, deformer->CreateBinding(smOutputInterface) });
-			}
-		}
-
-		~NewRendererSkeletonInterface()
-		{}
-
-	private:
-		struct Deformer
-		{
-			std::shared_ptr<IDeformOperator> _skinDeformer;
-			RenderCore::Assets::SkeletonBinding _deformerBindings;
-		};
-		std::vector<Deformer> _deformers;
-	};
-#endif
 
 	namespace GeoProc = RenderCore::Assets::GeoProc;
 
@@ -198,34 +160,6 @@ namespace UnitTests
 		return ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffold>>(*artifactCollection);
 	}
 
-#if 0
-	void RunDeformAcceleratorsTest(
-		std::shared_ptr<RenderCore::IDevice> device,
-		const TestAnimatedModelResources& resources)
-	{
-		auto threadContext = device->GetImmediateContext();
-
-		auto pool = Techniques::CreateDeformAcceleratorPool(device);
-		auto accelerator = pool->CreateDeformAccelerator("skin", resources._modelScaffold);
-
-		NewRendererSkeletonInterface skeletonInterface(
-			resources._modelScaffold->EmbeddedSkeleton().GetOutputInterface(),
-			pool->GetOperations(*accelerator, typeid(Techniques::SkinDeformer).hash_code()));
-		
-		pool->EnableInstance(*accelerator, 0);
-
-		std::vector<Float4x4> defaultSMResults;
-		defaultSMResults.resize(resources._modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount());
-		resources._modelScaffold->EmbeddedSkeleton().GenerateOutputTransforms(MakeIteratorRange(defaultSMResults), nullptr);
-		
-		skeletonInterface.FeedInSkeletonMachineResults(0, MakeIteratorRange(defaultSMResults));
-
-		pool->ReadyInstances(*threadContext);
-		threadContext->CommitCommands();
-		pool->OnFrameBarrier();
-	}
-#endif
-
 	static IResourcePtr LoadStorageBuffer(
 		IDevice& device,
 		const RenderCore::Assets::ModelScaffold& scaffold,
@@ -310,10 +244,8 @@ namespace UnitTests
 		deformInputBinding._geoBindings.push_back({
 			0, srcLayout, dstLayout
 		});
-		for (unsigned c=0; c<Techniques::Internal::VB_Count; ++c) {
-			deformInputBinding._geoBindings[0]._bufferStrides[c] = 0;
-			deformInputBinding._geoBindings[0]._bufferOffsets[c] = 0;
-		}
+		for (auto& o:deformInputBinding._geoBindings[0]._bufferOffsets) o = 0;
+		for (auto& s:deformInputBinding._geoBindings[0]._bufferStrides) s = 0;
 		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_GPUStaticData] = animVB._ia._vertexStride;
 		deformInputBinding._geoBindings[0]._bufferStrides[Techniques::Internal::VB_PostDeform] = CalculateVertexStrideForSlot(dstLayout, Techniques::Internal::VB_PostDeform);
 		deformer.Bind(deformInputBinding);
@@ -345,6 +277,22 @@ namespace UnitTests
 		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), outputResource->GetDesc()._linearBufferDesc._sizeInBytes, *inputView, *inputView, *outputView, metrics);
 		testHelper.EndFrameCapture();
 
+		{
+			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			barrier.pNext = nullptr;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkCmdPipelineBarrier(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				1, &barrier,
+				0, nullptr,
+				0, nullptr);
+		}
+
 		return outputResource->ReadBackSynchronized(*threadContext);
 	}
 
@@ -369,6 +317,8 @@ namespace UnitTests
 		geoBinding._geoId = 0;
 		geoBinding._inputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_CPUStaticData, 0});
 		geoBinding._outputElements.push_back({"POSITION", 0, Format::R32G32B32_FLOAT, Techniques::Internal::VB_PostDeform, 0});
+		for (auto& o:geoBinding._bufferOffsets) o = 0;
+		for (auto& s:geoBinding._bufferStrides) s = 0;
 		geoBinding._bufferStrides[Techniques::Internal::VB_CPUStaticData] = sizeof(Float3);
 		geoBinding._bufferStrides[Techniques::Internal::VB_PostDeform] = sizeof(Float3);
 		cpuSkinDeformer._bindingHelper._inputBinding._geoBindings.push_back(std::move(geoBinding));
@@ -394,7 +344,7 @@ namespace UnitTests
 		return AsFloat3s(eleRange);
 	}
 
-	TEST_CASE( "SkinDeformCPUVsGPU", "[rendercore_techniques]" )
+	TEST_CASE( "Deform-SkinCPUVsGPU", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -426,7 +376,7 @@ namespace UnitTests
 		globalServices->PrepareForDestruction();
 	}
 
-	TEST_CASE( "DeformAccelerator", "[rendercore_techniques]" )
+	TEST_CASE( "Deform-DeformAccelerator", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -472,7 +422,7 @@ namespace UnitTests
 		virtual void* QueryInterface(size_t) { return nullptr; }
 	};
 
-	TEST_CASE( "CPUDeformInstantiation", "[rendercore_techniques]" )
+	TEST_CASE( "Deform-CPUInstantiation", "[rendercore_techniques]" )
 	{
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto vertexCount = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._size / modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride;
@@ -602,7 +552,7 @@ namespace UnitTests
 		virtual ::Assets::DependencyValidation GetDependencyValidation() { return {}; }
 	};
 
-	TEST_CASE( "GPUDeformInstantiation", "[rendercore_techniques]" )
+	TEST_CASE( "Deform-GPUInstantiation", "[rendercore_techniques]" )
 	{
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto vertexCount = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._size / modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements._ia._vertexStride;

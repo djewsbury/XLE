@@ -1,6 +1,5 @@
 
 #include "deform-helper.compute.hlsl"
-#include "deform-util.hlsl"
 
 #if !IN_POSITION_FORMAT
 	#define IN_POSITION_FORMAT 6       // DXGIVALUE_R32G32B32_FLOAT
@@ -13,6 +12,17 @@
 #if !defined(BUFFER_FLAGS)
 	#define BUFFER_FLAGS 0
 #endif
+
+#define R32G32B32A32_FLOAT 2
+#define R32G32B32_FLOAT 6
+#define R16G16B16A16_FLOAT 10
+
+float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset);
+float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset);
+float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset);
+float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset);
+void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byteOffset);
+void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byteOffset);
 
 ByteAddressBuffer InputAttributes : register(t0);
 RWByteAddressBuffer OutputAttributes : register(u1);
@@ -54,6 +64,33 @@ struct LoadVertexResult
 	uint vertexIdx;
 	uint instanceIdx;
 };
+
+LoadVertexResult LoadVertex(uint dispatchIdx, DeformInvocationStruct invocationParams);
+void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformInvocationStruct invocationParams);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//   E N T R Y   P O I N T
+
+[numthreads(64, 1, 1)]
+	void frameworkEntry(uint dispatchIdx : SV_DispatchThreadID)
+{
+	DeformInvocationStruct invocationParams = GetDeformInvocationParams();
+	LoadVertexResult loadVertex = LoadVertex(dispatchIdx, invocationParams);
+	if (!loadVertex.success)
+		return;
+
+	#if defined(VERTEX_MAPPING)
+		IAParamsStruct iaParams = IAParams[invocationParams.ParamsIdx];
+		uint mappedVertex = VertexMapping.Load(iaParams.MappingBufferByteOffset+loadVertex.vertexIdx*4);
+	#else
+		uint mappedVertex = loadVertex.vertexIdx;
+	#endif
+	DeformVertex resultVertex = PerformDeform(loadVertex.vertex, mappedVertex, loadVertex.instanceIdx);
+	StoreVertex(resultVertex, loadVertex.vertexIdx, loadVertex.instanceIdx, invocationParams);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//   U T I L I T I E S
 
 LoadVertexResult LoadVertex(uint dispatchIdx, DeformInvocationStruct invocationParams)
 {
@@ -126,20 +163,82 @@ void StoreVertex(DeformVertex vertex, uint vertexIdx, uint instanceIdx, DeformIn
 	#endif
 }
 
-[numthreads(64, 1, 1)]
-	void frameworkEntry(uint dispatchIdx : SV_DispatchThreadID)
+float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
-	DeformInvocationStruct invocationParams = GetDeformInvocationParams();
-	LoadVertexResult loadVertex = LoadVertex(dispatchIdx, invocationParams);
-	if (!loadVertex.success)
-		return;
+	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
+		return asfloat(buffer.Load3(byteOffset));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint2 A = buffer.Load2(byteOffset);
+		return f16tof32(uint3(A.x&0xffff, A.x>>16, A.y&0xffff));
+	} else {
+		return 0;	// trouble
+	}
+}
 
-	#if defined(VERTEX_MAPPING)
-		IAParamsStruct iaParams = IAParams[invocationParams.ParamsIdx];
-		uint mappedVertex = VertexMapping.Load(iaParams.MappingBufferByteOffset+loadVertex.vertexIdx*4);
-	#else
-		uint mappedVertex = loadVertex.vertexIdx;
-	#endif
-	DeformVertex resultVertex = PerformDeform(loadVertex.vertex, mappedVertex, loadVertex.instanceIdx);
-	StoreVertex(resultVertex, loadVertex.vertexIdx, loadVertex.instanceIdx, invocationParams);
+float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32G32B32_FLOAT) {
+		return float4(asfloat(buffer.Load3(byteOffset)), 1);
+	} else if (format == R32G32B32A32_FLOAT) {
+		return asfloat(buffer.Load4(byteOffset));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint2 A = buffer.Load2(byteOffset);
+		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
+	} else {
+		return 0;	// trouble
+	}
+}
+
+float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
+		return asfloat(buffer.Load3(byteOffset));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint2 A = buffer.Load2(byteOffset);
+		return f16tof32(uint3(A.x&0xffff, A.x>>16, A.y&0xffff));
+	} else {
+		return 0;	// trouble
+	}
+}
+
+float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32G32B32_FLOAT) {
+		return float4(asfloat(buffer.Load3(byteOffset)), 1);
+	} else if (format == R32G32B32A32_FLOAT) {
+		return asfloat(buffer.Load4(byteOffset));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint2 A = buffer.Load2(byteOffset);
+		return f16tof32(uint4(A.x&0xffff, A.x>>16, A.y&0xffff, A.y>>16));
+	} else {
+		return 0;	// trouble
+	}
+}
+
+void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32G32B32_FLOAT) {
+		buffer.Store3(byteOffset, asuint(value));
+	} else if (format == R32G32B32A32_FLOAT) {
+		buffer.Store4(byteOffset, asuint(float4(value, 1)));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint3 A = f32tof16(value);
+		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), A.z&0xffff));
+	} else {
+		// trouble
+	}
+}
+
+void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byteOffset)
+{
+	if (format == R32G32B32_FLOAT) {
+		buffer.Store3(byteOffset, asuint(value.xyz));
+	} else if (format == R32G32B32A32_FLOAT) {
+		buffer.Store4(byteOffset, asuint(value));
+	} else if (format == R16G16B16A16_FLOAT) {
+		uint4 A = f32tof16(value);
+		buffer.Store2(byteOffset, uint2((A.x&0xffff)|(A.y<<16), (A.z&0xffff)|(A.w<<16)));
+	} else {
+		// trouble
+	}
 }
