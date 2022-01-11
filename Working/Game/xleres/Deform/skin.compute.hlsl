@@ -16,7 +16,7 @@ struct SkinIAParamsStruct		// per geo parameters
 	uint WeightsOffset;
 	uint JointIndicesOffsets;
 	uint StaticVertexAttachmentsStride;
-	uint JointMatricesInstanceStride;
+	uint Dummy;
 };
 
 StructuredBuffer<SkinIAParamsStruct> SkinIAParams : register(t6);
@@ -44,6 +44,7 @@ struct SkinInvocationStruct
 	uint SoftInfluenceCount;
 	uint FirstJointTransform;		// per section, not per geo
 	uint SkinParamsIdx;
+	uint JointMatricesInstanceStride;
 };
 
 [[vk::push_constant]] struct PushConstantsStruct
@@ -59,7 +60,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 	SkinInvocationStruct skinInvocationParams = GetSkinInvocationParams();
 	SkinIAParamsStruct skinIAParams = SkinIAParams[skinInvocationParams.SkinParamsIdx];
 	uint firstJointTransform = skinInvocationParams.FirstJointTransform;
-	firstJointTransform += instanceIdx * skinIAParams.JointMatricesInstanceStride;
+	firstJointTransform += instanceIdx * skinInvocationParams.JointMatricesInstanceStride;
 
 	float3 outputPosition = 0.0.xxx;
 	float3 outputNormal = 0.0.xxx;
