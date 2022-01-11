@@ -117,7 +117,7 @@ namespace GraphLanguage
 
         auto hash = Hash64(name.begin(), name.end());
         auto existing = _pimpl->_cache.find(hash);
-        if (existing == _pimpl->_cache.end() || existing->second->GetDependencyValidation() > 0) {
+        if (existing == _pimpl->_cache.end() || existing->second->GetDependencyValidation().GetValidationIndex() > 0) {
 			char resolvedFile[MaxPath];
 			_pimpl->_searchRules.ResolveFile(resolvedFile, name);
 			if (!resolvedFile[0])

@@ -31,6 +31,7 @@ namespace Assets
         void            IncreaseValidationIndex();      // (also increases validation index for any depvals dependent on this one)
 
         operator bool() const { return _marker != DependencyValidationMarker_Invalid; }
+        operator DependencyValidationMarker() const { return _marker; }
         friend bool operator==(const DependencyValidation& lhs, const DependencyValidation& rhs) { return lhs._marker == rhs._marker; }
         friend bool operator!=(const DependencyValidation& lhs, const DependencyValidation& rhs) { return lhs._marker != rhs._marker; }
         friend bool operator<(const DependencyValidation& lhs, const DependencyValidation& rhs) { return lhs._marker < rhs._marker; }
