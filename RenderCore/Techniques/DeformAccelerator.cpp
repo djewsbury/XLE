@@ -3,8 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformAccelerator.h"
-#include "SimpleModelDeform.h"
-#include "DeformerInternal.h"
+#include "DeformOperationFactory.h"
+#include "DeformInternal.h"
 #include "Services.h"
 #include "GPUTrackerHeap.h"
 #include "CommonUtils.h"

@@ -10,7 +10,6 @@
 #include "../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
-#include "../../RenderCore/Techniques/SimpleModelDeform.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderOverlays/AnimationVisualization.h"

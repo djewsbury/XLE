@@ -17,7 +17,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderPassUtils.cpp
         RenderStateResolver.cpp
         ShaderVariationSet.cpp
-        SimpleModelDeform.cpp
+        DeformOperationFactory.cpp
         SimpleModelRenderer.cpp
         SkinDeformer.cpp
         SystemUniformsDelegate.cpp
@@ -30,7 +30,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         PipelineCollection.cpp
         TextureCompilerUtil.cpp
         DeformAccelerator.cpp
-        DeformerInternal.cpp
+        DeformInternal.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
         )
     set(Headers
@@ -50,7 +50,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         RenderPassUtils.h
         RenderStateResolver.h
         ShaderVariationSet.h
-        SimpleModelDeform.h
+        DeformOperationFactory.h
         SimpleModelRenderer.h
         SkinDeformer.h
         SubFrameEvents.h

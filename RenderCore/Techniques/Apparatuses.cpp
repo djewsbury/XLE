@@ -12,7 +12,7 @@
 #include "ImmediateDrawables.h"
 #include "RenderPass.h"
 #include "SubFrameEvents.h"
-#include "SimpleModelDeform.h"
+#include "DeformOperationFactory.h"
 #include "SkinDeformer.h"
 #include "CommonResources.h"
 #include "SystemUniformsDelegate.h"

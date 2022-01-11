@@ -4,7 +4,7 @@
 
 #include "SkinDeformer.h"
 #include "SkinDeformerInternal.h"
-#include "DeformerInternal.h"		// (required for some utility functions)
+#include "DeformInternal.h"		// (required for some utility functions)
 #include "CommonUtils.h"
 #include "Services.h"
 #include "SubFrameEvents.h"

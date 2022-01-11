@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "SimpleModelDeform.h"
+#include "DeformOperationFactory.h"
 #include "Services.h"
 #include "../../Utility/MemoryUtils.h"
 

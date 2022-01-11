@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "SimpleModelDeform.h"
+#include "DeformOperationFactory.h"
 #include "CommonBindings.h"
 #include "PipelineCollection.h"
 #include "../Metal/InputLayout.h"

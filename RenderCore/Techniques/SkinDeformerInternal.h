@@ -5,8 +5,8 @@
 #pragma once
 
 #include "SkinDeformer.h"
-#include "DeformerInternal.h"
-#include "SimpleModelDeform.h"
+#include "DeformInternal.h"
+#include "DeformOperationFactory.h"
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/SkeletonScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"

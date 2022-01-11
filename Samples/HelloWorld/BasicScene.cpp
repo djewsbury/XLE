@@ -33,7 +33,7 @@
 #include "../../RenderCore/Techniques/BasicDelegates.h"
 #include "../../RenderCore/Metal/State.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
-#include "../../RenderCore/Techniques/SimpleModelDeform.h"
+#include "../../RenderCore/Techniques/DeformOperationFactory.h"
 
 namespace Sample
 {

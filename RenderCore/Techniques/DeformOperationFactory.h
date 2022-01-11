@@ -4,8 +4,7 @@
 
 #pragma once
 
-#include "../Types.h"
-#include "../VertexUtil.h"
+#include "DeformAccelerator.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
@@ -13,56 +12,8 @@
 #include <functional>
 #include <future>
 
-namespace RenderCore { namespace Assets { class ModelScaffold; }}
-namespace RenderCore { class IThreadContext; class IResourceView; }
-
 namespace RenderCore { namespace Techniques 
 {
-	class IDeformer
-	{
-	public:
-		struct Metrics
-		{
-			unsigned _dispatchCount = 0;
-			unsigned _vertexCount = 0;
-			unsigned _descriptorSetWrites = 0;
-			unsigned _constantDataSize = 0;
-			unsigned _inputStaticDataSize = 0;
-		};
-
-		virtual void ExecuteGPU(
-			IThreadContext& threadContext,
-			IteratorRange<const unsigned*> instanceIndices,
-			unsigned outputInstanceStride,
-			const IResourceView& srcVB,
-			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB,
-			Metrics& metrics) const;
-
-		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
-		virtual void ExecuteCPU(
-			IteratorRange<const unsigned*> instanceIndices,
-			unsigned outputInstanceStride,
-			IteratorRange<const void*> srcVB,
-			IteratorRange<const void*> deformTemporariesVB,
-			IteratorRange<const void*> dstVB) const;
-
-		virtual void* QueryInterface(size_t) = 0;
-		virtual ~IDeformer();
-	};
-
-	struct DeformerToRendererBinding
-	{
-		struct GeoBinding
-		{
-			unsigned _geoId = ~0u;
-			std::vector<InputElementDesc> _generatedElements;
-			std::vector<uint64_t> _suppressedElements;
-			unsigned _postDeformBufferOffset = 0;
-		};
-		std::vector<GeoBinding> _geoBindings;
-	};
-
 	struct DeformerInputBinding
 	{
 		struct GeoBinding

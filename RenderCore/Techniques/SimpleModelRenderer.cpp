@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SimpleModelRenderer.h"
-#include "SimpleModelDeform.h"
 #include "Drawables.h"
 #include "TechniqueUtils.h"
 #include "ParsingContext.h"
@@ -850,13 +849,6 @@ namespace RenderCore { namespace Techniques
 	}
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
-
-	struct DeformConstructionFuture
-	{
-	public:
-		std::string _pendingConstruction;
-		std::vector<DeformOperationInstantiation> _deformOps;
-	};
 
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,

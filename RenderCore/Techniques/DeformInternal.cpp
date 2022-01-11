@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "DeformerInternal.h"
+#include "DeformInternal.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
