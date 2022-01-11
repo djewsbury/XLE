@@ -745,6 +745,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				Internal::CaptureForBind capture(ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc);
 				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateLayout, capture.GetLayout());
+
+				// "7.9. Host Write Ordering Guarantees" suggests we shouldn't need a transfer -> host barrier here
 			}
 
 			return destaging.ReadBackSynchronized(context, subRes);

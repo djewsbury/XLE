@@ -177,6 +177,23 @@ namespace RenderCore { namespace Techniques
 			computeOp->EndDispatches();
 		}
 
+		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
+		{
+			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			barrier.pNext = nullptr;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkCmdPipelineBarrier(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				1, &barrier,
+				0, nullptr,
+				0, nullptr);
+		}
+
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
@@ -217,6 +234,23 @@ namespace RenderCore { namespace Techniques
 			us._immediateData = MakeIteratorRange(immData);
 			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 			computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
+		}
+
+		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
+		{
+			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+			barrier.pNext = nullptr;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			vkCmdPipelineBarrier(
+				metalContext.GetActiveCommandList().GetUnderlying().get(),
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				1, &barrier,
+				0, nullptr,
+				0, nullptr);
 		}
 
 		auto depVal = ::Assets::GetDepValSys().Make();

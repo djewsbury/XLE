@@ -539,6 +539,9 @@ namespace RenderCore { namespace Techniques
         auto& devContext = *Metal::DeviceContext::Get(threadContext);
         Metal::CompleteInitialization(devContext, {destagingResource.get()});
         devContext.BeginBlitEncoder().Copy(*destagingResource, *input);
+
+        // "7.9. Host Write Ordering Guarantees" suggests we shouldn't need a transfer -> host barrier here
+
         threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
         return destagingResource;
     }

@@ -52,7 +52,7 @@ namespace RenderCore { namespace LightingEngine
 			// Ensure the image is cleared
 			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
 			barrier.pNext = nullptr;
-			barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 			vkCmdPipelineBarrier(
 				metalContext.GetActiveCommandList().GetUnderlying().get(),
