@@ -21,6 +21,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	uint64_t CompiledPipelineLayout::GetGUID() const { return _guid; }
 	PipelineLayoutInitializer CompiledPipelineLayout::GetInitializer() const { return _initializer; }
 
+	static unsigned CalculateDynamicOffsetCount(IteratorRange<const DescriptorSlot*> signature)
+	{
+		unsigned result = 0;
+		for (const auto& s:signature)
+			if (s._type == DescriptorType::UniformBufferDynamicOffset || s._type == DescriptorType::UnorderedAccessBufferDynamicOffset)
+				++result;
+		return result;
+	}
+
 	CompiledPipelineLayout::CompiledPipelineLayout(
 		ObjectFactory& factory,
 		IteratorRange<const DescriptorSetBinding*> descriptorSets,
@@ -35,17 +44,23 @@ namespace RenderCore { namespace Metal_Vulkan
 		_descriptorSetCount = std::min((unsigned)descriptorSets.size(), s_maxBoundDescriptorSetCount);
 		_pushConstantBufferCount = std::min((unsigned)pushConstants.size(), s_maxPushConstantBuffers);
 		VkDescriptorSetLayout rawDescriptorSetLayouts[s_maxBoundDescriptorSetCount];
+		unsigned maxDynamicOffsetsCount = 0;
 		for (unsigned c=0; c<_descriptorSetCount; ++c) {
 			_descriptorSetLayouts[c] = descriptorSets[c]._layout;
 			rawDescriptorSetLayouts[c] = _descriptorSetLayouts[c]->GetUnderlying();
 			_blankDescriptorSets[c] = descriptorSets[c]._blankDescriptorSet;
+			_dynamicOffsetsCount[c] = CalculateDynamicOffsetCount(_descriptorSetLayouts[c]->GetDescriptorSlots());
 			_descriptorSetBindingNames[c] = Hash64(descriptorSets[c]._name);
 
 			#if defined(VULKAN_VERBOSE_DEBUG)
 				_blankDescriptorSetsDebugInfo[c] = descriptorSets[c]._blankDescriptorSetDebugInfo;
 				_descriptorSetStringNames[c] = descriptorSets[c]._name;
 			#endif
+
+			maxDynamicOffsetsCount = std::max(maxDynamicOffsetsCount, _dynamicOffsetsCount[c]);
 		}
+
+		_dynamicOffsetsBuffer.resize(maxDynamicOffsetsCount, 0);
 
 		// Vulkan is particular about how push constants work!
 		// Each range is bound to specific shader stages; but you can't overlap ranges,
@@ -185,10 +200,12 @@ namespace RenderCore { namespace Metal_Vulkan
 					break;
 
 				case DescriptorType::UniformBuffer:
+				case DescriptorType::UniformBufferDynamicOffset:
 					result._uniformBufferCount += b._count;
 					break;
 
 				case DescriptorType::UnorderedAccessBuffer:
+				case DescriptorType::UnorderedAccessBufferDynamicOffset:
 					result._storageBufferCount += b._count;
 					break;
 

@@ -87,7 +87,7 @@ namespace Assets
     public:
         virtual DependencyValidation Make(IteratorRange<const StringSection<>*> filenames) = 0;
         virtual DependencyValidation Make(IteratorRange<const DependentFileState*> filestates) = 0;
-        virtual DependencyValidation Make(IteratorRange<const DependencyValidationMarker*> dependencyAssets) = 0;
+        virtual DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) = 0;
         virtual DependencyValidation Make() = 0;
 
         inline DependencyValidation Make(StringSection<> filename);

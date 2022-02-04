@@ -5,13 +5,13 @@
 
 DescriptorSet Material
 {
-	UniformBuffer BasicMaterialConstants	// 0
+	UniformBufferDynamic BasicMaterialConstants	// 0
 	{
 		float3  MaterialDiffuse = {1.f,1.f,1.f}c;
 		float   Opacity = 1;
 		float3  MaterialSpecular = {1.f,1.f,1.f}c;
 		float   AlphaThreshold = .33f;
-		float   RoughnessMin = 0.5f;
+		float   RoughnessMin = 0.15f;
 		float   RoughnessMax = 1.f;
 		float   SpecularMin = 0.1f;
 		float   SpecularMax = 1.f;

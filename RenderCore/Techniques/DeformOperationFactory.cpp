@@ -85,28 +85,5 @@ namespace RenderCore { namespace Techniques
 		return Services::GetDeformOperationFactorySet();
 	}
 
-	void IDeformer::ExecuteGPU(
-		IThreadContext& threadContext,
-		IteratorRange<const unsigned*> instanceIndices,
-		unsigned outputInstanceStride,
-		const IResourceView& srcVB,
-		const IResourceView& deformTemporariesVB,
-		const IResourceView& dstVB,
-		Metrics& metrics) const
-	{
-		assert(0);
-	}
-
-	void IDeformer::ExecuteCPU(
-		IteratorRange<const unsigned*> instanceIndices,
-		unsigned outputInstanceStride,
-		IteratorRange<const void*> srcVB,
-		IteratorRange<const void*> deformTemporariesVB,
-		IteratorRange<const void*> dstVB) const
-	{
-		assert(0);
-	}
-
-	IDeformer::~IDeformer() {}
 	IDeformOperationFactory::~IDeformOperationFactory() {}
 }}

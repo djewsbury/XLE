@@ -279,7 +279,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				d._activeDescSet = std::move(newSets[0]);
 
 				encoder.BindDescriptorSet(
-					d._bindSlot, d._activeDescSet.get()
+					d._bindSlot, d._activeDescSet.get(), {}
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{d._description}));
 			}
 		}

@@ -120,8 +120,12 @@ namespace RenderCore
 		InputAttachment,
 		UniformTexelBuffer,					// "uniform texel buffer" in Vulkan terminology 
 		UnorderedAccessTexelBuffer,			// "storage texel buffer" in Vulkan terminology 
+		UniformBufferDynamicOffset,
+		UnorderedAccessBufferDynamicOffset,
 		Empty
 	};
+
+	const char* AsString(DescriptorType);
 
 	struct DescriptorSlot
 	{

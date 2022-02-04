@@ -954,8 +954,18 @@ namespace RenderCore { namespace Assets
             case TransformStackCommand::Translate_Parameter:
                 {
                     uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float3s.size()) {
-                        Combine_IntoRHS(float3s[parameterIndex], *workingTransform);
+                    if (parameterIndex < float4s.size()) {
+                        // Hack -- flag for object space translation
+                        if (float4s[parameterIndex][3] >= 256.f) {
+                            auto objectSpaceTranslation = Truncate(float4s[parameterIndex]);
+                            objectSpaceTranslation = TransformPoint(
+                                AsFloat4x4(Float3x3{-1.f, 0.f, 0.f, 0.f, 0.f, 1.f, 0.f, 1.f, 0.f}), 
+                                objectSpaceTranslation);
+                            auto localSpaceTranslation = TransformPointByOrthonormalInverse(*workingTransform, objectSpaceTranslation);
+                            Combine_IntoRHS(localSpaceTranslation, *workingTransform);
+                        } else {
+                            Combine_IntoRHS(Truncate(float4s[parameterIndex]), *workingTransform);
+                        }
                     } else {
                         Log(Warning) << "Warning -- bad parameter index for Translate_Parameter command (" << parameterIndex << ")" << std::endl;
                     }
@@ -1371,7 +1381,7 @@ namespace RenderCore { namespace Assets
             case TransformStackCommand::Translate_Parameter:
                 stream << indentBuffer << "Translate_Parameter [" << *i << "]";
                 if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float3, *i) << ")";
+                    stream << " (" << parameterToName(AnimSamplerType::Float4, *i) << ")";
                 stream << std::endl;
                 i++;
                 break;

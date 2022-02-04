@@ -37,6 +37,7 @@ macro(xle_internal_configure_compiler TargetName)
     # Some CMake kits set _DEBUG and NDEBUG automatically, but others don't seem to
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_definitions(${TargetName} PUBLIC XL_DEBUG _DEBUG)
+        target_link_options(${TargetName} PRIVATE -Wl,/DEBUG:ghash -Wl,/ignore:4099)
     elseif ((CMAKE_BUILD_TYPE STREQUAL "Release") OR (CMAKE_BUILD_TYPE STREQUAL "MinSizeRel") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
         target_compile_definitions(${TargetName} PUBLIC XL_RELEASE NDEBUG)
     else ()

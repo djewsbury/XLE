@@ -7,6 +7,7 @@
 #include "TechniqueUtils.h"
 #include "CommonResources.h"
 #include "Services.h"
+#include "DeformAccelerator.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Metal/State.h"
@@ -85,6 +86,8 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	std::shared_ptr<IDeformAcceleratorAttachment> BuildDeformAttachment(const RenderCore::Assets::PredefinedCBLayout& cbLayout);
+
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
 		const std::shared_ptr<IDevice>& device,
@@ -92,18 +95,26 @@ namespace RenderCore { namespace Techniques
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
+		SamplerPool* samplerPool,
+		const IDeformAcceleratorPool* deformAcceleratorPool,
+		const DeformAccelerator* deformAccelerator,
 		PipelineType pipelineType,
 		bool generateBindingInfo)
 	{
 		auto shrLanguage = GetDefaultShaderLanguage();
+
+		int maxSlotIdx = -1;
+		for (auto& slot:layout._slots)
+			maxSlotIdx = std::max(maxSlotIdx, int(slot._slotIdx));
+		assert(maxSlotIdx >= 0);
 		
 		DescriptorSetInProgress working;
-		working._slots.reserve(layout._slots.size());
-		working._signature._slots.reserve(working._slots.size());
+		working._slots.resize(maxSlotIdx+1);
 		if (generateBindingInfo)
-			working._bindingInfo._slots.reserve(working._slots.size());
+			working._bindingInfo._slots.resize(working._slots.size());
 
 		char stringMeldBuffer[512];
+		bool hasDeformerCB = false;
 		for (const auto& s:layout._slots) {
 			DescriptorSetInProgress::Slot slotInProgress;
 			slotInProgress._slotName = s._name;
@@ -130,26 +141,57 @@ namespace RenderCore { namespace Techniques
 				if (generateBindingInfo)
 					slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "DeferredShaderResource: " << boundResource.value()).AsString();
 
-			} else if (s._type == DescriptorType::UniformBuffer && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
-				auto& cbLayout = layout._constantBuffers[s._cbIdx];
-				auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
+			} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
-				auto cb = 
-					device->CreateResource(
-						CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
-						SubResourceInitData{buffer});
+				// This might be dynamically controlled by a deformer.
+				// Check in the deformerBinding first
+#if 0
+				if (s._name == "BasicMaterialConstants") {
+					auto& cbLayout = layout._constantBuffers[s._cbIdx];
 
-				slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-				slotInProgress._resourceIdx = (unsigned)working._resources.size();
-				DescriptorSetInProgress::Resource res;
-				res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
-				working._resources.push_back(res);
-				gotBinding = true;
+					auto deformAttachment = BuildDeformAttachment(cbLayout);
+					auto attachRules = deformAcceleratorPool->Attach(deformAccelerator, deformAttachment);
 
-				if (generateBindingInfo) {
-					std::stringstream str;
-					cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
-					slotBindingInfo._binding = str.str();
+					assert(s._type == DescriptorType::UniformBufferDynamicOffset);		// we must have a dynamic offset for this mechanism to work
+					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+					slotInProgress._resourceIdx = (unsigned)working._resources.size();
+
+					DescriptorSetInProgress::Resource res;
+					res._fixedResource = attachRules._pageResource;
+					working._resources.push_back(res);
+					gotBinding = true;
+					hasDeformerCB = true;
+
+					if (generateBindingInfo) {
+						std::stringstream str;
+						str << "<<deformer>>";
+						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
+						slotBindingInfo._binding = str.str();
+					}
+				}
+#endif
+
+				if (!gotBinding) {		// (if we didn't find a matching deformer binding)
+					auto& cbLayout = layout._constantBuffers[s._cbIdx];
+					auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
+
+					auto cb = 
+						device->CreateResource(
+							CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
+							SubResourceInitData{buffer});
+
+					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+					slotInProgress._resourceIdx = (unsigned)working._resources.size();
+					DescriptorSetInProgress::Resource res;
+					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
+					working._resources.push_back(res);
+					gotBinding = true;
+
+					if (generateBindingInfo) {
+						std::stringstream str;
+						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
+						slotBindingInfo._binding = str.str();
+					}
 				}
 			} else if (s._type == DescriptorType::Sampler) {
 				auto i = std::find_if(samplerBindings.begin(), samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
@@ -164,21 +206,25 @@ namespace RenderCore { namespace Techniques
 				}
 			} 
 			
-			if (!gotBinding)
-				slotInProgress._bindType = DescriptorSetInitializer::BindType::Empty;
-			working._signature._slots.push_back(DescriptorSlot{s._type});
-			working._slots.push_back(slotInProgress);
-			if (generateBindingInfo) {
-				slotBindingInfo._bindType = slotInProgress._bindType;
-				working._bindingInfo._slots.push_back(slotBindingInfo);
+			if (gotBinding) {
+				if (working._slots[s._slotIdx]._bindType != DescriptorSetInitializer::BindType::Empty)
+					Throw(std::runtime_error("Multiple resources bound to the same slot in ConstructDescriptorSet(). Attempting to bind slot " + s._name));
+
+				assert(s._slotIdx < working._slots.size());
+				working._slots[s._slotIdx] = slotInProgress;
+				if (generateBindingInfo) {
+					slotBindingInfo._bindType = slotInProgress._bindType;
+					working._bindingInfo._slots[s._slotIdx] = slotBindingInfo;
+				}
 			}
 		}
 
-		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
+		working._signature = layout.MakeDescriptorSetSignature(samplerPool);
 
+		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
 			std::move(promise),
-			[device, pipelineType](DescriptorSetInProgress working) {
+			[device, pipelineType, hasDeformerCB](DescriptorSetInProgress working) {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
@@ -249,6 +295,7 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
+				actualized._hasDeformerCB = hasDeformerCB;
 				return actualized;
 			});
 	}
@@ -259,6 +306,7 @@ namespace RenderCore { namespace Techniques
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
 		const UniformsStream& us,
+		SamplerPool* samplerPool,
 		PipelineType pipelineType)
 	{
 		assert(usi._immediateDataBindings.empty());		// imm data bindings not supported here
@@ -288,8 +336,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// awkwardly we need to construct a descriptor set signature here
-		auto& commonRes = *Services::GetCommonResources();
-		auto sig = layout.MakeDescriptorSetSignature(&commonRes._samplerPool);
+		auto sig = layout.MakeDescriptorSetSignature(samplerPool);
 
 		DescriptorSetInitializer initializer;
 		initializer._slotBindings = MakeIteratorRange(bindTypesAndIdx, &bindTypesAndIdx[layout._slots.size()]);
@@ -301,5 +348,58 @@ namespace RenderCore { namespace Techniques
 		return device.CreateDescriptorSet(initializer);
 	}
 
+		struct BasicMaterialConstants
+	{
+		Float2 UV_Scale;
+		Float2 UV_Offset;
+		Float4 Base_Color;
+		Float4 HairColor;
+		Float4 TintColor[8];
+		unsigned TintCount;
+		float AlphaThreshold;
+		float Base_Color_Scale;
+		Float3 Emissive_Color;
+		float Emissive_Multiple;
+		float Environment_Map_Scale;
+		unsigned Lighting_Influence;
+		unsigned Dummy[2];
+	};
+
+#if 0
+	class TestCBDeformer : public IDeformAcceleratorAttachment
+	{
+	public:
+		virtual void Execute(
+			IThreadContext& threadContext, 
+			IteratorRange<const unsigned*> instanceIdx, 
+			IResourceView& dstVB,
+			IteratorRange<void*> cpuBufferOutputRange,
+			IteratorRange<void*> cbBufferOutputRange,
+			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics)
+		{
+			static float time = 0.f;
+			time += 1.0f/30.f;
+
+			BasicMaterialConstants constants;
+			XlZeroMemory(constants);
+			constants.UV_Scale = Float2(1,1);
+			constants.UV_Offset = Float2(0,time*1.0f/30.f);
+			constants.Base_Color = Float4(1,1,1,1);
+			constants.AlphaThreshold = .5f;
+			constants.Base_Color_Scale = 1;	
+			assert(outputInstanceStride >= sizeof(BasicMaterialConstants));
+			assert(instanceIndices.size()*outputInstanceStride == dstCB.size());
+			for (unsigned c=0; c<instanceIndices.size(); ++c)
+				*(BasicMaterialConstants*)PtrAdd(dstCB.begin(), c*outputInstanceStride) = constants;
+		}
+
+		void* QueryInterface(size_t) { return nullptr; }
+	};
+
+	std::shared_ptr<IDeformAcceleratorAttachment> BuildDeformAttachment(const RenderCore::Assets::PredefinedCBLayout& cbLayout)
+	{
+
+	}
+#endif
 
 }}

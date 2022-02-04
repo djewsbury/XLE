@@ -44,15 +44,18 @@ namespace RenderCore { namespace LightingEngine
 		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, Hash64("t3"));
+		auto& commonRes = *Techniques::Services::GetCommonResources();
 		if (texture) {
 			_descSet = Techniques::ConstructDescriptorSet(
 				*_device, *descSetLayout, usi, 
-				ResourceViewStream{*texture});
+				ResourceViewStream{*texture},
+				&commonRes._samplerPool);
 		} else {
 			auto dummy = Techniques::Services::GetCommonResources()->_blackCubeSRV;
 			_descSet = Techniques::ConstructDescriptorSet(
 				*_device, *descSetLayout, usi, 
-				ResourceViewStream{*dummy});
+				ResourceViewStream{*dummy},
+				&commonRes._samplerPool);
 		}
 	}
 

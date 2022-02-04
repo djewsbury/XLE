@@ -158,12 +158,14 @@ namespace RenderCore { namespace Techniques
 				}
 
 				const IDescriptorSet* matDescSet = nullptr;
+				bool matDescSetHasDeformerCB = false;
 				if (drawable._descriptorSet) {
 					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
 					if (UsePreStalledResources && !actualizedDescSet && preStalledResources._pendingDescriptorSetMarkers[idx])
 						actualizedDescSet = &preStalledResources._pendingDescriptorSetMarkers[idx]->ActualizeBkgrnd();
 					if (!actualizedDescSet) continue;
 					matDescSet = actualizedDescSet->GetDescriptorSet().get();
+					matDescSetHasDeformerCB = actualizedDescSet->HasDeformerCB();
 					parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
 				}
 
@@ -210,9 +212,10 @@ namespace RenderCore { namespace Techniques
 					++fullDescSetCount;
 				} 
 				{
-					const IDescriptorSet* descriptorSets[2] { matDescSet, parserContext._extraSequencerDescriptorSet.second };
-					// When the shader interface hasn't changed, we'll set just the material descriptor set
-					currentBoundUniforms->ApplyDescriptorSets(metalContext, encoder, descriptorSets, s_uniformGroupMaterial);
+					unsigned cbOffset = matDescSetHasDeformerCB ? Techniques::Internal::GetDynamicCBOffset(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx) : 0u;
+					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet, s_uniformGroupMaterial, 0, MakeIteratorRange(&cbOffset, &cbOffset+1));
+					if (parserContext._extraSequencerDescriptorSet.second)
+						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 					++justMatDescSetCount;
 				}
 
@@ -316,7 +319,7 @@ namespace RenderCore { namespace Techniques
 				if (descriptorSetFuture && descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 					if (!result)
 						result = std::make_shared<::Assets::AsyncMarkerGroup>();
-					result->Add(pipelineFuture, s_descriptorSet);
+					result->Add(descriptorSetFuture, s_descriptorSet);
 				}
 			}
 		}

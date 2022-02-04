@@ -49,12 +49,29 @@ namespace Assets
 			return result;
 		}
 
-		DependencyValidation Make(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override
+		DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override
 		{
+			unsigned validCount = 0;
+			for (auto marker:dependencyAssets)
+				if (marker != DependencyValidationMarker_Invalid) {
+					++validCount;
+					break;
+				}
+			if (!validCount) return {};
+			
+			
 			ScopedLock(_lock);
+			if (validCount == 1)
+				for (auto marker:dependencyAssets)
+					if (marker != DependencyValidationMarker_Invalid) {
+						++_entries[marker]._refCount;
+						return marker;
+					}
+
 			DependencyValidation result = MakeAlreadyLocked();
-			for (const auto& state:dependencyAssets)
-				RegisterAssetDependencyAlreadyLocked(result._marker, state);
+			for (auto marker:dependencyAssets)
+				if (marker != DependencyValidationMarker_Invalid)
+					RegisterAssetDependencyAlreadyLocked(result._marker, marker);
 			return result;
 		}
 
@@ -174,6 +191,8 @@ namespace Assets
 		{
 			assert(dependentResource < _entries.size());
 			assert(dependency < _entries.size());
+			assert(dependency != DependencyValidationMarker_Invalid);
+			assert(dependentResource != DependencyValidationMarker_Invalid);
 			assert(_entries[dependentResource]._refCount > 0);
 			assert(_entries[dependency]._refCount > 0);
 

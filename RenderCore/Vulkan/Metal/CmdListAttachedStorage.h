@@ -48,8 +48,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		ConstantBufferView AsConstantBufferView();
 		std::shared_ptr<IResourceView> AsResourceView();
 
-		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&) = delete;
-		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&) = delete;
+		TemporaryStorageResourceMap(TemporaryStorageResourceMap&&);
+		TemporaryStorageResourceMap& operator=(TemporaryStorageResourceMap&&);
+		TemporaryStorageResourceMap();
+		
 		TemporaryStorageResourceMap(ResourceMap&&) = delete;
 		TemporaryStorageResourceMap& operator=(ResourceMap&&) = delete;
 	private:
@@ -75,12 +77,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	class IAsyncTracker;
 	class CmdListAttachedStorage;
+	using NamedPage = unsigned;
 
 	class TemporaryStorageManager
 	{
 	public:
 		CmdListAttachedStorage BeginCmdListReservation();
 		void FlushDestroys();
+
+		NamedPage CreateNamedPage(size_t byteCount, BindFlag::BitField bindFlags);
+		std::shared_ptr<IResource> GetResourceForNamedPage(NamedPage);
 
 		TemporaryStorageManager(
 			ObjectFactory& factory,
@@ -99,6 +105,9 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
 		BufferAndRange AllocateRange(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize = 0);
+
+		TemporaryStorageResourceMap	MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage);
+
 		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();
 		void WriteBarrier(DeviceContext& context, unsigned pageId);
@@ -112,6 +121,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	private:
 		std::vector<TemporaryStoragePage*> _reservedPages;
+		std::vector<TemporaryStoragePage*> _namedPageReservations;
 		TemporaryStorageManager::Pimpl* _manager = nullptr;
 		CmdListAttachedStorage(TemporaryStorageManager::Pimpl*);
 		friend class TemporaryStorageManager;

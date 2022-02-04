@@ -29,6 +29,8 @@ namespace RenderCore { namespace Techniques
 	, _materialDescSetLayout(materialDescSetLayout)
 	{
 		_depVal = ::Assets::GetDepValSys().Make();
+		if (src.GetDependencyValidation())
+			_depVal.RegisterDependency(src.GetDependencyValidation());
 		_guid = src.GetHash();
 
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
@@ -37,30 +39,47 @@ namespace RenderCore { namespace Techniques
 		if (!src.GetDescriptorSetFileName().empty()) {
 			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
 			layoutFileFuture->StallWhilePending();
-			auto actualLayoutFile =layoutFileFuture->Actualize();
-			auto i = actualLayoutFile->_descriptorSets.find("Material");
-			if (i == actualLayoutFile->_descriptorSets.end())
-				Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName() + "), but it was not found"));
+			TRY {
+				auto actualLayoutFile = layoutFileFuture->Actualize();
+				auto i = actualLayoutFile->_descriptorSets.find("Material");
+				if (i == actualLayoutFile->_descriptorSets.end())
+					Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName() + "), but it was not found"));
 
-			// Once we've finally got the descriptor set, we need to link it against the pipeline layout version to make sure it
-			// will agree (and potentially rearrange some members to fit)
-			_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet);
-			_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
+				// Once we've finally got the descriptor set, we need to link it against the pipeline layout version to make sure it
+				// will agree. Don't allow rearrangement of the input slots here, because the shader is probably making assumptions
+				// about where they appear
+				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet, false);
+				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
+			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+				::Assets::DependencyValidationMarker depVals[] { layoutFileFuture->GetDependencyValidation(), src.GetDependencyValidation() };
+				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
+			} CATCH(const std::exception& e) {
+				::Assets::DependencyValidationMarker depVals[] { layoutFileFuture->GetDependencyValidation(), src.GetDependencyValidation() };
+				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
+			} CATCH_END
 		}
 
 		// With the given shader patch collection, build the source code and the 
 		// patching functions associated
-		if (!src.GetPatches().empty()) {
-			for (const auto&i:src.GetPatches()) {
-				ShaderSourceParser::InstantiationRequest finalInstRequest[] = { i.second };
-				ShaderSourceParser::GenerateFunctionOptions generateOptions;
-				generateOptions._shaderLanguage = GetDefaultShaderLanguage();
-				generateOptions._pipelineLayoutMaterialDescriptorSet = materialDescSetLayout.GetLayout().get();
-				generateOptions._materialDescriptorSetIndex = materialDescSetLayout.GetSlotIndex();
-				auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequest), generateOptions);
-				BuildFromInstantiatedShader(inst);
+		TRY {
+			if (!src.GetPatches().empty()) {
+				for (const auto&i:src.GetPatches()) {
+					ShaderSourceParser::InstantiationRequest finalInstRequest[] = { i.second };
+					ShaderSourceParser::GenerateFunctionOptions generateOptions;
+					generateOptions._shaderLanguage = GetDefaultShaderLanguage();
+					generateOptions._pipelineLayoutMaterialDescriptorSet = materialDescSetLayout.GetLayout().get();
+					generateOptions._materialDescriptorSetIndex = materialDescSetLayout.GetSlotIndex();
+					auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequest), generateOptions);
+					BuildFromInstantiatedShader(inst);
+				}
 			}
-		}
+		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, src.GetDependencyValidation()));
+		} CATCH(const std::exception& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, src.GetDependencyValidation()));
+		} CATCH_END
 	}
 
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection(

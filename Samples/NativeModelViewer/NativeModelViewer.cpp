@@ -36,6 +36,16 @@ namespace Sample
 			globals._primaryResourcesApparatus->_deformAccelerators);
 
 		ToolsRig::ModelVisSettings visSettings {};
+		// visSettings._modelName = "data/meshes/Armor/Hide/M/CuirassHeavyChieftain_1.nif";
+		// visSettings._materialName = "data/meshes/Armor/Hide/M/CuirassHeavyChieftain_1.nif";
+		// visSettings._modelName = "data/meshes/actors/draugr/character assets/draugrmale.nif";
+		// visSettings._materialName = "data/meshes/actors/draugr/character assets/draugrmale.nif";
+		// visSettings._modelName = "data/meshes/Dungeons/Ship/ShipLongBoat01.nif";
+		// visSettings._materialName = "data/meshes/Dungeons/Ship/ShipLongBoat01.nif";
+		visSettings._modelName = "data/meshes/Effects/FXwaterfallbodytall.nif";
+		visSettings._materialName = "data/meshes/Effects/FXwaterfallbodytall.nif";
+		// visSettings._modelName = "data/meshes/Architecture/Markarth/mrkkeepwaterfall.nif";
+		// visSettings._materialName = "data/meshes/Architecture/Markarth/mrkkeepwaterfall.nif";
 		ToolsRig::Services::GetEntityMountingTree().MountDocument("cfg/lighting", EntityInterface::CreateTextEntityDocument("rawos/defaultenv.dat"));
 
 		auto scene = ToolsRig::MakeScene(pipelineAccelerators, globals._primaryResourcesApparatus->_deformAccelerators, visSettings);
@@ -45,7 +55,7 @@ namespace Sample
 
 		auto mouseOver = std::make_shared<ToolsRig::VisMouseOver>();
 		ToolsRig::VisOverlaySettings overlaySettings;
-		overlaySettings._colourByMaterial = 2;
+		// overlaySettings._colourByMaterial = 2;
 		overlaySettings._drawNormals = true;
 		overlaySettings._drawWireframe = false;
 

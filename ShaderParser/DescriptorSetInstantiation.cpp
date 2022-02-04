@@ -12,6 +12,7 @@
 #include <set>
 #include <unordered_map>
 #include <iostream>
+#include <sstream>
 
 namespace ShaderSourceParser
 {
@@ -117,7 +118,8 @@ namespace ShaderSourceParser
 
 	std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> LinkToFixedLayout(
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& input,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion)
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion,
+		bool allowSlotReassignment)
 	{
 		// Generate a version of "input" that conforms to the slots in "pipelineLayoutVersion"
 		// The idea is that "pipelineLayoutVersion" was used to construct the pipeline layout itself
@@ -129,34 +131,47 @@ namespace ShaderSourceParser
 		// However, let's match up the names where we can to encourage consistency for where we
 		// put common resources
 		auto result = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
-		result->_slots = pipelineLayoutVersion._slots;
-		bool usedSlots_pipelineLayout[pipelineLayoutVersion._slots.size()];
-		bool usedSlots_input[input._slots.size()];
 
-		for (unsigned c=0; c<pipelineLayoutVersion._slots.size(); ++c) usedSlots_pipelineLayout[c] = false;
+		int maxSlotIdxInput = -1, maxSlotIdxPipelineLayout = -1;
+		for (const auto& slot:input._slots) maxSlotIdxInput = std::max(maxSlotIdxInput, int(slot._slotIdx));
+		for (const auto& slot:pipelineLayoutVersion._slots) maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, int(slot._slotIdx));
+		if (maxSlotIdxInput > maxSlotIdxPipelineLayout) {
+			std::stringstream str;
+			str << "Could not link custom pipeline layout in LinkToFixedLayout. There are too many slots required by the custom layout (" << maxSlotIdxInput+1 << ") used, but only (" << maxSlotIdxPipelineLayout+1 << ") available";
+			Throw(std::runtime_error(str.str()));
+		}
+
+		bool assignedSlots_final[maxSlotIdxPipelineLayout+1];
+		bool usedSlots_input[input._slots.size()];
+		for (unsigned c=0; c<maxSlotIdxPipelineLayout+1; ++c) assignedSlots_final[c] = false;
 		for (unsigned c=0; c<input._slots.size(); ++c) usedSlots_input[c] = false;
+		result->_slots.reserve(maxSlotIdxPipelineLayout+1);
 
 		// First look for cases where the names agree
-		for (unsigned c=0; c<input._slots.size(); c++) {
-			auto name = input._slots[c]._name;
-			if (name.empty()) continue;
-			auto i = std::find_if(
-				pipelineLayoutVersion._slots.begin(), pipelineLayoutVersion._slots.end(),
-				[name](const auto& q) { return q._name == name; });
-			if (i != pipelineLayoutVersion._slots.end()) {
-				auto finalIdx = std::distance(pipelineLayoutVersion._slots.begin(), i);
-				// If the types do not agree, we can't use this slot. We will just treat them as unmatching
-				if (input._slots[c]._type != i->_type || input._slots[c]._arrayElementCount != i->_arrayElementCount)
-					continue;
-					
-				if (usedSlots_pipelineLayout[finalIdx])
-					Throw(std::runtime_error("Multiple descriptor set slots with the same name discovered"));
-				usedSlots_pipelineLayout[finalIdx] = true;
-				usedSlots_input[c] = true;
-				result->_slots[finalIdx] = input._slots[c];
+		if (allowSlotReassignment) {
+			for (unsigned c=0; c<input._slots.size(); c++) {
+				auto name = input._slots[c]._name;
+				if (name.empty()) continue;
+				auto i = std::find_if(
+					pipelineLayoutVersion._slots.begin(), pipelineLayoutVersion._slots.end(),
+					[name](const auto& q) { return q._name == name; });
+				if (i != pipelineLayoutVersion._slots.end()) {
+					auto finalIdx = std::distance(pipelineLayoutVersion._slots.begin(), i);
+					// If the types do not agree, we can't use this slot. We will just treat them as unmatching
+					if (input._slots[c]._type != i->_type || input._slots[c]._arrayElementCount != i->_arrayElementCount)
+						continue;
+						
+					if (assignedSlots_final[i->_slotIdx])
+						Throw(std::runtime_error("Multiple descriptor set slots with the same name discovered"));
+					assignedSlots_final[i->_slotIdx] = true;
+					usedSlots_input[c] = true;
+					auto finalSlot = input._slots[c];
+					finalSlot._slotIdx = i->_slotIdx;
+					result->_slots.push_back(finalSlot);
 
-				// We could try to align up the CB layout in some way, to try to encourage consistency there, as well
-				// ... may not be critical, though
+					// We could try to align up the CB layout in some way, to try to encourage consistency there, as well
+					// ... may not be critical, though
+				}
 			}
 		}
 
@@ -166,19 +181,44 @@ namespace ShaderSourceParser
 			if (usedSlots_input[c]) continue;
 
 			unsigned q=0;
-			for (; q<pipelineLayoutVersion._slots.size(); q++) {
-				if (!usedSlots_pipelineLayout[q]
-					&& input._slots[c]._type == pipelineLayoutVersion._slots[q]._type
-					&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount) {
-					break;
+			if (!allowSlotReassignment) {
+				for (; q<pipelineLayoutVersion._slots.size(); q++)
+					if (pipelineLayoutVersion._slots[q]._slotIdx == input._slots[c]._slotIdx)
+						break;
+				if (q == pipelineLayoutVersion._slots.size()) {
+					std::stringstream str;
+					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. No slot (" << input._slots[c]._slotIdx << ") in the fixed layout. Required to match entry (" << input._slots[c]._name << ") in the custom layout";
+					Throw(std::runtime_error(str.str()));
 				}
+				const auto& i = pipelineLayoutVersion._slots[q];
+				if (input._slots[c]._type != i._type || input._slots[c]._arrayElementCount != i._arrayElementCount) {
+					std::stringstream str;
+					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. Matching slot (" << i._slotIdx << "), which has type (" << AsString(i._type) << ") in the fixed layout but type (" << AsString(input._slots[c]._type) << ") in the custom layout (" << input._slots[c]._name << ")";
+					Throw(std::runtime_error(str.str()));
+				}
+			} else {
+				for (; q<pipelineLayoutVersion._slots.size(); q++) {
+					if (!assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]
+						&& input._slots[c]._type == pipelineLayoutVersion._slots[q]._type
+						&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount) {
+						break;
+					}
+				}
+				if (q == pipelineLayoutVersion._slots.size())
+					Throw(std::runtime_error("Could not find a slot in the pipeline layout for material descriptor set slot (" + input._slots[c]._name + "), when linking the instantiated layout to the shared fixed layout. You may have exceeded the maximum number of resources of this type"));
 			}
-			if (q == pipelineLayoutVersion._slots.size())
-				Throw(std::runtime_error("Could not find a slot in the pipeline layout for material descriptor set slot (" + input._slots[c]._name + "). You may have exceeded the maximum number of resources of this type"));
 
-			usedSlots_pipelineLayout[q] = true;
-			usedSlots_input[c] = true;
-			result->_slots[q] = input._slots[c];
+			assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx] = true;
+			auto finalSlot = input._slots[c];
+			finalSlot._slotIdx = pipelineLayoutVersion._slots[q]._slotIdx;
+			result->_slots.push_back(finalSlot);
+		}
+
+		// Fill in unallocated slots with the original pipeline layout slots
+		for (unsigned c=0; c<pipelineLayoutVersion._slots.size(); c++) {
+			if (assignedSlots_final[pipelineLayoutVersion._slots[c]._slotIdx])
+				continue;
+			result->_slots.push_back(pipelineLayoutVersion._slots[c]);
 		}
 
 		// fill in the _cbIdx fields and copy across CB details
@@ -186,7 +226,7 @@ namespace ShaderSourceParser
 			if (result->_slots[q]._cbIdx == ~0u) continue;
 
 			std::shared_ptr<RenderCore::Assets::PredefinedCBLayout> layout;
-			if (usedSlots_pipelineLayout[q]) {
+			if (assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]) {
 				layout = input._constantBuffers[result->_slots[q]._cbIdx];
 			} else {
 				layout = pipelineLayoutVersion._constantBuffers[result->_slots[q]._cbIdx];
@@ -200,6 +240,10 @@ namespace ShaderSourceParser
 				result->_constantBuffers.push_back(layout);
 			}
 		}
+
+		std::sort(
+			result->_slots.begin(), result->_slots.end(),
+			[](const auto& lhs, const auto& rhs) { return lhs._slotIdx < rhs._slotIdx; });
 
 		return result;
 	}

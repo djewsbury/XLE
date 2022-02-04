@@ -11,32 +11,52 @@
 #include <memory>
 
 namespace RenderCore { class IDevice; class IThreadContext; class VertexBufferView; class IResourceView; }
-namespace RenderCore { namespace Assets { class ModelScaffold; }}
 namespace Assets { class DependencyValidation; }
 
 namespace RenderCore { namespace Techniques
 {
 	class DeformAccelerator;
-	class IDeformer;
-	struct DeformerToRendererBinding;
+	class IDeformAcceleratorAttachment;
+	// struct DeformerToRendererBinding;
+	// struct DeformerToDescriptorSetBinding;
+
+			// todo -- move this to somewhere else
+	struct DeformerToDescriptorSetBinding
+	{
+		struct CBBinding
+		{
+			uint64_t _hashName;
+			std::shared_ptr<IResourceView> _pageResource;
+		};
+		std::vector<CBBinding> _dynamicCBs;
+	};
 
 	class IDeformAcceleratorPool
 	{
 	public:
-		virtual std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(
-			StringSection<> initializer,
+		virtual std::shared_ptr<DeformAccelerator> CreateDeformAccelerator() = 0;
+		virtual void Attach(
+			DeformAccelerator& deformAccelerator,
+			std::shared_ptr<IDeformAcceleratorAttachment> deformAttachment) = 0;
+
+		/*
+		virtual void AttachGeometryDeformers(
+			DeformAccelerator& accelerator,
+			IteratorRange<const DeformOperationFactorySet::Deformer*> deformers,
 			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-			const std::string& modelScaffoldName = {}) = 0;
+			const std::string& modelScaffoldName);
 
 		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const = 0;
+		virtual const DeformerToDescriptorSetBinding& GetDeformerToDescriptorSetBinding(DeformAccelerator& accelerator) const = 0;
+		*/
 
-		virtual std::vector<std::shared_ptr<IDeformer>> GetOperations(DeformAccelerator& accelerator, size_t typeId) = 0;
 		virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
 		virtual void ReadyInstances(IThreadContext&) = 0;
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
 		virtual void OnFrameBarrier() = 0;
 
 		unsigned GetGUID() const { return _guid; }
+		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 
 		struct ReadyInstancesMetrics;
 		virtual ReadyInstancesMetrics GetMetrics() const = 0;
@@ -47,52 +67,21 @@ namespace RenderCore { namespace Techniques
 		uint64_t _guid;
 	};
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device);
-
-	class IDeformer
+	class IDeformAcceleratorAttachment
 	{
 	public:
-		struct Metrics
-		{
-			unsigned _dispatchCount = 0;
-			unsigned _vertexCount = 0;
-			unsigned _descriptorSetWrites = 0;
-			unsigned _constantDataSize = 0;
-			unsigned _inputStaticDataSize = 0;
-		};
-
-		virtual void ExecuteGPU(
-			IThreadContext& threadContext,
-			IteratorRange<const unsigned*> instanceIndices,
-			unsigned outputInstanceStride,
-			const IResourceView& srcVB,
-			const IResourceView& deformTemporariesVB,
-			const IResourceView& dstVB,
-			Metrics& metrics) const;
-
-		using VertexElementRange = IteratorRange<RenderCore::VertexElementIterator>;
-		virtual void ExecuteCPU(
-			IteratorRange<const unsigned*> instanceIndices,
-			unsigned outputInstanceStride,
-			IteratorRange<const void*> srcVB,
-			IteratorRange<const void*> deformTemporariesVB,
-			IteratorRange<const void*> dstVB) const;
-
-		virtual void* QueryInterface(size_t) = 0;
-		virtual ~IDeformer();
+		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes, unsigned& cbBytes) = 0;
+		virtual void Execute(
+			IThreadContext& threadContext, 
+			IteratorRange<const unsigned*> instanceIdx, 
+			IResourceView& dstVB,
+			IteratorRange<void*> cpuBufferOutputRange,
+			IteratorRange<void*> cbBufferOutputRange,
+			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics) = 0;
+		virtual ~IDeformAcceleratorAttachment() = default;
 	};
 
-	struct DeformerToRendererBinding
-	{
-		struct GeoBinding
-		{
-			unsigned _geoId = ~0u;
-			std::vector<InputElementDesc> _generatedElements;
-			std::vector<uint64_t> _suppressedElements;
-			unsigned _postDeformBufferOffset = 0;
-		};
-		std::vector<GeoBinding> _geoBindings;
-	};
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device);
 
 	struct IDeformAcceleratorPool::ReadyInstancesMetrics
 	{
@@ -101,6 +90,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _instancesReadied = 0;
 		unsigned _cpuDeformAllocation = 0;
 		unsigned _gpuDeformAllocation = 0;
+		unsigned _cbAllocation = 0;
 		unsigned _dispatchCount = 0;
 		unsigned _vertexCount = 0;
 		unsigned _descriptorSetWrites = 0;
@@ -111,6 +101,7 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx);
+		unsigned GetDynamicCBOffset(DeformAccelerator& accelerator, unsigned instanceIdx);
 	}
 
 }}

@@ -172,7 +172,8 @@ namespace RenderCore { namespace ImplVulkan
         {
 			if (!Verbose.IsEnabled()) return false;
 			const auto* pMsg = pCallbackData->pMessage;
-			if (XlFindString(pMsg, "layout")) return false;
+			if (XlFindString(pCallbackData->pMessageIdName, "02699") || XlFindString(pCallbackData->pMessageIdName, "00344")) return false;
+			if (XlFindString(pMsg, "VK_IMAGE_LAYOUT")) return false;
             Log(Verbose) << pCallbackData->pMessageIdName << ": " << pMsg << std::endl;
 	        return false;
         }
@@ -432,11 +433,15 @@ namespace RenderCore { namespace ImplVulkan
 		transformFeedbackFeatures.geometryStreams = true;
 		transformFeedbackFeatures.transformFeedback = true;
 
-		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
-        multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
-		multiViewFeatures.multiview = true;
-		multiViewFeatures.multiviewGeometryShader = true;
-        transformFeedbackFeatures.pNext = &multiViewFeatures;
+		// AMD doesn't like this multiview stuff
+		const bool enableMultiView = false;
+		if (enableMultiView) {
+			VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
+			multiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES;
+			multiViewFeatures.multiview = true;
+			multiViewFeatures.multiviewGeometryShader = true;
+        	transformFeedbackFeatures.pNext = &multiViewFeatures;
+		}
 
 		VkPhysicalDeviceFeatures2KHR enabledFeatures2 = {};
 		enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
@@ -588,7 +593,7 @@ namespace RenderCore { namespace ImplVulkan
 				Throw(std::runtime_error("Attempting second stage device initialization on incorrect thread"));
 
 			_physDev = SelectPhysicalDeviceForRendering(_instance.get(), surface);
-			#if defined(OSSERVICES_ENABLE_LOG)
+			#if 0 // defined(OSSERVICES_ENABLE_LOG)
 				LogPhysicalDeviceExtensions(Log(Verbose), _physDev._dev);
 			#endif
 			_underlying = CreateUnderlyingDevice(_physDev);

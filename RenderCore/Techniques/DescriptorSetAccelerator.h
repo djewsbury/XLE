@@ -11,7 +11,7 @@
 #include <memory>
 
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
-namespace RenderCore { class IDevice; class IDescriptorSet; }
+namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; }
 namespace Utility { class ParameterBox; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
@@ -41,12 +41,17 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+		bool HasDeformerCB() const { return _hasDeformerCB; }
 
 		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
+		bool _hasDeformerCB = false;
 		::Assets::DependencyValidation _depVal;
 	};
+
+	class IDeformAcceleratorPool;
+	class DeformAccelerator;
 
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
@@ -55,6 +60,9 @@ namespace RenderCore { namespace Techniques
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
+		SamplerPool* samplerPool,
+		const IDeformAcceleratorPool* deformAcceleratorPool,
+		const DeformAccelerator* deformAccelerator,
 		PipelineType pipelineType = PipelineType::Graphics,
 		bool generateBindingInfo = false);
 
@@ -63,6 +71,7 @@ namespace RenderCore { namespace Techniques
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
 		const UniformsStream& us,
+		SamplerPool* samplerPool,
 		PipelineType pipelineType = PipelineType::Graphics);
 
 }}

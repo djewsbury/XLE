@@ -170,7 +170,7 @@ namespace RenderCore { namespace Metal_Vulkan
         BindFormat2(Format::S8_UINT, VK_FORMAT_S8_UINT);
         BindFormat2(Format::D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT);
         // BindFormat2(Format::D16_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT);
-        BindFormat2(Format::D24_UNORM_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT);
+        BindFormat2(Format::D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT);
         // BindFormat2(Format::D32_FLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT);
         BindFormat1(Format::BC1_UNORM, VK_FORMAT_BC1_RGB_UNORM_BLOCK);
         BindFormat1(Format::BC1_UNORM_SRGB, VK_FORMAT_BC1_RGB_SRGB_BLOCK);
@@ -248,9 +248,9 @@ namespace RenderCore { namespace Metal_Vulkan
         BindFormatTypeless(Format::BC6H_TYPELESS, VK_FORMAT_BC6H_SFLOAT_BLOCK);
         BindFormatTypeless(Format::BC7_TYPELESS, VK_FORMAT_BC7_UNORM_BLOCK);
         BindFormatTypeless(Format::B8G8R8A8_TYPELESS, VK_FORMAT_B8G8R8A8_UNORM);
-		BindFormatTypeless(Format::R24_UNORM_X8_TYPELESS, VK_FORMAT_D24_UNORM_S8_UINT);
-        BindFormatTypeless(Format::X24_TYPELESS_G8_UINT, VK_FORMAT_D24_UNORM_S8_UINT);
-		BindFormatTypeless(Format::R24G8_TYPELESS, VK_FORMAT_D24_UNORM_S8_UINT);
+		BindFormatTypeless(Format::R24_UNORM_X8_TYPELESS, VK_FORMAT_D32_SFLOAT_S8_UINT);
+        BindFormatTypeless(Format::X24_TYPELESS_G8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT);
+		BindFormatTypeless(Format::R24G8_TYPELESS, VK_FORMAT_D32_SFLOAT_S8_UINT);
 
 		// The A8 is an awkward throughback to DX9. Ideally it should be completely removed
 		BindFormatTypeless(Format::A8_UNORM, VK_FORMAT_R8_UNORM);

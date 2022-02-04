@@ -32,7 +32,7 @@ void WriteWire(inout LineStream<PCOut> outputStream, float3 worldStart, float3 w
     const float4 tangentColor = float4(1.f, 0.f, 0.f, 1.f);
     const float4 bitangentColor = float4(0.f, 1.f, 0.f, 1.f);
     const float4 normalColor = float4(0.f, 0.f, 1.f, 1.f);
-    const float wireLength = 0.015f;
+    const float wireLength = 1.015f;
     for (uint c=0; c<3; ++c) {
         float3 pos = input[c].worldPosition;
         // pos += 0.01f * input[c].normal;

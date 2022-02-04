@@ -249,12 +249,13 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         VkDescriptorPoolSize type_count[] = 
         {
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024},
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 128},
-            {VK_DESCRIPTOR_TYPE_SAMPLER, 256},
-            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 128}
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16*1024},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16*128},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16*1024},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 16*1024},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16*128},
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 16*256},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16*128}
         };
 
         VkDescriptorPoolCreateInfo descriptor_pool = {};

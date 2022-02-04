@@ -443,7 +443,7 @@ namespace Assets
 			// This is required because we can be woken up by SetAsset, which only set the
 			// background asset. But the caller most likely needs the asset right now, so
 			// we've got to swap it into the foreground.
-			// There is a problem if the caller is using bothActualize() and StallWhilePending() on the
+			// There is a problem if the caller is using both Actualize() and StallWhilePending() on the
 			// same asset in the same frame -- in this case, the order can have side effects.
 			AssetState newState;
 			Type newActualized;
@@ -458,9 +458,17 @@ namespace Assets
 				that->_actualizedDepVal = std::move(newDepVal);
 				that->_state = newState;
 			} else {
-				assert(that->_state == newState);
-				assert(that->_actualizedDepVal == newDepVal);
-				assert(that->_actualizationLog == newActualizationLog);
+				#if defined(_DEBUG)
+					assert(that->_state == newState);
+					assert(that->_actualizedDepVal == newDepVal);
+					if (that->_actualizationLog == nullptr || newActualizationLog == nullptr) {
+						assert((that->_actualizationLog == nullptr) == (newActualizationLog == nullptr));
+					} else {
+						// If the exception within the future is just a std::exception, we can end up with actualization 
+						// logs that contain the same data, but are different pointers, because the log is copied on query
+						assert(that->_actualizationLog->size() == newActualizationLog->size());
+					}
+				#endif
 			}
 
 			that->DisableFrameBarrierCallbackAlreadyLocked();

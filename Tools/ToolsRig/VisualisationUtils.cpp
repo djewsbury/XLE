@@ -985,6 +985,8 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			const PlatformRig::InputSnapshot& evnt)
         {
+			return false;
+			
 			if (evnt._mouseDelta == PlatformRig::Coord2 { 0, 0 })
 				return false;
 

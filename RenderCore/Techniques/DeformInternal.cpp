@@ -166,7 +166,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				result._patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
 
 				::Assets::DependencyValidationMarker depVals[] { predefinedPipelineLayoutActual->GetDependencyValidation(), result._patchCollection->GetDependencyValidation() };
-				result._depVal = ::Assets::GetDepValSys().Make(depVals);
+				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 				return result;
 			});
 	}

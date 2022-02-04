@@ -12,6 +12,8 @@
 #include <functional>
 #include <future>
 
+namespace RenderCore { namespace Assets { class ModelScaffold; }}
+
 namespace RenderCore { namespace Techniques 
 {
 	struct DeformerInputBinding
@@ -41,16 +43,18 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	class IGeoDeformer;
+
 	class IDeformOperationFactory
 	{
 	public:
-		virtual std::shared_ptr<IDeformer> Configure(
+		virtual std::shared_ptr<IGeoDeformer> Configure(
 			std::vector<DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName = {}) = 0;
 		virtual void Bind(
-			IDeformer& op,
+			IGeoDeformer& op,
 			const DeformerInputBinding& binding) = 0;
 		virtual bool IsCPUDeformer() const = 0;
 		
@@ -64,7 +68,7 @@ namespace RenderCore { namespace Techniques
 		{
 			std::vector<DeformOperationInstantiation> _instantiations;
 			std::shared_ptr<IDeformOperationFactory> _factory;
-			std::shared_ptr<IDeformer> _operator;
+			std::shared_ptr<IGeoDeformer> _operator;
 		};
 		std::vector<Deformer> CreateDeformOperators(
 			StringSection<> initializer,

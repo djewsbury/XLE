@@ -34,6 +34,8 @@ namespace RenderCore { namespace Assets
 			dest._descriptorSet = _descriptorSet;
 
 		dest.SortAndCalculateHash();
+		::Assets::DependencyValidationMarker depVals[] { dest._depVal, _depVal };
+		dest._depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 	}
 
 	ShaderPatchCollection::ShaderPatchCollection()

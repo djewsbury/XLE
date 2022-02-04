@@ -87,8 +87,8 @@ namespace RenderCore { namespace Techniques
 		auto instanceIdx = instanceIndices[0];
 		assert(instanceIdx == 0);
 
-		IDeformer::VertexElementRange sourceElements[16];
-		IDeformer::VertexElementRange destinationElements[16];
+		IGeoDeformer::VertexElementRange sourceElements[16];
+		IGeoDeformer::VertexElementRange destinationElements[16];
 
 		for (const auto&geo:_geos) {
 
@@ -224,8 +224,8 @@ namespace RenderCore { namespace Techniques
 			return this;
 		else if (typeId == typeid(ISkinDeformer).hash_code())
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(IDeformer).hash_code())
-			return (IDeformer*)this;
+		else if (typeId == typeid(IGeoDeformer).hash_code())
+			return (IGeoDeformer*)this;
 		return nullptr;
 	}
 
@@ -236,7 +236,7 @@ namespace RenderCore { namespace Techniques
 	class CPUSkinDeformerFactory : public IDeformOperationFactory
 	{
 	public:
-		std::shared_ptr<IDeformer> Configure(
+		std::shared_ptr<IGeoDeformer> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
@@ -267,7 +267,7 @@ namespace RenderCore { namespace Techniques
 			return std::make_shared<CPUSkinDeformer>(*modelScaffold, modelScaffoldName);
 		}
 
-		virtual void Bind(IDeformer& op, const DeformerInputBinding& binding) override
+		virtual void Bind(IGeoDeformer& op, const DeformerInputBinding& binding) override
 		{
 			auto* deformer = checked_cast<CPUSkinDeformer*>(&op);
 			deformer->_bindingHelper._inputBinding = binding;
@@ -705,8 +705,8 @@ namespace RenderCore { namespace Techniques
 			return this;
 		else if (typeId == typeid(ISkinDeformer).hash_code())
 			return (ISkinDeformer*)this;
-		else if (typeId == typeid(IDeformer).hash_code())
-			return (IDeformer*)this;
+		else if (typeId == typeid(IGeoDeformer).hash_code())
+			return (IGeoDeformer*)this;
 		return nullptr;
 	}
 
@@ -723,7 +723,7 @@ namespace RenderCore { namespace Techniques
 	class GPUSkinDeformerFactory : public IDeformOperationFactory
 	{
 	public:
-		std::shared_ptr<IDeformer> Configure(
+		std::shared_ptr<IGeoDeformer> Configure(
 			std::vector<RenderCore::Techniques::DeformOperationInstantiation>& result,
 			StringSection<> initializer,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
@@ -763,7 +763,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		virtual void Bind(
-			IDeformer& op,
+			IGeoDeformer& op,
 			const DeformerInputBinding& binding) override
 		{
 			auto* deformer = checked_cast<GPUSkinDeformer*>(&op);

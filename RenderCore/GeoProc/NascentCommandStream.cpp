@@ -332,8 +332,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	void	NascentSkeleton::WriteTranslationParameter(StringSection<> parameterName, const Float3& defaultValue)
 	{
 		uint32_t paramName = ~0u;
-		if (_skeletonMachine.TryAddParameter<Float3>(paramName, parameterName)) {
-			_defaultParameters.Set(paramName, defaultValue);
+		if (_skeletonMachine.TryAddParameter<Float4>(paramName, parameterName)) {
+			_defaultParameters.Set(paramName, Float4{defaultValue, 0});
 			_skeletonMachine.PushCommand(TransformStackCommand::Translate_Parameter);
 			_skeletonMachine.PushCommand(paramName);
 		} else {

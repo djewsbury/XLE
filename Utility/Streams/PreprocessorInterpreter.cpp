@@ -272,7 +272,7 @@ namespace Utility
 
 	bool EvaluatePreprocessorExpression(
 		StringSection<> input,
-		IteratorRange<const ParameterBox**> definedTokens)
+		IteratorRange<const ParameterBox*const*> definedTokens)
 	{
 		if (!static_hasSetupPreprocOps.load()) {
 			bool threadAssigned = static_setupThreadAssigned.exchange(true);

@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 				dependencies.push_back(pipelineDescWithFiltering._automaticFiltering[c]->GetDependencyValidation());
 		if (pipelineDescWithFiltering._preconfiguration)
 			dependencies.push_back(pipelineDescWithFiltering._preconfiguration->GetDependencyValidation());
-		return ::Assets::GetDepValSys().Make(dependencies);
+		return ::Assets::GetDepValSys().MakeOrReuse(dependencies);
 	}
 
 	static GraphicsPipelineAndLayout MergeDepVal(const GraphicsPipelineAndLayout& src, const ::Assets::DependencyValidation& cfgDepVal)

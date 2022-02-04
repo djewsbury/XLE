@@ -491,7 +491,8 @@ namespace Utility
 
                 // We need special cases for string types. In these cases we might have to
                 // do some conversion to get the value in the format we want.
-            if (type._type == ImpliedTyping::TypeCat::Int8 || type._type == ImpliedTyping::TypeCat::UInt8) {
+                // single char will be written as it's decimal value (unless specifically hinted as a string)
+            if ((type._type == ImpliedTyping::TypeCat::Int8 || type._type == ImpliedTyping::TypeCat::UInt8) && (type._arrayCount != 1 || type._typeHint == ImpliedTyping::TypeHint::String)) {
                 auto start = (const utf8*)value;
                 tmpBuffer.resize((type._arrayCount*2)+1);
                 auto valueLen = Conversion::Convert(
@@ -507,7 +508,7 @@ namespace Utility
                 continue;
             }
 
-            if (type._type == ImpliedTyping::TypeCat::Int16 || type._type == ImpliedTyping::TypeCat::UInt16) {
+            if ((type._type == ImpliedTyping::TypeCat::Int16 || type._type == ImpliedTyping::TypeCat::UInt16) && (type._arrayCount != 1 || type._typeHint == ImpliedTyping::TypeHint::String)) {
                 auto start = (const utf16*)value;
                 tmpBuffer.resize((type._arrayCount*2)+1);
                 auto valueLen = Conversion::Convert(
@@ -527,7 +528,7 @@ namespace Utility
             auto convertedString = Conversion::Convert<std::basic_string<CharType>>(stringFormat);
             stream.WriteKeyedValue(
                 MakeStringSection(AsPointer(nameBuffer.begin()), AsPointer(nameBuffer.begin()) + finalNameLen),
-                MakeStringSection(AsPointer(convertedString.begin()), AsPointer(convertedString.end())));
+                convertedString);
         }
     }
 

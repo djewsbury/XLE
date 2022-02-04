@@ -207,7 +207,6 @@ float3 CalculateIllumination(
 						} else if (l.Shape == 1) {
 							result += shadowing * SphereLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
 						}
-						// result += .5;
 					}
 				}
 			}
@@ -216,6 +215,7 @@ float3 CalculateIllumination(
 	}
 
 	result += LightResolve_Ambient(sample, directionToEye, screenDest);
+	result += sample.emissive;
 
 	return result;
 }

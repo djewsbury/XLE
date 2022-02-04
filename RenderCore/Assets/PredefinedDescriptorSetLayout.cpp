@@ -38,7 +38,33 @@ namespace RenderCore { namespace Assets
 		result._type = type;
 
 		auto token = iterator.GetNextToken();
-		if (type == DescriptorType::UniformBuffer && XlEqString(token._value, "{")) {
+		if (XlEqString(token._value, "[")) {
+			auto countToken = iterator.GetNextToken();
+			if (XlEqString(countToken._value, "]"))
+				Throw(FormatException("Expecting expecting array count, but got empty array brackets", token._start));
+
+			auto* parseEnd = FastParseValue(countToken._value, result._arrayElementCount);
+			if (parseEnd != countToken._value.end())
+				Throw(FormatException(StringMeld<256>() << "Expecting unsigned integer value for array count, but got " << countToken._value, token._start));
+
+			auto closeBracket = iterator.GetNextToken();
+			if (!XlEqString(closeBracket._value, "]"))
+				Throw(FormatException(StringMeld<256>() << "Expecting expecting closing bracket for array, but got " << closeBracket._value, token._start));
+
+			token = iterator.GetNextToken();
+		}
+
+		if (XlEqString(token._value, ":")) {
+			token = iterator.GetNextToken();
+
+			const char* parseEnd = FastParseValue(token._value, result._slotIdx);
+			if (parseEnd != token._value.end())
+				Throw(FormatException(StringMeld<256>() << "Expecting integer slot index value, but got " << token._value, token._start));
+
+			token = iterator.GetNextToken();
+		}
+
+		if ((type == DescriptorType::UniformBuffer || type == DescriptorType::UniformBufferDynamicOffset) && XlEqString(token._value, "{")) {
 			auto newLayout = std::make_shared<PredefinedCBLayout>();
 			unsigned currentLayoutCBIterator[PredefinedCBLayout::AlignmentRules_Max] = { 0, 0, 0 };
 
@@ -73,22 +99,6 @@ namespace RenderCore { namespace Assets
 
 			_fixedSamplers.push_back(fixedSampler);
 			result._fixedSamplerIdx = (unsigned)_fixedSamplers.size() - 1;
-		}
-
-		if (XlEqString(token._value, "[")) {
-			auto countToken = iterator.GetNextToken();
-			if (XlEqString(countToken._value, "]"))
-				Throw(FormatException("Expecting expecting array count, but got empty array brackets", token._start));
-
-			auto* parseEnd = FastParseValue(countToken._value, result._arrayElementCount);
-			if (parseEnd != countToken._value.end())
-				Throw(FormatException(StringMeld<256>() << "Expecting unsigned integer value for array count, but got " << countToken._value, token._start));
-
-			auto closeBracket = iterator.GetNextToken();
-			if (!XlEqString(closeBracket._value, "]"))
-				Throw(FormatException(StringMeld<256>() << "Expecting expecting closing bracket for array, but got " << closeBracket._value, token._start));
-
-			token = iterator.GetNextToken();
 		}
 
 		if (!XlEqString(token._value, ";"))
@@ -182,6 +192,9 @@ namespace RenderCore { namespace Assets
 		std::make_pair("StorageTexelBuffer", 			DescriptorType::UnorderedAccessTexelBuffer),
 		std::make_pair("UnorderedAccessTexelBuffer", 	DescriptorType::UnorderedAccessTexelBuffer),
 		std::make_pair("UniformTexelBuffer", 			DescriptorType::UniformTexelBuffer),
+		std::make_pair("UniformBufferDynamic", 			DescriptorType::UniformBufferDynamicOffset),
+		std::make_pair("UnordererdAccessBufferDynamic", DescriptorType::UnorderedAccessBufferDynamicOffset),
+		std::make_pair("StorageBufferDynamic", 			DescriptorType::UnorderedAccessBufferDynamicOffset),
 		std::make_pair("Sampler", 					DescriptorType::Sampler),
 		std::make_pair("SubpassInput", 				DescriptorType::InputAttachment)
 	};
@@ -220,7 +233,26 @@ namespace RenderCore { namespace Assets
 				}
 				Throw(FormatException(meld, token._start));
 			}
-		}		
+		}
+
+		// fill in slot indices where they weren't explicitly specified
+		int lastAssignedSlot = -1;
+		for (auto& slot:_slots) {
+			if (slot._slotIdx == ~0u) {
+				auto slotIdx = lastAssignedSlot+1;
+				for (;;) {
+					bool foundOverlap = false;
+					for (auto& slot:_slots)
+						if (slot._slotIdx == slotIdx) {
+							foundOverlap = true;
+							slotIdx++;
+							break;
+						}
+					if (!foundOverlap) break;
+				}
+				slot._slotIdx = lastAssignedSlot = slotIdx;
+			}
+		}
 	}
 
 	PredefinedDescriptorSetLayout::PredefinedDescriptorSetLayout(
@@ -249,6 +281,7 @@ namespace RenderCore { namespace Assets
 		uint64_t result = seed;
 		for (const auto& slot:_slots) {
 			result = Hash64(slot._name, result);
+			result = HashCombine(result, slot._slotIdx);
 			if (!slot._conditions.empty())
 				result = Hash64(slot._conditions, result);
 			result = HashCombine(uint64_t(slot._type) | (uint64_t(slot._arrayElementCount) << 16ull), result);
@@ -263,19 +296,29 @@ namespace RenderCore { namespace Assets
 
 	DescriptorSetSignature PredefinedDescriptorSetLayout::MakeDescriptorSetSignature(SamplerPool* samplerPool) const
 	{
-		DescriptorSetSignature result;
-		result._slots.reserve(_slots.size());
-		result._slotNames.reserve(_slots.size());
+		int maxSlotIdx = -1;
 		for (const auto&s:_slots) {
-			auto count = std::max(s._arrayElementCount, 1u);
-			result._slots.push_back(DescriptorSlot{s._type, count});
-			result._slotNames.push_back(Hash64(s._name));
+			assert(s._slotIdx != ~0u);
+			maxSlotIdx = std::max(maxSlotIdx, int(s._slotIdx));
+		}
+		if (maxSlotIdx<0) return {};
+
+		DescriptorSetSignature result;
+		result._slots.resize(maxSlotIdx+1);
+		result._slotNames.resize(maxSlotIdx+1, 0ull);
+
+		for (const auto&s:_slots) {
+			if (result._slotNames[s._slotIdx] == 0ull) {
+				auto count = std::max(s._arrayElementCount, 1u);
+				result._slots[s._slotIdx] = DescriptorSlot{s._type, count};
+				result._slotNames[s._slotIdx] = Hash64(s._name);
+			}
 		}
 		if (samplerPool && !_fixedSamplers.empty()) {
-			result._fixedSamplers.resize(_slots.size());
+			result._fixedSamplers.resize(maxSlotIdx+1);
 			for (unsigned c=0; c<_slots.size(); ++c) {
 				if (_slots[c]._fixedSamplerIdx == ~0u) continue;
-				result._fixedSamplers[c] = samplerPool->GetSampler(_fixedSamplers[_slots[c]._fixedSamplerIdx]);
+				result._fixedSamplers[_slots[c]._slotIdx] = samplerPool->GetSampler(_fixedSamplers[_slots[c]._fixedSamplerIdx]);
 			}
 		}
 		return result;

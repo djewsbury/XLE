@@ -158,13 +158,21 @@ namespace RenderCore { namespace Assets
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile(StringSection<> sourceFileName)
 	{
 		::Assets::PreprocessorIncludeHandler includeHandler;
-		auto initialFile = includeHandler.OpenFile(sourceFileName, {});
-		ConditionalProcessingTokenizer tokenizer(
-			MakeStringSection((const char*)initialFile._fileContents.get(), (const char*)PtrAdd(initialFile._fileContents.get(), initialFile._fileContentsSize)),
-			initialFile._filename,
-			&includeHandler);
-		Parse(tokenizer);
-		_depVal = includeHandler.MakeDependencyValidation();
+		TRY {
+			auto initialFile = includeHandler.OpenFile(sourceFileName, {});
+			ConditionalProcessingTokenizer tokenizer(
+				MakeStringSection((const char*)initialFile._fileContents.get(), (const char*)PtrAdd(initialFile._fileContents.get(), initialFile._fileContentsSize)),
+				initialFile._filename,
+				&includeHandler);
+			Parse(tokenizer);
+			_depVal = includeHandler.MakeDependencyValidation();
+			for (auto& layout:_descriptorSets)		// have to assign the parsed layout's depvals, as well -- since we don't generate this until the end of parsing
+				layout.second->_depVal = _depVal;
+		} CATCH(const std::exception& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, includeHandler.MakeDependencyValidation()));
+		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, includeHandler.MakeDependencyValidation()));
+		} CATCH_END
 	}
 
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile() {}

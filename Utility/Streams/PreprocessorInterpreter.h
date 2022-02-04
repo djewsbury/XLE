@@ -20,7 +20,7 @@ namespace Utility
 
 	bool EvaluatePreprocessorExpression(
 		StringSection<> input,
-		IteratorRange<const ParameterBox**> definedTokens);
+		IteratorRange<const ParameterBox*const*> definedTokens);
 
 	namespace Internal
 	{

@@ -28,6 +28,7 @@ namespace RenderCore { namespace Assets
 			std::string _name;
 			DescriptorType _type;
 			unsigned _arrayElementCount = 0u;
+			unsigned _slotIdx = ~0u;
 			unsigned _cbIdx = ~0u;		// this is an idx into the _constantBuffers array for constant buffer types
 			unsigned _fixedSamplerIdx = ~0u;
 			std::string _conditions;
@@ -57,6 +58,7 @@ namespace RenderCore { namespace Assets
 		void Parse(Utility::ConditionalProcessingTokenizer& iterator);
 
 		::Assets::DependencyValidation _depVal;
+		friend class PredefinedPipelineLayoutFile;
 	};
 
 }}

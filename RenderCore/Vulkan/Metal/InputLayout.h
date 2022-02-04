@@ -100,7 +100,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			DeviceContext& context,
 			SharedEncoder& encoder,
 			const IDescriptorSet& descriptorSet,
-			unsigned groupIdx = 0, unsigned slotIdx = 0) const;
+			unsigned groupIdx = 0, unsigned slotIdx = 0,
+			IteratorRange<const unsigned*> dynamicOffsets = {}) const;
 
 		uint64_t GetBoundLooseImmediateDatas(unsigned groupIdx = 0) const;
 		uint64_t GetBoundLooseResources(unsigned groupIdx = 0) const;
@@ -144,6 +145,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint32_t _descriptorSetIdx = 0u;
 			uint32_t _shaderStageMask = 0u;
 			std::shared_ptr<CompiledDescriptorSetLayout> _layout;
+			unsigned _layoutDynamicOffsetCount = 0;
 
 			std::vector<uint32_t> _resourceViewBinds;
 			std::vector<uint32_t> _immediateDataBinds;
@@ -174,6 +176,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint32_t _inputSlot;
 			uint32_t _outputSlot;
 			uint32_t _shaderStageMask;
+			uint32_t _expectedDynamicOffsetCount;
 		};
 
 		struct GroupRules

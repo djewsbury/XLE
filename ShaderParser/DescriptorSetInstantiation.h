@@ -23,7 +23,8 @@ namespace ShaderSourceParser
 
 	std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> LinkToFixedLayout(
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& input,
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion);
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion,
+		bool allowSlotReassignment = true);
 
 	RenderCore::DescriptorType CalculateDescriptorType(StringSection<> type);
 }

@@ -110,7 +110,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<IAsyncTracker> _gpuTracker;
 		Threading::Mutex _lock;
 		std::vector<std::unique_ptr<TemporaryStoragePage>> _pages;
-		BitHeap _pageReservations;
+		std::vector<std::unique_ptr<TemporaryStoragePage>> _namedPages;
+		BitHeap _pageReservations, _namedPageReservations;
 		unsigned _nextPageId = 1u;
 		std::atomic<unsigned> _cmdListAttachedStorageAlive = 0;
 		std::thread::id _boundThreadId;
@@ -119,6 +120,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		~Pimpl();
 
 		std::pair<TemporaryStoragePage*, unsigned> ReserveNewPageForAllocation(size_t byteCode, BindFlag::BitField bindFlags, bool cpuMapping, size_t defaultPageSize);
+		TemporaryStoragePage* ReserveNamedPage(NamedPage namedPage);
 		void ReleaseReservation(TemporaryStoragePage& page);
 		void FlushDestroys();
 	};
@@ -158,6 +160,15 @@ namespace RenderCore { namespace Metal_Vulkan
 		return std::make_pair(&page, space); 
 	}
 
+	TemporaryStoragePage* TemporaryStorageManager::Pimpl::ReserveNamedPage(NamedPage namedPage)
+	{
+		ScopedLock(_lock);
+		assert(namedPage < _namedPages.size());
+		assert(!_namedPageReservations.IsAllocated(namedPage));
+		_namedPageReservations.Allocate(namedPage);
+		return _namedPages[namedPage].get();
+	}
+
 	void TemporaryStorageManager::Pimpl::ReleaseReservation(TemporaryStoragePage& page)
 	{
 		ScopedLock(_lock);
@@ -165,6 +176,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (_pages[i].get() != &page) continue;
 			assert(_pageReservations.IsAllocated(i));
 			_pageReservations.Deallocate(i);
+			return;
+		}
+
+		for (auto i = 0u; i!=_namedPages.size(); ++i) {
+			if (_namedPages[i].get() != &page) continue;
+			assert(_namedPageReservations.IsAllocated(i));
+			_namedPageReservations.Deallocate(i);
 			return;
 		}
 
@@ -177,6 +195,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(std::this_thread::get_id() == _boundThreadId);
 		for (auto i = 0u; i!=_pages.size(); ++i) {
 			auto& page = *_pages[i];
+
+			auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
+			unsigned newFront = ~0u;
+			while (!page._markedDestroys.empty() && page._markedDestroys.front()._marker <= trackerMarker) {
+				newFront = page._markedDestroys.front()._front;
+				page._markedDestroys.pop_front();
+			}
+
+			if (newFront != ~0u)
+				page._heap.ResetFront(newFront);
+		}
+
+		for (auto i = 0u; i!=_namedPages.size(); ++i) {
+			auto& page = *_namedPages[i];
 
 			auto trackerMarker = _gpuTracker ? _gpuTracker->GetConsumerMarker() : ~0u;
 			unsigned newFront = ~0u;
@@ -204,6 +236,19 @@ namespace RenderCore { namespace Metal_Vulkan
 	CmdListAttachedStorage TemporaryStorageManager::BeginCmdListReservation()
 	{
 		return CmdListAttachedStorage { _pimpl.get() };
+	}
+
+	NamedPage TemporaryStorageManager::CreateNamedPage(size_t byteCount, BindFlag::BitField bindFlags)
+	{
+		auto result = (NamedPage)_pimpl->_namedPages.size();
+		_pimpl->_namedPages.emplace_back(std::make_unique<TemporaryStoragePage>(*_pimpl->_factory, byteCount, bindFlags, true, _pimpl->_nextPageId++));
+		return result;
+	}
+
+	std::shared_ptr<IResource> TemporaryStorageManager::GetResourceForNamedPage(NamedPage namedPage)
+	{
+		assert(namedPage < _pimpl->_namedPages.size());
+		return _pimpl->_namedPages[namedPage]->_resource;
 	}
 
 	void TemporaryStorageManager::FlushDestroys()
@@ -262,27 +307,33 @@ namespace RenderCore { namespace Metal_Vulkan
 		return 256 * 1024;
 	}
 
+	static unsigned AllocateSpaceFromPage(TemporaryStoragePage& page, unsigned byteCount)
+	{
+		auto alignedByteCount = CeilToMultiple((unsigned)byteCount, page._alignment); // (probably pow2, but we don't know for sure)
+		auto space = page._heap.AllocateBack(alignedByteCount);
+		if (space != ~0u) {
+			assert((space % page._alignment) == 0);
+			page._pendingNewFront = space + alignedByteCount;
+
+			// Check if we've crossed over the "last barrier" point (no special
+			// handling for wrap around case required)
+			if (space <= page._lastBarrier && space > page._lastBarrier)
+				page._lastBarrierContext = nullptr;	// reset tracking
+		}
+		return space;
+	}
+
 	TemporaryStorageResourceMap CmdListAttachedStorage::MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t defaultPageSize)
 	{
 		assert(byteCount != 0);
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
 			if ((*page)->_type != bindFlags && (*page)->_cpuMappable) continue;
 
-			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, (*page)->_alignment); // (probably pow2, but we don't know for sure)
-			auto space = (*page)->_heap.AllocateBack(alignedByteCount);
-			if (space != ~0u) {
-				assert((space % (*page)->_alignment) == 0);
-				(*page)->_pendingNewFront = space + alignedByteCount;
-
-				// Check if we've crossed over the "last barrier" point (no special
-				// handling for wrap around case required)
-				if (space <= (*page)->_lastBarrier && space > (*page)->_lastBarrier)
-					(*page)->_lastBarrierContext = nullptr;	// reset tracking
-
+			auto space = AllocateSpaceFromPage(**page, byteCount);
+			if (space != ~0u)
 				return TemporaryStorageResourceMap {
 					_manager->_factory->GetDevice().get(),
 					(*page)->_resource, space, byteCount, (*page)->_pageId };
-			}
 		}
 
 		if (!defaultPageSize)
@@ -302,19 +353,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (auto page=_reservedPages.rbegin(); page!=_reservedPages.rend(); ++page) {
 			if ((*page)->_type != bindFlags && !(*page)->_cpuMappable) continue;
 
-			auto alignedByteCount = CeilToMultiple((unsigned)byteCount, (*page)->_alignment); // (probably pow2, but we don't know for sure)
-			auto space = (*page)->_heap.AllocateBack(alignedByteCount);
-			if (space != ~0u) {
-				assert((space % (*page)->_alignment) == 0);
-				(*page)->_pendingNewFront = space + alignedByteCount;
-
-				// Check if we've crossed over the "last barrier" point (no special
-				// handling for wrap around case required)
-				if (space <= (*page)->_lastBarrier && space > (*page)->_lastBarrier)
-					(*page)->_lastBarrierContext = nullptr;	// reset tracking
-
+			auto space = AllocateSpaceFromPage(**page, byteCount);
+			if (space != ~0u)
 				return BufferAndRange { (*page)->_resource, space, (unsigned)byteCount };
-			}
 		}
 
 		if (!defaultPageSize)
@@ -324,6 +365,27 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto newPageAndAllocation = _manager->ReserveNewPageForAllocation(byteCount, bindFlags, cpuMappable, defaultPageSize);
 		_reservedPages.push_back(newPageAndAllocation.first);
 		return BufferAndRange { newPageAndAllocation.first->_resource, newPageAndAllocation.second, (unsigned)byteCount };
+	}
+
+	TemporaryStorageResourceMap	CmdListAttachedStorage::MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage)
+	{
+		if (namedPage >= _namedPageReservations.size())
+			_namedPageReservations.resize(namedPage+1, nullptr);
+
+		if (!_namedPageReservations[namedPage])
+			_namedPageReservations[namedPage] = _manager->ReserveNamedPage(namedPage);
+
+		auto& page = *_namedPageReservations[namedPage];
+		assert(page._cpuMappable);
+
+		auto space = AllocateSpaceFromPage(page, byteCount);
+		if (space != ~0u)
+			return TemporaryStorageResourceMap {
+				_manager->_factory->GetDevice().get(),
+				page._resource, space, byteCount, page._pageId };
+
+		assert(0);
+		return {};
 	}
 
 	void CmdListAttachedStorage::OnSubmitToQueue(unsigned trackerMarker)
@@ -336,7 +398,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// There's no actual thread protection for "_reservedPages" and "_pendingNewFront" here
 		// We're assuming that since this happens when the command list is being submitted, that there
 		// will be no further writers for those
-		for (const auto& page:_reservedPages) {
+		auto releasePage = [](auto& page, unsigned trackerMarker, auto& manager) {
 			assert(page->_pendingNewFront != ~0u);		// this would mean we never actually allocated anything from this page
 
 			if (page->_markedDestroys.empty() || page->_markedDestroys.back()._marker != trackerMarker) {
@@ -344,9 +406,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			page->_markedDestroys.back()._front = page->_pendingNewFront;
 			page->_pendingNewFront = ~0u;
-			_manager->ReleaseReservation(*page);
-		}
+			manager.ReleaseReservation(*page);
+		};
+
+		for (const auto& page:_reservedPages) releasePage(page, trackerMarker, *_manager);
 		_reservedPages.clear();
+		for (const auto& page:_namedPageReservations) releasePage(page, trackerMarker, *_manager);
+		_namedPageReservations.clear();
 	}
 
 	void CmdListAttachedStorage::AbandonAllocations()
@@ -359,6 +425,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		for (const auto& page:_reservedPages)
 			_manager->ReleaseReservation(*page);
 		_reservedPages.clear();
+		for (const auto& page:_namedPageReservations)
+			_manager->ReleaseReservation(*page);
+		_namedPageReservations.clear();
 	}
 
 	CmdListAttachedStorage::operator bool() const { return _manager != nullptr; }
@@ -375,6 +444,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			_reservedPages.begin(),
 			src._reservedPages.begin(), src._reservedPages.end());
 		src._reservedPages.clear();
+		_namedPageReservations.resize(std::max(_namedPageReservations.size(), src._namedPageReservations.size()));
+		for (unsigned c=0; c<src._namedPageReservations.size(); ++c) {
+			assert(!src._namedPageReservations[c] && _namedPageReservations[c]);		// samed named page can't be reserved by both
+			if (src._namedPageReservations[c])
+				_namedPageReservations[c] = src._namedPageReservations[c];
+		}
 		src = CmdListAttachedStorage{};
 	}
 
@@ -400,6 +475,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	
 	CmdListAttachedStorage::CmdListAttachedStorage(CmdListAttachedStorage&& moveFrom)
 	: _reservedPages(std::move(moveFrom._reservedPages))
+	, _namedPageReservations(std::move(moveFrom._namedPageReservations))
 	{
 		_manager = moveFrom._manager;
 		moveFrom._manager = nullptr;
@@ -412,6 +488,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			if (_manager)
 				_manager->_cmdListAttachedStorageAlive--;
 			_reservedPages = std::move(moveFrom._reservedPages);
+			_namedPageReservations = std::move(moveFrom._namedPageReservations);
 			_manager = moveFrom._manager;
 			moveFrom._manager = nullptr;
 		}
@@ -454,6 +531,29 @@ namespace RenderCore { namespace Metal_Vulkan
 	, _beginAndEndInResource(offset, offset+size)
 	{
 	}
+
+	TemporaryStorageResourceMap::TemporaryStorageResourceMap(TemporaryStorageResourceMap&& moveFrom)
+	: ResourceMap(std::move(moveFrom))
+	{
+		_resource = std::move(moveFrom._resource);
+		_pageId = moveFrom._pageId;
+		moveFrom._pageId = ~0u;
+		_beginAndEndInResource = moveFrom._beginAndEndInResource;
+		moveFrom._beginAndEndInResource = {0,0};
+	}
+
+	TemporaryStorageResourceMap& TemporaryStorageResourceMap::operator=(TemporaryStorageResourceMap&& moveFrom)
+	{
+		ResourceMap::operator=(std::move(moveFrom));
+		_resource = std::move(moveFrom._resource);
+		_pageId = moveFrom._pageId;
+		moveFrom._pageId = ~0u;
+		_beginAndEndInResource = moveFrom._beginAndEndInResource;
+		moveFrom._beginAndEndInResource = {0,0};
+		return *this;
+	}
+
+	TemporaryStorageResourceMap::TemporaryStorageResourceMap() {}
 
 	VertexBufferView BufferAndRange::AsVertexBufferView() { return { _resource.get(), _offset}; }
 	IndexBufferView BufferAndRange::AsIndexBufferView(Format indexFormat) { return { _resource.get(), indexFormat, _offset}; }

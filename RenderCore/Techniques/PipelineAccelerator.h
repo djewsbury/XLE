@@ -33,6 +33,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
+	struct DeformerToDescriptorSetBinding;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main

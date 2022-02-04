@@ -195,6 +195,8 @@ struct GBufferValues
     float cookedLightOcclusion; // this is precalculated occlusion of the dominant light source
 
     float3 transmission;
+
+    float3 emissive;
 };
 
 PerPixelMaterialParam PerPixelMaterialParam_Default()
@@ -220,6 +222,7 @@ GBufferValues GBufferValues_Default()
     result.cookedLightOcclusion = 1.f;
 
     result.transmission = 0.0.xxx;
+    result.emissive = 0.0.xxx;
     return result;
 }
 

@@ -411,7 +411,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
 	void SharedEncoder::BindDescriptorSet(
-		unsigned index, VkDescriptorSet set
+		unsigned index, VkDescriptorSet set,
+		IteratorRange<const unsigned*> dynamicOffsets
 		VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description))
 	{
 		auto encoderType = _sharedState->_currentEncoderType;
@@ -425,14 +426,14 @@ namespace RenderCore { namespace Metal_Vulkan
 					(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
 					GetUnderlyingPipelineLayout(),
 					index, 1, &set, 
-					0, nullptr);
+					dynamicOffsets.size(), dynamicOffsets.begin());
 			_capturedStates->_currentDescSet[index] = set;
 		} else {
 			_sharedState->_commandList.BindDescriptorSets(
 				(encoderType == EncoderType::Compute) ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
 				GetUnderlyingPipelineLayout(),
 				index, 1, &set, 
-				0, nullptr);
+				dynamicOffsets.size(), dynamicOffsets.begin());
 		}
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
@@ -514,7 +515,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Bind default blank descriptor sets for the layout
 			for (unsigned c=0; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
 				BindDescriptorSet(
-					c, _pipelineLayout->GetBlankDescriptorSet(c).get()
+					c, _pipelineLayout->GetBlankDescriptorSet(c).get(), _pipelineLayout->GetBlankDescriptorSetDynamicOffsets(c)
 					#if defined(VULKAN_VERBOSE_DEBUG)
 						, DescriptorSetDebugInfo{_pipelineLayout->GetBlankDescriptorSetDebugInfo(c)}
 					#endif

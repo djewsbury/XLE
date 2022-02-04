@@ -115,6 +115,7 @@ namespace RenderCore { namespace Assets
 		float b = (int32_t(B) - 2048) / 2048.0f;
 		float c = (int32_t(C) - 2048) / 2048.0f;
 
+#if 1
 		// 2047 seems to come up a lot in the data, suggesting it might be zero
 		// The constant here, 2895.f, is based on comparing some of the fixed values in animation
 		// files to the default parameters on skeletons. It's not clear why we're not using the full
@@ -144,6 +145,25 @@ namespace RenderCore { namespace Assets
 		case 3:
 			return { reconstructed, a, b, c };
 		}
+#else
+		a = (int32_t(A) - 2047) / 2048.f; // 2895.f;
+		b = (int32_t(B) - 2047) / 2048.f; // 2895.f;
+		c = (int32_t(C) - 2047) / 2048.f; // 2895.f;
+
+		float reconstructed = 1.f;
+		if (v.e&0x40) reconstructed = -reconstructed;
+		assert(!(v.e&0x80));	// unused bit?
+		switch ((v.e>>4)&0x3) {
+		case 0:
+			return cml::normalize(Quaternion{ c, reconstructed, a, b });
+		case 1:
+			return cml::normalize(Quaternion{ c, a, reconstructed, b });
+		case 2:
+			return cml::normalize(Quaternion{ c, a, b, reconstructed });
+		case 3:
+			return cml::normalize(Quaternion{ reconstructed, a, b, c });
+		}
+#endif
 
 		assert(0);	// compiler doesn't seem to be realize it's impossible to get here
 		return {0.f, 0.f, 0.f, 0.f};
