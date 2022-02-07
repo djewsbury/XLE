@@ -15,7 +15,7 @@ namespace RenderCore { namespace Techniques
 	class IGeoDeformerInfrastructure;
 	class IGeoDeformer;
 
-	class IGeoDeformerInfrastructure : public IDeformAcceleratorAttachment
+	class IGeoDeformerInfrastructure : public IDeformAttachment
 	{
 	public:
 		virtual const DeformerToRendererBinding& GetDeformerToRendererBinding() const = 0;

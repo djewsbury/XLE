@@ -168,6 +168,8 @@ namespace RenderCore { namespace Techniques
 		//   P R I M A R Y   R E S O U R C E S   //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	extern IDeformAcceleratorPool* g_deformAccelerators;
+
 	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device)
 	{
 		if (!_techniqueServices)
@@ -184,6 +186,8 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->GetDeformOperationFactorySet().Register("skin", CreateGPUSkinDeformerFactory(pipelineCollection));
 		_techniqueServices->GetDeformOperationFactorySet().Register("cpu_skin", CreateCPUSkinDeformerFactory());
 		_deformAccelerators = CreateDeformAcceleratorPool(device);
+
+		g_deformAccelerators = _deformAccelerators.get();
 
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);

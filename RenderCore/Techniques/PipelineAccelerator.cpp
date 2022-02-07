@@ -375,7 +375,9 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& materialSelectors,
 			const ParameterBox& constantBindings,
 			const ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings) override;
+			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
+			IteratorRange<const AnimatedParameterBinding*> animatedBindings,
+			const std::shared_ptr<IResourceView>& dynamicPageResource) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			const std::string& name,
@@ -671,7 +673,9 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& materialSelectors,
 		const ParameterBox& constantBindings,
 		const ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings)
+		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
+		IteratorRange<const AnimatedParameterBinding*> animatedBindings,
+		const std::shared_ptr<IResourceView>& dynamicPageResource)
 	{
 		std::shared_ptr<DescriptorSetAccelerator> result;
 		{
@@ -688,9 +692,8 @@ namespace RenderCore { namespace Techniques
 			}
 			if (shaderPatches)
 				hash = HashCombine(shaderPatches->GetHash(), hash);
-			/*if (deformerBinding)
-				for (const auto& b:deformerBinding->_dynamicCBs)
-					hash = HashCombine(b._hashName, hash);*/
+			for (const auto& b:animatedBindings)
+				hash = HashCombine(b._name, hash);
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
@@ -730,18 +733,19 @@ namespace RenderCore { namespace Techniques
 					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
 					constantBindings,
 					resourceBindings,
-					MakeIteratorRange(metalSamplers), _samplerPool.get(), nullptr, nullptr,
+					MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
 					PipelineType::Graphics,
 					!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 			} else {
 				ParameterBox constantBindingsCopy = constantBindings;
 				ParameterBox resourceBindingsCopy = resourceBindings;
+				std::vector<AnimatedParameterBinding> animatedParamCopy{animatedBindings.begin(), animatedBindings.end()};
 
 				std::weak_ptr<IDevice> weakDevice = _device;
 				bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					result->_descriptorSet->AdoptPromise(),
-					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool)](
+					[constantBindingsCopy, resourceBindingsCopy, animatedParamCopy, metalSamplers, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), dynamicPageResource=dynamicPageResource](
 						std::promise<ActualizedDescriptorSet>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
@@ -755,7 +759,7 @@ namespace RenderCore { namespace Techniques
 							patchCollection->GetInterface().GetMaterialDescriptorSet(),
 							constantBindingsCopy,
 							resourceBindingsCopy,
-							MakeIteratorRange(metalSamplers), samplerPool.lock().get(), nullptr, nullptr,
+							MakeIteratorRange(metalSamplers), samplerPool.lock().get(), animatedParamCopy, dynamicPageResource,
 							PipelineType::Graphics,
 							generateBindingInfo);
 					});
@@ -767,7 +771,7 @@ namespace RenderCore { namespace Techniques
 				*_matDescSetLayout.GetLayout(),
 				constantBindings,
 				resourceBindings,
-				MakeIteratorRange(metalSamplers), _samplerPool.get(), nullptr, nullptr,
+				MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
 				PipelineType::Graphics,
 				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 		}

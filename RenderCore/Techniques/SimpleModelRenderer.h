@@ -32,6 +32,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
 	class IGeoDeformerInfrastructure;
+	class IDeformParametersAttachment;
 	class IGeoDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;
@@ -86,6 +87,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
 			const std::shared_ptr<IGeoDeformerInfrastructure>& geoDeformerInfrastructure = nullptr,
+			const std::shared_ptr<IDeformParametersAttachment>& parametersDeformInfrastructure = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
 			const std::string& modelScaffoldName = {},
 			const std::string& materialScaffoldName = {});

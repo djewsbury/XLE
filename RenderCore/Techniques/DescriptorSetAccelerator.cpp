@@ -8,6 +8,8 @@
 #include "CommonResources.h"
 #include "Services.h"
 #include "DeformAccelerator.h"
+#include "DrawableDelegates.h"
+#include "Drawables.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Metal/State.h"
@@ -21,9 +23,22 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/ParameterBox.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques 
 {
+	struct AnimatedUniformBufferHelper
+	{
+		struct Mapping
+		{
+			ImpliedTyping::TypeDesc _srcFormat, _dstFormat;
+			unsigned _srcOffset, _dstOffset;
+		};
+		std::vector<Mapping> _parameters;
+		std::vector<uint8_t> _baseContents;
+		unsigned _dynamicPageBufferSize = 0;
+	};
+
 	struct DescriptorSetInProgress : public ::Assets::IAsyncMarker
 	{
 		struct Resource
@@ -45,6 +60,8 @@ namespace RenderCore { namespace Techniques
 
 		DescriptorSetSignature _signature;
 		DescriptorSetBindingInfo _bindingInfo;
+
+		std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
 
 		::Assets::AssetState GetAssetState() const override
 		{
@@ -86,7 +103,30 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IDeformAcceleratorAttachment> BuildDeformAttachment(const RenderCore::Assets::PredefinedCBLayout& cbLayout);
+/*
+	std::unique_ptr<AnimatedUniformBufferHelper> CreateAnimatedUniformBufferHelper(
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		const Utility::ParameterBox& constantBindings,
+		const IDeformAcceleratorPool& deformAcceleratorPool)
+	{
+		auto result = std::make_unique<AnimatedUniformBufferHelper>();
+		unsigned deformCBAlignment = deformAcceleratorPool.GetUniformBufferAlignment();
+		unsigned deformCBMovingOffset = 0;
+
+		for (const auto& s:layout._slots) {
+			if (s._name == "BasicMaterialConstants") {
+				AnimatedUniformBufferHelper::DeformableUniformBuffer ub;
+				ub._delegate = CreateTestCBDeformer();
+				auto size = ub._delegate->GetSize();
+				ub._begin = CeilToMultiple(deformCBMovingOffset, deformCBAlignment);
+				ub._end = ub._begin+size;
+				deformCBMovingOffset = ub._end;
+				result->_deformableBuffers.emplace_back(std::move(ub));
+			}
+		result->_deformBufferSize = deformCBMovingOffset;
+		return result;
+	}
+*/
 
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
@@ -96,8 +136,8 @@ namespace RenderCore { namespace Techniques
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
 		SamplerPool* samplerPool,
-		const IDeformAcceleratorPool* deformAcceleratorPool,
-		const DeformAccelerator* deformAccelerator,
+		IteratorRange<const AnimatedParameterBinding*> animatedBindings,
+		const std::shared_ptr<IResourceView>& dynamicPageResource,
 		PipelineType pipelineType,
 		bool generateBindingInfo)
 	{
@@ -113,8 +153,11 @@ namespace RenderCore { namespace Techniques
 		if (generateBindingInfo)
 			working._bindingInfo._slots.resize(working._slots.size());
 
+		unsigned dynamicPageBufferResourceIdx = ~0u;
+		unsigned dynamicPageBufferMovingOffset = 0u;
+		const unsigned dynamicPageBufferAlignment = 256u;		// todo -- get this from somewhere
+
 		char stringMeldBuffer[512];
-		bool hasDeformerCB = false;
 		for (const auto& s:layout._slots) {
 			DescriptorSetInProgress::Slot slotInProgress;
 			slotInProgress._slotName = s._name;
@@ -143,38 +186,24 @@ namespace RenderCore { namespace Techniques
 
 			} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
-				// This might be dynamically controlled by a deformer.
-				// Check in the deformerBinding first
-#if 0
-				if (s._name == "BasicMaterialConstants") {
-					auto& cbLayout = layout._constantBuffers[s._cbIdx];
+				auto& cbLayout = layout._constantBuffers[s._cbIdx];
+				auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
 
-					auto deformAttachment = BuildDeformAttachment(cbLayout);
-					auto attachRules = deformAcceleratorPool->Attach(deformAccelerator, deformAttachment);
-
-					assert(s._type == DescriptorType::UniformBufferDynamicOffset);		// we must have a dynamic offset for this mechanism to work
-					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
-					slotInProgress._resourceIdx = (unsigned)working._resources.size();
-
-					DescriptorSetInProgress::Resource res;
-					res._fixedResource = attachRules._pageResource;
-					working._resources.push_back(res);
-					gotBinding = true;
-					hasDeformerCB = true;
-
-					if (generateBindingInfo) {
-						std::stringstream str;
-						str << "<<deformer>>";
-						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
-						slotBindingInfo._binding = str.str();
+				// try to match parameters in the cb layout to the animated parameter list
+				std::vector<AnimatedUniformBufferHelper::Mapping> parameterMapping;
+				unsigned dynamicPageBufferStart = CeilToMultiple(dynamicPageBufferMovingOffset, dynamicPageBufferAlignment);
+				for (const auto& p:cbLayout->_elements) {
+					auto i = std::find_if(animatedBindings.begin(), animatedBindings.end(), [&p](const auto& q) { return q._name == p._hash; });
+					if (i != animatedBindings.end()) {
+						assert(p._arrayElementCount == 0);		// can't animate array elements
+						parameterMapping.push_back({
+							i->_type, p._type,
+							i->_offset, dynamicPageBufferStart+p._offsetsByLanguage[(unsigned)shrLanguage]});
 					}
 				}
-#endif
 
-				if (!gotBinding) {		// (if we didn't find a matching deformer binding)
-					auto& cbLayout = layout._constantBuffers[s._cbIdx];
-					auto buffer = cbLayout->BuildCBDataAsVector(constantBindings, shrLanguage);
-
+				if (parameterMapping.empty()) {
+					// non animated fixed buffer
 					auto cb = 
 						device->CreateResource(
 							CreateDesc(BindFlag::ConstantBuffer, 0, GPUAccess::Read, LinearBufferDesc::Create((unsigned)buffer.size()), s._name),
@@ -182,16 +211,38 @@ namespace RenderCore { namespace Techniques
 
 					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 					slotInProgress._resourceIdx = (unsigned)working._resources.size();
+
 					DescriptorSetInProgress::Resource res;
 					res._fixedResource = cb->CreateBufferView(BindFlag::ConstantBuffer);
 					working._resources.push_back(res);
-					gotBinding = true;
-
-					if (generateBindingInfo) {
-						std::stringstream str;
-						cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
-						slotBindingInfo._binding = str.str();
+				} else {
+					// animated dynamically written buffer
+					if (dynamicPageBufferResourceIdx == ~0u) {
+						dynamicPageBufferResourceIdx = (unsigned)working._resources.size();
+						DescriptorSetInProgress::Resource res;
+						assert(dynamicPageResource);
+						res._fixedResource = dynamicPageResource;		// todo -- if there are multiple buffers that reference this, should we have an offset here?
+						working._resources.push_back(res);
 					}
+
+					assert(s._type == DescriptorType::UniformBufferDynamicOffset);		// we must have a dynamic offset for this mechanism to work
+					slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
+					slotInProgress._resourceIdx = dynamicPageBufferResourceIdx;
+
+					dynamicPageBufferMovingOffset = dynamicPageBufferStart + (unsigned)buffer.size();
+					if (!working._animHelper)
+						working._animHelper = std::make_shared<AnimatedUniformBufferHelper>();
+					working._animHelper->_baseContents.resize(dynamicPageBufferMovingOffset, 0);
+					std::memcpy(PtrAdd(working._animHelper->_baseContents.data(), dynamicPageBufferStart), buffer.data(), buffer.size());
+					working._animHelper->_parameters.insert(working._animHelper->_parameters.end(), parameterMapping.begin(), parameterMapping.end());
+				}
+
+				gotBinding = true;
+
+				if (generateBindingInfo) {
+					std::stringstream str;
+					cbLayout->DescribeCB(str, MakeIteratorRange(buffer), shrLanguage);
+					slotBindingInfo._binding = str.str();
 				}
 			} else if (s._type == DescriptorType::Sampler) {
 				auto i = std::find_if(samplerBindings.begin(), samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
@@ -220,11 +271,13 @@ namespace RenderCore { namespace Techniques
 		}
 
 		working._signature = layout.MakeDescriptorSetSignature(samplerPool);
+		if (working._animHelper)
+			working._animHelper->_dynamicPageBufferSize = dynamicPageBufferMovingOffset;
 
 		auto futureWorkingDescSet = ::Assets::MakeASyncMarkerBridge(std::move(working));
 		::Assets::WhenAll(std::move(futureWorkingDescSet)).ThenConstructToPromise(
 			std::move(promise),
-			[device, pipelineType, hasDeformerCB](DescriptorSetInProgress working) {
+			[device, pipelineType](DescriptorSetInProgress working) {
 				std::vector<::Assets::DependencyValidation> subDepVals;
 				std::vector<std::shared_ptr<IResourceView>> finalResources;
 				finalResources.reserve(working._resources.size());
@@ -295,7 +348,8 @@ namespace RenderCore { namespace Techniques
 				actualized._depVal = std::move(depVal);
 				actualized._bindingInfo = std::move(working._bindingInfo);
 				actualized._completionCommandList = completionCommandList;
-				actualized._hasDeformerCB = hasDeformerCB;
+				actualized._dynamicPageBufferSize = working._animHelper ? working._animHelper->_dynamicPageBufferSize : 0;
+				actualized._animHelper = std::move(working._animHelper);
 				return actualized;
 			});
 	}
@@ -348,7 +402,36 @@ namespace RenderCore { namespace Techniques
 		return device.CreateDescriptorSet(initializer);
 	}
 
-		struct BasicMaterialConstants
+	ActualizedDescriptorSet::ActualizedDescriptorSet() = default;
+	ActualizedDescriptorSet::ActualizedDescriptorSet(ActualizedDescriptorSet&&) = default;
+	ActualizedDescriptorSet& ActualizedDescriptorSet::operator=(ActualizedDescriptorSet&&) = default;
+	ActualizedDescriptorSet::ActualizedDescriptorSet(const ActualizedDescriptorSet&) = default;
+	ActualizedDescriptorSet& ActualizedDescriptorSet::operator=(const ActualizedDescriptorSet&) = default;
+	ActualizedDescriptorSet::~ActualizedDescriptorSet() = default;
+
+	namespace Internal
+	{
+		bool PrepareDynamicPageResource(
+			const ActualizedDescriptorSet& descSet,
+			IteratorRange<const void*> animatedParameters,
+			IteratorRange<void*> dynamicPageBuffer)
+		{
+			if (!descSet._animHelper)
+				return false;
+
+			// copy in the parameter values to their expected destinations
+			auto& animHelper = *descSet._animHelper;
+			std::memcpy(dynamicPageBuffer.begin(), animHelper._baseContents.data(), animHelper._baseContents.size());
+			for (const auto& p:animHelper._parameters)
+				ImpliedTyping::Cast(
+					MakeIteratorRange(PtrAdd(dynamicPageBuffer.begin(), p._dstOffset), dynamicPageBuffer.end()), p._dstFormat, 
+					MakeIteratorRange(PtrAdd(animatedParameters.begin(), p._srcOffset), animatedParameters.end()), p._srcFormat);
+			return true;
+		}
+	}
+
+/*
+	struct BasicMaterialConstants
 	{
 		Float2 UV_Scale;
 		Float2 UV_Offset;
@@ -365,17 +448,10 @@ namespace RenderCore { namespace Techniques
 		unsigned Dummy[2];
 	};
 
-#if 0
-	class TestCBDeformer : public IDeformAcceleratorAttachment
+	class TestCBDeformer : public IUniformBufferDelegate
 	{
 	public:
-		virtual void Execute(
-			IThreadContext& threadContext, 
-			IteratorRange<const unsigned*> instanceIdx, 
-			IResourceView& dstVB,
-			IteratorRange<void*> cpuBufferOutputRange,
-			IteratorRange<void*> cbBufferOutputRange,
-			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics)
+		virtual void WriteImmediateData(ParsingContext& context, const void* objectContext, IteratorRange<void*> dst)
 		{
 			static float time = 0.f;
 			time += 1.0f/30.f;
@@ -387,19 +463,14 @@ namespace RenderCore { namespace Techniques
 			constants.Base_Color = Float4(1,1,1,1);
 			constants.AlphaThreshold = .5f;
 			constants.Base_Color_Scale = 1;	
-			assert(outputInstanceStride >= sizeof(BasicMaterialConstants));
-			assert(instanceIndices.size()*outputInstanceStride == dstCB.size());
-			for (unsigned c=0; c<instanceIndices.size(); ++c)
-				*(BasicMaterialConstants*)PtrAdd(dstCB.begin(), c*outputInstanceStride) = constants;
+			*(BasicMaterialConstants*)dst.begin() = constants;
 		}
 
-		void* QueryInterface(size_t) { return nullptr; }
+		virtual size_t GetSize() { return sizeof(BasicMaterialConstants); }
+        virtual IteratorRange<const ConstantBufferElementDesc*> GetLayout() { return {}; }
 	};
 
-	std::shared_ptr<IDeformAcceleratorAttachment> BuildDeformAttachment(const RenderCore::Assets::PredefinedCBLayout& cbLayout)
-	{
-
-	}
-#endif
+	std::shared_ptr<IUniformBufferDelegate> CreateTestCBDeformer() { return std::make_shared<TestCBDeformer>(); }
+*/
 
 }}

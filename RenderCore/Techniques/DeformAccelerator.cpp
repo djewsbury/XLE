@@ -3,16 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformAccelerator.h"
-// #include "DeformOperationFactory.h"
-// #include "DeformInternal.h"
 #include "Services.h"
 #include "GPUTrackerHeap.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
-// #include "../Assets/ModelScaffold.h"
-// #include "../Assets/ModelScaffoldInternal.h"
-// #include "../Assets/ModelImmutableData.h"
-// #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
 #include "../Metal/Resource.h"
@@ -35,18 +29,11 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator() override;
 		void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformAcceleratorAttachment> deformAttachment) override;
+			std::shared_ptr<IDeformAttachment> deformAttachment) override;
 
-		/*void AttachGeometryDeformers(
-			DeformAccelerator& newAccelerator,
-			IteratorRange<const DeformOperationFactorySet::Deformer*> deformers,
-			const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
-			const std::string& modelScaffoldName) override;
-
-		const DeformerToRendererBinding& GetDeformerToRendererBinding(DeformAccelerator& accelerator) const override;
-		const DeformerToDescriptorSetBinding& GetDeformerToDescriptorSetBinding(DeformAccelerator& accelerator) const override;
-
-		std::vector<std::shared_ptr<IGeoDeformer>> GetOperations(DeformAccelerator& accelerator, uint64_t typeId) override;*/
+		virtual void Attach(
+			DeformAccelerator& deformAccelerator,
+			std::shared_ptr<IDeformParametersAttachment> deformAttachment) override;
 
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
@@ -54,6 +41,9 @@ namespace RenderCore { namespace Techniques
 		void OnFrameBarrier() override;
 		ReadyInstancesMetrics GetMetrics() const override;
 		const std::shared_ptr<IDevice>& GetDevice() const override;
+
+		std::shared_ptr<IResourceView> GetDynamicPageResource() const override;
+		unsigned GetDynamicPageResourceAlignment() const override;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>);
 		~DeformAcceleratorPool();
@@ -65,7 +55,10 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
 		mutable bool _pendingVertexInputBarrier = false;
+
 		RenderCore::Metal_Vulkan::NamedPage _cbNamedPage = ~0u;
+		std::shared_ptr<IResourceView> _cbPageResource;
+		RenderCore::Metal_Vulkan::CmdListAttachedStorage _cbPageResourceAttachedStorage;
 
 		Threading::Mutex _acceleratorsLock;
 		std::thread::id _boundThread;
@@ -73,10 +66,10 @@ namespace RenderCore { namespace Techniques
 		ReadyInstancesMetrics _readyInstancesMetrics;
 		ReadyInstancesMetrics _lastFrameReadyInstancesMetrics;
 
-		void ExecuteCBInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange);
+		friend RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes);
 	};
 
-	enum AllocationType { AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_CB, AllocationType_Max };
+	enum AllocationType { AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_Max };
 
 	class DeformAccelerator
 	{
@@ -86,12 +79,15 @@ namespace RenderCore { namespace Techniques
 		unsigned _minEnabledInstance = ~0u;
 		unsigned _maxEnabledInstance = 0;
 
-		unsigned _reversationPerInstance[AllocationType_Max] = {0,0,0};
+		unsigned _reversationPerInstance[AllocationType_Max] = {0,0};
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
 		VertexBufferView _outputVBV;
 
-		std::shared_ptr<IDeformAcceleratorAttachment> _attachment;
-		// std::vector<std::shared_ptr<IGeoDeformer>> _cbWriteOps;
+		unsigned _parametersReservationPerInstance = 0;
+		std::vector<uint8_t> _outputParameterValues;
+
+		std::shared_ptr<IDeformAttachment> _attachment;
+		std::shared_ptr<IDeformParametersAttachment> _parametersAttachment;
 
 		#if defined(_DEBUG)
 			DeformAcceleratorPool* _containingPool = nullptr;
@@ -102,10 +98,17 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const unsigned*> instanceIdx, 
 			IResourceView& dstVB,
 			IteratorRange<void*> cpuBufferOutputRange,
-			IteratorRange<void*> cbBufferOutputRange,
 			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics)
 		{
-			_attachment->Execute(threadContext, instanceIdx, dstVB, cpuBufferOutputRange, cbBufferOutputRange, metrics);
+			_attachment->Execute(threadContext, instanceIdx, dstVB, cpuBufferOutputRange, metrics);
+		}
+
+		void ExecuteParameters(
+			IteratorRange<const unsigned*> instanceIdx, 
+			IteratorRange<void*> dst,
+			unsigned outputInstanceStride)
+		{
+			_parametersAttachment->Execute(instanceIdx, dst, outputInstanceStride);
 		}
 	};
 
@@ -118,12 +121,6 @@ namespace RenderCore { namespace Techniques
 			newAccelerator->_containingPool = this;
 		#endif
 
-		// newAccelerator->_cbWriteOps.push_back(std::make_shared<TestCBDeformer>());
-		// newAccelerator->_reversationPerInstance[AllocationType_CB] = sizeof(BasicMaterialConstants);
-		// we must expand newAccelerator->_cbSizePerInstance for the alignment requirements for dynamic buffer offsets of the given
-		// device
-		newAccelerator->_reversationPerInstance[AllocationType_CB] = CeilToMultiple(newAccelerator->_reversationPerInstance[AllocationType_CB], 256);
-
 		ScopedLock(_acceleratorsLock);
 		_accelerators.push_back(newAccelerator);
 		return newAccelerator;
@@ -131,7 +128,7 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::Attach(
 		DeformAccelerator& accelerator,
-		std::shared_ptr<IDeformAcceleratorAttachment> deformAttachment)
+		std::shared_ptr<IDeformAttachment> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
@@ -139,45 +136,24 @@ namespace RenderCore { namespace Techniques
 		assert(!accelerator._attachment);		// we can't attach geometry deformers more than once to a given deform accelerator
 		accelerator._attachment = std::move(deformAttachment);
 
-		unsigned reservationGPU = 0, reservationCPU = 0, reservationCB = 0;
-		accelerator._attachment->ReserveBytesRequired(1, reservationGPU, reservationCPU, reservationCB);
+		unsigned reservationGPU = 0, reservationCPU = 0;
+		accelerator._attachment->ReserveBytesRequired(1, reservationGPU, reservationCPU);
 		accelerator._reversationPerInstance[AllocationType_GPUVB] += reservationGPU;
 		accelerator._reversationPerInstance[AllocationType_CPUVB] += reservationCPU;
 	}
 
-/*
-	const DeformerToRendererBinding& DeformAcceleratorPool::GetDeformerToRendererBinding(DeformAccelerator& accelerator) const
+	void DeformAcceleratorPool::Attach(
+		DeformAccelerator& accelerator,
+		std::shared_ptr<IDeformParametersAttachment> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		return accelerator._geoInfrastructure._rendererGeoInterface;
+		assert(!accelerator._parametersAttachment);		// we can't attach geometry deformers more than once to a given deform accelerator
+		assert(deformAttachment);
+		accelerator._parametersAttachment = std::move(deformAttachment);
+		accelerator._parametersReservationPerInstance = accelerator._parametersAttachment->GetOutputInstanceStride();
 	}
-
-	const DeformerToDescriptorSetBinding& DeformAcceleratorPool::GetDeformerToDescriptorSetBinding(DeformAccelerator& accelerator) const
-	{
-		static DeformerToDescriptorSetBinding result;
-		static bool init = false;
-		if (!init) {
-			init = true;
-			DeformerToDescriptorSetBinding::CBBinding binding;
-			binding._hashName = Hash64("BasicMaterialConstants");
-			binding._pageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage)->CreateBufferView(BindFlag::ConstantBuffer);
-			result._dynamicCBs.push_back(std::move(binding));
-		}
-		return result;
-	}
-
-	std::vector<std::shared_ptr<IGeoDeformer>> DeformAcceleratorPool::GetOperations(DeformAccelerator& accelerator, size_t typeId)
-	{
-		#if defined(_DEBUG)
-			assert(accelerator._containingPool == this);
-		#endif
-		std::vector<std::shared_ptr<IGeoDeformer>> result;
-		accelerator.GetOperations(result, typeId);
-		return result;
-	}
-*/
 
 	void DeformAcceleratorPool::EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx)
 	{
@@ -193,12 +169,6 @@ namespace RenderCore { namespace Techniques
 		accelerator._maxEnabledInstance = std::max(accelerator._maxEnabledInstance, instanceIdx);
 	}
 
-	void DeformAcceleratorPool::ExecuteCBInstance(IThreadContext& threadContext, DeformAccelerator& a, IteratorRange<const unsigned*> instanceIdx, IteratorRange<void*> outputPartRange)
-	{
-		//for (const auto&d:a._cbWriteOps)
-			//d->ExecuteCB(instanceIdx, a._reversationPerInstance[AllocationType_CB], outputPartRange);
-	}
-
 	void DeformAcceleratorPool::ReadyInstances(IThreadContext& threadContext)
 	{
 		assert(_boundThread == std::this_thread::get_id());
@@ -206,7 +176,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<DeformAccelerator> accelerators[_accelerators.size()];
 		unsigned activeAcceleratorCount=0;
-		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
+		unsigned reservationBytes[AllocationType_Max] = {0,0};
 		unsigned maxInstanceCount = 0;
 		{
 			ScopedLock(_acceleratorsLock);
@@ -244,7 +214,7 @@ namespace RenderCore { namespace Techniques
 		const auto defaultPageSize = 8*1024*1024;
 		bool atLeastOneGPUOperator = false;
 
-		if (reservationBytes[AllocationType::AllocationType_GPUVB] || reservationBytes[AllocationType::AllocationType_CPUVB] || reservationBytes[AllocationType::AllocationType_CB]) {
+		{
 			#if defined(_DEBUG)
 				auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 				metalContext.BeginLabel("Deformers");
@@ -267,13 +237,8 @@ namespace RenderCore { namespace Techniques
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}
-			if (reservationBytes[AllocationType::AllocationType_CB]) {
-				assert(_cbNamedPage != ~0u);
-				cbMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_CB], _cbNamedPage);
-				cbDst = cbMap.GetData();
-			}
 
-			unsigned movingOffsets[AllocationType_Max] = {0, 0, 0};
+			unsigned movingOffsets[AllocationType_Max] = {0, 0};
 			unsigned instanceList[maxInstanceCount];
 
 			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
@@ -307,22 +272,33 @@ namespace RenderCore { namespace Techniques
 					accelerator->_outputVBV = gpuVBV;
 					atLeastOneGPUOperator = true;
 				}
-				auto cbOutputRange = MakeIteratorRange(PtrAdd(cbDst.begin(), movingOffsets[AllocationType_CB]), PtrAdd(cbDst.begin(), movingOffsets[AllocationType_CB]+instanceCount*accelerator->_reversationPerInstance[AllocationType_CB]));
 
-				accelerator->Execute(
-					threadContext, 
-					MakeIteratorRange(instanceList, &instanceList[instanceCount]),
-					*gpuBufferView, cpuOutputRange, cbOutputRange, 
-					_readyInstancesMetrics);
+				if (accelerator->_attachment) {
+					accelerator->Execute(
+						threadContext, 
+						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
+						*gpuBufferView, cpuOutputRange,
+						_readyInstancesMetrics);
 
-				for (unsigned allType=0; allType<AllocationType_Max; ++allType) {
-					if (accelerator->_instanceToReadiedOffset[allType].size() <= maxInstanceIdx+1)
-						accelerator->_instanceToReadiedOffset[allType].resize(maxInstanceIdx+1, ~0u);
+					for (unsigned allType=0; allType<AllocationType_Max; ++allType) {
+						if (accelerator->_instanceToReadiedOffset[allType].size() <= maxInstanceIdx+1)
+							accelerator->_instanceToReadiedOffset[allType].resize(maxInstanceIdx+1, ~0u);
 
-					for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
-						accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
-						movingOffsets[allType] += accelerator->_reversationPerInstance[allType];
+						for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
+							accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
+							movingOffsets[allType] += accelerator->_reversationPerInstance[allType];
+						}
 					}
+				}
+
+				if (accelerator->_parametersAttachment) {
+					if (accelerator->_outputParameterValues.size() < accelerator->_parametersReservationPerInstance * (maxInstanceIdx+1))
+						accelerator->_outputParameterValues.resize(accelerator->_parametersReservationPerInstance * (maxInstanceIdx+1), 0u);
+
+					accelerator->ExecuteParameters(
+						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
+						MakeIteratorRange(accelerator->_outputParameterValues), 
+						accelerator->_parametersReservationPerInstance);
 				}
 
 				++_readyInstancesMetrics._acceleratorsReadied;
@@ -341,7 +317,6 @@ namespace RenderCore { namespace Techniques
 		_pendingVertexInputBarrier |= atLeastOneGPUOperator;
 		_readyInstancesMetrics._cpuDeformAllocation += reservationBytes[AllocationType_CPUVB];
 		_readyInstancesMetrics._gpuDeformAllocation += reservationBytes[AllocationType_GPUVB];
-		_readyInstancesMetrics._cbAllocation += reservationBytes[AllocationType_CB];
 
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
 		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
@@ -387,20 +362,32 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
-		unsigned GetDynamicCBOffset(DeformAccelerator& accelerator, unsigned instanceIdx)
+		IteratorRange<const void*> GetOutputParameterState(DeformAccelerator& accelerator, unsigned instanceIdx)
 		{
-			// we must return zero if we're not actually using a dynamic CB
-			if (!accelerator._reversationPerInstance[AllocationType_CB]) return 0;
-			#if defined(_DEBUG)
-				auto f = instanceIdx / 64;
-				// If you hit either of the following, it means the instance wasn't enabled. Each instance that will be used should
-				// be enabled via EnableInstance() before usage (probably at the time it's initialized with current state data)
-				assert(f < accelerator._readiedInstances.size());
-				assert(accelerator._readiedInstances[f] & (1ull << uint64_t(instanceIdx & (64-1))));	
-				assert(instanceIdx < accelerator._instanceToReadiedOffset[AllocationType_CB].size());
-			#endif
-			return accelerator._instanceToReadiedOffset[AllocationType_CB][instanceIdx];
+			assert(!accelerator._outputParameterValues.empty());
+			return MakeIteratorRange(
+				PtrAdd(accelerator._outputParameterValues.data(), instanceIdx*accelerator._parametersReservationPerInstance),
+				PtrAdd(accelerator._outputParameterValues.data(), (instanceIdx+1)*accelerator._parametersReservationPerInstance));
 		}
+	}
+	
+	std::shared_ptr<IResourceView> DeformAcceleratorPool::GetDynamicPageResource() const
+	{
+		return _cbPageResource;
+	}
+
+	unsigned DeformAcceleratorPool::GetDynamicPageResourceAlignment() const
+	{
+		return 256;		// todo -- real values
+	}
+
+	RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes)
+	{
+		auto& realAccelerators = *checked_cast<DeformAcceleratorPool*>(&accelerators);
+		bytes = CeilToMultiple(bytes, realAccelerators.GetDynamicPageResourceAlignment());	// for safety, ceil up to alignment
+		if (!realAccelerators._cbPageResourceAttachedStorage)
+			realAccelerators._cbPageResourceAttachedStorage = realAccelerators._temporaryStorageManager->BeginCmdListReservation();
+		return realAccelerators._cbPageResourceAttachedStorage.MapStorageFromNamedPage(bytes, realAccelerators._cbNamedPage);
 	}
 
 	inline void DeformAcceleratorPool::OnFrameBarrier()
@@ -424,6 +411,10 @@ namespace RenderCore { namespace Techniques
 		for (auto& storage:_currentFrameAttachedStorage)
 			storage.OnSubmitToQueue(producerMarker);
 		_currentFrameAttachedStorage.clear();
+
+		// also invalidate data written by AllocateFromDynamicPageResource()
+		_cbPageResourceAttachedStorage.OnSubmitToQueue(producerMarker);
+		_cbPageResourceAttachedStorage = {};
 
 		_temporaryStorageManager->FlushDestroys();
 
@@ -450,6 +441,7 @@ namespace RenderCore { namespace Techniques
 			_temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(Metal::GetObjectFactory(), _asyncTracker);
 			const unsigned cbAllocationSize = 1024*1024;
 			_cbNamedPage = _temporaryStorageManager->CreateNamedPage(cbAllocationSize, BindFlag::ConstantBuffer);
+			_cbPageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage)->CreateBufferView(BindFlag::ConstantBuffer);
 		}
 		_boundThread = std::this_thread::get_id();
 	}

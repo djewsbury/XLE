@@ -7,6 +7,7 @@
 #include "../UniformsStream.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"
+#include "../../Utility/ImpliedTyping.h"
 #include <vector>
 #include <memory>
 
@@ -34,6 +35,8 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Slot> _slots;
 	};
+	
+	class AnimatedUniformBufferHelper;
 
 	class ActualizedDescriptorSet
 	{
@@ -41,17 +44,63 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::IDescriptorSet>& GetDescriptorSet() const { return _descriptorSet; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
-		bool HasDeformerCB() const { return _hasDeformerCB; }
 
 		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
+		unsigned _dynamicPageBufferSize = 0u;
+		std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
-		bool _hasDeformerCB = false;
 		::Assets::DependencyValidation _depVal;
+
+		ActualizedDescriptorSet();
+		ActualizedDescriptorSet(ActualizedDescriptorSet&&);
+		ActualizedDescriptorSet& operator=(ActualizedDescriptorSet&&);
+		ActualizedDescriptorSet(const ActualizedDescriptorSet&);
+		ActualizedDescriptorSet& operator=(const ActualizedDescriptorSet&);
+		~ActualizedDescriptorSet();
+	};
+
+	class AnimatedParameterBinding
+	{
+	public:
+		uint64_t _name;
+		ImpliedTyping::TypeDesc _type;
+		unsigned _offset;
+	};
+
+	namespace Internal
+	{
+		inline unsigned GetDynamicPageResourceSize(const ActualizedDescriptorSet& descSet) { return descSet._dynamicPageBufferSize; }
+		bool PrepareDynamicPageResource(
+			const ActualizedDescriptorSet& descSet,
+			IteratorRange<const void*> animatedParameters,
+			IteratorRange<void*> dynamicPageBuffer);
+	}
+
+	/*
+	class AnimatedUniformBufferHelper
+	{
+	public:
+		struct DeformableUniformBuffer
+		{
+			std::shared_ptr<IUniformBufferDelegate> _delegate;
+			unsigned _begin, _end;
+		};
+		std::vector<DeformableUniformBuffer> _deformableBuffers;
+		unsigned _deformBufferSize = 0;
+
+		struct Binding
+		{
+			IteratorRange<const void*> _animatedCBNames;
+			std::shared_ptr<IResourceView> _animatedCBPage;
+		};
 	};
 
 	class IDeformAcceleratorPool;
-	class DeformAccelerator;
+	std::unique_ptr<AnimatedUniformBufferHelper> CreateAnimatedUniformBufferHelper(
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& layout,
+		const Utility::ParameterBox& constantBindings,
+		const IDeformAcceleratorPool* deformAcceleratorPool);*/
 
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
@@ -61,8 +110,8 @@ namespace RenderCore { namespace Techniques
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
 		SamplerPool* samplerPool,
-		const IDeformAcceleratorPool* deformAcceleratorPool,
-		const DeformAccelerator* deformAccelerator,
+		IteratorRange<const AnimatedParameterBinding*> animatedBindings = {},
+		const std::shared_ptr<IResourceView>& dynamicPageResource = nullptr,
 		PipelineType pipelineType = PipelineType::Graphics,
 		bool generateBindingInfo = false);
 
@@ -73,5 +122,12 @@ namespace RenderCore { namespace Techniques
 		const UniformsStream& us,
 		SamplerPool* samplerPool,
 		PipelineType pipelineType = PipelineType::Graphics);
+
+	/*class DrawablesPacket;
+	class Drawable;
+	void ApplyToDrawable(
+		const ActualizedDescriptorSet& descSet,
+		const DrawablesPacket& drawablePkt,
+		Drawable& drawable);*/
 
 }}

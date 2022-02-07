@@ -185,7 +185,7 @@ namespace RenderCore { namespace Techniques
 				_lastQueuedDrawVertexCountOffset = _lastQueuedDrawable->_vertexCount;
 				return UpdateLastDrawCallVertexCount(vertexCount);
 			} else {
-				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::VB, vertexDataSize);
+				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
 				auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
 				drawable->_geo = AllocateDrawableGeo();
 				drawable->_geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
@@ -270,7 +270,7 @@ namespace RenderCore { namespace Techniques
 				if (allocationRequired <= _lastQueuedDrawable->_bytesAllocated) {
 					_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
 				} else {
-					auto extraStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::VB, allocationRequired-_lastQueuedDrawable->_bytesAllocated);
+					auto extraStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, allocationRequired-_lastQueuedDrawable->_bytesAllocated);
 					assert(_lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + _lastQueuedDrawable->_bytesAllocated == extraStorage._startOffset);
 					_lastQueuedDrawable->_bytesAllocated = allocationRequired;
 					_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
@@ -279,7 +279,7 @@ namespace RenderCore { namespace Techniques
 				_lastQueuedDrawable->_vertexCount = offsetPlusNewCount;
 			}
 
-			auto fullStorage = _workingPkt.GetStorage(DrawablesPacket::Storage::VB);
+			auto fullStorage = _workingPkt.GetStorage(DrawablesPacket::Storage::Vertex);
 			return MakeIteratorRange(
 				const_cast<void*>(PtrAdd(fullStorage.begin(), _lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + _lastQueuedDrawVertexCountOffset * _lastQueuedDrawable->_vertexStride)),
 				const_cast<void*>(PtrAdd(fullStorage.begin(), _lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + offsetPlusNewCount * _lastQueuedDrawable->_vertexStride)));

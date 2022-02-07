@@ -45,8 +45,7 @@ namespace RenderCore { namespace Techniques
 		void ReserveBytesRequired(
 			unsigned instanceCount,
 			unsigned& gpuBufferBytes,
-			unsigned& cpuBufferBytes,
-			unsigned& cbBytes) override
+			unsigned& cpuBufferBytes) override
 		{
 			cpuBufferBytes += _isCPUDeformer ? _outputVBSize * instanceCount : 0;
 			gpuBufferBytes += _isCPUDeformer ? 0 : _outputVBSize * instanceCount;
@@ -57,7 +56,6 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const unsigned*> instanceIdx, 
 			IResourceView& dstVB,
 			IteratorRange<void*> cpuBufferOutputRange,
-			IteratorRange<void*> cbBufferOutputRange,
 			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics) override
 		{
 			if (_isCPUDeformer) {
