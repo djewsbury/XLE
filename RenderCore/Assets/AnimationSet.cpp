@@ -14,7 +14,7 @@ namespace RenderCore { namespace Assets
 	void AnimationSet::CalculateOutput(
 		IteratorRange<void*> outputBlock,
 		const AnimationState& animState__,
-		IteratorRange<const OutputBlockItem*> outputItems) const
+		IteratorRange<const ParameterBindingRules*> bindingRules) const
 	{
 		AnimationState animState = animState__;
 
@@ -32,62 +32,66 @@ namespace RenderCore { namespace Assets
 			}
 		}
 
-		for (auto item:outputItems) {
-			if (item._parameterIndex < _animationDrivers.size()) {
-				const AnimationDriver& driver = _animationDrivers[item._parameterIndex];
-				assert(item._samplerType == driver._samplerType);
-				auto* dst = PtrAdd(outputBlock.begin(), item._offset);
+		for (size_t c=driverStart; c<driverEnd; ++c) {
+			const AnimationDriver& driver = _animationDrivers[c];
+			auto& br = bindingRules[driver._parameterIndex];
+			if (br._outputOffset  == ~0x0) continue;   // (unbound output)
 
-				if (driver._samplerType == AnimSamplerType::Float4x4) {
-					assert(driver._curveIndex < _curves.size());
-					const RawAnimationCurve& curve = _curves[driver._curveIndex];
-					assert(PtrAdd(dst,sizeof(Float4x4)) <= outputBlock.end());
-					*(Float4x4*)dst = curve.Calculate<Float4x4>(animState._time);
-				} else if (driver._samplerType == AnimSamplerType::Float4) {
-					assert(driver._curveIndex < _curves.size());
-					const RawAnimationCurve& curve = _curves[driver._curveIndex];
-					assert(PtrAdd(dst,sizeof(Float4)) <= outputBlock.end());
-					*(Float4*)dst = curve.Calculate<Float4>(animState._time);
-				} else if (driver._samplerType == AnimSamplerType::Quaternion) {
-					assert(driver._curveIndex < _curves.size());
-					const RawAnimationCurve& curve = _curves[driver._curveIndex];
-					assert(PtrAdd(dst, sizeof(Quaternion)) <= outputBlock.end());
-					*(Quaternion*)dst = curve.Calculate<Quaternion>(animState._time);
-				} else if (driver._samplerType == AnimSamplerType::Float3) {
-					assert(driver._curveIndex < _curves.size());
-					const RawAnimationCurve& curve = _curves[driver._curveIndex];
-					assert(PtrAdd(dst,sizeof(Float3)) <= outputBlock.end());
-					*(Float3*)dst = curve.Calculate<Float3>(animState._time);
-				} else if (driver._samplerType == AnimSamplerType::Float1) {
-					assert(driver._curveIndex < _curves.size());
-					const RawAnimationCurve& curve = _curves[driver._curveIndex];
-					assert(PtrAdd(dst,sizeof(float)) <= outputBlock.end());
-					*(float*)dst = curve.Calculate<float>(animState._time);
+			assert(br._samplerType == driver._samplerType);
+			auto* dst = PtrAdd(outputBlock.begin(), br._outputOffset);
+
+			if (driver._samplerType == AnimSamplerType::Float4x4) {
+				assert(driver._curveIndex < _curves.size());
+				const RawAnimationCurve& curve = _curves[driver._curveIndex];
+				assert(PtrAdd(dst,sizeof(Float4x4)) <= outputBlock.end());
+				*(Float4x4*)dst = curve.Calculate<Float4x4>(animState._time);
+			} else if (driver._samplerType == AnimSamplerType::Float4) {
+				assert(driver._curveIndex < _curves.size());
+				const RawAnimationCurve& curve = _curves[driver._curveIndex];
+				assert(PtrAdd(dst,sizeof(Float4)) <= outputBlock.end());
+				*(Float4*)dst = curve.Calculate<Float4>(animState._time);
+			} else if (driver._samplerType == AnimSamplerType::Quaternion) {
+				assert(driver._curveIndex < _curves.size());
+				const RawAnimationCurve& curve = _curves[driver._curveIndex];
+				assert(PtrAdd(dst, sizeof(Quaternion)) <= outputBlock.end());
+				*(Quaternion*)dst = curve.Calculate<Quaternion>(animState._time);
+			} else if (driver._samplerType == AnimSamplerType::Float3) {
+				assert(driver._curveIndex < _curves.size());
+				const RawAnimationCurve& curve = _curves[driver._curveIndex];
+				assert(PtrAdd(dst,sizeof(Float3)) <= outputBlock.end());
+				*(Float3*)dst = curve.Calculate<Float3>(animState._time);
+			} else if (driver._samplerType == AnimSamplerType::Float1) {
+				assert(driver._curveIndex < _curves.size());
+				const RawAnimationCurve& curve = _curves[driver._curveIndex];
+				assert(PtrAdd(dst,sizeof(float)) <= outputBlock.end());
+				*(float*)dst = curve.Calculate<float>(animState._time);
+			}
+		}
+
+		for (   size_t c=constantDriverStartIndex; c<constantDriverEndIndex; ++c) {
+			const ConstantDriver& driver = _constantDrivers[c];
+			auto& br = bindingRules[driver._parameterIndex];
+			if (br._outputOffset  == ~0x0) continue;   // (unbound output)
+
+			assert(br._samplerType == driver._samplerType);
+			const void* data = PtrAdd(_constantData.begin(), driver._dataOffset);
+			auto* dst = PtrAdd(outputBlock.begin(), br._outputOffset);
+
+			if (driver._samplerType == AnimSamplerType::Float4x4) {
+				*(Float4x4*)dst = *(const Float4x4*)data;
+			} else if (driver._samplerType == AnimSamplerType::Float4) {
+				*(Float4*)dst = *(const Float4*)data;
+			} else if (driver._samplerType == AnimSamplerType::Quaternion) {
+				if (driver._format == Format::R12G12B12A4_SNORM) {
+					*(Quaternion*)dst = Decompress_36bit(data);
+				} else {
+					assert(driver._format == Format::R32G32B32A32_FLOAT);
+					*(Quaternion*)dst = *(const Quaternion*)data;
 				}
-			} else {
-				assert((item._parameterIndex - _animationDrivers.size()) < _constantDrivers.size());
-				const ConstantDriver& driver = _constantDrivers[item._parameterIndex - _animationDrivers.size()];
-				assert(item._samplerType == driver._samplerType);
-
-				const void* data = PtrAdd(_constantData.begin(), driver._dataOffset);
-				auto* dst = PtrAdd(outputBlock.begin(), item._offset);
-
-				if (driver._samplerType == AnimSamplerType::Float4x4) {
-					*(Float4x4*)dst = *(const Float4x4*)data;
-				} else if (driver._samplerType == AnimSamplerType::Float4) {
-					*(Float4*)dst = *(const Float4*)data;
-				} else if (driver._samplerType == AnimSamplerType::Quaternion) {
-					if (driver._format == Format::R12G12B12A4_SNORM) {
-						*(Quaternion*)dst = Decompress_36bit(data);
-					} else {
-						assert(driver._format == Format::R32G32B32A32_FLOAT);
-						*(Quaternion*)dst = *(const Quaternion*)data;
-					}
-				} else if (driver._samplerType == AnimSamplerType::Float3) {
-					*(Float3*)dst = *(const Float3*)data;
-				} else if (driver._samplerType == AnimSamplerType::Float1) {
-					*(float*)dst = *(const float*)data;
-				}
+			} else if (driver._samplerType == AnimSamplerType::Float3) {
+				*(Float3*)dst = *(const Float3*)data;
+			} else if (driver._samplerType == AnimSamplerType::Float1) {
+				*(float*)dst = *(const float*)data;
 			}
 		}
 	}
@@ -153,6 +157,18 @@ namespace RenderCore { namespace Assets
 		case AnimSamplerType::Float4: return "Float4";
 		case AnimSamplerType::Quaternion: return "Quaternion";
 		case AnimSamplerType::Float4x4: return "Float4x4";
+		}
+		return "<<unknown>>";
+	}
+
+	const char* AsString(AnimSamplerComponent value)
+	{
+		switch (value) {
+		case AnimSamplerComponent::None: return "None";
+		case AnimSamplerComponent::Translation: return "Translation";
+		case AnimSamplerComponent::Rotation: return "Rotation";
+		case AnimSamplerComponent::Scale: return "Scale";
+		case AnimSamplerComponent::FullTransform: return "FullTransform";
 		}
 		return "<<unknown>>";
 	}

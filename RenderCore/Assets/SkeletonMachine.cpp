@@ -9,12 +9,12 @@ namespace RenderCore { namespace Assets
 
 	void SkeletonMachine::GenerateOutputTransforms(   
 		IteratorRange<Float4x4*> output,
-		const AnimatedParameterSet*   parameterSet) const
+		IteratorRange<const void*> parameterBlock) const
 	{
 		if (output.size() < _outputMatrixCount)
 			Throw(::Exceptions::BasicLabel("Output buffer to SkeletonMachine::GenerateOutputTransforms is too small"));
 		RenderCore::Assets::GenerateOutputTransforms(
-			output, parameterSet, 
+			output, parameterBlock,
 			MakeIteratorRange(_commandStream, _commandStream + _commandStreamSize));
 	}
 

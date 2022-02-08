@@ -11,6 +11,7 @@
 #include "MeshDatabase.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/ModelImmutableData.h"
+#include "../Assets/AnimationBindings.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/FastParseValue.h"
@@ -191,13 +192,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     static DefaultPoseData CalculateDefaultPoseData(
         const NascentSkeletonMachine& skeleton,
-		const AnimatedParameterSet& parameters,
         const NascentModelCommandStream& cmdStream,
         const NascentGeometryObjects& geoObjects)
     {
         DefaultPoseData result;
 
-        auto skeletonOutput = skeleton.GenerateOutputTransforms(parameters);
+        auto skeletonOutput = skeleton.GenerateOutputTransforms();
 
         auto skelOutputInterface = skeleton.BuildHashedOutputInterface();
         auto streamInputInterface = cmdStream.BuildHashedInputInterface();
@@ -262,7 +262,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		stream << cmdStream;
 		stream << std::endl;
 		stream << "============== Transformation Machine ==============" << std::endl;
-		SerializationOperator(stream, skeleton.GetSkeletonMachine(), skeleton.GetDefaultParameters());
+		SerializationOperator(stream, skeleton.GetSkeletonMachine());
 	}
 
 	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunks(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
@@ -279,7 +279,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			// And that requires a bit of hack to get pointers to those 
 			// run-time types
 		{
-			auto defaultPoseData = CalculateDefaultPoseData(skeleton.GetSkeletonMachine(), skeleton.GetDefaultParameters(), cmdStream, geoObjects);
+			auto defaultPoseData = CalculateDefaultPoseData(skeleton.GetSkeletonMachine(), cmdStream, geoObjects);
 			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
 			serializer.SerializeValue(size_t(defaultPoseData._defaultTransforms.size()));
 			SerializationOperator(serializer, defaultPoseData._boundingBox.first);

@@ -7,6 +7,7 @@
 #include "NascentCommandStream.h"
 #include "../Format.h"
 #include "../Assets/RawAnimationCurve.h"
+#include "../Assets/TransformationCommands.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../OSServices/Log.h"
@@ -323,58 +324,64 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 
 
-	void	NascentSkeleton::WriteStaticTransform(const Float4x4& transform)
+	void	NascentSkeleton::WriteStaticTransform(const Transform& transform)
 	{
-		_skeletonMachine.PushCommand(TransformCommand::TransformFloat4x4_Static);
-		_skeletonMachine.PushCommand(&transform, sizeof(transform));
+		unsigned cmdCount = 0;
+		auto cmds = TransformToCmds(transform, cmdCount);
+		if (cmdCount)
+			_skeletonMachine.PushCommand(cmds.data(), cmds.size()*sizeof(uint32_t));
 	}
 
-	void	NascentSkeleton::WriteTranslationParameter(StringSection<> parameterName, const Float3& defaultValue)
+	std::vector<uint32_t> NascentSkeleton::TransformToCmds(const Transform& transform, unsigned& cmdCount)
 	{
-		uint32_t paramName = ~0u;
-		if (_skeletonMachine.TryAddParameter<Float3>(paramName, parameterName)) {
-			_defaultParameters.Set(paramName, defaultValue);
-			_skeletonMachine.PushCommand(TransformCommand::Translate_Parameter);
-			_skeletonMachine.PushCommand(paramName);
-		} else {
-			Log(Warning) << "Parameter with name (" << parameterName.AsString() << ") could not be created. Skipping." << std::endl;
+		std::vector<uint32_t> result;
+		result.reserve(32);
+		if (transform._fullTransform) {
+			assert(!transform._translation && !transform._rotationAsQuaternion && !transform._arbitraryScale && !transform._uniformScale);
+			result.push_back((uint32_t)TransformCommand::TransformFloat4x4_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._fullTransform.value(), (const uint32_t*)(&transform._fullTransform.value()+1));
+			++cmdCount;
+			return result;
+		}
+
+		if (transform._translation) {
+			result.push_back((uint32_t)TransformCommand::Translate_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._translation.value(), (const uint32_t*)(&transform._translation.value()+1));
+			++cmdCount;
+		}
+
+		if (transform._rotationAsQuaternion) {
+			result.push_back((uint32_t)TransformCommand::RotateQuaternion_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._rotationAsQuaternion.value(), (const uint32_t*)(&transform._rotationAsQuaternion.value()+1));
+			++cmdCount;
+		}
+
+		if (transform._arbitraryScale) {
+			assert(!transform._uniformScale);
+			result.push_back((uint32_t)TransformCommand::ArbitraryScale_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._arbitraryScale.value(), (const uint32_t*)(&transform._arbitraryScale.value()+1));
+			++cmdCount;
+		} else if (transform._uniformScale) {
+			result.push_back((uint32_t)TransformCommand::UniformScale_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._uniformScale.value(), (const uint32_t*)(&transform._uniformScale.value()+1));
+			++cmdCount;
 		}
 	}
 
-	void	NascentSkeleton::WriteRotationParameter(StringSection<> parameterName, const Quaternion& defaultValue)
+	void	NascentSkeleton::WriteParameterizedTransform(StringSection<> parameterName, const Transform& transform)
 	{
-		uint32_t paramName = ~0u;
-		if (_skeletonMachine.TryAddParameter<Float4>(paramName, parameterName)) {
-			_defaultParameters.Set(paramName, defaultValue);
-			_skeletonMachine.PushCommand(TransformCommand::RotateQuaternion_Parameter);
-			_skeletonMachine.PushCommand(paramName);
-		} else {
-			Log(Warning) << "Parameter with name (" << parameterName.AsString() << ") could not be created. Skipping." << std::endl;
-		}
-	}
+		auto hashName = Hash64(parameterName);
+		_dehashTable.emplace_back(hashName, parameterName.AsString());
 
-	void	NascentSkeleton::WriteScaleParameter(StringSection<> parameterName, const Float3& defaultValue)
-	{
-		uint32_t paramName = ~0u;
-		if (_skeletonMachine.TryAddParameter<Float3>(paramName, parameterName)) {
-			_defaultParameters.Set(paramName, defaultValue);
-			_skeletonMachine.PushCommand(TransformCommand::ArbitraryScale_Parameter);
-			_skeletonMachine.PushCommand(paramName);
-		} else {
-			Log(Warning) << "Parameter with name (" << parameterName.AsString() << ") could not be created. Skipping." << std::endl;
-		}
-	}
+		auto insertPoint = _skeletonMachine.GetCommandStream().size();
+		WriteStaticTransform(transform);
 
-	void	NascentSkeleton::WriteScaleParameter(StringSection<> parameterName, float defaultValue)
-	{
-		uint32_t paramName = ~0u;
-		if (_skeletonMachine.TryAddParameter<float>(paramName, parameterName)) {
-			_defaultParameters.Set(paramName, defaultValue);
-			_skeletonMachine.PushCommand(TransformCommand::UniformScale_Parameter);
-			_skeletonMachine.PushCommand(paramName);
-		} else {
-			Log(Warning) << "Parameter with name (" << parameterName.AsString() << ") could not be created. Skipping." << std::endl;
-		}
+		unsigned cmdCount = 0;
+		auto cmds = TransformToCmds(transform, cmdCount);
+		_skeletonMachine.PushCommand(TransformCommand((unsigned)TransformCommand::BindingPoint_0 + cmdCount));
+		_skeletonMachine.PushCommand(hashName);
+		if (cmdCount)
+			_skeletonMachine.PushCommand(cmds.data(), cmds.size()*sizeof(uint32_t));
 	}
 
 	void	NascentSkeleton::WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName)
@@ -395,7 +402,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     void NascentSkeleton::SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
     {
         SerializationOperator(serializer, _skeletonMachine);
-		SerializationOperator(serializer, _defaultParameters);
     }
 
 

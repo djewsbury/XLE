@@ -21,7 +21,7 @@ namespace RenderCore { namespace Assets
             ||  cmd == TransformCommand::RotateX_Static
             ||  cmd == TransformCommand::RotateY_Static
             ||  cmd == TransformCommand::RotateZ_Static
-            ||  cmd == TransformCommand::Rotate_Static
+            ||  cmd == TransformCommand::RotateAxisAngle_Static
             ||  cmd == TransformCommand::RotateQuaternion_Static
             ||  cmd == TransformCommand::UniformScale_Static
             ||  cmd == TransformCommand::ArbitraryScale_Static;
@@ -37,7 +37,7 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateX_Static:             return cmd+1+(1);
         case TransformCommand::RotateY_Static:             return cmd+1+(1);
         case TransformCommand::RotateZ_Static:             return cmd+1+(1);
-        case TransformCommand::Rotate_Static:              return cmd+1+(4);
+        case TransformCommand::RotateAxisAngle_Static:              return cmd+1+(4);
 		case TransformCommand::RotateQuaternion_Static:    return cmd+1+(4);
         case TransformCommand::UniformScale_Static:        return cmd+1+(1);
         case TransformCommand::ArbitraryScale_Static:      return cmd+1+(3);
@@ -47,7 +47,7 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateX_Parameter:
         case TransformCommand::RotateY_Parameter:
         case TransformCommand::RotateZ_Parameter:
-        case TransformCommand::Rotate_Parameter:
+        case TransformCommand::RotateAxisAngle_Parameter:
 		case TransformCommand::RotateQuaternion_Parameter:
         case TransformCommand::UniformScale_Parameter:
         case TransformCommand::ArbitraryScale_Parameter:
@@ -267,7 +267,7 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateX_Static:
         case TransformCommand::RotateY_Static:
         case TransformCommand::RotateZ_Static:
-        case TransformCommand::Rotate_Static:
+        case TransformCommand::RotateAxisAngle_Static:
 		case TransformCommand::RotateQuaternion_Static:
         case TransformCommand::UniformScale_Static:
         case TransformCommand::ArbitraryScale_Static:  return MergeType::StaticTransform;
@@ -360,13 +360,13 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateX_Static:
         case TransformCommand::RotateY_Static:
         case TransformCommand::RotateZ_Static:
-        case TransformCommand::Rotate_Static:
+        case TransformCommand::RotateAxisAngle_Static:
 		case TransformCommand::RotateQuaternion_Static:
                 // only merge into another rotate
             return (rhs == TransformCommand::RotateX_Static)
                 || (rhs == TransformCommand::RotateY_Static)
                 || (rhs == TransformCommand::RotateZ_Static)
-                || (rhs == TransformCommand::Rotate_Static)
+                || (rhs == TransformCommand::RotateAxisAngle_Static)
 				|| (rhs == TransformCommand::RotateQuaternion_Static)
                 ;
 
@@ -402,7 +402,7 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateZ_Static:
             return AsFloat4x4(*(const RotationZ*)(cmd+1));
 
-        case TransformCommand::Rotate_Static:
+        case TransformCommand::RotateAxisAngle_Static:
             return AsFloat4x4(*(const ArbitraryRotation*)(cmd+1));
 
 		case TransformCommand::RotateQuaternion_Static:
@@ -425,7 +425,7 @@ namespace RenderCore { namespace Assets
         std::vector<uint32_t>::iterator dst,
         std::vector<uint32_t>::iterator mergingCmd)
     {
-        // If the transforms are of exactly the same type (and not Rotate_Static)
+        // If the transforms are of exactly the same type (and not RotateAxisAngle_Static)
         // then we can merge into a final transform that is the same type.
         // Otherwise we should merge to Float4x4. In some cases, the final Final4x4
         // can be converted into a simplier transform... We will go back through
@@ -771,7 +771,7 @@ namespace RenderCore { namespace Assets
                             *(float*)AsPointer(i+1) = Rad2Deg(float(rotZ) * rot._angle);
                             cmdStream.erase(i+2, cmdEnd);
                         } else {
-                            *i = (uint32_t)TransformCommand::Rotate_Static;
+                            *i = (uint32_t)TransformCommand::RotateAxisAngle_Static;
                             *(Float3*)AsPointer(i+1) = rot._axis;
                             *(float*)AsPointer(i+4) = Rad2Deg(rot._angle);
                             cmdStream.erase(i+5, cmdEnd);
@@ -822,7 +822,7 @@ namespace RenderCore { namespace Assets
 
             // note -- there's some more things we could do:
             //  * remove identity transforms (eg, scale by 1.f, translate by zero)
-            //  * simplify Rotate_Static to RotateX_Static, RotateY_Static, RotateZ_Static
+            //  * simplify RotateAxisAngle_Static to RotateX_Static, RotateY_Static, RotateZ_Static
 
             i = NextTransformationCommand_(i);
         }
@@ -960,7 +960,7 @@ namespace RenderCore { namespace Assets
                 i++;
                 break;
 
-            case TransformCommand::Rotate_Static:
+            case TransformCommand::RotateAxisAngle_Static:
                 // i = AdvanceTo16ByteAlignment(i);
                 Combine_IntoRHS(ArbitraryRotation(AsFloat3(reinterpret_cast<const float*>(AsPointer(i))), Deg2Rad(*reinterpret_cast<const float*>(AsPointer(i+3)))), *workingTransform);
                 i += 4;
@@ -1016,7 +1016,7 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformCommand::Rotate_Parameter:
+            case TransformCommand::RotateAxisAngle_Parameter:
                 {
                     uint32_t parameterOffset = *i++;
                     Float4 param = GetParameter<Float4>(parameterBlock, parameterOffset);
@@ -1275,11 +1275,11 @@ namespace RenderCore { namespace Assets
             i++;
             break;
 
-        case TransformCommand::Rotate_Static:
+        case TransformCommand::RotateAxisAngle_Static:
             {
                 auto a = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
                 float r = *reinterpret_cast<const float*>(AsPointer(i+3));
-                stream << "Rotate_Static (" << a[0] << ", " << a[1] << ", " << a[2] << ")(" << r << ")";
+                stream << "RotateAxisAngle_Static (" << a[0] << ", " << a[1] << ", " << a[2] << ")(" << r << ")";
                 i += 4;
             }
             break;
@@ -1347,7 +1347,7 @@ namespace RenderCore { namespace Assets
             case TransformCommand::RotateX_Static:
             case TransformCommand::RotateY_Static:
             case TransformCommand::RotateZ_Static:
-            case TransformCommand::Rotate_Static:
+            case TransformCommand::RotateAxisAngle_Static:
             case TransformCommand::RotateQuaternion_Static:
             case TransformCommand::UniformScale_Static:
             case TransformCommand::ArbitraryScale_Static:
@@ -1382,8 +1382,8 @@ namespace RenderCore { namespace Assets
                 i++;
                 break;
 
-            case TransformCommand::Rotate_Parameter:
-                stream << indentBuffer << "Rotate_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+            case TransformCommand::RotateAxisAngle_Parameter:
+                stream << indentBuffer << "RotateAxisAngle_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
                 i++;
                 break;
 

@@ -192,7 +192,7 @@ namespace ColladaConversion
                         // Post animation, this may become a rotation around any axis. So
                         // we can't perform an optimisation to squish it to rotation around
                         // one of the cardinal axes
-                    dst.PushCommand(TransformCommand::Rotate_Parameter);
+                    dst.PushCommand(TransformCommand::RotateAxisAngle_Parameter);
                     dst.PushCommand(paramIndex);
 
                 } else {
@@ -209,7 +209,7 @@ namespace ColladaConversion
                         dst.PushCommand(TransformCommand::RotateZ_Static);
                         dst.PushCommand(FloatBits(float(z) * rot._angle));
                     } else {
-                        dst.PushCommand(TransformCommand::Rotate_Static);
+                        dst.PushCommand(TransformCommand::RotateAxisAngle_Static);
                         dst.PushCommand(&rot, sizeof(rot));
                     }
 

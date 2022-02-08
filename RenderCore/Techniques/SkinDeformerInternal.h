@@ -8,7 +8,6 @@
 #include "DeformInternal.h"
 #include "DeformOperationFactory.h"
 #include "../Assets/ModelScaffoldInternal.h"
-#include "../Assets/SkeletonScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../Metal/InputLayout.h"
 #include "../Format.h"
