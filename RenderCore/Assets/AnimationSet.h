@@ -32,7 +32,9 @@ namespace RenderCore { namespace Assets
 	};
 
 	enum class AnimSamplerType { Float1, Float3, Float4, Float4x4, Quaternion };
+	enum class AnimSamplerComponent { None, Translation, Rotation, Scale, FullTransform };
 	const char* AsString(AnimSamplerType value);
+	const char* AsString(AnimSamplerComponent value);
 
 	#pragma pack(push)
 	#pragma pack(1)
@@ -44,6 +46,7 @@ namespace RenderCore { namespace Assets
 		struct AnimationDriver
 		{
 			unsigned			_curveIndex = ~0u;
+			unsigned			_parameterIndex = ~0u;
 			AnimSamplerType		_samplerType = (AnimSamplerType)~0u;
 			unsigned			_samplerOffset = ~0u;
 
@@ -54,6 +57,7 @@ namespace RenderCore { namespace Assets
 		struct ConstantDriver
 		{
 			unsigned			_dataOffset = ~0u;
+			unsigned			_parameterIndex = ~0u;
 			Format				_format = (Format)0;
 			AnimSamplerType		_samplerType = (AnimSamplerType)~0u;
 			unsigned			_samplerOffset = ~0u;
@@ -71,17 +75,16 @@ namespace RenderCore { namespace Assets
 		};
 		using AnimationAndName = std::pair<uint64_t, Animation>;
 
-		struct OutputBlockItem
+		struct ParameterBindingRules
 		{
-			unsigned _parameterIndex;
-			unsigned _offset;
-			AnimSamplerType _samplerType;
+			unsigned _outputOffset = ~0u;
+			AnimSamplerType _samplerType = AnimSamplerType::Float1;
 		};
 
 		void CalculateOutput(
-			IteratorRange<void*> outputBlock,
+			IteratorRange<void*> outputBlock,			// outputBlock should be pre-initialized with the defaults
 			const AnimationState& animState,
-			IteratorRange<const OutputBlockItem*> outputItems) const;
+			IteratorRange<const ParameterBindingRules*> parameterBindingRules) const;
 
 		Animation				FindAnimation(uint64_t animation) const;
 		unsigned				FindParameter(uint64_t parameterName) const;
@@ -94,9 +97,8 @@ namespace RenderCore { namespace Assets
 
 		struct OutputPart
 		{
-			enum Component { None, Translation, Rotation, Scale, FullTransform };
 			uint64_t _name;
-			Component _component;
+			AnimSamplerComponent _component;
 			AnimSamplerType _samplerType;
 		};
 		using OutputInterface = IteratorRange<const OutputPart*>;

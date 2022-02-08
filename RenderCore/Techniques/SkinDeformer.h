@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../Assets/SkeletonScaffoldInternal.h"
+#include "../Assets/AnimationBindings.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../../Math/Matrix.h"
 #include <memory>

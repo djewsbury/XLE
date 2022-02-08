@@ -194,8 +194,8 @@ namespace UnitTests
                 // INFO(str.str());
 
                 Float4x4 resultUnOpt, resultOpt;
-                GenerateOutputTransforms(MakeIteratorRange(&resultUnOpt, &resultUnOpt+1), nullptr, MakeIteratorRange(machine));
-                GenerateOutputTransforms(MakeIteratorRange(&resultOpt, &resultOpt+1), nullptr, MakeIteratorRange(optimized));
+                GenerateOutputTransforms(MakeIteratorRange(&resultUnOpt, &resultUnOpt+1), {}, MakeIteratorRange(machine));
+                GenerateOutputTransforms(MakeIteratorRange(&resultOpt, &resultOpt+1), {}, MakeIteratorRange(optimized));
 
                 const float tolerance = 3e-2f;
                 REQUIRE(RelativeEquivalent(resultUnOpt, resultOpt, tolerance));

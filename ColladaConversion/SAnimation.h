@@ -8,6 +8,7 @@
 
 #include "../RenderCore/Assets/RawAnimationCurve.h"
 #include "../RenderCore/Assets/TransformationCommands.h"
+#include "../RenderCore/Assets/AnimationSet.h"
 #include <string>
 #include <vector>
 

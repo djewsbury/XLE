@@ -31,7 +31,7 @@ namespace RenderCore { namespace Assets
         RotateX_Static,                 // rotation around X
         RotateY_Static,                 // rotation around Y
         RotateZ_Static,                 // rotation around Z
-        Rotate_Static,                  // Axis X, Y, Z, rotation
+        RotateAxisAngle_Static,                  // Axis X, Y, Z, rotation
         RotateQuaternion_Static,		// Rotate through a quaternion
         UniformScale_Static,            // scalar
         ArbitraryScale_Static,          // X, Y, Z scales
@@ -46,7 +46,7 @@ namespace RenderCore { namespace Assets
         RotateX_Parameter,
         RotateY_Parameter,
         RotateZ_Parameter,
-        Rotate_Parameter,
+        RotateAxisAngle_Parameter,
         RotateQuaternion_Parameter,
         UniformScale_Parameter,
         ArbitraryScale_Parameter,

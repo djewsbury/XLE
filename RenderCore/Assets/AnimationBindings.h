@@ -13,18 +13,20 @@ namespace RenderCore { namespace Assets
 	class AnimationSetBinding
 	{
 	public:
-		unsigned GetCount() const { return (unsigned)_animDriverToMachineParameter.size(); }
-		unsigned AnimDriverToMachineParameter(unsigned index) const { return _animDriverToMachineParameter[index]; }
+		IteratorRange<const AnimationSet::ParameterBindingRules*> GetParameterBindingRules() { return _animBindingRules; }
+		IteratorRange<const uint8_t*> GetParameterDefaultsBlock() const { return _parameterDefaultsBlock; }
 
-		AnimationSetBinding(const AnimationSet::OutputInterface&            output,
-							const SkeletonMachine::InputInterface&    input);
-		AnimationSetBinding();
-		AnimationSetBinding(AnimationSetBinding&& moveFrom) never_throws;
-		AnimationSetBinding& operator=(AnimationSetBinding&& moveFrom) never_throws;
-		~AnimationSetBinding();
+		void GenerateOutputTransforms   (   IteratorRange<Float4x4*> output,
+                                            IteratorRange<const void*> parameterBlock) const;
+
+		AnimationSetBinding(const AnimationSet::OutputInterface&		output,
+							const SkeletonMachine&    					input);
+		AnimationSetBinding() = default;
 
 	private:
-		std::vector<unsigned>   _animDriverToMachineParameter;
+		std::vector<uint32_t>   _specializedSkeletonMachine;
+		std::vector<AnimationSet::ParameterBindingRules> _animBindingRules;
+		std::vector<uint8_t> 	_parameterDefaultsBlock;
 	};
 
 	class SkeletonBinding
@@ -35,15 +37,16 @@ namespace RenderCore { namespace Assets
 
 		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
 							const ModelCommandStream::InputInterface&   input);
-		SkeletonBinding();
-		~SkeletonBinding();
+		SkeletonBinding() = default;
 
 	private:
 		std::vector<unsigned>   _modelJointIndexToMachineOutput;
 	};
 
 	std::vector<uint32_t> SpecializeTransformationMachine(
-		IteratorRange<const uint32_t*>      commandStream,
-		AnimationSet::OutputInterface& 		animSetOutput);
+		/* out */ std::vector<AnimationSet::ParameterBindingRules>& parameterBindingRules,
+		/* out */ std::vector<uint8_t>&			parameterDefaultsBlock,
+		IteratorRange<const uint32_t*>			commandStream,
+		const AnimationSet::OutputInterface& 	animSetOutput);
 }}
 

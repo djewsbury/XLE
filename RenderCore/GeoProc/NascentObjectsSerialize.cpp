@@ -29,7 +29,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto block = ::Assets::SerializeToBlob(skeleton);
 
 		std::stringstream metricsStream;
-		SerializationOperator(metricsStream, skeleton.GetSkeletonMachine(), skeleton.GetDefaultParameters());
+		SerializationOperator(metricsStream, skeleton.GetSkeletonMachine());
 		auto metricsBlock = ::Assets::AsBlob(metricsStream);
 
 		return {

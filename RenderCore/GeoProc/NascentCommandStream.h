@@ -7,7 +7,6 @@
 #pragma once
 
 #include "NascentSkeletonMachine.h"
-#include "../RenderCore/Assets/TransformationCommands.h"		// (for AnimatedParameterSet)
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include <vector>
 #include <string>
@@ -103,14 +102,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     public:
         NascentSkeletonMachine&				GetSkeletonMachine()			{ return _skeletonMachine; }
         const NascentSkeletonMachine&		GetSkeletonMachine() const		{ return _skeletonMachine; }
-		AnimatedParameterSet&         GetDefaultParameters()			{ return _defaultParameters; }
-		const AnimatedParameterSet&   GetDefaultParameters() const	{ return _defaultParameters; }
 
-		void	WriteStaticTransform(const Float4x4& transform);
-		void	WriteTranslationParameter(StringSection<> parameterName, const Float3& defaultValue);
-		void	WriteRotationParameter(StringSection<> parameterName, const Quaternion& defaultValue);
-		void	WriteScaleParameter(StringSection<> parameterName, const Float3& defaultValue);
-		void	WriteScaleParameter(StringSection<> parameterName, float defaultValue);
+		struct Transform
+		{
+			std::optional<Float4x4> _fullTransform;
+			std::optional<Float3> _translation;
+			std::optional<Quaternion> _rotationAsQuaternion;
+			std::optional<Float3> _arbitraryScale;
+			std::optional<float> _uniformScale;
+
+            Transform() = default;
+            Transform(const Float4x4&);
+            Transform(const Float3& translation, const Quaternion& rotation, float scale);
+		};
+		void	WriteStaticTransform(const Transform& transform);
+		void    WriteParameterizedTransform(StringSection<> parameterName, const Transform& transform);
+
 		void	WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName);
 
 		void	WritePushLocalToWorld();
@@ -120,7 +127,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     private:
         NascentSkeletonMachine		_skeletonMachine;
-		AnimatedParameterSet	_defaultParameters;
+        std::vector<std::pair<uint64_t, std::string>> _dehashTable;
+
+        std::vector<uint32_t> TransformToCmds(const Transform& transform, unsigned& cmdCount);
     };
 
         //

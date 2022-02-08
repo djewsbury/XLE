@@ -197,7 +197,7 @@ namespace UnitTests
 	{
 		std::vector<Float4x4> result;
 		result.resize(modelScaffold->EmbeddedSkeleton().GetOutputMatrixCount());
-		modelScaffold->EmbeddedSkeleton().GenerateOutputTransforms(MakeIteratorRange(result), nullptr);
+		modelScaffold->EmbeddedSkeleton().GenerateOutputTransforms(MakeIteratorRange(result), {});
 		return result;
 	}
 

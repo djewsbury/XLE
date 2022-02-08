@@ -121,7 +121,8 @@ namespace UnitTests
 
 	static RenderCore::Assets::GeoProc::NascentSkeleton GenerateNascentSkeleton()
 	{
-		RenderCore::Assets::GeoProc::NascentSkeleton result;
+		using NascentSkeleton = RenderCore::Assets::GeoProc::NascentSkeleton;
+		NascentSkeleton result;
 		result.WriteOutputMarker("", "identity");
 
 		// Using Push & Pop, we can generate a hierarchy of nodes
@@ -131,9 +132,11 @@ namespace UnitTests
 		//		or even a full matrix
 
 		result.WritePushLocalToWorld();
-			result.WriteRotationParameter("AnimatableRotation", MakeRotationQuaternion({0.f, 1.0f, 0.f}, 45.f * gPI / 180.f));
-			result.WriteScaleParameter("AnimatableScale", 1.0f);
-			result.WriteTranslationParameter("AnimatableTranslation", {5.0f, 0.f, 2.0f});
+			NascentSkeleton::Transform transform;
+			transform._rotationAsQuaternion = MakeRotationQuaternion({0.f, 1.0f, 0.f}, 45.f * gPI / 180.f);
+			transform._uniformScale = 1.f;
+			transform._translation = {5.0f, 0.f, 2.0f};
+			result.WriteParameterizedTransform("AnimatableTransform", transform);
 			result.WriteOutputMarker("", "RootNode");
 
 			result.WritePushLocalToWorld();
