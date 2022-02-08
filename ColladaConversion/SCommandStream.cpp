@@ -70,12 +70,12 @@ namespace ColladaConversion
 
     unsigned PushTransformations(
         RenderCore::Assets::GeoProc::NascentSkeletonMachine& dst,
-		RenderCore::Assets::TransformationParameterSet& defaultParameters,
+		RenderCore::Assets::AnimatedParameterSet& defaultParameters,
         const Transformation& transformations,
         const char nodeName[],
         const std::function<bool(StringSection<>)>& predicate)
     {
-		using RenderCore::Assets::TransformStackCommand;
+		using RenderCore::Assets::TransformCommand;
 
         if (!transformations)
             return 0;
@@ -84,7 +84,7 @@ namespace ColladaConversion
             //      Push in the commands for this node
             //
 
-        dst.PushCommand(TransformStackCommand::PushLocalToWorld);
+        dst.PushCommand(TransformCommand::PushLocalToWorld);
         const unsigned pushCount = 1;
 
         #if defined(_DEBUG)
@@ -151,13 +151,13 @@ namespace ColladaConversion
                     &&  dst.TryAddParameter<Float4x4>(paramIndex, MakeStringSection(paramName))) {
 
 					defaultParameters.Set(paramIndex, *(const Float4x4*)trans.GetUnionData());
-                    dst.PushCommand(TransformStackCommand::TransformFloat4x4_Parameter);
+                    dst.PushCommand(TransformCommand::TransformFloat4x4_Parameter);
                     dst.PushCommand(paramIndex);
                 } else {
                     if (Equivalent(*(Float4x4*)trans.GetUnionData(), Identity<Float4x4>(), transformThreshold)) {
                         // ignore transform by identity
                     } else {
-                        dst.PushCommand(TransformStackCommand::TransformFloat4x4_Static);
+                        dst.PushCommand(TransformCommand::TransformFloat4x4_Static);
                         dst.PushCommand(trans.GetUnionData(), sizeof(Float4x4));
                     }
                 }
@@ -169,13 +169,13 @@ namespace ColladaConversion
                     &&  dst.TryAddParameter<Float3>(paramIndex, MakeStringSection(paramName))) {
 
 					defaultParameters.Set(paramIndex, *(const Float3*)trans.GetUnionData());
-                    dst.PushCommand(TransformStackCommand::Translate_Parameter);
+                    dst.PushCommand(TransformCommand::Translate_Parameter);
                     dst.PushCommand(paramIndex);
                 } else {
                     if (Equivalent(*(Float3*)trans.GetUnionData(), Float3(0.f, 0.f, 0.f), translationThreshold)) {
                         // ignore translate by zero
                     } else {
-                        dst.PushCommand(TransformStackCommand::Translate_Static);
+                        dst.PushCommand(TransformCommand::Translate_Static);
                         dst.PushCommand(trans.GetUnionData(), sizeof(Float3));
                     }
                 }
@@ -192,7 +192,7 @@ namespace ColladaConversion
                         // Post animation, this may become a rotation around any axis. So
                         // we can't perform an optimisation to squish it to rotation around
                         // one of the cardinal axes
-                    dst.PushCommand(TransformStackCommand::Rotate_Parameter);
+                    dst.PushCommand(TransformCommand::Rotate_Parameter);
                     dst.PushCommand(paramIndex);
 
                 } else {
@@ -200,16 +200,16 @@ namespace ColladaConversion
                     if (Equivalent(rot._angle, 0.f, rotationThreshold)) {
                         // the angle is too small -- just ignore it
                     } else if (signed x = rot.IsRotationX()) {
-                        dst.PushCommand(TransformStackCommand::RotateX_Static);
+                        dst.PushCommand(TransformCommand::RotateX_Static);
                         dst.PushCommand(FloatBits(float(x) * rot._angle));
                     } else if (signed y = rot.IsRotationY()) {
-                        dst.PushCommand(TransformStackCommand::RotateY_Static);
+                        dst.PushCommand(TransformCommand::RotateY_Static);
                         dst.PushCommand(FloatBits(float(y) * rot._angle));
                     } else if (signed z = rot.IsRotationZ()) {
-                        dst.PushCommand(TransformStackCommand::RotateZ_Static);
+                        dst.PushCommand(TransformCommand::RotateZ_Static);
                         dst.PushCommand(FloatBits(float(z) * rot._angle));
                     } else {
-                        dst.PushCommand(TransformStackCommand::Rotate_Static);
+                        dst.PushCommand(TransformCommand::Rotate_Static);
                         dst.PushCommand(&rot, sizeof(rot));
                     }
 
@@ -235,14 +235,14 @@ namespace ColladaConversion
                     if (isUniform) {
                         if (dst.TryAddParameter<float>(paramIndex, MakeStringSection(paramName))) {
 							defaultParameters.Set(paramIndex, scale[0]);
-                            dst.PushCommand(TransformStackCommand::UniformScale_Parameter);
+                            dst.PushCommand(TransformCommand::UniformScale_Parameter);
                             dst.PushCommand(paramIndex);
                             writeEmbedded = false;
                         }
                     } else {
                         if (dst.TryAddParameter<Float3>(paramIndex, MakeStringSection(paramName))) {
 							defaultParameters.Set(paramIndex, scale);
-                            dst.PushCommand(TransformStackCommand::ArbitraryScale_Parameter);
+                            dst.PushCommand(TransformCommand::ArbitraryScale_Parameter);
                             dst.PushCommand(paramIndex);
                             writeEmbedded = false;
                         }
@@ -253,10 +253,10 @@ namespace ColladaConversion
                     if (Equivalent(scale, Float3(1.f, 1.f, 1.f), scaleThreshold)) {
                         // scaling by 1 -- just ignore
                     } else if (isUniform) {
-                        dst.PushCommand(TransformStackCommand::UniformScale_Static);
+                        dst.PushCommand(TransformCommand::UniformScale_Static);
                         dst.PushCommand(FloatBits(scale[0]));
                     } else {
-                        dst.PushCommand(TransformStackCommand::ArbitraryScale_Static);
+                        dst.PushCommand(TransformCommand::ArbitraryScale_Static);
                         dst.PushCommand(&scale, sizeof(scale));
                     }
                 }

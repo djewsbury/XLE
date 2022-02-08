@@ -18,43 +18,53 @@ namespace Utility { class OutputStream; }
 
 namespace RenderCore { namespace Assets
 {
-    enum class TransformStackCommand : uint32_t
+    enum class TransformCommand : uint32_t
     {
         PushLocalToWorld,       // no parameters
         PopLocalToWorld,        // number of transforms to pop (ie, often 1, but sometimes we want to do multiple pops at once)
 
             //
-            //      Transformation types.
-            //      Just some basic transforms currently
-            //          -- full 4x4 matrix
-            //          -- translate
-            //          -- rotation
-            //          -- scale
+            //      Static transformation ops
             //
-            //      These types are well suited the the Collada animation model.
-            //
-            //      But, in many cases, they should be converted into quaternion 
-            //      representations during optimisation
-            //
-        TransformFloat4x4_Static,       // 4x4 transformation matrix (float)
-        Translate_Static,               // X, Y, Z translation (float)
-        RotateX_Static,                 // rotation around X (float)
-        RotateY_Static,                 // rotation around X (float)
-        RotateZ_Static,                 // rotation around X (float)
-        Rotate_Static,                  // Axis X, Y, Z, rotation (float)
-		RotateQuaternion_Static,		// Rotate through a quaternion
-        UniformScale_Static,            // scalar (float)
-        ArbitraryScale_Static,          // X, Y, Z scales (float)
+        TransformFloat4x4_Static,       // 4x4 transformation matrix
+        Translate_Static,               // X, Y, Z translation
+        RotateX_Static,                 // rotation around X
+        RotateY_Static,                 // rotation around Y
+        RotateZ_Static,                 // rotation around Z
+        Rotate_Static,                  // Axis X, Y, Z, rotation
+        RotateQuaternion_Static,		// Rotate through a quaternion
+        UniformScale_Static,            // scalar
+        ArbitraryScale_Static,          // X, Y, Z scales
 
-        TransformFloat4x4_Parameter,    // 4x4 transformation matrix (float)
-        Translate_Parameter,            // X, Y, Z translation (float)
-        RotateX_Parameter,              // rotation around X (float)
-        RotateY_Parameter,              // rotation around X (float)
-        RotateZ_Parameter,              // rotation around X (float)
-        Rotate_Parameter,               // Axis X, Y, Z, rotation (float)
-		RotateQuaternion_Parameter,		// Rotate through a quaternion
-        UniformScale_Parameter,         // scalar (float)
-        ArbitraryScale_Parameter,       // X, Y, Z scales (float)
+            //
+            //      Param'd transformation ops
+            //      Simplpe simular to the static ops, but in this
+            //      case reading the value from the parameter set
+            //
+        TransformFloat4x4_Parameter,
+        Translate_Parameter,
+        RotateX_Parameter,
+        RotateY_Parameter,
+        RotateZ_Parameter,
+        Rotate_Parameter,
+        RotateQuaternion_Parameter,
+        UniformScale_Parameter,
+        ArbitraryScale_Parameter,
+
+            //
+            //      Binding point
+            //      Used to bind to animation parameter set output
+            //      Optionally followed by default rotation / scale / translations
+            //      Defaulting happens per-component; so (for example) if translation
+            //      but not rotation is given by the animation parameters, the
+            //      default rotation will be used
+            //      (But in cases like this, relative ordering of those components
+            //      is not necessarily preserved)
+            //
+        BindingPoint_0,
+        BindingPoint_1,
+        BindingPoint_2,
+        BindingPoint_3,
 
         WriteOutputMatrix,
         TransformFloat4x4AndWrite_Static,
@@ -63,51 +73,14 @@ namespace RenderCore { namespace Assets
         Comment
     };
 
-	enum class AnimSamplerType { Float1, Float3, Float4, Float4x4, Quaternion };
-	const char* AsString(AnimSamplerType value);
-
-            //////////////////////////////////////////////////////////
-
-    class TransformationParameterSet
-    {
-    public:
-        IteratorRange<const float*>     GetFloat1Parameters() const     { return MakeIteratorRange(_float1Parameters);      }
-        IteratorRange<const Float3*>    GetFloat3Parameters() const     { return MakeIteratorRange(_float3Parameters);      }
-        IteratorRange<const Float4*>    GetFloat4Parameters() const     { return MakeIteratorRange(_float4Parameters);      }
-        IteratorRange<const Float4x4*>	GetFloat4x4Parameters() const	{ return MakeIteratorRange(_float4x4Parameters);	}
-
-		IteratorRange<float*>			GetFloat1Parameters()			{ return MakeIteratorRange(_float1Parameters);      }
-        IteratorRange<Float3*>			GetFloat3Parameters()			{ return MakeIteratorRange(_float3Parameters);      }
-        IteratorRange<Float4*>			GetFloat4Parameters()			{ return MakeIteratorRange(_float4Parameters);      }
-        IteratorRange<Float4x4*>		GetFloat4x4Parameters()			{ return MakeIteratorRange(_float4x4Parameters);	}
-
-		void Set(uint32_t index, float);
-		void Set(uint32_t index, Float3);
-		void Set(uint32_t index, Float4);
-		void Set(uint32_t index, Quaternion);
-		void Set(uint32_t index, const Float4x4&);
-            
-        TransformationParameterSet();
-        TransformationParameterSet(TransformationParameterSet&& moveFrom);
-        TransformationParameterSet& operator=(TransformationParameterSet&& moveFrom);
-        TransformationParameterSet(const TransformationParameterSet& copyFrom);
-        TransformationParameterSet& operator=(const TransformationParameterSet& copyFrom);
-
-        void    SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const;
-
-    private:
-        SerializableVector<Float4x4>    _float4x4Parameters;
-        SerializableVector<Float4>      _float4Parameters;
-        SerializableVector<Float3>      _float3Parameters;
-        SerializableVector<float>       _float1Parameters;
-    };
-
         //////////////////////////////////////////////////////////
 
     void GenerateOutputTransforms(
-        IteratorRange<Float4x4*>					result,
-        const TransformationParameterSet*           parameterSet,
-        IteratorRange<const uint32_t*>                commandStream);
+        IteratorRange<Float4x4*>            result,
+        IteratorRange<const void*>          parameterBlock,
+        IteratorRange<const uint32_t*>      commandStream);
+
+    const uint32_t* NextTransformationCommand(const uint32_t*);
 
 	/// <summary>For each output marker, calculate the immediate parent</summary>
 	/// The parent of a given marker is defines as the first marker we encounter if we traverse back through
@@ -126,7 +99,7 @@ namespace RenderCore { namespace Assets
         std::ostream&                   outputStream,
         IteratorRange<const uint32_t*>    commandStream,
         std::function<std::string(unsigned)> outputMatrixToName,
-        std::function<std::string(AnimSamplerType, unsigned)> parameterToName);
+        std::function<std::string(unsigned)> parameterToName);
 
     class ITransformationMachineOptimizer
     {

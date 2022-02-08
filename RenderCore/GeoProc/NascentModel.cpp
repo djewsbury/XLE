@@ -191,7 +191,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     static DefaultPoseData CalculateDefaultPoseData(
         const NascentSkeletonMachine& skeleton,
-		const TransformationParameterSet& parameters,
+		const AnimatedParameterSet& parameters,
         const NascentModelCommandStream& cmdStream,
         const NascentGeometryObjects& geoObjects)
     {

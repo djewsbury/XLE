@@ -14,70 +14,114 @@
 
 namespace RenderCore { namespace Assets
 {
-    static unsigned CommandSize(TransformStackCommand cmd)
+    static bool IsStaticCommand(TransformCommand cmd)
     {
-        switch (cmd) {
-        case TransformStackCommand::PushLocalToWorld:           return 0;
-        case TransformStackCommand::PopLocalToWorld:            return 1;
-        case TransformStackCommand::TransformFloat4x4_Static:   return 16;
-        case TransformStackCommand::Translate_Static:           return 3;
-        case TransformStackCommand::RotateX_Static:             return 1;
-        case TransformStackCommand::RotateY_Static:             return 1;
-        case TransformStackCommand::RotateZ_Static:             return 1;
-        case TransformStackCommand::Rotate_Static:              return 4;
-		case TransformStackCommand::RotateQuaternion_Static:    return 4;
-        case TransformStackCommand::UniformScale_Static:        return 1;
-        case TransformStackCommand::ArbitraryScale_Static:      return 3;
+        return  cmd == TransformCommand::TransformFloat4x4_Static
+            ||  cmd == TransformCommand::Translate_Static
+            ||  cmd == TransformCommand::RotateX_Static
+            ||  cmd == TransformCommand::RotateY_Static
+            ||  cmd == TransformCommand::RotateZ_Static
+            ||  cmd == TransformCommand::Rotate_Static
+            ||  cmd == TransformCommand::RotateQuaternion_Static
+            ||  cmd == TransformCommand::UniformScale_Static
+            ||  cmd == TransformCommand::ArbitraryScale_Static;
+    }
+    template<typename Iterator>
+        Iterator NextTransformationCommand_(Iterator cmd)
+    {
+        switch ((TransformCommand)*cmd) {
+        case TransformCommand::PushLocalToWorld:           return cmd+1+(0);
+        case TransformCommand::PopLocalToWorld:            return cmd+1+(1);
+        case TransformCommand::TransformFloat4x4_Static:   return cmd+1+(16);
+        case TransformCommand::Translate_Static:           return cmd+1+(3);
+        case TransformCommand::RotateX_Static:             return cmd+1+(1);
+        case TransformCommand::RotateY_Static:             return cmd+1+(1);
+        case TransformCommand::RotateZ_Static:             return cmd+1+(1);
+        case TransformCommand::Rotate_Static:              return cmd+1+(4);
+		case TransformCommand::RotateQuaternion_Static:    return cmd+1+(4);
+        case TransformCommand::UniformScale_Static:        return cmd+1+(1);
+        case TransformCommand::ArbitraryScale_Static:      return cmd+1+(3);
 
-        case TransformStackCommand::TransformFloat4x4_Parameter:
-        case TransformStackCommand::Translate_Parameter:
-        case TransformStackCommand::RotateX_Parameter:
-        case TransformStackCommand::RotateY_Parameter:
-        case TransformStackCommand::RotateZ_Parameter:
-        case TransformStackCommand::Rotate_Parameter:
-		case TransformStackCommand::RotateQuaternion_Parameter:
-        case TransformStackCommand::UniformScale_Parameter:
-        case TransformStackCommand::ArbitraryScale_Parameter:
-            return 1;
+        case TransformCommand::TransformFloat4x4_Parameter:
+        case TransformCommand::Translate_Parameter:
+        case TransformCommand::RotateX_Parameter:
+        case TransformCommand::RotateY_Parameter:
+        case TransformCommand::RotateZ_Parameter:
+        case TransformCommand::Rotate_Parameter:
+		case TransformCommand::RotateQuaternion_Parameter:
+        case TransformCommand::UniformScale_Parameter:
+        case TransformCommand::ArbitraryScale_Parameter:
+            return cmd+1+(1);
 
-        case TransformStackCommand::WriteOutputMatrix:
-            return 1;
+        case TransformCommand::WriteOutputMatrix:
+            return cmd+1+(1);
 
-        case TransformStackCommand::TransformFloat4x4AndWrite_Static: return 1+16;
-        case TransformStackCommand::TransformFloat4x4AndWrite_Parameter: return 1+1;
+        case TransformCommand::TransformFloat4x4AndWrite_Static: return cmd+1+(1+16);
+        case TransformCommand::TransformFloat4x4AndWrite_Parameter: return cmd+1+(1+1);
 
-        case TransformStackCommand::Comment: return 64/4;
+        case TransformCommand::Comment: return cmd+1+(64/4);
 
-        default: return 0;
+        case TransformCommand::BindingPoint_0:
+            return cmd+1+(2);
+
+        case TransformCommand::BindingPoint_1:
+            cmd += 1+(2);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            return cmd;
+
+        case TransformCommand::BindingPoint_2:
+            cmd += 1+(2);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            return cmd;
+
+        case TransformCommand::BindingPoint_3:
+            cmd += 1+(2);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            assert(IsStaticCommand((TransformCommand)*cmd));
+            cmd = NextTransformationCommand_(cmd);
+            return cmd;
+
+        default: 
+            assert(0);
+            return cmd+1;
         }
     }
+
+    const uint32_t* NextTransformationCommand(const uint32_t* cmd) { return NextTransformationCommand_(cmd); }
 
     T1(Iterator) static Iterator SkipUntilPop(Iterator i, Iterator end, signed& finalIdentLevel)
     {
         finalIdentLevel = 1;
         for (; i!=end;) {
-            if (*i == (uint32_t)TransformStackCommand::PopLocalToWorld) {
+            if (*i == (uint32_t)TransformCommand::PopLocalToWorld) {
                 auto popCount = *(i+1);
                 finalIdentLevel -= signed(popCount);
                 if (finalIdentLevel <= 0)
                     return i;
-            } else if (*i == (uint32_t)TransformStackCommand::PushLocalToWorld)
+            } else if (*i == (uint32_t)TransformCommand::PushLocalToWorld)
                 ++finalIdentLevel;
-            i += 1 + CommandSize((TransformStackCommand)*i);
+            i = NextTransformationCommand_(i);
         }
         return end;
     }
 
-    static bool IsTransformCommand(TransformStackCommand cmd)
+    static bool IsTransformCommand(TransformCommand cmd)
     {
         return 
-                (cmd >= TransformStackCommand::TransformFloat4x4_Static && cmd <= TransformStackCommand::ArbitraryScale_Static)
-            ||  (cmd >= TransformStackCommand::TransformFloat4x4_Parameter && cmd <= TransformStackCommand::ArbitraryScale_Parameter);
+                (cmd >= TransformCommand::TransformFloat4x4_Static && cmd <= TransformCommand::ArbitraryScale_Static)
+            ||  (cmd >= TransformCommand::TransformFloat4x4_Parameter && cmd <= TransformCommand::ArbitraryScale_Parameter);
     }
 
-	static bool IsOutputCommand(TransformStackCommand cmd)
+	static bool IsOutputCommand(TransformCommand cmd)
     {
-        return (cmd >= TransformStackCommand::WriteOutputMatrix && cmd <= TransformStackCommand::TransformFloat4x4AndWrite_Parameter);
+        return (cmd >= TransformCommand::WriteOutputMatrix && cmd <= TransformCommand::TransformFloat4x4AndWrite_Parameter);
     }
 
     T1(Iterator) 
@@ -85,15 +129,15 @@ namespace RenderCore { namespace Assets
     {
         // Scan forward... if the transform isn't modified at this level, or if
         // the matrix isn't used after the pop, then the push/pop is redundant
-        assert(*i == (uint32_t)TransformStackCommand::PushLocalToWorld);
+        assert(*i == (uint32_t)TransformCommand::PushLocalToWorld);
         ++i;
 
         bool foundTransformCmd = false;
         for (;i<end;) {
-            auto cmd = TransformStackCommand(*i);
+            auto cmd = TransformCommand(*i);
             if (IsTransformCommand(cmd)) {
                 foundTransformCmd = true;
-            } else if (cmd == TransformStackCommand::PushLocalToWorld) {
+            } else if (cmd == TransformCommand::PushLocalToWorld) {
                 ++i;
                 signed finalIdentLevel = 0;
                 i = SkipUntilPop(i, end, finalIdentLevel);
@@ -101,13 +145,13 @@ namespace RenderCore { namespace Assets
                     isRedundant = (finalIdentLevel < -1) || !foundTransformCmd || (i+2) == end;
                     return i;
                 }   
-            } else if (cmd == TransformStackCommand::PopLocalToWorld) {
+            } else if (cmd == TransformCommand::PopLocalToWorld) {
                 auto popCount = *(i+1);
                 isRedundant = (popCount > 1) || !foundTransformCmd || (i+2) == end;
                 return i;
             }
 
-            i += 1 + CommandSize((TransformStackCommand)*i);
+            i = NextTransformationCommand_(i);
         }
         isRedundant = true;
         return i;
@@ -118,9 +162,9 @@ namespace RenderCore { namespace Assets
             // First, we just want to convert series of pop operations into
             // a single pop.
         for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-            if (*i == (uint32_t)TransformStackCommand::PopLocalToWorld) {
+            if (*i == (uint32_t)TransformCommand::PopLocalToWorld) {
                 if (    (cmdStream.end() - i) >= 4
-                    &&  *(i+2) == (uint32_t)TransformStackCommand::PopLocalToWorld) {
+                    &&  *(i+2) == (uint32_t)TransformCommand::PopLocalToWorld) {
                         // combine these 2 pops into a single pop command
                     auto newPopCount = *(i+1) + *(i+3);
                     i = cmdStream.erase(i, i+2);
@@ -129,13 +173,13 @@ namespace RenderCore { namespace Assets
                     i += 2;
                 }
             } else {
-                i += 1 + CommandSize((TransformStackCommand)*i);
+                i = NextTransformationCommand_(i);
             }
         }
 
             // Now look for push operations that are redundant
         for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-            if (*i == (uint32_t)TransformStackCommand::PushLocalToWorld) {
+            if (*i == (uint32_t)TransformCommand::PushLocalToWorld) {
                 bool isRedundant = false;
                 auto pop = IsRedundantPush(i, cmdStream.end(), isRedundant);
                 if (isRedundant) {
@@ -152,7 +196,7 @@ namespace RenderCore { namespace Assets
                 }
             } 
 
-            i += 1 + CommandSize((TransformStackCommand)*i);
+            i = NextTransformationCommand_(i);
         }
     }
 
@@ -161,17 +205,17 @@ namespace RenderCore { namespace Assets
     {
 		signed pushDepth = 0;
 		for (;i<end && pushDepth >= 0;) {
-            auto cmd = TransformStackCommand(*i);
+            auto cmd = TransformCommand(*i);
             if (IsOutputCommand(cmd)) {
                 return true;
-            } else if (cmd == TransformStackCommand::PushLocalToWorld) {
+            } else if (cmd == TransformCommand::PushLocalToWorld) {
                 ++pushDepth;
-            } else if (cmd == TransformStackCommand::PopLocalToWorld) {
+            } else if (cmd == TransformCommand::PopLocalToWorld) {
                 auto popCount = *(i+1);
                 pushDepth -= popCount;
             }
 
-            i += 1 + CommandSize((TransformStackCommand)*i);
+            i = NextTransformationCommand_(i);
         }
 		return false;
 	}
@@ -188,11 +232,11 @@ namespace RenderCore { namespace Assets
 			str, 
 			MakeIteratorRange(cmdStream),
 			[](unsigned) { return std::string{}; },
-			[](AnimSamplerType, unsigned) { return std::string{}; });
+			[](unsigned) { return std::string{}; });
 
 		for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-			auto nexti = i + 1 + CommandSize((TransformStackCommand)*i);
-			auto cmd = TransformStackCommand(*i);
+			auto nexti = NextTransformationCommand_(i);
+			auto cmd = TransformCommand(*i);
             if (IsTransformCommand(cmd)) {
 				if (!HasFollowingOutputCommand(nexti, cmdStream.end())) {
 					i = cmdStream.erase(i, nexti);
@@ -208,29 +252,29 @@ namespace RenderCore { namespace Assets
 			str, 
 			MakeIteratorRange(cmdStream),
 			[](unsigned) { return std::string{}; },
-			[](AnimSamplerType, unsigned) { return std::string{}; });
+			[](unsigned) { return std::string{}; });
 
 		auto debug = str.str();
 		(void)debug;
 	}
 
     enum MergeType { StaticTransform, OutputMatrix, Push, Pop, Blocker };
-    static MergeType AsMergeType(TransformStackCommand cmd)
+    static MergeType AsMergeType(TransformCommand cmd)
     {
         switch (cmd) {
-        case TransformStackCommand::TransformFloat4x4_Static:
-        case TransformStackCommand::Translate_Static:
-        case TransformStackCommand::RotateX_Static:
-        case TransformStackCommand::RotateY_Static:
-        case TransformStackCommand::RotateZ_Static:
-        case TransformStackCommand::Rotate_Static:
-		case TransformStackCommand::RotateQuaternion_Static:
-        case TransformStackCommand::UniformScale_Static:
-        case TransformStackCommand::ArbitraryScale_Static:  return MergeType::StaticTransform;
+        case TransformCommand::TransformFloat4x4_Static:
+        case TransformCommand::Translate_Static:
+        case TransformCommand::RotateX_Static:
+        case TransformCommand::RotateY_Static:
+        case TransformCommand::RotateZ_Static:
+        case TransformCommand::Rotate_Static:
+		case TransformCommand::RotateQuaternion_Static:
+        case TransformCommand::UniformScale_Static:
+        case TransformCommand::ArbitraryScale_Static:  return MergeType::StaticTransform;
 
-        case TransformStackCommand::PushLocalToWorld:       return MergeType::Push;
-        case TransformStackCommand::PopLocalToWorld:        return MergeType::Pop;
-        case TransformStackCommand::WriteOutputMatrix:      return MergeType::OutputMatrix;
+        case TransformCommand::PushLocalToWorld:       return MergeType::Push;
+        case TransformCommand::PopLocalToWorld:        return MergeType::Pop;
+        case TransformCommand::WriteOutputMatrix:      return MergeType::OutputMatrix;
 
         default: return MergeType::Blocker;
         }
@@ -243,20 +287,20 @@ namespace RenderCore { namespace Assets
             // Search forward and find the commands that are going to directly 
             // effected by the transform before i
         for (;i<range.end();) {
-            auto type = AsMergeType(TransformStackCommand(*i));
+            auto type = AsMergeType(TransformCommand(*i));
             if (type == MergeType::StaticTransform || type == MergeType::Blocker) {
                 // Hitting a static transform blocks any further searches
                 // We can just skip until we pop out of this block
                 result.push_back(i-range.begin());
                 i = SkipUntilPop(i, range.end(), finalIdentLevel);
-                return i+1+CommandSize((TransformStackCommand)*i);
+                return NextTransformationCommand_(i);
             } else if (type == MergeType::OutputMatrix) {
                 result.push_back(i-range.begin());
-                i += 1 + CommandSize((TransformStackCommand)*i);
+                i = NextTransformationCommand_(i);
             } else if (type == MergeType::Pop) {
                 auto popCount = *(i+1);
                 finalIdentLevel = popCount-1;
-                return i+1+CommandSize((TransformStackCommand)*i);
+                return NextTransformationCommand_(i);
             } else if (type == MergeType::Push) {
                 // Hitting a push operation means we have to branch.
                 // Here, we must find all of the influences in the
@@ -280,7 +324,7 @@ namespace RenderCore { namespace Assets
     {
         signed commandAdjustment = -1;
         for (auto c:influences) {
-            switch (AsMergeType(TransformStackCommand(cmdStream[c]))) {
+            switch (AsMergeType(TransformCommand(cmdStream[c]))) {
             case MergeType::StaticTransform:
                     // This other transform might be merged away, also -- if it can be merged further.
                     // so let's consider it another dropped command
@@ -302,35 +346,35 @@ namespace RenderCore { namespace Assets
         return commandAdjustment < 0;
     }
 
-    static bool ShouldDoSimpleMerge(TransformStackCommand lhs, TransformStackCommand rhs)
+    static bool ShouldDoSimpleMerge(TransformCommand lhs, TransformCommand rhs)
     {
-        if (    lhs == TransformStackCommand::TransformFloat4x4_Static
-            ||  rhs == TransformStackCommand::TransformFloat4x4_Static)
+        if (    lhs == TransformCommand::TransformFloat4x4_Static
+            ||  rhs == TransformCommand::TransformFloat4x4_Static)
             return true;
 
         switch (lhs) {
-        case TransformStackCommand::Translate_Static:
+        case TransformCommand::Translate_Static:
                 // only merge into another translate
-            return rhs == TransformStackCommand::Translate_Static;
+            return rhs == TransformCommand::Translate_Static;
 
-        case TransformStackCommand::RotateX_Static:
-        case TransformStackCommand::RotateY_Static:
-        case TransformStackCommand::RotateZ_Static:
-        case TransformStackCommand::Rotate_Static:
-		case TransformStackCommand::RotateQuaternion_Static:
+        case TransformCommand::RotateX_Static:
+        case TransformCommand::RotateY_Static:
+        case TransformCommand::RotateZ_Static:
+        case TransformCommand::Rotate_Static:
+		case TransformCommand::RotateQuaternion_Static:
                 // only merge into another rotate
-            return (rhs == TransformStackCommand::RotateX_Static)
-                || (rhs == TransformStackCommand::RotateY_Static)
-                || (rhs == TransformStackCommand::RotateZ_Static)
-                || (rhs == TransformStackCommand::Rotate_Static)
-				|| (rhs == TransformStackCommand::RotateQuaternion_Static)
+            return (rhs == TransformCommand::RotateX_Static)
+                || (rhs == TransformCommand::RotateY_Static)
+                || (rhs == TransformCommand::RotateZ_Static)
+                || (rhs == TransformCommand::Rotate_Static)
+				|| (rhs == TransformCommand::RotateQuaternion_Static)
                 ;
 
-        case TransformStackCommand::UniformScale_Static:
-        case TransformStackCommand::ArbitraryScale_Static:
+        case TransformCommand::UniformScale_Static:
+        case TransformCommand::ArbitraryScale_Static:
                 // only merge into another scale
-            return (rhs == TransformStackCommand::UniformScale_Static)
-                || (rhs == TransformStackCommand::ArbitraryScale_Static)
+            return (rhs == TransformCommand::UniformScale_Static)
+                || (rhs == TransformCommand::ArbitraryScale_Static)
                 ;
 
         default:
@@ -342,32 +386,32 @@ namespace RenderCore { namespace Assets
 
     static Float4x4 PromoteToFloat4x4(const uint32_t* cmd)
     {
-        switch (TransformStackCommand(*cmd)) {
-        case TransformStackCommand::TransformFloat4x4_Static:
+        switch (TransformCommand(*cmd)) {
+        case TransformCommand::TransformFloat4x4_Static:
             return *(const Float4x4*)(cmd+1);
 
-        case TransformStackCommand::Translate_Static:
+        case TransformCommand::Translate_Static:
             return AsFloat4x4(*(const Float3*)(cmd+1));
 
-        case TransformStackCommand::RotateX_Static:
+        case TransformCommand::RotateX_Static:
             return AsFloat4x4(*(const RotationX*)(cmd+1));
 
-        case TransformStackCommand::RotateY_Static:
+        case TransformCommand::RotateY_Static:
             return AsFloat4x4(*(const RotationY*)(cmd+1));
 
-        case TransformStackCommand::RotateZ_Static:
+        case TransformCommand::RotateZ_Static:
             return AsFloat4x4(*(const RotationZ*)(cmd+1));
 
-        case TransformStackCommand::Rotate_Static:
+        case TransformCommand::Rotate_Static:
             return AsFloat4x4(*(const ArbitraryRotation*)(cmd+1));
 
-		case TransformStackCommand::RotateQuaternion_Static:
+		case TransformCommand::RotateQuaternion_Static:
             return AsFloat4x4(*(const Quaternion*)(cmd+1));
 
-        case TransformStackCommand::UniformScale_Static:
+        case TransformCommand::UniformScale_Static:
             return AsFloat4x4(*(const UniformScale*)(cmd+1));
 
-        case TransformStackCommand::ArbitraryScale_Static:
+        case TransformCommand::ArbitraryScale_Static:
             return AsFloat4x4(*(const ArbitraryScale*)(cmd+1));
 
         default:
@@ -386,40 +430,40 @@ namespace RenderCore { namespace Assets
         // Otherwise we should merge to Float4x4. In some cases, the final Final4x4
         // can be converted into a simplier transform... We will go back through
         // and optimize those cases later.
-        auto typeDst = TransformStackCommand(*dst);
-        auto typeMerging = TransformStackCommand(*mergingCmd);
-        if (typeDst == TransformStackCommand::Translate_Static
-            && typeMerging == TransformStackCommand::Translate_Static) {
+        auto typeDst = TransformCommand(*dst);
+        auto typeMerging = TransformCommand(*mergingCmd);
+        if (typeDst == TransformCommand::Translate_Static
+            && typeMerging == TransformCommand::Translate_Static) {
 
             auto& dstTrans = *(Float3*)AsPointer(dst+1);
             auto& mergeTrans = *(Float3*)AsPointer(mergingCmd+1);
             dstTrans += mergeTrans;
-        } else if ((typeDst == TransformStackCommand::RotateX_Static
-            && typeMerging == TransformStackCommand::RotateX_Static)
-            || (typeDst == TransformStackCommand::RotateY_Static
-            && typeMerging == TransformStackCommand::RotateY_Static)
-            || (typeDst == TransformStackCommand::RotateZ_Static
-            && typeMerging == TransformStackCommand::RotateZ_Static)) {
+        } else if ((typeDst == TransformCommand::RotateX_Static
+            && typeMerging == TransformCommand::RotateX_Static)
+            || (typeDst == TransformCommand::RotateY_Static
+            && typeMerging == TransformCommand::RotateY_Static)
+            || (typeDst == TransformCommand::RotateZ_Static
+            && typeMerging == TransformCommand::RotateZ_Static)) {
 
             auto& dstTrans = *(float*)AsPointer(dst+1);
             auto& mergeTrans = *(float*)AsPointer(mergingCmd+1);
             dstTrans += mergeTrans;
-        } else if (typeDst == TransformStackCommand::UniformScale_Static
-            && typeMerging == TransformStackCommand::UniformScale_Static) {
+        } else if (typeDst == TransformCommand::UniformScale_Static
+            && typeMerging == TransformCommand::UniformScale_Static) {
 
             auto& dstTrans = *(float*)AsPointer(dst+1);
             auto& mergeTrans = *(float*)AsPointer(mergingCmd+1);
             dstTrans *= mergeTrans;
-        } else if (typeDst == TransformStackCommand::ArbitraryScale_Static
-            && typeMerging == TransformStackCommand::ArbitraryScale_Static) {
+        } else if (typeDst == TransformCommand::ArbitraryScale_Static
+            && typeMerging == TransformCommand::ArbitraryScale_Static) {
 
             auto& dstTrans = *(Float3*)AsPointer(dst+1);
             auto& mergeTrans = *(Float3*)AsPointer(mergingCmd+1);
             dstTrans[0] *= mergeTrans[0];
             dstTrans[1] *= mergeTrans[1];
             dstTrans[2] *= mergeTrans[2];
-        } else if (typeDst == TransformStackCommand::TransformFloat4x4_Static
-            && typeMerging == TransformStackCommand::TransformFloat4x4_Static) {
+        } else if (typeDst == TransformCommand::TransformFloat4x4_Static
+            && typeMerging == TransformCommand::TransformFloat4x4_Static) {
 
             auto& dstTrans = *(Float4x4*)AsPointer(dst+1);
             auto& mergeTrans = *(Float4x4*)AsPointer(mergingCmd+1);
@@ -429,9 +473,9 @@ namespace RenderCore { namespace Assets
             // a new Float4x4 transform into the space in "dst"
             auto dstTransform = PromoteToFloat4x4(AsPointer(dst));
             auto mergeTransform = PromoteToFloat4x4(AsPointer(mergingCmd));
-            auto t = cmdStream.erase(dst+1, dst+1+CommandSize(TransformStackCommand(*dst)));
+            auto t = cmdStream.erase(dst+1, NextTransformationCommand_(dst));
             assert(t==dst+1);
-            *dst = (uint32_t)TransformStackCommand::TransformFloat4x4_Static;
+            *dst = (uint32_t)TransformCommand::TransformFloat4x4_Static;
             auto finalTransform = Combine(dstTransform, mergeTransform);
             cmdStream.insert(dst+1, (uint32_t*)&finalTransform, (uint32_t*)(&finalTransform + 1));
         }
@@ -496,8 +540,8 @@ namespace RenderCore { namespace Assets
         // could just upgrade them all into 4x4 matrices and merge them all.
 
         for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-            auto cmdType = AsMergeType(TransformStackCommand(*i));
-            auto next = i + 1 + CommandSize(TransformStackCommand(*i));
+            auto cmdType = AsMergeType(TransformCommand(*i));
+            auto next = NextTransformationCommand_(i);
             if (cmdType == MergeType::StaticTransform) {
                     // Search forward & find influences
                 std::vector<size_t> influences; signed finalIdentLevel = 0;
@@ -524,7 +568,7 @@ namespace RenderCore { namespace Assets
                 } 
                 
                 bool isSpecialCase = false;
-                if (influences.size() == 1 && AsMergeType(TransformStackCommand(cmdStream[influences[0]])) == MergeType::StaticTransform) {
+                if (influences.size() == 1 && AsMergeType(TransformCommand(cmdStream[influences[0]])) == MergeType::StaticTransform) {
                         // we have a single static transform influence. Let's check the influences for
                         // the other transform.
                     std::vector<size_t> secondaryInfluences; 
@@ -536,7 +580,7 @@ namespace RenderCore { namespace Assets
 
                 bool doMerge = false;
                 if (isSpecialCase) {
-                    doMerge = ShouldDoSimpleMerge(TransformStackCommand(*i), TransformStackCommand(cmdStream[influences[0]]));
+                    doMerge = ShouldDoSimpleMerge(TransformCommand(*i), TransformCommand(cmdStream[influences[0]]));
                 } else {
                     doMerge = ShouldDoMerge(MakeIteratorRange(influences), MakeIteratorRange(cmdStream), optimizer);
                 }
@@ -551,7 +595,7 @@ namespace RenderCore { namespace Assets
                         // our iterators immediately
                     for (auto r=influences.rbegin(); r!=influences.rend(); ++r) {
                         auto i2 = cmdStream.begin() + *r;
-                        auto type = AsMergeType(TransformStackCommand(*i2));
+                        auto type = AsMergeType(TransformCommand(*i2));
                         if (type == MergeType::StaticTransform) {
                             DoTransformMerge(cmdStream, i2, i);
                             i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
@@ -560,8 +604,8 @@ namespace RenderCore { namespace Assets
                             // plus, we need a push/pop pair surrounding it
                             auto insertSize = next-i;
                             i2 = cmdStream.insert(i2, i, next);
-                            i2 = cmdStream.insert(i2, (uint32_t)TransformStackCommand::PushLocalToWorld);
-                            uint32_t popIntr[] = { (uint32_t)TransformStackCommand::PopLocalToWorld, 1 };
+                            i2 = cmdStream.insert(i2, (uint32_t)TransformCommand::PushLocalToWorld);
+                            uint32_t popIntr[] = { (uint32_t)TransformCommand::PopLocalToWorld, 1 };
                             i2 = cmdStream.insert(i2+1+insertSize, &popIntr[0], &popIntr[2]);
                             i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
                         } else if (type == MergeType::OutputMatrix) {
@@ -576,17 +620,17 @@ namespace RenderCore { namespace Assets
                                     // command list should write to each output matrix only once -- so this
                                     // should never happen.
                                 for (auto r2=influences.rbegin(); r2<r; ++r2)
-                                    if (    AsMergeType(TransformStackCommand(cmdStream[*r2])) == MergeType::OutputMatrix
+                                    if (    AsMergeType(TransformCommand(cmdStream[*r2])) == MergeType::OutputMatrix
                                         &&  cmdStream[*r2+1] == outputMatrixIndex)
                                         Throw(::Exceptions::BasicLabel("Writing to the same output matrix multiple times in transformation machine. Output matrix index: %u", outputMatrixIndex));
 
                                 auto transform = PromoteToFloat4x4(AsPointer(i));
                                 optimizer.MergeIntoOutputMatrix(outputMatrixIndex, transform);
                             } else {
-                                auto insertSize = next-i; auto outputMatSize = 1+CommandSize(TransformStackCommand(*i2));
+                                auto insertSize = next-i; auto outputMatSize = NextTransformationCommand_(i2) - i2;
                                 i2 = cmdStream.insert(i2, i, next);
-                                i2 = cmdStream.insert(i2, (uint32_t)TransformStackCommand::PushLocalToWorld);
-                                uint32_t popIntr[] = { (uint32_t)TransformStackCommand::PopLocalToWorld, 1 };
+                                i2 = cmdStream.insert(i2, (uint32_t)TransformCommand::PushLocalToWorld);
+                                uint32_t popIntr[] = { (uint32_t)TransformCommand::PopLocalToWorld, 1 };
                                 i2 = cmdStream.insert(i2+1+insertSize+outputMatSize, popIntr, ArrayEnd(popIntr));
                                 i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
                             }
@@ -599,7 +643,7 @@ namespace RenderCore { namespace Assets
                 }
             }
 
-            i += 1 + CommandSize(TransformStackCommand(*i));
+            i = NextTransformationCommand_(i);
         }
     }
 
@@ -616,34 +660,34 @@ namespace RenderCore { namespace Assets
         //          -> TransformFloat4x4AndWrite_Parameter
         
         for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-            std::pair<TransformStackCommand, std::vector<uint32_t>::iterator> nextInstructions[3];
+            std::pair<TransformCommand, std::vector<uint32_t>::iterator> nextInstructions[3];
             auto i2 = i;
             for (unsigned c=0; c<dimof(nextInstructions); ++c) {
                 if (i2 < cmdStream.end()) {
-                    nextInstructions[c] = std::make_pair(TransformStackCommand(*i2), i2);
-                    i2 += 1 + CommandSize(TransformStackCommand(*i2));
+                    nextInstructions[c] = std::make_pair(TransformCommand(*i2), i2);
+                    i2 = NextTransformationCommand_(i2);
                 } else {
-                    nextInstructions[c] = std::make_pair(TransformStackCommand(~0u), i2);
+                    nextInstructions[c] = std::make_pair(TransformCommand(~0u), i2);
                 }
             }
 
-            if (    (nextInstructions[0].first == TransformStackCommand::TransformFloat4x4_Static || nextInstructions[1].first == TransformStackCommand::TransformFloat4x4_Parameter)
-                &&  nextInstructions[1].first == TransformStackCommand::WriteOutputMatrix
-                &&  nextInstructions[2].first == TransformStackCommand::PopLocalToWorld) {
+            if (    (nextInstructions[0].first == TransformCommand::TransformFloat4x4_Static || nextInstructions[1].first == TransformCommand::TransformFloat4x4_Parameter)
+                &&  nextInstructions[1].first == TransformCommand::WriteOutputMatrix
+                &&  nextInstructions[2].first == TransformCommand::PopLocalToWorld) {
 
                     //  Merge 0 & 1 into a single TransformFloat4x4AndWrite_Static
                     //  Note that the push/pop pair should be removed with RemoveRedundantPushes
                 auto outputIndex = *(nextInstructions[1].second+1);
                 cmdStream.erase(nextInstructions[1].second, nextInstructions[2].second);
-                if (nextInstructions[0].first == TransformStackCommand::TransformFloat4x4_Static)
-                    *nextInstructions[0].second = (uint32_t)TransformStackCommand::TransformFloat4x4AndWrite_Static;
+                if (nextInstructions[0].first == TransformCommand::TransformFloat4x4_Static)
+                    *nextInstructions[0].second = (uint32_t)TransformCommand::TransformFloat4x4AndWrite_Static;
                 else 
-                    *nextInstructions[0].second = (uint32_t)TransformStackCommand::TransformFloat4x4AndWrite_Parameter;
+                    *nextInstructions[0].second = (uint32_t)TransformCommand::TransformFloat4x4AndWrite_Parameter;
                 i = cmdStream.insert(nextInstructions[0].second+1, outputIndex) - 1;
                 continue;
             }
 
-            i += 1 + CommandSize(TransformStackCommand(*i));
+            i = NextTransformationCommand_(i);
         }
     }
 
@@ -687,10 +731,10 @@ namespace RenderCore { namespace Assets
         const float identityThreshold = 1e-4f;
 
         for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
-            auto type = TransformStackCommand(*i);
-            if (type == TransformStackCommand::TransformFloat4x4_Static) {
+            auto type = TransformCommand(*i);
+            if (type == TransformCommand::TransformFloat4x4_Static) {
 
-                auto cmdEnd = i+1+CommandSize(type);
+                auto cmdEnd = NextTransformationCommand_(i);
 
                     // Let's try to decompose our matrix into its component
                     // parts. If we get a very simple result, we should 
@@ -715,35 +759,35 @@ namespace RenderCore { namespace Assets
                         //  Collada normally prefers axis, angle -- so we'll use that.
                         ArbitraryRotation rot(decomposed._rotation);
                         if (signed rotX = rot.IsRotationX()) {
-                            *i = (uint32_t)TransformStackCommand::RotateX_Static;
+                            *i = (uint32_t)TransformCommand::RotateX_Static;
                             *(float*)AsPointer(i+1) = Rad2Deg(float(rotX) * rot._angle);
                             cmdStream.erase(i+2, cmdEnd);
                         } else if (signed rotY = rot.IsRotationY()) {
-                            *i = (uint32_t)TransformStackCommand::RotateY_Static;
+                            *i = (uint32_t)TransformCommand::RotateY_Static;
                             *(float*)AsPointer(i+1) = Rad2Deg(float(rotY) * rot._angle);
                             cmdStream.erase(i+2, cmdEnd);
                         } else if (signed rotZ = rot.IsRotationZ()) {
-                            *i = (uint32_t)TransformStackCommand::RotateZ_Static;
+                            *i = (uint32_t)TransformCommand::RotateZ_Static;
                             *(float*)AsPointer(i+1) = Rad2Deg(float(rotZ) * rot._angle);
                             cmdStream.erase(i+2, cmdEnd);
                         } else {
-                            *i = (uint32_t)TransformStackCommand::Rotate_Static;
+                            *i = (uint32_t)TransformCommand::Rotate_Static;
                             *(Float3*)AsPointer(i+1) = rot._axis;
                             *(float*)AsPointer(i+4) = Rad2Deg(rot._angle);
                             cmdStream.erase(i+5, cmdEnd);
                         }
                     } else if (hasTranslation && !hasRotation) {
                         // translation (and maybe scale)
-                        *i = (uint32_t)TransformStackCommand::Translate_Static;
+                        *i = (uint32_t)TransformCommand::Translate_Static;
                         *(Float3*)AsPointer(i+1) = decomposed._translation;
                         auto transEnd = i+4;
                         if (hasScale) {
                             if (IsUniformScale(decomposed._scale, scaleThreshold)) {
-                                *transEnd = (uint32_t)TransformStackCommand::UniformScale_Static;
+                                *transEnd = (uint32_t)TransformCommand::UniformScale_Static;
                                 *(float*)AsPointer(transEnd+1) = GetMedianElement(decomposed._scale);
                                 cmdStream.erase(transEnd+2, cmdEnd);
                             } else {
-                                *transEnd = (uint32_t)TransformStackCommand::ArbitraryScale_Static;
+                                *transEnd = (uint32_t)TransformCommand::ArbitraryScale_Static;
                                 *(Float3*)AsPointer(transEnd+1) = decomposed._scale;
                                 cmdStream.erase(transEnd+4, cmdEnd);
                             }
@@ -753,11 +797,11 @@ namespace RenderCore { namespace Assets
                         // just scale
                         auto scaleEnd = i;
                         if (IsUniformScale(decomposed._scale, scaleThreshold)) {
-                            *i = (uint32_t)TransformStackCommand::UniformScale_Static;
+                            *i = (uint32_t)TransformCommand::UniformScale_Static;
                             *(float*)AsPointer(i+1) = GetMedianElement(decomposed._scale);
                             scaleEnd = i+2;
                         } else {
-                            *i = (uint32_t)TransformStackCommand::ArbitraryScale_Static;
+                            *i = (uint32_t)TransformCommand::ArbitraryScale_Static;
                             *(Float3*)AsPointer(i+1) = decomposed._scale;
                             scaleEnd = i+4;
                         }
@@ -765,12 +809,12 @@ namespace RenderCore { namespace Assets
                     }
                 }
 
-            } else if (type == TransformStackCommand::ArbitraryScale_Static) {
+            } else if (type == TransformCommand::ArbitraryScale_Static) {
                     // if our arbitrary scale factor is actually a uniform scale,
                     // we should definitely change it!
                 auto scale = *(Float3*)AsPointer(i+1);
                 if (IsUniformScale(scale, scaleThreshold)) {
-                    *i = (uint32_t)TransformStackCommand::UniformScale_Static;
+                    *i = (uint32_t)TransformCommand::UniformScale_Static;
                     cmdStream.erase(i+1, i+3);
                     *(float*)AsPointer(i+1) = GetMedianElement(scale);
                 }
@@ -780,7 +824,7 @@ namespace RenderCore { namespace Assets
             //  * remove identity transforms (eg, scale by 1.f, translate by zero)
             //  * simplify Rotate_Static to RotateX_Static, RotateY_Static, RotateZ_Static
 
-            i += 1 + CommandSize(TransformStackCommand(*i));
+            i = NextTransformationCommand_(i);
         }
     }
 
@@ -826,11 +870,19 @@ namespace RenderCore { namespace Assets
 
 	static const unsigned MaxSkeletonMachineDepth = 64;
 
+    template<typename Type>
+        const Type& GetParameter(IteratorRange<const void*> parameterBlock, unsigned offset)
+    {
+        auto* result = (Type*)PtrAdd(parameterBlock.begin(), offset);
+        assert(PtrAdd(result, sizeof(Type)) <= parameterBlock.end());
+        return *result;
+    }
+
     template<bool UseDebugIterator>
         void GenerateOutputTransforms_Int(
             IteratorRange<Float4x4*>					result,
-            const TransformationParameterSet*           parameterSet,
-            IteratorRange<const uint32_t*>                commandStream,
+            IteratorRange<const void*>                  parameterBlock,
+            IteratorRange<const uint32_t*>              commandStream,
             const std::function<void(const Float4x4&, const Float4x4&)>&     debugIterator)
     {
             // The command stream will sometimes not write to 
@@ -849,21 +901,10 @@ namespace RenderCore { namespace Assets
         Float4x4* workingTransform = workingStack;
         *workingTransform = Identity<Float4x4>();
 
-        IteratorRange<const float*> float1s;
-        IteratorRange<const Float3*> float3s;
-        IteratorRange<const Float4*> float4s;
-        IteratorRange<const Float4x4*> float4x4s;
-        if (parameterSet) {
-            float1s         = parameterSet->GetFloat1Parameters();
-            float3s         = parameterSet->GetFloat3Parameters();
-            float4s         = parameterSet->GetFloat4Parameters();
-            float4x4s       = parameterSet->GetFloat4x4Parameters();
-        }
-
         for (auto i=commandStream.cbegin(); i!=commandStream.cend();) {
             auto commandIndex = *i++;
-            switch ((TransformStackCommand)commandIndex) {
-            case TransformStackCommand::PushLocalToWorld:
+            switch ((TransformCommand)commandIndex) {
+            case TransformCommand::PushLocalToWorld:
                 if ((workingTransform+1) >= &workingStack[dimof(workingStack)]) {
                     Throw(::Exceptions::BasicLabel("Exceeded maximum stack depth in GenerateOutputTransforms"));
                 }
@@ -875,7 +916,7 @@ namespace RenderCore { namespace Assets
                 ++workingTransform;
                 break;
 
-            case TransformStackCommand::PopLocalToWorld:
+            case TransformCommand::PopLocalToWorld:
                 {
                     auto popCount = *i++;
                     if (workingTransform < workingStack+popCount) {
@@ -886,7 +927,7 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4_Static:
+            case TransformCommand::TransformFloat4x4_Static:
                     //
                     //      Parameter is a static single precision 4x4 matrix
                     //
@@ -898,63 +939,59 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::Translate_Static:
+            case TransformCommand::Translate_Static:
                 // i = AdvanceTo16ByteAlignment(i);
                 Combine_IntoRHS(AsFloat3(reinterpret_cast<const float*>(AsPointer(i))), *workingTransform);
                 i += 3;
                 break;
 
-            case TransformStackCommand::RotateX_Static:
+            case TransformCommand::RotateX_Static:
                 Combine_IntoRHS(RotationX(Deg2Rad(*reinterpret_cast<const float*>(AsPointer(i)))), *workingTransform);
                 i++;
                 break;
 
-            case TransformStackCommand::RotateY_Static:
+            case TransformCommand::RotateY_Static:
                 Combine_IntoRHS(RotationY(Deg2Rad(*reinterpret_cast<const float*>(AsPointer(i)))), *workingTransform);
                 i++;
                 break;
 
-            case TransformStackCommand::RotateZ_Static:
+            case TransformCommand::RotateZ_Static:
                 Combine_IntoRHS(RotationZ(Deg2Rad(*reinterpret_cast<const float*>(AsPointer(i)))), *workingTransform);
                 i++;
                 break;
 
-            case TransformStackCommand::Rotate_Static:
+            case TransformCommand::Rotate_Static:
                 // i = AdvanceTo16ByteAlignment(i);
                 Combine_IntoRHS(ArbitraryRotation(AsFloat3(reinterpret_cast<const float*>(AsPointer(i))), Deg2Rad(*reinterpret_cast<const float*>(AsPointer(i+3)))), *workingTransform);
                 i += 4;
                 break;
 
-			case TransformStackCommand::RotateQuaternion_Static:
+			case TransformCommand::RotateQuaternion_Static:
 				Combine_IntoRHS(*reinterpret_cast<const Quaternion*>(AsPointer(i)), *workingTransform);
 				i += 4;
 				break;
 
-            case TransformStackCommand::UniformScale_Static:
+            case TransformCommand::UniformScale_Static:
                 Combine_IntoRHS(UniformScale(*reinterpret_cast<const float*>(AsPointer(i))), *workingTransform);
                 i++;
                 break;
 
-            case TransformStackCommand::ArbitraryScale_Static:
+            case TransformCommand::ArbitraryScale_Static:
                 Combine_IntoRHS(ArbitraryScale(AsFloat3(reinterpret_cast<const float*>(AsPointer(i)))), *workingTransform);
                 i+=3;
                 break;
 
-            case TransformStackCommand::TransformFloat4x4_Parameter:
+            case TransformCommand::TransformFloat4x4_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float4x4s.size()) {
-                        *workingTransform = Combine(float4x4s[parameterIndex], *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for TransformFloat4x4_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    *workingTransform = Combine(GetParameter<Float4x4>(parameterBlock, parameterOffset), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::Translate_Parameter:
+            case TransformCommand::Translate_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float4s.size()) {
+                    uint32_t parameterOffset = *i++;
+                    #if 0
                         // Hack -- flag for object space translation
                         if (float4s[parameterIndex][3] >= 256.f) {
                             auto objectSpaceTranslation = Truncate(float4s[parameterIndex]);
@@ -964,93 +1001,62 @@ namespace RenderCore { namespace Assets
                             auto localSpaceTranslation = TransformPointByOrthonormalInverse(*workingTransform, objectSpaceTranslation);
                             Combine_IntoRHS(localSpaceTranslation, *workingTransform);
                         } else {
-                            Combine_IntoRHS(Truncate(float4s[parameterIndex]), *workingTransform);
-                        }
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for Translate_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    #endif
+                    Combine_IntoRHS(GetParameter<Float3>(parameterBlock, parameterOffset), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::RotateX_Parameter:
+            case TransformCommand::RotateX_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float1s.size()) {
-                        Combine_IntoRHS(RotationX(Deg2Rad(float1s[parameterIndex])), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for RotateX_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(RotationX(Deg2Rad(GetParameter<float>(parameterBlock, parameterOffset))), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::RotateY_Parameter:
+            case TransformCommand::RotateY_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float1s.size()) {
-                        Combine_IntoRHS(RotationY(Deg2Rad(float1s[parameterIndex])), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for RotateY_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(RotationY(Deg2Rad(GetParameter<float>(parameterBlock, parameterOffset))), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::RotateZ_Parameter:
+            case TransformCommand::RotateZ_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float1s.size()) {
-                        Combine_IntoRHS(RotationZ(Deg2Rad(float1s[parameterIndex])), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for RotateZ_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(RotationZ(Deg2Rad(GetParameter<float>(parameterBlock, parameterOffset))), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::Rotate_Parameter:
+            case TransformCommand::Rotate_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float4s.size()) {
-						Combine_IntoRHS(ArbitraryRotation(Truncate(float4s[parameterIndex]), Deg2Rad(float4s[parameterIndex][3])), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for Rotate_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Float4 param = GetParameter<Float4>(parameterBlock, parameterOffset);
+                    Combine_IntoRHS(ArbitraryRotation(Truncate(param), Deg2Rad(param[3])), *workingTransform);
                 }
                 break;
 
-			case TransformStackCommand::RotateQuaternion_Parameter:
+			case TransformCommand::RotateQuaternion_Parameter:
 				{
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float4s.size()) {
-						const Float4& p = float4s[parameterIndex];
-                        Combine_IntoRHS(Quaternion(p[0], p[1], p[2], p[3]), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for RotateQuaternion_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(GetParameter<Quaternion>(parameterBlock, parameterOffset), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::UniformScale_Parameter:
+            case TransformCommand::UniformScale_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float1s.size()) {
-                        Combine_IntoRHS(UniformScale(float1s[parameterIndex]), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for UniformScale_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(UniformScale(GetParameter<float>(parameterBlock, parameterOffset)), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::ArbitraryScale_Parameter:
+            case TransformCommand::ArbitraryScale_Parameter:
                 {
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float3s.size()) {
-                        Combine_IntoRHS(ArbitraryScale(float3s[parameterIndex]), *workingTransform);
-                    } else {
-                        Log(Warning) << "Warning -- bad parameter index for ArbitraryScale_Parameter command (" << parameterIndex << ")" << std::endl;
-                    }
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(ArbitraryScale(GetParameter<Float3>(parameterBlock, parameterOffset)), *workingTransform);
                 }
                 break;
 
-            case TransformStackCommand::WriteOutputMatrix:
+            case TransformCommand::WriteOutputMatrix:
                     //
                     //      Dump the current working transform to the output array
                     //
@@ -1065,7 +1071,7 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Static:
+            case TransformCommand::TransformFloat4x4AndWrite_Static:
                 {
                     uint32_t outputIndex = *i++;
                     const Float4x4& transformMatrix = *reinterpret_cast<const Float4x4*>(AsPointer(i)); 
@@ -1079,23 +1085,28 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Parameter:
+            case TransformCommand::TransformFloat4x4AndWrite_Parameter:
                 {
                     uint32_t outputIndex = *i++;
-                    uint32_t parameterIndex = *i++;
-                    if (parameterIndex < float4x4s.size()) {
-                        if (outputIndex < result.size()) {
-                            result[outputIndex] = Combine(float4x4s[parameterIndex], *workingTransform);
-                            if (constant_expression<UseDebugIterator>::result())
-                                debugIterator(*workingTransform, result[outputIndex]);
-                        } else
-                            Log(Warning) << "Warning -- bad output matrix index in TransformFloat4x4AndWrite_Parameter (" << outputIndex << ")" << std::endl;
+                    uint32_t parameterOffset = *i++;
+                    if (outputIndex < result.size()) {
+                        result[outputIndex] = Combine(GetParameter<Float4x4>(parameterBlock, parameterOffset), *workingTransform);
+                        if (constant_expression<UseDebugIterator>::result())
+                            debugIterator(*workingTransform, result[outputIndex]);
                     } else
-                        Log(Warning) << "Warning -- bad parameter index for TransformFloat4x4AndWrite_Parameter command (" << parameterIndex << ")" << std::endl;
+                        Log(Warning) << "Warning -- bad output matrix index in TransformFloat4x4AndWrite_Parameter (" << outputIndex << ")" << std::endl;
                 }
                 break;
 
-            case TransformStackCommand::Comment:
+            case TransformCommand::BindingPoint_0:
+            case TransformCommand::BindingPoint_1:
+            case TransformCommand::BindingPoint_2:
+            case TransformCommand::BindingPoint_3:
+                // skip over the binding point and treat the static defaults as just normal statics
+                i += 2;
+                break;
+
+            case TransformCommand::Comment:
                 i+=64/4;
                 break;
             }
@@ -1103,12 +1114,12 @@ namespace RenderCore { namespace Assets
     }
 
     void GenerateOutputTransforms(
-        IteratorRange<Float4x4*>					result,
-        const TransformationParameterSet*           parameterSet,
-        IteratorRange<const uint32_t*>                commandStream)
+        IteratorRange<Float4x4*>                    result,
+        IteratorRange<const void*>                  parameterBlock,
+        IteratorRange<const uint32_t*>              commandStream)
     {
         GenerateOutputTransforms_Int<false>(
-            result, parameterSet, commandStream, 
+            result, parameterBlock, commandStream, 
             std::function<void(const Float4x4&, const Float4x4&)>());
     }
 
@@ -1122,9 +1133,9 @@ namespace RenderCore { namespace Assets
 		for (auto&i:result) i = ~0u;
 
 		for (auto i=commandStream.cbegin(); i!=commandStream.cend();) {
-            auto commandIndex = *i++;
-            switch ((TransformStackCommand)commandIndex) {
-            case TransformStackCommand::PushLocalToWorld:
+            switch ((TransformCommand)*i) {
+            case TransformCommand::PushLocalToWorld:
+                ++i;
                 if ((workingTransform+1) >= &workingStack[dimof(workingStack)])
                     Throw(::Exceptions::BasicLabel("Exceeded maximum stack depth in CalculateParentPointers"));
 
@@ -1132,8 +1143,9 @@ namespace RenderCore { namespace Assets
                 ++workingTransform;
                 break;
 
-            case TransformStackCommand::PopLocalToWorld:
+            case TransformCommand::PopLocalToWorld:
                 {
+                    ++i;
                     auto popCount = *i++;
                     if (workingTransform < workingStack+popCount)
                         Throw(::Exceptions::BasicLabel("Stack underflow in CalculateParentPointers"));
@@ -1141,50 +1153,9 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4_Static:
-                i += 16;
-                break;
-
-            case TransformStackCommand::Translate_Static:
-                i += 3;
-                break;
-
-            case TransformStackCommand::RotateX_Static:
-            case TransformStackCommand::RotateY_Static:
-            case TransformStackCommand::RotateZ_Static:
-                i++;
-                break;
-
-            case TransformStackCommand::Rotate_Static:
-                i += 4;
-                break;
-
-			case TransformStackCommand::RotateQuaternion_Static:
-				i += 4;
-				break;
-
-            case TransformStackCommand::UniformScale_Static:
-                i++;
-                break;
-
-            case TransformStackCommand::ArbitraryScale_Static:
-                i+=3;
-                break;
-
-            case TransformStackCommand::TransformFloat4x4_Parameter:
-            case TransformStackCommand::Translate_Parameter:
-            case TransformStackCommand::RotateX_Parameter:
-            case TransformStackCommand::RotateY_Parameter:
-            case TransformStackCommand::RotateZ_Parameter:
-            case TransformStackCommand::Rotate_Parameter:
-			case TransformStackCommand::RotateQuaternion_Parameter:
-            case TransformStackCommand::UniformScale_Parameter:
-            case TransformStackCommand::ArbitraryScale_Parameter:
-				++i;
-				break;
-
-            case TransformStackCommand::WriteOutputMatrix:
+            case TransformCommand::WriteOutputMatrix:
                 {
+                    ++i;
                     uint32_t outputIndex = *i++;
                     if (outputIndex < result.size()) {
 						assert(result[outputIndex] == ~0u);		// if a given output marker is written to twice, we can end up here. It doesn't make much sense to do this, because only the last value written will be used (this applies both to this function and GenerateOutputTransforms)
@@ -1198,8 +1169,9 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Static:
+            case TransformCommand::TransformFloat4x4AndWrite_Static:
                 {
+                    ++i;
                     uint32_t outputIndex = *i++;
                     i += 16;
                     if (outputIndex < result.size()) {
@@ -1212,8 +1184,9 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Parameter:
+            case TransformCommand::TransformFloat4x4AndWrite_Parameter:
                 {
+                    ++i;
                     uint32_t outputIndex = *i++;
                     i++;
                     if (outputIndex < result.size()) {
@@ -1226,8 +1199,8 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::Comment:
-                i+=64/4;
+            default:
+                i = NextTransformationCommand(i);
                 break;
             }
         }
@@ -1245,8 +1218,8 @@ namespace RenderCore { namespace Assets
             // First, we just want to convert series of pop operations into
             // a single pop.
         for (auto i=input.begin(); i!=input.end();) {
-			auto nexti = i + 1 + CommandSize((TransformStackCommand)*i);
-            if (IsOutputCommand((TransformStackCommand)*i)) {
+			auto nexti = NextTransformationCommand_(i);
+            if (IsOutputCommand((TransformCommand)*i)) {
 				auto oldOutputMatrix = *(i+1);
 				unsigned newOutputMatrix = ~0u;
 				if (oldOutputMatrix < outputMatrixMapping.size())
@@ -1276,29 +1249,102 @@ namespace RenderCore { namespace Assets
         std::fill(buffer, &buffer[std::min(std::max(0,identLevel*2), signed(bufferSize-1))], ' ');
         buffer[std::min(std::max(0,identLevel*2), signed(bufferSize-1))] = '\0';
     }
+
+    static inline const uint32_t* TraceStaticTransformCommand(std::ostream&  stream, TransformCommand commandIndex, const uint32_t* i)
+    {
+        switch (commandIndex) {
+        case TransformCommand::TransformFloat4x4_Static:
+            {
+                auto trans = *reinterpret_cast<const Float4x4*>(AsPointer(i));
+                stream << "TransformFloat4x4_Static (";
+                CompactTransformDescription(stream, trans);
+                stream << ")"; 
+                i += 16;
+            }
+            break;
+
+        case TransformCommand::Translate_Static:
+            {
+                auto trans = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
+                stream << "Translate_Static (" << trans[0] << ", " << trans[1] << ", " << trans[2] << ")";
+                i += 3;
+            }
+            break;
+
+        case TransformCommand::RotateX_Static:
+            stream << "RotateX_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")";
+            i++;
+            break;
+
+        case TransformCommand::RotateY_Static:
+            stream << "RotateY_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")";
+            i++;
+            break;
+
+        case TransformCommand::RotateZ_Static:
+            stream << "RotateZ_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")";
+            i++;
+            break;
+
+        case TransformCommand::Rotate_Static:
+            {
+                auto a = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
+                float r = *reinterpret_cast<const float*>(AsPointer(i+3));
+                stream << "Rotate_Static (" << a[0] << ", " << a[1] << ", " << a[2] << ")(" << r << ")";
+                i += 4;
+            }
+            break;
+
+        case TransformCommand::RotateQuaternion_Static:
+            {
+                auto& q = *reinterpret_cast<const Quaternion*>(AsPointer(i));
+                stream << "RotateQuaternion_Static (" << q[0] << ", " << q[1] << ", " << q[2] << ", " << q[3] << ")";
+                i += 4;
+            }
+            break;
+
+        case TransformCommand::UniformScale_Static:
+            stream << "UniformScale_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")";
+            i++;
+            break;
+
+        case TransformCommand::ArbitraryScale_Static:
+            {
+                auto trans = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
+                stream << "ArbitraryScale_Static (" << trans[0] << ", " << trans[1] << ", " << trans[2] << ")";
+            }
+            i+=3;
+            break;
+        default:
+            assert(0);
+            break;
+        }
+        return i;
+    }
     
     void TraceTransformationMachine(
         std::ostream&   stream,
         IteratorRange<const uint32_t*>    commandStream,
         std::function<std::string(unsigned)> outputMatrixToName,
-        std::function<std::string(AnimSamplerType, unsigned)> parameterToName)
+        std::function<std::string(unsigned)> parameterToName)
     {
         stream << "Transformation machine size: (" << (commandStream.size()) * sizeof(uint32_t) << ") bytes" << std::endl;
 
-        char indentBuffer[32];
+        char indentBuffer[32], doubleIndentBuffer[32];
         signed indentLevel = 1;
         MakeIndentBuffer(indentBuffer, dimof(indentBuffer), indentLevel);
+        MakeIndentBuffer(doubleIndentBuffer, dimof(doubleIndentBuffer), indentLevel+1);
 
         for (auto i=commandStream.begin(); i!=commandStream.end();) {
             auto commandIndex = *i++;
-            switch ((TransformStackCommand)commandIndex) {
-            case TransformStackCommand::PushLocalToWorld:
+            switch ((TransformCommand)commandIndex) {
+            case TransformCommand::PushLocalToWorld:
                 stream << indentBuffer << "PushLocalToWorld" << std::endl;
                 ++indentLevel;
                 MakeIndentBuffer(indentBuffer, dimof(indentBuffer), indentLevel);
                 break;
 
-            case TransformStackCommand::PopLocalToWorld:
+            case TransformCommand::PopLocalToWorld:
                 {
                     auto popCount = *i++;
                     stream << indentBuffer << "PopLocalToWorld (" << popCount << ")" << std::endl;
@@ -1307,142 +1353,101 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4_Static:
+            case TransformCommand::TransformFloat4x4_Static:
+            case TransformCommand::Translate_Static:
+            case TransformCommand::RotateX_Static:
+            case TransformCommand::RotateY_Static:
+            case TransformCommand::RotateZ_Static:
+            case TransformCommand::Rotate_Static:
+            case TransformCommand::RotateQuaternion_Static:
+            case TransformCommand::UniformScale_Static:
+            case TransformCommand::ArbitraryScale_Static:
+                stream << indentBuffer;
+                i = TraceStaticTransformCommand(stream, (TransformCommand)commandIndex, i);
+                stream << std::endl;
+                break;
+
+            case TransformCommand::TransformFloat4x4_Parameter:
+                stream << indentBuffer << "TransformFloat4x4_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::Translate_Parameter:
+                stream << indentBuffer << "Translate_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::RotateX_Parameter:
+                stream << indentBuffer << "RotateX_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                stream << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::RotateY_Parameter:
+                stream << indentBuffer << "RotateY_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::RotateZ_Parameter:
+                stream << indentBuffer << "RotateZ_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::Rotate_Parameter:
+                stream << indentBuffer << "Rotate_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+			case TransformCommand::RotateQuaternion_Parameter:
+                stream << indentBuffer << "RotateQuaternion_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::UniformScale_Parameter:
+                stream << indentBuffer << "UniformScale_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::ArbitraryScale_Parameter:
+                stream << indentBuffer << "ArbitraryScale_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::BindingPoint_0:
+            case TransformCommand::BindingPoint_1:
+            case TransformCommand::BindingPoint_2:
+            case TransformCommand::BindingPoint_3:
+                stream << indentBuffer << "Binding point for parameter [" << *i << "]";
+                if (parameterToName) 
+                    stream << " (" << parameterToName(*i) << ")" << std::endl;
+                i++;
+
+                // handle defaults
                 {
-                    auto trans = *reinterpret_cast<const Float4x4*>(AsPointer(i));
-                    stream << indentBuffer << "TransformFloat4x4_Static (";
-                    CompactTransformDescription(stream, trans);
-                    stream << ")" << std::endl; 
-                    i += 16;
+                    unsigned defaultCount = 0;
+                    if (commandIndex == (uint32_t)TransformCommand::BindingPoint_0) {
+                        stream << " with no defaults" << std::endl;
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_1) {
+                        stream << " with 1 defaults" << std::endl;
+                        defaultCount = 1;
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_2) {
+                        stream << " with 2 defaults" << std::endl;
+                        defaultCount = 2;
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_3) {
+                        stream << " with 3 defaults" << std::endl;
+                        defaultCount = 3;
+                    }
+                    while (defaultCount--) {
+                        auto cmd = *(TransformCommand*)i;
+                        ++i;
+                        stream << doubleIndentBuffer << "Default: ";
+                        i = TraceStaticTransformCommand(stream, cmd, i);
+                        stream << std::endl;
+                    }
                 }
                 break;
 
-            case TransformStackCommand::Translate_Static:
-                {
-                    auto trans = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
-                    stream << indentBuffer << "Translate_Static (" << trans[0] << ", " << trans[1] << ", " << trans[2] << ")" << std::endl;
-                    i += 3;
-                }
-                break;
-
-            case TransformStackCommand::RotateX_Static:
-                stream << indentBuffer << "RotateX_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")" << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::RotateY_Static:
-                stream << indentBuffer << "RotateY_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")" << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::RotateZ_Static:
-                stream << indentBuffer << "RotateZ_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")" << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::Rotate_Static:
-                {
-                    auto a = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
-                    float r = *reinterpret_cast<const float*>(AsPointer(i+3));
-                    stream << indentBuffer << "Rotate_Static (" << a[0] << ", " << a[1] << ", " << a[2] << ")(" << r << ")" << std::endl;
-                    i += 4;
-                }
-                break;
-
-			case TransformStackCommand::RotateQuaternion_Static:
-                {
-                    auto& q = *reinterpret_cast<const Quaternion*>(AsPointer(i));
-                    stream << indentBuffer << "RotateQuaternion_Static (" << q[0] << ", " << q[1] << ", " << q[2] << ", " << q[3] << ")" << std::endl;
-                    i += 4;
-                }
-                break;
-
-            case TransformStackCommand::UniformScale_Static:
-                stream << indentBuffer << "UniformScale_Static (" << *reinterpret_cast<const float*>(AsPointer(i)) << ")" << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::ArbitraryScale_Static:
-                {
-                    auto trans = AsFloat3(reinterpret_cast<const float*>(AsPointer(i)));
-                    stream << indentBuffer << "ArbitraryScale_Static (" << trans[0] << ", " << trans[1] << ", " << trans[2] << ")" << std::endl;
-                }
-                i+=3;
-                break;
-
-            case TransformStackCommand::TransformFloat4x4_Parameter:
-                stream << indentBuffer << "TransformFloat4x4_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float4x4, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::Translate_Parameter:
-                stream << indentBuffer << "Translate_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float4, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::RotateX_Parameter:
-                stream << indentBuffer << "RotateX_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float1, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::RotateY_Parameter:
-                stream << indentBuffer << "RotateY_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float1, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::RotateZ_Parameter:
-                stream << indentBuffer << "RotateZ_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float1, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::Rotate_Parameter:
-                stream << indentBuffer << "Rotate_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float4, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-			case TransformStackCommand::RotateQuaternion_Parameter:
-                stream << indentBuffer << "RotateQuaternion_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Quaternion, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::UniformScale_Parameter:
-                stream << indentBuffer << "UniformScale_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float1, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::ArbitraryScale_Parameter:
-                stream << indentBuffer << "ArbitraryScale_Parameter [" << *i << "]";
-                if (parameterToName)
-                    stream << " (" << parameterToName(AnimSamplerType::Float3, *i) << ")";
-                stream << std::endl;
-                i++;
-                break;
-
-            case TransformStackCommand::WriteOutputMatrix:
+            case TransformCommand::WriteOutputMatrix:
                 stream << indentBuffer << "WriteOutputMatrix [" << *i << "]";
                 if (outputMatrixToName)
                     stream << " (" << outputMatrixToName(*i) << ")";
@@ -1450,7 +1455,7 @@ namespace RenderCore { namespace Assets
                 i++;
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Static:
+            case TransformCommand::TransformFloat4x4AndWrite_Static:
                 {
                     stream << indentBuffer << "TransformFloat4x4AndWrite_Static [" << *i << "]";
                     if (outputMatrixToName)
@@ -1463,16 +1468,15 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
-            case TransformStackCommand::TransformFloat4x4AndWrite_Parameter:
+            case TransformCommand::TransformFloat4x4AndWrite_Parameter:
                 stream << indentBuffer << "TransformFloat4x4AndWrite_Parameter [" << *i << "]";
                 if (outputMatrixToName)
                     stream << " (" << outputMatrixToName(*i) << ")";
-                stream << indentBuffer << " param: (" 
-                    << parameterToName(AnimSamplerType::Float4x4, *(i+1)) << ")" << std::endl;
+                stream << indentBuffer << " at offset (0x" << std::hex << *(i+1) << std::dec << ")" << std::endl;
                 i+=2;
                 break;
 
-            case TransformStackCommand::Comment:
+            case TransformCommand::Comment:
                 {
                     std::string str((const char*)AsPointer(i), (const char*)AsPointer(i+64/4));
                     str = str.substr(0, str.find_first_of('\0'));
@@ -1489,18 +1493,6 @@ namespace RenderCore { namespace Assets
             assert(i <= commandStream.end());  // make sure we haven't jumped past the end marker
         }
     }
-
-	const char* AsString(AnimSamplerType value)
-	{
-		switch (value) {
-		case AnimSamplerType::Float1: return "Float1";
-		case AnimSamplerType::Float3: return "Float3";
-		case AnimSamplerType::Float4: return "Float4";
-		case AnimSamplerType::Quaternion: return "Quaternion";
-		case AnimSamplerType::Float4x4: return "Float4x4";
-		}
-		return "<<unknown>>";
-	}
 
 }}
 

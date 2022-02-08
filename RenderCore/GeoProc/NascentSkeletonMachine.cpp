@@ -16,7 +16,7 @@
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	std::unique_ptr<Float4x4[]>           NascentSkeletonMachine::GenerateOutputTransforms(
-		const Assets::TransformationParameterSet&   parameterSet) const
+		const Assets::AnimatedParameterSet&   parameterSet) const
 	{
 		std::unique_ptr<Float4x4[]> result = std::make_unique<Float4x4[]>(size_t(_outputMatrixCount));
 		RenderCore::Assets::GenerateOutputTransforms(
@@ -33,7 +33,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			Throw(::Exceptions::BasicLabel("Failure while attempt to register joint name: (%s:%s)", skeletonName.AsString().c_str(), jointName.AsString().c_str()));
 
 		_outputMatrixCount = std::max(_outputMatrixCount, marker+1);
-		_commandStream.push_back((uint32)Assets::TransformStackCommand::WriteOutputMatrix);
+		_commandStream.push_back((uint32)Assets::TransformCommand::WriteOutputMatrix);
 		_commandStream.push_back(marker);
 	}
 
@@ -48,7 +48,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_commandStream.push_back(cmd);
 	}
 
-	void NascentSkeletonMachine::PushCommand(TransformStackCommand cmd)
+	void NascentSkeletonMachine::PushCommand(TransformCommand cmd)
 	{
 		ResolvePendingPops();
 		_commandStream.push_back((uint32)cmd);
@@ -64,7 +64,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	void NascentSkeletonMachine::ResolvePendingPops()
 	{
 		if (_pendingPops) {
-			_commandStream.push_back((uint32)Assets::TransformStackCommand::PopLocalToWorld);
+			_commandStream.push_back((uint32)Assets::TransformCommand::PopLocalToWorld);
 			_commandStream.push_back(_pendingPops);
 			_pendingPops = 0;
 		}
@@ -202,7 +202,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	std::ostream& SerializationOperator(
 		std::ostream& stream, 
 		const NascentSkeletonMachine& transMachine, 
-		const TransformationParameterSet& defaultParameters)
+		const AnimatedParameterSet& defaultParameters)
 	{
 		stream << "Output matrices: " << transMachine._jointTags.size() << std::endl;
 		stream << "Command stream size: " << transMachine._commandStream.size() * sizeof(uint32) << std::endl;

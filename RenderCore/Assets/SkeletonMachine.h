@@ -17,7 +17,7 @@
 namespace RenderCore { namespace Assets 
 {
     class SkinningBindingBox;
-    class TransformationParameterSet;
+    class AnimatedParameterSet;
     class RawAnimationCurve;
 
     #pragma pack(push)
@@ -29,17 +29,16 @@ namespace RenderCore { namespace Assets
     class SkeletonMachine
     {
     public:
-        unsigned                            GetOutputMatrixCount() const        { return _outputMatrixCount; }
-        const TransformationParameterSet&   GetDefaultParameters() const        { return _defaultParameters; }
+        unsigned                        GetOutputMatrixCount() const        { return _outputMatrixCount; }
+        const AnimatedParameterSet&     GetDefaultParameters() const        { return _defaultParameters; }
 
         void GenerateOutputTransforms   (   IteratorRange<Float4x4*> output,
-                                            const TransformationParameterSet*   parameterSet) const;
+                                            const AnimatedParameterSet*   parameterSet) const;
 
 		void CalculateParentPointers(IteratorRange<unsigned*> output) const;
 
-        class InputInterface
+        struct InputInterface
         {
-        public:
             struct Parameter
             {
                 uint64  _name = ~0ull;
@@ -51,10 +50,9 @@ namespace RenderCore { namespace Assets
             size_t      _parameterCount = 0;
         };
 
-        class OutputInterface
+        struct OutputInterface
         {
-        public:
-            uint64_t*     _outputMatrixNames = nullptr;
+            uint64_t*   _outputMatrixNames = nullptr;
             size_t      _outputMatrixNameCount = 0;
         };
 
@@ -75,7 +73,7 @@ namespace RenderCore { namespace Assets
 
 		SerializableVector<char>		_outputMatrixNames;
 
-		TransformationParameterSet      _defaultParameters;
+		AnimatedParameterSet      _defaultParameters;
 
         const uint32_t*   GetCommandStream()      { return _commandStream; }
         const size_t    GetCommandStreamSize()  { return _commandStreamSize; }

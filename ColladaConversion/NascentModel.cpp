@@ -450,10 +450,10 @@ namespace RenderCore { namespace ColladaConversion
         struct ParameterType { size_t count; AnimSamplerType samplerType; const void* arrayStart; };
         ParameterType parameterTypes[] = 
         {
-            { defaultParameters.GetFloat4x4ParametersCount(),   Assets::TransformationParameterSet::Type::Float4x4, defaultParameters.GetFloat4x4Parameters() },
-            { defaultParameters.GetFloat4ParametersCount(),     Assets::TransformationParameterSet::Type::Float4,   defaultParameters.GetFloat4Parameters() },
-            { defaultParameters.GetFloat3ParametersCount(),     Assets::TransformationParameterSet::Type::Float3,   defaultParameters.GetFloat3Parameters() },
-            { defaultParameters.GetFloat1ParametersCount(),     Assets::TransformationParameterSet::Type::Float1,   defaultParameters.GetFloat1Parameters() },
+            { defaultParameters.GetFloat4x4ParametersCount(),   Assets::AnimatedParameterSet::Type::Float4x4, defaultParameters.GetFloat4x4Parameters() },
+            { defaultParameters.GetFloat4ParametersCount(),     Assets::AnimatedParameterSet::Type::Float4,   defaultParameters.GetFloat4Parameters() },
+            { defaultParameters.GetFloat3ParametersCount(),     Assets::AnimatedParameterSet::Type::Float3,   defaultParameters.GetFloat3Parameters() },
+            { defaultParameters.GetFloat1ParametersCount(),     Assets::AnimatedParameterSet::Type::Float1,   defaultParameters.GetFloat1Parameters() },
         };
         for (size_t t=0; t<dimof(parameterTypes); ++t) {
             for (size_t c=0; c<parameterTypes[t].count; ++c) {
