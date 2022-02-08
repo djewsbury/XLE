@@ -14,10 +14,10 @@
 
 namespace RenderCore { namespace Assets
 {
-	enum class TransformStackCommand : uint32;
+	enum class TransformCommand : uint32;
 	enum class AnimSamplerType;
 	class ITransformationMachineOptimizer;
-	class TransformationParameterSet;
+	class AnimatedParameterSet;
 }}
 
 namespace RenderCore { namespace Assets { namespace GeoProc
@@ -31,7 +31,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         template<typename Serializer>
             void    SerializeMethod(Serializer& outputSerializer) const;
 
-        std::unique_ptr<Float4x4[]>		GenerateOutputTransforms(const TransformationParameterSet& parameterSet) const;
+        std::unique_ptr<Float4x4[]>		GenerateOutputTransforms(const AnimatedParameterSet& parameterSet) const;
 
 		using JointTag = std::pair<std::string, std::string>;
 		using ParameterTag = std::string;
@@ -49,10 +49,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         friend std::ostream& SerializationOperator(
 			std::ostream& stream, 
 			const NascentSkeletonMachine& transMachine, 
-			const TransformationParameterSet& defaultParameters);
+			const AnimatedParameterSet& defaultParameters);
 
         void    PushCommand(uint32 cmd);
-        void    PushCommand(TransformStackCommand cmd);
+        void    PushCommand(TransformCommand cmd);
         void    PushCommand(const void* ptr, size_t size);
 		void	WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName);
 		void	Pop(unsigned popCount);

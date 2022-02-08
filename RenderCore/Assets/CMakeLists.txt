@@ -1,4 +1,6 @@
-set(Src 
+add_library(
+    RenderCoreAssets
+    STATIC
     AssetUtils.cpp  
     MaterialCompiler.cpp
     MaterialScaffold.cpp
@@ -16,6 +18,9 @@ set(Src
     TextureCompiler.cpp
     TextureLoaders.cpp
     MergedAnimationSetCompiler.cpp
+    AnimationBindings.cpp
+    AnimationSet.cpp
+    SkeletonMachine.cpp
     ../GeoProc/GeometryAlgorithm.cpp
     ../GeoProc/GeoProcUtil.cpp
     ../GeoProc/MeshDatabase.cpp
@@ -26,34 +31,7 @@ set(Src
     ../GeoProc/NascentRawGeometry.cpp
     ../GeoProc/NascentSkeletonMachine.cpp
 	../GeoProc/DequantAnalysisTools.cpp)
-set(Headers
-    AssetUtils.h
-    MaterialCompiler.h
-    MaterialScaffold.h
-    ModelImmutableData.h
-    ModelScaffold.h
-    PredefinedCBLayout.h
-    PredefinedDescriptorSetLayout.h
-    PredefinedPipelineLayout.h
-    RawAnimationCurve.h
-    RawMaterial.h
-    Services.h
-    ShaderPatchCollection.h
-    SkeletonScaffoldInternal.h
-    TransformationCommands.h
-    PipelineConfigurationUtils.h
-    ../GeoProc/GeometryAlgorithm.h
-    ../GeoProc/GeoProcUtil.h
-    ../GeoProc/MeshDatabase.h
-    ../GeoProc/NascentAnimController.h
-    ../GeoProc/NascentCommandStream.h
-    ../GeoProc/NascentModel.h
-    ../GeoProc/NascentObjectGuid.h
-    ../GeoProc/NascentObjectsSerialize.h
-    ../GeoProc/NascentRawGeometry.h
-    ../GeoProc/NascentSkeletonMachine.h)
 
-add_library(RenderCoreAssets STATIC ${Src} ${Headers})
 xle_configure_library(RenderCoreAssets)
 target_link_libraries(RenderCoreAssets PUBLIC ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
 

@@ -7,7 +7,7 @@
 #pragma once
 
 #include "NascentSkeletonMachine.h"
-#include "../RenderCore/Assets/TransformationCommands.h"		// (for TransformationParameterSet)
+#include "../RenderCore/Assets/TransformationCommands.h"		// (for AnimatedParameterSet)
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include <vector>
 #include <string>
@@ -103,8 +103,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     public:
         NascentSkeletonMachine&				GetSkeletonMachine()			{ return _skeletonMachine; }
         const NascentSkeletonMachine&		GetSkeletonMachine() const		{ return _skeletonMachine; }
-		TransformationParameterSet&         GetDefaultParameters()			{ return _defaultParameters; }
-		const TransformationParameterSet&   GetDefaultParameters() const	{ return _defaultParameters; }
+		AnimatedParameterSet&         GetDefaultParameters()			{ return _defaultParameters; }
+		const AnimatedParameterSet&   GetDefaultParameters() const	{ return _defaultParameters; }
 
 		void	WriteStaticTransform(const Float4x4& transform);
 		void	WriteTranslationParameter(StringSection<> parameterName, const Float3& defaultValue);
@@ -120,7 +120,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     private:
         NascentSkeletonMachine		_skeletonMachine;
-		TransformationParameterSet	_defaultParameters;
+		AnimatedParameterSet	_defaultParameters;
     };
 
         //

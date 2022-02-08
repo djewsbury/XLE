@@ -9,7 +9,7 @@
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; } }
-namespace RenderCore { namespace Assets { class SkeletonMachine; class TransformationParameterSet; } }
+namespace RenderCore { namespace Assets { class SkeletonMachine; class AnimatedParameterSet; } }
 
 namespace RenderOverlays
 {

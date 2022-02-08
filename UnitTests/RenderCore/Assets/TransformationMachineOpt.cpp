@@ -64,13 +64,13 @@ namespace UnitTests
         //         auto transform = AsFloat4x4(temp);
         // 
         //         if (writeComments) {
-        //             machine.push_back((uint32)TransformStackCommand::Comment);
+        //             machine.push_back((uint32)TransformCommand::Comment);
         //             std::string comment = "Transform";
         //             comment.resize(64, 0);
         //             machine.insert(machine.end(), (uint32*)AsPointer(comment.begin()), (uint32*)AsPointer(comment.begin()+64));
         //         }
         // 
-        //         machine.push_back((uint32)TransformStackCommand::TransformFloat4x4_Static);
+        //         machine.push_back((uint32)TransformCommand::TransformFloat4x4_Static);
         //         machine.insert(machine.end(), (uint32*)(&transform), (uint32*)(&transform + 1));
         //     }
         //     return;
@@ -109,12 +109,12 @@ namespace UnitTests
             }
 
             if (writeComments) {
-                machine.push_back((uint32)TransformStackCommand::Comment);
+                machine.push_back((uint32)TransformCommand::Comment);
                 comment.resize(64, 0);
                 machine.insert(machine.end(), (uint32*)AsPointer(comment.begin()), (uint32*)AsPointer(comment.begin()+64));
             }
 
-            machine.push_back((uint32)TransformStackCommand::TransformFloat4x4_Static);
+            machine.push_back((uint32)TransformCommand::TransformFloat4x4_Static);
             machine.insert(machine.end(), (uint32*)(&transform), (uint32*)(&transform + 1));
         }
     }
@@ -184,7 +184,7 @@ namespace UnitTests
                 InsertRandomTransforms(machine, rng, 40, i==0);
 
                     // write out a single output matrix:
-                machine.push_back((uint32)TransformStackCommand::WriteOutputMatrix);
+                machine.push_back((uint32)TransformCommand::WriteOutputMatrix);
                 machine.push_back(0);
 
                 Optimizer opt;
