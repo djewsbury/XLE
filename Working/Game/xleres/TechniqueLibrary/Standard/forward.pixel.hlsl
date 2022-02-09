@@ -45,6 +45,14 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	return result;
 }
 
+#if (VULKAN!=1)
+	[earlydepthstencil]
+#endif
+float4 frameworkEntryCustomLighting(VSOUT geo, SystemInputs sys) : SV_Target0
+{
+	return PerPixelCustomLighting(geo);
+}
+
 float4 frameworkEntryWithEarlyRejection(VSOUT geo, SystemInputs sys) : SV_Target0
 {
 	if (EarlyRejectionTest(geo))

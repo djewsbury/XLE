@@ -7,6 +7,7 @@ float4 AmendColor(VSOUT geo, float4 inputColor);
 
 bool EarlyRejectionTest(VSOUT geo);
 GBufferValues PerPixel(VSOUT geo);
+float4 PerPixelCustomLighting(VSOUT geo);
     
 void PerPixel_Separate(
     VSOUT geo, 

@@ -115,6 +115,10 @@ Forward_PerPixelAndEarlyRejection=~
 	Inherit=~; Forward
 	PixelShader=xleres/TechniqueLibrary/Standard/forward.pixel.hlsl:frameworkEntryWithEarlyRejection
 
+Forward_PerPixelCustomLighting=~
+	Inherit=~; Forward
+	PixelShader=xleres/TechniqueLibrary/Standard/forward.pixel.hlsl:frameworkEntryCustomLighting
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 DepthOnly_NoPatches=~
