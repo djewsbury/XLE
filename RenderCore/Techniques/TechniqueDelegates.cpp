@@ -129,10 +129,12 @@ namespace RenderCore { namespace Techniques
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static const auto s_perPixel = Hash64("PerPixel");
+	static const auto s_perPixelCustomLighting = Hash64("PerPixelCustomLighting");
 	static const auto s_earlyRejectionTest = Hash64("EarlyRejectionTest");
 	static const auto s_vertexPatch = Hash64("VertexPatch");
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelAndEarlyRejection[] = { {s_perPixel, ShaderStage::Pixel}, {s_earlyRejectionTest, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixel[] = { {s_perPixel, ShaderStage::Pixel} };
+	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelCustomLighting[] = { {s_perPixelCustomLighting, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_earlyRejection[] = { {s_earlyRejectionTest, ShaderStage::Pixel} };
 	static std::pair<uint64_t, ShaderStage> s_patchExp_deformVertex[] = { { s_vertexPatch, ShaderStage::Vertex } };
 
@@ -144,6 +146,8 @@ namespace RenderCore { namespace Techniques
 			} else {
 				return IllumType::PerPixel;
 			}
+		} else if (shaderPatches.HasPatchType(s_perPixelCustomLighting)) {
+			return IllumType::PerPixelCustomLighting;
 		}
 		return IllumType::NoPerPixel;
 	}
@@ -282,6 +286,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _noPatches;
 			TechniqueEntry _perPixel;
 			TechniqueEntry _perPixelAndEarlyRejection;
+			TechniqueEntry _perPixelCustomLighting;
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
 
@@ -293,20 +298,22 @@ namespace RenderCore { namespace Techniques
 				const auto noPatchesHash = Hash64("Forward_NoPatches");
 				const auto perPixelHash = Hash64("Forward_PerPixel");
 				const auto perPixelAndEarlyRejectionHash = Hash64("Forward_PerPixelAndEarlyRejection");
+				const auto perPixelCustomLightingHash = Hash64("Forward_PerPixelCustomLighting");
 				const auto vsNoPatchesHash = Hash64("VS_NoPatches");
 				const auto vsDeformVertexHash = Hash64("VS_DeformVertex");
 				auto* noPatchesSrc = _techniqueSet->FindEntry(noPatchesHash);
 				auto* perPixelSrc = _techniqueSet->FindEntry(perPixelHash);
 				auto* perPixelAndEarlyRejectionSrc = _techniqueSet->FindEntry(perPixelAndEarlyRejectionHash);
+				auto* perPixelCustomLightingSrc = _techniqueSet->FindEntry(perPixelCustomLightingHash);
 				auto* vsNoPatchesSrc = _techniqueSet->FindEntry(vsNoPatchesHash);
 				auto* vsDeformVertexSrc = _techniqueSet->FindEntry(vsDeformVertexHash);
-				if (!noPatchesSrc || !perPixelSrc || !perPixelAndEarlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc) {
+				if (!noPatchesSrc || !perPixelSrc || !perPixelAndEarlyRejectionSrc || !vsNoPatchesSrc || !vsDeformVertexSrc || !perPixelCustomLightingSrc) {
 					Throw(std::runtime_error("Could not construct technique delegate because required configurations were not found"));
 				}
-
 				_noPatches = *noPatchesSrc;
 				_perPixel = *perPixelSrc;
 				_perPixelAndEarlyRejection = *perPixelAndEarlyRejectionSrc;
+				_perPixelCustomLighting = *perPixelCustomLightingSrc;
 				_vsNoPatchesSrc = *vsNoPatchesSrc;
 				_vsDeformVertexSrc = *vsDeformVertexSrc;
 			}
@@ -352,6 +359,9 @@ namespace RenderCore { namespace Techniques
 						psTechEntry = &techniqueFileHelper->_perPixelAndEarlyRejection;
 						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
 						break;
+					case IllumType::PerPixelCustomLighting:
+						psTechEntry = &techniqueFileHelper->_perPixelCustomLighting;
+						nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
 					default:
 						break;
 					}
