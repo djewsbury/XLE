@@ -151,7 +151,7 @@ namespace RenderCore { namespace Assets
     class SkeletonScaffold
     {
     public:
-        const SkeletonMachine&			GetTransformationMachine() const;
+        const SkeletonMachine&			GetSkeletonMachine() const;
 
 		const ::Assets::DependencyValidation&					GetDependencyValidation() const { return _depVal;  }
 

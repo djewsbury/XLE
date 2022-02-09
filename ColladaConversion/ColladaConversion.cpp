@@ -506,7 +506,7 @@ namespace ColladaConversion
                 for (auto c=anim._curves.begin(); c!=anim._curves.end(); ++c) {
                     unsigned curveIndex = result.AddCurve(std::move(c->_curve));
                     result.AddAnimationDriver(
-                        c->_parameterName, curveIndex,
+                        c->_parameterName, c->_parameterComponent, curveIndex,
                         c->_samplerType, c->_samplerOffset);
                 }
             } CATCH (...) {

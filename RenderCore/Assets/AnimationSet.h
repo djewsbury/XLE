@@ -87,13 +87,14 @@ namespace RenderCore { namespace Assets
 			IteratorRange<const ParameterBindingRules*> parameterBindingRules) const;
 
 		Animation				FindAnimation(uint64_t animation) const;
-		unsigned				FindParameter(uint64_t parameterName) const;
+		unsigned				FindParameter(uint64_t parameterName, AnimSamplerComponent component) const;
 		StringSection<>			LookupStringName(uint64_t animation) const;
 
 		IteratorRange<const AnimationDriver*> GetAnimationDrivers() const { return MakeIteratorRange(_animationDrivers); }
 		IteratorRange<const ConstantDriver*> GetConstantDrivers() const { return MakeIteratorRange(_constantDrivers); }
 		IteratorRange<const AnimationAndName*> GetAnimations() const { return MakeIteratorRange(_animations); }
 		IteratorRange<const void*> GetConstantData() const { return MakeIteratorRange(_constantData); }
+		IteratorRange<const RawAnimationCurve*>	GetCurves() const { return MakeIteratorRange(_curves); }
 
 		struct OutputPart
 		{
@@ -102,7 +103,7 @@ namespace RenderCore { namespace Assets
 			AnimSamplerType _samplerType;
 		};
 		using OutputInterface = IteratorRange<const OutputPart*>;
-		OutputInterface	GetOutputInterface() const;
+		OutputInterface	GetOutputInterface() const { return MakeIteratorRange(_outputInterface); }
 
 		AnimationSet();
 		~AnimationSet();
@@ -116,7 +117,7 @@ namespace RenderCore { namespace Assets
 		SerializableVector<ConstantDriver>		_constantDrivers;
 		SerializableVector<uint8_t>				_constantData;
 		SerializableVector<AnimationAndName>	_animations;
-		SerializableVector<uint64_t>			_outputInterface;
+		SerializableVector<OutputPart>			_outputInterface;
 		SerializableVector<RawAnimationCurve>	_curves;
 
 		SerializableVector<unsigned>			_stringNameBlockOffsets;

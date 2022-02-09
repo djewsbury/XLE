@@ -37,7 +37,7 @@ namespace RenderCore { namespace Assets
         case TransformCommand::RotateX_Static:             return cmd+1+(1);
         case TransformCommand::RotateY_Static:             return cmd+1+(1);
         case TransformCommand::RotateZ_Static:             return cmd+1+(1);
-        case TransformCommand::RotateAxisAngle_Static:              return cmd+1+(4);
+        case TransformCommand::RotateAxisAngle_Static:     return cmd+1+(4);
 		case TransformCommand::RotateQuaternion_Static:    return cmd+1+(4);
         case TransformCommand::UniformScale_Static:        return cmd+1+(1);
         case TransformCommand::ArbitraryScale_Static:      return cmd+1+(3);
@@ -114,9 +114,13 @@ namespace RenderCore { namespace Assets
 
     static bool IsTransformCommand(TransformCommand cmd)
     {
-        return 
-                (cmd >= TransformCommand::TransformFloat4x4_Static && cmd <= TransformCommand::ArbitraryScale_Static)
+        return  (cmd >= TransformCommand::TransformFloat4x4_Static && cmd <= TransformCommand::ArbitraryScale_Static)
             ||  (cmd >= TransformCommand::TransformFloat4x4_Parameter && cmd <= TransformCommand::ArbitraryScale_Parameter);
+    }
+
+    static bool IsBindingPointCommand(TransformCommand cmd)
+    {
+        return  (cmd >= TransformCommand::BindingPoint_0 && cmd <= TransformCommand::BindingPoint_3);
     }
 
 	static bool IsOutputCommand(TransformCommand cmd)
@@ -135,7 +139,7 @@ namespace RenderCore { namespace Assets
         bool foundTransformCmd = false;
         for (;i<end;) {
             auto cmd = TransformCommand(*i);
-            if (IsTransformCommand(cmd)) {
+            if (IsTransformCommand(cmd) || IsBindingPointCommand(cmd)) {
                 foundTransformCmd = true;
             } else if (cmd == TransformCommand::PushLocalToWorld) {
                 ++i;
@@ -237,7 +241,7 @@ namespace RenderCore { namespace Assets
 		for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
 			auto nexti = NextTransformationCommand_(i);
 			auto cmd = TransformCommand(*i);
-            if (IsTransformCommand(cmd)) {
+            if (IsTransformCommand(cmd) || IsBindingPointCommand(cmd)) {
 				if (!HasFollowingOutputCommand(nexti, cmdStream.end())) {
 					i = cmdStream.erase(i, nexti);
 					continue;
@@ -290,10 +294,15 @@ namespace RenderCore { namespace Assets
             auto type = AsMergeType(TransformCommand(*i));
             if (type == MergeType::StaticTransform || type == MergeType::Blocker) {
                 // Hitting a static transform blocks any further searches
-                // We can just skip until we pop out of this block
+                // We can just skip until we pop out of this block (or hit the end of the cmd list)
                 result.push_back(i-range.begin());
                 i = SkipUntilPop(i, range.end(), finalIdentLevel);
-                return NextTransformationCommand_(i);
+                if (i == range.end()) {
+                    assert(finalIdentLevel == 1);
+                    return i;
+                } else {
+                    return NextTransformationCommand_(i);
+                }
             } else if (type == MergeType::OutputMatrix) {
                 result.push_back(i-range.begin());
                 i = NextTransformationCommand_(i);
@@ -1406,13 +1415,14 @@ namespace RenderCore { namespace Assets
             case TransformCommand::BindingPoint_1:
             case TransformCommand::BindingPoint_2:
             case TransformCommand::BindingPoint_3:
-                stream << indentBuffer << "Binding point for parameter [" << *i << "]";
-                if (parameterToName) 
-                    stream << " (" << parameterToName(*i) << ")" << std::endl;
-                i++;
-
-                // handle defaults
                 {
+                    uint64_t param = (*i) | (uint64_t(*(i+1)) << 32ull);
+                    stream << indentBuffer << "Binding point for parameter [0x" << std::hex << param << std::dec << "]";
+                    if (parameterToName) 
+                        stream << " (" << parameterToName(param) << ")" << std::endl;
+                    i+=2;
+
+                    // handle defaults
                     unsigned defaultCount = 0;
                     if (commandIndex == (uint32_t)TransformCommand::BindingPoint_0) {
                         stream << " with no defaults" << std::endl;
@@ -1427,8 +1437,7 @@ namespace RenderCore { namespace Assets
                         defaultCount = 3;
                     }
                     while (defaultCount--) {
-                        auto cmd = *(TransformCommand*)i;
-                        ++i;
+                        auto cmd = *(TransformCommand*)i++;
                         stream << doubleIndentBuffer << "Default: ";
                         i = TraceStaticTransformCommand(stream, cmd, i);
                         stream << std::endl;

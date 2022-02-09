@@ -24,7 +24,7 @@ namespace RenderCore { namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    const SkeletonMachine&   SkeletonScaffold::GetTransformationMachine() const                
+    const SkeletonMachine&   SkeletonScaffold::GetSkeletonMachine() const                
     {
         return *(const SkeletonMachine*)::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
     }
@@ -49,7 +49,7 @@ namespace RenderCore { namespace Assets
     SkeletonScaffold& SkeletonScaffold::operator=(SkeletonScaffold&& moveFrom) never_throws
     {
 		if (_rawMemoryBlock)
-            GetTransformationMachine().~SkeletonMachine();
+            GetSkeletonMachine().~SkeletonMachine();
         _rawMemoryBlock = std::move(moveFrom._rawMemoryBlock);
 		_depVal = std::move(moveFrom._depVal);
         return *this;
@@ -60,7 +60,7 @@ namespace RenderCore { namespace Assets
     SkeletonScaffold::~SkeletonScaffold()
     {
         if (_rawMemoryBlock)
-		    GetTransformationMachine().~SkeletonMachine();
+		    GetSkeletonMachine().~SkeletonMachine();
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

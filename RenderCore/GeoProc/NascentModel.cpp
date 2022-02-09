@@ -413,7 +413,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		//
 		auto result = InvalidBoundingBox();
 		// const auto finalMatrices = 
-		//     _skeleton.GetTransformationMachine().GenerateOutputTransforms(
+		//     _skeleton.GetSkeletonMachine().GenerateOutputTransforms(
 		//         _animationSet.BuildTransformationParameterSet(0.f, nullptr, _skeleton, _objects));
 
 		//

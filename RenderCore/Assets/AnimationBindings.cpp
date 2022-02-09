@@ -88,7 +88,11 @@ namespace RenderCore { namespace Assets
 		{
 			if (_fullTransform)
 				return _fullTransform.value()._rotation;
-			if (_defaultRotationCmds.empty()) return Identity<Quaternion>();
+			if (_defaultRotationCmds.empty()) {
+				Quaternion q;
+				q.identity();
+				return q;
+			}
 			auto rotation = TransformationCommandsToMatrix(_defaultRotationCmds);
 			auto rotMat = Truncate3x3(rotation);
 			Quaternion result;

@@ -469,7 +469,7 @@ namespace ColladaConversion
                 std::move(keyBlock),
 				keyDataDesc, interpolationType);
             result._curves.emplace_back(
-				UnboundAnimation::Curve { i->first, std::move(curve), samplerType, 0 } );
+				UnboundAnimation::Curve { i->first, std::move(curve), samplerType, 0, RenderCore::Assets::AnimSamplerComponent::None } );       // todo -- assign AnimSamplerComponent?
             
             i = i2;
         }

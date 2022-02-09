@@ -20,6 +20,7 @@
 #include "../Assets/ModelScaffoldInternal.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../Assets/MaterialScaffold.h"
+#include "../Assets/AnimationBindings.h"
 #include "../Assets/ShaderPatchCollection.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Types.h"
@@ -776,7 +777,7 @@ namespace RenderCore { namespace Techniques
 
         _baseTransformCount = skeleton.GetOutputMatrixCount();
         _baseTransforms = std::make_unique<Float4x4[]>(_baseTransformCount);
-        skeleton.GenerateOutputTransforms(MakeIteratorRange(_baseTransforms.get(), _baseTransforms.get() + _baseTransformCount), &skeleton.GetDefaultParameters());
+        skeleton.GenerateOutputTransforms(MakeIteratorRange(_baseTransforms.get(), _baseTransforms.get() + _baseTransformCount));
 
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
@@ -1089,13 +1090,14 @@ namespace RenderCore { namespace Techniques
 	{
 		auto& cmdStream = scaffoldActual->CommandStream();
 		RenderCore::Assets::SkeletonBinding binding {
-			skeletonActual->GetTransformationMachine().GetOutputInterface(),
+			skeletonActual->GetSkeletonMachine().GetOutputInterface(),
 			cmdStream.GetInputInterface() };
 
-		std::vector<Float4x4> defaultTransforms(skeletonActual->GetTransformationMachine().GetOutputInterface()._outputMatrixNameCount);
-		skeletonActual->GetTransformationMachine().GenerateOutputTransforms(
+#if TEMP
+		std::vector<Float4x4> defaultTransforms(skeletonActual->GetSkeletonMachine().GetOutputInterface()._outputMatrixNameCount);
+		skeletonActual->GetSkeletonMachine().GenerateOutputTransforms(
 			MakeIteratorRange(defaultTransforms),
-			&skeletonActual->GetTransformationMachine().GetDefaultParameters());
+			&skeletonActual->GetSkeletonMachine().GetDefaultParameters());
 
 		auto& immutableData = scaffoldActual->ImmutableData();
 		for (const auto&skinnedGeo:MakeIteratorRange(immutableData._boundSkinnedControllers, &immutableData._boundSkinnedControllers[immutableData._boundSkinnedControllerCount])) {
@@ -1116,6 +1118,7 @@ namespace RenderCore { namespace Techniques
 				_sections.emplace_back(std::move(finalSection));
 			}
 		}
+#endif
 	}
 
 	SkinningUniformBufferDelegate::~SkinningUniformBufferDelegate()
