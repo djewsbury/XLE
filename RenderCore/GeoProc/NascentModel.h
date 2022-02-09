@@ -23,7 +23,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	class MeshDatabase;
 	class UnboundSkinController;
-	class NascentSkeletonMachine;
 	class NascentSkeleton;
 	struct NativeVBSettings;
 

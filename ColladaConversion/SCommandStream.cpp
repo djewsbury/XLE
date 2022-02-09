@@ -69,12 +69,11 @@ namespace ColladaConversion
     //}
 
     unsigned PushTransformations(
-        RenderCore::Assets::GeoProc::NascentSkeletonMachine& dst,
+        RenderCore::Assets::GeoProc::NascentSkeleton& dst,
         const Transformation& transformations,
         const char nodeName[],
         const std::function<bool(StringSection<>)>& predicate)
     {
-#if TEMP
 		using RenderCore::Assets::TransformCommand;
 
         if (!transformations)
@@ -84,7 +83,7 @@ namespace ColladaConversion
             //      Push in the commands for this node
             //
 
-        dst.PushCommand(TransformCommand::PushLocalToWorld);
+        dst.WritePushLocalToWorld();
         const unsigned pushCount = 1;
 
         #if defined(_DEBUG)
@@ -143,74 +142,62 @@ namespace ColladaConversion
 
             if  (type == TransformationSet::Type::Matrix4x4) {
 
-                    //
-                    //      Do we need 128 bit alignment for this matrix?
-                    //
-                uint32 paramIndex = ~0u;
-                if (    parameterType != ParameterType_Embedded
-                    &&  dst.TryAddParameter<Float4x4>(paramIndex, MakeStringSection(paramName))) {
+                RenderCore::Assets::GeoProc::NascentSkeleton::Transform transform;
+                transform._fullTransform = *(const Float4x4*)trans.GetUnionData();
 
-					defaultParameters.Set(paramIndex, *(const Float4x4*)trans.GetUnionData());
-                    dst.PushCommand(TransformCommand::TransformFloat4x4_Parameter);
-                    dst.PushCommand(paramIndex);
+                if (parameterType != ParameterType_Embedded) {
+                    dst.WriteParameterizedTransform(paramName, transform);
                 } else {
                     if (Equivalent(*(Float4x4*)trans.GetUnionData(), Identity<Float4x4>(), transformThreshold)) {
                         // ignore transform by identity
                     } else {
-                        dst.PushCommand(TransformCommand::TransformFloat4x4_Static);
-                        dst.PushCommand(trans.GetUnionData(), sizeof(Float4x4));
+                        dst.WriteStaticTransform(transform);
                     }
                 }
 
             } else if (type == TransformationSet::Type::Translate) {
 
-                uint32 paramIndex = ~0u;
-                if (    parameterType != ParameterType_Embedded
-                    &&  dst.TryAddParameter<Float3>(paramIndex, MakeStringSection(paramName))) {
+                RenderCore::Assets::GeoProc::NascentSkeleton::Transform transform;
+                transform._translation = *(const Float3*)trans.GetUnionData();
 
-					defaultParameters.Set(paramIndex, *(const Float3*)trans.GetUnionData());
-                    dst.PushCommand(TransformCommand::Translate_Parameter);
-                    dst.PushCommand(paramIndex);
+                if (    parameterType != ParameterType_Embedded) {
+                    dst.WriteParameterizedTransform(paramName, transform);
                 } else {
                     if (Equivalent(*(Float3*)trans.GetUnionData(), Float3(0.f, 0.f, 0.f), translationThreshold)) {
                         // ignore translate by zero
                     } else {
-                        dst.PushCommand(TransformCommand::Translate_Static);
-                        dst.PushCommand(trans.GetUnionData(), sizeof(Float3));
+                        dst.WriteStaticTransform(transform);
                     }
                 }
 
             } else if (type == TransformationSet::Type::Rotate) {
 
                 const auto& rot = *(const ArbitraryRotation*)trans.GetUnionData();
-                uint32 paramIndex = ~0u;
-                if (    parameterType != ParameterType_Embedded
-                    &&  dst.TryAddParameter<Float4>(paramIndex, MakeStringSection(paramName))) {
+                RenderCore::Assets::GeoProc::NascentSkeleton::Transform transform;
+                transform._rotationAsAxisAngle = rot;
 
-					defaultParameters.Set(paramIndex, *(const Float4*)&rot);
+                if (parameterType != ParameterType_Embedded) {
 
                         // Post animation, this may become a rotation around any axis. So
                         // we can't perform an optimisation to squish it to rotation around
                         // one of the cardinal axes
-                    dst.PushCommand(TransformCommand::RotateAxisAngle_Parameter);
-                    dst.PushCommand(paramIndex);
+                    dst.WriteParameterizedTransform(paramName, transform);
 
                 } else {
 
                     if (Equivalent(rot._angle, 0.f, rotationThreshold)) {
                         // the angle is too small -- just ignore it
                     } else if (signed x = rot.IsRotationX()) {
-                        dst.PushCommand(TransformCommand::RotateX_Static);
-                        dst.PushCommand(FloatBits(float(x) * rot._angle));
+                        dst.GetSkeletonMachine().PushCommand(TransformCommand::RotateX_Static);
+                        dst.GetSkeletonMachine().PushCommand(FloatBits(float(x) * rot._angle));
                     } else if (signed y = rot.IsRotationY()) {
-                        dst.PushCommand(TransformCommand::RotateY_Static);
-                        dst.PushCommand(FloatBits(float(y) * rot._angle));
+                        dst.GetSkeletonMachine().PushCommand(TransformCommand::RotateY_Static);
+                        dst.GetSkeletonMachine().PushCommand(FloatBits(float(y) * rot._angle));
                     } else if (signed z = rot.IsRotationZ()) {
-                        dst.PushCommand(TransformCommand::RotateZ_Static);
-                        dst.PushCommand(FloatBits(float(z) * rot._angle));
+                        dst.GetSkeletonMachine().PushCommand(TransformCommand::RotateZ_Static);
+                        dst.GetSkeletonMachine().PushCommand(FloatBits(float(z) * rot._angle));
                     } else {
-                        dst.PushCommand(TransformCommand::RotateAxisAngle_Static);
-                        dst.PushCommand(&rot, sizeof(rot));
+                        dst.WriteStaticTransform(transform);
                     }
 
                 }
@@ -228,36 +215,27 @@ namespace ColladaConversion
                     //
                 auto scale = *(const Float3*)trans.GetUnionData();
                 bool isUniform = Equivalent(scale[0], scale[1], scaleThreshold) && Equivalent(scale[0], scale[2], scaleThreshold);
-                bool writeEmbedded = true;
 
                 if (parameterType != ParameterType_Embedded) {
-                    uint32 paramIndex = ~0u;
                     if (isUniform) {
-                        if (dst.TryAddParameter<float>(paramIndex, MakeStringSection(paramName))) {
-							defaultParameters.Set(paramIndex, scale[0]);
-                            dst.PushCommand(TransformCommand::UniformScale_Parameter);
-                            dst.PushCommand(paramIndex);
-                            writeEmbedded = false;
-                        }
+                        RenderCore::Assets::GeoProc::NascentSkeleton::Transform transform;
+                        transform._uniformScale = scale[0];
+                        dst.WriteParameterizedTransform(paramName, transform);
                     } else {
-                        if (dst.TryAddParameter<Float3>(paramIndex, MakeStringSection(paramName))) {
-							defaultParameters.Set(paramIndex, scale);
-                            dst.PushCommand(TransformCommand::ArbitraryScale_Parameter);
-                            dst.PushCommand(paramIndex);
-                            writeEmbedded = false;
-                        }
+                        RenderCore::Assets::GeoProc::NascentSkeleton::Transform transform;
+                        transform._arbitraryScale = scale;
+                        dst.WriteParameterizedTransform(paramName, transform);
                     }
-                }
+                } else {
 
-                if (writeEmbedded) {
                     if (Equivalent(scale, Float3(1.f, 1.f, 1.f), scaleThreshold)) {
                         // scaling by 1 -- just ignore
                     } else if (isUniform) {
-                        dst.PushCommand(TransformCommand::UniformScale_Static);
-                        dst.PushCommand(FloatBits(scale[0]));
+                        dst.GetSkeletonMachine().PushCommand(TransformCommand::UniformScale_Static);
+                        dst.GetSkeletonMachine().PushCommand(FloatBits(scale[0]));
                     } else {
-                        dst.PushCommand(TransformCommand::ArbitraryScale_Static);
-                        dst.PushCommand(&scale, sizeof(scale));
+                        dst.GetSkeletonMachine().PushCommand(TransformCommand::ArbitraryScale_Static);
+                        dst.GetSkeletonMachine().PushCommand(&scale, sizeof(scale));
                     }
                 }
 
@@ -269,9 +247,6 @@ namespace ColladaConversion
         }
 
         return pushCount;
-#else
-        return 0;
-#endif
     }
 
 	void BuildSkeleton(RenderCore::Assets::GeoProc::NascentSkeleton& skeleton, const Node& node, StringSection<> skeletonName)
@@ -280,7 +255,7 @@ namespace ColladaConversion
         auto bindingName = SkeletonBindingName(node);
 
 		auto pushCount = PushTransformations(
-			skeleton.GetSkeletonMachine(),
+			skeleton,
 			node.GetFirstTransform(), bindingName.c_str(),
 			[](StringSection<>) { return true; });
 
@@ -294,7 +269,7 @@ namespace ColladaConversion
             child = child.GetNextSibling();
         }
 
-        skeleton.GetSkeletonMachine().Pop(pushCount);
+        skeleton.WritePopLocalToWorld(pushCount);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

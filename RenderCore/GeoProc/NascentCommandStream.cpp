@@ -277,8 +277,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     void NascentAnimationSet::SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
     {
 		AnimationSet finalAnimationSet;
-		finalAnimationSet._animationDrivers.insert(finalAnimationSet._animationDrivers.begin(), _animationDrivers.begin(), _animationDrivers.end());
-		finalAnimationSet._constantDrivers.insert(finalAnimationSet._constantDrivers.begin(), _constantDrivers.begin(), _constantDrivers.end());
+		finalAnimationSet._animationDrivers.insert(finalAnimationSet._animationDrivers.end(), _animationDrivers.begin(), _animationDrivers.end());
+		finalAnimationSet._constantDrivers.insert(finalAnimationSet._constantDrivers.end(), _constantDrivers.begin(), _constantDrivers.end());
 
 		finalAnimationSet._animations.reserve(_animations.size());
 		for (const auto&a:_animations)
@@ -292,7 +292,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			finalAnimationSet._outputInterface.push_back({p.first._hashForm, p.second, samplerType});
 		}
 
-		finalAnimationSet._constantData.insert(finalAnimationSet._constantData.begin(), _constantData.begin(), _constantData.end());
+		finalAnimationSet._curves.insert(finalAnimationSet._curves.end(), _curves.begin(), _curves.end());
+
+		finalAnimationSet._constantData.insert(finalAnimationSet._constantData.end(), _constantData.begin(), _constantData.end());
 
 		// Construct the string name block (note that we have write the names in their final sorted order)
 		for (const auto&a:finalAnimationSet._animations) {
@@ -308,8 +310,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		finalAnimationSet._stringNameBlockOffsets.push_back((unsigned)finalAnimationSet._stringNameBlock.size());
 		
 		SerializationOperator(serializer, finalAnimationSet);
-
-		SerializationOperator(serializer, _curves);
     }
 
 	static std::ostream& SerializationOperator(
@@ -390,6 +390,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		if (transform._rotationAsQuaternion) {
 			result.push_back((uint32_t)TransformCommand::RotateQuaternion_Static);
 			result.insert(result.end(), (const uint32_t*)&transform._rotationAsQuaternion.value(), (const uint32_t*)(&transform._rotationAsQuaternion.value()+1));
+			++cmdCount;
+		} else if (transform._rotationAsAxisAngle) {
+			result.push_back((uint32_t)TransformCommand::RotateAxisAngle_Static);
+			result.insert(result.end(), (const uint32_t*)&transform._rotationAsAxisAngle.value(), (const uint32_t*)(&transform._rotationAsAxisAngle.value()+1));
 			++cmdCount;
 		}
 

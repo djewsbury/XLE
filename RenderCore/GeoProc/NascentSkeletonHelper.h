@@ -15,13 +15,12 @@
 namespace RenderCore { namespace Assets
 {
 	enum class TransformCommand : uint32_t;
-	enum class AnimSamplerType;
 	class ITransformationMachineOptimizer;
 }}
 
-namespace RenderCore { namespace Assets { namespace GeoProc
+namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 {
-    class NascentSkeletonMachine
+    class NascentSkeletonHelper
     {
     public:
         unsigned        GetOutputMatrixCount    () const        { return _outputMatrixCount; }
@@ -33,7 +32,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::unique_ptr<Float4x4[]>		GenerateOutputTransforms() const;
 
 		using JointTag = std::pair<std::string, std::string>;
-		using ParameterTag = std::string;
 
 		IteratorRange<const JointTag*>	GetOutputInterface() const { return MakeIteratorRange(_jointTags); }
 		void							SetOutputInterface(IteratorRange<const JointTag*> jointNames);
@@ -45,7 +43,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         friend std::ostream& SerializationOperator(
 			std::ostream& stream, 
-			const NascentSkeletonMachine& transMachine);
+			const NascentSkeletonHelper& transMachine);
 
         void    PushCommand(uint32_t cmd);
         void    PushCommand(TransformCommand cmd);
@@ -56,10 +54,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         void    Optimize(ITransformationMachineOptimizer& optimizer);
 		void	RemapOutputMatrices(IteratorRange<const unsigned*> outputMatrixMapping);
 
-        NascentSkeletonMachine();
-        NascentSkeletonMachine(NascentSkeletonMachine&& machine) = default;
-        NascentSkeletonMachine& operator=(NascentSkeletonMachine&& moveFrom) = default;
-        ~NascentSkeletonMachine();
+        NascentSkeletonHelper();
+        NascentSkeletonHelper(NascentSkeletonHelper&& machine) = default;
+        NascentSkeletonHelper& operator=(NascentSkeletonHelper&& moveFrom) = default;
+        ~NascentSkeletonHelper();
 
     protected:
         std::vector<uint32_t>     _commandStream;
@@ -73,7 +71,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		void			ResolvePendingPops();
     };
 
-}}}
+}}}}
 
 
 

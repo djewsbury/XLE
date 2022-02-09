@@ -143,6 +143,7 @@ namespace RenderCore { namespace Assets
 		SerializationOperator(serializer, _constantData);
 		SerializationOperator(serializer, _animations);
 		SerializationOperator(serializer, _outputInterface);
+		SerializationOperator(serializer, _curves);
 		SerializationOperator(serializer, _stringNameBlockOffsets);
 		SerializationOperator(serializer, _stringNameBlock);
 	}

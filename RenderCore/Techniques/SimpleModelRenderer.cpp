@@ -1093,11 +1093,8 @@ namespace RenderCore { namespace Techniques
 			skeletonActual->GetSkeletonMachine().GetOutputInterface(),
 			cmdStream.GetInputInterface() };
 
-#if TEMP
 		std::vector<Float4x4> defaultTransforms(skeletonActual->GetSkeletonMachine().GetOutputInterface()._outputMatrixNameCount);
-		skeletonActual->GetSkeletonMachine().GenerateOutputTransforms(
-			MakeIteratorRange(defaultTransforms),
-			&skeletonActual->GetSkeletonMachine().GetDefaultParameters());
+		skeletonActual->GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(defaultTransforms));
 
 		auto& immutableData = scaffoldActual->ImmutableData();
 		for (const auto&skinnedGeo:MakeIteratorRange(immutableData._boundSkinnedControllers, &immutableData._boundSkinnedControllers[immutableData._boundSkinnedControllerCount])) {
@@ -1118,7 +1115,6 @@ namespace RenderCore { namespace Techniques
 				_sections.emplace_back(std::move(finalSection));
 			}
 		}
-#endif
 	}
 
 	SkinningUniformBufferDelegate::~SkinningUniformBufferDelegate()

@@ -127,7 +127,7 @@ namespace RenderCore { namespace Assets
 
 				auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
 				std::vector<std::string> files;
-				std::regex fileMatcher{R"(.*\.[hH][kK][xX])"};
+				std::regex fileMatcher{R"(.*\.(([hH][kK][xX])|([dD][aA][eE])))"};
 				for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
 					auto f = w.Desc()._mountedName;
 					if (std::regex_match(f.begin(), f.end(), fileMatcher))

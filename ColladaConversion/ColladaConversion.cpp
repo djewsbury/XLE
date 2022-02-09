@@ -475,15 +475,6 @@ namespace ColladaConversion
 
     std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeMaterials(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
     { 
-        // std::string matSettingsFile;
-        // {
-        //     ::Assets::ResChar settingsName[MaxPath];
-        //     XlBasename(settingsName, dimof(settingsName), model._name.c_str());
-        //     XlChopExtension(settingsName);
-        //     XlCatString(settingsName, dimof(settingsName), ".material");
-        //     matSettingsFile = settingsName;
-        // }
-
         MemoryOutputStream<char> strm;
         SerializeMatTable(strm, model);
         return {

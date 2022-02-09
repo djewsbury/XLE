@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "NascentSkeletonMachine.h"
+#include "NascentSkeletonHelper.h"
 #include "../Assets/TransformationCommands.h"
 #include "../RenderUtils.h"
 #include "../../Assets/Assets.h"
@@ -13,9 +13,9 @@
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 
-namespace RenderCore { namespace Assets { namespace GeoProc
+namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 {
-	std::unique_ptr<Float4x4[]>           NascentSkeletonMachine::GenerateOutputTransforms() const
+	std::unique_ptr<Float4x4[]>           NascentSkeletonHelper::GenerateOutputTransforms() const
 	{
 		std::unique_ptr<Float4x4[]> result = std::make_unique<Float4x4[]>(size_t(_outputMatrixCount));
 		RenderCore::Assets::GenerateOutputTransforms(
@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
-	void        NascentSkeletonMachine::WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName)
+	void        NascentSkeletonHelper::WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName)
 	{
 		uint32_t marker = ~0u;
 		if (!TryRegisterJointName(marker, skeletonName, jointName))
@@ -36,31 +36,31 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_commandStream.push_back(marker);
 	}
 
-	void		NascentSkeletonMachine::Pop(unsigned popCount)
+	void		NascentSkeletonHelper::Pop(unsigned popCount)
 	{
 		_pendingPops += popCount;
 	}
 
-	void NascentSkeletonMachine::PushCommand(uint32_t cmd)
+	void NascentSkeletonHelper::PushCommand(uint32_t cmd)
 	{
 		ResolvePendingPops();
 		_commandStream.push_back(cmd);
 	}
 
-	void NascentSkeletonMachine::PushCommand(TransformCommand cmd)
+	void NascentSkeletonHelper::PushCommand(TransformCommand cmd)
 	{
 		ResolvePendingPops();
 		_commandStream.push_back((uint32_t)cmd);
 	}
 
-	void NascentSkeletonMachine::PushCommand(const void* ptr, size_t size)
+	void NascentSkeletonHelper::PushCommand(const void* ptr, size_t size)
 	{
 		ResolvePendingPops();
 		assert((size % sizeof(uint32_t)) == 0);
 		_commandStream.insert(_commandStream.end(), (const uint32_t*)ptr, (const uint32_t*)PtrAdd(ptr, size));
 	}
 
-	void NascentSkeletonMachine::ResolvePendingPops()
+	void NascentSkeletonHelper::ResolvePendingPops()
 	{
 		if (_pendingPops) {
 			_commandStream.push_back((uint32_t)Assets::TransformCommand::PopLocalToWorld);
@@ -69,14 +69,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	void NascentSkeletonMachine::Optimize(ITransformationMachineOptimizer& optimizer)
+	void NascentSkeletonHelper::Optimize(ITransformationMachineOptimizer& optimizer)
 	{
 		ResolvePendingPops();
 		auto optimized = OptimizeTransformationMachine(MakeIteratorRange(_commandStream), optimizer);
 		_commandStream = std::move(optimized);
 	}
 
-	void	NascentSkeletonMachine::RemapOutputMatrices(IteratorRange<const unsigned*> outputMatrixMapping)
+	void	NascentSkeletonHelper::RemapOutputMatrices(IteratorRange<const unsigned*> outputMatrixMapping)
 	{
 		ResolvePendingPops();
 		_commandStream = RenderCore::Assets::RemapOutputMatrices(
@@ -89,7 +89,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_outputMatrixCount = newOutputMatrixCount;
 	}
 
-	void NascentSkeletonMachine::FilterOutputInterface(IteratorRange<const std::pair<std::string, std::string>*> filterIn)
+	void NascentSkeletonHelper::FilterOutputInterface(IteratorRange<const std::pair<std::string, std::string>*> filterIn)
 	{
 		auto oldOutputInterface = GetOutputInterface();
 		std::vector<std::pair<std::string, std::string>> newOutputInterface;
@@ -112,24 +112,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SetOutputInterface(MakeIteratorRange(newOutputInterface));
 	}
 
-    NascentSkeletonMachine::NascentSkeletonMachine() : _pendingPops(0), _outputMatrixCount(0) {}
-    NascentSkeletonMachine::~NascentSkeletonMachine() {}
+    NascentSkeletonHelper::NascentSkeletonHelper() : _pendingPops(0), _outputMatrixCount(0) {}
+    NascentSkeletonHelper::~NascentSkeletonHelper() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	#pragma pack(push)
-	#pragma pack(1)
-		struct NascentSkeletonInterface_Param    /* must match SkeletonMachine::InputInterface::Parameter */
-		{
-			uint64				_name;
-			uint32_t				_index;
-			AnimSamplerType		_type;
-			static const bool SerializeRaw = true;
-		};
-	#pragma pack(pop)
-
 	template <>
-		void    NascentSkeletonMachine::SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const
+		void    NascentSkeletonHelper::SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const
 	{
 		//
 		//		Write the command stream
@@ -153,13 +142,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(outputSerializer, boneNames);
 	}
 
-	void NascentSkeletonMachine::SetOutputInterface(IteratorRange<const JointTag*> jointNames)
+	void NascentSkeletonHelper::SetOutputInterface(IteratorRange<const JointTag*> jointNames)
 	{
 		_jointTags.clear();
 		_jointTags.insert(_jointTags.end(), jointNames.begin(), jointNames.end());
 	}
 
-	std::vector<uint64_t> NascentSkeletonMachine::BuildHashedOutputInterface() const
+	std::vector<uint64_t> NascentSkeletonHelper::BuildHashedOutputInterface() const
 	{
 		std::vector<uint64_t> hashedInterface;
 		hashedInterface.reserve(_jointTags.size());
@@ -169,7 +158,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	std::ostream& SerializationOperator(
 		std::ostream& stream, 
-		const NascentSkeletonMachine& transMachine)
+		const NascentSkeletonHelper& transMachine)
 	{
 		stream << "Output matrices: " << transMachine._jointTags.size() << std::endl;
 		stream << "Command stream size: " << transMachine._commandStream.size() * sizeof(uint32_t) << std::endl;
@@ -187,10 +176,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (outputMatrixIndex < transMachine._jointTags.size())
 					return transMachine._jointTags[outputMatrixIndex].first + " : " + transMachine._jointTags[outputMatrixIndex].second;
 				return {};
-			},
-			[&transMachine](unsigned parameterIndex) -> std::string
-			{
-				return {};
 			});
 
 		{
@@ -206,13 +191,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return stream;
 	}
 
-    bool    NascentSkeletonMachine::TryRegisterJointName(uint32_t& outputMarker, StringSection<> skeletonName, StringSection<> jointName)
+    bool    NascentSkeletonHelper::TryRegisterJointName(uint32_t& outputMarker, StringSection<> skeletonName, StringSection<> jointName)
     {
 		outputMarker = (uint32_t)_jointTags.size();
 		_jointTags.push_back({skeletonName.AsString(), jointName.AsString()});	// (note -- not checking for duplicates)
         return true;
     }
 
-}}}
+}}}}
 
 

@@ -12,6 +12,8 @@ namespace XLEMath
         bool goodDecomposition = false;
         ScaleRotationTranslationM decomposed{transform, goodDecomposition};
 
+        auto originalPrecision = str.precision(4);
+
         if (goodDecomposition) {
             bool first = true;
             if (!Equivalent(decomposed._scale, Float3(1,1,1), 1e-3f)) {
@@ -59,6 +61,8 @@ namespace XLEMath
                 str << "}";
             }
         }
+
+        str.precision(originalPrecision);
 
         return str;
     }

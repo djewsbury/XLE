@@ -191,15 +191,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     };
 
     static DefaultPoseData CalculateDefaultPoseData(
-        const NascentSkeletonMachine& skeleton,
+        const NascentSkeleton& skeleton,
         const NascentModelCommandStream& cmdStream,
         const NascentGeometryObjects& geoObjects)
     {
         DefaultPoseData result;
 
-        auto skeletonOutput = skeleton.GenerateOutputTransforms();
+        auto skeletonOutput = skeleton.GetSkeletonMachine().GenerateOutputTransforms();
 
-        auto skelOutputInterface = skeleton.BuildHashedOutputInterface();
+        auto skelOutputInterface = skeleton.GetSkeletonMachine().BuildHashedOutputInterface();
         auto streamInputInterface = cmdStream.BuildHashedInputInterface();
         RenderCore::Assets::SkeletonBinding skelBinding(
             RenderCore::Assets::SkeletonMachine::OutputInterface
@@ -279,7 +279,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			// And that requires a bit of hack to get pointers to those 
 			// run-time types
 		{
-			auto defaultPoseData = CalculateDefaultPoseData(skeleton.GetSkeletonMachine(), cmdStream, geoObjects);
+			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
 			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
 			serializer.SerializeValue(size_t(defaultPoseData._defaultTransforms.size()));
 			SerializationOperator(serializer, defaultPoseData._boundingBox.first);

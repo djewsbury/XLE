@@ -410,13 +410,13 @@ namespace RenderCore { namespace Assets
     float       RawAnimationCurve::StartTime() const
     {
         if (_timeMarkers.empty()) { return std::numeric_limits<float>::max(); }
-        return _timeMarkers[0];
+        return _timeMarkers[0] * _keyDataDesc._frameDuration;
     }
 
     float       RawAnimationCurve::EndTime() const
     {
         if (_timeMarkers.empty()) return -std::numeric_limits<float>::max();
-        return _timeMarkers[_timeMarkers.size()-1];
+        return _timeMarkers[_timeMarkers.size()-1] * _keyDataDesc._frameDuration;
     }
 
     template float      RawAnimationCurve::Calculate(float inputTime) const never_throws;

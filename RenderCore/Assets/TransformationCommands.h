@@ -98,8 +98,8 @@ namespace RenderCore { namespace Assets
     void TraceTransformationMachine(
         std::ostream&                   outputStream,
         IteratorRange<const uint32_t*>    commandStream,
-        std::function<std::string(unsigned)> outputMatrixToName,
-        std::function<std::string(unsigned)> parameterToName);
+        std::function<std::string(unsigned)> outputMatrixToName = nullptr,
+        std::function<std::string(uint64_t)> parameterToName = nullptr);
 
     class ITransformationMachineOptimizer
     {
