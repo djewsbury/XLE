@@ -111,13 +111,11 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	unsigned                AnimationSet::FindParameter(uint64_t parameterName) const
+	unsigned                AnimationSet::FindParameter(uint64_t parameterName, AnimSamplerComponent component) const
 	{
-		for (size_t c=0; c<_outputInterface.size(); ++c) {
-			if (_outputInterface[c] == parameterName) {
+		for (size_t c=0; c<_outputInterface.size(); ++c)
+			if (_outputInterface[c]._name == parameterName && _outputInterface[c]._component == component)
 				return unsigned(c);
-			}
-		}
 		return ~unsigned(0x0);
 	}
 

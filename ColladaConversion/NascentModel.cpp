@@ -446,7 +446,7 @@ namespace RenderCore { namespace ColladaConversion
             //      Basically we're just shifting information from the skeleton into
             //      the animation set
             //
-        auto defaultParameters = _skeleton.GetTransformationMachine().GetDefaultParameters();
+        auto defaultParameters = _skeleton.GetSkeletonMachine().GetDefaultParameters();
         struct ParameterType { size_t count; AnimSamplerType samplerType; const void* arrayStart; };
         ParameterType parameterTypes[] = 
         {
@@ -457,8 +457,8 @@ namespace RenderCore { namespace ColladaConversion
         };
         for (size_t t=0; t<dimof(parameterTypes); ++t) {
             for (size_t c=0; c<parameterTypes[t].count; ++c) {
-                auto name  = _skeleton.GetTransformationMachine().GetParameterName(parameterTypes[t].samplerType, (uint32)c);
-                std::string stringName      = _skeleton.GetTransformationMachine().HashedIdToStringId(name);
+                auto name  = _skeleton.GetSkeletonMachine().GetParameterName(parameterTypes[t].samplerType, (uint32)c);
+                std::string stringName      = _skeleton.GetSkeletonMachine().HashedIdToStringId(name);
                 if (!_animationSet.HasAnimationDriver(stringName)) {
                     _animationSet.AddConstantDriver(
                         stringName, PtrAdd(parameterTypes[t].arrayStart, c*SamplerSize(parameterTypes[t].samplerType)),
@@ -508,7 +508,7 @@ namespace RenderCore { namespace ColladaConversion
                 //
             for (auto i=_animationLinks.begin(); i!=_animationLinks.end(); ++i) {
                 _animationSet.AddAnimationDriver(
-                    _skeleton.GetTransformationMachine().HashedIdToStringId(i->_animationListName),
+                    _skeleton.GetSkeletonMachine().HashedIdToStringId(i->_animationListName),
                     _objects.GetIndex<Assets::RawAnimationCurve>(ColladaConversion::Convert(i->_animationId)), 
                     SamplerWidthToType(i->_samplerWidth), i->_samplerOffset);
             }
@@ -744,7 +744,7 @@ namespace RenderCore { namespace ColladaConversion
                     interpolatorType.first, interpolatorType.second);
 
                         //      If we've build the visual scene already, hook up the animation driver
-                std::string stringId = _skeleton.GetTransformationMachine().HashedIdToStringId(animationLink._animationListName);
+                std::string stringId = _skeleton.GetSkeletonMachine().HashedIdToStringId(animationLink._animationListName);
                 if (stringId.empty()) {
                     LogAlwaysWarningF("Couldn't bind animation driver. Sometimes this happens when there is an unsupported animation type (eg, animated material parameters)\n");
                 } else {
@@ -1065,8 +1065,8 @@ namespace RenderCore { namespace ColladaConversion
             //      But we don't have all of the animation parameters, etc...
             //
         if (index >= _visualScene._cameraInstances.size()) return Techniques::CameraDesc();
-        auto finalMatrices = _skeleton.GetTransformationMachine().GenerateOutputTransforms(
-            _skeleton.GetTransformationMachine().GetDefaultParameters());
+        auto finalMatrices = _skeleton.GetSkeletonMachine().GenerateOutputTransforms(
+            _skeleton.GetSkeletonMachine().GetDefaultParameters());
         Techniques::CameraDesc result;
         result._cameraToWorld       = finalMatrices[_visualScene._cameraInstances[index]._localToWorldId];
         result._nearClip            = 0.1f;
@@ -1092,7 +1092,7 @@ namespace RenderCore { namespace ColladaConversion
         using namespace ColladaConversion;
         auto result = InvalidBoundingBox();
         // const auto finalMatrices = 
-        //     _skeleton.GetTransformationMachine().GenerateOutputTransforms(
+        //     _skeleton.GetSkeletonMachine().GenerateOutputTransforms(
         //         _animationSet.BuildTransformationParameterSet(0.f, nullptr, _skeleton, _objects));
 
             //
@@ -1168,7 +1168,7 @@ namespace RenderCore { namespace ColladaConversion
 
         const bool traceSkeleton = false;
         if (constant_expression<traceSkeleton>::result()) {
-            auto i = _skeleton.GetTransformationMachine().GetCommandStream();
+            auto i = _skeleton.GetSkeletonMachine().GetCommandStream();
             Assets::TraceTransformationMachine(
                 ConsoleRig::GetWarningStream(), 
                 AsPointer(i.begin()), AsPointer(i.end()));

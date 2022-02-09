@@ -225,7 +225,7 @@ namespace Sample
 		{
 			auto& skeletonScaffold = ::Assets::Legacy::GetAsset<RenderCore::Assets::SkeletonScaffold>(
 				"game/model/character/skin.dae");
-			auto& skeletonMachine = skeletonScaffold.GetTransformationMachine();
+			auto& skeletonMachine = skeletonScaffold.GetSkeletonMachine();
 
 			auto& animScaffold = ::Assets::Legacy::GetAsset<RenderCore::Assets::AnimationSetScaffold>(
 				"game/model/character/animations/alldae");

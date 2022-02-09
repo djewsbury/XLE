@@ -178,7 +178,7 @@ namespace RenderOverlays
 	{
 		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
 		std::vector<Float4x4> outputMatrices(outputMatrixCount);
-		skeleton.GenerateOutputTransforms(MakeIteratorRange(outputMatrices), &skeleton.GetDefaultParameters());
+		skeleton.GenerateOutputTransforms(MakeIteratorRange(outputMatrices));
 		RenderSkeleton(context, parserContext, skeleton, MakeIteratorRange(outputMatrices), localToWorld, drawBoneNames);
 	}
 }

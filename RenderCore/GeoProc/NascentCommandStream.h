@@ -45,18 +45,20 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         };
 
         void    AddAnimationDriver(
-            StringOrHash        parameterName, 
-            unsigned            curveIndex, 
-            AnimSamplerType     samplerType, 
-            unsigned            samplerOffset);
+            StringOrHash            parameterName, 
+            AnimSamplerComponent    parameterComponent,
+            unsigned                curveIndex, 
+            AnimSamplerType         samplerType, 
+            unsigned                samplerOffset);
 
         void    AddConstantDriver(  
-            StringOrHash        parameterName, 
-            const void*         constantValue,
-			size_t				constantValueSize,
-			Format				format,
-            AnimSamplerType     samplerType, 
-            unsigned            samplerOffset);
+            StringOrHash            parameterName, 
+            AnimSamplerComponent    parameterComponent,
+            const void*             constantValue,
+            size_t                  constantValueSize,
+            Format                  format,
+            AnimSamplerType         samplerType, 
+            unsigned                samplerOffset);
 
         bool    HasAnimationDriver(StringOrHash parameterName) const;
         void    MergeInAsAnIndividualAnimation(const NascentAnimationSet& copyFrom, const std::string& name);
@@ -74,7 +76,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		IteratorRange<const AnimationDriver*> GetAnimationDrivers() const { return MakeIteratorRange(_animationDrivers); }
 		IteratorRange<const ConstantDriver*> GetConstantDrivers() const { return MakeIteratorRange(_constantDrivers); }
         IteratorRange<const RenderCore::Assets::RawAnimationCurve*> GetCurves() const { return MakeIteratorRange(_curves); }
-		unsigned GetParameterIndex(const std::string& parameterName) const;
+		unsigned GetParameterIndex(const std::string& parameterName, AnimSamplerComponent parameterComponent) const;
 
 		friend std::ostream& SerializationOperator(
 			std::ostream& stream, 
@@ -84,10 +86,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     private:
         std::vector<AnimationDriver>    _animationDrivers;
         std::vector<ConstantDriver>     _constantDrivers;
-        std::vector<std::pair<std::string, Animation>>          _animations;
-        std::vector<StringOrHash>        _parameterInterfaceDefinition;
+        std::vector<std::pair<std::string, Animation>>              _animations;
+        std::vector<std::pair<StringOrHash, AnimSamplerComponent>>  _parameterInterfaceDefinition;
         std::vector<uint8>              _constantData;
 		SerializableVector<RenderCore::Assets::RawAnimationCurve> _curves;
+
+        AnimSamplerType FindSamplerType(unsigned parameterIndex) const;
     };
 
         //

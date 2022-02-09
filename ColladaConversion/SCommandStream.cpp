@@ -70,11 +70,11 @@ namespace ColladaConversion
 
     unsigned PushTransformations(
         RenderCore::Assets::GeoProc::NascentSkeletonMachine& dst,
-		RenderCore::Assets::AnimatedParameterSet& defaultParameters,
         const Transformation& transformations,
         const char nodeName[],
         const std::function<bool(StringSection<>)>& predicate)
     {
+#if TEMP
 		using RenderCore::Assets::TransformCommand;
 
         if (!transformations)
@@ -269,6 +269,9 @@ namespace ColladaConversion
         }
 
         return pushCount;
+#else
+        return 0;
+#endif
     }
 
 	void BuildSkeleton(RenderCore::Assets::GeoProc::NascentSkeleton& skeleton, const Node& node, StringSection<> skeletonName)
@@ -278,7 +281,6 @@ namespace ColladaConversion
 
 		auto pushCount = PushTransformations(
 			skeleton.GetSkeletonMachine(),
-			skeleton.GetDefaultParameters(),
 			node.GetFirstTransform(), bindingName.c_str(),
 			[](StringSection<>) { return true; });
 

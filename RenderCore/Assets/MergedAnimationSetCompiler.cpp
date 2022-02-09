@@ -46,14 +46,15 @@ namespace RenderCore { namespace Assets
 		const std::string& namePrefix)
 	{
 		auto curveOffset = dst.GetCurves().size();
-		for (auto& c:src._curves)
+		for (auto& c:src._animationSet.GetCurves())
 			dst.AddCurve(RawAnimationCurve{c});
 
 		auto outputInterface = src._animationSet.GetOutputInterface();
 		auto constantDriverOffset = dst.GetConstantDrivers().size();
 		for (auto& constantDriver:src._animationSet.GetConstantDrivers()) {
 			dst.AddConstantDriver(
-				outputInterface[constantDriver._parameterIndex],
+				outputInterface[constantDriver._parameterIndex]._name,
+				outputInterface[constantDriver._parameterIndex]._component,
 				PtrAdd(src._animationSet.GetConstantData().begin(), constantDriver._dataOffset),
 				BitsPerPixel(constantDriver._format) / 8,
 				constantDriver._format, constantDriver._samplerType, constantDriver._samplerOffset);
@@ -62,7 +63,8 @@ namespace RenderCore { namespace Assets
 		auto animationDriverOffset = dst.GetAnimationDrivers().size();
 		for (auto& animDriver:src._animationSet.GetAnimationDrivers()) {
 			dst.AddAnimationDriver(
-				outputInterface[animDriver._parameterIndex],
+				outputInterface[animDriver._parameterIndex]._name,
+				outputInterface[animDriver._parameterIndex]._component,
 				animDriver._curveIndex + curveOffset,
 				animDriver._samplerType, animDriver._samplerOffset);
 		}

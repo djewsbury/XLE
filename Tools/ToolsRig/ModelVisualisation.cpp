@@ -76,7 +76,7 @@ namespace ToolsRig
 		{
 			const SkeletonMachine* skeletonMachine = nullptr;
 			if (_skeletonScaffold) {
-				skeletonMachine = &_skeletonScaffold->GetTransformationMachine();
+				skeletonMachine = &_skeletonScaffold->GetSkeletonMachine();
 			} else if (_modelScaffoldForEmbeddedSkeleton)
 				skeletonMachine = &_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
 			return skeletonMachine;
@@ -119,9 +119,9 @@ namespace ToolsRig
 						
 						RenderCore::Assets::AnimationSetBinding animBinding(
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							skeleton->GetTransformationMachine().GetInputInterface());
+							skeleton->GetSkeletonMachine());
 
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, skeleton->GetTransformationMachine().GetOutputInterface());
+						auto skeletonInterface = BuildSkeletonInterface(*renderer, skeleton->GetSkeletonMachine().GetOutputInterface());
 
 						auto depVal = ::Assets::GetDepValSys().Make();
 						depVal.RegisterDependency(renderer->GetDependencyValidation());
@@ -144,7 +144,7 @@ namespace ToolsRig
 						
 						RenderCore::Assets::AnimationSetBinding animBinding(
 							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							renderer->GetModelScaffold()->EmbeddedSkeleton().GetInputInterface());
+							renderer->GetModelScaffold()->EmbeddedSkeleton());
 
 						auto skeletonInterface = BuildSkeletonInterface(*renderer, renderer->GetModelScaffold()->EmbeddedSkeleton().GetOutputInterface());
 
@@ -186,6 +186,7 @@ namespace ToolsRig
 
 			std::vector<Float4x4> skeletonMachineOutput(skeletonMachine->GetOutputMatrixCount());
 
+#if TEMP
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
@@ -209,6 +210,7 @@ namespace ToolsRig
 					MakeIteratorRange(skeletonMachineOutput),
 					&skeletonMachine->GetDefaultParameters());
 			}
+#endif
 
 			const auto instanceIdx = 0u;
 			if (_actualized->_skeletonInterface)
@@ -252,6 +254,7 @@ namespace ToolsRig
 		{
 			auto skeletonMachine = _actualized->GetSkeletonMachine();
 
+#if TEMP
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
@@ -288,6 +291,7 @@ namespace ToolsRig
 					Identity<Float4x4>(),
 					drawBoneNames);
 			}
+#endif
 		}
 
 		void BindAnimationState(const std::shared_ptr<VisAnimationState>& animState) override

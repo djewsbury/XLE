@@ -24,6 +24,7 @@ namespace ColladaConversion
             RenderCore::Assets::RawAnimationCurve   _curve;
 			RenderCore::Assets::AnimSamplerType _samplerType;
             unsigned                    _samplerOffset;
+            RenderCore::Assets::AnimSamplerComponent _parameterComponent;
         };
 
         std::vector<Curve> _curves;
