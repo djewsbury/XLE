@@ -6,8 +6,9 @@
 
 #pragma once
 
-#include "NascentSkeletonMachine.h"
-#include "../RenderCore/Assets/AnimationScaffoldInternal.h"
+#include "NascentSkeletonHelper.h"
+#include "../Assets/AnimationScaffoldInternal.h"
+#include "../../Math/Transformations.h"
 #include <vector>
 #include <string>
 
@@ -18,9 +19,6 @@ namespace Utility { class OutputStream; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-    class NascentSkeleton;
-	class NascentSkeletonMachine;
-
         //
         //      "NascentAnimationSet" is a set of animations
         //      and some information to bind these animations to
@@ -89,7 +87,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<std::pair<std::string, Animation>>              _animations;
         std::vector<std::pair<StringOrHash, AnimSamplerComponent>>  _parameterInterfaceDefinition;
         std::vector<uint8>              _constantData;
-		SerializableVector<RenderCore::Assets::RawAnimationCurve> _curves;
+		std::vector<RenderCore::Assets::RawAnimationCurve> _curves;
 
         AnimSamplerType FindSamplerType(unsigned parameterIndex) const;
     };
@@ -104,14 +102,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     class NascentSkeleton
     {
     public:
-        NascentSkeletonMachine&				GetSkeletonMachine()			{ return _skeletonMachine; }
-        const NascentSkeletonMachine&		GetSkeletonMachine() const		{ return _skeletonMachine; }
-
 		struct Transform
 		{
 			std::optional<Float4x4> _fullTransform;
 			std::optional<Float3> _translation;
 			std::optional<Quaternion> _rotationAsQuaternion;
+            std::optional<ArbitraryRotation> _rotationAsAxisAngle;
 			std::optional<Float3> _arbitraryScale;
 			std::optional<float> _uniformScale;
 
@@ -129,8 +125,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		void	SerializeMethod(::Assets::NascentBlockSerializer& serializer) const;
 
+
+        Internal::NascentSkeletonHelper&            GetSkeletonMachine()			{ return _skeletonMachine; }
+        const Internal::NascentSkeletonHelper&      GetSkeletonMachine() const		{ return _skeletonMachine; }
     private:
-        NascentSkeletonMachine		_skeletonMachine;
+        Internal::NascentSkeletonHelper		_skeletonMachine;
         std::vector<std::pair<uint64_t, std::string>> _dehashTable;
 
         std::vector<uint32_t> TransformToCmds(const Transform& transform, unsigned& cmdCount);

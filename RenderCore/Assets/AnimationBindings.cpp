@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "AnimationBindings.h"
+#include "TransformationCommands.h"
 #include "../../OSServices/Log.h"
 
 namespace RenderCore { namespace Assets
@@ -15,6 +16,20 @@ namespace RenderCore { namespace Assets
 			_animBindingRules, _parameterDefaultsBlock, 
 			input.GetCommandStream(),
 			output);
+
+		TransformationMachineOptimizer_Null nullOptimizer;
+		_specializedSkeletonMachine = OptimizeTransformationMachine(_specializedSkeletonMachine, nullOptimizer);
+
+		_outputMatrixCount = input.GetOutputMatrixCount();
+	}
+
+	void AnimationSetBinding::GenerateOutputTransforms(
+		IteratorRange<Float4x4*> output,
+		IteratorRange<const void*> parameterBlock) const
+	{
+		RenderCore::Assets::GenerateOutputTransforms(
+			output, parameterBlock, 
+			MakeIteratorRange(_specializedSkeletonMachine));
 	}
 
 	SkeletonBinding::SkeletonBinding(   const SkeletonMachine::OutputInterface&		output,
@@ -188,6 +203,96 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	static void SetupFullTransformBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Float4x4) {
+			result.push_back((uint32_t)TransformCommand::TransformFloat4x4_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsFloat4x4Parameter(),
+					animParameterIndex, samplerType));
+		} else {
+			assert(0);
+		}
+	}
+
+	static void SetupTranslationBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Float3) {
+			result.push_back((uint32_t)TransformCommand::Translate_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsTranslateParameter(),
+					animParameterIndex, samplerType));
+		} else {
+			assert(0);
+		}
+	}
+
+	static void SetupRotationBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Quaternion) {
+			result.push_back((uint32_t)TransformCommand::RotateQuaternion_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsRotateQuaternionParameter(),
+					animParameterIndex, samplerType));
+		} else if (samplerType == AnimSamplerType::Float4) {
+			result.push_back((uint32_t)TransformCommand::RotateAxisAngle_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsRotateAxisAngleParameter(),
+					animParameterIndex, samplerType));
+		} else {
+			assert(0);
+		}
+	}
+
+	static void SetupScaleBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Float1) {
+			result.push_back((uint32_t)TransformCommand::UniformScale_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsUniformScaleParameter(),
+					animParameterIndex, samplerType));
+		} else if (samplerType == AnimSamplerType::Float3) {
+			result.push_back((uint32_t)TransformCommand::ArbitraryScale_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsArbitraryScaleParameter(),
+					animParameterIndex, samplerType));
+		} else {
+			assert(0);
+		}
+	}
+
 	std::vector<uint32_t> SpecializeTransformationMachine(
 		/* out */ std::vector<AnimationSet::ParameterBindingRules>& parameterBindingRules,
 		/* out */ std::vector<uint8_t>&			parameterDefaultsBlock,
@@ -226,10 +331,13 @@ namespace RenderCore { namespace Assets
 				// This is a binding point. We should be followed by 0 or more
 				// default transformation components.
 				{
+					auto startOfCmd = cmd;
 					++cmd;
 					uint64_t bindName = *cmd | (uint64_t(*(cmd+1)) << 32ull);
 					cmd += 2;
 					std::optional<unsigned> rotationParam, translationParam, scaleParam, fullTransformParam;
+					std::optional<unsigned> noneParam;
+
 					for (unsigned c=0; c<animSetOutput.size(); ++c) {
 						if (animSetOutput[c]._name == bindName) {
 							switch (animSetOutput[c]._component) {
@@ -250,34 +358,35 @@ namespace RenderCore { namespace Assets
 								fullTransformParam = c;
 								break;
 							case AnimSamplerComponent::None:
-								break;		// "none" component ignored
+								assert(!noneParam);
+								noneParam = c;
 							}
 						}
 					}
+
 					if (fullTransformParam) {
-						assert(!rotationParam && !translationParam && !scaleParam);
+						assert(!rotationParam && !translationParam && !scaleParam && !noneParam);
+					}
+					if (noneParam) {
+						assert(!rotationParam && !translationParam && !scaleParam && !fullTransformParam);
 					}
 
 					if (rotationParam || translationParam || scaleParam || fullTransformParam) {
-						DefaultedTransformation defaults(cmd);
+						DefaultedTransformation defaults(startOfCmd);
 						// we need to mix together what's provided by the animation set with what's provided by
 						// the defaults in the transformation commands
 						// Component ordering is always translation, rotation, scale
 						if (fullTransformParam) {
-							result.push_back((uint32_t)TransformCommand::TransformFloat4x4_Parameter);
-							result.push_back(
-								ConfigureBindingRules(
-									parameterBindingRules, parameterDefaultsBlock, 
-									defaults.AsFloat4x4Parameter(),
-									fullTransformParam.value(), animSetOutput[fullTransformParam.value()]._samplerType));
+							SetupFullTransformBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								fullTransformParam.value(), animSetOutput[fullTransformParam.value()]._samplerType);
 						} else {
 							if (translationParam) {
-								result.push_back((uint32_t)TransformCommand::Translate_Parameter);
-								result.push_back(
-									ConfigureBindingRules(
-										parameterBindingRules, parameterDefaultsBlock,
-										defaults.AsTranslateParameter(),
-										translationParam.value(), animSetOutput[translationParam.value()]._samplerType));
+								SetupTranslationBinding(
+									result, parameterBindingRules, parameterDefaultsBlock,
+									defaults,
+									translationParam.value(), animSetOutput[translationParam.value()]._samplerType);
 							} else if (!defaults._defaultTranslationCmds.empty()) {
 								result.insert(result.end(), defaults._defaultTranslationCmds.begin(), defaults._defaultTranslationCmds.end());
 							} else if (defaults._fullTransform) {
@@ -287,24 +396,10 @@ namespace RenderCore { namespace Assets
 							}
 
 							if (rotationParam) {
-								auto samplerType = animSetOutput[rotationParam.value()]._samplerType;
-								if (samplerType == AnimSamplerType::Quaternion) {
-									result.push_back((uint32_t)TransformCommand::RotateQuaternion_Parameter);
-									result.push_back(
-										ConfigureBindingRules(
-											parameterBindingRules, parameterDefaultsBlock, 
-											defaults.AsRotateQuaternionParameter(),
-											rotationParam.value(), samplerType));
-								} else if (samplerType == AnimSamplerType::Float4) {
-									result.push_back((uint32_t)TransformCommand::RotateAxisAngle_Parameter);
-									result.push_back(
-										ConfigureBindingRules(
-											parameterBindingRules, parameterDefaultsBlock, 
-											defaults.AsRotateAxisAngleParameter(),
-											rotationParam.value(), samplerType));
-								} else {
-									assert(0);
-								}
+								SetupRotationBinding(
+									result, parameterBindingRules, parameterDefaultsBlock,
+									defaults,
+									rotationParam.value(), animSetOutput[rotationParam.value()]._samplerType);
 							} else if (!defaults._defaultRotationCmds.empty()) {
 								result.insert(result.end(), defaults._defaultRotationCmds.begin(), defaults._defaultRotationCmds.end());
 							} else if (defaults._fullTransform) {
@@ -314,25 +409,10 @@ namespace RenderCore { namespace Assets
 							}
 
 							if (scaleParam) {
-								auto samplerType = animSetOutput[scaleParam.value()]._samplerType;
-								if (samplerType == AnimSamplerType::Float1) {
-									result.push_back((uint32_t)TransformCommand::UniformScale_Parameter);
-									// awkward here if the default really should be arbitrary, but the animation has a uniforms scale
-									result.push_back(
-										ConfigureBindingRules(
-											parameterBindingRules, parameterDefaultsBlock,
-											defaults.AsUniformScaleParameter(),
-											scaleParam.value(), samplerType));
-								} else if (samplerType == AnimSamplerType::Float3) {
-									result.push_back((uint32_t)TransformCommand::ArbitraryScale_Parameter);
-									result.push_back(
-										ConfigureBindingRules(
-											parameterBindingRules, parameterDefaultsBlock, 
-											defaults.AsArbitraryScaleParameter(),
-											scaleParam.value(), samplerType));
-								} else {
-									assert(0);
-								}
+								SetupScaleBinding(
+									result, parameterBindingRules, parameterDefaultsBlock,
+									defaults,
+									scaleParam.value(), animSetOutput[scaleParam.value()]._samplerType);
 							} else if (!defaults._defaultScaleCmds.empty()) {
 								result.insert(result.end(), defaults._defaultScaleCmds.begin(), defaults._defaultScaleCmds.end());
 							} else if (defaults._fullTransform) {
@@ -340,6 +420,38 @@ namespace RenderCore { namespace Assets
 								auto scale = defaults._fullTransform.value()._scale;
 								result.insert(result.end(), (const uint32_t*)&scale, (const uint32_t*)(&scale+1));
 							}
+						}
+					} else if (noneParam) {
+						DefaultedTransformation defaults(startOfCmd);
+						// If the animation parameter is marked with AnimSampleComponent::None, it means the animation parameter doesn't
+						// have an inherent component to bind to, and it must actually imply it's type from the binding point it's applied
+						// to.
+						// This is more similar to the previous behaviour for animation binding. This might require that there is a separate
+						// bind point for each component of the transform (assuming not using full matrix transforms)
+						if (defaults._fullTransform) {
+							SetupFullTransformBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
+						} else if (!defaults._defaultTranslationCmds.empty()) {
+							assert(defaults._defaultRotationCmds.empty() && defaults._defaultScaleCmds.empty());		// only one component can be defaulted
+							SetupTranslationBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
+						} else if (!defaults._defaultRotationCmds.empty()) {
+							assert(defaults._defaultTranslationCmds.empty() && defaults._defaultScaleCmds.empty());		// only one component can be defaulted
+							SetupRotationBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
+						} else if (!defaults._defaultScaleCmds.empty()) {
+							SetupScaleBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
+						} else {
+							assert(0);		// no defaults at all; we can't imply the component for this animation parameter
 						}
 					} else {
 						// no matching parameters at all. We can just take the defaults as-is because they are specified

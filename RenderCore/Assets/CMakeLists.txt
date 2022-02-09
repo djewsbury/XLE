@@ -29,7 +29,7 @@ add_library(
     ../GeoProc/NascentModel.cpp
     ../GeoProc/NascentObjectsSerialize.cpp
     ../GeoProc/NascentRawGeometry.cpp
-    ../GeoProc/NascentSkeletonMachine.cpp
+    ../GeoProc/NascentSkeletonHelper.cpp
 	../GeoProc/DequantAnalysisTools.cpp)
 
 xle_configure_library(RenderCoreAssets)

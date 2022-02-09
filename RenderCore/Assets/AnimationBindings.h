@@ -18,6 +18,7 @@ namespace RenderCore { namespace Assets
 
 		void GenerateOutputTransforms   (   IteratorRange<Float4x4*> output,
                                             IteratorRange<const void*> parameterBlock) const;
+		unsigned GetOutputMatrixCount() const { return _outputMatrixCount; }
 
 		AnimationSetBinding(const AnimationSet::OutputInterface&		output,
 							const SkeletonMachine&    					input);
@@ -27,6 +28,7 @@ namespace RenderCore { namespace Assets
 		std::vector<uint32_t>   _specializedSkeletonMachine;
 		std::vector<AnimationSet::ParameterBindingRules> _animBindingRules;
 		std::vector<uint8_t> 	_parameterDefaultsBlock;
+		unsigned _outputMatrixCount = 0;
 	};
 
 	class SkeletonBinding

@@ -332,10 +332,6 @@ namespace ColladaConversion
                 }
             }
 
-            // Skip anything with "rope" in the target parameter. 
-            // These channels cause problems with some Archeage data.
-            if (i->first.find("rope") != std::string::npos) { i = i2; continue; }
-
                 // We need to combine all of these curves into a single one.
                 // We're going to require that the input curves are "time" and
                 // they all match exactly.
@@ -448,7 +444,7 @@ namespace ColladaConversion
             SerializableVector<uint16_t> inputTimeBlock;
             inputTimeBlock.reserve(inputTimeBlockAsFloats.size());
             for (auto t:inputTimeBlockAsFloats)
-                inputTimeBlock.push_back(t*frameDuration);
+                inputTimeBlock.push_back(t/frameDuration);
 
                 // todo -- we need to find the correct animation curve type
             auto interpolationType = RenderCore::Assets::CurveInterpolationType::Linear;
@@ -469,7 +465,10 @@ namespace ColladaConversion
                 std::move(keyBlock),
 				keyDataDesc, interpolationType);
             result._curves.emplace_back(
-				UnboundAnimation::Curve { i->first, std::move(curve), samplerType, 0, RenderCore::Assets::AnimSamplerComponent::None } );       // todo -- assign AnimSamplerComponent?
+				UnboundAnimation::Curve {
+                    i->first, std::move(curve), samplerType, 0, 
+                    RenderCore::Assets::AnimSamplerComponent::None      // we don't know the component type here -- it has be implied by where we're binding it to
+                } );
             
             i = i2;
         }

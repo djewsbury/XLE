@@ -186,7 +186,6 @@ namespace ToolsRig
 
 			std::vector<Float4x4> skeletonMachineOutput(skeletonMachine->GetOutputMatrixCount());
 
-#if TEMP
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
@@ -197,20 +196,23 @@ namespace ToolsRig
 					time += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _animationState->_anchorTime).count() / 1000.f;
 				time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
 
-				auto params = animData._animationSet.BuildTransformationParameterSet(
-					{time, animHash},
-					*skeletonMachine, _actualized->_animSetBinding,
-					MakeIteratorRange(animData._curves));
+				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
+				uint8_t parameterBlock[parameterBlockSize];
+				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
-				skeletonMachine->GenerateOutputTransforms(
+				animData._animationSet.CalculateOutput(
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+					{time, animHash},
+					_actualized->_animSetBinding.GetParameterBindingRules());
+
+				// We have to use the "specialized" skeleton in _animSetBinding
+				assert(_actualized->_animSetBinding.GetOutputMatrixCount() == skeletonMachineOutput.size());
+				_actualized->_animSetBinding.GenerateOutputTransforms(
 					MakeIteratorRange(skeletonMachineOutput),
-					&params);
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 			} else {
-				skeletonMachine->GenerateOutputTransforms(
-					MakeIteratorRange(skeletonMachineOutput),
-					&skeletonMachine->GetDefaultParameters());
+				skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(skeletonMachineOutput));
 			}
-#endif
 
 			const auto instanceIdx = 0u;
 			if (_actualized->_skeletonInterface)
@@ -252,9 +254,6 @@ namespace ToolsRig
 			RenderCore::Techniques::ParsingContext& parserContext, 
 			bool drawBoneNames) const override
 		{
-			auto skeletonMachine = _actualized->GetSkeletonMachine();
-
-#if TEMP
 			if (_actualized->_animationScaffold && _animationState && _animationState->_state != VisAnimationState::State::BindPose) {
 				auto& animData = _actualized->_animationScaffold->ImmutableData();
 
@@ -266,32 +265,37 @@ namespace ToolsRig
 					time = fmodf(time - foundAnimation._beginTime, foundAnimation._endTime - foundAnimation._beginTime) + foundAnimation._beginTime;
 				}
 
-				auto params = animData._animationSet.BuildTransformationParameterSet(
-					{time, animHash},
-					*skeletonMachine, _actualized->_animSetBinding,
-					MakeIteratorRange(animData._curves));
+				auto parameterBlockSize = _actualized->_animSetBinding.GetParameterDefaultsBlock().size();
+				uint8_t parameterBlock[parameterBlockSize];
+				std::memcpy(parameterBlock, _actualized->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
 
-				Float4x4 skeletonOutput[skeletonMachine->GetOutputMatrixCount()];
-				skeletonMachine->GenerateOutputTransforms(
-					MakeIteratorRange(skeletonOutput, &skeletonOutput[skeletonMachine->GetOutputMatrixCount()]),
-					&params);
+				animData._animationSet.CalculateOutput(
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+					{time, animHash},
+					_actualized->_animSetBinding.GetParameterBindingRules());
+
+				// We have to use the "specialized" skeleton in _animSetBinding
+				auto outputMatrixCount = _actualized->_animSetBinding.GetOutputMatrixCount();
+				Float4x4 skeletonOutput[outputMatrixCount];
+				_actualized->_animSetBinding.GenerateOutputTransforms(
+					MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
+					MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 
 				RenderOverlays::RenderSkeleton(
 					overlayContext,
 					parserContext,
-					*skeletonMachine,
-					MakeIteratorRange(skeletonOutput, &skeletonOutput[skeletonMachine->GetOutputMatrixCount()]),
+					*_actualized->GetSkeletonMachine(),
+					MakeIteratorRange(skeletonOutput, &skeletonOutput[outputMatrixCount]),
 					Identity<Float4x4>(),
 					drawBoneNames);
 			} else {
 				RenderOverlays::RenderSkeleton(
 					overlayContext,
 					parserContext,
-					*skeletonMachine,
+					*_actualized->GetSkeletonMachine(),
 					Identity<Float4x4>(),
 					drawBoneNames);
 			}
-#endif
 		}
 
 		void BindAnimationState(const std::shared_ptr<VisAnimationState>& animState) override

@@ -44,13 +44,13 @@ namespace RenderCore { namespace Assets
         const OutputInterface&  GetOutputInterface() const  { return _outputInterface; }
 
 		std::vector<StringSection<>> GetOutputMatrixNames() const;
-        IteratorRange<const uint32_t*> GetCommandStream() const { return MakeIteratorRange(_commandStream, PtrAdd(_commandStream, _commandStreamSize)); }
+        IteratorRange<const uint32_t*> GetCommandStream() const { return MakeIteratorRange(_commandStream, &_commandStream[_commandStreamSize]); }
 
         SkeletonMachine();
         ~SkeletonMachine();
     protected:
         uint32_t*			_commandStream;
-        size_t              _commandStreamSize;
+        size_t              _commandStreamSize;     // size in number of uint32_t's
         unsigned            _outputMatrixCount;
 
         OutputInterface     _outputInterface;

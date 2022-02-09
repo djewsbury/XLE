@@ -145,8 +145,8 @@ namespace RenderCore { namespace Assets
                 ++i;
                 signed finalIdentLevel = 0;
                 i = SkipUntilPop(i, end, finalIdentLevel);
-                if (finalIdentLevel < 0) {
-                    isRedundant = (finalIdentLevel < -1) || !foundTransformCmd || (i+2) == end;
+                if (finalIdentLevel < 0 || i == end) {
+                    isRedundant = (finalIdentLevel < -1) || !foundTransformCmd || i == end || (i+2) == end;
                     return i;
                 }   
             } else if (cmd == TransformCommand::PopLocalToWorld) {
@@ -1335,14 +1335,13 @@ namespace RenderCore { namespace Assets
         std::ostream&   stream,
         IteratorRange<const uint32_t*>    commandStream,
         std::function<std::string(unsigned)> outputMatrixToName,
-        std::function<std::string(unsigned)> parameterToName)
+        std::function<std::string(uint64_t)> parameterToName)
     {
         stream << "Transformation machine size: (" << (commandStream.size()) * sizeof(uint32_t) << ") bytes" << std::endl;
 
-        char indentBuffer[32], doubleIndentBuffer[32];
+        char indentBuffer[32];
         signed indentLevel = 1;
         MakeIndentBuffer(indentBuffer, dimof(indentBuffer), indentLevel);
-        MakeIndentBuffer(doubleIndentBuffer, dimof(doubleIndentBuffer), indentLevel+1);
 
         for (auto i=commandStream.begin(); i!=commandStream.end();) {
             auto commandIndex = *i++;
@@ -1447,6 +1446,8 @@ namespace RenderCore { namespace Assets
                         stream << " with 3 defaults" << std::endl;
                         defaultCount = 3;
                     }
+                    char doubleIndentBuffer[32];
+                    MakeIndentBuffer(doubleIndentBuffer, dimof(doubleIndentBuffer), indentLevel+1);
                     while (defaultCount--) {
                         auto cmd = *(TransformCommand*)i++;
                         stream << doubleIndentBuffer << "Default: ";
