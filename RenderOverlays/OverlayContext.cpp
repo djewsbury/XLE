@@ -264,6 +264,35 @@ namespace RenderOverlays
 			col);
 	}
 
+	Float2  ImmediateOverlayContext::DrawTextWithTable(
+			const std::tuple<Float3, Float3>& quad,
+			FontPtrAndFlags fontTable[256],
+			TextAlignment alignment,
+			StringSection<> text,
+			IteratorRange<const uint32_t*> colors,
+			IteratorRange<const uint8_t*> fontSelectors,
+			ColorB shadowColor)
+	{
+		if (!_fontRenderingManager) return Float2{0, 0};
+
+		Quad q;
+		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
+		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
+		Float2 alignedPosition = q.min;
+		if (fontTable[0].first)
+			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
+		return DrawWithTable(
+			*_threadContext,
+			*_immediateDrawables, 
+			*_fontRenderingManager,
+			fontTable,
+			alignedPosition[0], alignedPosition[1],
+			0.f, 0.f, // q.max[0], q.max[1],
+			text, colors, fontSelectors,
+			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			shadowColor);
+	}
+
 	void ImmediateOverlayContext::CaptureState() 
 	{
 		SetState(OverlayState());
@@ -352,7 +381,7 @@ namespace RenderOverlays
 
 	std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(
-            RenderCore::IThreadContext& threadContext,
+			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::ImmediateDrawingApparatus& apparatus)
 	{
 		return MakeImmediateOverlayContext(threadContext, *apparatus._immediateDrawables, apparatus._fontRenderingManager.get());

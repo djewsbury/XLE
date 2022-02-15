@@ -23,24 +23,37 @@ namespace RenderOverlays
 	class Font;
 	class FontTexture2D;
 	class FontRenderingManager;
-        
-    Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
-                        float x, float y, float maxX, float maxY,
-						StringSection<> text,
-                        float scale, float depth,
-                        ColorB col);
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
-                        float x, float y, float maxX, float maxY,
+						float x, float y, float maxX, float maxY,
+						StringSection<> text,
+						float scale, float depth,
+						ColorB col);
+
+	Float2		Draw(   RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font, DrawTextFlags::BitField flags,
+						float x, float y, float maxX, float maxY,
 						StringSection<ucs4> text,
-                        float scale, float depth,
-                        ColorB col);
+						float scale, float depth,
+						ColorB col);
+
+	using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
+	Float2		DrawWithTable(
+						RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						FontPtrAndFlags fontTable[256],
+						float x, float y, float maxX, float maxY,
+						StringSection<> text,
+						IteratorRange<const uint32_t*> colors,
+						IteratorRange<const uint8_t*> fontSelectors,
+						float scale, float depth,
+						ColorB shadowColor);
 
 	class FontRenderingManager
 	{
@@ -62,7 +75,7 @@ namespace RenderOverlays
 
 		const FontTexture2D& GetFontTexture();
 		UInt2 GetTextureDimensions();
-    
+	
 		FontRenderingManager(RenderCore::IDevice& device);
 		~FontRenderingManager();
 

@@ -28,6 +28,7 @@ namespace RenderOverlays
 			float _ascenderExcludingAccent = 0.f;
 			float _lineHeight = 0.f;
 			float _maxAdvance = 0.f;
+			float _fixedWidthAdvance = 0.f;		// will be zero for non-fixed-width fonts
 		};
 
 		struct Bitmap

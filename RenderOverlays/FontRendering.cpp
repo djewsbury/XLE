@@ -65,6 +65,7 @@ namespace RenderOverlays
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			std::shared_ptr<RenderCore::IResourceView> textureView,
 			unsigned reservedQuads);
+		WorkingVertexSetPCT();
 
 	private:
 		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
@@ -164,6 +165,9 @@ namespace RenderOverlays
 		material._uniforms._resourceViews.clear();
 	}
 
+	WorkingVertexSetPCT::WorkingVertexSetPCT()
+	: _immediateDrawables{nullptr}, _currentIterator{nullptr} {}
+
 	template<typename CharType>
 		static unsigned ToDigitValue(CharType chr, unsigned base)
 	{
@@ -249,7 +253,8 @@ namespace RenderOverlays
 			estimatedQuadCount += text.size();
 		if (flags & DrawTextFlags::Outline)
 			estimatedQuadCount += 8 * text.size();
-		WorkingVertexSetPCT workingVertices(immediateDrawables, textureMan.GetFontTexture().GetSRV(), estimatedQuadCount);
+		WorkingVertexSetPCT workingVertices;
+		bool began = false;
 
 		auto shadowColor = ColorB{0, 0, 0, color.a};
 		ColorB colorOverride = 0x0;
@@ -303,94 +308,102 @@ namespace RenderOverlays
 			prev_rsb_delta = bitmap._rsbDelta;
 			*/
 
-			if (bitmap._width && bitmap._height) {
-				float baseX = x + bitmap._bitmapOffsetX * xScale;
-				float baseY = y + bitmap._bitmapOffsetY * yScale;
-				if (flags & DrawTextFlags::Snap) {
-					baseX = xScale * (int)(0.5f + baseX / xScale);
-					baseY = yScale * (int)(0.5f + baseY / yScale);
-				}
-
-				Quad pos = Quad::MinMax(
-					baseX, baseY, 
-					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-				Quad tc = Quad::MinMax(
-					bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
-					bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
-
-				if (__builtin_expect((maxX == 0.0f || pos.max[0] <= maxX) && (maxY == 0.0f || pos.max[1] <= maxY), true)) {
-					if (flags & DrawTextFlags::Outline) {
-						Quad shadowPos;
-						shadowPos = pos;
-						shadowPos.min[0] -= xScale;
-						shadowPos.max[0] -= xScale;
-						shadowPos.min[1] -= yScale;
-						shadowPos.max[1] -= yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[1] -= yScale;
-						shadowPos.max[1] -= yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[0] += xScale;
-						shadowPos.max[0] += xScale;
-						shadowPos.min[1] -= yScale;
-						shadowPos.max[1] -= yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[0] -= xScale;
-						shadowPos.max[0] -= xScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[0] += xScale;
-						shadowPos.max[0] += xScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[0] -= xScale;
-						shadowPos.max[0] -= xScale;
-						shadowPos.min[1] += yScale;
-						shadowPos.max[1] += yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[1] += yScale;
-						shadowPos.max[1] += yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-
-						shadowPos = pos;
-						shadowPos.min[0] += xScale;
-						shadowPos.max[0] += xScale;
-						shadowPos.min[1] += yScale;
-						shadowPos.max[1] += yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-					}
-
-					if (flags & DrawTextFlags::Shadow) {
-						Quad shadowPos = pos;
-						shadowPos.min[0] += xScale;
-						shadowPos.max[0] += xScale;
-						shadowPos.min[1] += yScale;
-						shadowPos.max[1] += yScale;
-						workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
-					}
-
-					workingVertices.PushQuad(pos, colorOverride.a?colorOverride:color, tc, depth);
-				}
-			}
-
+			float thisX = x;
 			x += bitmap._xAdvance * xScale;
 			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
 			if (flags & DrawTextFlags::Outline) {
 				x += 2 * xScale;
 			}
+			
+			if (!bitmap._width || !bitmap._height) continue;
+
+			float baseX = thisX + bitmap._bitmapOffsetX * xScale;
+			float baseY = y + bitmap._bitmapOffsetY * yScale;
+			if (flags & DrawTextFlags::Snap) {
+				baseX = xScale * (int)(0.5f + baseX / xScale);
+				baseY = yScale * (int)(0.5f + baseY / yScale);
+			}
+
+			Quad pos = Quad::MinMax(
+				baseX, baseY, 
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+			Quad tc = Quad::MinMax(
+				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
+				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
+
+			if (__builtin_expect((maxX == 0.0f || pos.max[0] <= maxX) && (maxY == 0.0f || pos.max[1] <= maxY), true)) {
+
+				if (!began) {
+					workingVertices = WorkingVertexSetPCT{immediateDrawables, textureMan.GetFontTexture().GetSRV(), (unsigned)estimatedQuadCount};
+					began = true;
+				}
+
+				if (flags & DrawTextFlags::Outline) {
+					Quad shadowPos;
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] -= yScale;
+					shadowPos.max[1] -= yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] -= xScale;
+					shadowPos.max[0] -= xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+
+					shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+				}
+
+				if (flags & DrawTextFlags::Shadow) {
+					Quad shadowPos = pos;
+					shadowPos.min[0] += xScale;
+					shadowPos.max[0] += xScale;
+					shadowPos.min[1] += yScale;
+					shadowPos.max[1] += yScale;
+					workingVertices.PushQuad(shadowPos, shadowColor, tc, depth);
+				}
+
+				workingVertices.PushQuad(pos, colorOverride.a?colorOverride:color, tc, depth);
+			}
 		}
 
-		workingVertices.Complete();
+		if (began)
+			workingVertices.Complete();
 		return { x, y };		// y is at the baseline here
 	}
 
@@ -416,6 +429,181 @@ namespace RenderOverlays
                         ColorB col)
 	{
 		return DrawTemplate<ucs4>(threadContext, immediateDrawables, textureMan, font, flags, x, y, maxX, maxY, text, scale, depth, col);
+	}
+
+	template<typename CharType>
+		static Float2 DrawWithTableTemplate(
+			RenderCore::IThreadContext& threadContext,
+			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			FontRenderingManager& textureMan,
+			FontPtrAndFlags fontTable[256],
+			float x, float y, float maxX, float maxY,
+			StringSection<CharType> text,
+			IteratorRange<const uint32_t*> colors,
+			IteratorRange<const uint8_t*> fontSelectors,
+			float scale, float depth,
+			ColorB shadowColor)
+	{
+		using namespace RenderCore;
+		if (text.IsEmpty()) return {0.f, 0.f};
+
+		int prevGlyph = 0;
+		unsigned prev_rsb_delta = 0;
+		float xScale = scale;
+		float yScale = scale;
+		
+		float xAtLineStart = x, yAtLineStart = y;
+
+		auto* res = textureMan.GetFontTexture().GetUnderlying().get();
+		Metal::CompleteInitialization(
+			*Metal::DeviceContext::Get(threadContext),
+			{&res, &res+1});
+			
+		auto texDims = textureMan.GetTextureDimensions();
+		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
+		WorkingVertexSetPCT workingVertices;
+		bool began = false;
+
+		auto fontSelectorI = fontSelectors.begin();
+		auto colorI = colors.begin();
+		auto shadowC = shadowColor.AsUInt32();
+
+		while (!text.IsEmpty()) {
+			auto ch = GetNext(text);
+			auto fontSelector = (fontSelectorI < fontSelectors.end()) ? *fontSelectorI : 0;
+			++fontSelectorI;
+			auto color = (colorI < colors.end()) ? *colorI : 0xffffffff;
+			++colorI;
+
+			// \n, \r\n, \r all considered new lines
+			if (ch == '\n' || ch == '\r') {
+				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+				x = xAtLineStart;
+				if (fontTable[0].first)
+					y = yAtLineStart = yAtLineStart + fontTable[0].first->GetFontProperties()._lineHeight;
+				continue;
+			}
+
+			auto* font = fontTable[fontSelector].first;
+			auto flags = fontTable[fontSelector].second;
+			if (!font) continue;
+
+			int curGlyph;
+			Float2 v = font->GetKerning(prevGlyph, ch, &curGlyph);
+			x += xScale * v[0];
+			y += yScale * v[1];
+			prevGlyph = curGlyph;
+
+			auto bitmap = textureMan.GetBitmap(threadContext, *font, ch);
+
+			float thisX = x;
+			x += bitmap._xAdvance * xScale;
+			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+			if (flags & DrawTextFlags::Outline) {
+				x += 2 * xScale;
+			}
+			
+			if (!bitmap._width || !bitmap._height) continue;
+
+			if (!began) {
+				workingVertices = WorkingVertexSetPCT{immediateDrawables, textureMan.GetFontTexture().GetSRV(), (unsigned)estimatedQuadCount};
+				began = true;
+			}
+
+			float baseX = thisX + bitmap._bitmapOffsetX * xScale;
+			float baseY = y + bitmap._bitmapOffsetY * yScale;
+
+			Quad pos = Quad::MinMax(
+				baseX, baseY, 
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+			Quad tc = Quad::MinMax(
+				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
+				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);
+
+			if (flags & DrawTextFlags::Outline) {
+				Quad shadowPos;
+				shadowPos = pos;
+				shadowPos.min[0] -= xScale;
+				shadowPos.max[0] -= xScale;
+				shadowPos.min[1] -= yScale;
+				shadowPos.max[1] -= yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[1] -= yScale;
+				shadowPos.max[1] -= yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xScale;
+				shadowPos.max[0] += xScale;
+				shadowPos.min[1] -= yScale;
+				shadowPos.max[1] -= yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[0] -= xScale;
+				shadowPos.max[0] -= xScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xScale;
+				shadowPos.max[0] += xScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[0] -= xScale;
+				shadowPos.max[0] -= xScale;
+				shadowPos.min[1] += yScale;
+				shadowPos.max[1] += yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[1] += yScale;
+				shadowPos.max[1] += yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xScale;
+				shadowPos.max[0] += xScale;
+				shadowPos.min[1] += yScale;
+				shadowPos.max[1] += yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+			}
+
+			if (flags & DrawTextFlags::Shadow) {
+				Quad shadowPos = pos;
+				shadowPos.min[0] += xScale;
+				shadowPos.max[0] += xScale;
+				shadowPos.min[1] += yScale;
+				shadowPos.max[1] += yScale;
+				workingVertices.PushQuad(shadowPos, shadowC, tc, depth);
+			}
+
+			workingVertices.PushQuad(pos, color, tc, depth);
+		}
+
+		if (began)
+			workingVertices.Complete();
+		return { x, y };		// y is at the baseline here
+	}
+
+	Float2		DrawWithTable(
+			RenderCore::IThreadContext& threadContext,
+			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			FontRenderingManager& textureMan,
+			FontPtrAndFlags fontTable[256],
+			float x, float y, float maxX, float maxY,
+			StringSection<> text,
+			IteratorRange<const uint32_t*> colors,
+			IteratorRange<const uint8_t*> fontSelectors,
+			float scale, float depth,
+			ColorB shadowColor)
+	{
+		return DrawWithTableTemplate<utf8>(
+			threadContext, immediateDrawables, textureMan, fontTable,
+			x, y, maxX, maxY,
+			text, colors, fontSelectors, scale, depth, shadowColor);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////

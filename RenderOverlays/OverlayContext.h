@@ -60,6 +60,15 @@ namespace RenderOverlays
             const Font& font, DrawTextFlags::BitField, 
             ColorB col, TextAlignment alignment, StringSection<char> text) override;
 
+        virtual Float2  DrawTextWithTable(
+            const std::tuple<Float3, Float3>& quad,
+			FontPtrAndFlags fontTable[256],
+			TextAlignment alignment,
+			StringSection<> text,
+			IteratorRange<const uint32_t*> colors,
+			IteratorRange<const uint8_t*> fontSelectors,
+			ColorB shadowColor) override;
+
         RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() override { return *_immediateDrawables; }
         BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const override;
         void RequireCommandList(BufferUploads::CommandListID) override;
