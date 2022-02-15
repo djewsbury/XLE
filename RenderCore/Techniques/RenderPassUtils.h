@@ -17,19 +17,23 @@ namespace RenderCore { namespace Techniques
 
 	RenderPassInstance RenderPassToPresentationTarget(
         ParsingContext& parserContext,
-		LoadStore loadOperation = LoadStore::Retain);
+		LoadStore loadOperation = LoadStore::Retain,
+		unsigned clearColor = 0xff000000);
 
 	RenderPassInstance RenderPassToPresentationTarget(
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,
-		LoadStore loadOperation = LoadStore::Retain);
+		LoadStore loadOperation = LoadStore::Retain,
+		unsigned clearColor = 0xff000000);
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
         ParsingContext& parserContext,
-		LoadStore loadOperation = LoadStore::Retain);
+		LoadStore loadOperation = LoadStore::Retain,
+		unsigned clearColor = 0xff000000);
 	
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,
-		LoadStore loadOperation = LoadStore::Retain);
+		LoadStore loadOperation = LoadStore::Retain,
+		unsigned clearColor = 0xff000000);
 }}
