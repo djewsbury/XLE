@@ -27,51 +27,9 @@
 
 namespace RenderOverlays
 {
-
-	//---------------------------------------------------------------------------------------
-	//  Font File Buffer Manager
-	//      : managing font file chunk buffers
-	//---------------------------------------------------------------------------------------
-	class FontFileBufferManager
-	{
-	public:
-		::Assets::Blob GetBuffer(const std::string& path)
-		{
-			auto it = _buffers.find(path);
-			if (it != _buffers.end()) {
-				auto result = it->second.lock();
-				if (result)
-					return result;
-			}
-
-			auto blob = ::Assets::MainFileSystem::TryLoadFileAsBlob(path);
-			if (blob)
-				_buffers.insert(std::make_pair(path, blob));
-			return blob;
-		}
-
-		FontFileBufferManager() {}
-		~FontFileBufferManager() 
-		{ 
-			for (auto it = _buffers.begin(); it != _buffers.end(); ++it)
-				assert(it->second.expired());
-		}
-
-	private:
-		struct FontFileBuffer
-		{
-			std::unique_ptr<uint8[]> _buffer;
-			size_t _bufferSize = 0;
-		};
-
-		using FontBufferMap = std::unordered_map<std::string, std::weak_ptr<std::vector<uint8_t>>>;
-		FontBufferMap _buffers;
-	};
-
 	class FTFontResources
 	{
 	public:
-		FontFileBufferManager _bufferManager;
 		FT_Library _ftLib;
 		std::unordered_map<std::string, std::string> _nameMap;
 		::Assets::DependencyValidation _nameMapDepVal;
@@ -100,7 +58,7 @@ namespace RenderOverlays
 			finalPath = i->second;
 
 		_hashCode = Hash64(finalPath, DefaultSeed64 + faceSize);
-		_pBuffer = _resources->_bufferManager.GetBuffer(finalPath);
+		_pBuffer = ::Assets::MainFileSystem::TryLoadFileAsBlob(finalPath);
 
 		_depVal = ::Assets::GetDepValSys().Make();
 		_depVal.RegisterDependency(finalPath);
@@ -130,10 +88,14 @@ namespace RenderOverlays
 		_fontProperties._lineHeight = _face->size->metrics.height / 64.0f;
 		_fontProperties._maxAdvance = _face->size->metrics.max_advance / 64.0f;
 		_fontProperties._ascenderExcludingAccent = _fontProperties._ascender;
+		_fontProperties._fixedWidthAdvance = 0.f;
 
 		error = FT_Load_Char(_face.get(), 'X', FT_LOAD_RENDER);
-		if (!error)
+		if (!error) {
 			_fontProperties._ascenderExcludingAccent = (float)_face->glyph->bitmap_top;
+			if (FT_IS_FIXED_WIDTH(_face.get()))
+				_fontProperties._fixedWidthAdvance = _face->glyph->advance.x / 64.f;
+		}
 	}
 
 	FTFont::~FTFont()

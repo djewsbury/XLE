@@ -95,7 +95,17 @@ namespace RenderOverlays
         virtual Float2   DrawText(
             const std::tuple<Float3, Float3>& quad,
             const Font& font, DrawTextFlags::BitField, 
-			ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
+            ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
+
+        using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
+        virtual Float2  DrawTextWithTable(
+            const std::tuple<Float3, Float3>& quad,
+            FontPtrAndFlags fontTable[256],
+            TextAlignment alignment,
+            StringSection<> text,
+            IteratorRange<const uint32_t*> colors = {},
+            IteratorRange<const uint8_t*> fontSelectors = {},
+            ColorB shadowColor = ColorB::Black) = 0;
 
         virtual void    CaptureState    () = 0;
         virtual void    ReleaseState    () = 0;
