@@ -25,7 +25,7 @@ namespace Utility
 	};
 
 // is c the start of a utf8 sequence ?
-#define isutf(c) (((c)&0xC0) != 0x80)
+#define isutf(c) (((uint8_t(c))&0xC0) != 0x80)
 
 // remark_warning("don't use XlFormatString here!")
 // begin -- for ucs2 and above
@@ -57,7 +57,7 @@ static const uint32 _offsets_magic[6] =
 };
 
 // trailing bytes for utf8
-static const utf8 _trailing_bytes[256] =  
+static const uint8_t _trailing_bytes[256] =  
 {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -71,7 +71,7 @@ static const utf8 _trailing_bytes[256] =
 
 int utf8_seqlen(const utf8* s)
 {
-    return _trailing_bytes[(uint8)s[0]] + 1;
+    return _trailing_bytes[(uint8_t)s[0]] + 1;
 }
 
 // return trailing bytes + first character (excluding trailing length 4 & 5)
@@ -91,10 +91,10 @@ int utf8_step(const char* utf8_str)
     return utf8_bytes[static_cast<unsigned char>(*utf8_str)];
 }
 
-static bool IsValid(const utf8* src, size_t len) 
+static bool IsValid(const uint8_t* src, size_t len) 
 {
     uint8_t a;
-    const utf8* srcptr = src + len;
+    const uint8_t* srcptr = (const uint8_t*)src + len;
     switch (len) {
     default: return false;
     // everything else falls through when "true"... 
@@ -102,7 +102,7 @@ static bool IsValid(const utf8* src, size_t len)
     case 3: if ((a = (uint8_t)(*--srcptr)) < 0x80 || a > 0xBF) return false;
     case 2: if ((a = (uint8_t)(*--srcptr)) > 0xBF) return false;
 
-    switch (*src) {
+    switch ((uint8_t)*src) {
         case 0xE0: if (a < 0xA0) return false; 
             break;
         case 0xED: if ((a < 0x80) || (a > 0x9F)) return false; 
@@ -122,14 +122,14 @@ static bool IsValid(const utf8* src, size_t len)
 
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant
 
-bool IsValid(const utf8* s, const utf8* se) 
+bool IsValid(const uint8_t* s, const uint8_t* se) 
 {
     size_t len;
     if (s == se) {
         return true;
     }
     while (true) {
-        len = _trailing_bytes[*s]+1;
+        len = _trailing_bytes[(uint8_t)*s]+1;
         if (s+len > se) {
             return false;
         }
@@ -148,8 +148,8 @@ int utf8_2_ucs4(const utf8* src, size_t sl, ucs4* dst, size_t dl)
     ucs4 ch;
     int nb;
 
-    const utf8* s = src;
-    const utf8* se = src + sl;
+    const uint8_t* s = (const uint8_t*)src;
+    const uint8_t* se = (const uint8_t*)src + sl;
     const ucs4* de = dst + dl;
     ucs4* d = dst;
 
@@ -198,11 +198,12 @@ int utf8_2_ucs4(const utf8* src, size_t sl, ucs4* dst, size_t dl)
     return (int)(d - dst);
 }
 
-int ucs2_2_utf8(const ucs2* src, size_t sl, utf8* dst, size_t dl)
+int ucs2_2_utf8(const ucs2* src, size_t sl, utf8* dst_, size_t dl)
 {
     ucs4 ch;
     size_t i = 0;
-    const utf8* dend = dst + dl;
+    uint8_t* dst = (uint8_t*)dst_;
+    const uint8_t* dend = dst + dl;
 
     while (i < sl) {
         ch = src[i];
@@ -213,31 +214,31 @@ int ucs2_2_utf8(const ucs2* src, size_t sl, utf8* dst, size_t dl)
             if (dst >= dend) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = (utf8)ch;
+            *dst++ = (uint8_t)ch;
         }
         else if (ch < 0x800) {
             if (dst >= dend - 1) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = utf8((ch >> 6) | 0xC0);
-            *dst++ = utf8((ch & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch >> 6) | 0xC0);
+            *dst++ = uint8_t((ch & 0x3F) | 0x80);
         }
         else if (ch < 0x10000) {
             if (dst >= dend - 2) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = utf8((ch>>12) | 0xE0);
-            *dst++ = utf8(((ch>>6) & 0x3F) | 0x80);
-            *dst++ = utf8((ch & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch>>12) | 0xE0);
+            *dst++ = uint8_t(((ch>>6) & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch & 0x3F) | 0x80);
         }
         else if (ch < 0x110000) {
             if (dst >= dend - 3) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = utf8((ch>>18) | 0xF0);
-            *dst++ = utf8(((ch>>12) & 0x3F) | 0x80);
-            *dst++ = utf8(((ch>>6) & 0x3F) | 0x80);
-            *dst++ = utf8((ch & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch>>18) | 0xF0);
+            *dst++ = uint8_t(((ch>>12) & 0x3F) | 0x80);
+            *dst++ = uint8_t(((ch>>6) & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch & 0x3F) | 0x80);
         }
         i++;
     }
@@ -248,11 +249,12 @@ int ucs2_2_utf8(const ucs2* src, size_t sl, utf8* dst, size_t dl)
     return (int)i;
 }
 
-int ucs4_2_utf8(const ucs4* src, size_t sl, utf8* dst, size_t dl)
+int ucs4_2_utf8(const ucs4* src, size_t sl, utf8* dst_, size_t dl)
 {
     ucs4 ch;
     size_t i = 0;
-    const utf8* dend = dst + dl;
+    uint8_t* dst = (uint8_t*)dst_;
+    const uint8_t* dend = dst + dl;
 
     while (i < sl) {
         ch = src[i];
@@ -264,22 +266,22 @@ int ucs4_2_utf8(const ucs4* src, size_t sl, utf8* dst, size_t dl)
             if (ch == 0) {
                 break;
             }
-            *dst++ = utf8(ch);
+            *dst++ = uint8_t(ch);
         }
         else if (ch >= 0x80  && ch < 0x800) {
             if (dst >= dend - 1) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = utf8((ch >> 6)   | 0xC0);
-            *dst++ = utf8((ch & 0x3F) | 0x80);
+            *dst++ = uint8_t((ch >> 6)   | 0xC0);
+            *dst++ = uint8_t((ch & 0x3F) | 0x80);
         }
         else if (ch >= 0x800 && ch < 0xFFFF) {
             if (dst >= dend - 2) {
                 return UCE_DST_EXHAUSTED;
             }
-            *dst++ = utf8(((ch >> 12)       ) | 0xE0);
-            *dst++ = utf8(((ch >> 6 ) & 0x3F) | 0x80);
-            *dst++ = utf8(((ch      ) & 0x3F) | 0x80);
+            *dst++ = uint8_t(((ch >> 12)       ) | 0xE0);
+            *dst++ = uint8_t(((ch >> 6 ) & 0x3F) | 0x80);
+            *dst++ = uint8_t(((ch      ) & 0x3F) | 0x80);
         }
         i++;
     }
@@ -292,8 +294,8 @@ int ucs4_2_utf8(const ucs4* src, size_t sl, utf8* dst, size_t dl)
 
 int utf8_2_ucs2(const utf8* src, size_t sl, ucs2* dst, size_t dl)
 {
-    const utf8* s = src;
-    const utf8* se = src + sl;
+    const uint8_t* s = (const uint8_t*)src;
+    const uint8_t* se = (const uint8_t*)src + sl;
     ucs2* d = dst;
     const ucs2* de = dst + dl;
 
@@ -302,7 +304,7 @@ int utf8_2_ucs2(const utf8* src, size_t sl, ucs2* dst, size_t dl)
 
     while (s < se) {
         ucs4 ch = 0;
-        utf8 nb = _trailing_bytes[*s];
+        uint8_t nb = _trailing_bytes[*s];
         if (s + nb >= se) {
             err = UCE_SRC_EXHAUSTED;
             break;
@@ -505,51 +507,53 @@ int ucs2_2_ucs4(const ucs2* src, size_t sl, ucs4* dst, size_t dl)
     return (int)(d - dst);
 }
 
-int ucs2_2_utf8(ucs2 ch, utf8* dst)
+int ucs2_2_utf8(ucs2 ch, utf8* dst_)
 {
+    uint8_t* dst = (uint8_t*)dst_;
     if (ch < 0x80) {
         dst[0] = (ch & 0xFF);
         dst[1] = '\0';
         return 1;
     }
     if (ch >= 0x80  && ch < 0x800) {
-        dst[0] = utf8((ch >> 6)   | 0xC0);
-        dst[1] = utf8((ch & 0x3F) | 0x80);
-        dst[2] = utf8('\0');
+        dst[0] = uint8_t((ch >> 6)   | 0xC0);
+        dst[1] = uint8_t((ch & 0x3F) | 0x80);
+        dst[2] = uint8_t('\0');
         return 2;
     }
     if (ch >= 0x800 && ch < 0xFFFF) {
-        dst[0] = utf8(((ch >> 12)       ) | 0xE0);
-        dst[1] = utf8(((ch >> 6 ) & 0x3F) | 0x80);
-        dst[2] = utf8(((ch      ) & 0x3F) | 0x80);
-        dst[3] = utf8('\0');
+        dst[0] = uint8_t(((ch >> 12)       ) | 0xE0);
+        dst[1] = uint8_t(((ch >> 6 ) & 0x3F) | 0x80);
+        dst[2] = uint8_t(((ch      ) & 0x3F) | 0x80);
+        dst[3] = uint8_t('\0');
         return 3;
     }
     return -1;
 }
 
-int ucs4_2_utf8(ucs4 ch, utf8* dst)
+int ucs4_2_utf8(ucs4 ch, utf8* dst_)
 {
+    uint8_t* dst = (uint8_t*)dst_;
     if (ch < 0x80) {
-        dst[0] = (utf8)ch;
+        dst[0] = (uint8_t)ch;
         return 1;
     }
     if (ch < 0x800) {
-        dst[0] = utf8((ch>>6) | 0xC0);
-        dst[1] = utf8((ch & 0x3F) | 0x80);
+        dst[0] = uint8_t((ch>>6) | 0xC0);
+        dst[1] = uint8_t((ch & 0x3F) | 0x80);
         return 2;
     }
     if (ch < 0x10000) {
-        dst[0] = utf8((ch>>12) | 0xE0);
-        dst[1] = utf8(((ch>>6) & 0x3F) | 0x80);
-        dst[2] = utf8((ch & 0x3F) | 0x80);
+        dst[0] = uint8_t((ch>>12) | 0xE0);
+        dst[1] = uint8_t(((ch>>6) & 0x3F) | 0x80);
+        dst[2] = uint8_t((ch & 0x3F) | 0x80);
         return 3;
     }
     if (ch < 0x110000) {
-        dst[0] = utf8((ch>>18) | 0xF0);
-        dst[1] = utf8(((ch>>12) & 0x3F) | 0x80);
-        dst[2] = utf8(((ch>>6) & 0x3F) | 0x80);
-        dst[3] = utf8((ch & 0x3F) | 0x80);
+        dst[0] = uint8_t((ch>>18) | 0xF0);
+        dst[1] = uint8_t(((ch>>12) & 0x3F) | 0x80);
+        dst[2] = uint8_t(((ch>>6) & 0x3F) | 0x80);
+        dst[3] = uint8_t((ch & 0x3F) | 0x80);
         return 4;
     }
     return 0;
@@ -580,10 +584,11 @@ size_t utf8_offset_ord(const utf8* s, size_t offset)
     return N;
 }
 
-ucs4 utf8_nextchar(const utf8* s, size_t* i)
+ucs4 utf8_nextchar(const utf8* src, size_t* i)
 {
-    if (!s[(*i)]) return 0;
+    if (!src[(*i)]) return 0;
 
+    const uint8_t* s = (const uint8_t*)src;
     ucs4 ch = 0;
     size_t l = 0;
 
@@ -605,7 +610,7 @@ ucs4 utf8_nextchar(utf8 const*& iterator, utf8 const* end)
 
 	do {
 		ch <<= 6;
-		ch += *iterator++;
+		ch += (uint8_t)*iterator++;
 		l++;
 	} while (iterator < end && !isutf(*iterator));
 
@@ -741,7 +746,7 @@ size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32 ch)
     else if (ch == L'\\')
         return (size_t)xl_snprintf((char*)buf, (int)dim, "\\\\");
     else if (ch < 32 || ch == 0x7f)
-        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\x%hhX", (uint8)ch);
+        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\x%hhX", (uint8_t)ch);
     else if (ch > 0xFFFF)
         return (size_t)xl_snprintf((char*)buf, (int)dim, "\\U%.8X", (uint32)ch);
     else if (ch >= 0x80 && ch <= 0xFFFF)
@@ -804,7 +809,7 @@ const utf8* utf8_memchr(const utf8* s, ucs4 ch, size_t n, int& ord)
 
         do {
             c <<= 6;
-            c += s[i++];
+            c += (uint8_t)s[i++];
             csz++;
         } while (i < n && !isutf(s[i]));
 
