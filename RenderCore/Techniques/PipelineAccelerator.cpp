@@ -263,18 +263,11 @@ namespace RenderCore { namespace Techniques
 
 		// Build up the geometry selectors. 
 		for (auto i = sortedIA.begin(); i!=sortedIA.end(); ++i) {
-			// If we have the same name as the last one, we should just skip (because the
-			// previous one would have had a larger semantic index, and effectively took
-			// care of this selector)
-			if (i!=sortedIA.begin() && (i-1)->_semanticName == i->_semanticName)
-				continue;
-
-			char buffer[256] = "GEO_HAS_";
-			unsigned c=0;
-			for (; c<i->_semanticName.size() && c < 255-8; ++c)
-				buffer[8+c] = (char)std::toupper(i->_semanticName[c]);	// ensure that we're using upper case for the full semantic
-			buffer[8+c] = '\0';
-			_geoSelectors.SetParameter((const utf8*)buffer, i->_semanticIndex+1);
+			StringMeld<256> meld;
+			meld << "GEO_HAS_" << i->_semanticName;
+			if (i->_semanticIndex != 0)
+				meld << i->_semanticIndex;
+			_geoSelectors.SetParameter(meld.AsStringSection(), 1);
 		}
 
 		// If we have no IA elements at all, force on GEO_HAS_VERTEX_ID. Shaders will almost always
@@ -310,16 +303,10 @@ namespace RenderCore { namespace Techniques
 			StringMeld<256> meld;
 			auto basicSemantic = CommonSemantics::TryDehash(i->_semanticHash);
 			if (basicSemantic.first) {
-				auto base = i->_semanticHash - basicSemantic.second;
-				auto endEquivalents = i+1;
-				while (endEquivalents != sortedIA.end() && (endEquivalents->_semanticHash - base) < 16)
-					++endEquivalents;
-				auto lastSemanticIndex = (endEquivalents-1)->_semanticHash - base;
-
 				meld << "GEO_HAS_" << basicSemantic.first;
 				if (basicSemantic.second != 0)
 					meld << basicSemantic.second;
-				_geoSelectors.SetParameter(meld.AsStringSection(), lastSemanticIndex+1);
+				_geoSelectors.SetParameter(meld.AsStringSection(), 1);
 			} else {
 				// The MiniInputElementDesc is not all-knowing, unfortunately. We can only dehash the
 				// "common" semantics
