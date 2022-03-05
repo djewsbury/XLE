@@ -564,12 +564,14 @@ namespace RenderCore { namespace ImplVulkan
         // and is fastest (though it tears).  If not, fall back to FIFO which is
         // always available.
         VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+		const bool onlyVSyncModes = true;
         for (auto pm:availableModes) {
             if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
                 swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
                 break;
             }
-            if ((swapchainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR) &&
+            if (!onlyVSyncModes &&
+                (swapchainPresentMode != VK_PRESENT_MODE_MAILBOX_KHR) &&
                 (pm == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
                 swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
             }
