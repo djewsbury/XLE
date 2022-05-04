@@ -917,7 +917,8 @@ namespace RenderCore { namespace Techniques
 					if (!deformAccelerator.first)
 						deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
 					auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
-					deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
+					if (deformParameters)
+						deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
 
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual,
@@ -1032,7 +1033,8 @@ namespace RenderCore { namespace Techniques
 				if (!deformAccelerator.first)
 					deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
 				auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
-				deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
+				if (deformParameters)
+					deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
 
 				if (deformAccelerator.first) {
 					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
