@@ -29,11 +29,12 @@ namespace RenderCore { namespace Techniques
 	, _materialDescSetLayout(materialDescSetLayout)
 	{
 		_guid = src.GetHash();
+		_depVal = ::Assets::GetDepValSys().Make();		// _depVal must be unique, because we call RegistryDependency on it in BuildFromInstantiatedShader
+		if (src.GetDependencyValidation())
+			_depVal.RegisterDependency(src.GetDependencyValidation());
 
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
-
-		::Assets::DependencyValidation layoutFileDepVal;
 
 		if (!src.GetDescriptorSetFileName().empty()) {
 			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
@@ -48,7 +49,7 @@ namespace RenderCore { namespace Techniques
 				// will agree. Don't allow rearrangement of the input slots here, because the shader is probably making assumptions
 				// about where they appear
 				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet, false);
-				layoutFileDepVal = actualLayoutFile->GetDependencyValidation();
+				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				::Assets::DependencyValidationMarker depVals[] { layoutFileFuture->GetDependencyValidation(), src.GetDependencyValidation() };
 				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
@@ -79,9 +80,6 @@ namespace RenderCore { namespace Techniques
 		} CATCH(const std::exception& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, src.GetDependencyValidation()));
 		} CATCH_END
-
-		::Assets::DependencyValidationMarker dependencies[] { src.GetDependencyValidation(), layoutFileDepVal };
-		_depVal = ::Assets::GetDepValSys().MakeOrReuse(dependencies);
 	}
 
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
