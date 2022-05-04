@@ -59,6 +59,7 @@ namespace Utility
 
         void            SetParameter(StringSection<utf8> name, IteratorRange<const void*> data, const TypeDesc& type);
         void            SetParameter(StringSection<utf8> name, StringSection<char> stringData);
+        void            SetParameter(StringSection<utf8> name, const std::string& stringData);
         T1(Type) void   SetParameter(StringSection<utf8> name, Type value);
 
         void            SetParameter(ParameterNameHash nameHash, IteratorRange<const void*> data, const TypeDesc& type);
@@ -230,6 +231,8 @@ namespace Utility
         const auto insertType = ImpliedTyping::TypeOf<Type>();
         SetParameter(name, MakeOpaqueIteratorRange(value), insertType);
     }
+
+    inline void ParameterBox::SetParameter(StringSection<utf8> name, const std::string& stringData) { SetParameter(name, MakeStringSection(stringData)); }
     
     uint8_t* ValueTableOffset(SerializableVector<uint8_t>& values, size_t offset);
     const uint8_t* ValueTableOffset(const SerializableVector<uint8_t>& values, size_t offset);
