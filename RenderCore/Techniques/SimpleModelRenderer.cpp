@@ -11,6 +11,8 @@
 #include "PipelineAccelerator.h"
 #include "DescriptorSetAccelerator.h"
 #include "DeformAccelerator.h"
+#include "DeformGeometryInfrastructure.h"
+#include "DeformParametersInfrastructure.h"
 #include "CompiledShaderPatchCollection.h"
 #include "DrawableDelegates.h"
 #include "Services.h"
@@ -508,14 +510,14 @@ namespace RenderCore { namespace Techniques
 			IDevice& device,
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 			const std::string& modelScaffoldName,
-			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
-			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr)
+			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
+			std::shared_ptr<IGeoDeformerInfrastructure> geoDeformerInfrastructure = nullptr)
 		{
 			// Construct the DrawableGeo objects needed by the renderer
 
 			DeformerToRendererBinding deformerBinding;
-			if (deformAccelerator && deformAcceleratorPool) {
-				deformerBinding = deformAcceleratorPool->GetDeformerToRendererBinding(*deformAccelerator);
+			if (deformAccelerator && geoDeformerInfrastructure) {
+				deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}
 
 			std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
@@ -546,6 +548,9 @@ namespace RenderCore { namespace Techniques
 				} else {
 					_geosLayout.push_back(Internal::BuildFinalIA(rg));
 				}
+
+				// hack -- we might need this for material deform, as well
+				drawableGeo->_deformAccelerator = deformAccelerator;
 				
 				drawableGeo->_ibOffset = staticIBIterator;
 				staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
@@ -642,7 +647,9 @@ namespace RenderCore { namespace Techniques
 				Techniques::IPipelineAcceleratorPool& acceleratorPool,
 				uint64_t materialGuid,
 				const RawGeoType& rawGeo,
-				const DrawableGeoBuilder::InputLayout& inputElements)
+				const DrawableGeoBuilder::InputLayout& inputElements,
+				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
+				const IDeformParametersAttachment* parametersDeformInfrastructure)
 		{
 			GeoCall resultGeoCall;
 			const auto* mat = _materialScaffold->GetMaterial(materialGuid);
@@ -660,10 +667,20 @@ namespace RenderCore { namespace Techniques
 					_depVals.insert(patchCollection->GetDependencyValidation());
 
 				IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings {};
-				resultGeoCall._descriptorSetAccelerator = acceleratorPool.CreateDescriptorSetAccelerator(
-					patchCollection,
-					mat->_matParams, mat->_constants, mat->_bindings,
-					samplerBindings);
+				if (parametersDeformInfrastructure && deformAcceleratorPool) {
+					auto paramBinding = parametersDeformInfrastructure->GetOutputParameterBindings();
+					resultGeoCall._descriptorSetAccelerator = acceleratorPool.CreateDescriptorSetAccelerator(
+						patchCollection,
+						mat->_matParams, mat->_constants, mat->_bindings,
+						samplerBindings,
+						{(const AnimatedParameterBinding*)paramBinding.begin(), (const AnimatedParameterBinding*)paramBinding.end()},
+						deformAcceleratorPool->GetDynamicPageResource());
+				} else {
+					resultGeoCall._descriptorSetAccelerator = acceleratorPool.CreateDescriptorSetAccelerator(
+						patchCollection,
+						mat->_matParams, mat->_constants, mat->_bindings,
+						samplerBindings);
+				}
 
 				// Collect up the list of resources in the descriptor set -- we'll use this to filter the "RES_HAS_" selectors
 				std::vector<std::string> resourceNames;
@@ -733,6 +750,8 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator,
+		const std::shared_ptr<IGeoDeformerInfrastructure>& geoDeformerInfrastructure,
+		const std::shared_ptr<IDeformParametersAttachment>& parametersDeformInfrastructure,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates,
 		const std::string& modelScaffoldName,
 		const std::string& materialScaffoldName)
@@ -745,6 +764,9 @@ namespace RenderCore { namespace Techniques
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = deformAccelerator;
 			_deformAcceleratorPool = deformAcceleratorPool;
+			_geoDeformerInfrastructure = geoDeformerInfrastructure;
+		} else {
+			assert(!geoDeformerInfrastructure);
 		}
 
         const auto& skeleton = modelScaffold->EmbeddedSkeleton();
@@ -759,7 +781,7 @@ namespace RenderCore { namespace Techniques
 		_geoCalls.reserve(modelScaffold->ImmutableData()._geoCount);
 		_boundSkinnedControllerGeoCalls.reserve(modelScaffold->ImmutableData()._boundSkinnedControllerCount);
 
-		DrawableGeoBuilder geos{*pipelineAcceleratorPool->GetDevice(), modelScaffold, _modelScaffoldName, deformAcceleratorPool, deformAccelerator};
+		DrawableGeoBuilder geos{*pipelineAcceleratorPool->GetDevice(), modelScaffold, _modelScaffoldName, deformAccelerator, geoDeformerInfrastructure};
 		_geos = std::move(geos._geos);
 		_boundSkinnedControllers = std::move(geos._boundSkinnedControllers);
 
@@ -775,7 +797,7 @@ namespace RenderCore { namespace Techniques
 			// duplication of objects and construction work
 			assert(geoCall._materialCount);
             for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
-				_geoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._geosLayout[geoCall._geoId]));
+				_geoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._geosLayout[geoCall._geoId], _deformAcceleratorPool.get(), parametersDeformInfrastructure.get()));
 			}
 		}
 
@@ -787,7 +809,7 @@ namespace RenderCore { namespace Techniques
 			// duplication of objects and construction work
 			assert(geoCall._materialCount);
 			for (unsigned d = 0; d < unsigned(geoCall._materialCount); ++d) {
-				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._boundSkinnedControllersLayout[geoCall._geoId]));
+				_boundSkinnedControllerGeoCalls.emplace_back(geoCallBuilder.MakeGeoCall(*pipelineAcceleratorPool, geoCall._materialGuids[d], rawGeo, geos._boundSkinnedControllersLayout[geoCall._geoId], _deformAcceleratorPool.get(), parametersDeformInfrastructure.get()));
 			}
 		}
 
@@ -850,6 +872,23 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
+	std::pair<std::shared_ptr<DeformAccelerator>, std::shared_ptr<IGeoDeformerInfrastructure>> CreateAndBindDeformAccelerator(
+		IDeformAcceleratorPool& pool,
+		StringSection<> initializer,
+		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
+		const std::string& modelScaffoldName)
+	{
+		auto geoDeformAttachment = CreateDeformGeometryInfrastructure(
+			*pool.GetDevice(), 
+			initializer, modelScaffold, modelScaffoldName);
+		if (!geoDeformAttachment)
+			return {nullptr, nullptr};
+
+		auto deformAccelerator = pool.CreateDeformAccelerator();
+		pool.Attach(*deformAccelerator, geoDeformAttachment);
+		return {deformAccelerator, geoDeformAttachment};
+	}
+
 	void SimpleModelRenderer::ConstructToPromise(
 		std::promise<std::shared_ptr<SimpleModelRenderer>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
@@ -869,19 +908,25 @@ namespace RenderCore { namespace Techniques
 			[deformOperationString{deformOperations.AsString()}, pipelineAcceleratorPool, uniformBufferBindings, modelScaffoldNameString, materialScaffoldNameString, deformAcceleratorPool](
 				auto scaffoldActual, auto materialActual) {
 				if (deformAcceleratorPool && !deformOperationString.empty()) {
-					auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
-						MakeStringSection(deformOperationString),
+					auto deformAccelerator = CreateAndBindDeformAccelerator(
+						*deformAcceleratorPool, 
+						MakeStringSection(deformOperationString), 
 						scaffoldActual, modelScaffoldNameString);
+
+					if (!deformAccelerator.first)
+						deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
+					auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
+					deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
 
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual,
-						deformAcceleratorPool, deformAccelerator,
+						deformAcceleratorPool, deformAccelerator.first, deformAccelerator.second, deformParameters,
 						MakeIteratorRange(uniformBufferBindings),
 						modelScaffoldNameString, materialScaffoldNameString);
 				} else {
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual,
-						nullptr, nullptr,
+						nullptr, nullptr, nullptr, nullptr,
 						MakeIteratorRange(uniformBufferBindings),
 						modelScaffoldNameString, materialScaffoldNameString);
 				}
@@ -924,7 +969,7 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IteratorRange<const std::shared_ptr<IDeformer>*> skinDeformers)
+		IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers)
 	{
 		_deformers.reserve(skinDeformers.size());
 		for (auto&d:skinDeformers) {
@@ -937,10 +982,9 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IDeformAcceleratorPool& deformAcceleratorPool,
-		DeformAccelerator& deformAccelerator)
+		IGeoDeformerInfrastructure& geoDeformerInfrastructure)
 	{
-		auto srcDeformers = deformAcceleratorPool.GetOperations(deformAccelerator, typeid(ISkinDeformer).hash_code());
+		auto srcDeformers = geoDeformerInfrastructure.GetOperations(typeid(ISkinDeformer).hash_code());
 		_deformers.reserve(srcDeformers.size());
 		for (auto&d:srcDeformers) {
 			auto* skinDeformer = (ISkinDeformer*)d->QueryInterface(typeid(ISkinDeformer).hash_code());
@@ -979,27 +1023,33 @@ namespace RenderCore { namespace Techniques
 				if (!deformOperationString.empty()) deformOperationString += ";skin";
 				else deformOperationString = "skin";
 
-				auto deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator(
+				auto deformAccelerator = CreateAndBindDeformAccelerator(
+					*deformAcceleratorPool,
 					MakeStringSection(deformOperationString),
 					scaffoldActual, modelScaffoldNameString);
 
-				if (deformAccelerator) {
+				if (!deformAccelerator.first)
+					deformAccelerator.first = deformAcceleratorPool->CreateDeformAccelerator();
+				auto deformParameters = CreateDeformParametersAttachment(scaffoldActual, modelScaffoldNameString);
+				deformAcceleratorPool->Attach(*deformAccelerator.first, deformParameters);
+
+				if (deformAccelerator.first) {
 					auto skeletonInterface = std::make_shared<RendererSkeletonInterface>(
 						scaffoldActual->EmbeddedSkeleton().GetOutputInterface(),
-						*deformAcceleratorPool, *deformAccelerator);
+						*deformAccelerator.second);
 					
 					skeletonInterfacePromise.set_value(skeletonInterface);
 
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						deformAcceleratorPool, deformAccelerator,
+						deformAcceleratorPool, deformAccelerator.first, deformAccelerator.second, deformParameters,
 						uniformBufferBindings,
 						modelScaffoldNameString, materialScaffoldNameString);
 				} else {
 					skeletonInterfacePromise.set_value(nullptr);
 					return std::make_shared<SimpleModelRenderer>(
 						pipelineAcceleratorPool, scaffoldActual, materialActual, 
-						nullptr, nullptr,
+						nullptr, nullptr, nullptr, nullptr,
 						uniformBufferBindings,
 						modelScaffoldNameString, materialScaffoldNameString);
 				}

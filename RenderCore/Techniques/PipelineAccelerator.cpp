@@ -10,6 +10,7 @@
 #include "CommonResources.h"
 #include "ShaderVariationSet.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset
+#include "DeformAccelerator.h"		// for DeformerToDescriptorSetBinding
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Metal/DeviceContext.h"
@@ -374,7 +375,9 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& materialSelectors,
 			const ParameterBox& constantBindings,
 			const ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings) override;
+			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
+			IteratorRange<const AnimatedParameterBinding*> animatedBindings,
+			const std::shared_ptr<IResourceView>& dynamicPageResource) override;
 
 		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			const std::string& name,
@@ -446,7 +449,7 @@ namespace RenderCore { namespace Techniques
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid);
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline);
 
-		SamplerPool _samplerPool;
+		std::shared_ptr<SamplerPool> _samplerPool;
 		DescriptorSetLayoutAndBinding _matDescSetLayout;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _emptyPatchCollection;
@@ -670,7 +673,9 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& materialSelectors,
 		const ParameterBox& constantBindings,
 		const ParameterBox& resourceBindings,
-		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings)
+		IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings,
+		IteratorRange<const AnimatedParameterBinding*> animatedBindings,
+		const std::shared_ptr<IResourceView>& dynamicPageResource)
 	{
 		std::shared_ptr<DescriptorSetAccelerator> result;
 		{
@@ -687,6 +692,8 @@ namespace RenderCore { namespace Techniques
 			}
 			if (shaderPatches)
 				hash = HashCombine(shaderPatches->GetHash(), hash);
+			for (const auto& b:animatedBindings)
+				hash = HashCombine(b._name, hash);
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
@@ -712,7 +719,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<ISampler>>> metalSamplers;
 		metalSamplers.reserve(samplerBindings.size());
 		for (const auto&c:samplerBindings)
-			metalSamplers.push_back(std::make_pair(c.first, _samplerPool.GetSampler(c.second)));
+			metalSamplers.push_back(std::make_pair(c.first, _samplerPool->GetSampler(c.second)));
 
 		if (shaderPatches) {
 			auto patchCollectionFuture = ::Assets::MakeAssetPtr<CompiledShaderPatchCollection>(*shaderPatches, _matDescSetLayout);
@@ -726,18 +733,19 @@ namespace RenderCore { namespace Techniques
 					(*patchCollection)->GetInterface().GetMaterialDescriptorSet(),
 					constantBindings,
 					resourceBindings,
-					MakeIteratorRange(metalSamplers),
+					MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
 					PipelineType::Graphics,
 					!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 			} else {
 				ParameterBox constantBindingsCopy = constantBindings;
 				ParameterBox resourceBindingsCopy = resourceBindings;
+				std::vector<AnimatedParameterBinding> animatedParamCopy{animatedBindings.begin(), animatedBindings.end()};
 
 				std::weak_ptr<IDevice> weakDevice = _device;
 				bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
 				::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 					result->_descriptorSet->AdoptPromise(),
-					[constantBindingsCopy, resourceBindingsCopy, metalSamplers, weakDevice, generateBindingInfo](
+					[constantBindingsCopy, resourceBindingsCopy, animatedParamCopy, metalSamplers, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), dynamicPageResource=dynamicPageResource](
 						std::promise<ActualizedDescriptorSet>&& promise,
 						std::shared_ptr<CompiledShaderPatchCollection> patchCollection) {
 
@@ -751,7 +759,7 @@ namespace RenderCore { namespace Techniques
 							patchCollection->GetInterface().GetMaterialDescriptorSet(),
 							constantBindingsCopy,
 							resourceBindingsCopy,
-							MakeIteratorRange(metalSamplers),
+							MakeIteratorRange(metalSamplers), samplerPool.lock().get(), animatedParamCopy, dynamicPageResource,
 							PipelineType::Graphics,
 							generateBindingInfo);
 					});
@@ -763,7 +771,7 @@ namespace RenderCore { namespace Techniques
 				*_matDescSetLayout.GetLayout(),
 				constantBindings,
 				resourceBindings,
-				MakeIteratorRange(metalSamplers),
+				MakeIteratorRange(metalSamplers), _samplerPool.get(), animatedBindings, dynamicPageResource,
 				PipelineType::Graphics,
 				!!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo));
 		}
@@ -1038,14 +1046,16 @@ namespace RenderCore { namespace Techniques
 
 		const auto& matchingDesc = pipelineLayoutDesc.GetDescriptorSets()[matDescSetLayout.GetSlotIndex()]._signature;
 		const auto& layout = *matDescSetLayout.GetLayout();
-		// It's ok if the pipeline layout has more slots than the _matDescSetLayout version; just not the other way around
-		// we just have the verify that the types match up for the slots that are there
-		if (matchingDesc._slots.size() < layout._slots.size())
-			Throw(std::runtime_error(std::string{"Pipeline layout does not match the provided "} + descSetName + " layout. There are too few slots in the pipeline layout"));
-
 		for (unsigned s=0; s<layout._slots.size(); ++s) {
 			auto expectedCount = layout._slots[s]._arrayElementCount ?: 1;
-			if (matchingDesc._slots[s]._type != layout._slots[s]._type || matchingDesc._slots[s]._count != expectedCount)
+			auto idx = layout._slots[s]._slotIdx;
+
+			// It's ok if the pipeline layout has more slots than the _matDescSetLayout version; just not the other way around
+			// we just have the verify that the types match up for the slots that are there
+			if (idx >= matchingDesc._slots.size())
+				Throw(std::runtime_error(std::string{"Pipeline layout does not match the provided "} + descSetName + " layout. There are too few slots in the pipeline layout"));
+
+			if (matchingDesc._slots[idx]._type != layout._slots[s]._type || matchingDesc._slots[idx]._count != expectedCount)
 				Throw(std::runtime_error(std::string{"Pipeline layout does not match the provided "} + descSetName + " layout. Slot type does not match for slot (" + std::to_string(s) + ")"));
 		}
 	}
@@ -1060,12 +1070,14 @@ namespace RenderCore { namespace Techniques
 		if (i != pipelineLayoutDesc.GetDescriptorSets().end()) {
 			auto extractedLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
 			extractedLayout->_slots.reserve(i->_signature._slots.size());
+			unsigned idx = 0;
 			for (const auto& slot:i->_signature._slots)
 				extractedLayout->_slots.push_back(
 					RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot{
 						std::string{},
 						slot._type,
-						(slot._count == 1) ? 0u : slot._count});
+						(slot._count == 1) ? 0u : slot._count,
+						idx++});
 			return DescriptorSetLayoutAndBinding { extractedLayout, (unsigned)std::distance(pipelineLayoutDesc.GetDescriptorSets().begin(), i) };
 		}
 		return {};
@@ -1075,7 +1087,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDevice>& device,
 		const DescriptorSetLayoutAndBinding& matDescSetLayout,
 		PipelineAcceleratorPoolFlags::BitField flags)
-	: _samplerPool(*device)
+	: _samplerPool(std::make_shared<SamplerPool>(*device))
 	{
 		_guid = s_nextPipelineAcceleratorPoolGUID++;
 		_device = device;

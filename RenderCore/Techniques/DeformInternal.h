@@ -5,6 +5,7 @@
 #pragma once
 
 #include "DeformOperationFactory.h"
+#include "DeformGeometryInfrastructure.h"
 #include "CommonBindings.h"
 #include "PipelineCollection.h"
 #include "../Metal/InputLayout.h"

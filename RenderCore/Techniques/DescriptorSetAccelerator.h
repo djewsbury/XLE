@@ -7,11 +7,12 @@
 #include "../UniformsStream.h"
 #include "../Types.h"
 #include "../../Assets/Marker.h"
+#include "../../Utility/ImpliedTyping.h"
 #include <vector>
 #include <memory>
 
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
-namespace RenderCore { class IDevice; class IDescriptorSet; }
+namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; }
 namespace Utility { class ParameterBox; }
 namespace BufferUploads { using CommandListID = uint32_t; }
 
@@ -34,6 +35,8 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<Slot> _slots;
 	};
+	
+	class AnimatedUniformBufferHelper;
 
 	class ActualizedDescriptorSet
 	{
@@ -43,10 +46,36 @@ namespace RenderCore { namespace Techniques
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 
 		std::shared_ptr<RenderCore::IDescriptorSet> _descriptorSet;
+		unsigned _dynamicPageBufferSize = 0u;
+		std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList;
 		::Assets::DependencyValidation _depVal;
+
+		ActualizedDescriptorSet();
+		ActualizedDescriptorSet(ActualizedDescriptorSet&&);
+		ActualizedDescriptorSet& operator=(ActualizedDescriptorSet&&);
+		ActualizedDescriptorSet(const ActualizedDescriptorSet&);
+		ActualizedDescriptorSet& operator=(const ActualizedDescriptorSet&);
+		~ActualizedDescriptorSet();
 	};
+
+	class AnimatedParameterBinding
+	{
+	public:
+		uint64_t _name;
+		ImpliedTyping::TypeDesc _type;
+		unsigned _offset;
+	};
+
+	namespace Internal
+	{
+		inline unsigned GetDynamicPageResourceSize(const ActualizedDescriptorSet& descSet) { return descSet._dynamicPageBufferSize; }
+		bool PrepareDynamicPageResource(
+			const ActualizedDescriptorSet& descSet,
+			IteratorRange<const void*> animatedParameters,
+			IteratorRange<void*> dynamicPageBuffer);
+	}
 
 	void ConstructDescriptorSet(
 		std::promise<ActualizedDescriptorSet>&& promise,
@@ -55,6 +84,9 @@ namespace RenderCore { namespace Techniques
 		const Utility::ParameterBox& constantBindings,
 		const Utility::ParameterBox& resourceBindings,
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<ISampler>>*> samplerBindings,
+		SamplerPool* samplerPool,
+		IteratorRange<const AnimatedParameterBinding*> animatedBindings = {},
+		const std::shared_ptr<IResourceView>& dynamicPageResource = nullptr,
 		PipelineType pipelineType = PipelineType::Graphics,
 		bool generateBindingInfo = false);
 
@@ -63,6 +95,7 @@ namespace RenderCore { namespace Techniques
 		const Assets::PredefinedDescriptorSetLayout& layout,
 		const UniformsStreamInterface& usi,
 		const UniformsStream& us,
+		SamplerPool* samplerPool,
 		PipelineType pipelineType = PipelineType::Graphics);
 
 }}

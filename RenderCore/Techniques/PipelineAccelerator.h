@@ -21,7 +21,7 @@ namespace RenderCore
 }
 
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; } }
-namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; }
+namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; class IResourceView; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -33,6 +33,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetLayoutAndBinding;
 	class ActualizedDescriptorSet;
 	class CompiledPipelineLayoutAsset;
+	class AnimatedParameterBinding;
 
 	// Switching this to a virtual interface style class in order to better support multiple DLLs/modules
 	// For many objects like the SimpleModelRenderer, the pipeline accelerator pools is one of the main
@@ -61,7 +62,9 @@ namespace RenderCore { namespace Techniques
 			const ParameterBox& materialSelectors,
 			const Utility::ParameterBox& constantBindings,
 			const Utility::ParameterBox& resourceBindings,
-			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {}) = 0;
+			IteratorRange<const std::pair<uint64_t, SamplerDesc>*> samplerBindings = {},
+			IteratorRange<const AnimatedParameterBinding*> animatedBindings = {},
+			const std::shared_ptr<IResourceView>& dynamicPageResource = nullptr) = 0;
 
 		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
 			const std::string& name,

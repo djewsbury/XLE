@@ -22,6 +22,7 @@
 #include "../Metal/Resource.h"
 #include "../../Assets/AsyncMarkerGroup.h"
 #include "../../Utility/ArithmeticUtils.h"
+#include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -87,6 +88,9 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	IDeformAcceleratorPool* g_hack_deformAccelerators = nullptr;
+	RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes);
+
 	template<bool UsePreStalledResources>
 		static void Draw(
 			RenderCore::Metal::DeviceContext& metalContext,
@@ -104,6 +108,8 @@ namespace RenderCore { namespace Techniques
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
 
 		const UniformsStreamInterface& globalUSI = uniformDelegateMan.GetInterface();
+
+		auto& deformAccelerators = *g_hack_deformAccelerators;
 		
 		UniformsStreamInterface materialUSI;
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
@@ -127,6 +133,9 @@ namespace RenderCore { namespace Techniques
 		unsigned fullDescSetCount = 0;
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
+		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap dynamicPageResourceWorkingAllocation;
+		const auto dynamicPageResourceAlignment = deformAccelerators.GetDynamicPageResourceAlignment();
+		unsigned dynamicPageMovingGPUOffset = 0, dynamicPageMovingGPUEnd = 0;
 
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
@@ -157,14 +166,13 @@ namespace RenderCore { namespace Techniques
 					++boundUniformLookupCount;
 				}
 
-				const IDescriptorSet* matDescSet = nullptr;
+				const ActualizedDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
-					auto* actualizedDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
-					if (UsePreStalledResources && !actualizedDescSet && preStalledResources._pendingDescriptorSetMarkers[idx])
-						actualizedDescSet = &preStalledResources._pendingDescriptorSetMarkers[idx]->ActualizeBkgrnd();
-					if (!actualizedDescSet) continue;
-					matDescSet = actualizedDescSet->GetDescriptorSet().get();
-					parserContext.RequireCommandList(actualizedDescSet->GetCompletionCommandList());
+					matDescSet = pipelineAccelerators.TryGetDescriptorSet(*drawable._descriptorSet);
+					if (UsePreStalledResources && !matDescSet && preStalledResources._pendingDescriptorSetMarkers[idx])
+						matDescSet = &preStalledResources._pendingDescriptorSetMarkers[idx]->ActualizeBkgrnd();
+					if (!matDescSet) continue;
+					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
 
 				////////////////////////////////////////////////////////////////////////////// 
@@ -210,9 +218,41 @@ namespace RenderCore { namespace Techniques
 					++fullDescSetCount;
 				} 
 				{
-					const IDescriptorSet* descriptorSets[2] { matDescSet, parserContext._extraSequencerDescriptorSet.second };
-					// When the shader interface hasn't changed, we'll set just the material descriptor set
-					currentBoundUniforms->ApplyDescriptorSets(metalContext, encoder, descriptorSets, s_uniformGroupMaterial);
+					if (matDescSet) {
+						auto dynamicSize = Internal::GetDynamicPageResourceSize(*matDescSet);
+						if (dynamicSize) {
+							
+							// if it fits in the existing block, go with that; otherwise allocate a new block
+							unsigned preAlign = CeilToMultiple((size_t)dynamicPageMovingGPUOffset, dynamicPageResourceAlignment) - (size_t)dynamicPageMovingGPUOffset;
+							if ((dynamicPageMovingGPUOffset+preAlign+dynamicSize) > dynamicPageMovingGPUEnd) {
+								const unsigned defaultBlockSize = 16*1024;
+								dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(deformAccelerators, std::max(dynamicSize, defaultBlockSize));
+								dynamicPageMovingGPUOffset = 0;
+								dynamicPageMovingGPUEnd = dynamicPageMovingGPUOffset + dynamicPageResourceWorkingAllocation.GetData().size();
+								preAlign = 0;
+							}
+
+							// deal with alignments and allocate our space from the allocated block
+							IteratorRange<void*> dynamicPageBufferSpace;
+							dynamicPageBufferSpace.first = PtrAdd(dynamicPageResourceWorkingAllocation.GetData().begin(), dynamicPageMovingGPUOffset+preAlign);
+							dynamicPageBufferSpace.second = PtrAdd(dynamicPageBufferSpace.first, dynamicSize);
+							unsigned dynamicOffset = dynamicPageResourceWorkingAllocation.GetBeginAndEndInResource().first+dynamicPageMovingGPUOffset+preAlign;
+							assert((dynamicOffset % dynamicPageResourceAlignment) == 0);
+							dynamicPageMovingGPUOffset += preAlign+dynamicSize;
+
+							assert(drawable._geo->_deformAccelerator);
+							Internal::PrepareDynamicPageResource(
+								*matDescSet,
+								Internal::GetOutputParameterState(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx),
+								dynamicPageBufferSpace);
+							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
+						} else {
+							unsigned dynamicOffset = 0;
+							currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
+						}
+					}
+					if (parserContext._extraSequencerDescriptorSet.second)
+						currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *parserContext._extraSequencerDescriptorSet.second, s_uniformGroupMaterial, 1);
 					++justMatDescSetCount;
 				}
 
@@ -240,20 +280,21 @@ namespace RenderCore { namespace Techniques
 		const DrawOptions& drawOptions)
 	{
 		TemporaryStorageLocator temporaryVB, temporaryIB;
-		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::VB).empty()) {
-			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::VB);
+		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::Vertex).empty()) {
+			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::Vertex);
 			auto mappedData = metalContext.MapTemporaryStorage(srcData.size(), BindFlag::VertexBuffer);
 			assert(mappedData.GetData().size() == srcData.size());
 			std::memcpy(mappedData.GetData().begin(), srcData.begin(), srcData.size());
 			temporaryVB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
-		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::IB).empty()) {
-			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::IB);
+		if (!drawablePkt.GetStorage(DrawablesPacket::Storage::Index).empty()) {
+			auto srcData = drawablePkt.GetStorage(DrawablesPacket::Storage::Index);
 			auto mappedData = metalContext.MapTemporaryStorage(srcData.size(), BindFlag::IndexBuffer);
 			assert(mappedData.GetData().size() == srcData.size());
 			std::memcpy(mappedData.GetData().begin(), srcData.begin(), srcData.size());
 			temporaryIB = { mappedData.GetResource().get(), mappedData.GetBeginAndEndInResource().first, mappedData.GetBeginAndEndInResource().second };
 		}
+		assert(drawablePkt.GetStorage(DrawablesPacket::Storage::Uniform).empty());
 
 		PreStalledResources preStalledResources;
 		if (drawOptions._stallForResources) {
@@ -316,7 +357,7 @@ namespace RenderCore { namespace Techniques
 				if (descriptorSetFuture && descriptorSetFuture->GetAssetState() != ::Assets::AssetState::Ready) {
 					if (!result)
 						result = std::make_shared<::Assets::AsyncMarkerGroup>();
-					result->Add(pipelineFuture, s_descriptorSet);
+					result->Add(descriptorSetFuture, s_descriptorSet);
 				}
 			}
 		}
@@ -418,20 +459,22 @@ namespace RenderCore { namespace Techniques
 
 	auto DrawablesPacket::AllocateStorage(Storage storageType, size_t size) -> AllocateStorageResult
 	{
-		if (storageType == Storage::IB) {
+		if (storageType == Storage::Index) {
 			return AllocateFrom(_ibStorage, size, _storageAlignment);
 		} else {
-			assert(storageType == Storage::VB);
+			assert(storageType == Storage::Vertex);
 			return AllocateFrom(_vbStorage, size, _storageAlignment);
 		}
 	}
 
 	IteratorRange<const void*> DrawablesPacket::GetStorage(Storage storageType) const
 	{
-		if (storageType == Storage::IB) {
+		if (storageType == Storage::Index) {
 			return MakeIteratorRange(_ibStorage);
+		} else if (storageType == Storage::Uniform) {
+			return MakeIteratorRange(_ubStorage);
 		} else {
-			assert(storageType == Storage::VB);
+			assert(storageType == Storage::Vertex);
 			return MakeIteratorRange(_vbStorage);
 		}
 	}

@@ -31,7 +31,9 @@ namespace RenderCore { namespace Techniques
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
-	class IDeformer;
+	class IGeoDeformerInfrastructure;
+	class IDeformParametersAttachment;
+	class IGeoDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;
 
@@ -69,8 +71,7 @@ namespace RenderCore { namespace Techniques
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
-		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }
-		const std::shared_ptr<IDeformAcceleratorPool>& GetDeformAcceleratorPool() const { return _deformAcceleratorPool; }
+		const std::shared_ptr<IGeoDeformerInfrastructure>& GetGeoDeformerInfrastructure() const { return _geoDeformerInfrastructure; }
 
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& GetModelScaffold() const { return _modelScaffold; }
 		const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& GetMaterialScaffold() const { return _materialScaffold; }
@@ -85,6 +86,8 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<RenderCore::Assets::MaterialScaffold>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool = nullptr,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator = nullptr,
+			const std::shared_ptr<IGeoDeformerInfrastructure>& geoDeformerInfrastructure = nullptr,
+			const std::shared_ptr<IDeformParametersAttachment>& parametersDeformInfrastructure = nullptr,
 			IteratorRange<const UniformBufferBinding*> uniformBufferDelegates = {},
 			const std::string& modelScaffoldName = {},
 			const std::string& materialScaffoldName = {});
@@ -147,6 +150,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<DrawableInputAssembly>> _drawableIAs;
 		std::shared_ptr<IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
+		std::shared_ptr<IGeoDeformerInfrastructure> _geoDeformerInfrastructure;
 
 		std::string _modelScaffoldName;
 		std::string _materialScaffoldName;
@@ -166,11 +170,10 @@ namespace RenderCore { namespace Techniques
 
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IteratorRange<const std::shared_ptr<IDeformer>*> skinDeformers);
+			IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers);
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IDeformAcceleratorPool& deformAcceleratorPool,
-			DeformAccelerator& deformAccelerator);
+			IGeoDeformerInfrastructure& geoDeformerInfrastructure);
 		~RendererSkeletonInterface();
 
 		static void ConstructToPromise(
@@ -189,7 +192,7 @@ namespace RenderCore { namespace Techniques
 		{
 			ISkinDeformer* _skinDeformer;
 			RenderCore::Assets::SkeletonBinding _deformerBindings;
-			std::shared_ptr<IDeformer> _skinDeformerRef;
+			std::shared_ptr<IGeoDeformer> _skinDeformerRef;
 		};
 		std::vector<Deformer> _deformers;
 	};

@@ -22,7 +22,7 @@ namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
 {
-	class CPUSkinDeformer : public IDeformer, public ISkinDeformer
+	class CPUSkinDeformer : public IGeoDeformer, public ISkinDeformer
 	{
 	public:
 		virtual void ExecuteCPU(
@@ -93,7 +93,7 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderPatchCollection;
 	namespace Internal { struct GPUDeformerIAParams; class DeformerPipelineCollection; }
 
-	class GPUSkinDeformer : public IDeformer, public ISkinDeformer
+	class GPUSkinDeformer : public IGeoDeformer, public ISkinDeformer
 	{
 	public:
 		virtual void ExecuteGPU(
