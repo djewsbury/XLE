@@ -387,6 +387,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		case DescriptorType::UnorderedAccessBuffer:
 		case DescriptorType::UniformTexelBuffer:
 		case DescriptorType::UnorderedAccessTexelBuffer:
+		case DescriptorType::UniformBufferDynamicOffset:
+		case DescriptorType::UnorderedAccessBufferDynamicOffset:
 			WriteBinding(
 				descriptorSetBindPoint,
 				vkSlotType,
@@ -462,7 +464,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			auto b = _signature[bIndex]._type;
 			if (_signature[bIndex]._count == 1) {
-				if (b == DescriptorType::UniformBuffer) {
+				if (b == DescriptorType::UniformBuffer || b == DescriptorType::UniformBufferDynamicOffset || b == DescriptorType::UnorderedAccessBufferDynamicOffset) {
 					WriteBinding(
 						bIndex,
 						AsVkDescriptorType(b),
@@ -961,7 +963,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				// across APIs.
 				// to support different descriptor types, we'd need to change the offset alignment
 				// values and change the bind flag used to create the buffer
-				assert(_layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBuffer);
+				assert(_layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBuffer || _layout->GetDescriptorSlots()[c]._type == DescriptorType::UniformBufferDynamicOffset);
 				auto size = uniforms._immediateData[binds[c]._uniformsStreamIdx].size();
 				linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 				writtenMask |= 1ull<<uint64_t(c);
@@ -1071,6 +1073,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		case DescriptorType::UnorderedAccessTexelBuffer:	return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
 		case DescriptorType::UniformTexelBuffer:			return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
 		case DescriptorType::InputAttachment:				return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		case DescriptorType::UniformBufferDynamicOffset:			return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		case DescriptorType::UnorderedAccessBufferDynamicOffset:	return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
 		default:											return VK_DESCRIPTOR_TYPE_SAMPLER;
 		}
 	}

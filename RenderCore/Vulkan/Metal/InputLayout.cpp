@@ -307,6 +307,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	const uint32_t s_arrayBindingFlag = 1u<<31u;
 
+	static unsigned CalculateDynamicOffsetCount(IteratorRange<const DescriptorSlot*> signature)
+	{
+		unsigned result = 0;
+		for (const auto& s:signature)
+			if (s._type == DescriptorType::UniformBufferDynamicOffset || s._type == DescriptorType::UnorderedAccessBufferDynamicOffset)
+				++result;
+		return result;
+	}
+
 	class BoundUniforms::ConstructionHelper
 	{
 	public:
@@ -414,8 +423,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				groupRules._adaptiveSetRules.begin(), groupRules._adaptiveSetRules.end(),
 				[outputDescriptorSet](const auto& c) { return c._descriptorSetIdx == outputDescriptorSet; });
 			if (adaptiveSet == groupRules._adaptiveSetRules.end()) {
+				auto layout = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet);
+				auto dynamicOffsetCount = CalculateDynamicOffsetCount(layout->GetDescriptorSlots());
 				groupRules._adaptiveSetRules.push_back(
-					AdaptiveSetBindingRules { outputDescriptorSet, 0u, _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet) });
+					AdaptiveSetBindingRules { outputDescriptorSet, 0u, std::move(layout), dynamicOffsetCount });
 				adaptiveSet = groupRules._adaptiveSetRules.end()-1;
 			}
 			adaptiveSet->_shaderStageMask |= shaderStageMask;
@@ -533,9 +544,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				return slotType == DescriptorType::SampledTexture || slotType == DescriptorType::UnorderedAccessTexture 
 					|| slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UnorderedAccessBuffer 
 					|| slotType == DescriptorType::InputAttachment
-					|| slotType == DescriptorType::UniformTexelBuffer || slotType == DescriptorType::UnorderedAccessTexelBuffer;
+					|| slotType == DescriptorType::UniformTexelBuffer || slotType == DescriptorType::UnorderedAccessTexelBuffer
+					|| slotType == DescriptorType::UniformBufferDynamicOffset || slotType == DescriptorType::UnorderedAccessBufferDynamicOffset;
 			else if (bindingType == UniformStreamType::ImmediateData)
-				return slotType == DescriptorType::UniformBuffer;			// we can only actually write immediate data to uniform buffers currently -- storage buffers, texel buffers, etc, aren't supported (to avoid the extra complexity that support would bring)
+				return slotType == DescriptorType::UniformBuffer || slotType == DescriptorType::UniformBufferDynamicOffset;			// we can only actually write immediate data to uniform buffers currently -- storage buffers, texel buffers, etc, aren't supported (to avoid the extra complexity that support would bring)
 			else if (bindingType == UniformStreamType::Sampler)
 				return slotType == DescriptorType::Sampler;
 
@@ -550,8 +562,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			case DescriptorType::UnorderedAccessTexture:
 				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && (*reflectionVariable._type == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._type == SPIRVReflection::BasicType::Image || *reflectionVariable._type == SPIRVReflection::BasicType::StorageImage); 
 			case DescriptorType::UniformBuffer:
+			case DescriptorType::UniformBufferDynamicOffset:
 				return reflectionVariable._isStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
 			case DescriptorType::UnorderedAccessBuffer:
+			case DescriptorType::UnorderedAccessBufferDynamicOffset:
 				return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._type && (*reflectionVariable._type != SPIRVReflection::BasicType::Image && *reflectionVariable._type != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._type != SPIRVReflection::BasicType::Sampler));
 			case DescriptorType::UniformTexelBuffer:
 				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._type && *reflectionVariable._type == SPIRVReflection::BasicType::TexelBuffer; 
@@ -677,6 +691,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 						auto groupIdx = std::get<0>(fixedDescSet->second);
 						auto inputSlot = std::get<1>(fixedDescSet->second);
+						auto dynamicOffsetCount = signature ? CalculateDynamicOffsetCount(signature->_slots) : 0u;
 
 						// We might have an existing registration for this binding; in which case we
 						// just have to update the shader stage mask
@@ -685,12 +700,12 @@ namespace RenderCore { namespace Metal_Vulkan
 							[inputSlot](const auto& c) { return c._inputSlot == inputSlot; });
 						if (existing != _group[groupIdx]._fixedDescriptorSetRules.end()) {
 							if (existing->_outputSlot != reflectionVariable._binding._descriptorSet)
-								Throw(std::runtime_error("Attempting to a single input descriptor set to multiple descriptor sets in the shader inputs (ds index: " + std::to_string(reflectionVariable._binding._descriptorSet) + ")"));
+								Throw(std::runtime_error("Attempting to bind a single input descriptor set to multiple descriptor sets in the shader inputs (ds index: " + std::to_string(reflectionVariable._binding._descriptorSet) + ")"));
 							existing->_shaderStageMask |= shaderStageMask;
 						} else {
 							_group[groupIdx]._fixedDescriptorSetRules.push_back(
 								FixedDescriptorSetBindingRules {
-									inputSlot, reflectionVariable._binding._descriptorSet, shaderStageMask
+									inputSlot, reflectionVariable._binding._descriptorSet, shaderStageMask, dynamicOffsetCount
 								});
 						}
 					}
@@ -1204,6 +1219,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		const UniformsStream& stream,
 		unsigned groupIdx) const
 	{
+		// todo -- consider using VK_KHR_descriptor_update_template as an optimized way of updating many descriptors
+		// in one go
+
 		// assert(encoder.GetPipelineLayout().get() == _pipelineLayout.get()); todo -- pipeline layout compatibility validation
 		assert(groupIdx < dimof(_group));
 		for (const auto& adaptiveSet:_group[groupIdx]._adaptiveSetRules) {
@@ -1301,9 +1319,14 @@ namespace RenderCore { namespace Metal_Vulkan
 					builder->FlushChanges(context.GetUnderlyingDevice(), descriptorSet.get(), nullptr, 0, resourceVisibilityList VULKAN_VERBOSE_DEBUG_ONLY(, verboseDescription));
 					context.GetActiveCommandList().RequireResourceVisbility(MakeIteratorRange(resourceVisibilityList));
 				}
+
+				unsigned dynamicOffsetCount = adaptiveSet._layoutDynamicOffsetCount;		// we should prefer this to be zero in the majority of cases
+				unsigned dynamicOffsets[dynamicOffsetCount];
+				for (unsigned c=0; c<dynamicOffsetCount; ++c) dynamicOffsets[c] = 0;
 			
 				encoder.BindDescriptorSet(
-					adaptiveSet._descriptorSetIdx, descriptorSet.get()
+					adaptiveSet._descriptorSetIdx, descriptorSet.get(),
+					MakeIteratorRange(dynamicOffsets, &dynamicOffsets[dynamicOffsetCount])
 					VULKAN_VERBOSE_DEBUG_ONLY(, std::move(verboseDescription)));
 			}
 		}
@@ -1334,8 +1357,10 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
 				}
 			#endif
+			assert(fixedSet._expectedDynamicOffsetCount == 0);
 			encoder.BindDescriptorSet(
-				fixedSet._outputSlot, descSet->GetUnderlying()
+				fixedSet._outputSlot, descSet->GetUnderlying(),
+				{}
 				VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
@@ -1348,7 +1373,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& context,
 		SharedEncoder& encoder,
 		const IDescriptorSet& descriptorSet,
-		unsigned groupIdx, unsigned slotIdx) const
+		unsigned groupIdx, unsigned slotIdx,
+		IteratorRange<const unsigned*> dynamicOffsets) const
 	{
 		assert(groupIdx < dimof(_group));
 		for (const auto& fixedSet:_group[groupIdx]._fixedDescriptorSetRules)
@@ -1364,8 +1390,10 @@ namespace RenderCore { namespace Metal_Vulkan
 						assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
 					}
 				#endif
+				// assert(fixedSet._expectedDynamicOffsetCount == dynamicOffsets.size());
 				encoder.BindDescriptorSet(
-					fixedSet._outputSlot, descSet->GetUnderlying()
+					fixedSet._outputSlot, descSet->GetUnderlying(),
+					dynamicOffsets
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)

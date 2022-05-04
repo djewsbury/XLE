@@ -44,6 +44,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkPipelineLayout				GetUnderlying() const;
 		const DescriptorSetLayoutPtr&	GetDescriptorSetLayout(DescriptorSetIndex) const;
 		const DescriptorSetPtr&			GetBlankDescriptorSet(DescriptorSetIndex) const;
+		IteratorRange<const unsigned*>	GetBlankDescriptorSetDynamicOffsets(DescriptorSetIndex) const;
 		unsigned 						GetDescriptorSetCount() const;
 		uint64_t 						GetGUID() const override;
 		PipelineLayoutInitializer 		GetInitializer() const override;
@@ -92,6 +93,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		DescriptorSetLayoutPtr	_descriptorSetLayouts[s_maxBoundDescriptorSetCount];
 		DescriptorSetPtr		_blankDescriptorSets[s_maxBoundDescriptorSetCount];
+		unsigned 				_dynamicOffsetsCount[s_maxBoundDescriptorSetCount];
 		VkPushConstantRange		_pushConstantRanges[s_maxPushConstantBuffers];
 		unsigned				_descriptorSetCount;
 		unsigned 				_pushConstantBufferCount;
@@ -101,6 +103,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		uint64_t				_guid;
 		PipelineLayoutInitializer	_initializer;
+		std::vector<unsigned> 	_dynamicOffsetsBuffer;
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			DescriptorSetDebugInfo _blankDescriptorSetsDebugInfo[s_maxBoundDescriptorSetCount];
@@ -120,6 +123,11 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(binding < _descriptorSetCount);
 		return _blankDescriptorSets[binding];
+	}
+
+	inline IteratorRange<const unsigned*> CompiledPipelineLayout::GetBlankDescriptorSetDynamicOffsets(DescriptorSetIndex binding) const
+	{
+		return MakeIteratorRange(_dynamicOffsetsBuffer.begin(), _dynamicOffsetsBuffer.begin() + _dynamicOffsetsCount[binding]);
 	}
 
 	inline auto CompiledPipelineLayout::GetDescriptorSetBindingNames() const -> IteratorRange<const uint64_t*>

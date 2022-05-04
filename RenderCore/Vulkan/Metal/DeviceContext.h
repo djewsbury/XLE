@@ -171,7 +171,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const CapturedStates* GetCapturedStates() const { return _capturedStates; }
 
 		// --------------- Vulkan specific interface --------------- 
-		void		BindDescriptorSet(unsigned index, VkDescriptorSet set VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
+		void		BindDescriptorSet(unsigned index, VkDescriptorSet set, IteratorRange<const unsigned*> dynamicOffsets VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo&& description));
 		void		PushConstants(VkShaderStageFlags stageFlags, unsigned offset, IteratorRange<const void*> data);
 
 		enum class EncoderType { None, Graphics, ProgressiveGraphics, Compute };

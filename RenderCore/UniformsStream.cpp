@@ -247,5 +247,23 @@ namespace RenderCore
 	LegacyRegisterBindingDesc::LegacyRegisterBindingDesc() {}
 	LegacyRegisterBindingDesc::~LegacyRegisterBindingDesc() {}
 
+	const char* AsString(DescriptorType type)
+	{
+		switch(type) {
+		case DescriptorType::SampledTexture: return "SampledTexture";
+		case DescriptorType::UniformBuffer: return "UniformBuffer";
+		case DescriptorType::UnorderedAccessTexture: return "UnorderedAccessTexture";
+		case DescriptorType::UnorderedAccessBuffer: return "UnorderedAccessBuffer";
+		case DescriptorType::Sampler: return "Sampler";
+		case DescriptorType::InputAttachment: return "InputAttachment";
+		case DescriptorType::UniformTexelBuffer: return "UniformTexelBuffer";
+		case DescriptorType::UnorderedAccessTexelBuffer: return "UnorderedAccessTexelBuffer";
+		case DescriptorType::UniformBufferDynamicOffset: return "UniformBufferDynamicOffset";
+		case DescriptorType::UnorderedAccessBufferDynamicOffset: return "UnorderedAccessBufferDynamicOffset";
+		case DescriptorType::Empty: return "Empty";
+		default: return "<<unknown>>";
+		}
+	}
+
 }
 
