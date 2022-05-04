@@ -18,7 +18,7 @@ cbuffer AOProps : register(b5, space1)
 	bool ClearAccumulation;
 }
 
-// #define BOTH_WAYS 1
+#define BOTH_WAYS 1
 // #define DITHER3x3 1
 #define HAS_HIERARCHICAL_DEPTHS 1
 #define DO_LATE_TEMPORAL_FILTERING 1
@@ -219,12 +219,14 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 				currentMipLevelScale /= 2;
 			}
 		} else {
+			float2 startXY = xy;
 			xy += float2(xStep, yStep)*currentMipLevelScale;
 			stepsAtMostDetailedRes += currentMipLevelScale;
 
 			// if we're on a boundary with the next mip level, then decrease
 			float2 test = xy / (2*currentMipLevelScale);
-			bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
+			// bool nextMipLevelBoundary = any(frac(test + 0.125) < 0.25);
+			bool nextMipLevelBoundary = uint2(startXY/(2*currentMipLevelScale)) != uint2(test);
 			currentMipLevel += nextMipLevelBoundary;
 			currentMipLevelScale *= nextMipLevelBoundary?2:1;
 		}
@@ -264,7 +266,7 @@ static const uint FrameWrap = 6;
 // static const uint FrameWrap = 12;
 
 // todo -- consider putting "ditherTable" into a shader resource
-static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 25, 61, 91, 7, 73, 13, 43, 55, 1, 85, 67, 31, 49, 37, 19, 79, 50, 2, 74, 26, 38, 86, 14, 62, 20, 68, 44, 92, 80, 32, 56, 8, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 82, 22, 40, 52, 34, 70, 88, 4, 58, 46, 16, 76, 10, 94, 64, 28, 11, 95, 65, 29, 59, 47, 17, 77, 35, 71, 89, 5, 83, 23, 41, 53};
+static const uint ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
 
 [numthreads(8, 8, 1)]
 	void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
@@ -522,6 +524,11 @@ void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
 	DoTemporalAccumulation(groupThreadId+int2(0,8), dispatchThreadId+int2(-4,4), minV, maxV);
 	DoTemporalAccumulation(groupThreadId+int2(8,0), dispatchThreadId+int2(4,-4), minV, maxV);
 	DoTemporalAccumulation(groupThreadId+int2(8,8), dispatchThreadId+int2(4,4), minV, maxV);
+
+	// GroupAO[groupThreadId.y][groupThreadId.x] = valueStd;
+	// GroupAO[groupThreadId.y][groupThreadId.x+8] = valueStd;
+	// GroupAO[groupThreadId.y+8][groupThreadId.x] = valueStd;
+	// GroupAO[groupThreadId.y+8][groupThreadId.x+8] = valueStd;
 
 	int2 pixelToWrite = groupThreadId + int2(groupThreadId.x<4?8:0, groupThreadId.y<4?8:0);
 	AccumulationAO[dispatchThreadId.xy-groupThreadId.xy+pixelToWrite.xy-int2(4,4)] = GroupAO[pixelToWrite.y][pixelToWrite.x];
@@ -891,53 +898,4 @@ float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+o
 	OutputTexture[outputPixel.xy*2 + uint2(1,0)] = out1 / out1TotalWeight;
 	OutputTexture[outputPixel.xy*2 + uint2(0,1)] = out2 / out2TotalWeight;
 	OutputTexture[outputPixel.xy*2 + uint2(1,1)] = out3 / out3TotalWeight;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////
-
-cbuffer DebuggingGlobals : register(b5, space1)
-{
-    const uint2 ViewportDimensions;
-    const int2 MousePosition;
-}
-
-float4 Value(uint2 position)
-{
-	return float4(OutputTexture.Load(position.xy).xxx, 1);
-
-#if 0
-    float input = InputTexture.Load(uint3(position.xy, 0));
-    float minValue = 0.4, maxValue = 0.5;
-#elif 0
-    float input = OutputTexture.Load(position.xy);
-    float minValue = 0.0, maxValue = 1.0;
-#elif 0
-    float input = normalize(InputNormals.Load(uint3(position.xy, 0)).xyz).r;
-    float minValue = -1.0, maxValue = 1.0;
-#elif 1
-    float2 vel = GBufferMotion.Load(uint3(position.xy, 0)).xy;
-	vel /= 127;
-	vel = 0.5 + 0.5 * vel;
-	return float4(vel, 0.5, 1);
-	float input = 0, minValue = -1.0, maxValue = 1.0;
-#endif
-
-    input = (input - minValue) / (maxValue - minValue);
-    return saturate(float4(1-2*input, 1-abs(2*input-1), 2*input-1, 1));
-}
-
-float4 visualize(float4 position : SV_Position) : SV_Target0
-{
-    float r = length(position.xy - MousePosition);
-    if (r <= 128) {
-        uint2 magnifiedCoords = MousePosition + (position.xy - MousePosition) / 3;
-        float4 col = Value(magnifiedCoords.xy);
-
-        float borderValue = (128 - r);
-        // float b = borderValue / (4 * max(abs(ddx(borderValue)), abs(ddy(borderValue))));
-        float b = borderValue / 4;
-        return lerp(float4(0,0,0,1), col, smoothstep(0, 1, saturate(b)));
-    } else {
-        return Value(position.xy);
-    }
 }
