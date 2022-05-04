@@ -43,9 +43,9 @@ namespace Utility
         class CompareSecond
         {
         public:
-            inline bool operator()(std::pair<First, Second>& lhs, std::pair<First, Second>& rhs) const   { return lhs.second < rhs.second; }
-            inline bool operator()(std::pair<First, Second>& lhs, Second& rhs) const                     { return lhs.second < rhs; }
-            inline bool operator()(Second& lhs, std::pair<First, Second>& rhs) const                     { return lhs < rhs.second; }
+            inline bool operator()(const std::pair<First, Second>& lhs, const std::pair<First, Second>& rhs) const   { return lhs.second < rhs.second; }
+            inline bool operator()(const std::pair<First, Second>& lhs, const Second& rhs) const                     { return lhs.second < rhs; }
+            inline bool operator()(const Second& lhs, const std::pair<First, Second>& rhs) const                     { return lhs < rhs.second; }
         };
 
     template <typename First, typename Second, typename Allocator>
