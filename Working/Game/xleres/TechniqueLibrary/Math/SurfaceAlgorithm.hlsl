@@ -113,7 +113,7 @@ float3x3 GetLocalToWorldUniformScale()
 {
         // note -- here, we assume that local-to-world doesn't have a nonuniform
         // scale.
-	return (float3x3)SysUniform_GetLocalToWorld();
+	return float3x3(SysUniform_GetLocalToWorld()[0].xyz, SysUniform_GetLocalToWorld()[1].xyz, SysUniform_GetLocalToWorld()[2].xyz);
 }
 
 float3 LocalToWorldUnitVector(float3 localSpaceVector)
