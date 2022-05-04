@@ -25,11 +25,13 @@ namespace RenderCore { namespace Techniques
 			unsigned outputInstanceStride) override
 		{
 			static float time = 0.f;
-			time += 1.0f / 30.f;
+			time += 1.0f / 100.f;
 
+			assert(!dst.empty());
+			assert(_outputInstanceStride);
 			for (auto i:instanceIdx) {
 				auto* d = PtrAdd(dst.data(), i*_outputInstanceStride);
-				*((Float2*)d) = Float2(0, -(1/30.f) * time);
+				*((Float2*)d) = Float2(0, /*-1.f/3.f*/ -1.f/8.3f * time);
 			}
 		}
 
@@ -49,7 +51,9 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<RenderCore::Assets::ModelScaffold>& modelScaffold,
 		const std::string& modelScaffoldName)
 	{
-		return std::make_shared<DeformParametersAttachment>();
+		// todo -- we need to be able to decide when to create a deform parameters attachment, and when not to
+		return nullptr;
+		// return std::make_shared<DeformParametersAttachment>();
 	}
 
 }}
