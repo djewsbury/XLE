@@ -83,10 +83,14 @@ namespace RenderCore { namespace Assets
 				if (sourceMaterial == sourceModel)
 					sourceMaterial = {};
 
-					// Parameters must be stripped off the source model filename before we get here.
+					// Ensure we strip off parameters from the source model filename before we get here.
 					// the parameters are irrelevant to the compiler -- so if they stay on the request
 					// name, will we end up with multiple assets that are equivalent
-				assert(MakeFileNameSplitter(sourceModel).ParametersWithDivider().IsEmpty());
+				{
+					auto splitter = MakeFileNameSplitter(sourceModel);
+					if (!splitter.ParametersWithDivider().IsEmpty())
+						sourceModel = splitter.AllExceptParameters().AsString();
+				}
 
 				AddDep(_dependencies, sourceModel);        // we need need a dependency (even if it's a missing file)
 
