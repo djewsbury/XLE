@@ -60,7 +60,7 @@ namespace RenderCore { namespace Assets
 
 	static Float4x4 TransformationCommandsToMatrix(IteratorRange<const void*> cmds)
 	{
-		uint32_t temp[cmds.size()+1];
+		uint32_t temp[cmds.size()+2];
 		memcpy(temp, cmds.begin(), cmds.size());
 		temp[cmds.size()] = (uint32_t)TransformCommand::WriteOutputMatrix;
 		temp[cmds.size()+1] = 0;
@@ -68,7 +68,7 @@ namespace RenderCore { namespace Assets
 		GenerateOutputTransforms(
 			MakeIteratorRange(&result, &result+1),
 			{},
-			MakeIteratorRange(temp, &temp[cmds.size()+1]));
+			MakeIteratorRange(temp, &temp[cmds.size()+2]));
 		return result;
 	}
 

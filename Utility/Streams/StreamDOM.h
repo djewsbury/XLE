@@ -72,6 +72,9 @@ namespace Utility
         friend class Internal::DocAttributeIterator<Formatter>;
     };
 
+    template<typename Formatter>
+        StreamDOM<Formatter> MakeStreamDOM(Formatter& formatter) { return StreamDOM<Formatter>(formatter); }
+
     namespace Internal
     {
         template<typename Formatter> class DocElementIterator;
