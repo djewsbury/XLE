@@ -129,7 +129,7 @@ namespace ToolsRig
                     { Float3( 1.f,  1.f, 0.f),  Float3(0.f, 0.f, 1.f), Float2(1.f, 0.f), Float4(1.f, 0.f, 0.f, 1.f) }
                 };
 
-				auto space = pkt->AllocateStorage(Techniques::DrawablesPacket::Storage::VB, sizeof(vertices));
+				auto space = pkt->AllocateStorage(Techniques::DrawablesPacket::Storage::Vertex, sizeof(vertices));
 				std::memcpy(space._data.begin(), vertices, sizeof(vertices));
 
 				auto& drawable = *pkt->_drawables.Allocate<MaterialSceneParserDrawable>();

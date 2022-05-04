@@ -10,6 +10,7 @@
 #include "../../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../../RenderCore/Techniques/DeformInternal.h"
 #include "../../../RenderCore/Techniques/DeformOperationFactory.h"
+#include "../../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
 #include "../../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../../RenderCore/Techniques/SkinDeformerInternal.h"
 #include "../../../RenderCore/Techniques/Services.h"
@@ -236,7 +237,7 @@ namespace UnitTests
 
 		const auto& animVB = modelScaffold->ImmutableData()._boundSkinnedControllers[0]._animatedVertexElements;
 
-		std::promise<std::shared_ptr<Techniques::IDeformer>> promise;
+		std::promise<std::shared_ptr<Techniques::IGeoDeformer>> promise;
 		auto future = promise.get_future();
 		auto srcLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_GPUStaticData), dstLayout = AsInputLayout(animVB._ia, Techniques::Internal::VB_PostDeform);
 		Techniques::GPUSkinDeformer deformer(pipelineCollection, modelScaffold, "unit-test");
@@ -273,7 +274,7 @@ namespace UnitTests
 		
 		testHelper.BeginFrameCapture();
 		unsigned instances[] = {0};
-		IDeformer::Metrics metrics;
+		IGeoDeformer::Metrics metrics;
 		deformer.ExecuteGPU(*threadContext, MakeIteratorRange(instances), outputResource->GetDesc()._linearBufferDesc._sizeInBytes, *inputView, *inputView, *outputView, metrics);
 		testHelper.EndFrameCapture();
 
@@ -392,22 +393,39 @@ namespace UnitTests
 		auto modelScaffold = MakeTestAnimatedModel();
 		
 		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device);
-		auto cpuAccelerator = pool->CreateDeformAccelerator("cpu_skin", modelScaffold);
-		REQUIRE(cpuAccelerator);
-		auto rendererBinding = pool->GetDeformerToRendererBinding(*cpuAccelerator);
-		REQUIRE(!rendererBinding._geoBindings.empty());
+		
+		{
+			auto cpuAccelerator = pool->CreateDeformAccelerator();
+			REQUIRE(cpuAccelerator);
 
-		auto gpuAccelerator = pool->CreateDeformAccelerator("gpu_skin", modelScaffold);
-		REQUIRE(gpuAccelerator);
-		auto rendererBinding2 = pool->GetDeformerToRendererBinding(*gpuAccelerator);
-		REQUIRE(!rendererBinding2._geoBindings.empty());
-		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements.size() == 3);
-		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[0]._semanticName == "POSITION");
-		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[1]._semanticName == "NORMAL");
-		REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
+			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, "cpu_skin", modelScaffold);
+			REQUIRE(cpuGeoDeformAttachment);
+
+			auto cpuRendererBinding = cpuGeoDeformAttachment->GetDeformerToRendererBinding();
+			REQUIRE(!cpuRendererBinding._geoBindings.empty());
+
+			pool->Attach(*cpuAccelerator, cpuGeoDeformAttachment);
+		}
+
+		{
+			auto gpuAccelerator = pool->CreateDeformAccelerator();
+			REQUIRE(gpuAccelerator);
+			
+			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeometryInfrastructure(*testHelper->_device, "gpu_skin", modelScaffold);
+			REQUIRE(gpuGeoDeformAttachment);
+
+			auto rendererBinding2 = gpuGeoDeformAttachment->GetDeformerToRendererBinding();
+			REQUIRE(!rendererBinding2._geoBindings.empty());
+			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements.size() == 3);
+			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[0]._semanticName == "POSITION");
+			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[1]._semanticName == "NORMAL");
+			REQUIRE(rendererBinding2._geoBindings[0]._generatedElements[2]._semanticName == "TEXTANGENT");
+
+			pool->Attach(*gpuAccelerator, gpuGeoDeformAttachment);
+		}
 	}
 
-	class TestCPUDeformOperator : public Techniques::IDeformer
+	class TestCPUDeformOperator : public Techniques::IGeoDeformer
 	{
 	public:
 		virtual void Execute(
@@ -536,7 +554,7 @@ namespace UnitTests
 		}
 	}
 
-	class TestGPUDeformOperator : public Techniques::IDeformer
+	class TestGPUDeformOperator : public Techniques::IGeoDeformer
 	{
 	public:
 		virtual void ExecuteGPU(

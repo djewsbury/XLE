@@ -54,9 +54,9 @@ namespace ToolsRig
 		SimpleModelRenderer& renderer,
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface)
 	{
-		auto* deformAccelerator = renderer.GetDeformAccelerator().get();
-		if (deformAccelerator)
-			return std::make_shared<RendererSkeletonInterface>(smOutputInterface, *renderer.GetDeformAcceleratorPool(), *deformAccelerator);
+		auto* deformerInfrastructure = renderer.GetGeoDeformerInfrastructure().get();
+		if (deformerInfrastructure)
+			return std::make_shared<RendererSkeletonInterface>(smOutputInterface, *deformerInfrastructure);
 		return nullptr;
 	}
 

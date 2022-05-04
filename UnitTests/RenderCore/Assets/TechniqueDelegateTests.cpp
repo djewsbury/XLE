@@ -379,7 +379,7 @@ namespace UnitTests
 			descSetFuture->StallWhilePending();
 			INFO(::Assets::AsString(descSetFuture->GetActualizationLog()));
 			REQUIRE(descSetFuture->GetAssetState() == ::Assets::AssetState::Ready);
-			auto actualizedDescSet = descSetFuture->Actualize();
+			auto& actualizedDescSet = descSetFuture->Actualize();
 			descriptorSet = actualizedDescSet.GetDescriptorSet();
 			REQUIRE(descriptorSet != nullptr);
 			RenderCore::Techniques::Services::GetBufferUploads().StallUntilCompletion(*threadContext, actualizedDescSet.GetCompletionCommandList());

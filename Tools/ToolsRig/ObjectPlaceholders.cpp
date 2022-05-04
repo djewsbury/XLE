@@ -404,7 +404,7 @@ namespace ToolsRig
 
 		auto& pkt = *pkts[(unsigned)RenderCore::Techniques::Batch::Opaque];
 
-        auto vbData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::VB, chld.size() * sizeof(Float3));
+        auto vbData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::Vertex, chld.size() * sizeof(Float3));
         for (size_t c=0; c<chld.size(); ++c) {
             const auto* e = objs.GetEntity(chld[c].second);
             if (e) {
@@ -414,7 +414,7 @@ namespace ToolsRig
             }
         }
 
-		auto ibData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::IB, indexListType._arrayCount * sizeof(unsigned));
+		auto ibData = pkt.AllocateStorage(Techniques::DrawablesPacket::Storage::Index, indexListType._arrayCount * sizeof(unsigned));
 		std::memcpy(ibData._data.begin(), indices.get(), indexListType._arrayCount * sizeof(unsigned));
 
 		auto geo = std::make_shared<Techniques::DrawableGeo>();
