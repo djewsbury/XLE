@@ -35,6 +35,9 @@ namespace RenderCore { namespace Techniques
 			DeformAccelerator& deformAccelerator,
 			std::shared_ptr<IDeformParametersAttachment> deformAttachment) override;
 
+		std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IDeformParametersAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override;
+
 		void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) override;
 		void ReadyInstances(IThreadContext&) override;
 		void SetVertexInputBarrier(IThreadContext&) const override;
@@ -153,6 +156,16 @@ namespace RenderCore { namespace Techniques
 		assert(deformAttachment);
 		accelerator._parametersAttachment = std::move(deformAttachment);
 		accelerator._parametersReservationPerInstance = accelerator._parametersAttachment->GetOutputInstanceStride();
+	}
+
+	std::shared_ptr<IDeformAttachment> DeformAcceleratorPool::GetDeformAttachment(DeformAccelerator& deformAccelerator)
+	{
+		return deformAccelerator._attachment;
+	}
+
+	std::shared_ptr<IDeformParametersAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override
+	{
+		return deformAccelerator._parametersAttachment;
 	}
 
 	void DeformAcceleratorPool::EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx)

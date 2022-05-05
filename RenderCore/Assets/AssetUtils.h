@@ -21,8 +21,8 @@ namespace RenderCore { namespace Assets
     static const uint64_t ChunkType_RawMat = ConstHash64<'RawM', 'at'>::Value;
     static const uint64_t ChunkType_Metrics = ConstHash64<'Metr', 'ics'>::Value;
 
-    class GeoInputAssembly;
-    class DrawCallDesc;
+    struct GeoInputAssembly;
+    struct DrawCallDesc;
     GeoInputAssembly CreateGeoInputAssembly(   
         const std::vector<InputElementDesc>& vertexInputLayout,
         unsigned vertexStride);

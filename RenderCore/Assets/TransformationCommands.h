@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "ScaffoldCmdStream.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Quaternion.h"
@@ -20,7 +21,7 @@ namespace RenderCore { namespace Assets
 {
     enum class TransformCommand : uint32_t
     {
-        PushLocalToWorld,       // no parameters
+        PushLocalToWorld = s_scaffoldCmdBegin_TransformationMachine,       // no parameters
         PopLocalToWorld,        // number of transforms to pop (ie, often 1, but sometimes we want to do multiple pops at once)
 
             //

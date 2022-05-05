@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets
         size_t              _commandStreamSize;     // size in number of uint32_t's
         unsigned            _outputMatrixCount;
 
-        OutputInterface     _outputInterface;
+        OutputInterface     _outputInterface;   // todo -- can this just become a SerializableVector for simplicity?
 
 		SerializableVector<char>		_outputMatrixNames;
     };

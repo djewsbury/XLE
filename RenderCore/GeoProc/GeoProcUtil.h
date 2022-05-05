@@ -7,7 +7,7 @@
 #include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 
-namespace RenderCore { namespace Assets { class VertexElement; }}
+namespace RenderCore { namespace Assets { struct VertexElement; }}
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
     unsigned int    FloatBits(float input);

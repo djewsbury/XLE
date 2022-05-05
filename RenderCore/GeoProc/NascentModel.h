@@ -17,8 +17,6 @@
 #include <string>
 #include <vector>
 
-namespace RenderCore { namespace Assets { class DrawCallDesc; }}
-
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	class MeshDatabase;

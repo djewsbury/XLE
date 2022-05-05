@@ -11,7 +11,7 @@
 #include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { namespace Assets { namespace GeoProc { class MeshDatabase; }}}
-namespace RenderCore { namespace Assets { class VertexElement; }}
+namespace RenderCore { namespace Assets { struct VertexElement; }}
 namespace RenderCore { class InputElementDesc; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc

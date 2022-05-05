@@ -33,6 +33,9 @@ namespace RenderCore { namespace Techniques
 			DeformAccelerator& deformAccelerator,
 			std::shared_ptr<IDeformParametersAttachment> deformAttachment) = 0;
 
+		virtual std::shared_ptr<IDeformAttachment> GetDeformAttachment(DeformAccelerator& deformAccelerator) = 0;
+		virtual std::shared_ptr<IDeformParametersAttachment> GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) = 0;
+
 		virtual void EnableInstance(DeformAccelerator& accelerator, unsigned instanceIdx) = 0;
 		virtual void ReadyInstances(IThreadContext&) = 0;
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
