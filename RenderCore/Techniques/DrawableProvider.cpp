@@ -168,7 +168,7 @@ namespace RenderCore { namespace Techniques
 					drawableGeo->_ibOffset = staticIBIterator;
 					// staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
 					// staticIBIterator += rg._ib._size;
-					drawableGeo->_ibFormat = rg._indexFormat;
+					drawableGeo->_ibFormat = rg._ib._format;
 					_geos.push_back(std::move(drawableGeo));
 					return (unsigned)_geos.size()-1;
 				} else {

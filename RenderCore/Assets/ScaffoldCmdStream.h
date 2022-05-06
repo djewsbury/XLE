@@ -7,6 +7,7 @@
 #include "../../Assets/ChunkFileContainer.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/DepVal.h"
+#include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 
 namespace Assets {  class IFileInterface; }
@@ -81,6 +82,7 @@ namespace RenderCore { namespace Assets
 
 	class ShaderPatchCollection;
 
+#if 0
 	class IScaffoldNavigation
 	{
 	public:
@@ -105,6 +107,63 @@ namespace RenderCore { namespace Assets
 
 	class ScaffoldAsset;
 	std::shared_ptr<IScaffoldNavigation> CreateSimpleScaffoldNavigation(std::shared_ptr<ScaffoldAsset> scaffoldAsset);
+#endif
+
+	class RendererConstruction : public std::enable_shared_from_this<RendererConstruction>
+	{
+	public:
+		class Internal;
+		class Element
+		{
+		public:
+			Element& SetModelScaffold(StringSection<>);
+			Element& SetMaterialScaffold(StringSection<>);
+			Element& SetSkeletonScaffold(StringSection<>);
+			Element& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+			Element& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+			Element& SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+			Element& SetModelScaffold(const std::shared_ptr<ScaffoldAsset>&);
+			Element& SetMaterialScaffold(const std::shared_ptr<ScaffoldAsset>&);
+			Element& SetSkeletonScaffold(const std::shared_ptr<ScaffoldAsset>&);
+
+			Element& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
+
+			Element& SetRootTransform(const Float4x4&);
+
+			Element& SetName(const std::string&);
+		private:
+			unsigned _elementId = ~0u;
+			Internal* _internal = nullptr;
+		};
+
+		Element& AddElement();
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const;
+
+		std::future<std::shared_ptr<RendererConstruction>> ReadyFuture();
+		::Assets::AssetState GetAssetState() const;
+
+		RendererConstruction();
+		~RendererConstruction();
+
+		Internal& GetInternal() { return *_internal; }
+		const Internal& GetInternal() const { return *_internal; }
+	protected:
+		std::unique_ptr<Internal> _internal;
+	};
+
+	class RendererConstruction::Internal
+	{
+	public:
+		using ElementId = unsigned;
+		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ScaffoldAsset>;
+		using ModelScaffoldPtr = std::shared_ptr<ScaffoldAsset>;
+
+		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
+		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
+		std::vector<std::pair<ElementId, std::string>> _names;
+		unsigned _elementCount = 0;
+	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

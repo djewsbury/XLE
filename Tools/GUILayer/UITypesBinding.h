@@ -351,7 +351,7 @@ namespace GUILayer
         void AddInheritted(System::String^);
         void RemoveInheritted(System::String^);
 
-		void MergeInto(RawMaterial^ destination);
+		void MergeIn(RawMaterial^ src);
 
 		bool TryGetConstantInt(System::String^ label, [Out] int% value);
 		bool TryGetConstantFloat(System::String^ label, [Out] float% value);

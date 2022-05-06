@@ -346,13 +346,13 @@ namespace RenderCore { namespace Assets
         }
     }
 
-	void RawMaterial::MergeInto(RawMaterial& dest) const
+	void RawMaterial::MergeIn(const RawMaterial& src)
 	{
-		dest._matParamBox.MergeIn(_matParamBox);
-        dest._stateSet = Merge(dest._stateSet, _stateSet);
-        dest._constants.MergeIn(_constants);
-        dest._resourceBindings.MergeIn(_resourceBindings);
-		_patchCollection.MergeInto(dest._patchCollection);
+		_matParamBox.MergeIn(src._matParamBox);
+        _stateSet = Merge(_stateSet, src._stateSet);
+        _constants.MergeIn(src._constants);
+        _resourceBindings.MergeIn(src._resourceBindings);
+		_patchCollection.MergeIn(src._patchCollection);
 	}
 
 	void ResolveMaterialFilename(
@@ -588,7 +588,7 @@ namespace RenderCore { namespace Assets
 			}
 		}
 
-		source._patchCollection.MergeInto(dest._patchCollection);
+		dest._patchCollection.MergeIn(source._patchCollection);
     }
 
 	static void AddDep(

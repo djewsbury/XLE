@@ -157,7 +157,7 @@ namespace RenderCore { namespace Assets
 
         std::vector<std::string> _inherit;
 
-		void					    MergeInto(RawMaterial& dest) const; 
+		void					    MergeIn(const RawMaterial& src);
 		std::vector<std::string>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
 
 		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }

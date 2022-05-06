@@ -526,11 +526,11 @@ namespace GUILayer
         assert(0); // not implemented!
     }
 
-	void RawMaterial::MergeInto(RawMaterial^ destination)
+	void RawMaterial::MergeIn(RawMaterial^ src)
 	{
-		auto transaction = destination->_underlying->Transaction_Begin("Merge Into");
+		auto transaction = _underlying->Transaction_Begin("Merge In");
 		if (transaction) {
-			_underlying->GetWorkingAsset()->MergeInto(transaction->GetAsset());
+			transaction->GetAsset()->MergeIn(_underlying->GetWorkingAsset());
 			destination->_transId = transaction->Commit();
 		}
 	}

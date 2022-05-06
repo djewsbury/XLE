@@ -14,28 +14,28 @@
 
 namespace RenderCore { namespace Assets
 {
-	void ShaderPatchCollection::MergeInto(ShaderPatchCollection& dest) const
+	void ShaderPatchCollection::MergeIn(const ShaderPatchCollection& src)
 	{
-		for (const auto&p:_patches) {
+		for (const auto&p:src._patches) {
 			if (p.first.empty()) {
-				dest._patches.push_back(p);	// empty name -- can't override
+				_patches.push_back(p);	// empty name -- can't override
 			} else {
 				auto i = std::find_if(
-					dest._patches.begin(), dest._patches.end(),
+					_patches.begin(), _patches.end(),
 					[&p](const std::pair<std::string, ShaderSourceParser::InstantiationRequest>& q) { return q.first == p.first; });
-				if (i == dest._patches.end()) {
-					dest._patches.push_back(p);
+				if (i == _patches.end()) {
+					_patches.push_back(p);
 				} else {
 					i->second = p.second;
 				}
 			}
 		}
 		if (!_descriptorSet.empty())
-			dest._descriptorSet = _descriptorSet;
+			_descriptorSet = src._descriptorSet;
 
-		dest.SortAndCalculateHash();
-		::Assets::DependencyValidationMarker depVals[] { dest._depVal, _depVal };
-		dest._depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+		SortAndCalculateHash();
+		::Assets::DependencyValidationMarker depVals[] { _depVal, src._depVal };
+		_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 	}
 
 	ShaderPatchCollection::ShaderPatchCollection()

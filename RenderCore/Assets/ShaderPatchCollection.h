@@ -23,7 +23,7 @@ namespace RenderCore { namespace Assets
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const { return _hash; }
 
-		void MergeInto(ShaderPatchCollection& dest) const;
+		void MergeIn(const ShaderPatchCollection& dest);
 
 		void SerializeMethod(OutputStreamFormatter& formatter) const;
 
