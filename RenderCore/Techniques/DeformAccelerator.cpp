@@ -163,7 +163,7 @@ namespace RenderCore { namespace Techniques
 		return deformAccelerator._attachment;
 	}
 
-	std::shared_ptr<IDeformParametersAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator) override
+	std::shared_ptr<IDeformParametersAttachment> DeformAcceleratorPool::GetDeformParametersAttachment(DeformAccelerator& deformAccelerator)
 	{
 		return deformAccelerator._parametersAttachment;
 	}

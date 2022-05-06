@@ -16,7 +16,7 @@ namespace Assets { class NascentBlockSerializer; }
 
 namespace RenderCore { namespace Assets
 {
-	namespace GeoProc { class NascentAnimationSet; }
+	namespace GeoProc { class NascentAnimationSet; void SerializationOperator(::Assets::NascentBlockSerializer&, const NascentAnimationSet&); }
 	class RawAnimationCurve;
 	class AnimatedParameterSet;
 
@@ -111,7 +111,7 @@ namespace RenderCore { namespace Assets
 		AnimationSet(const AnimationSet&) = delete;
 		AnimationSet& operator=(const AnimationSet&) = delete;
 
-		void			SerializeMethod(::Assets::NascentBlockSerializer& serializer) const;
+		friend void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const AnimationSet& obj);
 	protected:
 		SerializableVector<AnimationDriver>		_animationDrivers;
 		SerializableVector<ConstantDriver>		_constantDrivers;
@@ -124,6 +124,7 @@ namespace RenderCore { namespace Assets
 		SerializableVector<char>				_stringNameBlock;
 
 		friend class GeoProc::NascentAnimationSet;
+		friend void GeoProc::SerializationOperator(::Assets::NascentBlockSerializer&, const GeoProc::NascentAnimationSet&);
 	};
 
 	#pragma pack(pop)

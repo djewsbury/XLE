@@ -5,8 +5,6 @@
 #pragma once
 
 #include "../Core/Exceptions.h"
-#include "../Math/Vector.h"
-#include "../Math/Matrix.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/MemoryUtils.h"
@@ -32,7 +30,7 @@ namespace Assets
 	public:
 		struct SpecialBuffer
 		{
-			enum Enum { Unknown, VertexBuffer, IndexBuffer, String, Vector, UniquePtr };
+			enum Enum { Unknown, String, Vector, UniquePtr };
 		};
 		
 		template<typename Type, typename std::enable_if_t<Internal::IsPodIterator<Type>>* = nullptr>
@@ -57,28 +55,27 @@ namespace Assets
 		template<typename Type>
 			void    SerializeRaw    ( const Type& type );
 
+		unsigned	CreateRecall(unsigned size);
+		void		PushAtRecall(unsigned recallId, IteratorRange<const void*> value);
+		void		PushSizeValueAtRecall(unsigned recallId);
+
 		std::unique_ptr<uint8_t[], PODAlignedDeletor>      AsMemoryBlock() const;
 		size_t                          Size() const;
 
 		NascentBlockSerializer();
 		~NascentBlockSerializer();
 
-		class InternalPointer
-		{
-		public:
-			uint64_t                _pointerOffset;
-			uint64_t                _subBlockOffset;
-			uint64_t                _subBlockSize;
-			uint64_t                _specialBuffer;     // (this is SpecialBuffer::Enum. Made uint64_t to make alignment consistant across all platforms)
-		};
-
 		static const size_t PtrFlagBit  = size_t(1)<<(size_t(sizeof(size_t)*8-1));
 		static const size_t PtrMask     = ~PtrFlagBit;
+		struct InternalPointer;
 
 	protected:
-		std::vector<uint8_t>              _memory;
-		std::vector<uint8_t>              _trailingSubBlocks;
-		std::vector<InternalPointer>    _internalPointers;
+		std::vector<uint8_t>			_memory;
+		std::vector<uint8_t>			_trailingSubBlocks;
+		std::vector<InternalPointer>	_internalPointers;
+		struct Recall;
+		std::vector<Recall>				_pendingRecalls;
+		unsigned _nextRecallId = 0;
 
 		void PushBackPointer(size_t value);
 		void PushBackRaw(const void* data, size_t size);
@@ -173,22 +170,5 @@ namespace Assets
 		void    NascentBlockSerializer::SerializeRaw(const Type& type)
 	{
 		PushBackRaw(&type, sizeof(Type));
-	}
-}
-
-namespace cml
-{
-	template<int Dimen, typename Primitive>
-		inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const cml::vector< Primitive, cml::fixed<Dimen> >& vec)
-	{
-		for (unsigned j=0; j<Dimen; ++j)
-			SerializationOperator(serializer, vec[j]);
-	}
-	
-	inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const XLEMath::Float4x4& float4x4)
-	{
-		for (unsigned i=0; i<4; ++i)
-			for (unsigned j=0; j<4; ++j)
-				SerializationOperator(serializer, float4x4(i,j));
 	}
 }

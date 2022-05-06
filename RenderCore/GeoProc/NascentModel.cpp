@@ -12,6 +12,7 @@
 #include "../Assets/AssetUtils.h"
 #include "../Assets/ModelImmutableData.h"
 #include "../Assets/AnimationBindings.h"
+#include "../../Math/MathSerialization.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/FastParseValue.h"
@@ -183,6 +184,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
+	static ::Assets::Blob SerializeSkinCmdStreamForm(
+		::Assets::NascentBlockSerializer& serializer, 
+		const NascentGeometryObjects& objs)
+	{
+		auto result = std::make_shared<std::vector<uint8>>();
+		for (const auto& geo:objs._rawGeos) {
+			serializer << (uint32_t)Assets::ModelCommand::Geo;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
+			geo.second.SerializeWithResourceBlock(serializer, *result);
+			serializer.PushSizeValueAtRecall(recall);
+		}
+		// for (auto i = objs._skinnedGeos.begin(); i!=objs._skinnedGeos.end(); ++i)
+		// 	i->second.SerializeWithResourceBlockCmdStreamForm(tempBlock, *result);
+		return result;
+	}
+
     class DefaultPoseData
     {
     public:
@@ -273,11 +290,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto largeResourcesBlock = SerializeSkin(serializer, geoObjects);
 		SerializationOperator(serializer, skeleton);
 
-			// Generate the default transforms and serialize them out
-			// unfortunately this requires we use the run-time types to
-			// work out the transforms.
-			// And that requires a bit of hack to get pointers to those 
-			// run-time types
 		{
 			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
 			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
@@ -288,6 +300,46 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// Find the max LOD value, and serialize that
 		SerializationOperator(serializer, cmdStream.GetMaxLOD());
+
+		// SerializationOperator human-readable metrics information
+		std::stringstream metricsStream;
+		TraceMetrics(metricsStream, geoObjects, cmdStream, skeleton);
+
+		auto scaffoldBlock = ::Assets::AsBlob(serializer);
+		auto metricsBlock = ::Assets::AsBlob(metricsStream);
+
+		return
+			{
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_ModelScaffold, ModelScaffoldVersion, name,
+					std::move(scaffoldBlock)},
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
+					std::move(largeResourcesBlock)},
+				::Assets::ICompileOperation::SerializedArtifact{
+					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
+					std::move(metricsBlock)}
+			};
+	}
+
+	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunksCmdStreamForm(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
+	{
+		::Assets::NascentBlockSerializer serializer;
+
+		SerializeCmdStreamForm(serializer, cmdStream);
+		auto largeResourcesBlock = SerializeSkinCmdStreamForm(serializer, geoObjects);
+		// SerializationOperator(serializer, skeleton);
+
+		/*{
+			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
+			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
+			serializer.SerializeValue(size_t(defaultPoseData._defaultTransforms.size()));
+			SerializationOperator(serializer, defaultPoseData._boundingBox.first);
+			SerializationOperator(serializer, defaultPoseData._boundingBox.second);
+		}
+
+		// Find the max LOD value, and serialize that
+		SerializationOperator(serializer, cmdStream.GetMaxLOD());*/
 
 		// SerializationOperator human-readable metrics information
 		std::stringstream metricsStream;

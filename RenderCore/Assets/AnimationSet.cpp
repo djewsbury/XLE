@@ -136,16 +136,16 @@ namespace RenderCore { namespace Assets
 	AnimationSet::AnimationSet() {}
 	AnimationSet::~AnimationSet() {}
 
-	void AnimationSet::SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
+	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const AnimationSet& obj)
 	{
-		SerializationOperator(serializer, _animationDrivers);
-		SerializationOperator(serializer, _constantDrivers);
-		SerializationOperator(serializer, _constantData);
-		SerializationOperator(serializer, _animations);
-		SerializationOperator(serializer, _outputInterface);
-		SerializationOperator(serializer, _curves);
-		SerializationOperator(serializer, _stringNameBlockOffsets);
-		SerializationOperator(serializer, _stringNameBlock);
+		SerializationOperator(serializer, obj._animationDrivers);
+		SerializationOperator(serializer, obj._constantDrivers);
+		SerializationOperator(serializer, obj._constantData);
+		SerializationOperator(serializer, obj._animations);
+		SerializationOperator(serializer, obj._outputInterface);
+		SerializationOperator(serializer, obj._curves);
+		SerializationOperator(serializer, obj._stringNameBlockOffsets);
+		SerializationOperator(serializer, obj._stringNameBlock);
 	}
 
 	const char* AsString(AnimSamplerType value)

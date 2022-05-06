@@ -19,6 +19,7 @@
 #include "../../OSServices/LogUtil.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/Transformations.h"
+#include "../../Math/MathSerialization.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StreamUtils.h"

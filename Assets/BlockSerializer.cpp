@@ -14,6 +14,21 @@
 namespace Assets
 {
 
+    struct NascentBlockSerializer::InternalPointer
+    {
+        uint64_t	_pointerOffset;
+        uint64_t	_subBlockOffset;
+        uint64_t	_subBlockSize;
+        uint64_t	_specialBuffer;     // (this is SpecialBuffer::Enum. Made uint64_t to make alignment consistant across all platforms)
+    };
+
+    struct NascentBlockSerializer::Recall
+    {
+        unsigned _id;
+        unsigned _size;
+        uint64_t _memoryOffset;
+    };
+
         ////////////////////////////////////////////////////////////
 
     template<typename Type>
@@ -35,8 +50,6 @@ namespace Assets
         } else if (specialBuffer == SpecialBuffer::String) {
 			assert(0);
             _memory.insert(_memory.end(), sizeof(std::string), 0);
-        } else if (specialBuffer == SpecialBuffer::VertexBuffer || specialBuffer == SpecialBuffer::IndexBuffer) {
-            assert(0);
         } else if (specialBuffer == SpecialBuffer::UniquePtr) {
 			assert(0);
             _memory.insert(_memory.end(), sizeof(std::unique_ptr<void, BlockSerializerDeleter<void>>), 0);
@@ -97,6 +110,43 @@ namespace Assets
     void    NascentBlockSerializer::AddPadding(unsigned sizeInBytes)
     {
         _memory.insert(_memory.end(), sizeInBytes, 0);
+    }
+
+    unsigned NascentBlockSerializer::CreateRecall(unsigned size)
+    {
+        _pendingRecalls.push_back(Recall{_nextRecallId, size, (uint64_t)_memory.size()});
+        return _nextRecallId++;
+    }
+
+    void NascentBlockSerializer::PushAtRecall(unsigned recallId, IteratorRange<const void*> value)
+    {
+        auto i = std::find_if(_pendingRecalls.begin(), _pendingRecalls.end(), [recallId](const auto& q) { return q._id == recallId; });
+        assert(i!=_pendingRecalls.end());
+        if (i == _pendingRecalls.end()) return;
+        assert(value.size() == i->_size);
+        if (value.size() != i->_size) return;
+        assert((i->_memoryOffset + value.size()) <= _memory.size());
+        if ((i->_memoryOffset + value.size()) > _memory.size()) return;
+        std::copy((const uint8_t*)value.begin(), (const uint8_t*)value.end(), _memory.begin()+i->_memoryOffset);
+        _pendingRecalls.erase(i);
+    }
+
+    void NascentBlockSerializer::PushSizeValueAtRecall(unsigned recallId)
+    {
+        auto i = std::find_if(_pendingRecalls.begin(), _pendingRecalls.end(), [recallId](const auto& q) { return q._id == recallId; });
+        assert(i!=_pendingRecalls.end());
+        if (i == _pendingRecalls.end()) return;
+
+        assert((i->_memoryOffset + i->_size) <= _memory.size());
+        auto size = _memory.size() - i->_memoryOffset - i->_size;
+        if (i->_size == 8) {
+            *(uint64_t*)PtrAdd(_memory.data(), i->_memoryOffset) = size;
+        } else if (i->_size == 4) {
+            *(unsigned*)PtrAdd(_memory.data(), i->_memoryOffset) = (unsigned)size;
+        } else {
+            assert(0);
+        }
+        _pendingRecalls.erase(i);
     }
 
     void NascentBlockSerializer::PushBackRaw(const void* data, size_t size)
@@ -195,6 +245,7 @@ namespace Assets
 
     std::unique_ptr<uint8_t[], PODAlignedDeletor>      NascentBlockSerializer::AsMemoryBlock() const
     {
+        assert(_pendingRecalls.empty());    // if you hit this is means one or more recalls (CreateRecall) where not fullfilled
         std::unique_ptr<uint8_t[], PODAlignedDeletor> result{(uint8_t*)XlMemAlign(Size(), sizeof(uint64_t))};
 
         ((Header*)result.get())->_rawMemorySize = _memory.size() + _trailingSubBlocks.size();
@@ -261,8 +312,6 @@ namespace Assets
                 SetPtr(&o[1], ptr._subBlockOffset + ptr._subBlockSize + size_t(base) + sizeof(Header));
                 SetPtr(&o[2], 0);
             } else if (     ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::UniquePtr
-                       ||   ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::VertexBuffer
-                       ||   ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::IndexBuffer
                        ||   ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::String) {
                 // these are deprecated types -- they need a stronger cross-platform implementation to work reliably
                 assert(false);

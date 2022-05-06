@@ -5,7 +5,11 @@
 #pragma once
 
 #include "ScaffoldCmdStream.h"
-#include "ModelScaffoldInternal.h"
+#include "../StateDesc.h"
+#include "../Format.h"
+#include "../../Math/Matrix.h"
+#include "../../Assets/BlockSerializer.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 
 namespace RenderCore { namespace Assets
 {

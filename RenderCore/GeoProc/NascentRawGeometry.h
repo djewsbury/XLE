@@ -14,28 +14,28 @@ namespace Assets { class NascentBlockSerializer; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-    class NascentRawGeometry
-    {
-    public:
-        std::vector<uint8_t>		_vertices;
-        std::vector<uint8_t>		_indices;
+	class NascentRawGeometry
+	{
+	public:
+		std::vector<uint8_t>		_vertices;
+		std::vector<uint8_t>		_indices;
 
-        GeoInputAssembly            _mainDrawInputAssembly;
-        Format                      _indexFormat = Format(0);
-        std::vector<DrawCallDesc>   _mainDrawCalls;
+		GeoInputAssembly            _mainDrawInputAssembly;
+		Format                      _indexFormat = Format(0);
+		std::vector<DrawCallDesc>   _mainDrawCalls;
 
 		Float4x4 _geoSpaceToNodeSpace = Identity<Float4x4>();
 
-            //  Only required during processing
-        size_t						_finalVertexCount;
+			//  Only required during processing
+		size_t						_finalVertexCount;
 		std::vector<uint32_t>		_finalVertexIndexToOriginalIndex;
 
-        void SerializeWithResourceBlock(
-            ::Assets::NascentBlockSerializer& outputSerializer, 
-            std::vector<uint8>& largeResourcesBlock) const;
-		
+		void SerializeWithResourceBlock(
+			::Assets::NascentBlockSerializer& outputSerializer, 
+			std::vector<uint8>& largeResourcesBlock) const;
+
 		friend std::ostream& SerializationOperator(std::ostream&, const NascentRawGeometry&);
-    };
+	};
 
 }}}
 
