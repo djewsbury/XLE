@@ -90,36 +90,6 @@ namespace RenderCore { namespace Assets
 		BoundSkinnedGeometry();
 	};
 
-	struct VertexData	// todo -- remove; deprecated
-    {
-        GeoInputAssembly    _ia;
-        unsigned            _offset, _size;
-    };
-
-    struct IndexData	// todo -- remove; deprecated
-    {
-        Format		 _format;
-        unsigned    _offset, _size;
-    };
-
-	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
-		const VertexData& vd)
-	{
-		SerializationOperator(outputSerializer, vd._ia);
-		SerializationOperator(outputSerializer, vd._offset);
-		SerializationOperator(outputSerializer, vd._size);
-	}
-
-	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
-		const IndexData& id)
-	{
-		SerializationOperator(outputSerializer, (uint32_t)id._format);
-		SerializationOperator(outputSerializer, id._offset);
-		SerializationOperator(outputSerializer, id._size);
-	}
-
 	class SupplementGeo
 	{
 	public:

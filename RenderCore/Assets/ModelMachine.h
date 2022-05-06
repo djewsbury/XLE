@@ -87,10 +87,22 @@ namespace RenderCore { namespace Assets
 		uint64_t BuildHash() const;
 	};
 
+	struct VertexData
+	{
+		GeoInputAssembly    _ia;
+		unsigned            _offset, _size;
+	};
+
+	struct IndexData
+	{
+		Format		 _format;
+		unsigned    _offset, _size;
+	};
+
 	struct RawGeometryDesc
 	{
-		GeoInputAssembly					_staticVertexIA;
-		Format								_indexFormat;
+		VertexData							_vb;
+		IndexData							_ib;
 		SerializableVector<DrawCallDesc>	_drawCalls;
 		Float4x4							_geoSpaceToNodeSpace;					// transformation from the coordinate space of the geometry itself to whatever node it's attached to. Useful for some deformation operations, where a post-performance transform is required
 		SerializableVector<unsigned>		_finalVertexIndexToOriginalIndex;		// originalIndex = _finalVertexIndexToOriginalIndex[finalIndex]
@@ -101,8 +113,8 @@ namespace RenderCore { namespace Assets
 			//  The "RawGeometry" base class contains the 
 			//  unanimated vertex elements (and draw calls for
 			//  rendering the object as a whole)
-		GeoInputAssembly		_animatedVertexIA;
-		GeoInputAssembly		_skeletonBindingIA;
+		VertexData		_animatedVertexElements;
+		VertexData		_skeletonBinding;
 
 		struct Section
 		{
@@ -163,6 +175,24 @@ namespace RenderCore { namespace Assets
 	{
 		SerializationOperator(outputSerializer, ia._elements);
 		SerializationOperator(outputSerializer, ia._vertexStride);
+	}
+
+	inline void SerializationOperator(
+		::Assets::NascentBlockSerializer& outputSerializer,
+		const VertexData& vd)
+	{
+		SerializationOperator(outputSerializer, vd._ia);
+		SerializationOperator(outputSerializer, vd._offset);
+		SerializationOperator(outputSerializer, vd._size);
+	}
+
+	inline void SerializationOperator(
+		::Assets::NascentBlockSerializer& outputSerializer,
+		const IndexData& id)
+	{
+		SerializationOperator(outputSerializer, (uint32_t)id._format);
+		SerializationOperator(outputSerializer, id._offset);
+		SerializationOperator(outputSerializer, id._size);
 	}
 
 	inline void SerializationOperator(

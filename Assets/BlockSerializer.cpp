@@ -115,6 +115,7 @@ namespace Assets
     unsigned NascentBlockSerializer::CreateRecall(unsigned size)
     {
         _pendingRecalls.push_back(Recall{_nextRecallId, size, (uint64_t)_memory.size()});
+        AddPadding(size);
         return _nextRecallId++;
     }
 

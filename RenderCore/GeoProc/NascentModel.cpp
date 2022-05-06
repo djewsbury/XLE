@@ -325,6 +325,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunksCmdStreamForm(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
 	{
 		::Assets::NascentBlockSerializer serializer;
+		auto recall = serializer.CreateRecall(sizeof(unsigned));
 
 		SerializeCmdStreamForm(serializer, cmdStream);
 		auto largeResourcesBlock = SerializeSkinCmdStreamForm(serializer, geoObjects);
@@ -340,6 +341,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// Find the max LOD value, and serialize that
 		SerializationOperator(serializer, cmdStream.GetMaxLOD());*/
+
+		serializer.PushSizeValueAtRecall(recall);
 
 		// SerializationOperator human-readable metrics information
 		std::stringstream metricsStream;
@@ -445,7 +448,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 		}
 
-		return SerializeSkinToChunks(name, geoObjects, cmdStream, embeddedSkeleton);
+		return SerializeSkinToChunksCmdStreamForm(name, geoObjects, cmdStream, embeddedSkeleton);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

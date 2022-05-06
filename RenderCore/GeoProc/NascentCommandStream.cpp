@@ -9,6 +9,7 @@
 #include "../Assets/RawAnimationCurve.h"
 #include "../Assets/TransformationCommands.h"
 #include "../Assets/ModelMachine.h"
+#include "../Assets/AssetUtils.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../OSServices/Log.h"
@@ -516,50 +517,36 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	void SerializeCmdStreamForm(::Assets::NascentBlockSerializer& serializer, const NascentModelCommandStream& obj)
 	{
-		// _geometryInstances & _skinControllerInstances are actually written in the same way
+		// _geometryInstances & _skinControllerInstances are identical in their serialized form
 		std::optional<unsigned> currentTransformMarker;
 		const std::vector<NascentModelCommandStream::MaterialGuid>* currentMaterialAssignment = nullptr;
 		for (const auto& geo:obj._geometryInstances) {
 			if (!currentTransformMarker.has_value() || geo._localToWorldId != currentTransformMarker.value()) {
-				serializer << (uint32_t)ModelCommand::SetTransformMarker;
-				serializer << sizeof(geo._localToWorldId);
-				serializer << geo._localToWorldId;
+				serializer << MakeCmdAndRawData(ModelCommand::SetTransformMarker, geo._localToWorldId);
 				currentTransformMarker = geo._localToWorldId;
 			}
 			if (!currentMaterialAssignment || *currentMaterialAssignment != geo._materials) {
-				serializer << (uint32_t)ModelCommand::SetMaterialAssignments;
-				serializer << sizeof(*geo._materials.begin()) * geo._materials.size();
-				for (auto& m:geo._materials) serializer << m;
+				serializer << MakeCmdAndRawData(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
-			serializer << (uint32_t)ModelCommand::GeoCall;
-			serializer << sizeof(unsigned);
-			serializer << geo._id;
+			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);
 		}
 
 		for (const auto& geo:obj._skinControllerInstances) {
 			if (!currentTransformMarker.has_value() || geo._localToWorldId != currentTransformMarker.value()) {
-				serializer << (uint32_t)ModelCommand::SetTransformMarker;
-				serializer << sizeof(geo._localToWorldId);
-				serializer << geo._localToWorldId;
+				serializer << MakeCmdAndRawData(ModelCommand::SetTransformMarker, geo._localToWorldId);
 				currentTransformMarker = geo._localToWorldId;
 			}
 			if (!currentMaterialAssignment || *currentMaterialAssignment != geo._materials) {
-				serializer << (uint32_t)ModelCommand::SetMaterialAssignments;
-				serializer << sizeof(*geo._materials.begin()) * geo._materials.size();
-				for (auto& m:geo._materials) serializer << m;
+				serializer << MakeCmdAndRawData(ModelCommand::SetMaterialAssignments, geo._materials);
 				currentMaterialAssignment = &geo._materials;
 			}
-			serializer << (uint32_t)ModelCommand::GeoCall;
-			serializer << sizeof(unsigned);
-			serializer << geo._id;
+			serializer << MakeCmdAndRawData(ModelCommand::GeoCall, geo._id);
 		}
 
 		// write out the InputInterface
 		auto hashedInterface = obj.BuildHashedInputInterface();
-		serializer << (uint32_t)ModelCommand::InputInterface;
-		serializer << sizeof(*hashedInterface.begin()) * hashedInterface.size();
-		for (auto h:hashedInterface) serializer << h;
+		serializer << MakeCmdAndRawData(ModelCommand::InputInterface, hashedInterface);
 	}
 
 	std::vector<uint64_t> NascentModelCommandStream::BuildHashedInputInterface() const
