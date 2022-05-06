@@ -17,7 +17,7 @@
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	void NascentRawGeometry::SerializeWithResourceBlock(
-		::Assets::NascentBlockSerializer& outputSerializer, 
+		::Assets::NascentBlockSerializer& serializer, 
 		std::vector<uint8>& largeResourcesBlock) const
 	{
 			//  We're going to write the index and vertex buffer data to the "large resources block"
@@ -32,20 +32,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto ibSize = _indices.size();
 		largeResourcesBlock.insert(largeResourcesBlock.end(), _indices.begin(), _indices.end());
 
+		serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
+		auto recall = serializer.CreateRecall(sizeof(unsigned));
+
 		SerializationOperator(
-			outputSerializer, 
+			serializer, 
 			RenderCore::Assets::VertexData 
 				{ _mainDrawInputAssembly, unsigned(vbOffset), unsigned(vbSize) });
 
 		SerializationOperator(
-			outputSerializer, 
+			serializer, 
 			RenderCore::Assets::IndexData 
 				{ _indexFormat, unsigned(ibOffset), unsigned(ibSize) });
 		
-		SerializationOperator(outputSerializer, _mainDrawCalls);
-		SerializationOperator(outputSerializer, _geoSpaceToNodeSpace);
+		SerializationOperator(serializer, _mainDrawCalls);
+		SerializationOperator(serializer, _geoSpaceToNodeSpace);
 
-		SerializationOperator(outputSerializer, _finalVertexIndexToOriginalIndex);
+		SerializationOperator(serializer, _finalVertexIndexToOriginalIndex);
+
+		serializer.PushSizeValueAtRecall(recall);
 	}
 
 	std::ostream& SerializationOperator(std::ostream& stream, const NascentRawGeometry& geo)

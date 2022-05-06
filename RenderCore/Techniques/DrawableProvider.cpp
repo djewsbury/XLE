@@ -51,32 +51,42 @@ namespace RenderCore { namespace Techniques
 				for (auto cmd:machine) {
 					switch (cmd.Cmd()) {
 					case (uint32_t)Assets::ModelCommand::Geo:
-						_geoMachines.push_back(Assets::MakeScaffoldCmdRange(cmd.RawData()));
+						_geoMachines.push_back(CreateMachine(cmd.As<const void*>()));
 						break;
 					case (uint32_t)Assets::ModelCommand::Material:
 						{
-							auto hashId = *(const uint64_t*)cmd.RawData().begin();
-							auto data = Assets::MakeScaffoldCmdRange({PtrAdd(cmd.RawData().begin(), sizeof(uint64_t)), cmd.RawData().end()});
-							auto i = LowerBound(_materialMachines, hashId);
-							if (i != _materialMachines.end() &&i-> first == hashId) {
-								_materialMachines.insert(i, std::make_pair(hashId, data));
+							struct MaterialRef { uint64_t _hashId; const void* _data; };
+							auto ref = cmd.As<MaterialRef>();
+							// auto data = Assets::MakeScaffoldCmdRange({PtrAdd(cmd.RawData().begin(), sizeof(uint64_t)), cmd.RawData().end()});
+							auto i = LowerBound(_materialMachines, ref._hashId);
+							if (i != _materialMachines.end() &&i-> first == ref._hashId) {
+								_materialMachines.insert(i, std::make_pair(ref._hashId, CreateMachine(ref._data)));
 							} else
-								i->second = data;
+								i->second = CreateMachine(ref._data);
 						}
 						break;
 					case (uint32_t)Assets::ModelCommand::ShaderPatchCollection:
 						{
-							auto hashId = *(const uint64_t*)cmd.RawData().begin();
-							auto data = (const Assets::ShaderPatchCollection*)PtrAdd(cmd.RawData().begin(), sizeof(uint64_t));
-							auto i = LowerBound(_shaderPatchCollections, hashId);
-							if (i != _shaderPatchCollections.end() &&i-> first == hashId) {
-								_shaderPatchCollections.insert(i, std::make_pair(hashId, data));
+							struct SPCRef { uint64_t _hashId; const Assets::ShaderPatchCollection* _data; };
+							auto ref = cmd.As<SPCRef>();
+							// auto data = (const Assets::ShaderPatchCollection*)PtrAdd(cmd.RawData().begin(), sizeof(uint64_t));
+							auto i = LowerBound(_shaderPatchCollections, ref._hashId);
+							if (i != _shaderPatchCollections.end() &&i-> first == ref._hashId) {
+								_shaderPatchCollections.insert(i, std::make_pair(ref._hashId, ref._data));
 							} else
-								i->second = data;
+								i->second = ref._data;
 						}
 						break;
 					}
 				}
+			}
+
+			static Machine CreateMachine(const void* src)
+			{
+				auto size = *(const uint32_t*)src;
+				return Assets::MakeScaffoldCmdRange({
+					PtrAdd(src, sizeof(uint32_t)),
+					PtrAdd(src, sizeof(uint32_t)+size)});
 			}
 
 			ScaffoldAddressableObjects(IteratorRange<const Machine*> machines)
@@ -183,10 +193,6 @@ namespace RenderCore { namespace Techniques
 					case (uint32_t)Assets::GeoCommand::AttachSkinningData:
 						assert(!skinningData);
 						skinningData = (const Assets::SkinningDataDesc*)cmd.RawData().begin();
-						break;
-
-					case (uint32_t)Assets::GeoCommand::AttachGeometryBuffer:
-						// handle geometry buffers somehow
 						break;
 
 					default:
@@ -417,11 +423,15 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const uint64_t*> currentMaterialAssignments;
 			unsigned currentTransformMarker = ~0u;
 
-			auto* geoDeformerInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
-			auto deformParametersAttachment = deformAcceleratorPool->GetDeformParametersAttachment(*deformAccelerator);
+			RenderCore::Techniques::IGeoDeformerInfrastructure* geoDeformerInfrastructure = nullptr;
+			RenderCore::Techniques::IDeformParametersAttachment* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
-			if (deformAccelerator && geoDeformerInfrastructure)
-				deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
+			if (deformAcceleratorPool && deformAccelerator) { 
+				deformParametersAttachment = deformAcceleratorPool->GetDeformParametersAttachment(*deformAccelerator).get();
+				geoDeformerInfrastructure = dynamic_cast<IGeoDeformerInfrastructure*>(deformAcceleratorPool->GetDeformAttachment(*deformAccelerator).get());
+				if (geoDeformerInfrastructure)
+					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();				
+			}
 
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
 			Internal::ScaffoldAddressableObjects addressableObjects{machines};
@@ -485,7 +495,7 @@ namespace RenderCore { namespace Techniques
 										addressableObjects.GetMaterialMachine(matAssignment),
 										addressableObjects,
 										matAssignment,
-										deformAcceleratorPool.get(), deformParametersAttachment.get());
+										deformAcceleratorPool.get(), deformParametersAttachment);
 									auto compiledPipeline = _pendingPipelines.MakePipeline(
 										*workingMaterial, 
 										_pendingGeos._geosLayout[pendingGeoIdx],

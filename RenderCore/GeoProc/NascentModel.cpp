@@ -190,10 +190,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	{
 		auto result = std::make_shared<std::vector<uint8>>();
 		for (const auto& geo:objs._rawGeos) {
+			::Assets::NascentBlockSerializer tempBlock;
+			auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+			geo.second.SerializeWithResourceBlock(tempBlock, *result);
+			tempBlock.PushSizeValueAtRecall(recall);
+
 			serializer << (uint32_t)Assets::ModelCommand::Geo;
-			auto recall = serializer.CreateRecall(sizeof(unsigned));
-			geo.second.SerializeWithResourceBlock(serializer, *result);
-			serializer.PushSizeValueAtRecall(recall);
+			serializer << (uint32_t)sizeof(size_t);
+			serializer.SerializeSubBlock(tempBlock);
 		}
 		// for (auto i = objs._skinnedGeos.begin(); i!=objs._skinnedGeos.end(); ++i)
 		// 	i->second.SerializeWithResourceBlockCmdStreamForm(tempBlock, *result);

@@ -169,6 +169,8 @@ namespace Assets
 
     void    NascentBlockSerializer::SerializeSubBlock(NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
     {
+        assert(subBlock._pendingRecalls.empty());
+
             //
             //      Merge in the block we've just serialised, and write
             //      an internal pointer record for it.

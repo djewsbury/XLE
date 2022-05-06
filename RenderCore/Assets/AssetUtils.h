@@ -49,4 +49,25 @@ namespace RenderCore { namespace Assets
 		serializer << (uint32_t)obj._data.size();
 		serializer.SerializeRaw(obj._data);
 	}
+
+	template<typename Serializable>
+		struct CmdAndSerializable
+	{
+		uint32_t _cmd;
+		const Serializable* _serializable;
+	};
+	template<typename Serializable, typename Cmd>
+		CmdAndRawData MakeCmdAndSerializable(Cmd cmd, const Serializable& obj)
+		{
+			return CmdAndSerializable<Serializable>{(uint32_t)cmd, &obj};
+		}
+
+	template<typename Serializable>
+		inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const CmdAndSerializable<Serializable>& obj)
+	{
+		serializer << (uint32_t)obj._cmd;
+		auto recall = serializer.CreateRecall(sizeof(uint32_t));
+		serializer << obj;
+		serializer.PushSizeValueAtRecall(recall);
+	}
 }}

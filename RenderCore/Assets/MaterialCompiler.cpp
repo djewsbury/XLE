@@ -7,6 +7,8 @@
 #include "MaterialCompiler.h"
 #include "RawMaterial.h"
 #include "MaterialScaffold.h"
+#include "ModelMachine.h"
+#include "AssetUtils.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/ChunkFile.h"
 #include "../../Assets/Assets.h"
@@ -192,25 +194,35 @@ namespace RenderCore { namespace Assets
 
 					// "resolved" is now actually the data we want to write out
 				::Assets::NascentBlockSerializer blockSerializer;
-				SerializationOperator(blockSerializer, resolved);
-				SerializationOperator(blockSerializer, resolvedNames);
+				auto outerRecall = blockSerializer.CreateRecall(sizeof(uint32_t));
+				for (const auto& m:resolved) {
+					::Assets::NascentBlockSerializer tempBlock;
+					auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+					tempBlock << m.second;
+					tempBlock.PushSizeValueAtRecall(recall);
 
-				MemoryOutputStream<utf8> patchCollectionStrm;
-				{
-					OutputStreamFormatter fmtter(patchCollectionStrm);
-					SerializeShaderPatchCollectionSet(fmtter, MakeIteratorRange(patchCollections));
+					blockSerializer << (uint32_t)ModelCommand::Material;
+					blockSerializer << (uint32_t)sizeof(size_t);
+					blockSerializer.SerializeSubBlock(tempBlock);
 				}
+				for (const auto& pc:patchCollections) {
+					::Assets::NascentBlockSerializer tempBlock;
+					auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+					tempBlock << pc.GetHash();
+					tempBlock.PushSizeValueAtRecall(recall);
+
+					blockSerializer << (uint32_t)ModelCommand::ShaderPatchCollection;
+					blockSerializer << (uint32_t)sizeof(size_t);
+					blockSerializer.SerializeSubBlock(tempBlock);
+				}
+				blockSerializer << MakeCmdAndSerializable(ModelCommand::MaterialNameDehash, resolvedNames);
+				blockSerializer.PushSizeValueAtRecall(outerRecall);
 
 				_serializedArtifacts = std::vector<SerializedArtifact>{
 					{
 						ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
 						(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),
 						::Assets::AsBlob(blockSerializer)
-					},
-					{
-						ChunkType_PatchCollections, ResolvedMat_ExpectedVersion, 
-						(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),
-						::Assets::AsBlob(MakeIteratorRange(patchCollectionStrm.GetBuffer().Begin(), patchCollectionStrm.GetBuffer().End()))
 					}
 				};
 

@@ -4,6 +4,7 @@
 
 #include "ShaderPatchCollection.h"
 #include "../../Assets/DepVal.h"
+#include "../../Assets/BlockSerializer.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
@@ -50,8 +51,10 @@ namespace RenderCore { namespace Assets
 	}
 
 	ShaderPatchCollection::ShaderPatchCollection(std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>>&& patches)
-	: _patches(std::move(patches))
 	{
+		_patches.reserve(patches.size());
+		for (auto& p:patches)
+			_patches.emplace_back(std::move(p.first), std::move(p.second));
 		SortAndCalculateHash();
 	}
 
@@ -85,10 +88,6 @@ namespace RenderCore { namespace Assets
 	bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs) { return lhs.GetHash() < rhs.GetHash(); }
 	bool operator<(const ShaderPatchCollection& lhs, uint64_t rhs) { return lhs.GetHash() < rhs; }
 	bool operator<(uint64_t lhs, const ShaderPatchCollection& rhs) { return lhs < rhs.GetHash(); }
-	std::ostream& operator<<(std::ostream& str, const ShaderPatchCollection& patchCollection)
-	{
-		return str << patchCollection.GetHash();
-	}
 
 	static void SerializeInstantiationRequest(
 		OutputStreamFormatter& formatter, 
@@ -104,15 +103,29 @@ namespace RenderCore { namespace Assets
 			formatter.WriteKeyedValue("Implements", instRequest._implementsArchiveName);
 	}
 
-	void ShaderPatchCollection::SerializeMethod(OutputStreamFormatter& formatter) const
+	void SerializationOperator(OutputStreamFormatter& formatter, const ShaderPatchCollection& patchCollection)
 	{
-		for (const auto& p:_patches) {
+		for (const auto& p:patchCollection._patches) {
 			auto pele = (p.first.empty()) ? formatter.BeginSequencedElement() : formatter.BeginKeyedElement(p.first);
 			SerializeInstantiationRequest(formatter, p.second);
 			formatter.EndElement(pele);
 		}
-		if (!_descriptorSet.empty())
-			formatter.WriteKeyedValue("DescriptorSet", _descriptorSet);
+		if (!patchCollection._descriptorSet.empty())
+			formatter.WriteKeyedValue("DescriptorSet", patchCollection.GetDescriptorSetFileName());
+	}
+
+	std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection& patchCollection)
+	{
+		str << "PatchCollection[" << patchCollection.GetHash() << "]";
+		return str;
+	}
+
+	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const ShaderPatchCollection& patchCollection)
+	{
+		serializer << patchCollection._patches;
+		serializer << patchCollection._descriptorSet;
+		serializer << patchCollection._hash;
+		serializer << ::Assets::DependencyValidationMarker_Invalid;
 	}
 
 	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
@@ -172,7 +185,8 @@ namespace RenderCore { namespace Assets
 				auto name = RequireKeyedItem(formatter);
 				
 				if (XlEqString(name, "DescriptorSet")) {
-					_descriptorSet = RequireStringValue(formatter).AsString();
+					auto descSetStr = RequireStringValue(formatter).AsString();
+					_descriptorSet = SerializableVector<char>{descSetStr.begin(), descSetStr.end()};
 					continue;
 				}
 				
@@ -216,12 +230,6 @@ namespace RenderCore { namespace Assets
 			SerializationOperator(formatter, p);
 			formatter.EndElement(ele);
 		}
-	}	
-
-	std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection& patchCollection)
-	{
-		str << "PatchCollection[" << patchCollection.GetHash() << "]";
-		return str;
 	}
 
 }}

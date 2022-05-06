@@ -16,8 +16,7 @@ namespace RenderCore { namespace Assets
 	enum class GeoCommand : uint32_t
 	{
 		AttachRawGeometry = s_scaffoldCmdBegin_ModelMachine + 0x100,
-		AttachSkinningData,
-		AttachGeometryBuffer
+		AttachSkinningData
 	};
 
 	enum class ModelCommand : uint32_t
@@ -36,6 +35,7 @@ namespace RenderCore { namespace Assets
 		Skeleton,				// internal stream of TransformationCommand
 		ShaderPatchCollection, 	// serialized ShaderPatchCollection
 
+		MaterialNameDehash,
 		InputInterface,
 	};
 
