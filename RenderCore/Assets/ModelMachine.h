@@ -31,9 +31,10 @@ namespace RenderCore { namespace Assets
 		SetMaterialAssignments,
 		GeoCall,
 
-		Geo,			// internal stream of GeoCommand
-		Material,		// internal stream of MaterialCommand
-		Skeleton,		// internal stream of TransformationCommand
+		Geo,					// internal stream of GeoCommand
+		Material,				// internal stream of MaterialCommand
+		Skeleton,				// internal stream of TransformationCommand
+		ShaderPatchCollection, 	// serialized ShaderPatchCollection
 
 		InputInterface,
 	};

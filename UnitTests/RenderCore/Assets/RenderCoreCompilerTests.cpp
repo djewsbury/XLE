@@ -140,9 +140,6 @@ namespace UnitTests
 			auto collection = compile->GetArtifactCollection(targetCode);
 			INFO(::Assets::AsString(::Assets::GetErrorMessage(*collection)));		// exception here is normal -- it's expected when there is no output log
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
-
-			auto finalScaffold = ::Assets::AutoConstructAsset<RenderCore::Assets::ModelScaffold>(*collection);
-			(void)finalScaffold;
 		}
 
 		SECTION("Get material settings from a model file")

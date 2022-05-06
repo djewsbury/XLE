@@ -19,7 +19,7 @@ namespace RenderCore { namespace Assets
 	static constexpr unsigned s_scaffoldCmdBegin_SkeletonMachine = 0x1500;
 	static constexpr unsigned s_scaffoldCmdBegin_MaterialMachine = 0x2000;
 
-	class IScaffoldNavigation;
+	// class IScaffoldNavigation;
 	class ScaffoldCmdIterator
 	{
 	public:
@@ -43,21 +43,21 @@ namespace RenderCore { namespace Assets
 		friend bool operator==(const ScaffoldCmdIterator&, const ScaffoldCmdIterator&);
 		friend bool operator!=(const ScaffoldCmdIterator&, const ScaffoldCmdIterator&);
 
-		IScaffoldNavigation* Navigation() const;
+		// IScaffoldNavigation* Navigation() const;
 
-		ScaffoldCmdIterator(IteratorRange<const void*> data, IScaffoldNavigation& navigation);
+		// ScaffoldCmdIterator(IteratorRange<const void*> data, IScaffoldNavigation& navigation);
 		ScaffoldCmdIterator(IteratorRange<const void*> data);
 		ScaffoldCmdIterator();
 		ScaffoldCmdIterator(nullptr_t);
 
 	private:
 		Value _value;
-		IScaffoldNavigation* _navigation = nullptr;
+		// IScaffoldNavigation* _navigation = nullptr;
 
 		bool IsEqual(const ScaffoldCmdIterator& other) const;
 	};
 
-	IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation);
+	// IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation);
 	IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data);
 
 	class ScaffoldAsset
@@ -118,13 +118,12 @@ namespace RenderCore { namespace Assets
 		public:
 			Element& SetModelScaffold(StringSection<>);
 			Element& SetMaterialScaffold(StringSection<>);
-			Element& SetSkeletonScaffold(StringSection<>);
+			
 			Element& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
 			Element& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
-			Element& SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+			
 			Element& SetModelScaffold(const std::shared_ptr<ScaffoldAsset>&);
 			Element& SetMaterialScaffold(const std::shared_ptr<ScaffoldAsset>&);
-			Element& SetSkeletonScaffold(const std::shared_ptr<ScaffoldAsset>&);
 
 			Element& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
 
@@ -134,9 +133,15 @@ namespace RenderCore { namespace Assets
 		private:
 			unsigned _elementId = ~0u;
 			Internal* _internal = nullptr;
+			Element(unsigned elementId, Internal& internal) : _elementId(elementId), _internal(&internal) {}
+			Element() {}
+			friend class RendererConstruction;
 		};
 
-		Element& AddElement();
+		Element AddElement();
+		void SetSkeletonScaffold(StringSection<>);
+		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+		void SetSkeletonScaffold(const std::shared_ptr<ScaffoldAsset>&);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
@@ -191,8 +196,8 @@ namespace RenderCore { namespace Assets
 	template<typename Type> const Type& ScaffoldCmdIterator::Value::As() const
 	{
 		auto rawData = RawData();
-		assert(rawData.size() == sizeof(Type))
-		return *(const Type*)rawData.begin()
+		assert(rawData.size() == sizeof(Type));
+		return *(const Type*)rawData.begin();
 	}
 
 	inline ScaffoldCmdIterator::Value::Value(IteratorRange<const void*> block) : _data(block) {}
@@ -211,7 +216,7 @@ namespace RenderCore { namespace Assets
 	inline auto ScaffoldCmdIterator::operator->() const -> const Value* { return &_value; }
 	inline bool ScaffoldCmdIterator::IsEqual(const ScaffoldCmdIterator& other) const
 	{ 
-		assert(_navigation == other._navigation);
+		// assert(_navigation == other._navigation);
 		return _value._data.begin() == other._value._data.begin();
 	}
 	inline bool operator==(const ScaffoldCmdIterator& lhs, const ScaffoldCmdIterator& rhs)
@@ -223,25 +228,25 @@ namespace RenderCore { namespace Assets
 		return !lhs.IsEqual(rhs);
 	}
 
-	inline IScaffoldNavigation* ScaffoldCmdIterator::Navigation() const { return _navigation; }
+	/*inline IScaffoldNavigation* ScaffoldCmdIterator::Navigation() const { return _navigation; }
 
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator(IteratorRange<const void*> data, IScaffoldNavigation& navigation)
 	: _value(data)
 	, _navigation(&navigation)
-	{}
+	{}*/
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator(IteratorRange<const void*> data)
 	: _value(data)
 	{}
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator() {}
 	inline ScaffoldCmdIterator::ScaffoldCmdIterator(nullptr_t) {}
 
-	inline IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation)
+	/*inline IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation)
 	{
 		return {
 			ScaffoldCmdIterator(data, navigation),
 			ScaffoldCmdIterator({data.end(), data.end()}, navigation)
 		};
-	}
+	}*/
 
 	inline IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data)
 	{

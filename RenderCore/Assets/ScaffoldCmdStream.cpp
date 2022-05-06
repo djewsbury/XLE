@@ -91,7 +91,6 @@ namespace RenderCore { namespace Assets
 		return *this;
 	}
 	auto RendererConstruction::Element::SetMaterialScaffold(StringSection<>) -> Element& { return *this; }
-	auto RendererConstruction::Element::SetSkeletonScaffold(StringSection<>) -> Element& { return *this; }
 	auto RendererConstruction::Element::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>& scaffoldMarker) -> Element&
 	{
 		assert(_internal);
@@ -103,7 +102,6 @@ namespace RenderCore { namespace Assets
 		return *this;
 	}
 	auto RendererConstruction::Element::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&) -> Element& { return *this; }
-	auto RendererConstruction::Element::SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&) -> Element& { return *this; }
 	auto RendererConstruction::Element::SetModelScaffold(const std::shared_ptr<ScaffoldAsset>& scaffoldPtr) -> Element& 
 	{
 		assert(_internal);
@@ -115,7 +113,6 @@ namespace RenderCore { namespace Assets
 		return *this; 
 	}
 	auto RendererConstruction::Element::SetMaterialScaffold(const std::shared_ptr<ScaffoldAsset>&) -> Element& { return *this; }
-	auto RendererConstruction::Element::SetSkeletonScaffold(const std::shared_ptr<ScaffoldAsset>&) -> Element& { return *this; }
 
 	auto RendererConstruction::Element::AddMorphTarget(uint64_t targetName, StringSection<> srcFile) -> Element& { return *this; }
 
@@ -135,8 +132,10 @@ namespace RenderCore { namespace Assets
 	std::future<std::shared_ptr<RendererConstruction>> RendererConstruction::ReadyFuture()
 	{
 		std::promise<std::shared_ptr<RendererConstruction>> promise;
+		auto result = promise.get_future();
 
 		auto strongThis = shared_from_this();
+		assert(strongThis);
 		::Assets::PollToPromise(
 			std::move(promise),
 			[strongThis](auto timeout) {
@@ -144,8 +143,8 @@ namespace RenderCore { namespace Assets
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				for (auto& f:strongThis->_internal->_modelScaffoldMarkers) {
 					auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
-					if (remainingTime <= 0) return ::Assets::PollStatus::Continue;
-					auto t = f.second->StallWhilePending(remainingTime);
+					if (remainingTime.count() <= 0) return ::Assets::PollStatus::Continue;
+					auto t = f.second->StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
 					if (t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending)
 						return ::Assets::PollStatus::Continue;
 				}
@@ -156,7 +155,7 @@ namespace RenderCore { namespace Assets
 				return strongThis;
 			});
 
-		return promise.get_future();
+		return result;
 	}
 
 	::Assets::AssetState RendererConstruction::GetAssetState() const
@@ -170,6 +169,19 @@ namespace RenderCore { namespace Assets
 		}
 		return hasPending ? ::Assets::AssetState::Pending : ::Assets::AssetState::Ready;
 	}
+
+	auto RendererConstruction::AddElement() -> Element
+	{
+		auto result = Element{_internal->_elementCount, *_internal.get()};
+		++_internal->_elementCount;
+		return result;
+	}
+
+	RendererConstruction::RendererConstruction()
+	{
+		_internal = std::make_unique<Internal>();
+	}
+	RendererConstruction::~RendererConstruction() {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
