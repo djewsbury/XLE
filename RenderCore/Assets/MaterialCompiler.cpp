@@ -93,6 +93,9 @@ namespace RenderCore { namespace Assets
 				if (initializers.GetCount() >= 2)
 					sourceModel = initializers.GetInitializer<std::string>(1);
 
+				if (sourceModel.empty())
+					Throw(::Exceptions::BasicLabel{"Empty source model in MaterialCompileOperation"});
+
 				if (sourceMaterial == sourceModel)
 					sourceMaterial = {};
 

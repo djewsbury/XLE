@@ -122,7 +122,7 @@ namespace RenderCore { namespace Techniques
 				return _modelScaffold->GetDependencyValidation();
 			}
 
-			std::shared_ptr<RenderCore::Assets::ModelScaffold> _modelScaffold;
+			std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> _modelScaffold;
 			ResourceDesc _resourceDesc;
 			struct LoadRequests { unsigned _dstOffset, _srcOffset, _size; };
 			std::vector<LoadRequests> _loadRequests;
@@ -142,9 +142,10 @@ namespace RenderCore { namespace Techniques
 	}
 
 	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
+		BufferUploads::IManager& bufferUploads,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
@@ -156,14 +157,14 @@ namespace RenderCore { namespace Techniques
 			resourceName);
 		dataSource->_loadRequests = Internal::AsLoadRequests(loadRequests);
 
-		return Services::GetBufferUploads().Transaction_Begin(dataSource, bindFlags);
+		return bufferUploads.Transaction_Begin(dataSource, bindFlags);
 	}
 
 	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(
 		IDevice& device,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName)
 	{
@@ -178,6 +179,18 @@ namespace RenderCore { namespace Techniques
 		auto resource = device.CreateResource(dataSource->_resourceDesc);
 		auto marker = Services::GetBufferUploads().Transaction_Begin(resource, dataSource, bindFlags);
 		return {std::move(resource), std::move(marker)};
+	}
+
+	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(		// deprecated version
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName)
+	{
+		assert(0);
+		return {};
 	}
 
 	::Assets::PtrToMarkerPtr<Metal::ShaderProgram> CreateShaderProgramFromByteCode(

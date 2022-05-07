@@ -6,6 +6,7 @@
 #include "Drawables.h"
 #include "DeformGeometryInfrastructure.h"
 #include "PipelineAccelerator.h"
+#include "CommonUtils.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/ModelMachine.h"
 #include "../Assets/MaterialMachine.h"
@@ -18,86 +19,6 @@ namespace RenderCore { namespace Techniques
 {
 	namespace Internal
 	{
-		struct ScaffoldAddressableObjects
-		{
-		public:
-			using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
-			std::vector<Machine> _geoMachines;
-			std::vector<std::pair<uint64_t, Machine>> _materialMachines;
-			std::vector<std::pair<uint64_t, std::shared_ptr<Assets::ShaderPatchCollection>>> _shaderPatchCollections;
-
-			Machine GetGeoMachine(unsigned geoIdx) const
-			{
-				assert(geoIdx < _geoMachines.size());
-				return _geoMachines[geoIdx];
-			}
-
-			Machine GetMaterialMachine(uint64_t hashId) const
-			{
-				auto i = LowerBound(_materialMachines, hashId);
-				if (i != _materialMachines.end() &&i-> first == hashId)
-					return i->second;
-				return {};
-			}
-
-			std::shared_ptr<Assets::ShaderPatchCollection> GetShaderPatchCollection(uint64_t hashId) const
-			{
-				auto i = LowerBound(_shaderPatchCollections, hashId);
-				if (i != _shaderPatchCollections.end() &&i-> first == hashId)
-					return i->second;
-				return nullptr;
-			}
-
-			void AddObjectsFromMachine(Machine machine)
-			{
-				for (auto cmd:machine) {
-					switch (cmd.Cmd()) {
-					case (uint32_t)Assets::ScaffoldCommand::Geo:
-						_geoMachines.push_back(CreateMachine(cmd.As<const void*>()));
-						break;
-					case (uint32_t)Assets::ScaffoldCommand::Material:
-						{
-							struct MaterialRef { uint64_t _hashId; const void* _data; };
-							auto ref = cmd.As<MaterialRef>();
-							// auto data = Assets::MakeScaffoldCmdRange({PtrAdd(cmd.RawData().begin(), sizeof(uint64_t)), cmd.RawData().end()});
-							auto i = LowerBound(_materialMachines, ref._hashId);
-							if (i != _materialMachines.end() &&i-> first == ref._hashId) {
-								_materialMachines.insert(i, std::make_pair(ref._hashId, CreateMachine(ref._data)));
-							} else
-								i->second = CreateMachine(ref._data);
-						}
-						break;
-					case (uint32_t)Assets::ScaffoldCommand::ShaderPatchCollection:
-						{
-							struct SPCRef { uint64_t _hashId; size_t _blockSize; const void* _serializedBlock; };
-							auto ref = cmd.As<SPCRef>();
-							auto i = LowerBound(_shaderPatchCollections, ref._hashId);
-							if (i != _shaderPatchCollections.end() &&i-> first == ref._hashId) {
-								// we have to deserialize via text format
-								InputStreamFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
-								auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
-								_shaderPatchCollections.insert(i, std::make_pair(ref._hashId, std::move(patchCollection)));
-							}
-						}
-						break;
-					}
-				}
-			}
-
-			static Machine CreateMachine(const void* src)
-			{
-				auto size = *(const uint32_t*)src;
-				return Assets::MakeScaffoldCmdRange({
-					PtrAdd(src, sizeof(uint32_t)),
-					PtrAdd(src, sizeof(uint32_t)+size)});
-			}
-
-			ScaffoldAddressableObjects(IteratorRange<const Machine*> machines)
-			{
-				for (auto machine:machines) AddObjectsFromMachine(machine);
-			}
-		};
-
 		static std::vector<InputElementDesc> MakeIA(IteratorRange<const Assets::VertexElement*> elements, IteratorRange<const uint64_t*> suppressedElements, unsigned streamIdx)
 		{
 			std::vector<InputElementDesc> result;
@@ -173,17 +94,49 @@ namespace RenderCore { namespace Techniques
 			std::vector<InputLayout> _geosLayout;
 			std::vector<Topology> _geosTopologies;
 
+			enum class LoadBuffer { VB, IB };
+			enum class DrawableStream { IB, Vertex0, Vertex1, Vertex2, Vertex3 };
+			struct LoadRequest
+			{
+				unsigned _scaffoldIdx;
+				unsigned _drawableGeoIdx;
+				unsigned _srcOffset, _srcSize;
+				LoadBuffer _loadBuffer;
+				DrawableStream _drawableStream;
+			};
+			std::vector<LoadRequest> _staticLoadRequests;
+
+			void AddStaticLoadRequest(
+				LoadBuffer loadBuffer, DrawableStream drawableStream,
+				unsigned scaffoldIdx, unsigned drawableGeoIdx,
+				unsigned largeBlocksOffset, unsigned largeBlocksSize)
+			{
+				if (!largeBlocksSize) return;
+				// note -- we could throw in a hash check here to avoid reuploading the same data
+				_staticLoadRequests.emplace_back(
+					LoadRequest{
+						scaffoldIdx, drawableGeoIdx,
+						largeBlocksOffset, largeBlocksSize,
+						loadBuffer, drawableStream});
+			}
+
+			std::vector<std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>> _registeredScaffolds;
+			unsigned GetScaffoldIdx(const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& scaffold)
+			{
+				auto i = std::find(_registeredScaffolds.begin(), _registeredScaffolds.end(), scaffold);
+				if (i != _registeredScaffolds.end())
+					return std::distance(_registeredScaffolds.begin(), i);
+				_registeredScaffolds.push_back(scaffold);
+				return (unsigned)_registeredScaffolds.size()-1;
+			}
+
 			unsigned AddGeo(
 				IteratorRange<Assets::ScaffoldCmdIterator> geoMachine,
+				const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 				const DeformerToRendererBinding& deformerBinding,
 				unsigned geoIdx)
 			{
-				std::vector<std::pair<unsigned, unsigned>> staticVBLoadRequests;
-				unsigned staticVBIterator = 0;
-				std::vector<std::pair<unsigned, unsigned>> staticIBLoadRequests;
-				unsigned staticIBIterator = 0;
-
 				const Assets::RawGeometryDesc* rawGeometry = nullptr;
 				const Assets::SkinningDataDesc* skinningData = nullptr;
 				for (auto cmd:geoMachine) {
@@ -208,9 +161,10 @@ namespace RenderCore { namespace Techniques
 
 					// Build the main non-deformed vertex stream
 					auto drawableGeo = std::make_shared<Techniques::DrawableGeo>();
-					drawableGeo->_vertexStreams[0]._vbOffset = staticVBIterator;
-					// staticVBLoadRequests.push_back({rg._vb._offset, rg._vb._size});
-					// staticVBIterator += rg._vb._size;
+					auto drawableGeoIdx = (unsigned)_geos.size();
+					auto scaffoldIdx = GetScaffoldIdx(scaffold);
+
+					AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
 					drawableGeo->_vertexStreamCount = 1;
 
 					// Attach those vertex streams that come from the deform operation
@@ -222,9 +176,9 @@ namespace RenderCore { namespace Techniques
 						++drawableGeo->_vertexStreamCount;
 					} else {
 						if (skinningData) {
-							drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount++]._vbOffset = staticVBIterator;
-							// staticVBLoadRequests.push_back({skinningData->_animatedVertexElements._offset, skinningData->_animatedVertexElements._size});
-							// staticVBIterator += skinningData->_animatedVertexElements._size;
+							AddStaticLoadRequest(
+								LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
+								skinningData->_animatedVertexElements._offset, skinningData->_animatedVertexElements._size);
 						}
 
 						_geosLayout.push_back(BuildFinalIA(rg));
@@ -245,9 +199,7 @@ namespace RenderCore { namespace Techniques
 					// hack -- we might need this for material deform, as well
 					drawableGeo->_deformAccelerator = deformAccelerator;
 					
-					drawableGeo->_ibOffset = staticIBIterator;
-					// staticIBLoadRequests.push_back({rg._ib._offset, rg._ib._size});
-					// staticIBIterator += rg._ib._size;
+					AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size);
 					drawableGeo->_ibFormat = rg._ib._format;
 					_geos.push_back(std::move(drawableGeo));
 					return (unsigned)_geos.size()-1;
@@ -255,6 +207,47 @@ namespace RenderCore { namespace Techniques
 					assert(0);
 					// expecting a raw geometry here somewhere
 					return ~0u;
+				}
+			}
+
+			void LoadStaticResources(BufferUploads::IManager& bufferUploads)
+			{
+				// collect all of the various uploads we need to make, and engage!
+				std::sort(
+					_staticLoadRequests.begin(), _staticLoadRequests.end(),
+					[](const auto& lhs, const auto& rhs) {
+						if (lhs._loadBuffer < rhs._loadBuffer) return true;
+						if (lhs._loadBuffer > rhs._loadBuffer) return false;
+						if (lhs._scaffoldIdx < rhs._scaffoldIdx) return true;
+						if (lhs._scaffoldIdx < rhs._scaffoldIdx) return false;
+						return lhs._srcOffset < rhs._srcOffset;
+					});
+
+				std::vector<BufferUploads::TransactionMarker> translationMarkers;
+				for (auto i=_staticLoadRequests.begin(); i!=_staticLoadRequests.end();) {
+					auto start = i;
+					while (i!=_staticLoadRequests.end() && i->_loadBuffer == start->_loadBuffer && i->_scaffoldIdx == start->_scaffoldIdx) ++i;
+
+					std::vector<std::pair<unsigned, unsigned>> localLoadRequests;
+					localLoadRequests.reserve(i-start);
+					unsigned offset = 0;
+					for (auto i2=start; i2!=i; ++i2) {
+						localLoadRequests.emplace_back(i2->_srcOffset, i2->_srcSize);
+						// set the offset value in the DrawableGeo now (though the resource won't be filled in immediately)
+						if (i2->_drawableStream == DrawableStream::IB) {
+							_geos[i2->_drawableGeoIdx]->_ibOffset = offset;
+						} else {
+							_geos[i2->_drawableGeoIdx]->_vertexStreams[unsigned(i2->_drawableStream)-unsigned(DrawableStream::Vertex0)]._vbOffset = offset;
+						}
+						offset += i2->_srcSize;	// todo -- alignment?
+					}
+					auto transMarker = LoadStaticResourceFullyAsync(
+						bufferUploads,
+						MakeIteratorRange(localLoadRequests),
+						offset, _registeredScaffolds[start->_scaffoldIdx],
+						(start->_loadBuffer == LoadBuffer::IB) ? BindFlag::IndexBuffer : BindFlag::VertexBuffer,
+						"[vb]");
+					translationMarkers.emplace_back(std::move(transMarker));
 				}
 			}
 		};
@@ -282,7 +275,7 @@ namespace RenderCore { namespace Techniques
 
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-				const ScaffoldAddressableObjects& addressableObjects,
+				const Assets::MaterialScaffoldCmdStreamForm& materialScaffold,
 				uint64_t materialGuid,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformParametersAttachment* parametersDeformInfrastructure)
@@ -300,7 +293,7 @@ namespace RenderCore { namespace Techniques
 						if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachPatchCollectionId) {
 							assert(!i->_patchCollection);
 							auto id = *(const uint64_t*)cmd.RawData().begin();
-							i->_patchCollection = addressableObjects.GetShaderPatchCollection(id);
+							i->_patchCollection = materialScaffold.GetShaderPatchCollection(id);
 						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachShaderResourceBindings) {
 							assert(resHasParameters.GetCount() == 0);
 							assert(!cmd.RawData().empty());
@@ -387,11 +380,13 @@ namespace RenderCore { namespace Techniques
 	public:
 		Internal::PipelineBuilder _pendingPipelines;
 		Internal::DrawableGeoBuilder _pendingGeos;
+		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
 		void AddModel(
-			IteratorRange<const Machine*> machines,
+			const std::shared_ptr<Assets::ModelScaffoldCmdStreamForm>& modelScaffold,
+			const std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 		{
@@ -421,122 +416,138 @@ namespace RenderCore { namespace Techniques
 			}
 
 			std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
-			Internal::ScaffoldAddressableObjects addressableObjects{machines};
+			for (auto cmd:modelScaffold->CommandStream()) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)Assets::ModelCommand::BeginSubModel:
+				case (uint32_t)Assets::ModelCommand::EndSubModel:
+				case (uint32_t)Assets::ModelCommand::SetLevelOfDetail:
+					break;		// submodel stuff not used at the moment
 
-			for (auto machine:machines) {
-				for (auto cmd:machine) {
-					switch (cmd.Cmd()) {
-					case (uint32_t)Assets::ModelCommand::BeginSubModel:
-					case (uint32_t)Assets::ModelCommand::EndSubModel:
-					case (uint32_t)Assets::ModelCommand::SetLevelOfDetail:
-						break;		// submodel stuff not used at the moment
+				case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+					currentTransformMarker = cmd.As<unsigned>();
+					break;
 
-					case (uint32_t)Assets::ModelCommand::SetTransformMarker:
-						currentTransformMarker = cmd.As<unsigned>();
-						break;
+				case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
+					currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
+					break;
 
-					case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
-						currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
-						break;
+				case (uint32_t)Assets::ModelCommand::GeoCall:
+					{
+						auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
+						auto geoMachine = modelScaffold->GetGeoMachine(geoCallDesc._geoId);
+						assert(!geoMachine.empty());
 
-					case (uint32_t)Assets::ModelCommand::GeoCall:
-						{
-							auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
-							auto geoMachine = addressableObjects.GetGeoMachine(geoCallDesc._geoId);
-							assert(!geoMachine.empty());
+						// Find the referenced geo object, and create the DrawableGeo object, etc
+						unsigned pendingGeoIdx = ~0u;
+						auto i = std::find_if(
+							modelGeoIdToPendingGeoIndex.begin(), modelGeoIdToPendingGeoIndex.end(),
+							[geoId=geoCallDesc._geoId](const auto& q) { return q.first == geoId; });
+						if (i == modelGeoIdToPendingGeoIndex.end()) {
+							pendingGeoIdx = _pendingGeos.AddGeo(
+								geoMachine, modelScaffold,
+								deformAccelerator, deformerBinding,
+								geoCallDesc._geoId);
+							modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
+						} else {
+							pendingGeoIdx = i->second;
+						}
 
-							// Find the referenced geo object, and create the DrawableGeo object, etc
-							unsigned pendingGeoIdx = ~0u;
-							auto i = std::find_if(modelGeoIdToPendingGeoIndex.begin(), modelGeoIdToPendingGeoIndex.end(), [geoId=geoCallDesc._geoId](const auto& q) { return q.first == geoId; });
-							if (i == modelGeoIdToPendingGeoIndex.end()) {
-								pendingGeoIdx = _pendingGeos.AddGeo(
-									geoMachine,
-									deformAccelerator, deformerBinding,
-									geoCallDesc._geoId);
-								modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
-							} else {
-								pendingGeoIdx = i->second;
-							}
-
-							// configure the draw calls that we're going to need to make for this geocall
-							// while doing this we'll also sort out materials
-							const Assets::RawGeometryDesc* rawGeometry = nullptr;
-							for (auto cmd:geoMachine) {
-								switch (cmd.Cmd()) {
-								case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-									assert(!rawGeometry);
-									rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
-									break;
-								}
-							}
-
-							if (rawGeometry) {
-								auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
-								for (const auto& dc:rawGeometry->_drawCalls) {
-									// note -- there's some redundancy here, because we'll end up calling 
-									// AddMaterial & MakePipeline over and over again for the same parameters. There's
-									// some caching in those to precent allocating dupes, but it might still be more
-									// efficient to avoid some of the redundancy
-									auto matAssignment = currentMaterialAssignments[dc._subMaterialIndex];
-									auto* workingMaterial = _pendingPipelines.AddMaterial(
-										addressableObjects.GetMaterialMachine(matAssignment),
-										addressableObjects,
-										matAssignment,
-										deformAcceleratorPool.get(), deformParametersAttachment);
-									auto compiledPipeline = _pendingPipelines.MakePipeline(
-										*workingMaterial, 
-										_pendingGeos._geosLayout[pendingGeoIdx],
-										_pendingGeos._geosTopologies[pendingGeoIdx]);
-									drawableSrcs.push_back(DrawableSrc{
-										std::move(compiledPipeline._pipelineAccelerator),
-										workingMaterial->_descriptorSetAccelerator,
-										workingMaterial->_batchFilter,
-										matAssignment,
-										dc._firstIndex, dc._indexCount, dc._firstVertex});
-								}
+						// configure the draw calls that we're going to need to make for this geocall
+						// while doing this we'll also sort out materials
+						const Assets::RawGeometryDesc* rawGeometry = nullptr;
+						for (auto cmd:geoMachine) {
+							switch (cmd.Cmd()) {
+							case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
+								assert(!rawGeometry);
+								rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
+								break;
 							}
 						}
-						break;
+
+						if (rawGeometry) {
+							auto& pendingGeo = _pendingGeos._geos[pendingGeoIdx];
+							for (const auto& dc:rawGeometry->_drawCalls) {
+								// note -- there's some redundancy here, because we'll end up calling 
+								// AddMaterial & MakePipeline over and over again for the same parameters. There's
+								// some caching in those to precent allocating dupes, but it might still be more
+								// efficient to avoid some of the redundancy
+								auto matAssignment = currentMaterialAssignments[dc._subMaterialIndex];
+								auto* workingMaterial = _pendingPipelines.AddMaterial(
+									materialScaffold->GetMaterialMachine(matAssignment),
+									*materialScaffold,
+									matAssignment,
+									deformAcceleratorPool.get(), deformParametersAttachment);
+								auto compiledPipeline = _pendingPipelines.MakePipeline(
+									*workingMaterial, 
+									_pendingGeos._geosLayout[pendingGeoIdx],
+									_pendingGeos._geosTopologies[pendingGeoIdx]);
+								drawableSrcs.push_back(DrawableSrc{
+									std::move(compiledPipeline._pipelineAccelerator),
+									workingMaterial->_descriptorSetAccelerator,
+									workingMaterial->_batchFilter,
+									matAssignment,
+									dc._firstIndex, dc._indexCount, dc._firstVertex});
+							}
+						}
 					}
+					break;
 				}
 			}
 		}
 
-		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+		Pimpl(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators, std::shared_ptr<BufferUploads::IManager> bufferUploads)
 		{
 			_pendingPipelines._pipelineAcceleratorPool = std::move(pipelineAccelerators);
+			_bufferUploads = std::move(bufferUploads);
 		}
 
 		~Pimpl()
 		{}
 	};
 
-	void DrawableProvider::Add(Assets::RendererConstruction& construction)
+	void DrawableProvider::Add(const Assets::RendererConstruction& construction)
 	{
 		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
 		auto& internal = construction.GetInternal();
-		std::vector<Pimpl::Machine> machinesToWalkThrough;
-		machinesToWalkThrough.reserve(internal._elementCount);
 		auto msmi = internal._modelScaffoldMarkers.begin();
 		auto mspi = internal._modelScaffoldPtrs.begin();
+		auto matsmi = internal._materialScaffoldMarkers.begin();
+		auto matspi = internal._materialScaffoldPtrs.begin();
 
+		// wallk through all of the registered elements, and depending on what has been registered
+		// with them, trigger AddModel()
 		for (unsigned e=0; e<internal._elementCount; ++e) {
 			while (msmi!=internal._modelScaffoldMarkers.end() && msmi->first < e) ++msmi;
 			while (mspi!=internal._modelScaffoldPtrs.end() && mspi->first < e) ++mspi;
-			/*
-			if (msmi!=internal._modelScaffoldMarkers.end() && msmi->first == e)
-				machinesToWalkThrough.push_back(msmi->second->Actualize()->GetCmdStream());
+			while (matsmi!=internal._materialScaffoldMarkers.end() && matsmi->first < e) ++matsmi;
+			while (matspi!=internal._materialScaffoldPtrs.end() && matspi->first < e) ++matspi;
+			
+			std::shared_ptr<Assets::ModelScaffoldCmdStreamForm> modelScaffold;
+			std::shared_ptr<Assets::MaterialScaffoldCmdStreamForm> materialScaffold;
 			if (mspi!=internal._modelScaffoldPtrs.end() && mspi->first == e)
-				machinesToWalkThrough.push_back(mspi->second->GetCmdStream());
-			*/
+				modelScaffold = mspi->second;
+			else if (msmi!=internal._modelScaffoldMarkers.end() && msmi->first == e)
+				modelScaffold = msmi->second->Actualize();
+			
+			if (matspi!=internal._materialScaffoldPtrs.end() && matspi->first == e)
+				materialScaffold = matspi->second;
+			else if (matsmi!=internal._materialScaffoldMarkers.end() && matsmi->first == e)
+				materialScaffold = matsmi->second->Actualize();
+			
+			if (modelScaffold && materialScaffold) {
+				_pimpl->AddModel(modelScaffold, materialScaffold, nullptr, nullptr);
+			}
 		}
-
-		_pimpl->AddModel(MakeIteratorRange(machinesToWalkThrough), nullptr, nullptr);
 	}
 
-	DrawableProvider::DrawableProvider(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+	DrawableProvider::DrawableProvider(
+		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<BufferUploads::IManager> bufferUploads,
+		const Assets::RendererConstruction& construction)
 	{
-		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators));
+		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators), std::move(bufferUploads));
+		Add(construction);
+		_pimpl->_pendingGeos.LoadStaticResources(*_pimpl->_bufferUploads);
 	}
 
 	DrawableProvider::~DrawableProvider() {}

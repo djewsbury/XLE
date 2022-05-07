@@ -15,7 +15,7 @@
 #include <utility>
 
 namespace RenderCore { class IResource; class IDevice; class CompiledShaderByteCode; class StreamOutputInitializers; class ICompiledPipelineLayout; }
-namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
+namespace RenderCore { namespace Assets { class ModelScaffoldCmdStreamForm; class ModelScaffold; class MaterialScaffoldMaterial; class PredefinedDescriptorSetLayout; class ShaderPatchCollection; }}
 namespace Assets { class IFileInterface; }
 
 namespace RenderCore { namespace Techniques {
@@ -33,9 +33,10 @@ namespace RenderCore { namespace Techniques {
 
 	/// Both data load and resource construction is pushed to async thread
 	BufferUploads::TransactionMarker LoadStaticResourceFullyAsync(
+		BufferUploads::IManager& bufferUploads,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName);
 
@@ -44,7 +45,15 @@ namespace RenderCore { namespace Techniques {
 		IDevice& device,
 		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
 		unsigned resourceSize,
-		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffol,
+		std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm> modelScaffold,
+		BindFlag::BitField bindFlags,
+		StringSection<> resourceName);
+
+	std::pair<std::shared_ptr<IResource>, BufferUploads::TransactionMarker> LoadStaticResourcePartialAsync(		// deprecated version
+		IDevice& device,
+		IteratorRange<std::pair<unsigned, unsigned>*> loadRequests,
+		unsigned resourceSize,
+		std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold,
 		BindFlag::BitField bindFlags,
 		StringSection<> resourceName);
 

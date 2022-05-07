@@ -12,90 +12,21 @@
 
 namespace RenderCore { namespace Assets
 {
-	
-#if 0
-	class RendererConstruction : public IScaffoldNavigation
-	{
-	public:
-		virtual IteratorRange<ScaffoldCmdIterator> GetSubModel() override
-		{
-			return {};
-		}
-
-		virtual IteratorRange<ScaffoldCmdIterator> GetGeoMachine(GeoId geoId) override
-		{
-			auto i = LowerBound(_geoMachines, geoId);
-			if (i != _geoMachines.end() && i->first == geoId)
-				return MakeScaffoldCmdRange(i->second, *this);
-			return {};
-		}
-
-		virtual IteratorRange<ScaffoldCmdIterator> GetMaterialMachine(MaterialId) override
-		{
-			assert(0);
-			return {};
-		}
-
-		virtual const ShaderPatchCollection* GetShaderPatchCollection(ShaderPatchCollectionId) override
-		{
-			assert(0);
-			return nullptr;
-		}
-
-		virtual const IteratorRange<const void*> GetGeometryBufferData(GeoId, GeoBufferType) override
-		{
-			assert(0);
-			return {};
-		}
-
-		RendererConstruction(std::shared_ptr<ScaffoldAsset> scaffoldAsset)
-		: _scaffoldAsset(std::move(scaffoldAsset))
-		{
-			auto cmdStream = _scaffoldAsset->GetCmdStream();
-			// pass through the cmd stream once and pull out important data
-			for (auto cmd:cmdStream) {
-				switch (cmd.Cmd()) {
-				case (uint32_t)ModelCommand::Geo:
-					{
-						auto data = cmd.RawData();
-						assert(data.size() > sizeof(uint32_t));
-						_geoMachines.emplace_back(
-							*(uint32_t*)data.begin(),
-							VoidRange{PtrAdd(data.begin(), sizeof(uint32_t)), data.end()});
-					}
-					break;
-				default:
-					break;
-				}
-			}
-
-			std::sort(_geoMachines.begin(), _geoMachines.end());
-		}
-
-	private:
-		std::shared_ptr<ScaffoldAsset> _scaffoldAsset;
-
-		using VoidRange = IteratorRange<const void*>;
-		std::vector<std::pair<GeoId, VoidRange>> _geoMachines;
-		VoidRange _firstSubModel;
-	};
-
-	std::shared_ptr<IScaffoldNavigation> CreateSimpleRendererConstruction(std::shared_ptr<ScaffoldAsset> scaffoldAsset)
-	{
-		return std::make_shared<RendererConstruction>(std::move(scaffoldAsset));
-	}
-#endif
-
 	auto RendererConstruction::Element::SetModelScaffold(StringSection<> initializer) -> Element&
 	{
-		assert(_internal);
+		assert(_internal && !_internal->_sealed);
 		SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(initializer));
 		return *this;
 	}
-	auto RendererConstruction::Element::SetMaterialScaffold(StringSection<>) -> Element& { return *this; }
+	auto RendererConstruction::Element::SetMaterialScaffold(StringSection<> initializer) -> Element&
+	{ 
+		assert(_internal && !_internal->_sealed);
+		SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(initializer));
+		return *this; 
+	}
 	auto RendererConstruction::Element::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>& scaffoldMarker) -> Element&
 	{
-		assert(_internal);
+		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_modelScaffoldMarkers, _elementId);
 		if (i != _internal->_modelScaffoldMarkers.end() && i->first == _elementId) {
 			i->second = scaffoldMarker;
@@ -103,10 +34,19 @@ namespace RenderCore { namespace Assets
 			_internal->_modelScaffoldMarkers.insert(i, {_elementId, scaffoldMarker});
 		return *this;
 	}
-	auto RendererConstruction::Element::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&) -> Element& { return *this; }
+	auto RendererConstruction::Element::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>& scaffoldMarker) -> Element&
+	{ 
+		assert(_internal && !_internal->_sealed);
+		auto i = LowerBound(_internal->_materialScaffoldMarkers, _elementId);
+		if (i != _internal->_materialScaffoldMarkers.end() && i->first == _elementId) {
+			i->second = scaffoldMarker;
+		} else
+			_internal->_materialScaffoldMarkers.insert(i, {_elementId, scaffoldMarker});
+		return *this;
+	}
 	auto RendererConstruction::Element::SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>& scaffoldPtr) -> Element& 
 	{
-		assert(_internal);
+		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_modelScaffoldPtrs, _elementId);
 		if (i != _internal->_modelScaffoldPtrs.end() && i->first == _elementId) {
 			i->second = scaffoldPtr;
@@ -114,7 +54,16 @@ namespace RenderCore { namespace Assets
 			_internal->_modelScaffoldPtrs.insert(i, {_elementId, scaffoldPtr});
 		return *this; 
 	}
-	auto RendererConstruction::Element::SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&) -> Element& { return *this; }
+	auto RendererConstruction::Element::SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>& scaffoldPtr) -> Element&
+	{
+		assert(_internal && !_internal->_sealed);
+		auto i = LowerBound(_internal->_materialScaffoldPtrs, _elementId);
+		if (i != _internal->_materialScaffoldPtrs.end() && i->first == _elementId) {
+			i->second = scaffoldPtr;
+		} else
+			_internal->_materialScaffoldPtrs.insert(i, {_elementId, scaffoldPtr});
+		return *this; 
+	}
 
 	auto RendererConstruction::Element::AddMorphTarget(uint64_t targetName, StringSection<> srcFile) -> Element& { return *this; }
 
@@ -122,7 +71,7 @@ namespace RenderCore { namespace Assets
 
 	auto RendererConstruction::Element::SetName(const std::string& name) -> Element&
 	{ 
-		assert(_internal);
+		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_names, _elementId);
 		if (i != _internal->_names.end() && i->first == _elementId) {
 			i->second = name;
@@ -131,10 +80,10 @@ namespace RenderCore { namespace Assets
 		return *this; 
 	}
 
-	std::future<std::shared_ptr<RendererConstruction>> RendererConstruction::ReadyFuture()
+	void RendererConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<RendererConstruction>>&& promise)
 	{
-		std::promise<std::shared_ptr<RendererConstruction>> promise;
-		auto result = promise.get_future();
+		assert(_internal);
+		_internal->_sealed = true;
 
 		auto strongThis = shared_from_this();
 		assert(strongThis);
@@ -156,12 +105,13 @@ namespace RenderCore { namespace Assets
 				assert(strongThis->GetAssetState() != ::Assets::AssetState::Pending);
 				return strongThis;
 			});
-
-		return result;
 	}
 
 	::Assets::AssetState RendererConstruction::GetAssetState() const
 	{
+		assert(_internal);
+		_internal->_sealed = true;
+		
 		bool hasPending = false;
 		for (auto& f:_internal->_modelScaffoldMarkers) {
 			auto state = f.second->GetAssetState();
@@ -174,6 +124,7 @@ namespace RenderCore { namespace Assets
 
 	auto RendererConstruction::AddElement() -> Element
 	{
+		assert(_internal && !_internal->_sealed);
 		auto result = Element{_internal->_elementCount, *_internal.get()};
 		++_internal->_elementCount;
 		return result;

@@ -6,7 +6,9 @@
 #include "../../UnitTestHelper.h"
 #include "FakeModelCompiler.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
+#include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
+#include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Techniques/DrawableProvider.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
@@ -29,47 +31,67 @@ namespace UnitTests
 
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		auto modelRegistration = UnitTests::RegisterFakeModelCompiler(compilers);
 		auto testHelper = MakeTestHelper();
 		TechniqueTestApparatus testApparatus(*testHelper);
 
 		// compile a fake scaffold using some simple input data
-		auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
-		auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
-		REQUIRE(marker != nullptr);
+		std::shared_ptr<::Assets::ArtifactCollectionFuture> modelCompile;
+		std::shared_ptr<::Assets::ArtifactCollectionFuture> materialCompile;
+		{
+			auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
+			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
+			REQUIRE(marker != nullptr);
 
-		auto compile = marker->InvokeCompile();
-		REQUIRE(compile != nullptr);
+			modelCompile = marker->InvokeCompile();
+			REQUIRE(modelCompile != nullptr);
+		}
+		{
+			auto targetCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
+			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model", "fake-model" });
+			REQUIRE(marker != nullptr);
 
-		compile->StallWhilePending();
-		auto collection = compile->GetArtifactCollection(targetCode);
-		INFO(::Assets::AsString(::Assets::GetErrorMessage(*collection)));		// exception here is normal -- it's expected when there is no output log
-		REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+			materialCompile = marker->InvokeCompile();
+			REQUIRE(materialCompile != nullptr);
+		}
+
+		modelCompile->StallWhilePending();
+		materialCompile->StallWhilePending();
 		
 		SECTION("Load as scaffold")
 		{
-			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*collection);
-			auto cmdStream = finalScaffold->CommandStream();
+			auto modelCollection = modelCompile->GetArtifactCollection(RenderCore::Assets::ModelScaffold::CompileProcessType);
+			REQUIRE(modelCompile->GetAssetState() == ::Assets::AssetState::Ready);
+
+			auto modelScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*modelCollection);
+			auto cmdStream = modelScaffold->CommandStream();
 			REQUIRE(!cmdStream.empty());
 			for (auto cmd:cmdStream) {
 				Log(Warning) << "Cmd: " << (uint32_t)cmd.Cmd() << std::endl;
 				Log(Warning) << "Data: " << cmd.BlockSize() << std::endl;
 			}
 
+			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>(
+				*materialCompile->GetArtifactCollection(RenderCore::Assets::MaterialScaffold::CompileProcessType));
+
 			SECTION("Create RendererConstruction")
 			{
 				auto rendererConstruction = std::make_shared<RenderCore::Assets::RendererConstruction>();
-				rendererConstruction->AddElement().SetModelScaffold(finalScaffold).SetName("test-element");
+				auto& ele = rendererConstruction->AddElement().SetModelScaffold(modelScaffold).SetName("test-element");
+				ele.SetMaterialScaffold(materialScaffold);
 				
-				auto future = rendererConstruction->ReadyFuture();
+				std::promise<std::shared_ptr<RenderCore::Assets::RendererConstruction>> promise;
+				auto future = promise.get_future();
+				rendererConstruction->FulfillWhenNotPending(std::move(promise));
 				future.wait();
 				REQUIRE(future.get() == rendererConstruction);
 				REQUIRE(rendererConstruction->GetAssetState() == ::Assets::AssetState::Ready);
 			
 				SECTION("Create DrawableProvider")
 				{
-					RenderCore::Techniques::DrawableProvider provider{testApparatus._pipelineAccelerators};
-					provider.Add(*rendererConstruction);
+					RenderCore::Techniques::DrawableProvider provider{testApparatus._pipelineAccelerators, testApparatus._bufferUploads, *rendererConstruction};
+					(void)provider;
 				}
 			}
 		}

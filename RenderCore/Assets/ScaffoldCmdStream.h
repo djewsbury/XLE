@@ -11,6 +11,7 @@
 #include "../../Utility/IteratorUtils.h"
 
 namespace Assets {  class IFileInterface; }
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace Assets
 {
@@ -167,7 +168,7 @@ namespace RenderCore { namespace Assets
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
-		std::future<std::shared_ptr<RendererConstruction>> ReadyFuture();
+		void FulfillWhenNotPending(std::promise<std::shared_ptr<RendererConstruction>>&& promise);
 		::Assets::AssetState GetAssetState() const;
 
 		RendererConstruction();
@@ -185,11 +186,16 @@ namespace RenderCore { namespace Assets
 		using ElementId = unsigned;
 		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>;
 		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
+		using MaterialScaffoldMarker = ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>;
+		using MaterialScaffoldPtr = std::shared_ptr<MaterialScaffoldCmdStreamForm>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
+		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
+		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
 		std::vector<std::pair<ElementId, std::string>> _names;
 		unsigned _elementCount = 0;
+		bool _sealed = false;
 	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
