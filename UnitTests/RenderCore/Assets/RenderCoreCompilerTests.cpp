@@ -10,6 +10,7 @@
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Assets/ModelImmutableData.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
+#include "../../../RenderCore/Assets/MaterialMachine.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
 #include "../../../Assets/IArtifact.h"
@@ -28,6 +29,7 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <filesystem>
+
 
 using namespace Catch::literals;
 namespace UnitTests
@@ -92,38 +94,78 @@ namespace UnitTests
 			compile->StallWhilePending();
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
 
-			/*
-			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
-				*compile->GetArtifactCollection(targetCode));
-			(void)finalScaffold;
-
-			// The final values in the material are a combination of values that come from
-			// FakeModelCompileOperations & the test.material material file
-
-			auto* material0 = finalScaffold->GetMaterial(Hash64("Material0"));
-			REQUIRE(material0->_matParams.GetParameter<unsigned>("MAT_DOUBLE_SIDED_LIGHTING").value() == 1);
-			REQUIRE(Equivalent(material0->_constants.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
-			REQUIRE(Equivalent(material0->_constants.GetParameter<Float3>("MaterialDiffuse").value(), Float3{0.1f, 0.1f, 0.1f}, 1e-3f));
-			REQUIRE(Equivalent(material0->_constants.GetParameter<Float3>("SharedConstant").value(), Float3{1.0f, 1.0f, 1.0f}, 1e-3f));
-			REQUIRE(material0->_constants.GetParameter<float>("Brightness") == 50_a);
-			REQUIRE(material0->_constants.GetParameter<float>("OnEverything") == 75_a);
-
-			auto* material1 = finalScaffold->GetMaterial(Hash64("Material1"));
-			REQUIRE(Equivalent(material1->_constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
-			REQUIRE(material1->_constants.GetParameter<float>("Brightness") == 33_a);
-			REQUIRE(material1->_constants.GetParameter<float>("OnEverything") == 75_a);
-			*/
-
 			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>(
 				*compile->GetArtifactCollection(targetCode));
 			auto material0 = newScaffold->GetMaterialMachine(Hash64("Material0"));
 			REQUIRE(!material0.empty());
 
+			bool foundSelectors = false, foundConstants = false, foundPatches = false;
+			for (auto cmd:material0) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)RenderCore::Assets::MaterialCommand::AttachSelectors:
+					REQUIRE(!foundSelectors);
+					foundSelectors = true;
+					{
+						auto& selectors = cmd.As<ParameterBox>();
+						REQUIRE(selectors.GetParameter<unsigned>("MAT_DOUBLE_SIDED_LIGHTING").value() == 1);
+					}
+					break;
+				case (uint32_t)RenderCore::Assets::MaterialCommand::AttachConstants:
+					REQUIRE(!foundConstants);
+					foundConstants = true;
+					{
+						auto& constants = cmd.As<ParameterBox>();
+						REQUIRE(Equivalent(constants.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
+						REQUIRE(Equivalent(constants.GetParameter<Float3>("MaterialDiffuse").value(), Float3{0.1f, 0.1f, 0.1f}, 1e-3f));
+						REQUIRE(Equivalent(constants.GetParameter<Float3>("SharedConstant").value(), Float3{1.0f, 1.0f, 1.0f}, 1e-3f));
+						REQUIRE(constants.GetParameter<float>("Brightness") == 50_a);
+						REQUIRE(constants.GetParameter<float>("OnEverything") == 75_a);
+					}
+					break;
+				case (uint32_t)RenderCore::Assets::MaterialCommand::AttachPatchCollectionId:
+					REQUIRE(!foundPatches);
+					foundPatches = true;
+					{
+						auto guid = cmd.As<uint64_t>();
+						auto patchCollection = newScaffold->GetShaderPatchCollection(guid);
+						REQUIRE(patchCollection);
+						REQUIRE(patchCollection->GetDescriptorSetFileName().AsString() == "some.pipeline");
+						REQUIRE(patchCollection->GetPatches().size() == 1);
+						REQUIRE(patchCollection->GetPatches()[0].first == "PerPixel");
+					}
+					break;
+				default:
+					break;
+				}
+			}
+			REQUIRE(foundSelectors);
+			REQUIRE(foundConstants);
+			REQUIRE(foundPatches);
+
+			// material1 actually comes from the fake-model-compiler, which has some default materials
 			auto material1 = newScaffold->GetMaterialMachine(Hash64("Material1"));
 			REQUIRE(!material1.empty());
+			foundConstants = false;
+			for (auto cmd:material1) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)RenderCore::Assets::MaterialCommand::AttachConstants:
+					REQUIRE(!foundConstants);
+					foundConstants = true;
+					{
+						auto& constants = cmd.As<ParameterBox>();
+						REQUIRE(Equivalent(constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
+						REQUIRE(constants.GetParameter<float>("Brightness") == 33_a);
+						REQUIRE(constants.GetParameter<float>("OnEverything") == 75_a);
+					}
+					break;
+				}
+			}
+			REQUIRE(foundConstants);
 
-			REQUIRE(newScaffold->DehashMaterialName(Hash64("Material0")).AsString() == "Material0");
-			REQUIRE(newScaffold->DehashMaterialName(Hash64("Material1")).AsString() == "Material1");
+			auto dehashedName0 = newScaffold->DehashMaterialName(Hash64("Material0")).AsString();
+			auto dehashedName1 = newScaffold->DehashMaterialName(Hash64("Material1")).AsString();
+			REQUIRE(dehashedName0 == "fake-model:Material0;ut-data/test.material:*;ut-data/test.material:Material0");
+			REQUIRE(dehashedName1 == "fake-model:Material1;ut-data/test.material:*;ut-data/test.material:Material1");
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);

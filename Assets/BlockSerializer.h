@@ -39,7 +39,7 @@ namespace Assets
 		template<typename Type, typename std::enable_if_t<!Internal::IsPodIterator<Type>>* = nullptr>
 			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 
-		void    SerializeSubBlock(NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
+		void    SerializeSubBlock(const NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 		void    SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 
 		void    SerializeSpecialBuffer(SpecialBuffer::Enum specialBuffer, IteratorRange<const void*> range);
@@ -65,6 +65,8 @@ namespace Assets
 
 		NascentBlockSerializer();
 		~NascentBlockSerializer();
+		NascentBlockSerializer(NascentBlockSerializer&&) never_throws;
+		NascentBlockSerializer& operator=(NascentBlockSerializer&&) never_throws;
 
 		static const size_t PtrFlagBit  = size_t(1)<<(size_t(sizeof(size_t)*8-1));
 		static const size_t PtrMask     = ~PtrFlagBit;

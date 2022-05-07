@@ -125,7 +125,7 @@ namespace RenderCore { namespace Assets
 	{
 		if (!_resolvedNames) return {};
 		auto i = std::lower_bound(_resolvedNames->begin(), _resolvedNames->end(), guid, CompareFirst<MaterialGuid, SerializableVector<char>>{});
-		if (i != _resolvedNames->begin() && i->first == guid)
+		if (i != _resolvedNames->end() && i->first == guid)
 			return MakeStringSection(i->second.begin(), i->second.end());
 		return {};
 	}
@@ -158,7 +158,6 @@ namespace RenderCore { namespace Assets
 				{
 					struct MaterialRef { uint64_t _hashId; const void* _data; };
 					auto ref = cmd.As<MaterialRef>();
-					// auto data = Assets::MakeScaffoldCmdRange({PtrAdd(cmd.RawData().begin(), sizeof(uint64_t)), cmd.RawData().end()});
 					auto i = LowerBound(_materialMachines, ref._hashId);
 					if (i == _materialMachines.end() || i->first != ref._hashId) {
 						_materialMachines.insert(i, std::make_pair(ref._hashId, CreateMachine(ref._data)));

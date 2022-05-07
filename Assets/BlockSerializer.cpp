@@ -167,7 +167,7 @@ namespace Assets
         _internalPointers.push_back(ptr);
     }
 
-    void    NascentBlockSerializer::SerializeSubBlock(NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
+    void    NascentBlockSerializer::SerializeSubBlock(const NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
     {
         assert(subBlock._pendingRecalls.empty());
 
@@ -274,14 +274,10 @@ namespace Assets
         return result;
     }
 
-    NascentBlockSerializer::NascentBlockSerializer()
-    {
-    }
-
-    NascentBlockSerializer::~NascentBlockSerializer()
-    {
-
-    }
+    NascentBlockSerializer::NascentBlockSerializer() = default;
+    NascentBlockSerializer::~NascentBlockSerializer() = default;
+    NascentBlockSerializer::NascentBlockSerializer(NascentBlockSerializer&&) never_throws = default;
+	NascentBlockSerializer& NascentBlockSerializer::operator=(NascentBlockSerializer&&) never_throws = default;
 
     #undef new
 
