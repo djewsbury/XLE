@@ -5,6 +5,8 @@
 #include "ScaffoldCmdStream.h"
 #include "ModelMachine.h"
 #include "AssetUtils.h"
+#include "ModelScaffold.h"
+#include "MaterialScaffold.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 
@@ -91,7 +93,7 @@ namespace RenderCore { namespace Assets
 		return *this;
 	}
 	auto RendererConstruction::Element::SetMaterialScaffold(StringSection<>) -> Element& { return *this; }
-	auto RendererConstruction::Element::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>& scaffoldMarker) -> Element&
+	auto RendererConstruction::Element::SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>& scaffoldMarker) -> Element&
 	{
 		assert(_internal);
 		auto i = LowerBound(_internal->_modelScaffoldMarkers, _elementId);
@@ -101,8 +103,8 @@ namespace RenderCore { namespace Assets
 			_internal->_modelScaffoldMarkers.insert(i, {_elementId, scaffoldMarker});
 		return *this;
 	}
-	auto RendererConstruction::Element::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&) -> Element& { return *this; }
-	auto RendererConstruction::Element::SetModelScaffold(const std::shared_ptr<ScaffoldAsset>& scaffoldPtr) -> Element& 
+	auto RendererConstruction::Element::SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&) -> Element& { return *this; }
+	auto RendererConstruction::Element::SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>& scaffoldPtr) -> Element& 
 	{
 		assert(_internal);
 		auto i = LowerBound(_internal->_modelScaffoldPtrs, _elementId);
@@ -112,7 +114,7 @@ namespace RenderCore { namespace Assets
 			_internal->_modelScaffoldPtrs.insert(i, {_elementId, scaffoldPtr});
 		return *this; 
 	}
-	auto RendererConstruction::Element::SetMaterialScaffold(const std::shared_ptr<ScaffoldAsset>&) -> Element& { return *this; }
+	auto RendererConstruction::Element::SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&) -> Element& { return *this; }
 
 	auto RendererConstruction::Element::AddMorphTarget(uint64_t targetName, StringSection<> srcFile) -> Element& { return *this; }
 
@@ -182,43 +184,5 @@ namespace RenderCore { namespace Assets
 		_internal = std::make_unique<Internal>();
 	}
 	RendererConstruction::~RendererConstruction() {}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	static const unsigned ModelScaffoldVersion = 1;
-    static const unsigned ModelScaffoldLargeBlocksVersion = 0;
-
-	const ::Assets::ArtifactRequest ScaffoldAsset::ChunkRequests[2]
-	{
-		::Assets::ArtifactRequest { "Scaffold", ChunkType_ModelScaffold, ModelScaffoldVersion, ::Assets::ArtifactRequest::DataType::BlockSerializer },
-		::Assets::ArtifactRequest { "LargeBlocks", ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, ::Assets::ArtifactRequest::DataType::ReopenFunction }
-	};
-
-	IteratorRange<ScaffoldCmdIterator> ScaffoldAsset::GetCmdStream() const
-	{
-		if (_rawMemoryBlockSize <= sizeof(uint32_t)) return {};
-		auto* firstObject = ::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
-		auto streamSize = *(const uint32_t*)firstObject;
-		assert((streamSize + sizeof(uint32_t)) <= _rawMemoryBlockSize);
-		auto* start = PtrAdd(firstObject, sizeof(uint32_t));
-		auto* end = (const void*)PtrAdd(firstObject, sizeof(uint32_t)+streamSize);
-		return {
-			ScaffoldCmdIterator{MakeIteratorRange(start, end)},
-			ScaffoldCmdIterator{MakeIteratorRange(end, end)}};
-	}
-
-	std::shared_ptr<::Assets::IFileInterface> ScaffoldAsset::OpenLargeBlocks() const { return _largeBlocksReopen(); }
-
-	ScaffoldAsset::ScaffoldAsset() {}
-	ScaffoldAsset::ScaffoldAsset(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-	: _depVal{depVal}
-	{
-		assert(chunks.size() == 2);
-		_rawMemoryBlock = std::move(chunks[0]._buffer);
-		_rawMemoryBlockSize = chunks[0]._bufferSize;
-		_largeBlocksReopen = std::move(chunks[1]._reopenFunction);
-		
-	}
-	ScaffoldAsset::~ScaffoldAsset() {}
 
 }}

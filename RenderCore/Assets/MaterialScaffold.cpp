@@ -6,12 +6,11 @@
 
 #include "MaterialScaffold.h"
 #include "ShaderPatchCollection.h"
+#include "MaterialMachine.h"
 #include "../../Assets/ChunkFileContainer.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/Streams/PathUtils.h"
-
-#include "ModelMachine.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -138,34 +137,44 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
+	IteratorRange<ScaffoldCmdIterator> MaterialScaffoldCmdStreamForm::GetOuterCommandStream() const
+	{
+		if (_rawMemoryBlockSize <= sizeof(uint32_t)) return {};
+		auto* firstObject = ::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
+		auto streamSize = *(const uint32_t*)firstObject;
+		assert((streamSize + sizeof(uint32_t)) <= _rawMemoryBlockSize);
+		auto* start = PtrAdd(firstObject, sizeof(uint32_t));
+		auto* end = (const void*)PtrAdd(firstObject, sizeof(uint32_t)+streamSize);
+		return {
+			ScaffoldCmdIterator{MakeIteratorRange(start, end)},
+			ScaffoldCmdIterator{MakeIteratorRange(end, end)}};
+	}
+
 	MaterialScaffoldCmdStreamForm::MaterialScaffoldCmdStreamForm()
 	{}
 
-	static IteratorRange<Assets::ScaffoldCmdIterator> CreateMachine(const void* src)
-	{
-		auto size = *(const uint32_t*)src;
-		return Assets::MakeScaffoldCmdRange({
-			PtrAdd(src, sizeof(uint32_t)),
-			PtrAdd(src, sizeof(uint32_t)+size)});
-	}
-
 	MaterialScaffoldCmdStreamForm::MaterialScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-	: ScaffoldAsset(chunks, depVal)
+	: _depVal(depVal)
 	{
-		for (auto cmd:GetCmdStream()) {
+		assert(chunks.size() == 1);
+		_rawMemoryBlock = std::move(chunks[0]._buffer);
+		_rawMemoryBlockSize = chunks[0]._bufferSize;
+
+		for (auto cmd:GetOuterCommandStream()) {
 			switch (cmd.Cmd()) {
-			case (uint32_t)ModelCommand::Material:
+			case (uint32_t)ScaffoldCommand::Material:
 				{
-					struct MaterialRef { uint64_t _hashId; const void* _data; };
+					struct MaterialRef { uint64_t _hashId; size_t _dataSize; const void* _data; };
 					auto ref = cmd.As<MaterialRef>();
+					auto machine = Assets::MakeScaffoldCmdRange(MakeIteratorRange(ref._data, PtrAdd(ref._data, ref._dataSize)));
 					auto i = LowerBound(_materialMachines, ref._hashId);
 					if (i == _materialMachines.end() || i->first != ref._hashId) {
-						_materialMachines.insert(i, std::make_pair(ref._hashId, CreateMachine(ref._data)));
+						_materialMachines.insert(i, std::make_pair(ref._hashId, machine));
 					} else
-						i->second = CreateMachine(ref._data);
+						i->second = machine;
 				}
 				break;
-			case (uint32_t)Assets::ModelCommand::ShaderPatchCollection:
+			case (uint32_t)Assets::ScaffoldCommand::ShaderPatchCollection:
 				{
 					struct SPCRef { uint64_t _hashId; size_t _blockSize; const void* _serializedBlock; };
 					auto ref = cmd.As<SPCRef>();
@@ -178,7 +187,7 @@ namespace RenderCore { namespace Assets
 					}
 				}
 				break;
-			case (uint32_t)Assets::ModelCommand::MaterialNameDehash:
+			case (uint32_t)Assets::ScaffoldCommand::MaterialNameDehash:
 				_resolvedNames = (decltype(_resolvedNames))cmd.RawData().begin();
 				break;
 			}

@@ -46,7 +46,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		const std::string& name,
 		const NascentAnimationSet& animationSet)
 	{
-		::Assets::NascentBlockSerializer serializer;
+		::Assets::BlockSerializer serializer;
 		SerializationOperator(serializer, animationSet);
 		auto block = ::Assets::AsBlob(serializer);
 

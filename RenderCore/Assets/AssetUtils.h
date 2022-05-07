@@ -43,7 +43,7 @@ namespace RenderCore { namespace Assets
 			return CmdAndRawData{(uint32_t)cmd, MakeOpaqueIteratorRange(obj)};
 		}
 
-	inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const CmdAndRawData& obj)
+	inline void SerializationOperator(::Assets::BlockSerializer& serializer, const CmdAndRawData& obj)
 	{
 		serializer << (uint32_t)obj._cmd;
 		serializer << (uint32_t)obj._data.size();
@@ -63,7 +63,7 @@ namespace RenderCore { namespace Assets
 		}
 
 	template<typename Serializable>
-		inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const CmdAndSerializable<Serializable>& obj)
+		inline void SerializationOperator(::Assets::BlockSerializer& serializer, const CmdAndSerializable<Serializable>& obj)
 	{
 		serializer << (uint32_t)obj._cmd;
 		auto recall = serializer.CreateRecall(sizeof(uint32_t));

@@ -18,6 +18,23 @@ namespace RenderCore { namespace Assets
 	static constexpr unsigned s_scaffoldCmdBegin_ModelMachine = 0x1000;
 	static constexpr unsigned s_scaffoldCmdBegin_SkeletonMachine = 0x1500;
 	static constexpr unsigned s_scaffoldCmdBegin_MaterialMachine = 0x2000;
+	static constexpr unsigned s_scaffoldCmdBegin_ScaffoldMachine = 0x2500;
+
+	enum class ScaffoldCommand : uint32_t
+	{
+		BeginSubModel = s_scaffoldCmdBegin_ScaffoldMachine,
+
+		Geo,					// pointer to stream of GeoCommand
+		Material,				// pointer to stream of MaterialCommand
+		Skeleton,				// pointer to stream of TransformationCommand
+		ShaderPatchCollection, 	// serialized ShaderPatchCollection
+		ModelCommandStream,		// pointer to stream of ModelCommand
+
+		MaterialNameDehash,
+		InputInterface,
+		DefaultPoseData,
+		ModelRootData
+	};
 
 	// class IScaffoldNavigation;
 	class ScaffoldCmdIterator
@@ -60,6 +77,7 @@ namespace RenderCore { namespace Assets
 	// IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data, IScaffoldNavigation& navigation);
 	IteratorRange<ScaffoldCmdIterator> MakeScaffoldCmdRange(IteratorRange<const void*> data);
 
+#if 0
 	class ScaffoldAsset
 	{
 	public:
@@ -81,6 +99,7 @@ namespace RenderCore { namespace Assets
 	};
 
 	class ShaderPatchCollection;
+#endif
 
 #if 0
 	class IScaffoldNavigation
@@ -109,6 +128,9 @@ namespace RenderCore { namespace Assets
 	std::shared_ptr<IScaffoldNavigation> CreateSimpleScaffoldNavigation(std::shared_ptr<ScaffoldAsset> scaffoldAsset);
 #endif
 
+	class ModelScaffoldCmdStreamForm;
+	class MaterialScaffoldCmdStreamForm;
+
 	class RendererConstruction : public std::enable_shared_from_this<RendererConstruction>
 	{
 	public:
@@ -119,11 +141,11 @@ namespace RenderCore { namespace Assets
 			Element& SetModelScaffold(StringSection<>);
 			Element& SetMaterialScaffold(StringSection<>);
 			
-			Element& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
-			Element& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
+			Element& SetModelScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
+			Element& SetMaterialScaffold(const ::Assets::PtrToMarkerPtr<MaterialScaffoldCmdStreamForm>&);
 			
-			Element& SetModelScaffold(const std::shared_ptr<ScaffoldAsset>&);
-			Element& SetMaterialScaffold(const std::shared_ptr<ScaffoldAsset>&);
+			Element& SetModelScaffold(const std::shared_ptr<ModelScaffoldCmdStreamForm>&);
+			Element& SetMaterialScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
 			Element& AddMorphTarget(uint64_t targetName, StringSection<> srcFile);
 
@@ -140,8 +162,8 @@ namespace RenderCore { namespace Assets
 
 		Element AddElement();
 		void SetSkeletonScaffold(StringSection<>);
-		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ScaffoldAsset>&);
-		void SetSkeletonScaffold(const std::shared_ptr<ScaffoldAsset>&);
+		void SetSkeletonScaffold(const ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>&);
+		void SetSkeletonScaffold(const std::shared_ptr<MaterialScaffoldCmdStreamForm>&);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const;
 
@@ -161,8 +183,8 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		using ElementId = unsigned;
-		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ScaffoldAsset>;
-		using ModelScaffoldPtr = std::shared_ptr<ScaffoldAsset>;
+		using ModelScaffoldMarker = ::Assets::PtrToMarkerPtr<ModelScaffoldCmdStreamForm>;
+		using ModelScaffoldPtr = std::shared_ptr<ModelScaffoldCmdStreamForm>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;

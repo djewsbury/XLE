@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::pair<Float3, Float3>	_localBoundingBox = InvalidBoundingBox();
 		std::vector<uint32_t>		_finalVertexIndexToOriginalIndex;
 
-        void    SerializeWithResourceBlock(::Assets::NascentBlockSerializer& outputSerializer, std::vector<uint8>& largeResourcesBlock) const;
+        void    SerializeWithResourceBlock(::Assets::BlockSerializer& outputSerializer, std::vector<uint8>& largeResourcesBlock) const;
         friend std::ostream& SerializationOperator(std::ostream&, const NascentBoundSkinnedGeometry&);
     };
 

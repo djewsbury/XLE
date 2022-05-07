@@ -48,8 +48,8 @@ namespace UnitTests
 		
 		SECTION("Load as scaffold")
 		{
-			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ScaffoldAsset>>(*collection);
-			auto cmdStream = finalScaffold->GetCmdStream();
+			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(*collection);
+			auto cmdStream = finalScaffold->CommandStream();
 			REQUIRE(!cmdStream.empty());
 			for (auto cmd:cmdStream) {
 				Log(Warning) << "Cmd: " << (uint32_t)cmd.Cmd() << std::endl;

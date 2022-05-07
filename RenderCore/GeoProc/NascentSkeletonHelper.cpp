@@ -118,7 +118,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <>
-		void    NascentSkeletonHelper::SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const
+		void    NascentSkeletonHelper::SerializeMethod(::Assets::BlockSerializer& outputSerializer) const
 	{
 		//
 		//		Write the command stream

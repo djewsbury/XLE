@@ -99,7 +99,7 @@ namespace RenderCore { namespace Assets
 	static constexpr uint64 ChunkType_PatchCollections = ConstHash64<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
 
-	class MaterialScaffoldCmdStreamForm : public ScaffoldAsset
+	class MaterialScaffoldCmdStreamForm
 	{
 	public:
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
@@ -107,6 +107,7 @@ namespace RenderCore { namespace Assets
 		StringSection<>		DehashMaterialName(MaterialGuid guid) const;
 
 		std::shared_ptr<ShaderPatchCollection> GetShaderPatchCollection(uint64_t hash) const;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		MaterialScaffoldCmdStreamForm();
 		MaterialScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
@@ -118,6 +119,11 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
 		std::vector<std::shared_ptr<ShaderPatchCollection>> _patchCollections;
 		const SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>>* _resolvedNames = nullptr;
+		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
+		size_t											_rawMemoryBlockSize = 0;
+		::Assets::DependencyValidation					_depVal;
+
+		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

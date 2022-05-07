@@ -12,7 +12,7 @@
 #include <iosfwd>
 
 namespace Utility { template<typename Char> class InputStreamFormatter; class OutputStreamFormatter; }
-namespace Assets { class NascentBlockSerializer; }
+namespace Assets { class BlockSerializer; }
 
 namespace RenderCore { namespace Assets
 {

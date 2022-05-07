@@ -635,7 +635,7 @@ namespace ToolsRig
         size_t scaffoldChunkSize = 0;
 
         {
-            ::Assets::NascentBlockSerializer suppArray;
+            ::Assets::BlockSerializer suppArray;
             for (auto m=meshes.begin(); m!=meshes.end(); ++m) {
                 SerializationOperator(suppArray, m->first);
 
@@ -653,7 +653,7 @@ namespace ToolsRig
                     RenderCore::Assets::VertexData { inputAssembly, unsigned(vbOffset), unsigned(vbSize) });
             }
 
-            ::Assets::NascentBlockSerializer supplementImmutableData;
+            ::Assets::BlockSerializer supplementImmutableData;
             supplementImmutableData.SerializeSubBlock(suppArray);
             SerializationOperator(supplementImmutableData, size_t(meshes.size()));
 

@@ -25,7 +25,7 @@ namespace Assets
 
 		////////////////////////////////////////////////////
 
-	class NascentBlockSerializer
+	class BlockSerializer
 	{
 	public:
 		struct SpecialBuffer
@@ -39,7 +39,7 @@ namespace Assets
 		template<typename Type, typename std::enable_if_t<!Internal::IsPodIterator<Type>>* = nullptr>
 			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 
-		void    SerializeSubBlock(const NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
+		void    SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 		void    SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
 
 		void    SerializeSpecialBuffer(SpecialBuffer::Enum specialBuffer, IteratorRange<const void*> range);
@@ -60,13 +60,14 @@ namespace Assets
 		void		PushAtRecall(unsigned recallId, IteratorRange<const void*> value);
 		void		PushSizeValueAtRecall(unsigned recallId);
 
-		std::unique_ptr<uint8_t[], PODAlignedDeletor>      AsMemoryBlock() const;
-		size_t                          Size() const;
+		auto	AsMemoryBlock() const -> std::unique_ptr<uint8_t[], PODAlignedDeletor>;
+		size_t	Size() const;
+		size_t	SizePrimaryBlock() const;
 
-		NascentBlockSerializer();
-		~NascentBlockSerializer();
-		NascentBlockSerializer(NascentBlockSerializer&&) never_throws;
-		NascentBlockSerializer& operator=(NascentBlockSerializer&&) never_throws;
+		BlockSerializer();
+		~BlockSerializer();
+		BlockSerializer(BlockSerializer&&) never_throws;
+		BlockSerializer& operator=(BlockSerializer&&) never_throws;
 
 		static const size_t PtrFlagBit  = size_t(1)<<(size_t(sizeof(size_t)*8-1));
 		static const size_t PtrMask     = ~PtrFlagBit;
@@ -98,49 +99,49 @@ namespace Assets
 	{
 		template<typename T> struct HasSerializeMethod
 		{
-			template<typename U, void (U::*)(NascentBlockSerializer&) const> struct FunctionSignature {};
+			template<typename U, void (U::*)(BlockSerializer&) const> struct FunctionSignature {};
 			template<typename U> static std::true_type Test1(FunctionSignature<U, &U::SerializeMethod>*);
 			template<typename U> static std::false_type Test1(...);
 			static const bool Result = decltype(Test1<T>(0))::value;
 		};
 
-		template<typename Type> static auto SerializeAsValue_Helper(int) -> decltype(std::declval<NascentBlockSerializer>().SerializeValue(std::declval<Type>()), std::true_type{});
+		template<typename Type> static auto SerializeAsValue_Helper(int) -> decltype(std::declval<BlockSerializer>().SerializeValue(std::declval<Type>()), std::true_type{});
 		template<typename...> static auto SerializeAsValue_Helper(...) -> std::false_type;
 		template<typename Type> struct SerializeAsValue : decltype(SerializeAsValue_Helper<Type>(0)) {};
 	}
 
 	template<typename Type, typename std::enable_if_t<Internal::HasSerializeMethod<Type>::Result>* = nullptr>
-		void SerializationOperator(NascentBlockSerializer& serializer, const Type& value)
+		void SerializationOperator(BlockSerializer& serializer, const Type& value)
 			{ value.SerializeMethod(serializer); }
 
 	template <typename Type, typename std::enable_if_t<Internal::SerializeAsValue<Type>::value>* = nullptr>
-		void SerializationOperator(NascentBlockSerializer& serializer, Type value)
+		void SerializationOperator(BlockSerializer& serializer, Type value)
 			{ serializer.SerializeValue(value); }
 
 	template <typename Type, typename std::enable_if_t<std::is_same_v<const bool, decltype(Type::SerializeRaw)> && Type::SerializeRaw>* = nullptr>
-		void SerializationOperator(NascentBlockSerializer& serializer, const Type& value)
+		void SerializationOperator(BlockSerializer& serializer, const Type& value)
 			{ serializer.SerializeRaw(value); }
 
 	template<typename Type, typename Allocator>
-		void    SerializationOperator  ( NascentBlockSerializer& serializer, const std::vector<Type, Allocator>& value )
+		void    SerializationOperator  ( BlockSerializer& serializer, const std::vector<Type, Allocator>& value )
 	{
-		serializer.SerializeSubBlock(MakeIteratorRange(value), NascentBlockSerializer::SpecialBuffer::Vector);
+		serializer.SerializeSubBlock(MakeIteratorRange(value), BlockSerializer::SpecialBuffer::Vector);
 	}
 
 	template<typename Type>
-		void    SerializationOperator  ( NascentBlockSerializer& serializer, const SerializableVector<Type>& value )
+		void    SerializationOperator  ( BlockSerializer& serializer, const SerializableVector<Type>& value )
 	{
-		serializer.SerializeSubBlock(MakeIteratorRange(value), NascentBlockSerializer::SpecialBuffer::Vector);
+		serializer.SerializeSubBlock(MakeIteratorRange(value), BlockSerializer::SpecialBuffer::Vector);
 	}
 
 	template<typename Type, typename Deletor>
-		void    SerializationOperator  ( NascentBlockSerializer& serializer, const std::unique_ptr<Type, Deletor>& value, size_t count )
+		void    SerializationOperator  ( BlockSerializer& serializer, const std::unique_ptr<Type, Deletor>& value, size_t count )
 	{
-		serializer.SerializeSubBlock(MakeIteratorRange(value.get(), &value[count]), NascentBlockSerializer::SpecialBuffer::UniquePtr);
+		serializer.SerializeSubBlock(MakeIteratorRange(value.get(), &value[count]), BlockSerializer::SpecialBuffer::UniquePtr);
 	}
 
 	template<typename TypeLHS, typename TypeRHS>
-		void SerializationOperator(NascentBlockSerializer& serializer, const std::pair<TypeLHS, TypeRHS>& value)
+		void SerializationOperator(BlockSerializer& serializer, const std::pair<TypeLHS, TypeRHS>& value)
 			{ 
 				SerializationOperator(serializer, value.first);
 				SerializationOperator(serializer, value.second);
@@ -151,30 +152,30 @@ namespace Assets
 			}
 
 		// the following has no implementation. Objects that don't match will attempt to use this implementation
-	void SerializationOperator(NascentBlockSerializer& serializer, ...) = delete;
+	void SerializationOperator(BlockSerializer& serializer, ...) = delete;
 
 		////////////////////////////////////////////////////
 
 	template<typename Type, typename std::enable_if_t<!Internal::IsPodIterator<Type>>*>
-		void    NascentBlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
+		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
 	{
-		NascentBlockSerializer temporaryBlock;
+		BlockSerializer temporaryBlock;
 		for (const auto& i:range) SerializationOperator(temporaryBlock, i);
 		SerializeSubBlock(temporaryBlock, specialBuffer);
 	}
 
 	template<typename Type, typename std::enable_if_t<Internal::IsPodIterator<Type>>*>
-		void    NascentBlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
+		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
 	{
 		SerializeRawSubBlock(range.template Cast<const void*>(), specialBuffer);
 	}
 		
 	template<typename Type>
-		void    NascentBlockSerializer::SerializeRaw(const Type& type)
+		void    BlockSerializer::SerializeRaw(const Type& type)
 	{
 		PushBackRaw(&type, sizeof(Type));
 	}
 
-	inline void    NascentBlockSerializer::SerializeRawRange( IteratorRange<const void*> data ) { PushBackRaw(data.begin(), data.size()); }
+	inline void    BlockSerializer::SerializeRawRange( IteratorRange<const void*> data ) { PushBackRaw(data.begin(), data.size()); }
 }
 

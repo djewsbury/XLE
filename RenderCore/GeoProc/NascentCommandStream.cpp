@@ -276,7 +276,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result.value();
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const NascentAnimationSet& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentAnimationSet& obj)
 	{
 		AnimationSet finalAnimationSet;
 		finalAnimationSet._animationDrivers.insert(finalAnimationSet._animationDrivers.end(), obj._animationDrivers.begin(), obj._animationDrivers.end());
@@ -440,7 +440,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_skeletonMachine.Pop(popCount);
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const NascentSkeleton& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentSkeleton& obj)
 	{
 		SerializationOperator(serializer, obj._skeletonMachine);
 	}
@@ -481,7 +481,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_skinControllerInstances.emplace_back(std::move(skinControllerInstance));
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const NascentModelCommandStream::GeometryInstance& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentModelCommandStream::GeometryInstance& obj)
 	{
 		SerializationOperator(serializer, obj._id);
 		SerializationOperator(serializer, obj._localToWorldId);
@@ -490,7 +490,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(serializer, obj._levelOfDetail);
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const NascentModelCommandStream::SkinControllerInstance& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentModelCommandStream::SkinControllerInstance& obj)
 	{
 		SerializationOperator(serializer, obj._id);
 		SerializationOperator(serializer, obj._localToWorldId);
@@ -499,7 +499,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(serializer, obj._levelOfDetail);
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const NascentModelCommandStream& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const NascentModelCommandStream& obj)
 	{
 		serializer.SerializeSubBlock(MakeIteratorRange(obj._geometryInstances));
 		serializer.SerializeValue(obj._geometryInstances.size());
@@ -515,7 +515,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		serializer.SerializeValue(hashedInterface.size());
 	}
 
-	void SerializeCmdStreamForm(::Assets::NascentBlockSerializer& serializer, const NascentModelCommandStream& obj)
+	void SerializeCmdStreamForm(::Assets::BlockSerializer& serializer, const NascentModelCommandStream& obj)
 	{
 		// _geometryInstances & _skinControllerInstances are identical in their serialized form
 		std::optional<unsigned> currentTransformMarker;
@@ -546,7 +546,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// write out the InputInterface
 		auto hashedInterface = obj.BuildHashedInputInterface();
-		serializer << MakeCmdAndRawData(ModelCommand::InputInterface, hashedInterface);
+		serializer << MakeCmdAndRawData(ScaffoldCommand::InputInterface, hashedInterface);
 	}
 
 	std::vector<uint64_t> NascentModelCommandStream::BuildHashedInputInterface() const

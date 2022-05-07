@@ -12,11 +12,11 @@
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 
-namespace Assets { class NascentBlockSerializer; }
+namespace Assets { class BlockSerializer; }
 
 namespace RenderCore { namespace Assets
 {
-	namespace GeoProc { class NascentAnimationSet; void SerializationOperator(::Assets::NascentBlockSerializer&, const NascentAnimationSet&); }
+	namespace GeoProc { class NascentAnimationSet; void SerializationOperator(::Assets::BlockSerializer&, const NascentAnimationSet&); }
 	class RawAnimationCurve;
 	class AnimatedParameterSet;
 
@@ -111,7 +111,7 @@ namespace RenderCore { namespace Assets
 		AnimationSet(const AnimationSet&) = delete;
 		AnimationSet& operator=(const AnimationSet&) = delete;
 
-		friend void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const AnimationSet& obj);
+		friend void SerializationOperator(::Assets::BlockSerializer& serializer, const AnimationSet& obj);
 	protected:
 		SerializableVector<AnimationDriver>		_animationDrivers;
 		SerializableVector<ConstantDriver>		_constantDrivers;
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Assets
 		SerializableVector<char>				_stringNameBlock;
 
 		friend class GeoProc::NascentAnimationSet;
-		friend void GeoProc::SerializationOperator(::Assets::NascentBlockSerializer&, const GeoProc::NascentAnimationSet&);
+		friend void GeoProc::SerializationOperator(::Assets::BlockSerializer&, const GeoProc::NascentAnimationSet&);
 	};
 
 	#pragma pack(pop)
@@ -158,7 +158,7 @@ namespace RenderCore { namespace Assets
 		AnimatedParameterSet(const AnimatedParameterSet& copyFrom);
 		AnimatedParameterSet& operator=(const AnimatedParameterSet& copyFrom);
 
-		void    SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const;
+		void    SerializeMethod(::Assets::BlockSerializer& outputSerializer) const;
 
 	private:
 		SerializableVector<Float4x4>    _float4x4Parameters;

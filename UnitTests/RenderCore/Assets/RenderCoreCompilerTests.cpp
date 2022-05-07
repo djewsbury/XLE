@@ -199,6 +199,19 @@ namespace UnitTests
 			auto collection = compile->GetArtifactCollection(targetCode);
 			INFO(::Assets::AsString(::Assets::GetErrorMessage(*collection)));		// exception here is normal -- it's expected when there is no output log
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
+
+			SECTION("Load into scaffold")
+			{
+				auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::ModelScaffoldCmdStreamForm>>(
+					*compile->GetArtifactCollection(targetCode));
+
+				auto geoMachine = newScaffold->GetGeoMachine(0);
+				REQUIRE(!geoMachine.empty());
+
+				auto boundingBox = newScaffold->GetStaticBoundingBox();
+				auto volume = (boundingBox.second[0]-boundingBox.first[0])*(boundingBox.second[1]-boundingBox.first[1])*(boundingBox.second[2]-boundingBox.first[2]);
+				REQUIRE(volume > 0);
+			}
 		}
 
 		SECTION("Get material settings from a model file")

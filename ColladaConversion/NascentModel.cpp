@@ -1163,7 +1163,7 @@ namespace RenderCore { namespace ColladaConversion
 
     NascentChunkArray NascentModel::SerializeSkin() const
     {
-        NascentBlockSerializer serializer;
+        BlockSerializer serializer;
         std::vector<uint8> largeResourcesBlock;
 
         const bool traceSkeleton = false;
@@ -1256,7 +1256,7 @@ namespace RenderCore { namespace ColladaConversion
 
     NascentChunkArray NascentModel::SerializeAnimationSet() const
     {
-        NascentBlockSerializer serializer;
+        BlockSerializer serializer;
 
         SerializationOperator(serializer, _animationSet);
         _objects.SerializeAnimationSet(serializer);
@@ -1275,7 +1275,7 @@ namespace RenderCore { namespace ColladaConversion
 
     NascentChunkArray NascentModel::SerializeSkeleton() const
     {
-        NascentBlockSerializer serializer;
+        BlockSerializer serializer;
 
         SerializationOperator(serializer, _skeleton);
         ConsoleRig::GetWarningStream().Flush();

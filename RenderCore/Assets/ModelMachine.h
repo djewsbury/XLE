@@ -28,15 +28,7 @@ namespace RenderCore { namespace Assets
 		// ModelCommandStream style callouts
 		SetTransformMarker,
 		SetMaterialAssignments,
-		GeoCall,
-
-		Geo,					// internal stream of GeoCommand
-		Material,				// internal stream of MaterialCommand
-		Skeleton,				// internal stream of TransformationCommand
-		ShaderPatchCollection, 	// serialized ShaderPatchCollection
-
-		MaterialNameDehash,
-		InputInterface,
+		GeoCall
 	};
 
 	struct SubModelDesc
@@ -164,14 +156,14 @@ namespace RenderCore { namespace Assets
 	}
 
 	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
+		::Assets::BlockSerializer& outputSerializer,
 		const VertexElement& ia)
 	{
 		outputSerializer.SerializeRaw(ia);
 	}
 	
 	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
+		::Assets::BlockSerializer& outputSerializer,
 		const GeoInputAssembly& ia)
 	{
 		SerializationOperator(outputSerializer, ia._elements);
@@ -179,7 +171,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
+		::Assets::BlockSerializer& outputSerializer,
 		const VertexData& vd)
 	{
 		SerializationOperator(outputSerializer, vd._ia);
@@ -188,7 +180,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
+		::Assets::BlockSerializer& outputSerializer,
 		const IndexData& id)
 	{
 		SerializationOperator(outputSerializer, (uint32_t)id._format);
@@ -197,7 +189,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	inline void SerializationOperator(
-		::Assets::NascentBlockSerializer& outputSerializer,
+		::Assets::BlockSerializer& outputSerializer,
 		const DrawCallDesc& drawCall)
 	{
 		SerializationOperator(outputSerializer, drawCall._firstIndex);

@@ -961,7 +961,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static void SerializationOperator(::Assets::NascentBlockSerializer& outputSerializer, const NascentBoundSkinnedGeometry::Section& section)
+	static void SerializationOperator(::Assets::BlockSerializer& outputSerializer, const NascentBoundSkinnedGeometry::Section& section)
 	{
 		SerializationOperator(outputSerializer, section._bindShapeByInverseBindMatrices);
 		SerializationOperator(outputSerializer, section._preskinningDrawCalls);
@@ -972,7 +972,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	}
 
     void NascentBoundSkinnedGeometry::SerializeWithResourceBlock(
-        ::Assets::NascentBlockSerializer& outputSerializer, 
+        ::Assets::BlockSerializer& outputSerializer, 
         std::vector<uint8_t>& largeResourcesBlock) const
     {
         using namespace Assets;
@@ -994,6 +994,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         largeResourcesBlock.insert(largeResourcesBlock.end(), _indices.begin(), _indices.end());
 
             // first part is just like "NascentRawGeometry::SerializeMethod"
+
+        outputSerializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
+		auto recall = outputSerializer.CreateRecall(sizeof(unsigned));
+
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
@@ -1009,7 +1013,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		SerializationOperator(outputSerializer, _finalVertexIndexToOriginalIndex);
 
+        outputSerializer.PushSizeValueAtRecall(recall);
+
             // append skinning related information
+        outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
+		recall = outputSerializer.CreateRecall(sizeof(unsigned));
+
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
@@ -1023,6 +1032,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         SerializationOperator(outputSerializer, _localBoundingBox.first);
         SerializationOperator(outputSerializer, _localBoundingBox.second);
+
+        outputSerializer.PushSizeValueAtRecall(recall);
     }
 
 

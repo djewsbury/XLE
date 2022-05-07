@@ -25,7 +25,7 @@ namespace SceneEngine
             BoundingBox                     _boundary;
 			SerializableVector<unsigned>	_objects;
 
-			void SerializeMethod(::Assets::NascentBlockSerializer& serializer) const 
+			void SerializeMethod(::Assets::BlockSerializer& serializer) const 
 			{ 
 				SerializationOperator(serializer, _boundary);
 				SerializationOperator(serializer, _objects);
@@ -92,7 +92,7 @@ namespace SceneEngine
                 Int2(std::min(resultMax[0], _desc._maxCell[0]), std::min(resultMax[1], _desc._maxCell[1])));
         }
 
-		void SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
+		void SerializeMethod(::Assets::BlockSerializer& serializer) const
 		{
 			SerializationOperator(serializer, _payloads);
             SerializationOperator(serializer, _oversized);
@@ -278,7 +278,7 @@ namespace SceneEngine
 
         pimpl->_desc._maxCullResults = pimpl->CalculateMaxResults();
 
-        ::Assets::NascentBlockSerializer serializer;
+        ::Assets::BlockSerializer serializer;
 		SerializationOperator(serializer, *pimpl);
 		return std::vector<uint8_t>(
 			serializer.AsMemoryBlock(),

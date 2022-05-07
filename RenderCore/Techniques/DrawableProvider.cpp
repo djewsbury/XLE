@@ -9,7 +9,8 @@
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/ModelMachine.h"
 #include "../Assets/MaterialMachine.h"
-#include "../Assets/ScaffoldCmdStream.h"
+#include "../Assets/ModelScaffold.h"
+#include "../Assets/MaterialScaffold.h"
 #include "../Assets/Marker.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 
@@ -51,10 +52,10 @@ namespace RenderCore { namespace Techniques
 			{
 				for (auto cmd:machine) {
 					switch (cmd.Cmd()) {
-					case (uint32_t)Assets::ModelCommand::Geo:
+					case (uint32_t)Assets::ScaffoldCommand::Geo:
 						_geoMachines.push_back(CreateMachine(cmd.As<const void*>()));
 						break;
-					case (uint32_t)Assets::ModelCommand::Material:
+					case (uint32_t)Assets::ScaffoldCommand::Material:
 						{
 							struct MaterialRef { uint64_t _hashId; const void* _data; };
 							auto ref = cmd.As<MaterialRef>();
@@ -66,7 +67,7 @@ namespace RenderCore { namespace Techniques
 								i->second = CreateMachine(ref._data);
 						}
 						break;
-					case (uint32_t)Assets::ModelCommand::ShaderPatchCollection:
+					case (uint32_t)Assets::ScaffoldCommand::ShaderPatchCollection:
 						{
 							struct SPCRef { uint64_t _hashId; size_t _blockSize; const void* _serializedBlock; };
 							auto ref = cmd.As<SPCRef>();
@@ -522,10 +523,12 @@ namespace RenderCore { namespace Techniques
 		for (unsigned e=0; e<internal._elementCount; ++e) {
 			while (msmi!=internal._modelScaffoldMarkers.end() && msmi->first < e) ++msmi;
 			while (mspi!=internal._modelScaffoldPtrs.end() && mspi->first < e) ++mspi;
+			/*
 			if (msmi!=internal._modelScaffoldMarkers.end() && msmi->first == e)
 				machinesToWalkThrough.push_back(msmi->second->Actualize()->GetCmdStream());
 			if (mspi!=internal._modelScaffoldPtrs.end() && mspi->first == e)
 				machinesToWalkThrough.push_back(mspi->second->GetCmdStream());
+			*/
 		}
 
 		_pimpl->AddModel(MakeIteratorRange(machinesToWalkThrough), nullptr, nullptr);

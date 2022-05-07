@@ -136,7 +136,7 @@ namespace RenderCore { namespace Assets
 	AnimationSet::AnimationSet() {}
 	AnimationSet::~AnimationSet() {}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const AnimationSet& obj)
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const AnimationSet& obj)
 	{
 		SerializationOperator(serializer, obj._animationDrivers);
 		SerializationOperator(serializer, obj._constantDrivers);
@@ -244,7 +244,7 @@ namespace RenderCore { namespace Assets
 		return *this;
 	}
 
-	void    AnimatedParameterSet::SerializeMethod(::Assets::NascentBlockSerializer& outputSerializer) const
+	void    AnimatedParameterSet::SerializeMethod(::Assets::BlockSerializer& outputSerializer) const
 	{
 		SerializationOperator(outputSerializer, _float4x4Parameters);
 		SerializationOperator(outputSerializer, _float4Parameters);

@@ -17,7 +17,7 @@
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	void NascentRawGeometry::SerializeWithResourceBlock(
-		::Assets::NascentBlockSerializer& serializer, 
+		::Assets::BlockSerializer& serializer, 
 		std::vector<uint8>& largeResourcesBlock) const
 	{
 			//  We're going to write the index and vertex buffer data to the "large resources block"

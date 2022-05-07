@@ -24,7 +24,7 @@ namespace Assets
 		return std::make_shared<std::vector<uint8_t>>((const uint8_t*)copyFrom.begin(), (const uint8_t*)copyFrom.end());
 	}
 
-	Blob AsBlob(const NascentBlockSerializer& serializer)
+	Blob AsBlob(const BlockSerializer& serializer)
 	{
 		auto block = serializer.AsMemoryBlock();
 		size_t size = Block_GetSize(block.get());

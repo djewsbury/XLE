@@ -10,7 +10,7 @@
 #include "../Format.h"
 #include <vector>
 
-namespace Assets { class NascentBlockSerializer; }
+namespace Assets { class BlockSerializer; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
@@ -31,7 +31,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<uint32_t>		_finalVertexIndexToOriginalIndex;
 
 		void SerializeWithResourceBlock(
-			::Assets::NascentBlockSerializer& outputSerializer, 
+			::Assets::BlockSerializer& outputSerializer, 
 			std::vector<uint8>& largeResourcesBlock) const;
 
 		friend std::ostream& SerializationOperator(std::ostream&, const NascentRawGeometry&);

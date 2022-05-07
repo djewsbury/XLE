@@ -160,63 +160,37 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		);
 
 	static ::Assets::Blob SerializeSkin(
-		::Assets::NascentBlockSerializer& serializer, 
-		const NascentGeometryObjects& objs)
-	{
-		auto result = std::make_shared<std::vector<uint8>>();
-		{
-			::Assets::NascentBlockSerializer tempBlock;
-			for (auto i = objs._rawGeos.begin(); i!=objs._rawGeos.end(); ++i) {
-				i->second.SerializeWithResourceBlock(tempBlock, *result);
-			}
-			serializer.SerializeSubBlock(tempBlock);
-			SerializationOperator(serializer, objs._rawGeos.size());
-		}
-
-		{
-			::Assets::NascentBlockSerializer tempBlock;
-			for (auto i = objs._skinnedGeos.begin(); i!=objs._skinnedGeos.end(); ++i) {
-				i->second.SerializeWithResourceBlock(tempBlock, *result);
-			}
-			serializer.SerializeSubBlock(tempBlock);
-			SerializationOperator(serializer, objs._skinnedGeos.size());
-		}
-		return result;
-	}
-
-	static ::Assets::Blob SerializeSkinCmdStreamForm(
-		::Assets::NascentBlockSerializer& serializer, 
+		::Assets::BlockSerializer& serializer, 
 		const NascentGeometryObjects& objs)
 	{
 		auto result = std::make_shared<std::vector<uint8>>();
 		for (const auto& geo:objs._rawGeos) {
-			::Assets::NascentBlockSerializer tempBlock;
-			auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+			::Assets::BlockSerializer tempBlock;
 			geo.second.SerializeWithResourceBlock(tempBlock, *result);
-			tempBlock.PushSizeValueAtRecall(recall);
 
-			serializer << (uint32_t)Assets::ModelCommand::Geo;
-			serializer << (uint32_t)sizeof(size_t);
+			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
 			serializer.SerializeSubBlock(tempBlock);
 		}
-		// for (auto i = objs._skinnedGeos.begin(); i!=objs._skinnedGeos.end(); ++i)
-		// 	i->second.SerializeWithResourceBlockCmdStreamForm(tempBlock, *result);
+		for (const auto& geo:objs._skinnedGeos) {
+			::Assets::BlockSerializer tempBlock;
+			geo.second.SerializeWithResourceBlock(tempBlock, *result);
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+		}
 		return result;
 	}
 
-    class DefaultPoseData
-    {
-    public:
-        std::vector<Float4x4>       _defaultTransforms;
-        std::pair<Float3, Float3>   _boundingBox;
-    };
-
-    static DefaultPoseData CalculateDefaultPoseData(
+    static ModelDefaultPoseData CalculateDefaultPoseData(
         const NascentSkeleton& skeleton,
         const NascentModelCommandStream& cmdStream,
         const NascentGeometryObjects& geoObjects)
     {
-        DefaultPoseData result;
+        ModelDefaultPoseData result;
 
         auto skeletonOutput = skeleton.GetSkeletonMachine().GenerateOutputTransforms();
 
@@ -251,7 +225,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             hasNonIdentity |= !Equivalent(result._defaultTransforms[c], Identity<Float4x4>(), tolerance);
         if (!hasNonIdentity) {
             finalMatrixCount = 0u;
-            result._defaultTransforms.clear();
+            result._defaultTransforms.erase(result._defaultTransforms.begin(), result._defaultTransforms.end());
         }
 
         result._boundingBox = CalculateBoundingBox(
@@ -288,63 +262,33 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunks(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
 	{
-		::Assets::NascentBlockSerializer serializer;
+		::Assets::BlockSerializer serializer;
+		auto recall = serializer.CreateRecall(sizeof(unsigned));
 
-		SerializationOperator(serializer, cmdStream);
 		auto largeResourcesBlock = SerializeSkin(serializer, geoObjects);
-		SerializationOperator(serializer, skeleton);
+
+		{
+			::Assets::BlockSerializer tempBlock;
+			SerializeCmdStreamForm(tempBlock, cmdStream);
+
+			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
+			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+			serializer << tempBlock.SizePrimaryBlock();
+			serializer.SerializeSubBlock(tempBlock);
+		}
+
+		// SerializationOperator(serializer, skeleton);
 
 		{
 			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
-			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
-			serializer.SerializeValue(size_t(defaultPoseData._defaultTransforms.size()));
-			SerializationOperator(serializer, defaultPoseData._boundingBox.first);
-			SerializationOperator(serializer, defaultPoseData._boundingBox.second);
+			serializer << MakeCmdAndSerializable(ScaffoldCommand::DefaultPoseData, defaultPoseData);
 		}
 
-		// Find the max LOD value, and serialize that
-		SerializationOperator(serializer, cmdStream.GetMaxLOD());
-
-		// SerializationOperator human-readable metrics information
-		std::stringstream metricsStream;
-		TraceMetrics(metricsStream, geoObjects, cmdStream, skeleton);
-
-		auto scaffoldBlock = ::Assets::AsBlob(serializer);
-		auto metricsBlock = ::Assets::AsBlob(metricsStream);
-
-		return
-			{
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_ModelScaffold, ModelScaffoldVersion, name,
-					std::move(scaffoldBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
-					std::move(largeResourcesBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
-					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
-					std::move(metricsBlock)}
-			};
-	}
-
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunksCmdStreamForm(const std::string& name, const NascentGeometryObjects& geoObjects, const NascentModelCommandStream& cmdStream, const NascentSkeleton& skeleton)
-	{
-		::Assets::NascentBlockSerializer serializer;
-		auto recall = serializer.CreateRecall(sizeof(unsigned));
-
-		SerializeCmdStreamForm(serializer, cmdStream);
-		auto largeResourcesBlock = SerializeSkinCmdStreamForm(serializer, geoObjects);
-		// SerializationOperator(serializer, skeleton);
-
-		/*{
-			auto defaultPoseData = CalculateDefaultPoseData(skeleton, cmdStream, geoObjects);
-			serializer.SerializeSubBlock(MakeIteratorRange(defaultPoseData._defaultTransforms));
-			serializer.SerializeValue(size_t(defaultPoseData._defaultTransforms.size()));
-			SerializationOperator(serializer, defaultPoseData._boundingBox.first);
-			SerializationOperator(serializer, defaultPoseData._boundingBox.second);
+		{
+			ModelRootData rootData;
+			rootData._maxLOD = cmdStream.GetMaxLOD();
+			serializer << MakeCmdAndSerializable(ScaffoldCommand::ModelRootData, rootData);
 		}
-
-		// Find the max LOD value, and serialize that
-		SerializationOperator(serializer, cmdStream.GetMaxLOD());*/
 
 		serializer.PushSizeValueAtRecall(recall);
 
@@ -452,7 +396,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 		}
 
-		return SerializeSkinToChunksCmdStreamForm(name, geoObjects, cmdStream, embeddedSkeleton);
+		return SerializeSkinToChunks(name, geoObjects, cmdStream, embeddedSkeleton);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

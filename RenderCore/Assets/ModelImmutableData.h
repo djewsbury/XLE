@@ -9,6 +9,7 @@
 #include "ModelScaffoldInternal.h"
 #include "SkeletonMachine.h"
 #include "AnimationScaffoldInternal.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 #include <vector>
 #include <utility>
 
@@ -20,7 +21,21 @@ namespace RenderCore { namespace Assets
 ////////////////////////////////////////////////////////////////////////////////////////////
     //      i m m u t a b l e   d a t a         //
 
-    class ModelImmutableData
+    struct ModelDefaultPoseData
+    {
+        SerializableVector<Float4x4>    _defaultTransforms;
+        std::pair<Float3, Float3>       _boundingBox = {Float3(0,0,0), Float3(0,0,0)};
+
+        friend void SerializationOperator(::Assets::BlockSerializer&, const ModelDefaultPoseData&);
+    };
+
+    struct ModelRootData
+    {
+        unsigned    _maxLOD = 0;
+        friend void SerializationOperator(::Assets::BlockSerializer&, const ModelRootData&);
+    };
+
+    class ModelImmutableData    // todo -- deprecaated
     {
     public:
         ModelCommandStream          _visualScene;

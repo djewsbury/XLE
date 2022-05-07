@@ -41,7 +41,7 @@ namespace SceneEngine
         public:
 			SerializableVector<unsigned>	_objects;
 
-			void SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
+			void SerializeMethod(::Assets::BlockSerializer& serializer) const
 			{
 				SerializationOperator(serializer, _objects);
 			}
@@ -114,7 +114,7 @@ namespace SceneEngine
             return (box.second[2] - box.first[2]) * (box.second[1] - box.first[1]) * (box.second[0] - box.first[0]);
         }
 
-		void SerializeMethod(::Assets::NascentBlockSerializer& serializer) const
+		void SerializeMethod(::Assets::BlockSerializer& serializer) const
 		{
 			SerializationOperator(serializer, _nodes);
 			SerializationOperator(serializer, _payloads);
@@ -827,7 +827,7 @@ namespace SceneEngine
         pimpl->PushNode(~unsigned(0x0), 0, workingObjects, leafThreshold, orientation);
         pimpl->_maxCullResults = pimpl->CalculateMaxResults();
 
-        ::Assets::NascentBlockSerializer serializer;
+        ::Assets::BlockSerializer serializer;
 		SerializationOperator(serializer, *pimpl);
 		return std::make_pair(std::move(serializer.AsMemoryBlock()), serializer.Size());
     }

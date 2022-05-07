@@ -10,7 +10,7 @@
 #include "../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace Assets { class NascentBlockSerializer; }
+namespace Assets { class BlockSerializer; }
 
 namespace Assets
 {
@@ -26,7 +26,7 @@ namespace Assets
 	using NascentChunkArray = std::shared_ptr<std::vector<NascentChunk>>;
 	NascentChunkArray MakeNascentChunkArray(const std::initializer_list<NascentChunk>& inits);
 
-	Blob AsBlob(const NascentBlockSerializer& serializer);
+	Blob AsBlob(const BlockSerializer& serializer);
 	Blob AsBlob(IteratorRange<const void*>);
 
 	template<typename Char>
@@ -39,7 +39,7 @@ namespace Assets
 	template<typename Type>
 		static Blob SerializeToBlob(const Type& obj)
 	{
-		NascentBlockSerializer serializer;
+		BlockSerializer serializer;
 		SerializationOperator(serializer, obj);
 		return AsBlob(serializer);
 	}

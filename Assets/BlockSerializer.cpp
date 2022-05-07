@@ -14,7 +14,7 @@
 namespace Assets
 {
 
-    struct NascentBlockSerializer::InternalPointer
+    struct BlockSerializer::InternalPointer
     {
         uint64_t	_pointerOffset;
         uint64_t	_subBlockOffset;
@@ -22,7 +22,7 @@ namespace Assets
         uint64_t	_specialBuffer;     // (this is SpecialBuffer::Enum. Made uint64_t to make alignment consistant across all platforms)
     };
 
-    struct NascentBlockSerializer::Recall
+    struct BlockSerializer::Recall
     {
         unsigned _id;
         unsigned _size;
@@ -38,12 +38,12 @@ namespace Assets
                     std::back_inserter(buffer));
     }
 
-    void NascentBlockSerializer::PushBackPointer(size_t value)
+    void BlockSerializer::PushBackPointer(size_t value)
     {
         PushBack(_memory, value);
     }
 
-    void    NascentBlockSerializer::PushBackPlaceholder(SpecialBuffer::Enum specialBuffer)
+    void    BlockSerializer::PushBackPlaceholder(SpecialBuffer::Enum specialBuffer)
     {
         if (specialBuffer == SpecialBuffer::Vector) {
             _memory.insert(_memory.end(), sizeof(SerializableVector<unsigned>), 0);
@@ -58,7 +58,7 @@ namespace Assets
         }
     }
 
-    void    NascentBlockSerializer::SerializeSpecialBuffer( 
+    void    BlockSerializer::SerializeSpecialBuffer( 
                     SpecialBuffer::Enum specialBuffer, 
                     IteratorRange<const void*> range)
     {
@@ -77,49 +77,49 @@ namespace Assets
         PushBackPlaceholder(specialBuffer);
     }
 
-    void    NascentBlockSerializer::SerializeValue(uint8_t     value)
+    void    BlockSerializer::SerializeValue(uint8_t     value)
     {
         std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
                     std::back_inserter(_memory));
     }
 
-    void    NascentBlockSerializer::SerializeValue(uint16_t    value)
+    void    BlockSerializer::SerializeValue(uint16_t    value)
     {
         std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
                     std::back_inserter(_memory));
     }
 
-    void    NascentBlockSerializer::SerializeValue(uint32_t    value)
+    void    BlockSerializer::SerializeValue(uint32_t    value)
     {
         std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
                     std::back_inserter(_memory));
     }
 
-    void    NascentBlockSerializer::SerializeValue(uint64_t    value)
+    void    BlockSerializer::SerializeValue(uint64_t    value)
     {
         std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
                     std::back_inserter(_memory));
     }
 
-    void    NascentBlockSerializer::SerializeValue(float     value)
+    void    BlockSerializer::SerializeValue(float     value)
     {
         std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
                     std::back_inserter(_memory));
     }
 
-    void    NascentBlockSerializer::AddPadding(unsigned sizeInBytes)
+    void    BlockSerializer::AddPadding(unsigned sizeInBytes)
     {
         _memory.insert(_memory.end(), sizeInBytes, 0);
     }
 
-    unsigned NascentBlockSerializer::CreateRecall(unsigned size)
+    unsigned BlockSerializer::CreateRecall(unsigned size)
     {
         _pendingRecalls.push_back(Recall{_nextRecallId, size, (uint64_t)_memory.size()});
         AddPadding(size);
         return _nextRecallId++;
     }
 
-    void NascentBlockSerializer::PushAtRecall(unsigned recallId, IteratorRange<const void*> value)
+    void BlockSerializer::PushAtRecall(unsigned recallId, IteratorRange<const void*> value)
     {
         auto i = std::find_if(_pendingRecalls.begin(), _pendingRecalls.end(), [recallId](const auto& q) { return q._id == recallId; });
         assert(i!=_pendingRecalls.end());
@@ -132,7 +132,7 @@ namespace Assets
         _pendingRecalls.erase(i);
     }
 
-    void NascentBlockSerializer::PushSizeValueAtRecall(unsigned recallId)
+    void BlockSerializer::PushSizeValueAtRecall(unsigned recallId)
     {
         auto i = std::find_if(_pendingRecalls.begin(), _pendingRecalls.end(), [recallId](const auto& q) { return q._id == recallId; });
         assert(i!=_pendingRecalls.end());
@@ -150,24 +150,24 @@ namespace Assets
         _pendingRecalls.erase(i);
     }
 
-    void NascentBlockSerializer::PushBackRaw(const void* data, size_t size)
+    void BlockSerializer::PushBackRaw(const void* data, size_t size)
     {
         std::copy(  (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size), 
                     std::back_inserter(_memory));
     }
 
-    void NascentBlockSerializer::PushBackRaw_SubBlock(const void* data, size_t size)
+    void BlockSerializer::PushBackRaw_SubBlock(const void* data, size_t size)
     {
         std::copy(  (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size), 
                     std::back_inserter(_trailingSubBlocks));
     }
 
-    void NascentBlockSerializer::RegisterInternalPointer(const InternalPointer& ptr)
+    void BlockSerializer::RegisterInternalPointer(const InternalPointer& ptr)
     {
         _internalPointers.push_back(ptr);
     }
 
-    void    NascentBlockSerializer::SerializeSubBlock(const NascentBlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
+    void    BlockSerializer::SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
     {
         assert(subBlock._pendingRecalls.empty());
 
@@ -211,7 +211,7 @@ namespace Assets
         PushBackRaw_SubBlock(AsPointer(subBlock._trailingSubBlocks.begin()), subBlock._trailingSubBlocks.size());
     }
 
-    void NascentBlockSerializer::SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer)
+    void BlockSerializer::SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer)
     {
         auto size = size_t(range.end()) - size_t(range.begin());
 
@@ -226,7 +226,7 @@ namespace Assets
         PushBackRaw_SubBlock(range.begin(), range.size());
     }
 
-    void NascentBlockSerializer::SerializeValue(const std::string& value)
+    void BlockSerializer::SerializeValue(const std::string& value)
     {
         SerializeSpecialBuffer(SpecialBuffer::String, MakeIteratorRange(value));
     }
@@ -238,7 +238,7 @@ namespace Assets
         uint64_t  _internalPointerCount;
     };
     
-    size_t      NascentBlockSerializer::Size() const
+    size_t      BlockSerializer::Size() const
     {
         return sizeof(Header)
             + _memory.size()
@@ -246,7 +246,12 @@ namespace Assets
             + _internalPointers.size() * sizeof(InternalPointer);
     }
 
-    std::unique_ptr<uint8_t[], PODAlignedDeletor>      NascentBlockSerializer::AsMemoryBlock() const
+    size_t	BlockSerializer::SizePrimaryBlock() const
+    {
+        return _memory.size();
+    }
+
+    std::unique_ptr<uint8_t[], PODAlignedDeletor>      BlockSerializer::AsMemoryBlock() const
     {
         assert(_pendingRecalls.empty());    // if you hit this is means one or more recalls (CreateRecall) where not fullfilled
         std::unique_ptr<uint8_t[], PODAlignedDeletor> result{(uint8_t*)XlMemAlign(Size(), sizeof(uint64_t))};
@@ -274,10 +279,10 @@ namespace Assets
         return result;
     }
 
-    NascentBlockSerializer::NascentBlockSerializer() = default;
-    NascentBlockSerializer::~NascentBlockSerializer() = default;
-    NascentBlockSerializer::NascentBlockSerializer(NascentBlockSerializer&&) never_throws = default;
-	NascentBlockSerializer& NascentBlockSerializer::operator=(NascentBlockSerializer&&) never_throws = default;
+    BlockSerializer::BlockSerializer() = default;
+    BlockSerializer::~BlockSerializer() = default;
+    BlockSerializer::BlockSerializer(BlockSerializer&&) never_throws = default;
+	BlockSerializer& BlockSerializer::operator=(BlockSerializer&&) never_throws = default;
 
     #undef new
 
@@ -294,24 +299,24 @@ namespace Assets
 
         const Header& h = *(const Header*)block;
 
-        // Use uintptr_t even though this is of type (NascentBlockSerializer::InternalPointer*) to avoid
+        // Use uintptr_t even though this is of type (BlockSerializer::InternalPointer*) to avoid
         // SIGBUS errors
         uintptr_t ptrTable = (uintptr_t)PtrAdd(block, ptrdiff_t(sizeof(Header)+h._rawMemorySize));
 
         for (unsigned c=0; c<h._internalPointerCount; ++c) {
-             NascentBlockSerializer::InternalPointer ptr;
+             BlockSerializer::InternalPointer ptr;
              // Use memcpy to avoid SIGBUS errors if the data isn't aligned
              memcpy(&ptr, (void*)(ptrTable + (sizeof(ptr) * c)), sizeof(ptr));
-            if (ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::Unknown) {
+            if (ptr._specialBuffer == BlockSerializer::SpecialBuffer::Unknown) {
                 SetPtr(PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset)),
                        ptr._subBlockOffset + size_t(base) + sizeof(Header));
-            } else if (ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::Vector) {
+            } else if (ptr._specialBuffer == BlockSerializer::SpecialBuffer::Vector) {
                 uint64_t* o = (uint64_t*)PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset));
                 SetPtr(&o[0], ptr._subBlockOffset + size_t(base) + sizeof(Header));
                 SetPtr(&o[1], ptr._subBlockOffset + ptr._subBlockSize + size_t(base) + sizeof(Header));
                 SetPtr(&o[2], 0);
-            } else if (     ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::UniquePtr
-                       ||   ptr._specialBuffer == NascentBlockSerializer::SpecialBuffer::String) {
+            } else if (     ptr._specialBuffer == BlockSerializer::SpecialBuffer::UniquePtr
+                       ||   ptr._specialBuffer == BlockSerializer::SpecialBuffer::String) {
                 // these are deprecated types -- they need a stronger cross-platform implementation to work reliably
                 assert(false);
             }
@@ -332,7 +337,7 @@ namespace Assets
     size_t          Block_GetSize(const void* block)
     {
         const Header& h = *(const Header*)block;
-        return size_t(h._rawMemorySize + h._internalPointerCount * sizeof(NascentBlockSerializer::InternalPointer) + sizeof(Header));
+        return size_t(h._rawMemorySize + h._internalPointerCount * sizeof(BlockSerializer::InternalPointer) + sizeof(Header));
     }
 #pragma GCC diagnostic pop
     std::unique_ptr<uint8_t[]>  Block_Duplicate(const void* block)

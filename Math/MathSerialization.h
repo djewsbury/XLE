@@ -23,13 +23,13 @@ namespace cml
     constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(Float4x4 const*)      { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float, 16, Utility::ImpliedTyping::TypeHint::Matrix}; }
 
 	template<int Dimen, typename Primitive>
-		inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const cml::vector< Primitive, cml::fixed<Dimen> >& vec)
+		inline void SerializationOperator(::Assets::BlockSerializer& serializer, const cml::vector< Primitive, cml::fixed<Dimen> >& vec)
 	{
 		for (unsigned j=0; j<Dimen; ++j)
 			SerializationOperator(serializer, vec[j]);
 	}
 	
-	inline void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const XLEMath::Float4x4& float4x4)
+	inline void SerializationOperator(::Assets::BlockSerializer& serializer, const XLEMath::Float4x4& float4x4)
 	{
 		for (unsigned i=0; i<4; ++i)
 			for (unsigned j=0; j<4; ++j)
