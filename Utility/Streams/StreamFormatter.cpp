@@ -220,12 +220,6 @@ namespace Utility
         --_currentIndentLevel;
     }
 
-    void OutputStreamFormatter::Flush()
-    {
-        DoNewLine();  // finish on a new line (just for neatness)
-        assert(_currentIndentLevel == 0);
-    }
-
     void OutputStreamFormatter::NewLine()
     {
         DoNewLine();
@@ -242,7 +236,9 @@ namespace Utility
     }
 
     OutputStreamFormatter::~OutputStreamFormatter()
-    {}
+    {
+        assert(_currentIndentLevel == 0);
+    }
 
 
     

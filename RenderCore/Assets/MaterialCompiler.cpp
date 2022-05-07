@@ -178,12 +178,14 @@ namespace RenderCore { namespace Assets
 					scaffoldMat._patchCollection = resolvedMat._patchCollection.GetHash();
 					resolved.push_back({m.first, std::move(scaffoldMat)});
 
-					bool gotExisting = false;
-					for (const auto&p:patchCollections)
-						gotExisting |= p.GetHash() == resolvedMat._patchCollection.GetHash();
+					if (resolvedMat._patchCollection.GetHash() != 0) {
+						bool gotExisting = false;
+						for (const auto&p:patchCollections)
+							gotExisting |= p.GetHash() == resolvedMat._patchCollection.GetHash();
 
-					if (!gotExisting)
-						patchCollections.emplace_back(resolvedMat._patchCollection);
+						if (!gotExisting)
+							patchCollections.emplace_back(resolvedMat._patchCollection);
+					}
 
 					for (const auto& d:resolvedMat._depFileStates)
 						AddDep(_dependencies, d);
@@ -202,17 +204,22 @@ namespace RenderCore { namespace Assets
 					tempBlock.PushSizeValueAtRecall(recall);
 
 					blockSerializer << (uint32_t)ModelCommand::Material;
-					blockSerializer << (uint32_t)sizeof(size_t);
+					blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(uint64_t));
+					blockSerializer << m.first;
 					blockSerializer.SerializeSubBlock(tempBlock);
 				}
 				for (const auto& pc:patchCollections) {
 					::Assets::NascentBlockSerializer tempBlock;
-					auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
-					tempBlock << pc.GetHash();
-					tempBlock.PushSizeValueAtRecall(recall);
+					// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
+					MemoryOutputStream<utf8> patchCollectionStrm;
+					{ OutputStreamFormatter fmtter{patchCollectionStrm}; fmtter << pc; }
+					auto strSerializedPatchCollection = MakeIteratorRange(patchCollectionStrm.GetBuffer().Begin(), patchCollectionStrm.GetBuffer().End());
+					tempBlock.SerializeRawRange(strSerializedPatchCollection);
 
 					blockSerializer << (uint32_t)ModelCommand::ShaderPatchCollection;
-					blockSerializer << (uint32_t)sizeof(size_t);
+					blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+					blockSerializer << pc.GetHash();
+					blockSerializer << strSerializedPatchCollection.size();
 					blockSerializer.SerializeSubBlock(tempBlock);
 				}
 				blockSerializer << MakeCmdAndSerializable(ModelCommand::MaterialNameDehash, resolvedNames);

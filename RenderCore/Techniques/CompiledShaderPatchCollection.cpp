@@ -36,14 +36,14 @@ namespace RenderCore { namespace Techniques
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 
-		if (!src.GetDescriptorSetFileName().empty()) {
+		if (!src.GetDescriptorSetFileName().IsEmpty()) {
 			auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
 			layoutFileFuture->StallWhilePending();
 			TRY {
 				auto actualLayoutFile = layoutFileFuture->Actualize();
 				auto i = actualLayoutFile->_descriptorSets.find("Material");
 				if (i == actualLayoutFile->_descriptorSets.end())
-					Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName() + "), but it was not found"));
+					Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName().AsString() + "), but it was not found"));
 
 				// Once we've finally got the descriptor set, we need to link it against the pipeline layout version to make sure it
 				// will agree. Don't allow rearrangement of the input slots here, because the shader is probably making assumptions

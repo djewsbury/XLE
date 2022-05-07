@@ -31,7 +31,7 @@ namespace RenderCore { namespace Assets
 				}
 			}
 		}
-		if (!_descriptorSet.empty())
+		if (!src._descriptorSet.empty())
 			_descriptorSet = src._descriptorSet;
 
 		SortAndCalculateHash();
@@ -120,14 +120,6 @@ namespace RenderCore { namespace Assets
 		return str;
 	}
 
-	void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const ShaderPatchCollection& patchCollection)
-	{
-		serializer << patchCollection._patches;
-		serializer << patchCollection._descriptorSet;
-		serializer << patchCollection._hash;
-		serializer << ::Assets::DependencyValidationMarker_Invalid;
-	}
-
 	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		auto splitName = MakeFileNameSplitter(src);
@@ -185,8 +177,7 @@ namespace RenderCore { namespace Assets
 				auto name = RequireKeyedItem(formatter);
 				
 				if (XlEqString(name, "DescriptorSet")) {
-					auto descSetStr = RequireStringValue(formatter).AsString();
-					_descriptorSet = SerializableVector<char>{descSetStr.begin(), descSetStr.end()};
+					_descriptorSet = RequireStringValue(formatter).AsString();
 					continue;
 				}
 				

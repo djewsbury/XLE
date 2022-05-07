@@ -11,6 +11,8 @@
 #include "../../Assets/Assets.h"
 #include "../../Utility/Streams/PathUtils.h"
 
+#include "ModelMachine.h"
+
 namespace RenderCore { namespace Assets
 {
 	class MaterialImmutableData
@@ -101,7 +103,91 @@ namespace RenderCore { namespace Assets
 		ImmutableData().~MaterialImmutableData();
 	}
 
-	
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	const ::Assets::ArtifactRequest MaterialScaffoldCmdStreamForm::ChunkRequests[]
+	{
+		::Assets::ArtifactRequest{
+			"Scaffold", ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
+			::Assets::ArtifactRequest::DataType::BlockSerializer
+		}
+	};
+
+	auto				MaterialScaffoldCmdStreamForm::GetMaterialMachine(MaterialGuid guid) const -> Machine
+	{
+		auto i = LowerBound(_materialMachines, guid);
+		if (i != _materialMachines.end() && i->first == guid)
+			return i->second;
+		return {};
+	}
+
+	StringSection<>		MaterialScaffoldCmdStreamForm::DehashMaterialName(MaterialGuid guid) const
+	{
+		if (!_resolvedNames) return {};
+		auto i = std::lower_bound(_resolvedNames->begin(), _resolvedNames->end(), guid, CompareFirst<MaterialGuid, SerializableVector<char>>{});
+		if (i != _resolvedNames->begin() && i->first == guid)
+			return MakeStringSection(i->second.begin(), i->second.end());
+		return {};
+	}
+
+	std::shared_ptr<ShaderPatchCollection> MaterialScaffoldCmdStreamForm::GetShaderPatchCollection(uint64_t hash) const
+	{
+		auto i = std::lower_bound(_patchCollections.begin(), _patchCollections.end(), hash, [](const auto& q, auto lhs) { return q->GetHash() < lhs; });
+		if (i != _patchCollections.end() && (*i)->GetHash() == hash)
+			return *i;
+		return nullptr;
+	}
+
+	MaterialScaffoldCmdStreamForm::MaterialScaffoldCmdStreamForm()
+	{}
+
+	static IteratorRange<Assets::ScaffoldCmdIterator> CreateMachine(const void* src)
+	{
+		auto size = *(const uint32_t*)src;
+		return Assets::MakeScaffoldCmdRange({
+			PtrAdd(src, sizeof(uint32_t)),
+			PtrAdd(src, sizeof(uint32_t)+size)});
+	}
+
+	MaterialScaffoldCmdStreamForm::MaterialScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
+	: ScaffoldAsset(chunks, depVal)
+	{
+		for (auto cmd:GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)ModelCommand::Material:
+				{
+					struct MaterialRef { uint64_t _hashId; const void* _data; };
+					auto ref = cmd.As<MaterialRef>();
+					// auto data = Assets::MakeScaffoldCmdRange({PtrAdd(cmd.RawData().begin(), sizeof(uint64_t)), cmd.RawData().end()});
+					auto i = LowerBound(_materialMachines, ref._hashId);
+					if (i == _materialMachines.end() || i->first != ref._hashId) {
+						_materialMachines.insert(i, std::make_pair(ref._hashId, CreateMachine(ref._data)));
+					} else
+						i->second = CreateMachine(ref._data);
+				}
+				break;
+			case (uint32_t)Assets::ModelCommand::ShaderPatchCollection:
+				{
+					struct SPCRef { uint64_t _hashId; size_t _blockSize; const void* _serializedBlock; };
+					auto ref = cmd.As<SPCRef>();
+					auto i = std::lower_bound(_patchCollections.begin(), _patchCollections.end(), ref._hashId, [](const auto& q, auto lhs) { return q->GetHash() < lhs; });
+					if (i == _patchCollections.end() || (*i)->GetHash() != ref._hashId) {
+						// we have to deserialize via text format
+						InputStreamFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
+						auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+						_patchCollections.insert(i, std::move(patchCollection));
+					}
+				}
+				break;
+			case (uint32_t)Assets::ModelCommand::MaterialNameDehash:
+				_resolvedNames = (decltype(_resolvedNames))cmd.RawData().begin();
+				break;
+			}
+		}
+	}
+
+	MaterialScaffoldCmdStreamForm::~MaterialScaffoldCmdStreamForm()
+	{}
 
 }}
 

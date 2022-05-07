@@ -50,9 +50,9 @@ namespace Assets
 		void    SerializeValue  ( uint64_t value );
 		void    SerializeValue  ( float value );
 		void    SerializeValue  ( const std::string& value );
-		void    SerializeRaw 	( IteratorRange<const void*> data );
 		void    AddPadding      ( unsigned sizeInBytes );
 			
+		void    SerializeRawRange	( IteratorRange<const void*> data );
 		template<typename Type>
 			void    SerializeRaw    ( const Type& type );
 
@@ -173,6 +173,6 @@ namespace Assets
 		PushBackRaw(&type, sizeof(Type));
 	}
 
-	inline void    NascentBlockSerializer::SerializeRaw 	( IteratorRange<const void*> data ) { PushBackRaw(data.begin(), data.size()); }
+	inline void    NascentBlockSerializer::SerializeRawRange( IteratorRange<const void*> data ) { PushBackRaw(data.begin(), data.size()); }
 }
 

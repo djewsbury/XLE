@@ -385,17 +385,19 @@ namespace Assets
 		return nullptr;
 	}
 
-	static std::unique_ptr<uint8_t[], PODAlignedDeletor> TryLoadFileAsAlignedBuffer(IFileSystem&fs, StringSection<char> sourceFileName, size_t& res)
+	static std::unique_ptr<uint8_t[], PODAlignedDeletor> TryLoadFileAsAlignedBuffer(IFileSystem&fs, StringSection<char> sourceFileName, size_t& sizeResult)
 	{
 		std::unique_ptr<IFileInterface> file;
 		if (TryOpen(file, fs, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
-			size_t size = file->GetSize();
-			if (size) {
-				uint8_t* mem = (uint8*)XlMemAlign(size, sizeof(uint64_t));
+			sizeResult = file->GetSize();
+			if (sizeResult) {
+				uint8_t* mem = (uint8*)XlMemAlign(sizeResult, sizeof(uint64_t));
 				auto result = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
-				file->Read(result.get(), 1, size);
+				file->Read(result.get(), 1, sizeResult);
 				return result;
 			}
+		} else {
+			sizeResult = 0;
 		}
 		return nullptr;
 	}

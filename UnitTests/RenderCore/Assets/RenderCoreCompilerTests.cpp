@@ -47,6 +47,10 @@ namespace UnitTests
 						MaterialDiffuse={0.1f, 0.1f, 0.1f}c
 					States=~
 						DoubleSided=1u
+					Patches=~
+						PerPixel=~
+							some.pixel.hlsl::PerPixelCustomLighting
+						DescriptorSet=some.pipeline
 			)--")),
 		std::make_pair(
 			"base.material",
@@ -88,6 +92,7 @@ namespace UnitTests
 			compile->StallWhilePending();
 			REQUIRE(compile->GetAssetState() == ::Assets::AssetState::Ready);
 
+			/*
 			auto finalScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
 				*compile->GetArtifactCollection(targetCode));
 			(void)finalScaffold;
@@ -107,6 +112,18 @@ namespace UnitTests
 			REQUIRE(Equivalent(material1->_constants.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 			REQUIRE(material1->_constants.GetParameter<float>("Brightness") == 33_a);
 			REQUIRE(material1->_constants.GetParameter<float>("OnEverything") == 75_a);
+			*/
+
+			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffoldCmdStreamForm>>(
+				*compile->GetArtifactCollection(targetCode));
+			auto material0 = newScaffold->GetMaterialMachine(Hash64("Material0"));
+			REQUIRE(!material0.empty());
+
+			auto material1 = newScaffold->GetMaterialMachine(Hash64("Material1"));
+			REQUIRE(!material1.empty());
+
+			REQUIRE(newScaffold->DehashMaterialName(Hash64("Material0")).AsString() == "Material0");
+			REQUIRE(newScaffold->DehashMaterialName(Hash64("Material1")).AsString() == "Material1");
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);

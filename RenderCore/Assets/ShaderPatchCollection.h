@@ -32,7 +32,6 @@ namespace RenderCore { namespace Assets
 
 		friend std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection&);
 		friend void SerializationOperator(OutputStreamFormatter& formatter, const ShaderPatchCollection& patchCollection);
-		friend void SerializationOperator(::Assets::NascentBlockSerializer& serializer, const ShaderPatchCollection& patchCollection);
 
 		ShaderPatchCollection();
 		ShaderPatchCollection(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
@@ -41,8 +40,8 @@ namespace RenderCore { namespace Assets
 		~ShaderPatchCollection();
 
 	private:
-		SerializableVector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>> _patches;
-		SerializableVector<char> _descriptorSet;
+		std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>> _patches;
+		std::string _descriptorSet;
 		uint64_t _hash = ~0ull;
 		::Assets::DependencyValidation _depVal;
 

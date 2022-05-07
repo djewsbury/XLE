@@ -16,6 +16,8 @@
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 
+#include "ScaffoldCmdStream.h"
+
 namespace Assets 
 { 
     class DependencyValidation;
@@ -96,6 +98,27 @@ namespace RenderCore { namespace Assets
 	static constexpr uint64 ChunkType_ResolvedMat = ConstHash64<'ResM', 'at'>::Value;
 	static constexpr uint64 ChunkType_PatchCollections = ConstHash64<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
+
+	class MaterialScaffoldCmdStreamForm : public ScaffoldAsset
+	{
+	public:
+		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
+		Machine				GetMaterialMachine(MaterialGuid guid) const;
+		StringSection<>		DehashMaterialName(MaterialGuid guid) const;
+
+		std::shared_ptr<ShaderPatchCollection> GetShaderPatchCollection(uint64_t hash) const;
+
+		MaterialScaffoldCmdStreamForm();
+		MaterialScaffoldCmdStreamForm(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
+		~MaterialScaffoldCmdStreamForm();
+
+		static const auto CompileProcessType = ConstHash64<'ResM', 'at'>::Value;
+		static const ::Assets::ArtifactRequest ChunkRequests[1];
+	protected:
+		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
+		std::vector<std::shared_ptr<ShaderPatchCollection>> _patchCollections;
+		const SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>>* _resolvedNames = nullptr;
+	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

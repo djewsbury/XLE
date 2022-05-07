@@ -31,7 +31,6 @@ namespace Utility
 		void WriteSequencedValue(
 			StringSection<utf8> value);
 		
-		void Flush();
 		void NewLine();
 
 		OutputStreamFormatter(OutputStream& stream);

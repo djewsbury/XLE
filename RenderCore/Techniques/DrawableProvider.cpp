@@ -11,6 +11,7 @@
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/Marker.h"
+#include "../../Utility/Streams/StreamFormatter.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -22,7 +23,7 @@ namespace RenderCore { namespace Techniques
 			using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 			std::vector<Machine> _geoMachines;
 			std::vector<std::pair<uint64_t, Machine>> _materialMachines;
-			std::vector<std::pair<uint64_t, const Assets::ShaderPatchCollection*>> _shaderPatchCollections;
+			std::vector<std::pair<uint64_t, std::shared_ptr<Assets::ShaderPatchCollection>>> _shaderPatchCollections;
 
 			Machine GetGeoMachine(unsigned geoIdx) const
 			{
@@ -38,7 +39,7 @@ namespace RenderCore { namespace Techniques
 				return {};
 			}
 
-			const Assets::ShaderPatchCollection* GetShaderPatchCollection(uint64_t hashId) const
+			std::shared_ptr<Assets::ShaderPatchCollection> GetShaderPatchCollection(uint64_t hashId) const
 			{
 				auto i = LowerBound(_shaderPatchCollections, hashId);
 				if (i != _shaderPatchCollections.end() &&i-> first == hashId)
@@ -67,14 +68,15 @@ namespace RenderCore { namespace Techniques
 						break;
 					case (uint32_t)Assets::ModelCommand::ShaderPatchCollection:
 						{
-							struct SPCRef { uint64_t _hashId; const Assets::ShaderPatchCollection* _data; };
+							struct SPCRef { uint64_t _hashId; size_t _blockSize; const void* _serializedBlock; };
 							auto ref = cmd.As<SPCRef>();
-							// auto data = (const Assets::ShaderPatchCollection*)PtrAdd(cmd.RawData().begin(), sizeof(uint64_t));
 							auto i = LowerBound(_shaderPatchCollections, ref._hashId);
 							if (i != _shaderPatchCollections.end() &&i-> first == ref._hashId) {
-								_shaderPatchCollections.insert(i, std::make_pair(ref._hashId, ref._data));
-							} else
-								i->second = ref._data;
+								// we have to deserialize via text format
+								InputStreamFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
+								auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+								_shaderPatchCollections.insert(i, std::make_pair(ref._hashId, std::move(patchCollection)));
+							}
 						}
 						break;
 					}
@@ -297,9 +299,7 @@ namespace RenderCore { namespace Techniques
 						if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachPatchCollectionId) {
 							assert(!i->_patchCollection);
 							auto id = *(const uint64_t*)cmd.RawData().begin();
-							auto* patchCollectionSrc = addressableObjects.GetShaderPatchCollection(id);
-							if (patchCollectionSrc)
-								i->_patchCollection = DupeShaderPatchCollection(*patchCollectionSrc);
+							i->_patchCollection = addressableObjects.GetShaderPatchCollection(id);
 						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachShaderResourceBindings) {
 							assert(resHasParameters.GetCount() == 0);
 							assert(!cmd.RawData().empty());
@@ -339,20 +339,6 @@ namespace RenderCore { namespace Techniques
 
 					i->_batchFilter = (unsigned)CalculateBatchForStateSet(i->_stateSet);
 					return AsPointer(i);
-				}
-			}
-
-			std::vector<std::pair<uint64_t, std::shared_ptr<Assets::ShaderPatchCollection>>> _dupedShaderPatchCollections;
-			std::shared_ptr<Assets::ShaderPatchCollection> DupeShaderPatchCollection(const Assets::ShaderPatchCollection& src)
-			{
-				auto hash = src.GetHash();
-				auto i = LowerBound(_dupedShaderPatchCollections, hash);
-				if (i != _dupedShaderPatchCollections.end() && i->first == hash) {
-					return i->second;
-				} else {
-					auto newPatchCollection = std::make_shared<Assets::ShaderPatchCollection>(src);
-					_dupedShaderPatchCollections.insert(i, std::make_pair(hash, newPatchCollection));
-					return newPatchCollection;
 				}
 			}
 
