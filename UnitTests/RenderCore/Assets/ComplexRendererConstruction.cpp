@@ -90,8 +90,14 @@ namespace UnitTests
 			
 				SECTION("Create DrawableProvider")
 				{
-					RenderCore::Techniques::DrawableProvider provider{testApparatus._pipelineAccelerators, testApparatus._bufferUploads, *rendererConstruction};
-					(void)provider;
+					auto provider = std::make_shared<RenderCore::Techniques::DrawableProvider>(testApparatus._pipelineAccelerators, testApparatus._bufferUploads, *rendererConstruction);
+					std::promise<RenderCore::Techniques::DrawableProvider::FulFilledProvider> promise;
+					auto future = promise.get_future();
+					provider->FulfillWhenNotPending(std::move(promise));
+					future.wait();
+					auto fulfilledPromise = future.get();
+					REQUIRE(fulfilledPromise._provider == provider);
+					REQUIRE(fulfilledPromise._completionCmdList > 0);
 				}
 			}
 		}

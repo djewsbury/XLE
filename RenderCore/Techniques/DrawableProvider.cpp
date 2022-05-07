@@ -12,7 +12,8 @@
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/MaterialScaffold.h"
-#include "../Assets/Marker.h"
+#include "../../Assets/Marker.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/Streams/StreamFormatter.h"
 
 namespace RenderCore { namespace Techniques
@@ -210,7 +211,9 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			void LoadStaticResources(BufferUploads::IManager& bufferUploads)
+			void LoadPendingStaticResources(
+				std::promise<BufferUploads::CommandListID>&& completionCmdListPromise,
+				BufferUploads::IManager& bufferUploads)
 			{
 				// collect all of the various uploads we need to make, and engage!
 				std::sort(
@@ -223,7 +226,19 @@ namespace RenderCore { namespace Techniques
 						return lhs._srcOffset < rhs._srcOffset;
 					});
 
-				std::vector<BufferUploads::TransactionMarker> translationMarkers;
+				struct PendingTransactions
+				{
+					std::vector<BufferUploads::TransactionMarker> _markers;
+
+					struct ResAssignment
+					{
+						std::shared_ptr<DrawableGeo> _drawableGeo;
+						unsigned _markerIdx = ~0u;
+						DrawableStream _drawableStream = DrawableStream::IB;
+					};
+					std::vector<ResAssignment> _resAssignments;
+				};
+				auto pendingTransactions = std::make_shared<PendingTransactions>();
 				for (auto i=_staticLoadRequests.begin(); i!=_staticLoadRequests.end();) {
 					auto start = i;
 					while (i!=_staticLoadRequests.end() && i->_loadBuffer == start->_loadBuffer && i->_scaffoldIdx == start->_scaffoldIdx) ++i;
@@ -240,6 +255,9 @@ namespace RenderCore { namespace Techniques
 							_geos[i2->_drawableGeoIdx]->_vertexStreams[unsigned(i2->_drawableStream)-unsigned(DrawableStream::Vertex0)]._vbOffset = offset;
 						}
 						offset += i2->_srcSize;	// todo -- alignment?
+
+						pendingTransactions->_resAssignments.emplace_back(
+							PendingTransactions::ResAssignment{_geos[i2->_drawableGeoIdx], (unsigned)pendingTransactions->_markers.size(), i2->_drawableStream});
 					}
 					auto transMarker = LoadStaticResourceFullyAsync(
 						bufferUploads,
@@ -247,8 +265,46 @@ namespace RenderCore { namespace Techniques
 						offset, _registeredScaffolds[start->_scaffoldIdx],
 						(start->_loadBuffer == LoadBuffer::IB) ? BindFlag::IndexBuffer : BindFlag::VertexBuffer,
 						"[vb]");
-					translationMarkers.emplace_back(std::move(transMarker));
+					pendingTransactions->_markers.emplace_back(std::move(transMarker));
 				}
+				_staticLoadRequests.clear();
+
+				::Assets::PollToPromise(
+					std::move(completionCmdListPromise),
+					[pendingTransactions](auto timeout) {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						for (const auto& t:pendingTransactions->_markers) {
+							auto status = t._future.wait_until(timeoutTime);
+							if (status == std::future_status::timeout)
+								return ::Assets::PollStatus::Continue;
+						}
+						return ::Assets::PollStatus::Finish;
+					},
+					[pendingTransactions]() {
+						std::vector<BufferUploads::ResourceLocator> locators;
+						locators.reserve(pendingTransactions->_markers.size());
+						for (auto& t:pendingTransactions->_markers)
+							locators.emplace_back(t._future.get());
+
+						BufferUploads::CommandListID largestCmdList = 0;
+						for (const auto& l:locators)
+							largestCmdList = std::max(l.GetCompletionCommandList(), largestCmdList); 
+
+						// commit the resources back to the drawables, as needed
+						// note -- no threading protection for this
+						for (const auto& assign:pendingTransactions->_resAssignments) {
+							if (assign._drawableStream == DrawableStream::IB) {
+								assign._drawableGeo->_ib = locators[assign._markerIdx].GetContainingResource();
+								assign._drawableGeo->_ibOffset += locators[assign._markerIdx].GetRangeInContainingResource().first;
+							} else {
+								auto& vertexStream = assign._drawableGeo->_vertexStreams[unsigned(assign._drawableStream)-unsigned(DrawableStream::Vertex0)];
+								vertexStream._resource = locators[assign._markerIdx].GetContainingResource();
+								vertexStream._vbOffset += locators[assign._markerIdx].GetRangeInContainingResource().first;
+							}
+						}
+
+						return largestCmdList;
+					});
 			}
 		};
 
@@ -381,6 +437,8 @@ namespace RenderCore { namespace Techniques
 		Internal::PipelineBuilder _pendingPipelines;
 		Internal::DrawableGeoBuilder _pendingGeos;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
+		std::future<BufferUploads::CommandListID> _uploadFuture;
+		std::atomic<bool> _fulfillWhenNotPendingCalled = false;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 
@@ -540,6 +598,28 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
+	void DrawableProvider::FulfillWhenNotPending(std::promise<FulFilledProvider>&& promise)
+	{
+		// prevent multiple calls, because this introduces a lot of threading complications
+		auto prevCalled = _pimpl->_fulfillWhenNotPendingCalled.exchange(true);
+		if (prevCalled)
+			Throw(std::runtime_error("Attempting to call DrawableProvider::FulfillWhenNotPending multiple times. This can only be called once"));
+
+		auto strongThis = shared_from_this();
+		::Assets::PollToPromise(
+			std::move(promise),
+			[strongThis](auto timeout) {
+				auto futureStatus = strongThis->_pimpl->_uploadFuture.wait_for(timeout);
+				return (futureStatus == std::future_status::timeout) ? ::Assets::PollStatus::Continue : ::Assets::PollStatus::Finish;
+			},
+			[strongThis]() {
+				FulFilledProvider result;
+				result._provider = strongThis;
+				result._completionCmdList = strongThis->_pimpl->_uploadFuture.get();
+				return result;
+			});
+	}
+
 	DrawableProvider::DrawableProvider(
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		std::shared_ptr<BufferUploads::IManager> bufferUploads,
@@ -547,7 +627,9 @@ namespace RenderCore { namespace Techniques
 	{
 		_pimpl = std::make_unique<Pimpl>(std::move(pipelineAccelerators), std::move(bufferUploads));
 		Add(construction);
-		_pimpl->_pendingGeos.LoadStaticResources(*_pimpl->_bufferUploads);
+		std::promise<BufferUploads::CommandListID> uploadPromise;
+		_pimpl->_uploadFuture = uploadPromise.get_future();
+		_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), *_pimpl->_bufferUploads);
 	}
 
 	DrawableProvider::~DrawableProvider() {}

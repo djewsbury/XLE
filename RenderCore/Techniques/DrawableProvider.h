@@ -22,7 +22,6 @@ namespace RenderCore { namespace Techniques
 			BufferUploads::CommandListID _completionCmdList;
 		};
 		void FulfillWhenNotPending(std::promise<FulFilledProvider>&& promise);
-		::Assets::AssetState GetAssetState() const;
 
 		DrawableProvider(
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
